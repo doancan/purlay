@@ -62,7 +62,7 @@ export const issueAdminVerification = async (
   executor: Executor,
   session: SetupClaimDigest,
   { clock }: { readonly clock: Clock },
-): Promise<{ readonly token: string; readonly email: string }> => {
+): Promise<IssuedVerification> => {
   const token = randomToken();
   const digest = await tokenDigest(token);
   const outcome = await atomicallyOn(executor)(async (transaction) => {
@@ -77,6 +77,14 @@ export const issueAdminVerification = async (
       .executeTakeFirst();
     if (admin === undefined) return { reason: 'no-admin' as const };
     if (admin.email_verified) return { reason: 'already-verified' as const };
+    // Read under the lock this transaction holds on the claim's row, in the same transaction that replaces
+    // it: what a letter that then fails puts back is what was in force at this moment, not at some earlier one.
+    const previous = await transaction
+      .selectFrom('admin_email_verification')
+      .select(['user_id', 'email', 'token_digest', 'issued_at'])
+      .where('id', '=', true)
+      .forUpdate()
+      .executeTakeFirst();
     const row = {
       user_id: state.admin_user_id,
       email: admin.email,
@@ -89,13 +97,57 @@ export const issueAdminVerification = async (
       .values({ id: true, ...row })
       .onConflict((conflict) => conflict.column('id').doUpdateSet(row))
       .execute();
-    return { email: admin.email };
+    return { email: admin.email, previous };
   });
-  if ('email' in outcome) return { token, email: outcome.email };
+  if ('email' in outcome) {
+    return { token, email: outcome.email, digest, previous: outcome.previous };
+  }
   if (outcome.reason === 'no-admin' || outcome.reason === 'already-verified') {
     throw new VerificationRefused(outcome);
   }
   throw new SetupRefused(outcome);
+};
+
+/** The one row as it is kept: whose address, which mailbox, the link's digest and its day. */
+export interface AdminVerificationRow {
+  readonly user_id: string;
+  readonly email: string;
+  readonly token_digest: string;
+  readonly issued_at: Date;
+}
+
+/**
+ * What an issue hands back: the token for the letter alone, the address it goes to, the digest the row
+ * now holds, and the link it replaced — which a letter that then fails puts back (`restoreAdminVerification`).
+ */
+export interface IssuedVerification {
+  readonly token: string;
+  readonly email: string;
+  readonly digest: string;
+  readonly previous: AdminVerificationRow | undefined;
+}
+
+/**
+ * Puts back the link a letter replaced and never carried — **only while the row still holds the link that
+ * letter issued** (`replacedDigest`). A later issue took the row since (two sends at once), or the link was
+ * followed and spent: then there is nothing of this letter's to undo, and what is there is not touched.
+ */
+export const restoreAdminVerification = async (
+  executor: Executor,
+  previous: AdminVerificationRow,
+  replacedDigest: string,
+): Promise<void> => {
+  await executor
+    .updateTable('admin_email_verification')
+    .set({
+      user_id: previous.user_id,
+      email: previous.email,
+      token_digest: previous.token_digest,
+      issued_at: previous.issued_at,
+    })
+    .where('id', '=', true)
+    .where('token_digest', '=', replacedDigest)
+    .execute();
 };
 
 /**

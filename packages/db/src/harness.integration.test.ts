@@ -13,6 +13,7 @@ import {
   closeIntegrationDatabase,
   dropDatabases,
   integrationDatabase,
+  migrateIntegrationDatabase,
   withRollback,
 } from './testing';
 
@@ -133,5 +134,48 @@ describe('integration harness cost', () => {
     expect(building).toBeLessThan(TEMPLATE_BUDGET_MS);
     expect(cloning.ms).toBeLessThan(CLONE_BUDGET_MS);
     expect(dropping.ms).toBeLessThan(DROP_BUDGET_MS);
+  });
+});
+
+describe('integration: the database the rollback harness uses directly', () => {
+  // `withRollback` runs on the configured database itself, not on a clone of the migrated template: one
+  // that was last migrated before a migration was added answers "relation does not exist" to the tests that
+  // use it, which reads as a defect in whatever the tests were about.
+  test('is brought up to date by the run itself, from whatever it was left at', async () => {
+    const source = process.env['DATABASE_URL'] ?? '';
+    const name = `purlay_harness_stale_${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`;
+    const admin = new URL(source);
+    admin.pathname = '/postgres';
+    const target = new URL(source);
+    target.pathname = `/${name}`;
+    const { Kysely, PostgresDialect } = await import('kysely');
+    const pg = (await import('pg')).default;
+    const control = new Kysely<unknown>({
+      dialect: new PostgresDialect({
+        pool: new pg.Pool({ connectionString: admin.toString(), max: 1 }),
+      }),
+    });
+    try {
+      await sql`create database ${sql.id(name)}`.execute(control);
+      await migrateIntegrationDatabase(target.toString());
+      const inspected = new Kysely<unknown>({
+        dialect: new PostgresDialect({
+          pool: new pg.Pool({ connectionString: target.toString(), max: 1 }),
+        }),
+      });
+      try {
+        const tables = await sql<{
+          name: string;
+        }>`select to_regclass('public.server_settings')::text as name`.execute(inspected);
+        expect(tables.rows[0]?.name).toBe('server_settings');
+        // A second run finds nothing to do and fails on nothing.
+        await migrateIntegrationDatabase(target.toString());
+      } finally {
+        await inspected.destroy();
+      }
+    } finally {
+      await sql`drop database if exists ${sql.id(name)} with (force)`.execute(control);
+      await control.destroy();
+    }
   });
 });

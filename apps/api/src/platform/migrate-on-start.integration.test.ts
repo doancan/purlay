@@ -80,7 +80,7 @@ const aNode = (
     ENCRYPTION_KEY: key,
     ...more,
   };
-  return Bun.spawn(['bun', join(import.meta.dir, '../index.ts')], {
+  return Bun.spawn(['bun', '--no-env-file', join(import.meta.dir, '../index.ts')], {
     stdout: 'pipe',
     stderr: 'pipe',
     env: Object.fromEntries(
@@ -272,7 +272,7 @@ describe('integration: migrate on start', () => {
     const entry = join(import.meta.dir, '../index.ts');
 
     const nodes = ports.map((port) =>
-      Bun.spawn(['bun', entry], {
+      Bun.spawn(['bun', '--no-env-file', entry], {
         stdout: 'ignore',
         stderr: 'ignore',
         env: {
@@ -333,7 +333,7 @@ describe('integration: migrate on start', () => {
     await migrateOnStart({ connectionString: urlFor(name) });
     await sql`alter table accounts rename column scope to scope_was`.execute(db);
     const port = freePort();
-    const node = Bun.spawn(['bun', join(import.meta.dir, '../index.ts')], {
+    const node = Bun.spawn(['bun', '--no-env-file', join(import.meta.dir, '../index.ts')], {
       stdout: 'pipe',
       stderr: 'ignore',
       env: {

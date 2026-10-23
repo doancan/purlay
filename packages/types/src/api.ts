@@ -1277,7 +1277,8 @@ export type SetupGitHubRequest = Static<typeof SetupGitHubRequest>;
 /**
  * `POST /setup/smtp` — the relay (`smtpUrl`, its credentials in it — named so the log never writes it)
  * and the sender, tried with the administrator's verification letter in `locale`; kept only when the
- * try works and `save` says to. Or the step skipped.
+ * try works and `save` says to. Or the step skipped. Or the letter sent again through the relay
+ * already kept — which the client cannot name, since the relay's address is never shown to it again.
  */
 export const SetupSmtpRequest = Type.Union([
   FromClient({
@@ -1288,6 +1289,7 @@ export const SetupSmtpRequest = Type.Union([
     save: Type.Optional(Type.Boolean()),
   }),
   Skipped,
+  FromClient({ resend: Type.Literal(true), locale: SignInLocale }),
 ]);
 export type SetupSmtpRequest = Static<typeof SetupSmtpRequest>;
 

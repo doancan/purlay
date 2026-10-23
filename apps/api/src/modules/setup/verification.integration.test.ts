@@ -9,12 +9,17 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, closeIntegrationDatabase, sql, type Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
+import { credentialCipher } from '../../platform/crypto';
 import { createLogger, type Logger } from '../../platform/logging';
-import { smtpTransport } from '../../platform/mail';
+import { smtpTransport, type SmtpTransportFactory } from '../../platform/mail';
 import { tokenDigest } from '../../platform/tokens';
 import { aScriptedRelay } from '../../testing/smtp-relay';
 import { aUserRow } from '../../testing/users';
 import { probeSmtp } from './probes';
+import type { SettingsChange } from './runtime';
+import { saveSettings } from './settings';
+import { resendRelayLetter } from './wizard';
 import {
   claimSetup,
   completeSetup,
@@ -28,6 +33,7 @@ import {
   ADMIN_VERIFICATION_TTL_MS,
   adminVerificationLetter,
   issueAdminVerification,
+  restoreAdminVerification,
   sweepAdminVerification,
   VerificationRefused,
   verifyAdminEmail,
@@ -160,6 +166,35 @@ describe('integration: the administrator’s address check (D-179 §4.3, R32)', 
     // Spent: the second time is the refusal every other failure is.
     expect(await verifyAdminEmail(db, issued.token, clock)).toBe('refused');
     expect(await pending(db)).toEqual([]);
+  });
+
+  test('a link put back replaces only the link that replaced it: a newer one is not undone, a spent one is not revived', async () => {
+    const clock = movable();
+    const { db, session, admin } = await aServerWithItsAdmin(clock);
+    const a = await issueAdminVerification(db, session, { clock });
+    expect(a.previous).toBeUndefined();
+    const b = await issueAdminVerification(db, session, { clock });
+    expect(b.previous?.token_digest).toBe(a.digest);
+    expect((await pending(db))[0]?.token_digest).toBe(b.digest);
+
+    // The letter with B was never sent: A, which was, is put back.
+    if (b.previous === undefined) throw new Error('B replaced nothing');
+    await restoreAdminVerification(db, b.previous, b.digest);
+    expect((await pending(db))[0]?.token_digest).toBe(a.digest);
+
+    // Two sends overlap: C then D replace A; C's failure arrives after D took the row. D stays.
+    const c = await issueAdminVerification(db, session, { clock });
+    const d = await issueAdminVerification(db, session, { clock });
+    if (c.previous === undefined) throw new Error('C replaced nothing');
+    await restoreAdminVerification(db, c.previous, c.digest);
+    expect((await pending(db))[0]?.token_digest).toBe(d.digest);
+    expect(await verifyAdminEmail(db, d.token, clock)).toBe('verified');
+
+    // D's own failure, late: the link was followed and spent, and is not brought back.
+    if (d.previous === undefined) throw new Error('D replaced nothing');
+    await restoreAdminVerification(db, d.previous, d.digest);
+    expect(await pending(db)).toEqual([]);
+    expect(await verifiedOf(db, admin.userId)).toBe(true);
   });
 
   test('opens for a day from its issue, and not a moment past it', async () => {
@@ -437,5 +472,125 @@ describe('integration: the e-mail step whole — the candidate relay tried with 
     } finally {
       await relay.stop();
     }
+  });
+});
+
+describe('integration: letters sent at once (D-179 §4.3)', () => {
+  const cipher = credentialCipher(DEVELOPMENT_ENCRYPTION_KEY);
+
+  const until = async (condition: () => boolean): Promise<void> => {
+    const deadline = Date.now() + 5_000;
+    while (!condition() && Date.now() < deadline) await Bun.sleep(10);
+    if (!condition()) throw new Error('what the test waited for did not happen');
+  };
+
+  test('two resends that both fail leave the link of the letter that was delivered opening: they go one after the other', async () => {
+    const clock = movable();
+    const { db, session } = await aServerWithItsAdmin(clock);
+    // The e-mail step is reachable, and a relay is kept.
+    await db
+      .updateTable('setup_state')
+      .set({ step_reached: 'github' })
+      .where('id', '=', true)
+      .execute();
+    await saveSettings(db, cipher, clock, {
+      smtp: { smtpUrl: 'smtp://relay.test:25', from: 'purlay@example.test', allowPlaintext: true },
+    });
+    const { log } = recording();
+    // Only what a resend reads of it: the key and the log.
+    const change = { cipher, clock, log } as unknown as SettingsChange;
+    // The first letter went; its link is the one in force.
+    const delivered = await issueAdminVerification(db, session, { clock });
+
+    // A relay that answers when the test says so, and refuses.
+    const refusals: (() => void)[] = [];
+    const refusing: SmtpTransportFactory = () => ({
+      verify: () =>
+        new Promise((_, reject) => {
+          refusals.push(() => {
+            reject(Object.assign(new Error('refused'), { code: 'ECONNECTION' }));
+          });
+        }),
+      sendMail: () => Promise.reject(new Error('never reached: verify refused')),
+      close: () => undefined,
+    });
+    const dependencies = {
+      database: db,
+      clock,
+      change,
+      appUrl: APP_URL,
+      transportFactory: refusing,
+    };
+
+    const first = resendRelayLetter(dependencies, session, 'en');
+    const second = resendRelayLetter(dependencies, session, 'en');
+    await until(() => refusals.length >= 1);
+    // The second has every chance to start: if nothing held it back it would be at the relay by now,
+    // and would have read the first one's letter — which no mailbox holds — as the one to put back.
+    await Bun.sleep(150);
+    expect(refusals).toHaveLength(1);
+
+    refusals[0]?.();
+    expect((await first).ok).toBe(false);
+    await until(() => refusals.length >= 2);
+    refusals[1]?.();
+    expect((await second).ok).toBe(false);
+
+    expect(await verifyAdminEmail(db, delivered.token, clock)).toBe('verified');
+  });
+  test('a put-back that itself fails is logged without a secret, and the relay’s answer is still the answer', async () => {
+    const clock = movable();
+    const { db, session } = await aServerWithItsAdmin(clock);
+    await db
+      .updateTable('setup_state')
+      .set({ step_reached: 'github' })
+      .where('id', '=', true)
+      .execute();
+    await saveSettings(db, cipher, clock, {
+      smtp: {
+        smtpUrl: 'smtp://mailer:a-relay-secret-31@relay.test:25',
+        from: 'purlay@example.test',
+        allowPlaintext: true,
+      },
+    });
+    const { log, lines } = recording();
+    const change = { cipher, clock, log } as unknown as SettingsChange;
+    await issueAdminVerification(db, session, { clock });
+
+    // The database fails the one statement that puts a link back (an UPDATE of that table).
+    const breaking: KyselyPlugin = {
+      transformQuery: ({ node }) => {
+        if (
+          node.kind === 'UpdateQueryNode' &&
+          JSON.stringify(node.table).includes('admin_email_verification')
+        ) {
+          throw new Error('the database went away');
+        }
+        return node;
+      },
+      transformResult: async ({ result }) => await Promise.resolve(result),
+    };
+    const refusing: SmtpTransportFactory = () => ({
+      verify: () => Promise.reject(Object.assign(new Error('refused'), { code: 'ECONNECTION' })),
+      sendMail: () => Promise.reject(new Error('never reached')),
+      close: () => undefined,
+    });
+    const answer = await resendRelayLetter(
+      {
+        database: db.withPlugin(breaking),
+        clock,
+        change,
+        appUrl: APP_URL,
+        transportFactory: refusing,
+      },
+      session,
+      'en',
+    );
+    // Not the database's error: what the person was about to be told.
+    expect(answer.ok).toBe(false);
+    const written = lines.join('\n');
+    expect(written).toContain('could not be put back');
+    expect(written).toContain('the database went away');
+    expect(written).not.toContain('a-relay-secret-31');
   });
 });

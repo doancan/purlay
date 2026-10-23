@@ -12,62 +12,28 @@
  * Its own server and database, outside the four projects' worlds; it runs once, in the light wide
  * project, since a second run in each of the others would only repeat what one proves.
  */
-import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { portFor, startFresh, type FreshServer } from './fresh';
 
-interface Manifest {
-  readonly origin: string;
-  readonly code: string;
-  readonly github: { readonly clientId: string; readonly clientSecret: string };
-  readonly relay: { readonly port: number };
-}
+const PORT = portFor(50);
 
-// Clear of the four worlds (`BASE_PORT + 100 × index`) and of a person's own demo.
-const PORT = Number(process.env['PURLAY_E2E_PORT'] ?? 4173) + 50;
-
-let server: ChildProcess | null = null;
-let directory = '';
-let manifest: Manifest | null = null;
+let fresh: FreshServer | null = null;
 
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({}, info) => {
   test.skip(info.project.name !== 'chromium-light', 'one run proves the path');
   test.setTimeout(240_000);
-  directory = mkdtempSync(join(tmpdir(), 'purlay-setup-e2e-'));
-  const file = join(directory, 'fresh.json');
-  server = spawn(
-    'bun',
-    [
-      'run',
-      'apps/api/src/testing/fresh-server.ts',
-      '--no-build',
-      '--db',
-      `purlay_e2e_fresh_${String(PORT)}`,
-      '--port',
-      String(PORT),
-      '--manifest',
-      file,
-    ],
-    { cwd: '../..', stdio: 'ignore' },
-  );
-  for (let attempt = 0; attempt < 1200 && !existsSync(file); attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  manifest = JSON.parse(readFileSync(file, 'utf8')) as Manifest;
+  fresh = await startFresh(PORT);
 });
 
 test.afterAll(() => {
-  server?.kill();
-  if (directory !== '') rmSync(directory, { recursive: true, force: true });
+  fresh?.stop();
 });
 
 test('walks a fresh server from the code to its first workspace', async ({ browser }) => {
-  if (manifest === null) throw new Error('the server did not start');
-  const { origin, code, github, relay } = manifest;
+  if (fresh === null) throw new Error('the server did not start');
+  const { origin, code, github, relay } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
   const page = await context.newPage();
 

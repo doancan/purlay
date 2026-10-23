@@ -488,6 +488,118 @@ describe('email', () => {
     expect(passed.getByRole('heading', { name: 'Create the first workspace' })).toBeDefined();
   });
 
+  test('says what the sender may be before it is typed, and under the field when the server refuses it', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              from: 'the sender cannot be tried: one plain address, with no name and nothing else',
+            }),
+          ),
+      }),
+    );
+    expect(view.getByText(en['setup.email.fromHint'])).toBeDefined();
+    expect(en['setup.email.fromHint']).toMatch(/plain address/i);
+    await person().type(view.getByLabelText('Mail server'), 'smtp://mail.example.test');
+    await person().type(view.getByLabelText('Sender'), 'Purlay <purlay@example.test>');
+    await press(view, TRY);
+    const sender = view.getByLabelText('Sender');
+    expect(sender.getAttribute('aria-invalid')).toBe('true');
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    // The refusal stands in the hint's place, not under it: two sentences saying one thing.
+    expect(view.queryByText(en['setup.email.fromHint']) === null).toBe(true);
+    // The sentence is the field's, not the page's "the server refused this".
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+    // Typing again takes the refusal off the field.
+    await person().type(sender, 'x');
+    expect(view.queryByText(en['setup.email.fromInvalid']) === null).toBe(true);
+  });
+
+  test('says an address the server cannot try under the mail server field', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              smtpUrl: 'an address with no space or line break in it',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByLabelText('Mail server').getAttribute('aria-invalid')).toBe('true');
+    expect(view.getByText(en['setup.email.urlInvalid'])).toBeDefined();
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+  });
+
+  test('editing one refused field takes away only its own refusal', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              smtpUrl: 'not an smtp:// or smtps:// address',
+              from: 'one plain address, with no name and nothing else',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByText(en['setup.email.urlInvalid'])).toBeDefined();
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    await person().type(view.getByLabelText('Mail server'), 'x');
+    expect(view.queryByText(en['setup.email.urlInvalid']) === null).toBe(true);
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    // And the page's generic sentence never comes back for what was explained under its fields.
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+  });
+
+  test('a refusal that names a field this screen explains and another it does not still says the generic sentence', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              from: 'one plain address, with no name and nothing else',
+              locale: 'is not a language',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    expect(
+      view
+        .getAllByRole('alert')
+        .some((one) => one.textContent.includes(en['setup.failed.generic'])),
+    ).toBe(true);
+  });
+
+  test('a refusal that names a field the screen has not got is the page’s generic sentence', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              body: 'Expected union value',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByRole('alert').textContent).toContain(en['setup.failed.generic']);
+  });
+
   test('a mail login that can no longer be read asks for it again', async () => {
     const view = await openSetup(
       aClient({
@@ -501,7 +613,270 @@ describe('email', () => {
       }),
     );
     expect(view.getByText(en['setup.email.reentry'])).toBeDefined();
-    expect(view.queryByText(en['setup.email.connected'])).toBeNull();
+    expect(view.queryByText(en['setup.email.connected']) === null).toBe(true);
+  });
+});
+
+describe('email: the letter again', () => {
+  const TRY = 'Try the connection and continue';
+  const KEPT = atEmail({
+    steps: ['claim', 'admin', 'address', 'policy', 'github', 'email'],
+    settings: { ...aState().settings, smtp: CONNECTED_SMTP },
+  });
+  const AGAIN = en['setup.email.resend'];
+
+  /** The connected screen, which a person comes back to when the letter never came. */
+  const connected = async (
+    over: Partial<SetupClient>,
+    state: SetupState = KEPT,
+    options: Parameters<typeof openSetup>[1] = {},
+  ): Promise<View> => {
+    const view = await openSetup(
+      aClient({ state: () => Promise.resolve(state), ...over }),
+      options,
+    );
+    await press(view, 'Back');
+    return view;
+  };
+
+  test('is offered on the connected screen with the address it goes to, and sends in the screen’s language', async () => {
+    const sent: string[] = [];
+    const view = await connected({
+      resendSmtp: (locale) => {
+        sent.push(locale);
+        return Promise.resolve({ ok: true });
+      },
+    });
+    expect(view.getByText(en['setup.email.connected'])).toBeDefined();
+    await press(view, AGAIN);
+    expect(sent).toEqual(['en']);
+    expect(
+      view.getByText(en['setup.email.resent'].replace('{email}', 'ayse@example.test')),
+    ).toBeDefined();
+    // Still there: a second letter is asked for the same way.
+    await press(view, AGAIN);
+    expect(sent).toEqual(['en', 'en']);
+  });
+
+  test('asks in Turkish on a Turkish screen', async () => {
+    const sent: string[] = [];
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(KEPT),
+        resendSmtp: (locale) => {
+          sent.push(locale);
+          return Promise.resolve({ ok: true });
+        },
+      }),
+      { locale: 'tr' },
+    );
+    await person().click(view.getByRole('button', { name: tr['setup.back'] }));
+    await settle();
+    await person().click(view.getByRole('button', { name: tr['setup.email.resend'] }));
+    await settle();
+    expect(sent).toEqual(['tr']);
+  });
+
+  test('is a test message again, not a letter, once the address is verified', async () => {
+    const view = await connected(
+      { resendSmtp: () => Promise.resolve({ ok: true }) },
+      { ...KEPT, admin: { ...ADMIN, emailVerified: true } },
+    );
+    expect(view.queryByRole('button', { name: AGAIN }) === null).toBe(true);
+    await press(view, en['setup.email.resendTest']);
+    expect(
+      view.getByText(en['setup.email.resentTest'].replace('{email}', 'ayse@example.test')),
+    ).toBeDefined();
+  });
+
+  test('says where a relay that refuses now stopped, with its words, and can be asked again', async () => {
+    let asked = 0;
+    const view = await connected({
+      resendSmtp: () => {
+        asked += 1;
+        return Promise.resolve({ ok: false, reason: 'auth-failed', raw: '535 denied' });
+      },
+    });
+    await press(view, AGAIN);
+    expect(view.getByText('535 denied')).toBeDefined();
+    expect(view.getByText(en['setup.email.stage.failed'])).toBeDefined();
+    expect(
+      view.queryByText(en['setup.email.resent'].replace('{email}', 'ayse@example.test')),
+    ).toBeNull();
+    await press(view, AGAIN);
+    expect(asked).toBe(2);
+  });
+
+  test('says a call that failed outright, and follows the claim being lost', async () => {
+    const failing = await connected({
+      resendSmtp: () => Promise.reject(new SetupFailure(0, 'NETWORK', 'down')),
+    });
+    await press(failing, AGAIN);
+    expect(failing.getByRole('alert').textContent).toContain(en['setup.failed.network']);
+    failing.unmount();
+    let held = true;
+    const lost = await connected({
+      state: () => (held ? Promise.resolve(KEPT) : unheld()),
+      resendSmtp: () => {
+        held = false;
+        return Promise.reject(new SetupFailure(404, 'SETUP_UNAVAILABLE', 'gone'));
+      },
+    });
+    await press(lost, AGAIN);
+    expect(lost.getByRole('heading', { name: /code/i })).toBeDefined();
+  });
+
+  test('a refusal of the order is said, and the button is usable again', async () => {
+    const view = await connected({
+      resendSmtp: () =>
+        Promise.reject(
+          new SetupFailure(409, 'SETUP_STEP_REFUSED', 'later', null, {}, 'out-of-order'),
+        ),
+    });
+    await press(view, AGAIN);
+    expect(view.getByRole('alert').textContent).toContain(en['setup.failed.order']);
+    expect(view.getByRole('button', { name: AGAIN }).hasAttribute('disabled')).toBe(false);
+  });
+
+  test('after a send, says the kind of letter the state now shows: a link followed meanwhile makes it a test message', async () => {
+    let state = KEPT;
+    const view = await connected(
+      {
+        state: () => Promise.resolve(state),
+        resendSmtp: () => {
+          // The administrator followed the first link in another tab before this press was answered.
+          state = { ...KEPT, admin: { ...ADMIN, emailVerified: true } };
+          return Promise.resolve({ ok: true });
+        },
+      },
+      KEPT,
+    );
+    await press(view, AGAIN);
+    expect(
+      view.getByText(en['setup.email.resentTest'].replace('{email}', 'ayse@example.test')),
+    ).toBeDefined();
+    expect(
+      view.queryByText(en['setup.email.resent'].replace('{email}', 'ayse@example.test')) === null,
+    ).toBe(true);
+  });
+
+  test('takes the last "sent" note away while the next send is on its way', async () => {
+    let release: () => void = () => undefined;
+    let calls = 0;
+    const view = await connected({
+      resendSmtp: () => {
+        calls += 1;
+        if (calls === 1) return Promise.resolve({ ok: true });
+        return new Promise((resolve) => {
+          release = (): void => {
+            resolve({ ok: true });
+          };
+        });
+      },
+    });
+    const note = en['setup.email.resent'].replace('{email}', 'ayse@example.test');
+    await press(view, AGAIN);
+    expect(view.getByText(note)).toBeDefined();
+    await person().click(view.getByRole('button', { name: AGAIN }));
+    expect(view.queryByText(note) === null).toBe(true);
+    release();
+    await settle();
+    expect(view.getByText(note)).toBeDefined();
+  });
+
+  test('a double press is one letter: the button is held while the first is on its way', async () => {
+    let release: () => void = () => undefined;
+    let calls = 0;
+    const view = await connected({
+      resendSmtp: () => {
+        calls += 1;
+        return new Promise((resolve) => {
+          release = (): void => {
+            resolve({ ok: true });
+          };
+        });
+      },
+    });
+    const button = view.getByRole('button', { name: AGAIN });
+    await person().click(button);
+    await person().click(button);
+    expect(calls).toBe(1);
+    release();
+    await settle();
+    expect(calls).toBe(1);
+  });
+
+  test('says, with a refusal, where to change what cannot be changed here', async () => {
+    const view = await connected({
+      resendSmtp: () => Promise.resolve({ ok: false, reason: 'auth-failed', raw: '535 denied' }),
+    });
+    await press(view, AGAIN);
+    expect(view.getByText(en['setup.email.resendFix'])).toBeDefined();
+  });
+
+  test('a saved relay the server can no longer try says so, and where to enter it again', async () => {
+    const view = await connected({
+      resendSmtp: () =>
+        Promise.reject(
+          new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+            from: 'one plain address, with no name and nothing else',
+          }),
+        ),
+    });
+    await press(view, AGAIN);
+    expect(view.getByText(en['setup.email.resendSavedInvalid'])).toBeDefined();
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+  });
+
+  test('is offered right after a try that worked too, where the person waits for the message', async () => {
+    const sent: string[] = [];
+    let state = atEmail();
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(state),
+        smtp: () => {
+          state = KEPT;
+          return Promise.resolve({ ok: true });
+        },
+        resendSmtp: (locale) => {
+          sent.push(locale);
+          return Promise.resolve({ ok: true });
+        },
+      }),
+    );
+    await person().type(view.getByLabelText('Mail server'), 'smtp://mail.example.test');
+    await person().type(view.getByLabelText('Sender'), 'purlay@example.test');
+    await press(view, TRY);
+    expect(
+      view.getByText(en['setup.email.sent'].replace('{email}', 'ayse@example.test')),
+    ).toBeDefined();
+    await press(view, AGAIN);
+    expect(sent).toEqual(['en']);
+    // The server's state says the mail step has passed; the wizard does not move on under the person
+    // who is waiting for the message: that is Continue's to do.
+    expect(view.getByRole('heading', { name: 'Connect email' })).toBeDefined();
+    expect(
+      view.getByText(en['setup.email.resent'].replace('{email}', 'ayse@example.test')),
+    ).toBeDefined();
+    expect(view.queryByRole('heading', { name: 'Create the first workspace' }) === null).toBe(true);
+  });
+
+  test('is not offered where there is no relay to send through', async () => {
+    const view = await openSetup(aClient({ state: () => Promise.resolve(atEmail()) }));
+    expect(view.queryByRole('button', { name: AGAIN }) === null).toBe(true);
+    view.unmount();
+    const reentry = await openSetup(
+      aClient({
+        state: () =>
+          Promise.resolve(
+            atEmail({
+              settings: { ...aState().settings, smtp: CONNECTED_SMTP },
+              needsReentry: ['smtp'],
+            }),
+          ),
+      }),
+    );
+    expect(reentry.queryByRole('button', { name: AGAIN }) === null).toBe(true);
   });
 });
 

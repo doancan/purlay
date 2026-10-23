@@ -16,7 +16,7 @@ import { Button } from '../../ui/button';
 import { IconButton } from '../../ui/icon-button';
 import { useWorkspace } from '../shell/workspace';
 import { ChannelRow } from './channel-row';
-import { joinedChannels, starredChannels } from './ordering';
+import { joinableChannels, joinedChannels, starredChannels } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
 export const ChannelList = (): React.JSX.Element => {
@@ -32,6 +32,8 @@ export const ChannelList = (): React.JSX.Element => {
   const mine = joinedChannels(channels.data ?? []);
   // In no channel at all is the empty state; in channels that are all starred is not (D-132).
   const none = mine.length === 0 && starredChannels(channels.data ?? []).length === 0;
+  // In none, but with public ones to join (an invited member arrives so): "create the first" would be untrue.
+  const joinable = none && joinableChannels(channels.data ?? []).length > 0;
 
   return (
     <nav aria-label={t('sidebar.channels')} className="flex flex-col">
@@ -71,16 +73,26 @@ export const ChannelList = (): React.JSX.Element => {
         />
       ) : none ? (
         <SectionEmpty
-          title={t('state.channels.empty.title')}
-          body={t('state.channels.empty.body')}
+          title={joinable ? t('state.channels.unjoined.title') : t('state.channels.empty.title')}
+          body={joinable ? t('state.channels.unjoined.body') : t('state.channels.empty.body')}
           action={
-            <Button
-              onClick={() => {
-                setCreating(true);
-              }}
-            >
-              {t('sidebar.newChannel')}
-            </Button>
+            joinable ? (
+              <Button
+                onClick={() => {
+                  setBrowsing(true);
+                }}
+              >
+                {t('sidebar.browse')}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  setCreating(true);
+                }}
+              >
+                {t('sidebar.newChannel')}
+              </Button>
+            )
           }
         />
       ) : (

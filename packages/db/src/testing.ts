@@ -32,7 +32,8 @@ const integrationUrl = (): string => {
   if (connectionString === undefined || connectionString === '') {
     throw new Error(
       'DATABASE_URL is not set, so these tests would silently prove nothing.\n' +
-        'Start the environment and run them with:\n' +
+        'Start the environment, name its database in .env.test (see .env.test.example) or in the\n' +
+        'environment, and run them with:\n' +
         '  bun run db:up:postgres && bun run test:integration',
     );
   }
@@ -171,6 +172,24 @@ export const buildIntegrationTemplate = async (name?: string): Promise<string> =
     await templateDb.destroy();
   }
   return template;
+};
+
+/**
+ * Brings a database up to the latest migration — by default the configured one, the one `withRollback`
+ * runs on directly. Until this, only the template was kept current: a database last migrated before a
+ * migration was added made every test that used it fail with "relation does not exist", which reads as a
+ * defect in what the tests were about. Migrating an up-to-date database is a no-op, so every run does it.
+ */
+export const migrateIntegrationDatabase = async (connectionString?: string): Promise<void> => {
+  const database = connect<unknown>(connectionString ?? integrationUrl(), 1);
+  try {
+    const { error } = await migrateToLatest(database);
+    if (error !== undefined) {
+      throw new Error('migrating the test database failed', { cause: error });
+    }
+  } finally {
+    await database.destroy();
+  }
 };
 
 let prepared: Promise<string> | undefined;

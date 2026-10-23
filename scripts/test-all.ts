@@ -18,7 +18,10 @@ import { reachable } from './database-reachable';
 const ROOTS = ['apps', 'packages', 'scripts'];
 
 const run = (args: readonly string[]): number =>
-  Bun.spawnSync(['bun', 'test', ...args], { stdout: 'inherit', stderr: 'inherit' }).exitCode;
+  Bun.spawnSync(['bun', '--no-env-file', '--env-file=.env.test', 'test', ...args], {
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).exitCode;
 
 const url = process.env['DATABASE_URL'] ?? '';
 const inCi = process.env['CI'] === 'true';

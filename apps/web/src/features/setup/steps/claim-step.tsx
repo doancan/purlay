@@ -99,7 +99,7 @@ export const ClaimStep = ({
         >
           <div className="flex flex-col gap-2">
             <p className="text-body text-ink">{t('setup.claim.where')}</p>
-            <CopyField label={t('setup.claim.where')} value={LOG_COMMAND} />
+            <CopyField label={t('setup.claim.command')} value={LOG_COMMAND} />
             <p className="text-caption text-ink-muted">{t('setup.claim.hour')}</p>
           </div>
           <TextField

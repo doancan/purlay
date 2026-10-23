@@ -14,7 +14,10 @@ export const main = async (
   environment: Readonly<Record<string, string | undefined>>,
   args: readonly string[],
   run: (args: readonly string[]) => Promise<number> = async (given) =>
-    await Bun.spawn(['bun', COMMAND, ...given], { stdout: 'inherit', stderr: 'inherit' }).exited,
+    await Bun.spawn(['bun', '--no-env-file', COMMAND, ...given], {
+      stdout: 'inherit',
+      stderr: 'inherit',
+    }).exited,
 ): Promise<{ readonly line: string | null; readonly code: number }> => {
   const url = environment['DATABASE_URL'] ?? '';
   if (url === '' || !(await reachable(url))) {

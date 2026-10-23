@@ -66,10 +66,18 @@ Start the local environment with `bun run db:up` (PostgreSQL and object storage,
 be healthy). `bun run db:up:postgres` starts the database alone — all the integration tests need,
 and what CI runs, because nothing the integration tests reach reads object storage yet.
 
-**The tests find that database through `DATABASE_URL`, and a fresh clone has none.** Bun reads `.env`
-for every command, so put the URL of the compose database there — its user, password, database and
-port are the ones in `docker-compose.yml`, the same URL the pipeline sets in `.github/workflows/ci.yml`.
-Without it `verify` still passes, on the unit tests alone, behind the banner below.
+**Two environment files, and a process reads one of them.** `.env` is the development servers' (`bun run
+dev`, `dev:api`, `dev:web`, the database tools): what you would give a running Purlay. **`.env.test` is
+the tests' — the address of the database *server* they may create and drop scratch databases on** — and
+the demo's, the browser suite's and the budgets'. Copy `.env.test.example` to `.env.test`: one line,
+`DATABASE_URL`, pointing at the compose database (its user, password, database and port are the ones in
+`docker-compose.yml`, and the same URL the pipeline sets in `.github/workflows/ci.yml`). Those commands are
+started `bun --no-env-file --env-file=.env.test`, so nothing in `.env` reaches them — not the key, not the
+bucket, not a database that is yours — and every `bun` they start in turn says `--no-env-file` too:
+`scripts/hermetic.test.ts` refuses a place that forgot. Without `.env.test` or a `DATABASE_URL` in the
+environment `verify` still passes, on the unit tests alone, behind the banner below. The database a run
+points at is brought up to its latest migration by the run itself, so one last migrated a week ago is not a
+failure of the tests that use it.
 
 **Two verification commands, and the difference matters:**
 

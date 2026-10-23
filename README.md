@@ -67,16 +67,24 @@ was nearly built.
 
 On a server with Docker and the compose plugin, and a public name whose ports 80 and 443 reach it:
 
-1. Make a GitHub OAuth app whose callback is `https://<your name>/auth/callback/github`.
-2. `cp docker/production.env.example production.env`, and fill in every empty value; each says how to
+1. `cp docker/production.env.example production.env`, and fill in every empty value; each says how to
    make it. Keep the file private.
-3. `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait`
+2. `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait`
+3. Read the one-time setup code from the log — `docker compose -f docker-compose.production.yml
+   --env-file production.env logs api | grep 'SETUP CODE'` — and open `https://<your name>/setup`.
 
-That is all: the database migrates as the API starts, the object store is prepared on the way, and
-the certificate is issued. Sign in, and make the first workspace from the screen you land on; you are
-its owner. Nobody else may make one unless `WORKSPACE_CREATORS` names them; everyone else is invited. Every variable is in [`docs/CONFIG.md`](docs/CONFIG.md), with backups, restores and
-upgrades ("Production deployment"), and what personal data the instance holds, and how to erase it,
-is [`docs/DATA.md`](docs/DATA.md).
+That is all of the terminal: the database migrates as the API starts, the object store is prepared
+on the way, and the certificate is issued. The rest is the page: the code, the administrator (name,
+address and password), the sign-up policy, how other people sign in — **GitHub** (an OAuth app of your
+own, whose callback address the page shows) and/or **email** (a mail server, tried for real with a
+letter to the administrator that also verifies the address) — the first workspace, and the first
+invitations. Setup does not finish until at least one way for other people to sign in has been tried
+and worked; skipping both is said, not allowed. Everything it asked can be changed afterwards under
+*Administration → Server*, and the sign-up policy is *invite-only* unless you choose otherwise.
+Nobody else may make a workspace unless `WORKSPACE_CREATORS` names them; everyone else is invited.
+Every variable is in [`docs/CONFIG.md`](docs/CONFIG.md), with backups, restores and upgrades
+("Production deployment") and the setup code in full; what personal data the instance holds, and how
+to erase it, is [`docs/DATA.md`](docs/DATA.md).
 
 ---
 

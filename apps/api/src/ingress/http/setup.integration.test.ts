@@ -245,6 +245,20 @@ const quotedPrintable = (data: string): string =>
     .replace(/=\r?\n/g, '')
     .replace(/=([0-9A-F]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
 
+/** The same, read as UTF-8 text: what a person with an accented alphabet reads in the letter. */
+const utf8Text = (data: string): string => {
+  const joined = data.replace(/=\r?\n/g, '');
+  const bytes: number[] = [];
+  for (let at = 0; at < joined.length; at += 1) {
+    const hex = joined.slice(at + 1, at + 3);
+    if (joined[at] === '=' && /^[0-9A-F]{2}$/.test(hex)) {
+      bytes.push(Number.parseInt(hex, 16));
+      at += 2;
+    } else bytes.push(...Buffer.from(joined.charAt(at), 'utf8'));
+  }
+  return Buffer.from(bytes).toString('utf8');
+};
+
 const tokenIn = (relay: ScriptedRelay, at = 0): string => {
   const token = /\/setup\/verify#([0-9a-f]{64})/.exec(
     quotedPrintable(relay.received[at]?.data ?? ''),
@@ -301,6 +315,7 @@ const HOLDER_ROUTES: readonly [method: 'GET' | 'POST', path: string, body: unkno
       save: true,
     },
   ],
+  ['POST', '/setup/smtp', { resend: true, locale: 'en' }],
   ['POST', '/setup/workspace', { name: 'Analytical', slug: 'analytical' }],
   ['POST', '/setup/invite', undefined],
   ['POST', '/setup/finish', undefined],
@@ -521,7 +536,16 @@ describe('integration: the setup over HTTP, start to finish', () => {
         save: true,
       },
     });
-    const verification = tokenIn(relay);
+    // A letter again, taken; then again, with the relay gone: what the new path writes holds no secret either.
+    await call(wizard, 'POST', '/setup/smtp', { cookie, body: { resend: true, locale: 'en' } });
+    const first = tokenIn(relay, 0);
+    const verification = tokenIn(relay, 1);
+    await relay.stop();
+    const gone = await call(wizard, 'POST', '/setup/smtp', {
+      cookie,
+      body: { resend: true, locale: 'en' },
+    });
+    expect(await gone.json()).toMatchObject({ ok: false, reason: 'unreachable' });
     await call(wizard, 'POST', '/setup/verify', { body: { token: verification } });
     await call(wizard, 'POST', '/setup/verify', { body: { token: 'f'.repeat(64) } });
     await passedTo(wizard, cookie, 'invite');
@@ -538,6 +562,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
       'a-wrong-secret-4410',
       RELAY_PASS,
       'a-wrong-relay-pass-55',
+      first,
       verification,
     ]) {
       expect([secret, written.includes(secret)]).toEqual([secret, false]);
@@ -634,7 +659,9 @@ describe('integration: only the browser holding the claim', () => {
     const routes = HOLDER_ROUTES.map(([method, path, body]): [typeof method, string, unknown] => [
       method,
       path,
-      path === '/setup/smtp' ? { ...(body as object), smtpUrl: smtpOf(relay) } : body,
+      path === '/setup/smtp' && typeof body === 'object' && body !== null && 'from' in body
+        ? { ...body, smtpUrl: smtpOf(relay) }
+        : body,
     ]);
     for (const cookie of [undefined, `${SETUP_COOKIE}=${'a'.repeat(64)}`, old]) {
       for (const [method, path, body] of routes) {
@@ -971,6 +998,256 @@ describe('integration: a try that fails saves nothing', () => {
     );
     expect((await readSettings(wizard.db, cipher)).signUp).toBe('invite-only');
     expect((await stateOf(wizard, cookie)).steps).not.toContain('policy');
+  });
+});
+
+describe('integration: the letter again (D-179 §4.3)', () => {
+  const RESEND = { resend: true, locale: 'en' } as const;
+
+  /** Through GitHub skipped, then the relay kept, with the first letter in its mailbox. */
+  const kept = async (wizard: Wizard, cookie: string, relay: ScriptedRelay): Promise<void> => {
+    await passedTo(wizard, cookie, 'github');
+    const response = await call(wizard, 'POST', '/setup/smtp', {
+      cookie,
+      body: {
+        smtpUrl: smtpOf(relay),
+        from: 'purlay@example.test',
+        allowPlaintext: false,
+        locale: 'en',
+        save: true,
+      },
+    });
+    expect(await response.json()).toEqual({ ok: true });
+  };
+
+  test('sends another letter through the relay that was kept: a new link, the old one no longer opens, nothing is saved again', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    const before = await readSettings(wizard.db, cipher);
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect([response.status, await response.json()]).toEqual([200, { ok: true }]);
+    expect(relay.received).toHaveLength(2);
+    expect(relay.received[1]?.to).toEqual([ADMIN.email]);
+    const first = tokenIn(relay, 0);
+    const second = tokenIn(relay, 1);
+    expect(second).not.toBe(first);
+    expect((await call(wizard, 'POST', '/setup/verify', { body: { token: first } })).status).toBe(
+      404,
+    );
+    expect((await call(wizard, 'POST', '/setup/verify', { body: { token: second } })).status).toBe(
+      200,
+    );
+    expect(await readSettings(wizard.db, cipher)).toEqual(before);
+  });
+
+  test('is refused before the mail step, and while no relay is kept, and sends nothing', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await passedTo(wizard, cookie, 'policy');
+    for (const stage of ['before the mail step', 'with the mail step skipped']) {
+      if (stage === 'with the mail step skipped') await passedTo(wizard, cookie, 'email');
+      const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+      expect([stage, response.status, await response.json()]).toEqual([
+        stage,
+        409,
+        {
+          error: {
+            code: 'SETUP_STEP_REFUSED',
+            message: 'That step comes later.',
+            details: { reason: 'out-of-order' },
+          },
+        },
+      ]);
+    }
+    expect(relay.commands).toEqual([]);
+  });
+
+  test('is refused before the mail step even when the settings already hold a relay, and sends nothing', async () => {
+    const relay = await aRelay();
+    const wizard = await aWizard({
+      seededRelay: { smtpUrl: smtpOf(relay), from: 'purlay@example.test', allowPlaintext: false },
+    });
+    const cookie = await claimed(wizard);
+    await passedTo(wizard, cookie, 'policy');
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect(response.status).toBe(409);
+    expect(relay.commands).toEqual([]);
+    const pending = await wizard.db
+      .selectFrom('admin_email_verification')
+      .select('user_id')
+      .where('id', '=', true)
+      .execute();
+    expect(pending).toEqual([]);
+  });
+
+  test('a relay that fails now is said by its reason, and the link the last letter carried still opens', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    const first = tokenIn(relay, 0);
+    await relay.stop();
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: false, reason: 'unreachable' });
+    expect((await call(wizard, 'POST', '/setup/verify', { body: { token: first } })).status).toBe(
+      200,
+    );
+  });
+
+  test('a new relay tried and refused leaves the link the first letter carried opening', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    const first = tokenIn(relay, 0);
+    const tried = await call(wizard, 'POST', '/setup/smtp', {
+      cookie,
+      body: {
+        smtpUrl: smtpOf(relay, 'the-wrong-password-9'),
+        from: 'purlay@example.test',
+        allowPlaintext: false,
+        locale: 'en',
+        save: true,
+      },
+    });
+    expect(await tried.json()).toMatchObject({ ok: false, reason: 'auth-failed' });
+    expect((await call(wizard, 'POST', '/setup/verify', { body: { token: first } })).status).toBe(
+      200,
+    );
+  });
+
+  test('a kept relay whose sender no longer passes the rules is a refusal by field, and the link still opens', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    const first = tokenIn(relay, 0);
+    await wizard.db
+      .updateTable('server_settings')
+      .set({ mail_from: 'Purlay <purlay@example.test>' })
+      .execute();
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect(response.status).toBe(400);
+    const { error } = (await response.json()) as { error: { details: { fields: object } } };
+    expect(Object.keys(error.details.fields)).toEqual(['from']);
+    expect(relay.received).toHaveLength(1);
+    expect((await call(wizard, 'POST', '/setup/verify', { body: { token: first } })).status).toBe(
+      200,
+    );
+  });
+
+  test('an address already verified is sent the plain test letter, with no link', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    await wizard.db
+      .updateTable('users')
+      .set({ email_verified: true })
+      .where('email', '=', ADMIN.email)
+      .execute();
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect(await response.json()).toEqual({ ok: true });
+    const data = quotedPrintable(relay.received[1]?.data ?? '');
+    expect(data).toContain('Subject: A test from your Purlay server');
+    expect(data).not.toContain('/setup/verify');
+  });
+
+  test('writes the letter in the language asked for', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    const response = await call(wizard, 'POST', '/setup/smtp', {
+      cookie,
+      body: { resend: true, locale: 'tr' },
+    });
+    expect(await response.json()).toEqual({ ok: true });
+    const turkish = utf8Text(relay.received[1]?.data ?? '');
+    expect(turkish).toContain('Bir Purlay sunucusu kurmuyorsan');
+    expect(utf8Text(relay.received[0]?.data ?? '')).toContain('If you are not setting up');
+    // And the link in it is the one that opens.
+    const link = /\/setup\/verify#([0-9a-f]{64})/.exec(turkish)?.[1] ?? '';
+    expect((await call(wizard, 'POST', '/setup/verify', { body: { token: link } })).status).toBe(
+      200,
+    );
+  });
+
+  test('passes no step and counts for no channel: a relay only in the settings is still untried after it', async () => {
+    const relay = await aRelay();
+    const wizard = await aWizard({
+      seededRelay: { smtpUrl: smtpOf(relay), from: 'purlay@example.test', allowPlaintext: false },
+    });
+    const cookie = await claimed(wizard);
+    await passedTo(wizard, cookie, 'github');
+    const before = await stateOf(wizard, cookie);
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect(await response.json()).toEqual({ ok: true });
+    expect(relay.received).toHaveLength(1);
+    const after = await stateOf(wizard, cookie);
+    expect(after.steps).toEqual(before.steps);
+    expect(after.steps).not.toContain('email');
+    expect(after.channels.email).toBe(false);
+  });
+
+  test('a relay whose login the key can no longer open is no relay: refused as out of turn, nothing sent', async () => {
+    const relay = await aRelay();
+    const wizard = await aWizard();
+    const cookie = await claimed(wizard);
+    await passedTo(wizard, cookie, 'github');
+    // Sealed under another key, as after a rotation.
+    const rotated = credentialCipher(
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+    );
+    await saveSettings(wizard.db, rotated, systemClock, {
+      smtp: { smtpUrl: smtpOf(relay), from: 'purlay@example.test', allowPlaintext: false },
+    });
+    const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+    expect(response.status).toBe(409);
+    expect(relay.commands).toEqual([]);
+  });
+
+  test('every resend is counted with the holder routes: the thirty-first in the window is limited, and no letter more is sent', async () => {
+    const wizard = await aWizard({ limits: 'real' });
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    let sent = 0;
+    let limited: Response | undefined;
+    for (let n = 0; n < SETUP_BUDGET.burst + 5 && limited === undefined; n += 1) {
+      const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body: RESEND });
+      if (response.status === 429) limited = response;
+      else {
+        expect(response.status).toBe(200);
+        sent += 1;
+      }
+    }
+    expect(limited?.status).toBe(429);
+    expect(Number(limited?.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(sent).toBeLessThanOrEqual(SETUP_BUDGET.burst);
+    // The first letter, and one for each resend that was let through: none for the one that was not.
+    expect(relay.received).toHaveLength(1 + sent);
+  });
+
+  test('a body that is neither a try, a skip nor a resend is a refusal by name, and nothing is sent', async () => {
+    const wizard = await aWizard();
+    const relay = await aRelay();
+    const cookie = await claimed(wizard);
+    await kept(wizard, cookie, relay);
+    for (const body of [
+      { resend: true },
+      { resend: false, locale: 'en' },
+      { resend: true, locale: 'de' },
+      { resend: true, locale: 'en', smtpUrl: smtpOf(relay) },
+    ]) {
+      const response = await call(wizard, 'POST', '/setup/smtp', { cookie, body });
+      expect([JSON.stringify(body), response.status]).toEqual([JSON.stringify(body), 400]);
+    }
+    expect(relay.received).toHaveLength(1);
   });
 });
 

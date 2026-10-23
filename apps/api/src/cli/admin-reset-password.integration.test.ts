@@ -41,7 +41,8 @@ const run = (
 ): Ran => {
   const rest = { ...process.env };
   delete rest['DATABASE_URL'];
-  const done = Bun.spawnSync(['bun', 'run', SCRIPT, ...args], {
+  // `--no-env-file`: a machine's own `.env` names a DATABASE_URL, and "without a database" would not be.
+  const done = Bun.spawnSync(['bun', '--no-env-file', 'run', SCRIPT, ...args], {
     stdin: Buffer.from(stdin),
     env: { ...rest, ...(url === undefined ? {} : { DATABASE_URL: url }), ...env },
   });

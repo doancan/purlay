@@ -40,7 +40,7 @@ import {
   type GitHubProbeDependencies,
 } from './probes';
 import { applySettings, type SettingsChange } from './runtime';
-import type { SmtpSettings } from './settings';
+import { readSettingsToBoot, type SmtpSettings } from './settings';
 import {
   completeSetup,
   heldBy,
@@ -55,6 +55,7 @@ import {
   adminVerificationLetter,
   issueAdminVerification,
   relayTestLetter,
+  restoreAdminVerification,
   VerificationRefused,
 } from './verification';
 
@@ -235,6 +236,13 @@ export const tryGitHub = async (
   return result;
 };
 
+/** A letter for the administrator, and what to do if the relay did not take it. */
+interface AdminLetter {
+  readonly message: MailMessage;
+  /** Puts back the link this letter replaced; nothing to do for a letter that carries none. */
+  readonly putBack: () => Promise<void>;
+}
+
 /**
  * The letter the relay is tried with: the administrator's address link, or — the address verified
  * already — a plain test. Made only once the candidate could be tried, so a refused one replaces no link.
@@ -243,10 +251,21 @@ const letterForTheAdministrator = async (
   executor: Executor,
   session: SetupSession,
   { appUrl, locale, clock }: { appUrl: string; locale: SignInLocale; clock: Clock },
-): Promise<MailMessage> => {
+): Promise<AdminLetter> => {
   try {
-    const { token, email } = await issueAdminVerification(executor, session, { clock });
-    return adminVerificationLetter({ to: email, appUrl, token, locale });
+    const issued = await issueAdminVerification(executor, session, { clock });
+    return {
+      message: adminVerificationLetter({
+        to: issued.email,
+        appUrl,
+        token: issued.token,
+        locale,
+      }),
+      putBack: async (): Promise<void> => {
+        if (issued.previous === undefined) return;
+        await restoreAdminVerification(executor, issued.previous, issued.digest);
+      },
+    };
   } catch (error) {
     if (!(error instanceof VerificationRefused)) throw error;
     if (error.refusal.reason === 'no-admin') throw new SetupRefused({ reason: 'out-of-order' });
@@ -261,7 +280,82 @@ const letterForTheAdministrator = async (
         .executeTakeFirst();
     });
     if (admin === undefined) throw new SetupRefused({ reason: 'out-of-order' });
-    return relayTestLetter({ to: admin.email, appUrl, locale });
+    return {
+      message: relayTestLetter({ to: admin.email, appUrl, locale }),
+      putBack: (): Promise<void> => Promise.resolve(),
+    };
+  }
+};
+
+/** The letters in flight, one chain for each claim: what a send waits behind. */
+const lettersInFlight = new Map<string, Promise<void>>();
+
+/**
+ * One letter at a time for a claim. The link is a single row, so two sends at once each read what the
+ * other had just replaced — a link no mailbox holds — as the one to put back if theirs failed, and the
+ * link of the letter that *was* delivered was lost with it. Behind each other, a send that fails puts back
+ * what the one before it left in force. A double press, two tabs, or a resend while a new relay is being
+ * tried all land here. (One process: a setup is on one node, as the schedule is one container.)
+ */
+const oneLetterAtATime = async <T>(session: SetupSession, work: () => Promise<T>): Promise<T> => {
+  const key = session.claimDigest;
+  const mine = (lettersInFlight.get(key) ?? Promise.resolve()).then(work);
+  const settled = mine.then(
+    () => undefined,
+    () => undefined,
+  );
+  lettersInFlight.set(key, settled);
+  try {
+    return await mine;
+  } finally {
+    if (lettersInFlight.get(key) === settled) lettersInFlight.delete(key);
+  }
+};
+
+/**
+ * The relay tried with an administrator's letter. A letter's link replaces the one before it, so a relay
+ * that does not take the letter — refused, unreachable, or gone mid-way — has replaced a link that was
+ * perhaps in a mailbox with one no mailbox holds: the earlier link is put back, only while the row still
+ * holds this letter's (`restoreAdminVerification`). A put-back that itself fails is logged and says nothing
+ * more: what the caller was about to be told — the relay's answer, or its own error — still is.
+ *
+ * A try that ends at its deadline may have handed the letter over all the same; the earlier link is put
+ * back anyway, since the common failure is a relay that is down, and there the earlier letter is the only
+ * one that exists. The letter that arrives late then carries a link that no longer opens, which another
+ * send makes right.
+ */
+const probeWithLetter = async (
+  {
+    change,
+    transportFactory,
+  }: Pick<WizardDependencies, 'change'> & {
+    readonly transportFactory: SmtpTransportFactory;
+  },
+  session: SetupSession,
+  relay: SmtpSettings,
+  letter: AdminLetter,
+): Promise<ProbeResult> => {
+  let taken = false;
+  try {
+    const result = await probeSmtp(session, relay, letter.message, {
+      transportFactory,
+      timeoutMs: SMTP_PROBE_TIMEOUT_MS,
+    });
+    taken = result.ok;
+    return result;
+  } finally {
+    if (!taken) {
+      try {
+        await letter.putBack();
+      } catch (error) {
+        change.log.error(
+          'the administrator’s earlier link could not be put back after a letter that was not sent',
+          {
+            err: error,
+          },
+        );
+      }
+    }
   }
 };
 
@@ -285,15 +379,47 @@ export const tryRelay = async (
   await inTurn(database, session, 'email', clock);
   const refused = candidateRefusal(candidate);
   if (refused !== undefined) throw refused;
-  const message = await letterForTheAdministrator(database, session, { appUrl, locale, clock });
-  const result = await probeSmtp(session, candidate, message, {
-    transportFactory,
-    timeoutMs: SMTP_PROBE_TIMEOUT_MS,
+  const result = await oneLetterAtATime(session, async () => {
+    const letter = await letterForTheAdministrator(database, session, { appUrl, locale, clock });
+    return await probeWithLetter({ change, transportFactory }, session, candidate, letter);
   });
   if (!result.ok || !save) return result;
   await applySettings(database, { smtp: candidate }, change);
   await recordChannelTried(database, session, 'email', clock);
   return result;
+};
+
+/**
+ * The administrator's letter sent again through the relay that was kept — for the person whose first
+ * one never came, who cannot be asked for the relay's address again: it is never shown to a browser
+ * after it is saved. Nothing is saved and no step passes. The new link replaces the old; if the relay
+ * then fails, the old one is put back (`probeWithLetter`), so a failed resend never leaves the address
+ * with no link that can open.
+ */
+export const resendRelayLetter = async (
+  {
+    database,
+    clock,
+    change,
+    appUrl,
+    transportFactory = smtpTransport,
+  }: WizardDependencies & {
+    readonly appUrl: string;
+    readonly transportFactory?: SmtpTransportFactory;
+  },
+  session: SetupSession,
+  locale: SignInLocale,
+): Promise<ProbeResult> => {
+  await inTurn(database, session, 'email', clock);
+  // A relay whose login the key can no longer open reads as unset, as everywhere: nothing to send through.
+  return await oneLetterAtATime(session, async () => {
+    // Read inside the turn: the relay and the link in force are as the send before this one left them.
+    const { settings } = await readSettingsToBoot(database, change.cipher);
+    const relay = settings.smtp;
+    if (relay === undefined) throw new SetupRefused({ reason: 'out-of-order' });
+    const letter = await letterForTheAdministrator(database, session, { appUrl, locale, clock });
+    return await probeWithLetter({ change, transportFactory }, session, relay, letter);
+  });
 };
 
 /**

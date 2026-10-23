@@ -66,6 +66,104 @@ const Stages = ({ stoppedAt }: { readonly stoppedAt: MailStage | 'all' }): React
   );
 };
 
+/** Where a try stopped and what the service answered: the same for the form's try and a letter sent again. */
+const MailFailure = ({
+  result,
+}: {
+  readonly result: Extract<ProbeResult, { ok: false }>;
+}): React.JSX.Element => {
+  const { stoppedAt } = REASONS[result.reason];
+  return (
+    <>
+      {stoppedAt !== null && <Stages stoppedAt={stoppedAt} />}
+      <ProbeFailure result={result} />
+    </>
+  );
+};
+
+/**
+ * The letter again, through the relay already kept: for the person whose first one never came, and who
+ * cannot be asked for the relay's address a second time — it is never shown to a browser after it is
+ * saved. A new letter's link replaces the old, which the sentence says; a relay that now refuses is said
+ * the way a try's is, by where it stopped.
+ */
+const ResendLetter = ({
+  address,
+  verified,
+}: {
+  readonly address: string;
+  readonly verified: boolean;
+}): React.JSX.Element => {
+  const { t, locale } = useI18n();
+  const { client, lose } = useSetup();
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<ProbeResult | null>(null);
+  // Which letter went, as the server's state says when it answered — not as this screen was drawn.
+  const [wasVerified, setWasVerified] = useState(verified);
+  const [failure, setFailure] = useState<unknown>(null);
+
+  const send = async (): Promise<void> => {
+    setBusy(true);
+    setFailure(null);
+    // The last answer is not this one's: a "sent" that was true a minute ago is not shown beside a new try.
+    setOutcome(null);
+    try {
+      const result = await client.resendSmtp(locale === 'tr' ? 'tr' : 'en');
+      if (result.ok) {
+        // The address may have been verified since this screen was drawn — in another tab — and then the
+        // server sent a test message, not a link. Read it alone: the wizard's own state is not refreshed
+        // here, since a refresh would move the screen on (the mail step has passed) and take this note away.
+        try {
+          setWasVerified((await client.state()).admin?.emailVerified === true);
+        } catch {
+          setWasVerified(verified);
+        }
+      }
+      setOutcome(result);
+    } catch (caught) {
+      setFailure(caught);
+      if (isSetupFailure(caught) && caught.code === 'SETUP_UNAVAILABLE') lose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // The server could not try what is kept (its sender or address no longer passes the rules): nothing
+  // here can change it — the form behind *Try again* can.
+  const cannotBeTried = isSetupFailure(failure) && failure.code === 'VALIDATION_FAILED';
+
+  return (
+    <div className="flex max-w-dialog flex-col gap-3">
+      <div>
+        <Button
+          busy={busy}
+          disabled={busy}
+          onClick={() => {
+            void send();
+          }}
+        >
+          {verified ? t('setup.email.resendTest') : t('setup.email.resend')}
+        </Button>
+      </div>
+      {outcome?.ok === true && (
+        <Note tone="good">
+          {wasVerified
+            ? t('setup.email.resentTest', { email: address })
+            : t('setup.email.resent', { email: address })}
+        </Note>
+      )}
+      {outcome?.ok === false && (
+        <>
+          <MailFailure result={outcome} />
+          <p className="text-body text-ink-muted">{t('setup.email.resendFix')}</p>
+        </>
+      )}
+      {cannotBeTried && <Note tone="warn">{t('setup.email.resendSavedInvalid')}</Note>}
+      {failure !== null && !cannotBeTried && <FailureNote failure={failure} />}
+    </div>
+  );
+};
+
 export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX.Element => {
   const { t, locale } = useI18n();
   const { client, refresh, lose } = useSetup();
@@ -79,6 +177,8 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
   const [busy, setBusy] = useState<'try' | 'skip' | null>(null);
   const [result, setResult] = useState<ProbeResult | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
+  // Fields of the last refusal that were edited since, so their sentences are gone.
+  const [cleared, setCleared] = useState<readonly string[]>([]);
 
   useHeadingFocusOnChange(
     connected && !editing && result === null ? 'connected' : result?.ok === true ? 'sent' : 'form',
@@ -86,6 +186,22 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
 
   const admin = state.admin;
   const address = admin?.email ?? '';
+  // What the server said about a field it would not try: said under that field, in this screen's words,
+  // until that field is edited. A refusal whose every field is one of these two is wholly explained there.
+  const refusedFields =
+    isSetupFailure(failure) && failure.code === 'VALIDATION_FAILED'
+      ? Object.keys(failure.fields)
+      : [];
+  const explained =
+    refusedFields.length > 0 && refusedFields.every((one) => one === 'from' || one === 'smtpUrl');
+  const fromRefused = refusedFields.includes('from') && !cleared.includes('from');
+  const urlRefused = refusedFields.includes('smtpUrl') && !cleared.includes('smtpUrl');
+  /** A field edited: its own refusal goes; a failure that was not about a field goes with any edit. */
+  const edited = (field: 'from' | 'smtpUrl'): void => {
+    setResult(null);
+    if (explained) setCleared((now) => (now.includes(field) ? now : [...now, field]));
+    else setFailure(null);
+  };
 
   const fail = (caught: unknown): void => {
     setFailure(caught);
@@ -95,6 +211,7 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
   const submit = async (): Promise<void> => {
     setBusy('try');
     setFailure(null);
+    setCleared([]);
     try {
       const value = await client.smtp({
         smtpUrl: smtpUrl.trim(),
@@ -136,6 +253,7 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
       <div className="flex flex-col gap-6">
         <StepHeader title={t('setup.email.title')} lede={t('setup.email.lede')} />
         <Note tone="good">{t('setup.email.connected')}</Note>
+        <ResendLetter address={address} verified={admin?.emailVerified === true} />
         <Actions start={back}>
           <Button
             onClick={() => {
@@ -173,6 +291,7 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
               ? t('setup.email.sentTest', { email: address })
               : t('setup.email.sent', { email: address })}
           </Note>
+          <ResendLetter address={address} verified={admin?.emailVerified === true} />
         </div>
         <Actions>
           <Button
@@ -207,22 +326,25 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
         <MailServerField
           value={smtpUrl}
           invalid={field === 'smtpUrl'}
+          {...(urlRefused ? { error: t('setup.email.urlInvalid') } : {})}
           onChange={(value) => {
             setSmtpUrl(value);
-            setResult(null);
+            edited('smtpUrl');
           }}
         />
         <TextField
           label={t('setup.email.from')}
-          hint={t('setup.email.fromHint')}
+          // The refusal says it better, and in the same breath: the hint stands aside for it.
+          {...(fromRefused ? {} : { hint: t('setup.email.fromHint') })}
           value={from}
           autoComplete="off"
           spellCheck={false}
           maxLength={254}
           invalid={field === 'from'}
+          {...(fromRefused ? { error: t('setup.email.fromInvalid') } : {})}
           onChange={(event) => {
             setFrom(event.target.value);
-            setResult(null);
+            edited('from');
           }}
         />
         <label className="flex items-start gap-3">
@@ -246,13 +368,8 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
               : t('setup.email.letter', { email: address })}
           </p>
         )}
-        {failed !== null && words !== null && (
-          <>
-            {words.stoppedAt !== null && <Stages stoppedAt={words.stoppedAt} />}
-            <ProbeFailure result={failed} />
-          </>
-        )}
-        {failure !== null && <FailureNote failure={failure} />}
+        {failed !== null && words !== null && <MailFailure result={failed} />}
+        {failure !== null && !explained && <FailureNote failure={failure} />}
         <p className="text-caption text-ink-muted">{t('setup.email.skipNote')}</p>
       </div>
       <Actions

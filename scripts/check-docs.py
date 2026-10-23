@@ -10,8 +10,11 @@ a valid section with the wrong meaning, which no link checker would have caught.
 """
 import json, re, pathlib, collections, sys
 
+# A person's own tooling lives in directories no clone has and no commit carries (`.git/info/exclude`
+# names them on one machine). Reading them would fail the check here for a file CI never sees.
+PERSONAL = {'.agents', '.claude', '.superpowers', '.superdesign', '.swarm'}
 docs = {p.as_posix(): p.read_text() for p in sorted(pathlib.Path('.').rglob('*.md'))
-        if not {'.agents', '.claude', 'node_modules'} & set(p.parts)}
+        if not (PERSONAL | {'node_modules'}) & set(p.parts)}
 problems = collections.defaultdict(list)
 
 # ---- build a title index per document, covering all three heading styles ----
@@ -206,7 +209,7 @@ else:
 # #268 reached main with an unresolved conflict in two documents, and every gate
 # was green: nothing in this repository read for the markers, and the numbering
 # check counts decisions without looking at where they sit. Both are cheap to see.
-_skip = {'.git', '.agents', '.claude', 'node_modules', '.tsbuild', 'dist', 'coverage'}
+_skip = {'.git', 'node_modules', '.tsbuild', 'dist', 'coverage'} | PERSONAL
 _binary = {'.png', '.jpg', '.gif', '.ico', '.woff', '.woff2', '.lock'}
 _marker = re.compile(r'^(<{7}|>{7})( |$)|^={7}$', re.M)
 _scanned = 0

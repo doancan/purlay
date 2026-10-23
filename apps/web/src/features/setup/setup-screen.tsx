@@ -49,7 +49,7 @@ const Stepper = ({
   const { t } = useI18n();
   const reduced = useReducedMotion();
   return (
-    <aside className="flex w-sidebar shrink-0 flex-col gap-8 bg-nav-rail p-6 text-nav-ink max-narrow:hidden">
+    <aside className="flex w-sidebar shrink-0 flex-col gap-8 border-r-hairline border-border-subtle bg-surface-050 p-6 text-ink max-narrow:hidden">
       <div className="flex items-center gap-3 text-title">
         <LogoMark />
         <span>{t('setup.title')}</span>
@@ -68,7 +68,7 @@ const Stepper = ({
                 {index < SCREENS.length - 1 && (
                   <span
                     aria-hidden="true"
-                    className="absolute left-3 top-6 bottom-0 border-l-hairline border-nav-border"
+                    className="absolute left-3 top-6 bottom-0 border-l-hairline border-border-subtle"
                   />
                 )}
                 <span
@@ -77,17 +77,17 @@ const Stepper = ({
                     'relative inline-flex size-6 shrink-0 items-center justify-center rounded-pill border-hairline text-caption',
                     done && 'border-success bg-success text-on-status',
                     now && 'border-accent bg-accent text-on-accent',
-                    !done && !now && 'border-nav-border bg-nav-rail text-nav-ink-muted',
+                    !done && !now && 'border-border-subtle bg-surface-100 text-ink-muted',
                     done && settled === index && movementClass('mark-settle', reduced),
                   )}
                 >
                   {done ? <Icon name="confirm" size="sm" /> : index + 1}
                 </span>
                 <span className="flex min-w-0 flex-col">
-                  <span className={cn('text-label', !done && !now && 'text-nav-ink-muted')}>
+                  <span className={cn('text-label', !done && !now && 'text-ink-muted')}>
                     {t(NAMES[screen].name)}
                   </span>
-                  <span className="text-caption text-nav-ink-muted">{t(NAMES[screen].line)}</span>
+                  <span className="text-caption text-ink-muted">{t(NAMES[screen].line)}</span>
                   {done && <VisuallyHidden>{t('setup.done')}</VisuallyHidden>}
                 </span>
               </li>
@@ -95,7 +95,7 @@ const Stepper = ({
           })}
         </ol>
       </nav>
-      <p className="border-t-hairline border-nav-border pt-4 text-caption text-nav-ink-muted">
+      <p className="border-t-hairline border-border-subtle pt-4 text-caption text-ink-muted">
         {t('setup.foot')}
       </p>
     </aside>

@@ -14,7 +14,7 @@ const environment = {
 };
 
 const printed = (): Record<string, string> => {
-  const run = Bun.spawnSync(['bun', 'run', `${import.meta.dir}/push-keys.ts`]);
+  const run = Bun.spawnSync(['bun', '--no-env-file', 'run', `${import.meta.dir}/push-keys.ts`]);
   expect(run.exitCode).toBe(0);
   return Object.fromEntries(
     run.stdout

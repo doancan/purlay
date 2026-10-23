@@ -1496,6 +1496,21 @@ a place of its own for the migrator takes a schema, and a clone is for what must
 `harness.integration.test.ts` holds template build, clone and drop to budgets (2.5 s, 1 s, 1 s;
 measured 0.12 s, 0.03 s, 0.01 s on a laptop).*
 
+*Amended 2026-10-23 (the environment a run starts in): Bun loads `.env` from the working directory into
+every process it starts, so a machine with a development `.env` ran the suite — and each `bun` a test
+started in turn — against the developer's key, bucket and database, and three differences between that
+machine and CI were found by hand in one afternoon (the demo's sessions signed with another key than the
+server they were for; the browser suite's server writing to a real bucket; "without a database" finding
+one). A test run, the demo, the browser suite and the budgets are therefore started `bun --no-env-file
+--env-file=.env.test`: they read **one** file, the address of the database server they may create scratch
+databases on, and a clone with no such file is not an error. Every `bun` they start says `--no-env-file`,
+which `scripts/hermetic.test.ts` checks — a rule held by remembering is a wish (D-47). And the database
+`withRollback` uses *directly* — the one place a test does not run on a clone of the migrated template —
+is brought to the latest migration by the preload as the template is (`migrateIntegrationDatabase`): one
+last migrated before a migration was added answered "relation does not exist" to every test that used it.
+Considered and rejected: scrubbing the keys `.env` defines from the process in a preload — it cannot tell
+a value the developer exported on purpose from the same value in the file.*
+
 *Built 2026-10-08, with the first file that needed it (#31): `cloneIntegrationDatabase` in
 `packages/db/src/testing.ts`. The template is `<database>_template`, and it is migrated on every
 clone — a no-op when current, and the only thing stopping a template left by an older run from
@@ -8667,6 +8682,28 @@ tested. D-60's refusal of a revoked session on a socket, D-111 and the cross-ten
 rest of a person's data, and `DATA.md` lists them when their tables exist. `ENCRYPTION_KEY` now guards
 settings as well as integration tokens, so rotating it invalidates both. Each later change names the
 documentation page it was read from, and a difference between page and package is settled for the page.
+
+*Amended 2026-10-23 (the letter again):* the administrator's letter can be sent again from the e-mail
+step — `{ resend: true, locale }` on `/setup/smtp` — **through the relay already kept**, read on the
+server (`readSettingsToBoot`), because the relay's address is never shown to a browser a second time
+and a person whose first letter never came cannot be asked to type it, password and all. Refused
+`out-of-order` before the mail step is reached and while no relay is kept. Considered and rejected: a
+resend through the *serving* mailer, which would need failure reasons of its own — the probe already has
+the closed set, the wizard already says each, and the same path gives the same words.
+
+The link is one row, and a letter replaces it before it is known to have gone, so **any letter the relay
+does not take puts the link it replaced back** — a resend, and equally a *new* relay tried and refused
+(which, before, left the first letter's link dead). Three rules make that safe, each found by someone
+who did not write it: it is put back **only while the row still holds the link this letter issued**
+(`restoreAdminVerification` takes the digest; a later issue, or a link followed and spent, is not undone);
+**letters go one at a time for a claim** (`oneLetterAtATime`: two at once each read the other's undelivered
+link as the one to put back, and the delivered letter's link was lost — one process, since a setup is on
+one node); and a put-back that itself fails is logged and says nothing more, so the relay's answer is
+still the answer. *Accepted:* a try that ends at its deadline may have handed the letter over all the
+same, and the earlier link is put back regardless — the common failure is a relay that is down, where the
+earlier letter is the only one there is; the letter that arrives late then carries a link that no longer
+opens, and another send makes it right. The same change makes the wizard say a sender that carries a name
+— refused since the try was built — under its field, in its own words.
 
 **Cost of reversing.** The library, its configuration and plugin, the migrations (dropping the new
 tables and the column; `sessions` keeps its shape throughout), the wizard and `/setup`, and the

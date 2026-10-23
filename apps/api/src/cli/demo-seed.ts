@@ -28,7 +28,7 @@
 import { nobodyActive } from '../platform/attention';
 import { isTransaction, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import type { Config } from '../platform/config';
+import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../platform/config';
 import type { Clock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { createLogger } from '../platform/logging';
@@ -132,6 +132,14 @@ export const assertDemoDatabase = (connectionString: string): void => {
 };
 
 /**
+ * The secret a scratch server signs sessions with. Its key is always the development key
+ * (`scripts/demo.ts`, `testing/fresh-server.ts`), so a session made for it is signed with that key's
+ * secret — **never with whatever `ENCRYPTION_KEY` this process happens to hold**: a machine with a `.env`
+ * names its own, and a session signed with it is refused by the scratch server, every time, as a plain 401.
+ */
+export const demoSecret = (): string => deriveAuthSecret(DEVELOPMENT_ENCRYPTION_KEY);
+
+/**
  * A new session for a person the seed made, in a scratch database only. Signing out everywhere ends
  * every session a person holds, so a browser test of it would leave the seeded ones dead for a retry
  * or a second run against the same server; it asks for a session of its own instead.
@@ -200,7 +208,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
 
   // Signed with the secret the served instance derives from the same key, so the cookies printed
   // for a browser are the ones the server resolves (D-179).
-  const secret = deriveAuthSecret(config.ENCRYPTION_KEY);
+  const secret = demoSecret();
   const log = createLogger({ level: 'silent' });
   // The history is sent in bulk by four people, which the production write budget
   // would (rightly) refuse; the seed is not a client to rate-limit.

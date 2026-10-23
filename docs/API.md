@@ -166,7 +166,7 @@ policy, github, email, workspace, invite, finish.
 | ○ | `POST` | `/setup/address` | holder | `{ confirmed: true }` → `200`: `APP_URL` seen and confirmed (Ruling R35); it is a deployment setting, never this route's |
 | ○ | `POST` | `/setup/policy` | holder | `{ signUp }`, `invite-only` or `open` → `200`: saved and served at once |
 | ○ | `POST` | `/setup/github` | holder | `{ clientId, clientSecret, save? }` → `200 ProbeResult`; kept, and served at once, only when `ok` **and** `save`. `{ skip: true }` → `200`, the step passed with nothing connected |
-| ○ | `POST` | `/setup/smtp` | holder | `{ smtpUrl, from, allowPlaintext, locale, save? }` → `200 ProbeResult`: the relay tried with the administrator's address letter (a plain test letter, with no link, once the address is verified); kept only when `ok` **and** `save`. `{ skip: true }` → `200` |
+| ○ | `POST` | `/setup/smtp` | holder | `{ smtpUrl, from, allowPlaintext, locale, save? }` → `200 ProbeResult`: the relay tried with the administrator's address letter (a plain test letter, with no link, once the address is verified); kept only when `ok` **and** `save`. `{ skip: true }` → `200`. `{ resend: true, locale }` → `200 ProbeResult`: the same letter sent again through the relay **already kept** — the one thing a browser cannot name, since the relay's address is never shown again — nothing saved, no step passed; refused `409 SETUP_STEP_REFUSED` (`out-of-order`) before the mail step is reached and while no relay is kept (a login the key can no longer open reads as none). Its link replaces the one before; if the relay then refuses, the one before is put back (as it is after a *new* relay is tried and refused), only while the row still holds this letter's link, and letters for a claim go one at a time — so a failed send never leaves the address with no link that opens |
 | ○ | `POST` | `/setup/workspace` | holder | `CreateWorkspaceRequest` `{ name, slug }` → `201 Workspace`, the administrator its owner, with `#general` (D-174); asked again, `200` and the one made before, whatever was asked |
 | ○ | `POST` | `/setup/invite` | holder | no body → `200`: the invitations sent through the invitation routes of §3 by the signed-in administrator, or skipped |
 | ○ | `POST` | `/setup/finish` | holder | no body → `204` and the claim's cookie cleared, when the finish rule holds; the door is closed from then on |
@@ -254,7 +254,7 @@ referrer carries it. `/setup/verify` is the client's page: it reads the token fr
 the fragment, and posts `{ token }` to `POST /setup/verify`. Every link that does not open — unknown,
 spent, past its day, its account gone or its address changed since — and every body that is not a
 well-formed token (64 hex characters, judged before anything is hashed) is the one answer,
-`404 ADMIN_LINK_NOT_FOUND`.
+`404 ADMIN_LINK_NOT_FOUND`. A letter that never came is sent again with `{ resend: true }` on `/setup/smtp` (§2): the newest link is the only one that opens, and a resend the relay refuses leaves the last working one in place.
 
 **Limits and the edge.** Every `/setup` route is limited per client — an IPv4 address or an IPv6 /64
 (`limitKeyFor`) — and the limit is charged before the claim is looked at or anything is weighed:

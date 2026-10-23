@@ -595,7 +595,7 @@ describe('integration: what a relay can do to a probe (review, fix round 1)', ()
       try { await createTransport({ host: '127.0.0.1', port: ${String(relay.port)}, secure: true, connectionTimeout: 5000 }).verify(); console.log('verified'); }
       catch (error) { console.log('refused', error.originalCode ?? error.code); }`;
     const run = async (environment: Record<string, string>): Promise<string> => {
-      const child = Bun.spawn(['bun', '-e', script], {
+      const child = Bun.spawn(['bun', '--no-env-file', '-e', script], {
         cwd: import.meta.dir,
         env: { ...process.env, ...environment },
         stdout: 'pipe',

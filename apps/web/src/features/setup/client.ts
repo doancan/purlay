@@ -89,6 +89,8 @@ export interface SetupClient {
   readonly skipGithub: () => Promise<void>;
   readonly smtp: (input: SmtpTry) => Promise<ProbeResult>;
   readonly skipSmtp: () => Promise<void>;
+  /** The administrator's letter again, through the relay already kept (it is never shown to a browser). */
+  readonly resendSmtp: (locale: 'en' | 'tr') => Promise<ProbeResult>;
   readonly workspace: (input: { readonly name: string; readonly slug: string }) => Promise<void>;
   readonly invite: () => Promise<void>;
   readonly finish: () => Promise<void>;
@@ -255,6 +257,7 @@ export const createSetupClient = (fetchFn: SetupFetch): SetupClient => {
     skipGithub: () => send('/setup/github', { skip: true }),
     smtp: (input) => probe('/setup/smtp', input),
     skipSmtp: () => send('/setup/smtp', { skip: true }),
+    resendSmtp: (locale) => probe('/setup/smtp', { resend: true, locale }),
     workspace: (input) => send('/setup/workspace', input),
     invite: () => send('/setup/invite'),
     finish: () => send('/setup/finish'),

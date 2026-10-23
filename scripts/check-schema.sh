@@ -32,12 +32,12 @@ database_of() {
 
 if [ -z "${DATABASE_URL:-}" ]; then
   export DATABASE_URL="$DEV_DATABASE_URL"
-  made="$(DATABASE_URL="$DEV_DATABASE_URL" bun "$THROWAWAY" clone | tail -n 1)"
+  made="$(DATABASE_URL="$DEV_DATABASE_URL" bun --no-env-file "$THROWAWAY" clone | tail -n 1)"
   clone_name="$(database_of "$made")"
   drop_clone() {
     local status=$?
     trap - EXIT
-    DATABASE_URL="$DEV_DATABASE_URL" bun "$THROWAWAY" drop "$clone_name" || echo "could not drop $clone_name" >&2
+    DATABASE_URL="$DEV_DATABASE_URL" bun --no-env-file "$THROWAWAY" drop "$clone_name" || echo "could not drop $clone_name" >&2
     exit "$status"
   }
   trap drop_clone EXIT

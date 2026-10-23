@@ -308,6 +308,21 @@ starts them, waits for both to report healthy, and runs `scripts/storage-init.sh
 bucket and the development key (`S3_ACCESS_KEY_ID` `GK000000000000000000000001`, secret in the
 script); `bun run db:reset` throws the data away and starts again.
 
+**Which process reads which file.** Bun loads `.env` from the working directory into every process it
+starts, so a rule that is not enforced leaks it everywhere: the demo's sessions were signed with the
+`.env`'s key and served with the development key, the browser suite's server wrote to the bucket the
+`.env` named, a test of "no database" found the one in `.env`. The model is two files, and each process
+reads one:
+
+| Process | Reads | Why |
+|---|---|---|
+| `bun run dev`, `dev:api`, `dev:web`, the database tools (`db:migrate`, `db:generate`, `job`, `admin:reset-password`) | `.env` | They run the real server, or act on the developer's own database |
+| `bun run test`, `test:integration`, `test:all`, `demo`, `test:e2e`, `budget:*`, and every `bun` they start | `.env.test` only (`--no-env-file --env-file=.env.test`) | They make scratch databases of their own and bring their own key, bucket and settings; the one thing they need from outside is the database server's address |
+| CI | neither: the workflow sets `DATABASE_URL` | A clone has no `.env`, and a missing `.env.test` is not an error |
+
+`.env.test.example` is the template, one variable. The check is `scripts/hermetic.test.ts`: every `bun`
+that a test or a script starts says `--no-env-file`.
+
 **Host ports are overridable**, because 5432 and 9000 are conventional and frequently already
 taken — and a port collision is exactly the friction that turns *self-hosts it from the README*
 into a support ticket (`PRD.md` §3, S-2):

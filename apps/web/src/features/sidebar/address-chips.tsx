@@ -78,7 +78,7 @@ export const AddressChips = ({
       </label>
       <div
         className={cn(
-          'flex min-h-control flex-wrap items-center gap-1 rounded-md border-hairline border-border-strong bg-surface-100 p-1 focus-within:outline-focus focus-within:outline-focus-ring focus-within:outline-offset-focus',
+          'flex min-h-control flex-wrap items-center gap-1 rounded-md border-hairline border-border-strong bg-surface-100 p-1 focus-within:outline-focus focus-within:outline-focus-ring focus-within:-outline-offset-focus',
           disabled && 'bg-surface-200',
         )}
       >

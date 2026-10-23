@@ -27,7 +27,7 @@ const aCopy = (): string => {
 };
 
 const run = (root: string, ...flags: string[]): { status: number; out: string } => {
-  const result = Bun.spawnSync(['bun', 'run', cli, '--root', root, ...flags], {
+  const result = Bun.spawnSync(['bun', '--no-env-file', 'run', cli, '--root', root, ...flags], {
     stdout: 'pipe',
     stderr: 'pipe',
   });

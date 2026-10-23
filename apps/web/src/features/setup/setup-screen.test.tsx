@@ -111,6 +111,17 @@ describe('the setup code', () => {
     expect(view.getByText('docker compose logs api | grep -i setup')).toBeDefined();
   });
 
+  for (const locale of ['en', 'tr'] as const) {
+    test(`says where the code is read once — to a screen reader as to the eye — in ${locale}`, async () => {
+      const view = await openSetup(aClient({ state: unheld }), { locale });
+      const where = catalogue[locale]['setup.claim.where'];
+      // The sentence introduces the command; the command's own name is another word, not the sentence again.
+      const said = view.container.textContent.split(where).length - 1;
+      expect(said).toBe(1);
+      expect(catalogue[locale]['setup.claim.command']).not.toBe(where);
+    });
+  }
+
   test('says a wrong code is not the code', async () => {
     const view = await claimAs(() =>
       Promise.reject(new SetupFailure(400, 'VALIDATION_FAILED', 'x', null, { code: 'x' })),

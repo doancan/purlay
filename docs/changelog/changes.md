@@ -6,6 +6,42 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-23: no `.env` in a test, and the test database kept current
+
+- **Tests, the demo, the browser suite and the budgets never read the development `.env`** (D-46,
+  amended): started `bun --no-env-file --env-file=.env.test`, and every `bun` they start says
+  `--no-env-file` — `scripts/hermetic.test.ts` refuses a place that forgot (it found twenty-five). Three
+  differences between a machine with a `.env` and CI were found by hand and are closed: demo sessions
+  signed with the `.env`'s key (a login that led to the sign-in screen), the browser suite's server writing
+  to the bucket the `.env` named, "without a database" finding the `.env`'s. `.env.test.example` is the
+  template; `CONTRIBUTING.md` §2 and `CONFIG.md` say which process reads which file.
+- **The database `withRollback` uses is migrated by the run** (`migrateIntegrationDatabase`, in the
+  preload): one last migrated before a migration was added failed every test that used it with "relation
+  does not exist". The same walk found `bun install` to be the missing step after a pull that adds a
+  dependency, and `db:migrate` the one after a pull that adds a migration.
+- `scripts/check-docs.py` skips a person's own tooling directories; `fresh-server` blanks the bucket
+  variables and writes its files whole.
+
+### Change — 2026-10-23: the setup wizard, walked end to end and closed up
+
+- **The administrator's letter can be sent again** (`API.md` §2, D-179 §4.3, amended): `{ resend: true,
+  locale }` on `/setup/smtp`, through the relay already kept — a browser cannot name it, it is never
+  shown twice. Refused `out-of-order` before the mail step and while no relay is kept. A resend the relay
+  refuses puts the previous link back. The wizard offers **Send the letter again** on the connected
+  e-mail screen and beside *We sent a message*.
+- **A sender with a name before it** (`Purlay <x@y>`) was refused by the server with the right reason,
+  and said on the page as *The server refused this*. It is now said under the field, in words, and the
+  hint says it before it is typed; an address the server cannot try is said under its own field too.
+- **The setup-code screen** read its introduction twice to a screen reader (the command's hidden name was
+  the same sentence); the command has a name of its own.
+- **A member in no channel** while the workspace has public ones to join is no longer told to *create
+  the first*; the section says so and offers **Browse channels**.
+- **README, *Self-hosting*,** described the sign-in-first flow D-179 replaced (a GitHub app before the
+  first start, then *make the first workspace*). It now describes the wizard: the setup code, then the
+  page. `UX.md` §11's GitHub row says the two buttons it has.
+- Found by walking a fresh server in a browser with a real mail relay (a scripted SMTP sink) and a second
+  browser for the invited person; nothing else in the first-run path was found missing.
+
 ### Change — 2026-10-22: upgrading a server made before the sign-in library
 
 - **`0055_backfill_existing_identities`**: an `accounts` row for every user who has a `github_id` (the

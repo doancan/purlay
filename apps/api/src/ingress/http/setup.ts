@@ -61,6 +61,7 @@ import {
   FinishRefused,
   makeFirstWorkspace,
   passStep,
+  resendRelayLetter,
   setupProgress,
   tryGitHub,
   tryRelay,
@@ -459,6 +460,18 @@ export const tryMailRelay = async (
       await passStep(dependencies.database, session, 'email', dependencies.clock);
     });
     return answer(holder, null);
+  }
+  if ('resend' in input) {
+    const sent = await said(
+      dependencies,
+      async () =>
+        await resendRelayLetter(
+          { ...wizardOf(dependencies), appUrl: dependencies.config.APP_URL },
+          session,
+          input.locale,
+        ),
+    );
+    return answer(holder, sent);
   }
   const result = await said(
     dependencies,

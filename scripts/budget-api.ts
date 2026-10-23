@@ -85,7 +85,7 @@ export const measureIdleRss = async (url: string): Promise<number> => {
   const problem = throwawayDatabaseProblem(url);
   if (problem !== undefined) throw new Error(problem);
   const port = await freePort();
-  const api = Bun.spawn(['bun', 'apps/api/src/index.ts'], {
+  const api = Bun.spawn(['bun', '--no-env-file', 'apps/api/src/index.ts'], {
     env: {
       ...process.env,
       NODE_ENV: 'development',
@@ -152,14 +152,14 @@ export const onAClone = async <T>(
   body: (url: string) => Promise<T>,
   world: CloneWorld = realWorld,
 ): Promise<T> => {
-  const made = world.spawn(['bun', THROWAWAY, 'clone']);
+  const made = world.spawn(['bun', '--no-env-file', THROWAWAY, 'clone']);
   const url = made.stdout.toString().trim().split('\n').at(-1) ?? '';
   if (made.exitCode !== 0 || url === '') {
     throw new Error('a clone of the test template could not be made to start the API on');
   }
   const name = new URL(url).pathname.slice(1);
   const drop = (): void => {
-    const dropped = world.spawn(['bun', THROWAWAY, 'drop', name]);
+    const dropped = world.spawn(['bun', '--no-env-file', THROWAWAY, 'drop', name]);
     // A clone left behind is said, not swallowed: it is a whole database on the developer's server.
     if (dropped.exitCode !== 0) {
       console.error(`budget:api — could not drop the clone "${name}"; drop it by hand.`);

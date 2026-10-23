@@ -105,7 +105,7 @@ const run = (
 };
 
 export const runMutations = (options: Options): Verdict[] => {
-  const command = options.command ?? ['bun', 'test'];
+  const command = options.command ?? ['bun', '--no-env-file', '--env-file=.env.test', 'test'];
   const timeoutMs = options.timeoutMs ?? 180_000;
   const root = resolve(options.root);
   const copy = copyTree(root);

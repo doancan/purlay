@@ -114,7 +114,7 @@ describe('a clone to start the API on, and what becomes of it', () => {
     const world: CloneWorld = {
       spawn: (command) => {
         commands.push([...command]);
-        return command[2] === 'clone'
+        return command.includes('clone')
           ? (over.clone ?? ran(0, `noise\n${CLONE_URL}\n`))
           : ran(over.drop ?? 0);
       },
@@ -142,7 +142,7 @@ describe('a clone to start the API on, and what becomes of it', () => {
     }, world);
     expect(answer).toBe(42);
     expect(seen).toEqual([CLONE_URL]);
-    expect(commands.map((command) => command.slice(2))).toEqual([
+    expect(commands.map((command) => command.slice(3))).toEqual([
       ['clone'],
       ['drop', 'purlay_clone_abc'],
     ]);
@@ -160,7 +160,7 @@ describe('a clone to start the API on, and what becomes of it', () => {
       (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
     expect(failed).toBe('the API did not start');
-    expect(commands.at(-1)?.slice(2)).toEqual(['drop', 'purlay_clone_abc']);
+    expect(commands.at(-1)?.slice(3)).toEqual(['drop', 'purlay_clone_abc']);
   });
 
   test('does not run the body, and drops nothing, when no clone could be made', async () => {
@@ -212,7 +212,7 @@ describe('a clone to start the API on, and what becomes of it', () => {
         handler();
       }).toThrow(`exit ${String(code)}`);
       expect(exits).toEqual([code]);
-      expect(commands.at(-1)?.slice(2)).toEqual(['drop', 'purlay_clone_abc']);
+      expect(commands.at(-1)?.slice(3)).toEqual(['drop', 'purlay_clone_abc']);
       reached();
       await running;
     }
@@ -231,6 +231,6 @@ describe('a clone to start the API on, and what becomes of it', () => {
     );
     expect(rss).toBe(77 * 1024 * 1024);
     expect(measured).toEqual([CLONE_URL]);
-    expect(commands.at(-1)?.slice(2)).toEqual(['drop', 'purlay_clone_abc']);
+    expect(commands.at(-1)?.slice(3)).toEqual(['drop', 'purlay_clone_abc']);
   });
 });

@@ -10,9 +10,7 @@
  */
 import { createDatabase } from '@purlay/db';
 import { systemClock } from '../platform/clock';
-import { DEVELOPMENT_ENCRYPTION_KEY } from '../platform/config';
-import { deriveAuthSecret } from '../modules/auth/better-auth';
-import { freshPerson, freshSession } from './demo-seed';
+import { demoSecret, freshPerson, freshSession } from './demo-seed';
 
 const valueOf = (flag: string): string | undefined => {
   const at = process.argv.indexOf(flag);
@@ -29,7 +27,7 @@ if ((existing === undefined) === (made === undefined) || url === undefined) {
 }
 
 // The key the scratch server runs with (`scripts/demo.ts`): the session is signed as it signs them.
-const secret = deriveAuthSecret(process.env['ENCRYPTION_KEY'] ?? DEVELOPMENT_ENCRYPTION_KEY);
+const secret = demoSecret();
 const database = createDatabase({ connectionString: url, poolSize: 1 });
 try {
   if (made !== undefined) {

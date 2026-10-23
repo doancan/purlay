@@ -114,6 +114,15 @@ describe('the requests the wizard sends', () => {
     });
     expect(sent).toEqual({ ok: true });
     expect(smtp.seen[0]?.path).toBe('/setup/smtp');
+
+    const again = ok({ ok: false, reason: 'unreachable', raw: 'ECONNREFUSED' });
+    expect(await createSetupClient(again.fetch).resendSmtp('tr')).toEqual({
+      ok: false,
+      reason: 'unreachable',
+      raw: 'ECONNREFUSED',
+    });
+    expect(again.seen[0]?.path).toBe('/setup/smtp');
+    expect(again.seen[0]?.init.body).toBe('{"resend":true,"locale":"tr"}');
   });
 
   test('sends the verification token and answers verified', async () => {
@@ -149,6 +158,7 @@ describe('an answer the browser does not trust', () => {
         c.smtp({ smtpUrl: 'a', from: 'b', allowPlaintext: false, locale: 'en', save: false }),
       'text',
     ],
+    ['a resend verdict that is not an object', (c): Promise<unknown> => c.resendSmtp('en'), 'text'],
     [
       'a verification that is not verified',
       (c): Promise<unknown> => c.verify('t'),

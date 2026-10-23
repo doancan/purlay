@@ -75,7 +75,7 @@ const run = async (command: string[], env: Record<string, string> = {}): Promise
 // ── 1. The client ────────────────────────────────────────────────────────────
 if (build) {
   say('building the client…');
-  await run(['bun', 'run', 'build:web']);
+  await run(['bun', '--no-env-file', 'run', 'build:web']);
 }
 
 // ── 2. A fresh database ──────────────────────────────────────────────────────
@@ -87,13 +87,13 @@ await admin.unsafe(`drop database if exists ${databaseName} with (force)`);
 await admin.unsafe(`create database ${databaseName}`);
 await admin.close();
 
-await run(['bun', 'run', 'db:migrate'], { DATABASE_URL: demoUrl });
+await run(['bun', '--no-env-file', 'run', 'db:migrate'], { DATABASE_URL: demoUrl });
 
 // ── 3. The seed ──────────────────────────────────────────────────────────────
 const directory = mkdtempSync(join(tmpdir(), 'purlay-demo-'));
 const seeded = manifestPath ?? join(directory, 'world.json');
 say('seeding the workspace through the API…');
-await run(['bun', 'run', 'apps/api/src/cli/seed-demo.ts', '--out', seeded], {
+await run(['bun', '--no-env-file', 'run', 'apps/api/src/cli/seed-demo.ts', '--out', seeded], {
   DATABASE_URL: demoUrl,
   APP_URL: origin,
 });
@@ -122,7 +122,7 @@ if (files !== null) {
   say(`attachments are kept in ${files}`);
 }
 say(`starting the API on :${String(apiPort)}…`);
-const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
+const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
   env: {
     ...process.env,

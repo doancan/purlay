@@ -31,6 +31,16 @@
   }
 
   /*
+   * A control with a line of its own — an input, a select, a bordered button — takes the ring *in place of*
+   * the line, as the composer's box does: drawn outside it with a gap there would be the line, the gap and
+   * the ring, which reads as two borders. Inset by the ring's own width, the ring covers the line and is the
+   * one edge. (A control with no line keeps the gap, which is what shows a ring on a filled button.)
+   */
+  .border-hairline:focus-visible {
+    outline-offset: calc(var(--size-focus-offset) * -1);
+  }
+
+  /*
    * Shiki paints code with its css-variables theme, which names a variable per kind of token.
    * Each is mapped to a syntax token here, and on every element that sets a theme (not only the
    * root), so highlighting follows whichever theme the code sits in — including the gallery's two

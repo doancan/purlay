@@ -11,15 +11,16 @@
  *
  * The manifest (`--manifest`, written when the API is ready) carries what a test needs and a person
  * cannot read from the screen: the setup code the API wrote to its log, the credentials the GitHub
- * stand-in knows, and the relay's port. The API has no GitHub and no SMTP of its own: a zero-env
+ * stand-in knows, the relay's port, and the mailbox — a file of every letter the relay took, whole, as
+ * JSON. The API has no GitHub and no SMTP of its own: a zero-env
  * boot (Ruling R38), which is the state the wizard exists for.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SQL } from 'bun';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from './github-stub';
-import { aRelay } from './relay';
+import { aScriptedRelay } from './smtp-relay';
 
 const DEVELOPMENT_KEY = 'ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMhISE=';
 const SAFE_DATABASE = /^purlay_(demo|e2e)[a-z0-9_]*$/;
@@ -72,7 +73,7 @@ const run = async (command: string[], env: Record<string, string> = {}): Promise
 
 if (build) {
   say('building the client…');
-  await run(['bun', 'run', 'build:web']);
+  await run(['bun', '--no-env-file', 'run', 'build:web']);
 }
 
 say(`recreating ${databaseName}…`);
@@ -81,7 +82,7 @@ const admin = new SQL(adminUrl);
 await admin.unsafe(`drop database if exists ${databaseName} with (force)`);
 await admin.unsafe(`create database ${databaseName}`);
 await admin.close();
-await run(['bun', 'run', 'db:migrate'], { DATABASE_URL: databaseUrl });
+await run(['bun', '--no-env-file', 'run', 'db:migrate'], { DATABASE_URL: databaseUrl });
 
 const github = aGitHubStub(
   { id: 1, login: 'ayse', name: 'Ayse', email: 'ayse@example.test' },
@@ -89,12 +90,27 @@ const github = aGitHubStub(
   GITHUB_STUB_CREDENTIALS,
 );
 const githubServed = github.serve(port + 2);
-const relay = aRelay();
+const relay = await aScriptedRelay();
 
 const directory = mkdtempSync(join(tmpdir(), 'purlay-fresh-'));
+// What the relay took, as the mailbox a browser test reads: every letter whole, in the order it came.
+const mailbox = join(directory, 'mailbox.json');
+/** Whole or not at all: a reader that comes while it is being written reads the file before, never half. */
+const writeWhole = (path: string, text: string): void => {
+  const scratch = `${path}.${String(process.pid)}.tmp`;
+  writeFileSync(scratch, text);
+  renameSync(scratch, path);
+};
+writeWhole(mailbox, '[]');
+let written = 0;
+const mailboxTimer = setInterval(() => {
+  if (relay.received.length === written) return;
+  written = relay.received.length;
+  writeWhole(mailbox, JSON.stringify(relay.received));
+}, 50);
 const files = join(directory, 'files');
 let log = '';
-const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
+const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
   env: {
     ...process.env,
@@ -104,7 +120,13 @@ const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
     APP_URL: origin,
     DATABASE_URL: databaseUrl,
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
+    // This server's own directory, never a bucket a `.env` names: it is thrown away with its database, and
+    // empty is unset (config), so the four S3 variables a `.env` may carry are blanked rather than inherited.
     STORAGE_DIRECTORY: files,
+    S3_ENDPOINT: '',
+    S3_BUCKET: '',
+    S3_ACCESS_KEY_ID: '',
+    S3_SECRET_ACCESS_KEY: '',
     GITHUB_URL: githubServed.url,
     GITHUB_API_URL: githubServed.url,
     CLIENT_DIST: join(root, 'apps/web/dist'),
@@ -141,15 +163,17 @@ const manifest = {
   code,
   github: { ...GITHUB_STUB_CREDENTIALS, url: githubServed.url },
   relay: { port: relay.port },
+  mailbox,
 };
-if (manifestPath !== undefined) writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+if (manifestPath !== undefined) writeWhole(manifestPath, JSON.stringify(manifest, null, 2));
 say(`READY ${origin}`);
 say(`  setup code: ${code}`);
 
 const stop = (): void => {
   api.kill();
   githubServed.stop();
-  relay.stop();
+  clearInterval(mailboxTimer);
+  void relay.stop();
   rmSync(directory, { recursive: true, force: true });
   process.exit(0);
 };

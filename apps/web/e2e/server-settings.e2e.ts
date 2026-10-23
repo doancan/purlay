@@ -35,6 +35,7 @@ test.beforeAll(async ({}, info) => {
   server = spawn(
     'bun',
     [
+      '--no-env-file',
       'run',
       'apps/api/src/testing/fresh-server.ts',
       '--no-build',

@@ -87,7 +87,7 @@ const SIGNED_TOKEN = /^[\w-]{32,}\.[\w%]{40,}$/;
 const freshSessionOf = (world: World, outsider: string): string => {
   const printed = execFileSync(
     'bun',
-    ['run', 'apps/api/src/cli/demo-session.ts', '--as', outsider],
+    ['--no-env-file', 'run', 'apps/api/src/cli/demo-session.ts', '--as', outsider],
     {
       cwd: join(import.meta.dirname, '../../..'),
       env: { ...process.env, DATABASE_URL: world.database },
@@ -125,11 +125,15 @@ const madePerson = async (
   username: string,
 ): Promise<{ userId: string; token: string }> => {
   const printed = (
-    await run('bun', ['run', 'apps/api/src/cli/demo-session.ts', '--new', username], {
-      cwd: join(import.meta.dirname, '../../..'),
-      env: { ...process.env, DATABASE_URL: world.database },
-      encoding: 'utf8',
-    })
+    await run(
+      'bun',
+      ['--no-env-file', 'run', 'apps/api/src/cli/demo-session.ts', '--new', username],
+      {
+        cwd: join(import.meta.dirname, '../../..'),
+        env: { ...process.env, DATABASE_URL: world.database },
+        encoding: 'utf8',
+      },
+    )
   ).stdout.trim();
   const [userId, token] = printed.split(' ');
   // Fail here, saying what came back, rather than as a 401 three steps later.

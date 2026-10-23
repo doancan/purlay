@@ -9,7 +9,7 @@
  * nothing either.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -49,6 +49,23 @@ const run = (root: string): { status: number; output: string } => {
 describe('the document check', () => {
   test('passes on the repository as it is', () => {
     const { status, output } = run(aCopy());
+    expect({ status, output }).toEqual({
+      status: 0,
+      output: expect.stringContaining('[ok]') as string,
+    });
+  });
+
+  test("does not read a person's own tooling directories, which no clone has and no commit carries", () => {
+    const root = aCopy();
+    // What an agent's notes on one machine look like: a pinned version, a stale count, a conflict marker.
+    for (const dir of ['.superpowers/sdd/plan', '.superdesign/notes', '.swarm/log']) {
+      mkdirSync(join(root, dir), { recursive: true });
+      writeFileSync(
+        join(root, dir, 'report.md'),
+        `Bun 1.4.3 was used. It claims 9 decisions.\n${'<'.repeat(7)} HEAD\n`,
+      );
+    }
+    const { status, output } = run(root);
     expect({ status, output }).toEqual({
       status: 0,
       output: expect.stringContaining('[ok]') as string,

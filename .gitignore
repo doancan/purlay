@@ -13,6 +13,8 @@
 *.env
 # tracked: must list every variable in CONFIG.md
 !.env.example
+# tracked: what `.env.test` is for, with the variable and where it points
+!.env.test.example
 
 # Key material. ENCRYPTION_KEY and GITHUB_CLIENT_SECRET live in .env, never here,
 # but a stray key file must never be committable by accident.

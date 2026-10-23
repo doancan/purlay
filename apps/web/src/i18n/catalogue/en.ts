@@ -1028,6 +1028,9 @@ export const en = {
   'state.channels.error.body': 'The server did not answer. Try again.',
   'state.channels.empty.title': 'No channels yet',
   'state.channels.empty.body': 'Create the first one; it takes a name and nothing else.',
+  'state.channels.unjoined.title': 'You are not in a channel yet',
+  'state.channels.unjoined.body':
+    'The workspace has channels you can join. Browse them to start, or make a new one.',
 
   // ── A new build (#334) ──────────────────────────────────────────────────
   'update.available': 'Purlay was updated. Reload to get the new version; your drafts are kept.',
@@ -1472,6 +1475,7 @@ export const en = {
   'setup.claim.title': 'Enter the setup code',
   'setup.claim.lede':
     'This proves you run this server. The code is written to the server’s log and nowhere else.',
+  'setup.claim.command': 'Command',
   'setup.claim.where': 'On the machine that runs the server, read it with:',
   'setup.claim.hour': 'The code works for one hour. Restarting the server writes a new one.',
   'setup.claim.label': 'Setup code',
@@ -1570,7 +1574,12 @@ export const en = {
   'setup.email.urlHint':
     'The relay’s address with its login, such as smtps://user:password@host:465.',
   'setup.email.from': 'Sender',
-  'setup.email.fromHint': 'The address messages come from.',
+  'setup.email.fromHint':
+    'One plain address, such as purlay@example.com. A name before it, like “Purlay <purlay@example.com>”, is not accepted.',
+  'setup.email.fromInvalid':
+    'Use one plain address, such as purlay@example.com, with no name before it.',
+  'setup.email.urlInvalid':
+    'The mail server must be an smtp:// or smtps:// address with a host; a user and a password go together, or neither is given.',
   'setup.email.plaintext': 'Allow an unencrypted connection',
   'setup.email.plaintextHint': 'Only for a relay on a private network.',
   'setup.email.letter': 'We will send a message to {email} that also verifies it.',
@@ -1586,6 +1595,14 @@ export const en = {
   'setup.email.stage.skipped': 'not reached',
   'setup.email.sent': 'We sent a message to {email}. Open the link in it to verify your address.',
   'setup.email.sentTest': 'We sent a test message to {email}.',
+  'setup.email.resend': 'Send the letter again',
+  'setup.email.resendTest': 'Send a test message again',
+  'setup.email.resent':
+    'We sent it again to {email}. The link in the earlier message no longer works; open the one in this message.',
+  'setup.email.resentTest': 'We sent another test message to {email}.',
+  'setup.email.resendSavedInvalid':
+    'The saved mail settings can no longer be tried as they are. Use “Try again” below to enter them again.',
+  'setup.email.resendFix': 'To change the mail server or the sender, use “Try again” below.',
   'setup.email.connected': 'Email is connected.',
   'setup.email.skipNote':
     'If you skip, invitation links are copied, not sent, and email sign-in and creating an account by email are hidden. GitHub, if connected, still lets everyone in. Your address stays unverified.',

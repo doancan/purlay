@@ -176,6 +176,35 @@ describe('the channels section', () => {
     await person().click(some(buttons.at(-1)));
     expect(view.getByRole('dialog', { name: 'New channel' })).toBeDefined();
   });
+
+  test('in no channel while the workspace has public ones to join, it says that — not "create the first one" — and offers Browse', async () => {
+    const unjoined = someChannels().map((c) => ({ ...c, state: null }));
+    const view = await open(
+      aSignedInApi({ channels: () => Promise.resolve(unjoined) }),
+      '/w/acme/questions',
+    );
+    expect(view.queryByText(en['state.channels.empty.title']) === null).toBe(true);
+    expect(view.getByText(en['state.channels.unjoined.title'])).toBeDefined();
+    expect(view.getByText(en['state.channels.unjoined.body'])).toBeDefined();
+    const browse = view.getAllByRole('button', { name: en['sidebar.browse'] });
+    await person().click(some(browse.at(-1)));
+    // The dialog is in the deferred chunk (D-163): it is there once the chunk has come.
+    await settle();
+    expect(view.getByRole('dialog', { name: en['sidebar.browse'] })).toBeDefined();
+  });
+
+  test('with only private channels left out, there is nothing to join and the first-channel prompt stays', async () => {
+    const unjoinedPrivate = someChannels().map((c) => ({
+      ...c,
+      state: null,
+      type: 'private' as const,
+    }));
+    const view = await open(
+      aSignedInApi({ channels: () => Promise.resolve(unjoinedPrivate) }),
+      '/w/acme/questions',
+    );
+    expect(view.getByText(en['state.channels.empty.title'])).toBeDefined();
+  });
 });
 
 describe('the people section', () => {

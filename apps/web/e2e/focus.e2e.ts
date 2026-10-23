@@ -11,12 +11,14 @@ import { expect, test } from './fixtures';
 import { shellReady } from './support';
 
 /** What the focused element shows, measured in the page: a ring on it or on one of its two parents. */
-const ringOfFocused = async (page: Page): Promise<{ what: string; ring: number }> =>
+const ringOfFocused = async (
+  page: Page,
+): Promise<{ what: string; ring: number; besideItsLine: boolean }> =>
   await page.evaluate(() => {
     const element = document.activeElement;
     // Past the last stop the browser hands focus to the page itself: not a stop.
     if (!(element instanceof HTMLElement) || element === document.body) {
-      return { what: 'nothing', ring: 0 };
+      return { what: 'nothing', ring: 0, besideItsLine: false };
     }
     const width = (node: Element): number => {
       const style = getComputedStyle(node);
@@ -28,7 +30,17 @@ const ringOfFocused = async (page: Page): Promise<{ what: string; ring: number }
       element.parentElement?.parentElement == null ? 0 : width(element.parentElement.parentElement),
     );
     const name = element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 40);
-    return { what: `${element.tagName.toLowerCase()} "${name}"`, ring };
+    // An element with a line of its own that keeps the ring outside it, a gap between: two lines, which
+    // reads as a mistake. The ring takes the line's place (the composer's way) — it is not offset outward.
+    const own = getComputedStyle(element);
+    const hasLine = ['Top', 'Right', 'Bottom', 'Left'].some(
+      (side) =>
+        Number.parseFloat(own.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0 &&
+        own.getPropertyValue(`border-${side.toLowerCase()}-style`) !== 'none',
+    );
+    const besideItsLine =
+      hasLine && own.outlineStyle !== 'none' && Number.parseFloat(own.outlineOffset) > 0;
+    return { what: `${element.tagName.toLowerCase()} "${name}"`, ring, besideItsLine };
   });
 
 test.describe('focus', () => {
@@ -51,6 +63,7 @@ test.describe('focus', () => {
     await expect(page.locator(`[data-thread-root="${root.id}"]`)).toBeVisible();
 
     const unringed: string[] = [];
+    const doubled: string[] = [];
     const seen = new Set<string>();
     for (let press = 0; press < 60; press++) {
       await page.keyboard.press('Tab');
@@ -58,6 +71,7 @@ test.describe('focus', () => {
       if (stop.what === 'nothing' || seen.has(stop.what)) continue;
       seen.add(stop.what);
       if (stop.ring < 2) unringed.push(`${stop.what} (${String(stop.ring)}px)`);
+      if (stop.besideItsLine) doubled.push(stop.what);
     }
     // Enough of the page was crossed for the answer to mean something. On a narrow window the
     // thread panel covers the channel and what it covers is out of the Tab order (D-122), so the
@@ -76,6 +90,8 @@ test.describe('focus', () => {
       expect(seen.size).toBeGreaterThan(10);
     }
     expect(unringed).toEqual([]);
+    // One line, not a line and a ring beside it.
+    expect(doubled).toEqual([]);
   });
 
   test('the feed is one Tab stop: its row, then that row’s own controls, then the composer (D-168)', async ({

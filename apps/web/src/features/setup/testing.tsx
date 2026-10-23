@@ -45,6 +45,7 @@ export const aClient = (over: Partial<SetupClient> = {}): SetupClient => ({
   skipGithub: unexpected('skipGithub'),
   smtp: unexpected('smtp'),
   skipSmtp: unexpected('skipSmtp'),
+  resendSmtp: unexpected('resendSmtp'),
   workspace: unexpected('workspace'),
   invite: unexpected('invite'),
   finish: unexpected('finish'),

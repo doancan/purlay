@@ -204,10 +204,13 @@ export const CopyField = ({
 export const MailServerField = ({
   value,
   invalid,
+  error,
   onChange,
 }: {
   readonly value: string;
   readonly invalid: boolean;
+  /** The server's refusal of the address itself, said under the field. */
+  readonly error?: string;
   readonly onChange: (value: string) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
@@ -225,6 +228,7 @@ export const MailServerField = ({
           maxLength={2048}
           className="font-mono"
           invalid={invalid}
+          {...(error === undefined ? {} : { error })}
           onChange={(event) => {
             onChange(event.target.value);
           }}

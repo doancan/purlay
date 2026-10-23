@@ -1008,6 +1008,9 @@ export const tr = {
   'state.channels.error.body': 'Sunucu yanıt vermedi. Yeniden dene.',
   'state.channels.empty.title': 'Henüz kanal yok',
   'state.channels.empty.body': 'İlkini oluştur; yalnızca bir ad yeter.',
+  'state.channels.unjoined.title': 'Henüz hiçbir kanalda değilsin',
+  'state.channels.unjoined.body':
+    'Çalışma alanında katılabileceğin kanallar var. Başlamak için göz at ya da yenisini aç.',
 
   // ── A new build (#334) ──────────────────────────────────────────────────
   'update.available': 'Purlay güncellendi. Yeni sürüm için yenile; taslakların korunur.',
@@ -1431,6 +1434,7 @@ export const tr = {
   'setup.claim.title': 'Kurulum kodunu gir',
   'setup.claim.lede':
     'Bu sunucuyu senin yönettiğini kanıtlar. Kod yalnızca sunucunun günlüğüne yazılır.',
+  'setup.claim.command': 'Komut',
   'setup.claim.where': 'Sunucunun çalıştığı makinede şununla oku:',
   'setup.claim.hour': 'Kod bir saat geçerlidir. Sunucuyu yeniden başlatmak yenisini yazar.',
   'setup.claim.label': 'Kurulum kodu',
@@ -1526,7 +1530,12 @@ export const tr = {
   'setup.email.urlHint':
     'Sunucunun adresi ve oturum bilgisi, örneğin smtps://kullanici:parola@host:465.',
   'setup.email.from': 'Gönderen',
-  'setup.email.fromHint': 'İletilerin geldiği adres.',
+  'setup.email.fromHint':
+    'Tek ve yalın bir adres, örneğin purlay@example.com. Önüne ad yazmak, “Purlay <purlay@example.com>” gibi, kabul edilmez.',
+  'setup.email.fromInvalid':
+    'Önünde ad olmadan, purlay@example.com gibi tek ve yalın bir adres kullan.',
+  'setup.email.urlInvalid':
+    'Posta sunucusu, bir ana makinesi olan smtp:// ya da smtps:// adresi olmalı; kullanıcı ve parola birlikte verilir ya da ikisi de verilmez.',
   'setup.email.plaintext': 'Şifresiz bağlantıya izin ver',
   'setup.email.plaintextHint': 'Yalnızca özel bir ağdaki sunucu için.',
   'setup.email.letter': '{email} adresine, onu doğrulayan bir ileti göndereceğiz.',
@@ -1543,6 +1552,15 @@ export const tr = {
   'setup.email.sent':
     '{email} adresine bir ileti gönderdik. Adresini doğrulamak için içindeki bağlantıyı aç.',
   'setup.email.sentTest': '{email} adresine bir deneme iletisi gönderdik.',
+  'setup.email.resend': 'Mektubu yeniden gönder',
+  'setup.email.resendTest': 'Deneme iletisini yeniden gönder',
+  'setup.email.resent':
+    '{email} adresine yeniden gönderdik. Önceki iletideki bağlantı artık çalışmaz; bu iletidekini aç.',
+  'setup.email.resentTest': '{email} adresine bir deneme iletisi daha gönderdik.',
+  'setup.email.resendSavedInvalid':
+    'Kayıtlı posta ayarları artık olduğu gibi denenemiyor. Yeniden girmek için aşağıdaki “Yeniden dene”yi kullan.',
+  'setup.email.resendFix':
+    'Posta sunucusunu ya da göndereni değiştirmek için aşağıdaki “Yeniden dene”yi kullan.',
   'setup.email.connected': 'E-posta bağlı.',
   'setup.email.skipNote':
     'Atlarsan davet bağlantıları gönderilmez, yalnızca kopyalanır; e-postayla giriş ve e-postayla hesap açma gizlenir. GitHub bağlıysa herkes yine de girer. Adresin doğrulanmamış kalır.',
