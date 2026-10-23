@@ -23,7 +23,9 @@ const horizontalOverflow = async (page: Page): Promise<number> =>
   await page.evaluate(() => {
     let widest = document.documentElement.scrollWidth - window.innerWidth;
     for (const element of document.body.querySelectorAll('*')) {
-      if (element.closest('pre, [data-diff]') !== null) continue;
+      // What scrolls sideways on purpose: code, a diff, and the composer's formatting row (D-181), which
+      // is one row on a phone and says so with its scrollbar.
+      if (element.closest('pre, [data-diff], [role="toolbar"]') !== null) continue;
       const { overflowX } = getComputedStyle(element);
       if (overflowX !== 'auto' && overflowX !== 'scroll') continue;
       widest = Math.max(widest, element.scrollWidth - element.clientWidth);

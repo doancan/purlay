@@ -6,7 +6,10 @@ import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 import {
   asCodeBlock,
   broadcastMention,
+  continueList,
+  formatKey,
   insertMarkdown,
+  insertText,
   insideFence,
   isLongPaste,
   rowsFor,
@@ -231,6 +234,264 @@ describe('the three buttons under the box (D-110): markdown, inserted where the 
     expect(insertMarkdown('ab', { start: 1, end: 1 }, 'bold')).toEqual({
       text: 'a****b',
       selection: { start: 3, end: 3 },
+    });
+  });
+});
+
+describe('the formatting buttons: every construct the renderer draws, as markdown (D-110, D-181)', () => {
+  const at = (start: number, end = start): { start: number; end: number } => ({ start, end });
+
+  test.each([
+    ['bullets', '- '],
+    ['numbers', '1. '],
+    ['quote', '> '],
+  ] as const)(
+    '%s on a blank line with the caret in it starts the list there, caret after the marker',
+    (kind, marker) => {
+      expect(insertMarkdown('', at(0), kind)).toEqual({
+        text: marker,
+        selection: { start: marker.length, end: marker.length },
+      });
+      expect(insertMarkdown('title\n\nend', at(6), kind)).toEqual({
+        text: `title\n${marker}\nend`,
+        selection: { start: 6 + marker.length, end: 6 + marker.length },
+      });
+    },
+  );
+
+  test.each([
+    ['italic', '_'],
+    ['strike', '~~'],
+    ['inlineCode', '`'],
+  ] as const)('%s wraps the selection in %s and keeps it selected', (kind, mark) => {
+    const wrapped = insertMarkdown('fix it', at(4, 6), kind);
+    expect(wrapped).toEqual({
+      text: `fix ${mark}it${mark}`,
+      selection: { start: 4 + mark.length, end: 6 + mark.length },
+    });
+  });
+
+  test.each([
+    ['bold', '**'],
+    ['italic', '_'],
+    ['strike', '~~'],
+    ['inlineCode', '`'],
+  ] as const)('%s with nothing selected leaves the caret between its markers', (kind, mark) => {
+    expect(insertMarkdown('', at(0), kind)).toEqual({
+      text: `${mark}${mark}`,
+      selection: { start: mark.length, end: mark.length },
+    });
+  });
+
+  test.each([
+    ['bold', '**'],
+    ['italic', '_'],
+    ['strike', '~~'],
+    ['inlineCode', '`'],
+  ] as const)(
+    '%s again takes its markers off: with the markers inside the selection, or around it',
+    (kind, mark) => {
+      // The selection includes the markers.
+      expect(insertMarkdown(`a ${mark}it${mark} b`, at(2, 4 + 2 * mark.length), kind)).toEqual({
+        text: 'a it b',
+        selection: { start: 2, end: 4 },
+      });
+      // The selection is what is inside them.
+      expect(
+        insertMarkdown(`a ${mark}it${mark} b`, at(2 + mark.length, 4 + mark.length), kind),
+      ).toEqual({ text: 'a it b', selection: { start: 2, end: 4 } });
+    },
+  );
+
+  test('inline code over a selection of several lines is a block, which is what it would have to be', () => {
+    expect(insertMarkdown('a\nb', at(0, 3), 'inlineCode')).toEqual(
+      insertMarkdown('a\nb', at(0, 3), 'code'),
+    );
+  });
+
+  test('inline code around a selection that holds a backtick uses a longer run, with a space inside it', () => {
+    expect(insertMarkdown('x`y', at(0, 3), 'inlineCode')).toEqual({
+      text: '`` x`y ``',
+      selection: { start: 3, end: 6 },
+    });
+  });
+
+  test('a link around words puts the address to be typed where the caret will be taken', () => {
+    expect(insertMarkdown('see docs', at(4, 8), 'link')).toEqual({
+      text: 'see [docs](https://)',
+      selection: { start: 11, end: 19 },
+    });
+  });
+
+  test('a link over an address makes the address the target, and asks for the words', () => {
+    expect(insertMarkdown('go https://purlay.test/x', at(3, 24), 'link')).toEqual({
+      text: 'go [text](https://purlay.test/x)',
+      selection: { start: 4, end: 8 },
+    });
+  });
+
+  test('a link with nothing selected writes a template with its words selected', () => {
+    expect(insertMarkdown('', at(0), 'link')).toEqual({
+      text: '[text](https://)',
+      selection: { start: 1, end: 5 },
+    });
+  });
+
+  test('a list takes a marker on every line the selection touches, whole lines, and keeps them selected', () => {
+    expect(insertMarkdown('one\ntwo\nthree', at(1, 6), 'bullets')).toEqual({
+      text: '- one\n- two\nthree',
+      selection: { start: 0, end: 11 },
+    });
+    expect(insertMarkdown('one\ntwo\nthree', at(0, 13), 'numbers')).toEqual({
+      text: '1. one\n2. two\n3. three',
+      selection: { start: 0, end: 22 },
+    });
+    expect(insertMarkdown('one\ntwo', at(0, 7), 'quote')).toEqual({
+      text: '> one\n> two',
+      selection: { start: 0, end: 11 },
+    });
+  });
+
+  test('with no selection a list marks the line the caret is on, and the caret stays after it', () => {
+    expect(insertMarkdown('a\nbb\nc', at(3), 'bullets')).toEqual({
+      text: 'a\n- bb\nc',
+      selection: { start: 5, end: 5 },
+    });
+  });
+
+  test('the same list again takes the markers off, when every line has one', () => {
+    expect(insertMarkdown('- one\n- two', at(0, 11), 'bullets')).toEqual({
+      text: 'one\ntwo',
+      selection: { start: 0, end: 7 },
+    });
+    expect(insertMarkdown('1. one\n2. two', at(0, 13), 'numbers')).toEqual({
+      text: 'one\ntwo',
+      selection: { start: 0, end: 7 },
+    });
+    expect(insertMarkdown('> one', at(0, 5), 'quote')).toEqual({
+      text: 'one',
+      selection: { start: 0, end: 3 },
+    });
+  });
+
+  test('a selection where only some lines have the marker gets it on all of them, and none is doubled', () => {
+    expect(insertMarkdown('- one\ntwo', at(0, 9), 'bullets')).toEqual({
+      text: '- one\n- two',
+      selection: { start: 0, end: 11 },
+    });
+  });
+});
+
+describe('Shift+Enter in a list or a quote carries it on (D-181)', () => {
+  test('a bulleted line is followed by a bulleted line, with the caret after its marker', () => {
+    expect(continueList('- one', 5)).toEqual({ text: '- one\n- ', caret: 8 });
+  });
+
+  test('a numbered line is followed by the next number, and the indent is kept', () => {
+    expect(continueList('2. two', 6)).toEqual({ text: '2. two\n3. ', caret: 10 });
+    expect(continueList('  - nested', 10)).toEqual({ text: '  - nested\n  - ', caret: 15 });
+  });
+
+  test('a quoted line is followed by a quoted line', () => {
+    expect(continueList('> said', 6)).toEqual({ text: '> said\n> ', caret: 9 });
+  });
+
+  test('an empty item ends the list: its marker goes, and no line is added', () => {
+    expect(continueList('- one\n- ', 8)).toEqual({ text: '- one\n', caret: 6 });
+    expect(continueList('1. ', 3)).toEqual({ text: '', caret: 0 });
+  });
+
+  test('text after the caret moves to the new item, and a caret mid-line splits it', () => {
+    expect(continueList('- ab', 3)).toEqual({ text: '- a\n- b', caret: 6 });
+  });
+
+  test('a line that is not a list is left to the browser', () => {
+    expect(continueList('plain', 5)).toBeNull();
+    expect(continueList('-not a list', 11)).toBeNull();
+    expect(continueList('', 0)).toBeNull();
+  });
+
+  test('inside a fence nothing is carried on, since a dash in code is not a list', () => {
+    expect(continueList('```\n- x', 8)).toBeNull();
+  });
+});
+
+describe('which formatting a key asks for (D-181)', () => {
+  const key = (
+    k: string,
+    over: Partial<{
+      code: string;
+      ctrlKey: boolean;
+      metaKey: boolean;
+      shiftKey: boolean;
+      altKey: boolean;
+    }> = {},
+  ): Parameters<typeof formatKey>[0] => ({
+    key: k,
+    code: '',
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...over,
+  });
+
+  test.each([
+    [key('b'), 'bold'],
+    [key('B'), 'bold'],
+    [key('i'), 'italic'],
+    [key('e'), 'inlineCode'],
+    [key('x', { shiftKey: true }), 'strike'],
+    [key('X', { shiftKey: true }), 'strike'],
+    [key('u', { shiftKey: true }), 'link'],
+    [key('p', { shiftKey: true }), 'preview'],
+    [key('b', { ctrlKey: false, metaKey: true }), 'bold'],
+  ] as const)('%j is %s', (event, expected) => {
+    expect(formatKey(event)).toBe(expected);
+  });
+
+  test.each([
+    ['Digit8', 'bullets'],
+    ['Digit7', 'numbers'],
+    ['Digit9', 'quote'],
+  ] as const)(
+    'Ctrl+Shift on %s is %s, whatever character the layout makes of that key',
+    (code, expected) => {
+      expect(formatKey(key('*', { code, shiftKey: true }))).toBe(expected);
+      expect(formatKey(key('&', { code, shiftKey: true }))).toBe(expected);
+    },
+  );
+
+  test.each([
+    ['without Ctrl or Meta', key('b', { ctrlKey: false })],
+    ['with Alt', key('b', { altKey: true })],
+    ['for a letter that means nothing', key('q')],
+    ['for Shift with a letter that is not strike', key('b', { shiftKey: true })],
+    ['for a digit without Shift', key('8', { code: 'Digit8' })],
+    ["for Ctrl+K, which is the palette's", key('k')],
+  ])('nothing %s', (_name, event) => {
+    expect(formatKey(event)).toBeNull();
+  });
+});
+
+describe('an emoji, or any text, put where the caret is (D-181)', () => {
+  test('replaces the selection, and the caret waits after it', () => {
+    expect(insertText('fix it now', { start: 4, end: 6 }, '😄')).toEqual({
+      text: 'fix 😄 now',
+      selection: { start: 6, end: 6 },
+    });
+  });
+
+  test('at a point it is inserted, and counts what it is in UTF-16 units, not in characters', () => {
+    const wide = insertText('ab', { start: 1, end: 1 }, '👍🏽');
+    expect(wide.text).toBe('a👍🏽b');
+    expect(wide.selection.start).toBe(1 + '👍🏽'.length);
+  });
+
+  test('into an empty box', () => {
+    expect(insertText('', { start: 0, end: 0 }, '🚀')).toEqual({
+      text: '🚀',
+      selection: { start: 2, end: 2 },
     });
   });
 });

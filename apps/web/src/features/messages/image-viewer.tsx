@@ -183,9 +183,11 @@ export const ImageViewer = ({
       }}
     >
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-palette bg-nav-rail" />
+        <RadixDialog.Overlay data-theme="dark" className="fixed inset-0 z-palette bg-nav-rail" />
         <RadixDialog.Content
           data-image-viewer=""
+          // The lightbox is dark in either theme: a picture is judged on a dark ground.
+          data-theme="dark"
           className="fixed inset-0 z-palette flex flex-col bg-nav-rail text-nav-ink outline-none"
           onOpenAutoFocus={(event) => {
             // The viewer itself takes the first focus: a control taking it would show its tooltip, and

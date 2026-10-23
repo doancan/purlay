@@ -927,6 +927,21 @@ export const tr = {
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
   'composer.bold': 'Kalın',
   'composer.codeBlock': 'Kod bloğu',
+  'composer.italic': 'İtalik',
+  'composer.strike': 'Üstü çizili',
+  'composer.inlineCode': 'Kod',
+  'composer.link': 'Bağlantı',
+  'composer.bullets': 'Madde işaretli liste',
+  'composer.numbers': 'Numaralı liste',
+  'composer.quote': 'Alıntı',
+  'composer.emoji': 'Emoji ekle',
+  'emoji.faces': 'Yüzler',
+  'emoji.hands': 'Eller ve insanlar',
+  'emoji.work': 'İş',
+  'emoji.symbols': 'Semboller',
+  'composer.preview': 'Önizleme',
+  'composer.previewEmpty': 'Önizlenecek bir şey yok',
+  'composer.format': 'Biçimlendirme',
   'composer.attach': 'Dosya ekle',
   'composer.files': 'Gönderilecek dosyalar',
   'composer.waiting': 'Dosyaların yüklenmesi bitince gönderilecek.',
@@ -1387,6 +1402,10 @@ export const tr = {
 
   // ── Klavye kısayolları, devamı ──────────────────────────────────────────
   'shortcuts.codeSend': 'Kod bloğunun içinden gönder',
+  'shortcuts.bold': 'Kalın',
+  'shortcuts.italic': 'İtalik',
+  'shortcuts.link': 'Bağlantı ekle',
+  'shortcuts.preview': 'Mesajı önizle',
   'shortcuts.or': 'ya da',
 
   // ── Kurulum sihirbazı (D-179 §4, UX §11) ────────────────────────────────

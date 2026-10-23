@@ -34,7 +34,11 @@ type RowKey =
   | 'shortcuts.resolve'
   | 'shortcuts.send'
   | 'shortcuts.newline'
-  | 'shortcuts.codeSend';
+  | 'shortcuts.codeSend'
+  | 'shortcuts.bold'
+  | 'shortcuts.italic'
+  | 'shortcuts.link'
+  | 'shortcuts.preview';
 
 type GroupKey =
   'shortcuts.group.navigation' | 'shortcuts.group.messages' | 'shortcuts.group.composer';
@@ -80,6 +84,10 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
       { label: 'shortcuts.send', keys: (k) => [[k.enter]] },
       { label: 'shortcuts.newline', keys: (k) => [[k.shift, k.enter]] },
       { label: 'shortcuts.codeSend', keys: (k) => [[k.mod, k.enter]] },
+      { label: 'shortcuts.bold', keys: (k) => [[k.mod, 'B']] },
+      { label: 'shortcuts.italic', keys: (k) => [[k.mod, 'I']] },
+      { label: 'shortcuts.link', keys: (k) => [[k.mod, k.shift, 'U']] },
+      { label: 'shortcuts.preview', keys: (k) => [[k.mod, k.shift, 'P']] },
     ],
   },
 ];

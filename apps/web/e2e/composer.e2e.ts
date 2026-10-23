@@ -521,3 +521,86 @@ test.describe('@ and a name', () => {
     expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([]);
   });
 });
+
+test.describe('the formatting row, the emoji picker and the preview (D-181)', () => {
+  test('a button only inserts markdown: the server holds the text, a list carries on with Shift+Enter, and the message is drawn bold', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.click();
+    await page.getByRole('button', { name: 'Bold' }).click();
+    await page.keyboard.type('ship it');
+    await expect(box).toHaveValue('**ship it**');
+    // The caret to the end by script: a key races the caret the button put between the markers.
+    await box.evaluate((el: HTMLTextAreaElement) => {
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+    await box.press('Shift+Enter');
+    await page.getByRole('button', { name: 'Bulleted list' }).click();
+    await page.keyboard.type('one');
+    await box.press('Shift+Enter');
+    await expect(box).toHaveValue('**ship it**\n- one\n- ');
+    await page.keyboard.type('two');
+    await box.press('Enter');
+    await expectDelivered(page, 'two');
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([
+      '**ship it**\n- one\n- two',
+    ]);
+    await expect(rowWith(page, 'two').locator('strong')).toHaveText('ship it');
+  });
+
+  test('the emoji picker writes the emoji at the caret and gives the focus back; Esc closes it with nothing written', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.fill('done');
+    await page.getByRole('button', { name: 'Add an emoji' }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menuitemcheckbox', { name: '🚀' })).toHaveCount(0);
+    await expect(box).toBeFocused();
+    await expect(box).toHaveValue('done');
+    await page.getByRole('button', { name: 'Add an emoji' }).click();
+    await page.getByRole('menuitemcheckbox', { name: '🚀' }).click();
+    await expect(box).toHaveValue('done🚀');
+    await expect(box).toBeFocused();
+    await box.press('Enter');
+    await expectDelivered(page, 'done🚀');
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual(['done🚀']);
+  });
+
+  test('the preview draws the draft as it will be sent, and a second press goes back to the text untouched', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.fill('a **bold** and `code` word');
+    await page.getByRole('button', { name: 'Preview' }).click();
+    const preview = page.locator('[data-composer-preview]');
+    await expect(preview.locator('strong')).toHaveText('bold');
+    await expect(preview.locator('code')).toHaveText('code');
+    await expect(page.getByRole('button', { name: 'Preview' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.getByRole('button', { name: 'Preview' }).click();
+    await expect(preview).toHaveCount(0);
+    await expect(box).toBeFocused();
+    await expect(box).toHaveValue('a **bold** and `code` word');
+  });
+});

@@ -8710,6 +8710,68 @@ tables and the column; `sessions` keeps its shape throughout), the wizard and `/
 `server_settings` import. A reversal returns to the code D-11, D-38 and D-138 describe; the
 `workspaces` module was never touched, which is what makes it possible.
 
+### D-180. Navigation follows the theme: a light neutral in the light theme, the dark navy in the dark — changes D-118
+
+**Decided (the owner, 2026-10-23).** D-118 drew the rail and the sidebar in dark navy in *both* themes. The
+owner, using the product, asked for the left menu to be light in the light theme, and for the dark theme to
+keep the tones it has. So the `nav-*` tokens now have a light value of their own (`nav-rail` `#e9ecf5`,
+`nav-surface` `#f3f5fa`, `nav-hover` `#dfe3f1`, `nav-border` `#d6dbeb`, `nav-ink` `#1b1c2e`,
+`nav-ink-muted` `#555977`) and the dark values are unchanged; the shell no longer forces `data-theme="dark"`
+on the rail and the sidebar, so every shared control inside them speaks the inks of the theme it is in, and
+`pairs.ts` computes the navigation's pairs in both themes like any other (`inNav` no longer pins the dark one).
+
+**What it cost, and why.** A light navigation that is told apart from the white conversation by tone alone
+is a narrow band, and the contrast pairs are computed against it: `accent-text` on `nav-hover` and
+`ink-subtle` on the rail would have failed at their old light values. Three light values moved, each a small
+step, each helping the rest of the screen too: `accent-text` `#2563eb` → `#1d4ed8` (links and mentions
+read at 6.7:1 on white instead of 4.8:1), `ink-subtle` `#6b6b73` → `#63636e`, and `focus-ring` `#3b82f6` →
+the accent `#2563eb` (the ring reads at 5.2:1 on white instead of 3.7:1). The accent fill, the dark theme and
+every other token are untouched.
+
+**What stays dark.** The full-screen image viewer: a picture is judged on a dark ground, so it sets
+`data-theme="dark"` on its own overlay and content in either theme.
+
+**Considered and rejected.** Keeping D-118 and only softening the navy (the owner asked for a light
+navigation); tinting the sidebar and leaving the rail dark (two tones that match neither theme); loosening
+the contrast pairs to keep the old light values (the pairs are the gate, D-97 §5).
+
+**Cost of reversing.** The six light `nav-*` values, the three moved light values, the two lines in the shell
+that no longer force the theme and `inNav`'s pin: tokens and one file each. No contract, route or key.
+
+### D-181. The composer's formatting row, emoji picker and preview — extends D-110
+
+**Decided (the owner, 2026-10-23).** The owner called the message box "very weak" next to the competition's.
+D-110 allowed three inserting buttons (bold, code block, mention); the renderer draws far more than that
+(`packages/markdown/src/tree.ts`: bold, italic, strike, inline code, link, bulleted and numbered lists,
+quote, code, tables). So the box now has **a formatting row above the text** with a button for every
+construct the renderer draws (bold, italic, strike, link, bulleted list, numbered list, quote, inline code,
+code block), **an emoji picker**, and **a preview toggle**. Each stays inside D-110's line: a button only
+*inserts markdown* (`insertMarkdown`, pure and tested), the box stays a plain textarea, and what is sent is
+the text. Nothing here is a second editor.
+
+- **Keys do what the buttons do** (`formatKey`, one answer for both): `Mod+B`, `Mod+I`, `Mod+Shift+X` strike,
+  `Mod+E` inline code, `Mod+Shift+U` link, `Mod+Shift+7` / `8` / `9` numbered list / bullets / quote,
+  `Mod+Shift+P` preview. A button with a key names it in its tooltip; the shortcuts reference lists them.
+- **`Shift+Enter` in a list or a quote carries it on**, and an empty item ends it (`continueList`); outside
+  one it is the new line it always was. `Enter` still sends.
+- **The emoji picker** is a grid on the menu primitive (four groups of sixteen: faces, hands and people,
+  work, symbols), each tile named by its emoji, `←` `→` and `↑` `↓` moving through it. The emoji is text
+  written at the caret. It is curated, not complete: a searchable list of thousands is a product of its
+  own, and the operating system's emoji keyboard is one keystroke away for anyone who wants all of them.
+- **The preview** draws the draft with the same `renderContent` a sent message uses and hides the textarea
+  (it is not unmounted: the draft, the caret and the undo stack stay). It is a look, never a copy; Send
+  works while it is open.
+- A thread's box has the same row (D-164's parity).
+
+**Considered and rejected.** A WYSIWYG editor (PRD §4.1 fixes plain textarea and GFM); a full emoji dataset
+with search (cost out of proportion to what a team uses, and the system keyboard exists); a hidden toolbar
+behind a "Aa" toggle (formatting that has to be discovered is not formatting people use); a preview in a
+side panel (the width the thread panel needs).
+
+**Cost of reversing.** `emoji-picker.tsx`, the row and the preview in `composer.tsx`, `insertMarkdown`,
+`continueList` and `formatKey` in `composer-text.ts`, and the `MenuTiles` `grid` mode. No contract, route,
+key or stored data: a draft is the same text it always was.
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

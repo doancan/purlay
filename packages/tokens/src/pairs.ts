@@ -48,12 +48,12 @@ const cross = (
 
 const SURFACES = ['surface-000', 'surface-050', 'surface-100', 'surface-200'] as const;
 /**
- * Navigation is drawn in the dark theme whatever the page's theme (v10, D-118): its own grounds,
- * and every shared control inside it speaks the dark theme's inks.
+ * Navigation follows the page's theme (D-180, which changes D-118): its own grounds in each — a light
+ * neutral in the light theme, the dark navy in the dark — and every shared control inside it speaks the
+ * inks of the theme it is in, so each pair is computed in both themes like any other.
  */
 const NAV = ['nav-rail', 'nav-surface', 'nav-hover'] as const;
-const inNav = (pairs: readonly Pair[]): readonly Pair[] =>
-  pairs.map((pair) => ({ ...pair, theme: 'dark' }));
+const inNav = (pairs: readonly Pair[]): readonly Pair[] => pairs;
 const AVATARS = ['avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6'] as const;
 const READING = [...SURFACES, 'accent-subtle', 'code-bg'] as const;
 const SYNTAX = [

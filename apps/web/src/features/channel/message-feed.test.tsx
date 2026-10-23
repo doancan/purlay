@@ -1089,6 +1089,15 @@ describe('the feed is one Tab stop (D-168)', () => {
     });
     return describeStop(reached);
   };
+  // Shift+Tab out of the box passes the composer's own controls (the formatting row, D-181) first: it
+  // comes back to the row they follow, and the walk says how many controls were in between.
+  const tabBackToRow = (): string => {
+    for (let press = 0; press < 20; press++) {
+      const stop = tab(true);
+      if (stop.startsWith('row')) return stop;
+    }
+    throw new Error('Shift+Tab never came back to a row');
+  };
   const feedStops = (view: ChannelView): HTMLElement[] =>
     tabOrder().filter((stop) => view.getByRole('feed').contains(stop));
 
@@ -1108,7 +1117,7 @@ describe('the feed is one Tab stop (D-168)', () => {
     expectFocusOn(newest);
     // Its own link, then its bar, then out to the composer.
     const walk: string[] = [];
-    for (let press = 0; press < 10; press++) {
+    for (let press = 0; press < 30; press++) {
       const stop = tab();
       walk.push(stop);
       if (stop === 'composer') break;
@@ -1119,7 +1128,7 @@ describe('the feed is one Tab stop (D-168)', () => {
     expect(walk.some((stop) => stop.startsWith('👍'))).toBe(false);
     for (const stop of walk.slice(0, -1)) expect(stop).not.toBe('row');
     // Shift+Tab from the composer comes back to the row, not to the last control it passed.
-    expect(tab(true)).toBe('row');
+    expect(tabBackToRow()).toBe('row');
     expectFocusOn(newest);
     view.unmountAll();
   });
@@ -1142,7 +1151,7 @@ describe('the feed is one Tab stop (D-168)', () => {
     fireEvent.keyDown(second, { key: 'ArrowUp' });
     expectFocusOn(first);
     const walk: string[] = [];
-    for (let press = 0; press < 12; press++) {
+    for (let press = 0; press < 30; press++) {
       const stop = tab();
       walk.push(stop);
       if (stop === 'composer') break;
@@ -1152,7 +1161,7 @@ describe('the feed is one Tab stop (D-168)', () => {
     expect(walk).not.toContain('Copy code');
     expect(walk.at(-1)).toBe('composer');
     // And the row the keyboard left is the one Tab comes back to.
-    expect(tab(true)).toBe('row');
+    expect(tabBackToRow()).toBe('row');
     expectFocusOn(first);
     view.unmountAll();
   });

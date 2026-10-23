@@ -67,8 +67,6 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
   return (
     <nav
       aria-label={t('rail.label')}
-      // Navigation is drawn in the dark theme whatever the page's (D-118).
-      data-theme="dark"
       className={
         overlay
           ? 'flex h-full w-rail shrink-0 flex-col items-center bg-nav-rail pb-4'

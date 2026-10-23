@@ -882,6 +882,15 @@ describe('the panel’s list is one Tab stop, as the feed is (D-168)', () => {
     });
     return named(reached);
   };
+  // Shift+Tab out of the box passes the composer's own controls (the formatting row, D-181) first: it
+  // comes back to the row they follow, and the walk says how many controls were in between.
+  const tabBackToRow = (): string => {
+    for (let press = 0; press < 20; press++) {
+      const stop = tab(true);
+      if (stop.startsWith('row')) return stop;
+    }
+    throw new Error('Shift+Tab never came back to a row');
+  };
   const walkToComposer = (): string[] => {
     const walk: string[] = [];
     for (let press = 0; press < 20; press++) {
@@ -930,7 +939,7 @@ describe('the panel’s list is one Tab stop, as the feed is (D-168)', () => {
     expect(walk[0]).toMatch(/^https:\/\/example.com\/three/);
     expect(walk.some((stop) => stop.startsWith('https://example.com/four'))).toBe(false);
     expect(walk.at(-1)).toBe('composer');
-    expect(tab(true)).toBe(`row ${messageIdAt(3)}`);
+    expect(tabBackToRow()).toBe(`row ${messageIdAt(3)}`);
     // A reply's link that is not the current row's still opens under the pointer: it is a link.
     const four = within(sectionOf(view)).getByRole('link', {
       name: 'https://example.com/four (Opens in a new tab)',

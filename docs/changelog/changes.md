@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-23: a light navigation, and a composer worth writing in
+
+- **The left menu is light in the light theme** and keeps the dark navy in the dark one (D-180, amends
+  D-118): the rail and the sidebar no longer force a theme. To keep the contrast gate green three light
+  values moved a little (`accent-text`, `ink-subtle`, `focus-ring`), which also helps links and the focus
+  ring elsewhere.
+- **The message box** (D-181, extends D-110): a formatting row with a button for everything the renderer
+  draws, keys for each, `Shift+Enter` carrying a list or quote on, an emoji picker and a preview toggle.
+  Still a plain textarea; a button only inserts markdown.
+
 ### Change — 2026-10-23: no `.env` in a test, and the test database kept current
 
 - **Tests, the demo, the browser suite and the budgets never read the development `.env`** (D-46,

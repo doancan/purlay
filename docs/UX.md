@@ -31,7 +31,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one dark navy tone (D-118), the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -533,15 +533,24 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 
 ## 5. Composer
 
-Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1). Three buttons sit under it — bold, a code
-block, a mention — and each only *inserts markdown* that the keys below also produce (D-110); a fourth
-attaches a file. **A thread's box has the same four** (D-164): in the panel's width the key hints are not
-drawn (a screen reader still reads them) and Send is the icon alone.
+Plain textarea, GFM, no WYSIWYG (`PRD.md` §4.1). **A formatting row above the text** has a button for every
+construct the renderer draws — bold, italic, strike, link, bulleted list, numbered list, quote, inline code,
+code block — and a preview toggle at its end; under the text sit the mention, an emoji picker and the file
+attach. Each button only *inserts markdown* that the keys below also produce (D-110, D-181). **A thread's
+box has the same row** (D-164, D-181): in the panel's width the key hints are not drawn (a screen reader
+still reads them) and Send is the icon alone.
+
+The **emoji picker** is a grid of four groups (faces, hands and people, work, symbols), arrow keys move
+through it, `Enter` writes the emoji where the caret is and the focus goes back to the box; `Esc` closes it
+with nothing written. The **preview** draws the draft as the message will be drawn; the text is still there
+under it, and Send works while it is open (D-181).
 
 | Key | Action |
 |---|---|
 | `Enter` | Send |
-| `Shift+Enter` | Newline |
+| `Shift+Enter` | Newline; in a list or a quote it carries the list on, and an empty item ends it (D-181) |
+| `Cmd/Ctrl+B` `I` `E` | Bold, italic, inline code |
+| `Cmd/Ctrl+Shift+X` `U` `7` `8` `9` `P` | Strike, link, numbered list, bulleted list, quote, preview (D-181) |
 | ` ``` ` then `Enter` | Opens a code block; `Enter` inside it inserts a newline, `Cmd/Ctrl+Enter` sends |
 | `↑` on an empty composer | Edit your last message |
 | `Esc` | Cancel edit / close the thread panel / close palette |
@@ -711,7 +720,7 @@ Decided here so Phase 0 does not invent one at random.
   1.6 prose / 1.54 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
   choice kept per device. Both are designed together: neutral greys, one blue accent and a navigation
-  that is dark navy in both, with dark derived in the same terms (D-110, D-118). Every colour pair is computed in both. Never colour alone
+  that is a light neutral in the light theme and the dark navy in the dark (D-110, D-180). Every colour pair is computed in both. Never colour alone
   to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.

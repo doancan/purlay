@@ -707,10 +707,13 @@ describe('the three buttons under the box (D-110)', () => {
     const { view } = await mount();
     const card = view.container.querySelector('[data-composer-card]');
     for (const name of ['Bold', 'Code block', 'Mention someone']) {
-      const button = view.getByRole('button', { name });
-      expect(card?.contains(button)).toBe(true);
-      expect(button.getAttribute('tabindex')).not.toBe('-1');
+      expect(card?.contains(view.getByRole('button', { name }))).toBe(true);
     }
+    // Bold is the formatting row's one Tab stop; Code block is reached from it by the arrows.
+    expect(view.getByRole('button', { name: 'Bold' }).getAttribute('tabindex')).toBe('0');
+    expect(view.getByRole('button', { name: 'Mention someone' }).getAttribute('tabindex')).not.toBe(
+      '-1',
+    );
   });
 
   test('Bold wraps what is selected, and keeps the box focused', async () => {
@@ -754,6 +757,262 @@ describe('the three buttons under the box (D-110)', () => {
     await user.click(view.getByRole('button', { name: 'Bold' }));
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['**ship**']);
+  });
+});
+
+describe('the formatting row: every construct the renderer draws (D-110, D-181)', () => {
+  const FORMATTING = [
+    'Bold',
+    'Italic',
+    'Strikethrough',
+    'Code',
+    'Link',
+    'Bulleted list',
+    'Numbered list',
+    'Quote',
+    'Code block',
+  ] as const;
+
+  test('is there, in the channel and in a thread alike, each button named and reachable by Tab', async () => {
+    const channel = await mount();
+    const card = channel.view.container.querySelector('[data-composer-card]');
+    for (const name of [
+      ...FORMATTING,
+      'Preview',
+      'Mention someone',
+      'Add an emoji',
+      'Attach a file',
+    ]) {
+      expect(card?.contains(channel.view.getByRole('button', { name }))).toBe(true);
+    }
+    // The row is one Tab stop (a toolbar): the rest are reached by the arrows, so a keyboard walk
+    // from the feed to the box is not eleven presses longer than it was.
+    const toolbar = channel.view.getByRole('toolbar', { name: 'Formatting' });
+    const stops = within(toolbar)
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('tabindex') !== '-1');
+    expect(stops.map((button) => button.getAttribute('aria-label'))).toEqual(['Bold']);
+    channel.view.unmount();
+    const thread = await mount({ props: { parentId: messageIdAt(1) } });
+    for (const name of FORMATTING) {
+      expect(thread.view.getByRole('button', { name })).toBeDefined();
+    }
+  });
+
+  test('the arrows move along the row, Home and End go to its ends, and Tab leaves it by the button last used', async () => {
+    const { view, user } = await mount();
+    const toolbar = view.getByRole('toolbar', { name: 'Formatting' });
+    const bold = within(toolbar).getByRole('button', { name: 'Bold' });
+    const italic = within(toolbar).getByRole('button', { name: 'Italic' });
+    const preview = within(toolbar).getByRole('button', { name: 'Preview' });
+    const codeBlock = within(toolbar).getByRole('button', { name: 'Code block' });
+    act(() => {
+      bold.focus();
+    });
+    await user.keyboard('{ArrowRight}');
+    expectFocusOn(italic);
+    await user.keyboard('{ArrowLeft}');
+    expectFocusOn(bold);
+    await user.keyboard('{End}');
+    expectFocusOn(preview);
+    await user.keyboard('{ArrowRight}');
+    expectFocusOn(bold);
+    await user.keyboard('{ArrowLeft}');
+    expectFocusOn(preview);
+    await user.keyboard('{Home}');
+    expectFocusOn(bold);
+    // The stop follows the focus: back in the row, Tab lands where it was left.
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(italic.getAttribute('tabindex')).toBe('-1');
+    expect(
+      within(toolbar).getByRole('button', { name: 'Strikethrough' }).getAttribute('tabindex'),
+    ).toBe('0');
+    expect(codeBlock.getAttribute('tabindex')).toBe('-1');
+  });
+
+  const typed = async (
+    text: string,
+    from: number,
+    to: number,
+  ): Promise<Awaited<ReturnType<typeof mount>>> => {
+    const mounted = await mount();
+    await mounted.user.click(mounted.box());
+    await mounted.user.keyboard(text.replaceAll('\n', '{Shift>}{Enter}{/Shift}'));
+    act(() => {
+      mounted.box().setSelectionRange(from, to);
+    });
+    return mounted;
+  };
+
+  test.each([
+    ['Italic', 'fix it', 4, 6, 'fix _it_'],
+    ['Strikethrough', 'fix it', 4, 6, 'fix ~~it~~'],
+    ['Code', 'fix it', 4, 6, 'fix `it`'],
+    ['Link', 'see docs', 4, 8, 'see [docs](https://)'],
+    ['Bulleted list', 'one\ntwo', 0, 7, '- one\n- two'],
+    ['Numbered list', 'one\ntwo', 0, 7, '1. one\n2. two'],
+    ['Quote', 'one', 0, 3, '> one'],
+  ] as const)(
+    '%s inserts its markdown and keeps the box focused',
+    async (name, text, from, to, expected) => {
+      const { view, box, user } = await typed(text, from, to);
+      await user.click(view.getByRole('button', { name }));
+      expect(box().value).toBe(expected);
+      expectFocusOn(box());
+    },
+  );
+
+  test('a second press takes the markers off again', async () => {
+    const { view, box, user } = await typed('fix it', 4, 6);
+    await user.click(view.getByRole('button', { name: 'Italic' }));
+    await user.click(view.getByRole('button', { name: 'Italic' }));
+    expect(box().value).toBe('fix it');
+  });
+
+  test.each([
+    ['{Control>}b{/Control}', 'fix **it**'],
+    ['{Meta>}b{/Meta}', 'fix **it**'],
+    ['{Control>}i{/Control}', 'fix _it_'],
+    ['{Control>}e{/Control}', 'fix `it`'],
+    ['{Control>}{Shift>}x{/Shift}{/Control}', 'fix ~~it~~'],
+    ['{Control>}{Shift>}u{/Shift}{/Control}', 'fix [it](https://)'],
+  ])('the key %s does what its button does', async (keys, expected) => {
+    const { box, user } = await typed('fix it', 4, 6);
+    await user.keyboard(keys);
+    expect(box().value).toBe(expected);
+    expect(document.activeElement === box()).toBe(true);
+  });
+
+  test.each([
+    ['Digit8', '- one'],
+    ['Digit7', '1. one'],
+    ['Digit9', '> one'],
+  ])(
+    'Ctrl+Shift+%s marks lines, whichever character the layout puts on that key',
+    async (code, expected) => {
+      const { box } = await typed('one', 0, 3);
+      fireEvent.keyDown(box(), { code, key: '*', ctrlKey: true, shiftKey: true });
+      expect(box().value).toBe(expected);
+    },
+  );
+
+  test('a formatting key sends nothing and leaves the browser its own meaning of nothing', async () => {
+    const { box, user, sent } = await typed('x', 0, 1);
+    await user.keyboard('{Control>}b{/Control}');
+    expect(sent()).toEqual([]);
+    expect(box().value).toBe('**x**');
+  });
+
+  test('a key with Alt, or without Ctrl or Meta, is only typing', async () => {
+    const { box, user } = await typed('x', 1, 1);
+    await user.keyboard('b');
+    await user.keyboard('{Alt>}i{/Alt}');
+    expect(box().value).toBe('xb');
+  });
+
+  test("inside a code fence the formatting keys still work: it is the person's box", async () => {
+    const { box, user } = await typed('```\nfix it', 8, 10);
+    await user.keyboard('{Control>}b{/Control}');
+    expect(box().value).toBe('```\nfix **it**');
+  });
+});
+
+describe('the emoji picker (D-181)', () => {
+  test('offers groups of emoji, each one named for what it is by the emoji itself, and writes the one chosen at the caret', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('ship it now');
+    act(() => {
+      box().setSelectionRange(7, 7);
+    });
+    await user.click(view.getByRole('button', { name: 'Add an emoji' }));
+    // Groups, so the grid is read in pieces.
+    for (const group of ['Faces', 'Hands and people', 'Work', 'Symbols']) {
+      expect(view.getByText(group)).toBeDefined();
+    }
+    await user.click(view.getByRole('menuitemcheckbox', { name: '🚀' }));
+    expect(box().value).toBe('ship it🚀 now');
+    // Where the person was writing, not on the button that opened the picker.
+    expectFocusOn(box());
+    expect(box().selectionStart).toBe(7 + '🚀'.length);
+  });
+
+  test('is a grid: ← → step one tile, ↑ ↓ step a row of eight, and a row past the group is left to the menu', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.click(view.getByRole('button', { name: 'Add an emoji' }));
+    const tiles = view.getAllByRole('menuitemcheckbox').slice(0, 16);
+    const [first, second, , , , , , , ninth] = tiles;
+    if (first === undefined || second === undefined || ninth === undefined) {
+      throw new Error('the picker has no tiles');
+    }
+    act(() => {
+      first.focus();
+    });
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expectFocusOn(second);
+    fireEvent.keyDown(second, { key: 'ArrowLeft' });
+    expectFocusOn(first);
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    expectFocusOn(ninth);
+    fireEvent.keyDown(ninth, { key: 'ArrowUp' });
+    expectFocusOn(first);
+    // Up from the top row does not wrap round to the bottom row.
+    fireEvent.keyDown(first, { key: 'ArrowUp' });
+    expect(ninth.matches(':focus')).toBe(false);
+  });
+
+  test('what it writes is a draft like any other, and sends as typed', async () => {
+    const { view, box, user, sent } = await mount();
+    await user.click(box());
+    await user.click(view.getByRole('button', { name: 'Add an emoji' }));
+    await user.click(view.getByRole('menuitemcheckbox', { name: '✅' }));
+    await user.keyboard(' done{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['✅ done']);
+  });
+
+  test('Escape closes it and gives the focus back to the box, with nothing written', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('x');
+    await user.click(view.getByRole('button', { name: 'Add an emoji' }));
+    await user.keyboard('{Escape}');
+    expect(view.queryByRole('menuitemcheckbox', { name: '🚀' })).toBeNull();
+    expectFocusOn(box());
+    expect(box().value).toBe('x');
+  });
+});
+
+describe('Shift+Enter in a list carries it on; Enter still sends (D-181)', () => {
+  test('a bulleted line is followed by a bulleted one', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('- one{Shift>}{Enter}{/Shift}two');
+    expect(box().value).toBe('- one\n- two');
+    expect(sent()).toEqual([]);
+  });
+
+  test('a numbered line is followed by the next number, and an empty item ends the list', async () => {
+    const { box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('1. a{Shift>}{Enter}{/Shift}b{Shift>}{Enter}{/Shift}');
+    expect(box().value).toBe('1. a\n2. b\n3. ');
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(box().value).toBe('1. a\n2. b\n');
+  });
+
+  test('Enter in a list sends it, as it does anywhere', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('- one{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['- one']);
+  });
+
+  test('in a code fence a dash is not a list: Shift+Enter is the ordinary line break', async () => {
+    const { box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('```{Shift>}{Enter}{/Shift}- x{Shift>}{Enter}{/Shift}');
+    expect(box().value).toBe('```\n- x\n');
   });
 });
 
@@ -1591,5 +1850,48 @@ describe('typing', () => {
     });
     await settle();
     expect(view.queryByText('Alice is typing…')).toBeNull();
+  });
+});
+
+describe('the preview (D-181)', () => {
+  test('shows the draft as the message will be drawn, and goes back to the text untouched', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('ship **it** now');
+    const toggle = view.getByRole('button', { name: 'Preview' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    // Drawn instead of the text, not beside it; the text is kept under it.
+    expect(view.container.querySelector('textarea')?.hidden).toBe(true);
+    const drawn = view.container.querySelector('[data-composer-preview] strong');
+    expect(drawn?.textContent).toBe('it');
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(view.container.querySelector('[data-composer-preview]')).toBeNull();
+    expect(box().hidden).toBe(false);
+    expect(box().value).toBe('ship **it** now');
+    expectFocusOn(box());
+  });
+
+  test('Mod+Shift+P does the same from the box, and an empty draft says there is nothing to preview', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
+    expect(view.container.querySelector('[data-composer-preview]')).not.toBeNull();
+    expect(view.getByText('Nothing to preview yet')).toBeDefined();
+    await user.click(view.getByRole('button', { name: 'Preview' }));
+    await user.keyboard('hi');
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
+    expect(view.container.querySelector('[data-composer-preview]')?.textContent).toBe('hi');
+  });
+
+  test('a preview that is open does not stop the send', async () => {
+    const { view, box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('ready');
+    await user.click(view.getByRole('button', { name: 'Preview' }));
+    await user.click(view.getByRole('button', { name: 'Send' }));
+    expect(sent().map((frame) => frame.content)).toEqual(['ready']);
   });
 });

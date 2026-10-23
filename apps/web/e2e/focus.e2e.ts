@@ -135,6 +135,9 @@ test.describe('focus', () => {
     await expect(row(older.id).locator('pre')).toBeVisible();
     // Shift+Tab from the composer: the feed's row, then out of the feed.
     await composer.focus();
+    // The formatting row is one stop between them (a toolbar, D-181): the arrows walk its buttons.
+    await page.keyboard.press('Shift+Tab');
+    expect(await where()).toBe('outside Bold');
     await page.keyboard.press('Shift+Tab');
     expect(await where()).toBe(`row ${newest.id}`);
     expect((await ringOfFocused(page)).ring).toBeGreaterThanOrEqual(2);
@@ -156,6 +159,8 @@ test.describe('focus', () => {
     expect(walk.filter((stop) => stop.startsWith(older.id))).toEqual([]);
 
     // ↑ to the older message: Tab walks its link, its code block and its chip, and only those.
+    await page.keyboard.press('Shift+Tab');
+    expect(await where()).toBe('outside Bold');
     await page.keyboard.press('Shift+Tab');
     expect(await where()).toBe(`row ${newest.id}`);
     await page.keyboard.press('ArrowUp');

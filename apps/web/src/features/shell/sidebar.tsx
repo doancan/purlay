@@ -34,8 +34,6 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
   return (
     <aside
       aria-label={t('sidebar.label')}
-      // Navigation is drawn in the dark theme whatever the page's (D-118).
-      data-theme="dark"
       className={cn(
         'flex w-sidebar shrink-0 flex-col bg-nav-surface',
         overlay ? 'h-full' : 'border-r-hairline border-nav-border',

@@ -943,6 +943,21 @@ export const en = {
   // ── Composer (UX §5) ────────────────────────────────────────────────────
   'composer.bold': 'Bold',
   'composer.codeBlock': 'Code block',
+  'composer.italic': 'Italic',
+  'composer.strike': 'Strikethrough',
+  'composer.inlineCode': 'Code',
+  'composer.link': 'Link',
+  'composer.bullets': 'Bulleted list',
+  'composer.numbers': 'Numbered list',
+  'composer.quote': 'Quote',
+  'composer.emoji': 'Add an emoji',
+  'emoji.faces': 'Faces',
+  'emoji.hands': 'Hands and people',
+  'emoji.work': 'Work',
+  'emoji.symbols': 'Symbols',
+  'composer.preview': 'Preview',
+  'composer.previewEmpty': 'Nothing to preview yet',
+  'composer.format': 'Formatting',
   'composer.attach': 'Attach a file',
   'composer.files': 'Files to send',
   'composer.waiting': 'Sends when the files finish uploading.',
@@ -1428,6 +1443,10 @@ export const en = {
 
   // ── Keyboard shortcuts, continued ───────────────────────────────────────
   'shortcuts.codeSend': 'Send from inside a code block',
+  'shortcuts.bold': 'Bold',
+  'shortcuts.italic': 'Italic',
+  'shortcuts.link': 'Add a link',
+  'shortcuts.preview': 'Preview the message',
   'shortcuts.or': 'or',
 
   // ── The setup wizard (D-179 §4, UX §11) ─────────────────────────────────

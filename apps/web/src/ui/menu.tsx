@@ -244,26 +244,49 @@ export const MenuRadioItem = ({
  */
 export const MenuTiles = ({
   children,
+  grid = false,
 }: {
   readonly children: React.ReactNode;
+  /**
+   * Eight to a row instead of one long row, and ↑ ↓ move a row (D-181): an emoji picker is a grid, and a
+   * grid that only the sideways arrows can cross is a list in disguise. Radix's own ↑ ↓ would step one.
+   */
+  readonly grid?: boolean;
 }): React.JSX.Element => (
   <div
     role="group"
-    className="flex gap-1"
+    className={grid ? 'grid grid-cols-8 gap-1' : 'flex gap-1'}
     onKeyDown={(event) => {
-      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      const step =
+        event.key === 'ArrowRight'
+          ? 1
+          : event.key === 'ArrowLeft'
+            ? -1
+            : grid && event.key === 'ArrowDown'
+              ? GRID_COLUMNS
+              : grid && event.key === 'ArrowUp'
+                ? -GRID_COLUMNS
+                : 0;
       if (step === 0) return;
       const tiles = Array.from(
         event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'),
       );
       const at = tiles.findIndex((tile) => tile === document.activeElement);
-      tiles[(at + step + tiles.length) % tiles.length]?.focus();
+      const to = at + step;
+      // Sideways wraps round the whole group; a row up from the first or down from the last stays put,
+      // for Radix to carry on to what is above or below the grid.
+      if (Math.abs(step) === GRID_COLUMNS && (to < 0 || to >= tiles.length)) return;
+      tiles[(to + tiles.length) % tiles.length]?.focus();
       event.preventDefault();
+      event.stopPropagation();
     }}
   >
     {children}
   </div>
 );
+
+/** How many tiles a grid has in a row. */
+const GRID_COLUMNS = 8;
 
 interface MenuTileProps {
   readonly label: string;
@@ -271,6 +294,11 @@ interface MenuTileProps {
   readonly onSelect: () => void;
   /** Told when it is reached, by the pointer or the keyboard. */
   readonly onHighlight?: () => void;
+  /**
+   * As wide as the cell it is in, square, instead of a fixed height: a grid of eight on a phone is
+   * narrower than eight finger-tall tiles (the picker ran off the screen's edge).
+   */
+  readonly fill?: boolean;
   readonly children: React.ReactNode;
 }
 
@@ -279,6 +307,7 @@ export const MenuTile = ({
   checked,
   onSelect,
   onHighlight,
+  fill = false,
   children,
 }: MenuTileProps): React.JSX.Element => (
   <RadixMenu.CheckboxItem
@@ -286,7 +315,10 @@ export const MenuTile = ({
     checked={checked}
     onSelect={onSelect}
     {...(onHighlight === undefined ? {} : { onFocus: onHighlight })}
-    className="flex h-row max-narrow:h-touch aspect-square cursor-pointer items-center justify-center rounded-md text-title data-[highlighted]:bg-surface-200 data-[state=checked]:bg-accent-subtle"
+    className={cn(
+      'flex aspect-square cursor-pointer items-center justify-center rounded-md text-title data-[highlighted]:bg-surface-200 data-[state=checked]:bg-accent-subtle',
+      fill ? 'w-full' : 'h-row max-narrow:h-touch',
+    )}
   >
     <span aria-hidden="true">{children}</span>
   </RadixMenu.CheckboxItem>

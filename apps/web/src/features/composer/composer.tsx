@@ -30,7 +30,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent } from '@purlay/types';
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Icon } from '../../components/icon';
+import { Icon, type GlyphName } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useEngine } from '../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,7 +44,10 @@ import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import {
   broadcastMention,
+  continueList,
+  formatKey,
   insertMarkdown,
+  insertText,
   insideFence,
   isLongPaste,
   asCodeBlock,
@@ -56,11 +59,14 @@ import {
   type Selection,
 } from './composer-text';
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
+import { isMacPlatform, keyLabels } from '../shortcuts/platform';
 import { useClientStorage } from '../../data/storage-provider';
 import { isClaimedBy } from '../../data/browser-storage';
 import { draftKey, readDraft, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
+import { renderContent } from '../content/render-content';
+import { EmojiPicker } from './emoji-picker';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
 
@@ -100,6 +106,17 @@ const Inner = ({
   // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
   const [focused, setFocused] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  // The draft drawn as it will be sent (D-181): a look, never a second copy of the text.
+  const [previewing, setPreviewing] = useState(false);
+  const returningFromPreview = useRef(false);
+  // The formatting row is one Tab stop and the arrows move along it (the toolbar pattern): which
+  // button is the stop, the last one used.
+  const [stopAt, setStopAt] = useState(0);
+  useEffect(() => {
+    if (previewing || !returningFromPreview.current) return;
+    returningFromPreview.current = false;
+    field.current?.focus();
+  }, [previewing]);
   const hintsId = useId();
   // Where the caret goes after a change that is made by script (a paste, an undo).
   const caret = useRef<number | null>(null);
@@ -207,6 +224,16 @@ const Inner = ({
     const at = box === null ? text.length : box.selectionStart;
     const to = box === null ? text.length : box.selectionEnd;
     const next = insertMarkdown(text, { start: at, end: to }, kind);
+    inserted.current = next.selection;
+    change(next.text);
+  };
+
+  /** An emoji from the picker: text where the caret is, as a key would type it. */
+  const insertEmoji = (emoji: string): void => {
+    const box = field.current;
+    const at = box === null ? text.length : box.selectionStart;
+    const to = box === null ? text.length : box.selectionEnd;
+    const next = insertText(text, { start: at, end: to }, emoji);
     inserted.current = next.selection;
     change(next.text);
   };
@@ -329,11 +356,33 @@ const Inner = ({
         return;
       }
     }
+    // A formatting key does what its button does (`formatKey`, D-181): one answer, shared.
+    const asked = formatKey(event);
+    if (asked !== null) {
+      event.preventDefault();
+      if (asked === 'preview') togglePreview();
+      else insert(asked);
+      return;
+    }
     if (event.key === 'Escape') {
       event.currentTarget.blur();
       return;
     }
-    if (event.key !== 'Enter' || event.shiftKey) return;
+    if (event.key !== 'Enter') return;
+    if (event.shiftKey) {
+      // In a list or a quote the line break carries it on, and an empty item ends it; elsewhere the
+      // browser's own line break is right (D-181).
+      const box = event.currentTarget;
+      if (!event.metaKey && !event.ctrlKey && box.selectionStart === box.selectionEnd) {
+        const carried = continueList(box.value, box.selectionStart);
+        if (carried !== null) {
+          event.preventDefault();
+          caret.current = carried.caret;
+          change(carried.text);
+        }
+      }
+      return;
+    }
     if (event.metaKey || event.ctrlKey) {
       event.preventDefault();
       send();
@@ -381,6 +430,59 @@ const Inner = ({
       },
     });
   };
+
+  // The key printed in a tooltip: only the words depend on the platform, never the behaviour.
+  const mac = isMacPlatform(typeof navigator === 'undefined' ? {} : navigator);
+  const labels = keyLabels(mac);
+  const chord = (...parts: readonly string[]): string => parts.join(mac ? '' : '+');
+  /** One button of the formatting row: its markdown, its glyph and the key that does the same. */
+  const tool = (
+    slot: number,
+    kind: MarkdownKind,
+    label: string,
+    glyph: GlyphName,
+    shortcut?: string,
+  ): React.JSX.Element => (
+    <IconButton
+      key={kind}
+      label={label}
+      glyph={glyph}
+      {...(shortcut === undefined ? {} : { shortcut })}
+      tabIndex={slot === stopAt ? 0 : -1}
+      onFocus={() => {
+        setStopAt(slot);
+      }}
+      onClick={() => {
+        insert(kind);
+      }}
+    />
+  );
+  /** ← → Home End along the row, round at its ends; Tab is left to leave it. */
+  const onToolbarKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+    const at = buttons.findIndex((button) => button === document.activeElement);
+    const to =
+      event.key === 'ArrowRight'
+        ? (at + 1) % buttons.length
+        : event.key === 'ArrowLeft'
+          ? (at - 1 + buttons.length) % buttons.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? buttons.length - 1
+              : -1;
+    if (at === -1 || to === -1) return;
+    event.preventDefault();
+    buttons[to]?.focus();
+  };
+  /** Preview on or off; back on the text, the box has the focus again where it left it. */
+  const togglePreview = (): void => {
+    setPreviewing((now) => !now);
+    returningFromPreview.current = previewing;
+  };
+  const divider = (
+    <span aria-hidden="true" className="mx-1 h-4 border-l-hairline border-border-subtle" />
+  );
 
   const left = unitsLeft(text);
   const rows = rowsFor(text, 1);
@@ -554,7 +656,66 @@ const Inner = ({
           <VisuallyHidden role="status" aria-live="polite">
             {open ? t('mention.results', { count: suggestions.length }) : ''}
           </VisuallyHidden>
-          <div className="flex gap-2 px-3 pt-3">
+          <div
+            role="toolbar"
+            aria-label={t('composer.format')}
+            aria-orientation="horizontal"
+            className="flex items-center px-2 pt-2"
+            onKeyDown={onToolbarKey}
+          >
+            {/* One row on every width: on a phone it scrolls sideways instead of breaking into two, and
+              the preview toggle stays where it is. */}
+            <div className="flex min-w-0 flex-1 items-center overflow-x-auto p-1 scrollbar-thin">
+              {tool(0, 'bold', t('composer.bold'), 'bold', chord(labels.mod, 'B'))}
+              {tool(1, 'italic', t('composer.italic'), 'italic', chord(labels.mod, 'I'))}
+              {tool(
+                2,
+                'strike',
+                t('composer.strike'),
+                'strike',
+                chord(labels.mod, labels.shift, 'X'),
+              )}
+              {divider}
+              {tool(3, 'link', t('composer.link'), 'link', chord(labels.mod, labels.shift, 'U'))}
+              {tool(
+                4,
+                'bullets',
+                t('composer.bullets'),
+                'bullet-list',
+                chord(labels.mod, labels.shift, '8'),
+              )}
+              {tool(
+                5,
+                'numbers',
+                t('composer.numbers'),
+                'numbered-list',
+                chord(labels.mod, labels.shift, '7'),
+              )}
+              {tool(6, 'quote', t('composer.quote'), 'quote', chord(labels.mod, labels.shift, '9'))}
+              {divider}
+              {tool(
+                7,
+                'inlineCode',
+                t('composer.inlineCode'),
+                'inline-code',
+                chord(labels.mod, 'E'),
+              )}
+              {tool(8, 'code', t('composer.codeBlock'), 'code-block')}
+            </div>
+            <IconButton
+              label={t('composer.preview')}
+              glyph="preview"
+              shortcut={chord(labels.mod, labels.shift, 'P')}
+              aria-pressed={previewing}
+              tabIndex={stopAt === 9 ? 0 : -1}
+              onFocus={() => {
+                setStopAt(9);
+              }}
+              className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-accent-text"
+              onClick={togglePreview}
+            />
+          </div>
+          <div className="flex gap-2 px-3 pt-2">
             <textarea
               data-composer=""
               ref={field}
@@ -568,6 +729,7 @@ const Inner = ({
               aria-controls={open ? listId : undefined}
               aria-activedescendant={open ? optionId(current) : undefined}
               placeholder={t('composer.placeholder', { channel: channelName })}
+              hidden={previewing}
               className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
               onChange={(event) => {
                 const { value, selectionStart } = event.target;
@@ -582,6 +744,15 @@ const Inner = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
             />
+            {previewing && (
+              <div data-composer-preview="" className="min-h-control min-w-0 flex-1">
+                {empty ? (
+                  <p className="text-body text-ink-muted">{t('composer.previewEmpty')}</p>
+                ) : (
+                  renderContent(text)
+                )}
+              </div>
+            )}
           </div>
           <UploadList uploads={uploads} />
           <input
@@ -600,24 +771,16 @@ const Inner = ({
           <div className="flex items-center gap-3 pb-2 pl-2 pr-2 pt-1">
             <span className="flex items-center gap-1">
               <IconButton
-                label={t('composer.bold')}
-                glyph="bold"
-                onClick={() => {
-                  insert('bold');
-                }}
-              />
-              <IconButton
-                label={t('composer.codeBlock')}
-                glyph="code"
-                onClick={() => {
-                  insert('code');
-                }}
-              />
-              <IconButton
                 label={t('composer.mention')}
                 glyph="mention"
                 onClick={() => {
                   insert('mention');
+                }}
+              />
+              <EmojiPicker
+                onPick={insertEmoji}
+                onClosed={() => {
+                  field.current?.focus();
                 }}
               />
               <IconButton

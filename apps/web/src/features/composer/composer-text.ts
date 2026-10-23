@@ -93,32 +93,174 @@ export interface Selection {
   readonly end: number;
 }
 
-/** The three buttons under the box (D-110). Each only inserts markdown the keys also type. */
-export type MarkdownKind = 'bold' | 'code' | 'mention';
+/**
+ * What a button or a key inserts (D-110, D-181). Each is markdown the renderer draws and nothing else —
+ * there is no editor here, only text put where the caret is. `code` is a fenced block; `inlineCode` a span.
+ */
+export type MarkdownKind =
+  | 'bold'
+  | 'italic'
+  | 'strike'
+  | 'inlineCode'
+  | 'link'
+  | 'bullets'
+  | 'numbers'
+  | 'quote'
+  | 'code'
+  | 'mention';
+
+/** The text and the caret after a button or a key: one pure answer, shared by both. */
+export interface Inserted {
+  readonly text: string;
+  readonly selection: Selection;
+}
+
+const WRAPS = { bold: '**', italic: '_', strike: '~~' } as const;
+
+/**
+ * `mark` around the selection, keeping it selected — or taken off again when the selection already is
+ * one (the markers inside it) or sits inside one (the markers just outside it). With nothing selected the
+ * caret waits between the markers.
+ */
+const wrap = (text: string, selection: Selection, mark: string): Inserted => {
+  const before = text.slice(0, selection.start);
+  const chosen = text.slice(selection.start, selection.end);
+  const after = text.slice(selection.end);
+  const width = mark.length;
+  if (chosen.length >= 2 * width && chosen.startsWith(mark) && chosen.endsWith(mark)) {
+    const inner = chosen.slice(width, chosen.length - width);
+    return {
+      text: before + inner + after,
+      selection: { start: before.length, end: before.length + inner.length },
+    };
+  }
+  if (before.endsWith(mark) && after.startsWith(mark)) {
+    const start = before.length - width;
+    return {
+      text: before.slice(0, start) + chosen + after.slice(width),
+      selection: { start, end: start + chosen.length },
+    };
+  }
+  return {
+    text: `${before}${mark}${chosen}${mark}${after}`,
+    selection: { start: before.length + width, end: before.length + width + chosen.length },
+  };
+};
+
+/** `value` where the selection is — in its place — with the caret after it: an emoji from the picker. */
+export const insertText = (text: string, selection: Selection, value: string): Inserted => ({
+  text: text.slice(0, selection.start) + value + text.slice(selection.end),
+  selection: { start: selection.start + value.length, end: selection.start + value.length },
+});
+
+/** A line's own marker of each kind, and the one that is any of them. */
+const LINE_MARKER: Readonly<Record<'bullets' | 'numbers' | 'quote', RegExp>> = {
+  bullets: /^[-*+] /,
+  numbers: /^\d+\. /,
+  quote: /^> /,
+};
+const ANY_MARKER = /^(?:[-*+] |\d+\. |> )/;
+
+/**
+ * A marker on every line the selection touches — whole lines, whatever part of them is selected — or
+ * taken off all of them when each already has it. A line with another kind of marker is changed to this
+ * one, never stacked on it; a blank line takes none and is not counted in a numbering.
+ */
+const marked = (
+  text: string,
+  selection: Selection,
+  kind: 'bullets' | 'numbers' | 'quote',
+): Inserted => {
+  const first = text.lastIndexOf('\n', selection.start - 1) + 1;
+  const stop = text.indexOf('\n', selection.end);
+  const last = stop === -1 ? text.length : stop;
+  const lines = text.slice(first, last).split('\n');
+  const named = lines.filter((line) => line !== '');
+  if (selection.start === selection.end && named.length === 0) {
+    // The caret on a blank line: the button starts the list there. Blank lines inside a selection
+    // still take none, so a block of paragraphs is marked paragraph by paragraph.
+    const marker = kind === 'bullets' ? '- ' : kind === 'numbers' ? '1. ' : '> ';
+    const caret = first + marker.length;
+    return {
+      text: text.slice(0, first) + marker + text.slice(last),
+      selection: { start: caret, end: caret },
+    };
+  }
+  const off = named.length > 0 && named.every((line) => LINE_MARKER[kind].test(line));
+  let number = 0;
+  const changed = lines.map((line) => {
+    if (line === '') return line;
+    const bare = line.replace(ANY_MARKER, '');
+    if (off) return bare;
+    number += 1;
+    return `${kind === 'bullets' ? '- ' : kind === 'numbers' ? `${String(number)}. ` : '> '}${bare}`;
+  });
+  const block = changed.join('\n');
+  const result = text.slice(0, first) + block + text.slice(last);
+  if (selection.start !== selection.end) {
+    return { text: result, selection: { start: first, end: first + block.length } };
+  }
+  // Nothing selected: the caret stays where it was in the line, which has moved by what was added or taken.
+  const caret = Math.max(first, selection.start + (block.length - (last - first)));
+  return { text: result, selection: { start: caret, end: caret } };
+};
+
+const URLISH = /^https?:\/\/\S+$/;
 
 /**
  * The text and the caret after a button is pressed, as one pure answer so a key can share it.
  *
- * Bold wraps what is selected and keeps it selected; with nothing selected the caret waits
- * between the markers. A code block opens and closes on lines of its own — a fence glued to a
- * sentence is not a fence — around the selection or around an empty line for the caret. A mention
- * is an `@` after a space, so it never glues itself to the word before; the first letter typed after
- * it opens the list of people (`mention-suggest.ts`, `UX.md` §5).
+ * Bold, italic and strike wrap what is selected and keep it selected, or take their markers off again; with
+ * nothing selected the caret waits between them. Inline code does the same with backticks — a longer run
+ * and a space when the words hold a backtick, and a block when they hold a line break. A link is a
+ * template: an address that was selected becomes its target and asks for the words; words become its label
+ * and ask for the address. A list or a quote marks whole lines. A code block opens and closes on lines of
+ * its own — a fence glued to a sentence is not a fence — around the selection or around an empty line for
+ * the caret. A mention is an `@` after a space, so it never glues itself to the word before; the first
+ * letter typed after it opens the list of people (`mention-suggest.ts`, `UX.md` §5).
  */
 export const insertMarkdown = (
   text: string,
   selection: Selection,
   kind: MarkdownKind,
-): { readonly text: string; readonly selection: Selection } => {
+): Inserted => {
   const before = text.slice(0, selection.start);
   const chosen = text.slice(selection.start, selection.end);
   const after = text.slice(selection.end);
   const at = before.length;
-  if (kind === 'bold') {
+  if (kind === 'bold' || kind === 'italic' || kind === 'strike') {
+    return wrap(text, selection, WRAPS[kind]);
+  }
+  if (kind === 'inlineCode') {
+    if (chosen.includes('\n')) return insertMarkdown(text, selection, 'code');
+    const toggles =
+      /^`[^`]+`$/.test(chosen) ||
+      (before.endsWith('`') && after.startsWith('`') && !chosen.includes('`'));
+    if (toggles || !chosen.includes('`')) return wrap(text, selection, '`');
+    const longest = Math.max(...(chosen.match(/`+/g) ?? []).map((run) => run.length));
+    const fence = '`'.repeat(longest + 1);
+    const start = at + fence.length + 1;
     return {
-      text: `${before}**${chosen}**${after}`,
-      selection: { start: at + 2, end: at + 2 + chosen.length },
+      text: `${before}${fence} ${chosen} ${fence}${after}`,
+      selection: { start, end: start + chosen.length },
     };
+  }
+  if (kind === 'link') {
+    if (URLISH.test(chosen)) {
+      return {
+        text: `${before}[text](${chosen})${after}`,
+        selection: { start: at + 1, end: at + 5 },
+      };
+    }
+    const label = chosen === '' ? 'text' : chosen;
+    const start = chosen === '' ? at + 1 : at + label.length + 3;
+    return {
+      text: `${before}[${label}](https://)${after}`,
+      selection: { start, end: start + (chosen === '' ? 4 : 8) },
+    };
+  }
+  if (kind === 'bullets' || kind === 'numbers' || kind === 'quote') {
+    return marked(text, selection, kind);
   }
   if (kind === 'code') {
     const lead = before === '' || before.endsWith('\n') ? '' : '\n';
@@ -133,4 +275,74 @@ export const insertMarkdown = (
   const lead = before === '' || /\s$/.test(before) ? '' : ' ';
   const caret = at + lead.length + 1;
   return { text: `${before}${lead}@${chosen}${after}`, selection: { start: caret, end: caret } };
+};
+
+/** A list or a quote's own marker at the start of a line: its indent, its kind, and the text it takes. */
+const CONTINUING = /^(\s*)(?:([-*+])|(\d+)\.|(>)) /;
+
+/**
+ * What Shift+Enter does in a list or a quote: the line break, and the next marker already on the new line —
+ * the next number for a numbered one. On an item that has only its marker it takes the marker away instead,
+ * which is how a list is ended. `null` where the line is no list (or the caret is in a code fence, where a
+ * dash is not one): the browser's own line break is right there.
+ */
+export const continueList = (
+  text: string,
+  caret: number,
+): { readonly text: string; readonly caret: number } | null => {
+  if (insideFence(text.slice(0, caret))) return null;
+  const lineStart = text.lastIndexOf('\n', caret - 1) + 1;
+  const lineBefore = text.slice(lineStart, caret);
+  const found = CONTINUING.exec(lineBefore);
+  if (found === null) return null;
+  const marker = found[0];
+  if (lineBefore === marker) {
+    // An empty item: the marker goes, and the list is over.
+    return { text: text.slice(0, lineStart) + text.slice(caret), caret: lineStart };
+  }
+  const indent = found[1] ?? '';
+  const next =
+    found[3] !== undefined
+      ? `${indent}${String(Number(found[3]) + 1)}. `
+      : `${indent}${found[2] ?? found[4] ?? '-'} `;
+  return {
+    text: `${text.slice(0, caret)}\n${next}${text.slice(caret)}`,
+    caret: caret + 1 + next.length,
+  };
+};
+
+/** The parts of a keyboard event a formatting key is read from: nothing the DOM adds. */
+export interface KeyLike {
+  readonly key: string;
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+/**
+ * What a key asks for in the box, or `null` when it is only typing (D-181). Either of Ctrl and Meta, as the
+ * palette's key is read, so the behaviour never depends on the platform — only the tooltip's words do.
+ * Ctrl+K is not here: it is the palette's. The digit keys are read by their *position* (`code`), since
+ * Shift turns a digit into a different character on every layout.
+ */
+export const formatKey = (
+  event: KeyLike,
+): Exclude<MarkdownKind, 'code' | 'mention'> | 'preview' | null => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+  const letter = event.key.toLowerCase();
+  if (!event.shiftKey) {
+    if (letter === 'b') return 'bold';
+    if (letter === 'i') return 'italic';
+    if (letter === 'e') return 'inlineCode';
+    return null;
+  }
+  if (letter === 'x') return 'strike';
+  if (letter === 'u') return 'link';
+  if (letter === 'p') return 'preview';
+  if (event.code === 'Digit8') return 'bullets';
+  if (event.code === 'Digit7') return 'numbers';
+  if (event.code === 'Digit9') return 'quote';
+  return null;
 };
