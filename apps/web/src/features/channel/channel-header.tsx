@@ -169,6 +169,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
                 {title}
               </button>
             </h1>
+            {/* The star is the channel's own, beside its name where Slack and Linear keep it, not one
+                more icon in the cluster of actions on the right. */}
+            <StarToggle channel={channel} />
             <span
               aria-hidden="true"
               className="h-4 shrink-0 border-l-hairline border-border-subtle max-narrow:hidden"
@@ -226,23 +229,30 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           </Link>
         </nav>
       )}
-      {!direct && <StarToggle channel={channel} />}
-      <PanelControls direct={direct} channel={channel} />
-      <NotificationLevelMenu channel={channel} />
-      {canAdd && (
-        <>
-          <IconButton
-            label={t('people.add')}
-            glyph="add"
-            onClick={() => {
-              setAdding(true);
-            }}
-          />
-          {deferred !== null && (
-            <deferred.AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
-          )}
-        </>
-      )}
+      {/* What the header does, in one group at one spacing: the panels it opens, then how this
+          channel notifies and who is in it, set apart by a hairline. */}
+      <div className="flex shrink-0 items-center gap-1 max-narrow:gap-0">
+        <PanelControls direct={direct} channel={channel} />
+        <span
+          aria-hidden="true"
+          className="mx-1 h-4 shrink-0 border-l-hairline border-border-subtle max-narrow:hidden"
+        />
+        <NotificationLevelMenu channel={channel} />
+        {canAdd && (
+          <>
+            <IconButton
+              label={t('people.add')}
+              glyph="add"
+              onClick={() => {
+                setAdding(true);
+              }}
+            />
+            {deferred !== null && (
+              <deferred.AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
+            )}
+          </>
+        )}
+      </div>
     </header>
   );
 };

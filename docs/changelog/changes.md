@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-23: the channel header, in groups
+
+- The channel's **star** moves beside its name; the actions on the right are one group at one spacing (the
+  panels, then a hairline, then the bell and Add people). A narrow window is unchanged.
+
 ### Change — 2026-10-23: a light navigation, and a composer worth writing in
 
 - **The left menu is light in the light theme** and keeps the dark navy in the dark one (D-180, amends

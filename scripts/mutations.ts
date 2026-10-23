@@ -8221,4 +8221,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  if (selection.start === selection.end && named.length === 0 && Number.isNaN(0)) {',
     tests: ['apps/web/src/features/composer/composer-text.test.ts'],
   },
+  {
+    id: 'header-star-back-in-the-cluster',
+    why: 'the star goes back to the row of actions on the right, one more icon in a crowded cluster (D-181 follow-up)',
+    file: 'apps/web/src/features/channel/channel-header.tsx',
+    find: '            <StarToggle channel={channel} />\n',
+    replace: '',
+    tests: ['apps/web/src/features/sidebar/starred.test.tsx'],
+  },
 ];

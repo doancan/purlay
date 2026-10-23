@@ -244,6 +244,13 @@ describe('starring a channel', () => {
     view.unmount();
   });
 
+  test('the star is beside the channel’s name, not in the cluster of actions on the right', async () => {
+    const view = await open(aServer().api);
+    const title = view.container.querySelector('[data-header-title]');
+    expect(title?.contains(star(view))).toBe(true);
+    view.unmount();
+  });
+
   test('a channel the person can see and is not in has no star', async () => {
     const view = await open({}, `/w/acme/c/${IDS.browse}`);
     expect(view.queryByRole('button', { name: 'Star this channel' })).toBeNull();
