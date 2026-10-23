@@ -174,6 +174,9 @@ describe('the channels section', () => {
     const buttons = view.getAllByRole('button', { name: 'New channel' });
     expect(buttons).toHaveLength(2);
     await person().click(some(buttons.at(-1)));
+    // The dialog is in the deferred chunk (D-163): it is there once the chunk has come. Asked for at once, this
+    // passed when the chunk was already loaded by a file before it in the process, and failed when it was not.
+    await settle();
     expect(view.getByRole('dialog', { name: 'New channel' })).toBeDefined();
   });
 
