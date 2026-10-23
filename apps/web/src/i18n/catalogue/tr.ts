@@ -1519,6 +1519,8 @@ export const tr = {
   'setup.github.ok': 'GitHub bu bilgileri kabul etti.',
   'setup.github.okNote': 'Henüz kaydedilmedi. Kaydet ve devam et onları saklar.',
   'setup.github.connected': 'GitHub bağlı. Secret saklanıyor ve gösterilmiyor.',
+  'setup.github.untried':
+    'GitHub bu sunucunun ortamında tanımlı ve denenmemiş. Bir giriş yolu, kurulum için ancak denendikten sonra sayılır: değerlerini girip denemek için “Yeniden dene”yi kullan, olduğu gibi bırakmak için Devam’a bas.',
   'setup.github.skipNote':
     'Atlarsan kimse GitHub ile giremez. E-postayı bağlarsan insanlar yine de girebilir.',
   'setup.email.title': 'E-postayı bağla',
@@ -1562,6 +1564,8 @@ export const tr = {
   'setup.email.resendFix':
     'Posta sunucusunu ya da göndereni değiştirmek için aşağıdaki “Yeniden dene”yi kullan.',
   'setup.email.connected': 'E-posta bağlı.',
+  'setup.email.untried':
+    'Bir posta sunucusu bu sunucunun ortamında tanımlı ve denenmemiş. Bir giriş yolu, kurulum için ancak denendikten sonra sayılır: adresini girip denemek için “Yeniden dene”yi kullan, olduğu gibi bırakmak için Devam’a bas.',
   'setup.email.skipNote':
     'Atlarsan davet bağlantıları gönderilmez, yalnızca kopyalanır; e-postayla giriş ve e-postayla hesap açma gizlenir. GitHub bağlıysa herkes yine de girer. Adresin doğrulanmamış kalır.',
   'setup.workspace.title': 'İlk çalışma alanını oluştur',

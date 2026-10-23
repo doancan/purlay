@@ -794,6 +794,13 @@ into the form taken out, at most 200 characters (D-179 §4.4). The wording of ev
 | `message-refused` | The mail server took both addresses and refused the message | The relay's policy refused it — often the sender's domain (SPF, DKIM, DMARC): send from a domain the relay may send for |
 | `unexpected-reply` | The answer was not one a working GitHub or mail server gives: an error or a busy reply from the service itself, a redirect, a reply too long to be one, or a web server, a proxy or another service at that address | Try again in a minute; if it stays, check the address — the reply shown says which it was |
 
+**An app or a relay that is only in the settings** — put there by the environment (`GITHUB_CLIENT_ID`, `SMTP_URL`
+and the others seed the settings on the first start, D-179 §6) and never tried — is **not called connected**: the
+step says it is set in the server's environment and has not been tried, that a way in counts for the setup only
+after a try, and offers *Try again* (enter the values and try them) and *Continue*, which **passes the step as it
+is** — it is not left unpassed, and it counts toward nothing at the finish (§4.5). Only a try that worked is
+*connected*.
+
 **What the GitHub step cannot try is the callback address.** GitHub checks it only on its own screen when
 somebody signs in, so the step shows the exact address — `APP_URL/auth/callback/github` — with **Copy**,
 and says that GitHub's page *"The redirect_uri MUST match the registered callback URL"* means the app's

@@ -84,10 +84,16 @@ export const GitHubStep = ({ state, done, onBack, onNext }: StepProps): React.JS
     );
 
   if (connected && !editing) {
+    // Tried and kept, or only in the settings — put there by the environment, never tried. The second is not
+    // "connected" for the setup (the finish rule counts a try), and Continue does not leave it unpassed.
+    const tried = state.channels.github;
     return (
       <div className="flex flex-col gap-6">
         <StepHeader title={t('setup.github.title')} lede={t('setup.github.lede')} />
-        <Note tone="good">{t('setup.github.connected')}</Note>
+        <Note tone={tried ? 'good' : 'warn'}>
+          {tried ? t('setup.github.connected') : t('setup.github.untried')}
+        </Note>
+        {failure !== null && <FailureNote failure={failure} />}
         <Actions start={back}>
           <Button
             onClick={() => {
@@ -98,11 +104,13 @@ export const GitHubStep = ({ state, done, onBack, onNext }: StepProps): React.JS
           </Button>
           <Button
             variant="primary"
+            busy={busy === 'skip'}
+            disabled={busy !== null}
             onClick={
               done
                 ? onNext
                 : (): void => {
-                    void refresh();
+                    void skip();
                   }
             }
           >

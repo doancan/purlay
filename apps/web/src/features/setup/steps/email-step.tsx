@@ -252,8 +252,13 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
     return (
       <div className="flex flex-col gap-6">
         <StepHeader title={t('setup.email.title')} lede={t('setup.email.lede')} />
-        <Note tone="good">{t('setup.email.connected')}</Note>
-        <ResendLetter address={address} verified={admin?.emailVerified === true} />
+        <Note tone={state.channels.email ? 'good' : 'warn'}>
+          {state.channels.email ? t('setup.email.connected') : t('setup.email.untried')}
+        </Note>
+        {state.channels.email && (
+          <ResendLetter address={address} verified={admin?.emailVerified === true} />
+        )}
+        {failure !== null && <FailureNote failure={failure} />}
         <Actions start={back}>
           <Button
             onClick={() => {
@@ -264,11 +269,13 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
           </Button>
           <Button
             variant="primary"
+            busy={busy === 'skip'}
+            disabled={busy !== null}
             onClick={
               done
                 ? onNext
                 : (): void => {
-                    void refresh();
+                    void skip();
                   }
             }
           >

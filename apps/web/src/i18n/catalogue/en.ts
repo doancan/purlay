@@ -1563,6 +1563,8 @@ export const en = {
   'setup.github.ok': 'GitHub accepted these credentials.',
   'setup.github.okNote': 'They are not saved yet. Save and continue keeps them.',
   'setup.github.connected': 'GitHub is connected. Its secret is stored and not shown.',
+  'setup.github.untried':
+    'GitHub is set in this server’s environment and has not been tried. A way in counts for the setup only after a try: use “Try again” to enter its values and try them, or Continue to leave it as it is.',
   'setup.github.skipNote':
     'If you skip, nobody can sign in with GitHub. Email, if you connect it, still lets people in.',
   'setup.email.title': 'Connect email',
@@ -1604,6 +1606,8 @@ export const en = {
     'The saved mail settings can no longer be tried as they are. Use “Try again” below to enter them again.',
   'setup.email.resendFix': 'To change the mail server or the sender, use “Try again” below.',
   'setup.email.connected': 'Email is connected.',
+  'setup.email.untried':
+    'A mail server is set in this server’s environment and has not been tried. A way in counts for the setup only after a try: use “Try again” to enter its address and try it, or Continue to leave it as it is.',
   'setup.email.skipNote':
     'If you skip, invitation links are copied, not sent, and email sign-in and creating an account by email are hidden. GitHub, if connected, still lets everyone in. Your address stays unverified.',
   'setup.workspace.title': 'Create the first workspace',

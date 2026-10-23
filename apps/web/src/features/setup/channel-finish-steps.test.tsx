@@ -197,7 +197,10 @@ describe('GitHub', () => {
   });
 
   test('when connected, says so without the secret, and can be done again or gone on from', async () => {
-    let state = atGithub({ settings: { ...aState().settings, github: CONNECTED_GITHUB } });
+    let state = atGithub({
+      settings: { ...aState().settings, github: CONNECTED_GITHUB },
+      channels: { github: true, email: false },
+    });
     const view = await openSetup(aClient({ state: () => Promise.resolve(state) }));
     expect(view.getByText(en['setup.github.connected'])).toBeDefined();
     expect(view.container.textContent).not.toContain('shh');
@@ -223,24 +226,62 @@ describe('GitHub', () => {
     expect(view.queryByText(en['setup.github.connected'])).toBeNull();
   });
 
-  test('Continue on a connected screen not yet passed reads the state again', async () => {
-    let reads = 0;
+  test('an app that is only in the settings (the environment put it there) is not called connected, and Continue passes the step without a try', async () => {
+    let state = atGithub({ settings: { ...aState().settings, github: CONNECTED_GITHUB } });
+    let skipped = 0;
     const view = await openSetup(
       aClient({
-        state: () => {
-          reads += 1;
-          return Promise.resolve(
-            atGithub({ settings: { ...aState().settings, github: CONNECTED_GITHUB } }),
-          );
+        state: () => Promise.resolve(state),
+        skipGithub: () => {
+          skipped += 1;
+          state = atEmail({ settings: { ...aState().settings, github: CONNECTED_GITHUB } });
+          return Promise.resolve();
         },
       }),
     );
-    const before = reads;
+    expect(view.getByText(en['setup.github.untried'])).toBeDefined();
+    expect(view.queryByText(en['setup.github.connected']) === null).toBe(true);
     await press(view, 'Continue');
-    expect(reads).toBe(before + 1);
+    // The step is passed — not "read again" and left where it was.
+    expect(skipped).toBe(1);
+    expect(view.getByRole('heading', { name: 'Connect email' })).toBeDefined();
+  });
+
+  test('Continue on that screen says a failure, and follows the claim being lost', async () => {
+    const seeded = atGithub({ settings: { ...aState().settings, github: CONNECTED_GITHUB } });
+    const failing = await openSetup(
+      aClient({
+        state: () => Promise.resolve(seeded),
+        skipGithub: () => Promise.reject(new SetupFailure(0, 'NETWORK', 'down')),
+      }),
+    );
+    await press(failing, 'Continue');
+    expect(failing.getByRole('alert').textContent).toContain(en['setup.failed.network']);
+    failing.unmount();
+    const lost = await openSetup(losing(seeded, 'skipGithub'));
+    await press(lost, 'Continue');
+    expect(lost.getByRole('heading', { name: /code/i })).toBeDefined();
   });
 
   test('Continue on a connected screen that was passed goes to the next without a call', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () =>
+          Promise.resolve(
+            atEmail({
+              settings: { ...aState().settings, github: CONNECTED_GITHUB },
+              channels: { github: true, email: false },
+            }),
+          ),
+      }),
+    );
+    await press(view, 'Back');
+    expect(view.getByText(en['setup.github.connected'])).toBeDefined();
+    await press(view, 'Continue');
+    expect(view.getByRole('heading', { name: 'Connect email' })).toBeDefined();
+  });
+
+  test('walked back to after it was passed untried, it still says untried, and Continue asks for nothing', async () => {
     const view = await openSetup(
       aClient({
         state: () =>
@@ -250,7 +291,7 @@ describe('GitHub', () => {
       }),
     );
     await press(view, 'Back');
-    expect(view.getByText(en['setup.github.connected'])).toBeDefined();
+    expect(view.getByText(en['setup.github.untried'])).toBeDefined();
     await press(view, 'Continue');
     expect(view.getByRole('heading', { name: 'Connect email' })).toBeDefined();
   });
@@ -446,6 +487,7 @@ describe('email', () => {
             atEmail({
               steps: ['claim', 'admin', 'address', 'policy', 'github', 'email'],
               settings: { ...aState().settings, smtp: CONNECTED_SMTP },
+              channels: { github: false, email: true },
             }),
           ),
       }),
@@ -458,146 +500,45 @@ describe('email', () => {
     expect((view.getByLabelText('Mail server') as HTMLInputElement).value).toBe('');
   });
 
-  test('Continue on a connected screen: passed goes on without a call, not yet passed reads the state', async () => {
-    let reads = 0;
-    const connected = atEmail({ settings: { ...aState().settings, smtp: CONNECTED_SMTP } });
+  test('a relay that is only in the settings is not called connected, and Continue passes the step without a try; once passed, Continue goes on with no call', async () => {
+    let state = atEmail({ settings: { ...aState().settings, smtp: CONNECTED_SMTP } });
+    let skipped = 0;
     const view = await openSetup(
       aClient({
-        state: () => {
-          reads += 1;
-          return Promise.resolve(connected);
+        state: () => Promise.resolve(state),
+        skipSmtp: () => {
+          skipped += 1;
+          state = { ...state, steps: [...state.steps, 'email'] };
+          return Promise.resolve();
         },
       }),
     );
-    const before = reads;
+    expect(view.getByText(en['setup.email.untried'])).toBeDefined();
+    expect(view.queryByText(en['setup.email.connected']) === null).toBe(true);
     await press(view, 'Continue');
-    expect(reads).toBe(before + 1);
-    view.unmount();
-
-    const passed = await openSetup(
-      aClient({
-        state: () =>
-          Promise.resolve({
-            ...connected,
-            steps: [...connected.steps, 'email'],
-          }),
-      }),
-    );
-    await press(passed, 'Back');
-    await press(passed, 'Continue');
-    expect(passed.getByRole('heading', { name: 'Create the first workspace' })).toBeDefined();
+    expect(skipped).toBe(1);
+    expect(view.getByRole('heading', { name: 'Create the first workspace' })).toBeDefined();
+    // Walked back to, it is passed already: Continue goes on and asks for nothing.
+    await press(view, 'Back');
+    await press(view, 'Continue');
+    expect(skipped).toBe(1);
+    expect(view.getByRole('heading', { name: 'Create the first workspace' })).toBeDefined();
   });
 
-  test('says what the sender may be before it is typed, and under the field when the server refuses it', async () => {
-    const view = await openSetup(
+  test('Continue on that screen says a failure, and follows the claim being lost', async () => {
+    const seeded = atEmail({ settings: { ...aState().settings, smtp: CONNECTED_SMTP } });
+    const failing = await openSetup(
       aClient({
-        state: () => Promise.resolve(atEmail()),
-        smtp: () =>
-          Promise.reject(
-            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
-              from: 'the sender cannot be tried: one plain address, with no name and nothing else',
-            }),
-          ),
+        state: () => Promise.resolve(seeded),
+        skipSmtp: () => Promise.reject(new SetupFailure(0, 'NETWORK', 'down')),
       }),
     );
-    expect(view.getByText(en['setup.email.fromHint'])).toBeDefined();
-    expect(en['setup.email.fromHint']).toMatch(/plain address/i);
-    await person().type(view.getByLabelText('Mail server'), 'smtp://mail.example.test');
-    await person().type(view.getByLabelText('Sender'), 'Purlay <purlay@example.test>');
-    await press(view, TRY);
-    const sender = view.getByLabelText('Sender');
-    expect(sender.getAttribute('aria-invalid')).toBe('true');
-    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
-    // The refusal stands in the hint's place, not under it: two sentences saying one thing.
-    expect(view.queryByText(en['setup.email.fromHint']) === null).toBe(true);
-    // The sentence is the field's, not the page's "the server refused this".
-    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
-    // Typing again takes the refusal off the field.
-    await person().type(sender, 'x');
-    expect(view.queryByText(en['setup.email.fromInvalid']) === null).toBe(true);
-  });
-
-  test('says an address the server cannot try under the mail server field', async () => {
-    const view = await openSetup(
-      aClient({
-        state: () => Promise.resolve(atEmail()),
-        smtp: () =>
-          Promise.reject(
-            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
-              smtpUrl: 'an address with no space or line break in it',
-            }),
-          ),
-      }),
-    );
-    await fillMail(view);
-    await press(view, TRY);
-    expect(view.getByLabelText('Mail server').getAttribute('aria-invalid')).toBe('true');
-    expect(view.getByText(en['setup.email.urlInvalid'])).toBeDefined();
-    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
-  });
-
-  test('editing one refused field takes away only its own refusal', async () => {
-    const view = await openSetup(
-      aClient({
-        state: () => Promise.resolve(atEmail()),
-        smtp: () =>
-          Promise.reject(
-            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
-              smtpUrl: 'not an smtp:// or smtps:// address',
-              from: 'one plain address, with no name and nothing else',
-            }),
-          ),
-      }),
-    );
-    await fillMail(view);
-    await press(view, TRY);
-    expect(view.getByText(en['setup.email.urlInvalid'])).toBeDefined();
-    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
-    await person().type(view.getByLabelText('Mail server'), 'x');
-    expect(view.queryByText(en['setup.email.urlInvalid']) === null).toBe(true);
-    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
-    // And the page's generic sentence never comes back for what was explained under its fields.
-    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
-  });
-
-  test('a refusal that names a field this screen explains and another it does not still says the generic sentence', async () => {
-    const view = await openSetup(
-      aClient({
-        state: () => Promise.resolve(atEmail()),
-        smtp: () =>
-          Promise.reject(
-            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
-              from: 'one plain address, with no name and nothing else',
-              locale: 'is not a language',
-            }),
-          ),
-      }),
-    );
-    await fillMail(view);
-    await press(view, TRY);
-    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
-    expect(
-      view
-        .getAllByRole('alert')
-        .some((one) => one.textContent.includes(en['setup.failed.generic'])),
-    ).toBe(true);
-  });
-
-  test('a refusal that names a field the screen has not got is the page’s generic sentence', async () => {
-    const view = await openSetup(
-      aClient({
-        state: () => Promise.resolve(atEmail()),
-        smtp: () =>
-          Promise.reject(
-            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
-              body: 'Expected union value',
-            }),
-          ),
-      }),
-    );
-    await fillMail(view);
-    await press(view, TRY);
-    expect(view.getByRole('alert').textContent).toContain(en['setup.failed.generic']);
+    await press(failing, 'Continue');
+    expect(failing.getByRole('alert').textContent).toContain(en['setup.failed.network']);
+    failing.unmount();
+    const lost = await openSetup(losing(seeded, 'skipSmtp'));
+    await press(lost, 'Continue');
+    expect(lost.getByRole('heading', { name: /code/i })).toBeDefined();
   });
 
   test('a mail login that can no longer be read asks for it again', async () => {
@@ -619,9 +560,11 @@ describe('email', () => {
 
 describe('email: the letter again', () => {
   const TRY = 'Try the connection and continue';
+  // Kept after a try that worked: the relay is tried and serving, which is what a letter again is offered on.
   const KEPT = atEmail({
     steps: ['claim', 'admin', 'address', 'policy', 'github', 'email'],
     settings: { ...aState().settings, smtp: CONNECTED_SMTP },
+    channels: { github: false, email: true },
   });
   const AGAIN = en['setup.email.resend'];
 

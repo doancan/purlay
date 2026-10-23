@@ -39,6 +39,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - **README, *Self-hosting*,** described the sign-in-first flow D-179 replaced (a GitHub app before the
   first start, then *make the first workspace*). It now describes the wizard: the setup code, then the
   page. `UX.md` §11's GitHub row says the two buttons it has.
+- **An app or a relay put in the settings by the environment, never tried, is no longer "connected" with a
+  Continue that did nothing.** On a server whose environment seeds GitHub (the dogfooding server's does), the
+  wizard's GitHub step said *GitHub is connected* and offered Continue, which only read the state again and
+  left the person on the step — a dead end that only retyping the same credentials got out of. It now says the
+  app is set in the environment and has not been tried (the finish rule counts only a try, §4.5), and
+  Continue passes the step as it is; the mail step likewise. Found by walking the real server.
 - Found by walking a fresh server in a browser with a real mail relay (a scripted SMTP sink) and a second
   browser for the invited person; nothing else in the first-run path was found missing.
 
