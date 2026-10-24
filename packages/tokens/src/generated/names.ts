@@ -7,6 +7,7 @@ export const defaultTheme = 'dark';
 export const themes = [
   'dark',
   'light',
+  'midnight',
 ] as const;
 
 export const colorTokens = [

@@ -38,7 +38,11 @@ export const Choices = <V extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="grid w-full grid-cols-3 gap-3 max-narrow:grid-cols-1"
+      className={cn(
+        'grid w-full gap-3 max-narrow:grid-cols-1',
+        // Four fit one row (the themes); a fifth would leave one alone on the next.
+        choices.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
+      )}
     >
       {choices.map((choice) => {
         const chosen = choice.value === value;

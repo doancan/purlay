@@ -58,7 +58,7 @@ test.describe('an address that leads nowhere', () => {
 });
 
 test.describe('the gallery', () => {
-  test('shows every primitive in both themes at once, and is clean in this one', async ({
+  test('shows every primitive in every theme at once, and is clean in this one', async ({
     page,
     expectNoAxe,
   }) => {
@@ -111,6 +111,27 @@ test.describe('the theme', () => {
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', other);
     expect(await page.evaluate(() => localStorage.getItem('purlay.theme'))).toBe(other);
+  });
+});
+
+test.describe('Midnight (D-184)', () => {
+  test('is chosen in the menu, is kept across a reload without a black flash, and is a dark scheme for the platform', async ({
+    page,
+  }) => {
+    await page.goto('/__gallery');
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('menuitemradio', { name: 'Midnight' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight');
+    expect(await page.evaluate(() => localStorage.getItem('purlay.theme'))).toBe('midnight');
+    // Not the black dark theme's content colour, and told to the platform as dark.
+    const drawn = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      return { surface: style.getPropertyValue('--surface-100').trim(), scheme: style.colorScheme };
+    });
+    expect(drawn.surface).toBe('#1a1a34');
+    expect(drawn.scheme).toBe('dark');
   });
 });
 

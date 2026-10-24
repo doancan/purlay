@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-24: a black dark theme, and Midnight
+
+- **Dark is black now** (D-184): neutral, layered, in the manner of Apple's dark mode, with a black navigation. The
+  indigo of the previous change is a theme of its own, **Midnight**, chosen in Settings → Preferences (the
+  device's own dark setting gives the black one). Contrast is computed in all three themes.
+- **The skip link** no longer shows a stray line at the top edge of the window over a dialog.
+
 ### Change — 2026-10-23: the dark theme in one family, and one check box
 
 - **Dark is the navigation's indigo throughout** (D-183): the content, cards, hairlines and text moved from a

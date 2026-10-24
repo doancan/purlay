@@ -16,7 +16,12 @@
   try {
     var stored = window.localStorage.getItem('purlay.theme');
     var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var theme = stored === 'light' || stored === 'dark' ? stored : dark ? 'dark' : 'light';
+    var theme =
+      stored === 'light' || stored === 'dark' || stored === 'midnight'
+        ? stored
+        : dark
+          ? 'dark'
+          : 'light';
     document.documentElement.setAttribute('data-theme', theme);
   } catch (error) {
     // Keep the default in index.html.

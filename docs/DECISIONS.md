@@ -8791,7 +8791,7 @@ platform's keys, and adds a dependency for what one input does).
 
 **Cost of reversing.** One file and eight call sites; no contract, route or key.
 
-### D-183. The dark theme is one family: the navigation's indigo, in layers
+### D-183. The dark theme is one family: the navigation's indigo, in layers — now Midnight (D-184)
 
 **Decided (the owner, 2026-10-23), amends D-180's "dark keeps the navigation's tones".** The dark theme's
 content was a neutral near-black (`#0f0f11`, `#161618`) beside a navigation in indigo-navy (`#16162b`,
@@ -8799,7 +8799,7 @@ content was a neutral near-black (`#0f0f11`, `#161618`) beside a navigation in i
 clean and in the manner of Apple's dark mode: deep, calm, layered, no hard edges. Every dark surface, border
 and text token now sits in the navigation's hue: the window `#12122a`, the content `#1a1a34`, a raised
 fill `#25253f`, a hover `#20203c`, hairlines `#2d2d4b`, a control's edge `#7d7da0`, text `#f1f1f8` /
-`#b6b6d0` / `#a3a3bf`; the avatar tints moved from warm browns to the same family. The light theme and the
+`#a9a9c6` / `#9696b6`; the avatar tints moved from warm browns to the same family. The light theme and the
 navigation's own tokens are unchanged.
 
 The contrast pairs are the gate and were not touched: every pair passes at the new values (`bun run tokens:check`).
@@ -8808,6 +8808,35 @@ The contrast pairs are the gate and were not touched: every pair passes at the n
 mismatch the owner saw); a pure black "OLED" ground (harsh against the indigo navigation).
 
 **Cost of reversing.** Eleven dark values in `tokens.json` and the avatar tints; generated files follow.
+
+### D-184. Dark is black, and the indigo is a theme of its own, Midnight
+
+**Decided (the owner, 2026-10-24), refines D-183.** D-183 put the whole dark theme in the navigation's
+indigo. The owner asked for that indigo to be a theme called Midnight, and for the default dark to be a
+black one. So there are three themes — `dark`, `light`, `midnight` — and four choices (`system`, `light`,
+`dark`, `midnight`):
+
+- **Dark** (the default dark, and what `system` gives when the device is dark) is neutral black in the
+  manner of Apple's dark mode: window `#050506`, content `#0e0e10`, a raised fill `#1c1c1f`, hairlines
+  `#252528`, text `#f5f5f7` / `#a9a9b1` / `#9696a0`, a black navigation (rail `#000000`, sidebar `#0d0d0f`),
+  and quiet, neutral avatar tints.
+- **Midnight** is D-183's indigo exactly as it was decided (every dark token and the navigation in the one
+  hue, in layers) and is chosen from Settings → Preferences; the operating system has no word for it, so
+  `system` never gives it.
+- **Light** is unchanged.
+
+Every colour and shadow has a value in each of the three, a theme never inherits (the token file refuses
+one that does), and the contrast pairs are computed in all three; Midnight is told to the platform as a dark
+`color-scheme`. The choice is the same `data-theme` switch and the same per-device storage as before; the
+script that runs before first paint knows `midnight`, so it does not flash black first.
+
+**Considered and rejected.** Keeping the indigo as the only dark (what D-183 made, and the owner did not
+want as the default); a fourth, "OLED" theme beside it (black is the default, one is enough); reading
+Midnight from the device (no such setting exists).
+
+**Cost of reversing.** One theme entry and its values in `tokens.json`, three lines in `theme.ts` and
+`theme-init.js`, a glyph, two strings, and the gallery's third frame. No contract, route or stored data
+beyond the device's `purlay.theme`.
 
 ## Part D — Open, deliberately
 

@@ -44,6 +44,24 @@ const ringOfFocused = async (
   });
 
 test.describe('focus', () => {
+  test('the skip link is wholly out of the window until it is focused, and then inside it', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    await shellReady(page);
+    const link = page.getByRole('link', { name: /skip to the conversation/i });
+    // Not at the edge with its bottom border showing: over a dialog's scrim that was a stray line.
+    const resting = await link.boundingBox();
+    expect(resting === null ? 0 : resting.y + resting.height).toBeLessThanOrEqual(0);
+    await link.focus();
+    const shown = await link.boundingBox();
+    expect(shown === null ? -1 : shown.y).toBeGreaterThanOrEqual(0);
+  });
+
   test('every Tab stop in a channel with a thread open shows a ring', async ({
     page,
     signIn,

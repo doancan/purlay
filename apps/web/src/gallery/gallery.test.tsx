@@ -17,24 +17,29 @@ import { Gallery } from './gallery';
 installDom();
 
 describe('the gallery', () => {
-  test('shows dark and light side by side, each scoped to its own theme', async () => {
+  test('shows dark, light and Midnight side by side, each scoped to its own theme', async () => {
     const { getByRole } = await renderApp(<Gallery />);
     expect(getByRole('region', { name: 'dark theme' }).getAttribute('data-theme')).toBe('dark');
     expect(getByRole('region', { name: 'light theme' }).getAttribute('data-theme')).toBe('light');
+    expect(getByRole('region', { name: 'midnight theme' }).getAttribute('data-theme')).toBe(
+      'midnight',
+    );
   });
 
   test('has the same specimen in both, so the two can be compared', async () => {
     const { getByRole } = await renderApp(<Gallery />);
     const dark = within(getByRole('region', { name: 'dark theme' }));
     const light = within(getByRole('region', { name: 'light theme' }));
-    expect(dark.getAllByRole('button').map((b) => b.textContent)).toEqual(
-      light.getAllByRole('button').map((b) => b.textContent),
-    );
+    const midnight = within(getByRole('region', { name: 'midnight theme' }));
+    const buttons = (frame: typeof dark): (string | null)[] =>
+      frame.getAllByRole('button').map((b) => b.textContent);
+    expect(buttons(dark)).toEqual(buttons(light));
+    expect(buttons(dark)).toEqual(buttons(midnight));
   });
 
   test('shows every colour token, in each theme', async () => {
     const { getByRole } = await renderApp(<Gallery />);
-    for (const theme of ['dark', 'light']) {
+    for (const theme of ['dark', 'light', 'midnight']) {
       const frame = within(getByRole('region', { name: `${theme} theme` }));
       for (const name of colorTokens) expect(frame.getAllByText(name).length).toBeGreaterThan(0);
     }
@@ -46,7 +51,7 @@ describe('the gallery', () => {
     for (const name of glyphNames) expect(frame.getAllByText(name).length).toBeGreaterThan(0);
   });
 
-  test('passes the accessibility audit, both themes', async () => {
+  test('passes the accessibility audit, every theme', async () => {
     const { container } = await renderApp(<Gallery />);
     await expectNoAxeViolations(container);
   });

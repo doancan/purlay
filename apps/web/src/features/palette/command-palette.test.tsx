@@ -173,6 +173,7 @@ describe('what is on offer before anything is typed', () => {
       'Theme: System',
       'Theme: Light',
       'Theme: Dark',
+      'Theme: Midnight',
       'Language: English',
       'Language: Türkçe',
     ]);

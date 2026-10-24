@@ -79,6 +79,7 @@ describe('choosing', () => {
     expect(parseChoice('sepia')).toBe('system');
     expect(parseChoice('light')).toBe('light');
     expect(parseChoice('dark')).toBe('dark');
+    expect(parseChoice('midnight')).toBe('midnight');
   });
 
   test('system is whatever the operating system says; a decision is not', () => {
@@ -86,10 +87,13 @@ describe('choosing', () => {
     expect(resolveTheme('system', false)).toBe('light');
     expect(resolveTheme('light', true)).toBe('light');
     expect(resolveTheme('dark', false)).toBe('dark');
+    // Midnight is chosen, never the operating system's answer: "dark" there means the black one.
+    expect(resolveTheme('midnight', true)).toBe('midnight');
+    expect(resolveTheme('midnight', false)).toBe('midnight');
   });
 
-  test('offers the three choices, system first', () => {
-    expect(THEME_CHOICES).toEqual(['system', 'light', 'dark']);
+  test('offers the four choices, system first and Midnight last (D-184)', () => {
+    expect(THEME_CHOICES).toEqual(['system', 'light', 'dark', 'midnight']);
   });
 });
 
@@ -121,6 +125,18 @@ describe('the store', () => {
     expect(html.attributes['data-theme']).toBe('light');
     expect(storage.data[THEME_KEY]).toBe('light');
     expect(store.getState().resolved).toBe('light');
+  });
+
+  test('Midnight is applied and remembered, and stays when the operating system changes (D-184)', () => {
+    const storage = memory();
+    const html = target();
+    const os = system(true);
+    const { store } = connected({ storage, query: os, target: html });
+    store.getState().setChoice('midnight');
+    expect(html.attributes['data-theme']).toBe('midnight');
+    expect(storage.data[THEME_KEY]).toBe('midnight');
+    os.flip(false);
+    expect(store.getState().resolved).toBe('midnight');
   });
 
   test('only system follows the operating system when it changes its mind', () => {
@@ -222,7 +238,7 @@ describe('public/theme-init.js', () => {
   });
 
   test('decides exactly as the store does', () => {
-    for (const stored of [null, 'light', 'dark', 'sepia'] as const) {
+    for (const stored of [null, 'light', 'dark', 'midnight', 'sepia'] as const) {
       for (const dark of [true, false]) {
         expect(run(stored, dark)).toBe(resolveTheme(parseChoice(stored), dark));
       }

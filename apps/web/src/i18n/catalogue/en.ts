@@ -1381,6 +1381,7 @@ export const en = {
   'theme.system': 'System',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
+  'theme.midnight': 'Midnight',
   'language.label': 'Language',
   'language.en': 'English',
   'language.tr': 'Türkçe',

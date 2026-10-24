@@ -50,6 +50,9 @@ const MAX_DURATION_MS = 200;
 /** The spacing grid, in px. */
 const GRID = 4;
 
+/** The platform's `color-scheme` a theme is drawn in: Midnight is a dark theme. */
+export const schemeOf = (theme: string): 'light' | 'dark' => (theme === 'light' ? 'light' : 'dark');
+
 export interface Theme {
   readonly id: string;
   readonly name: string;
@@ -183,10 +186,12 @@ export const parseTokens = (raw: unknown): Parsed => {
   const themeIds = themes.map((theme) => theme.id);
   if (new Set(themeIds).size !== themeIds.length) problem('color.themes: ids must be unique');
   const defaultTheme = themeIds[0] ?? '';
-  // The id is also the CSS `color-scheme` keyword that makes scrollbars and form
-  // controls follow the theme, so it can only be one of the two the platform knows.
+  // The id says which of the platform's two `color-scheme`s makes scrollbars and form controls
+  // follow the theme (`schemeOf`), so it can only be one this knows: black, light, or Midnight.
   for (const id of themeIds) {
-    if (id !== 'dark' && id !== 'light') problem(`color.themes: "${id}" must be "dark" or "light"`);
+    if (id !== 'dark' && id !== 'light' && id !== 'midnight') {
+      problem(`color.themes: "${id}" must be "dark", "light" or "midnight"`);
+    }
   }
 
   // ---- colours ---------------------------------------------------------------------

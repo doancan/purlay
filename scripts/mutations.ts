@@ -8245,4 +8245,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '<input type="checkbox"',
     tests: ['apps/web/src/ui/checkbox.test.tsx'],
   },
+  {
+    id: 'theme-midnight-forgotten-on-load',
+    why: 'a stored Midnight is read as "system" and the page comes back black after a reload (D-184)',
+    file: 'apps/web/src/theme/theme.ts',
+    find: "raw === 'light' || raw === 'dark' || raw === 'midnight' ? raw : 'system'",
+    replace: "raw === 'light' || raw === 'dark' ? raw : 'system'",
+    tests: ['apps/web/src/theme/theme.test.ts'],
+  },
+  {
+    id: 'theme-init-forgets-midnight',
+    why: 'the script that runs before first paint does not know Midnight, so it flashes black before the page settles (D-184)',
+    file: 'apps/web/public/theme-init.js',
+    find: "stored === 'light' || stored === 'dark' || stored === 'midnight'",
+    replace: "stored === 'light' || stored === 'dark'",
+    tests: ['apps/web/src/theme/theme.test.ts'],
+  },
+  {
+    id: 'midnight-drawn-light-for-the-platform',
+    why: 'Midnight is told to the platform as a light scheme: white scrollbars and native controls on a dark page (D-184)',
+    file: 'packages/tokens/src/model.ts',
+    find: "theme === 'light' ? 'light' : 'dark'",
+    replace: "theme === 'light' || theme === 'midnight' ? 'light' : 'dark'",
+    tests: ['packages/tokens/src/tokens.test.ts'],
+  },
 ];

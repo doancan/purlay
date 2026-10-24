@@ -33,11 +33,13 @@ describe('SettingsMenu', () => {
       'System',
       'Light',
       'Dark',
+      'Midnight',
       'English',
       'Türkçe',
     ]);
     expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual([
       'true',
+      'false',
       'false',
       'false',
       'true',
@@ -72,6 +74,7 @@ describe('SettingsMenu', () => {
       'Sistem',
       'Açık',
       'Koyu',
+      'Gece yarısı',
       'English',
       'Türkçe',
     ]);

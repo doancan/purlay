@@ -73,7 +73,7 @@ describe('tokens:check', () => {
     // Dark ink-muted becomes nearly the surface's own colour.
     writeFileSync(
       file,
-      readFileSync(file, 'utf8').replace('"dark": "#b6b6d0"', '"dark": "#1e2227"'),
+      readFileSync(file, 'utf8').replace('"dark": "#a9a9b1"', '"dark": "#1e2227"'),
     );
     const { status, out } = run(root, '--check');
     expect(status).toBe(1);

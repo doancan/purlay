@@ -34,7 +34,13 @@ import { EmptyState, ErrorState } from '../ui/states';
 import { TextField } from '../ui/text-field';
 import { useToast } from '../ui/toast';
 
-type SpecimenTheme = 'dark' | 'light';
+type SpecimenTheme = 'dark' | 'light' | 'midnight';
+
+const TITLES: Readonly<Record<SpecimenTheme, string>> = {
+  dark: 'Dark',
+  light: 'Light',
+  midnight: 'Midnight',
+};
 
 /** What a gallery control does: nothing, on purpose — it is here to be looked at. */
 const noop = (): void => undefined;
@@ -282,7 +288,7 @@ const ThemeFrame = ({
     aria-label={`${theme} theme`}
     className="flex min-w-0 flex-col gap-6 rounded-md border-hairline border-border-subtle bg-surface-100 p-6 text-ink"
   >
-    <h2 className="text-title">{theme === 'dark' ? 'Dark' : 'Light'}</h2>
+    <h2 className="text-title">{TITLES[theme]}</h2>
     {children}
   </section>
 );
@@ -292,7 +298,7 @@ export const Gallery = (): React.JSX.Element => (
     <header className="flex flex-col gap-1">
       <h1 className="text-display text-ink">Gallery</h1>
       <p className="max-w-feed text-body text-ink-muted">
-        Every primitive and every state, in both themes at once. Development only: this page is not
+        Every primitive and every state, in every theme at once. Development only: this page is not
         in the production build.
       </p>
     </header>
@@ -302,6 +308,9 @@ export const Gallery = (): React.JSX.Element => (
         <Specimen />
       </ThemeFrame>
       <ThemeFrame theme="light">
+        <Specimen />
+      </ThemeFrame>
+      <ThemeFrame theme="midnight">
         <Specimen />
       </ThemeFrame>
     </div>

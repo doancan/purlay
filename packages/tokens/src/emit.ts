@@ -15,7 +15,7 @@
  * in the order the file is written, so `tokens:check` can compare bytes.
  */
 import type { Model, PlainToken } from './model';
-import { WEIGHTS } from './model';
+import { WEIGHTS, schemeOf } from './model';
 
 /**
  * Where each size token goes in Tailwind's theme. Written out rather than guessed
@@ -107,7 +107,7 @@ export type Emitted = Readonly<Record<'tokens.css' | 'theme.css' | 'names.ts', s
 const themeBlock = (model: Model, theme: string): string => {
   const selector =
     theme === model.defaultTheme ? `:root,\n[data-theme='${theme}']` : `[data-theme='${theme}']`;
-  const lines = [`${selector} {`, declaration('color-scheme', theme)];
+  const lines = [`${selector} {`, declaration('color-scheme', schemeOf(theme))];
   for (const color of model.colors) {
     const source = color.source[theme];
     if (source === undefined) throw new Error(`color "${color.name}" has no ${theme} value`);

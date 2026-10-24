@@ -1,14 +1,15 @@
 /**
  * Which theme is showing, who chose it, and where that choice is kept.
  *
- * **Both themes ship together** (D-98): the tokens declare every colour in dark
- * and light, and contrast is computed in each, so the choice is only ever a
- * switch of `data-theme` on `<html>` — never a second stylesheet and never a
+ * **Every theme ships together** (D-98, D-184): the tokens declare every colour in
+ * dark (black), light and Midnight (the indigo dark), and contrast is computed in
+ * each, so the choice is only ever a switch of `data-theme` on `<html>` — never a second stylesheet and never a
  * class a component has to know about.
  *
- * **Three choices, two themes.** `system` follows the operating system until a
- * person decides otherwise, and keeps following it afterwards if they go back to
- * `system`; `light` and `dark` are decisions. The choice is per device
+ * **Four choices, three themes.** `system` follows the operating system (light, or
+ * the black dark) until a person decides otherwise, and keeps following it
+ * afterwards if they go back to `system`; `light`, `dark` and `midnight` are
+ * decisions — the operating system has no word for Midnight. The choice is per device
  * (`localStorage`, no schema), exactly like the locale (D-41).
  *
  * **Every outside thing is an argument** — storage, the media query, the element
@@ -19,8 +20,8 @@
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-export type ThemeChoice = 'system' | 'light' | 'dark';
-export type ResolvedTheme = 'light' | 'dark';
+export type ThemeChoice = 'system' | 'light' | 'dark' | 'midnight';
+export type ResolvedTheme = 'light' | 'dark' | 'midnight';
 
 /**
  * The key `public/theme-init.js` reads before first paint. That script cannot
@@ -30,7 +31,12 @@ export type ResolvedTheme = 'light' | 'dark';
 export const THEME_KEY = 'purlay.theme';
 
 /** The order the toggle offers them in. */
-export const THEME_CHOICES = ['system', 'light', 'dark'] as const satisfies readonly ThemeChoice[];
+export const THEME_CHOICES = [
+  'system',
+  'light',
+  'dark',
+  'midnight',
+] as const satisfies readonly ThemeChoice[];
 
 export interface KeyValueStorage {
   getItem(key: string): string | null;
@@ -57,7 +63,7 @@ export interface ThemePorts {
 
 /** Anything unrecognised is `system`: a value from an older build must not pin a theme nobody chose. */
 export const parseChoice = (raw: string | null): ThemeChoice =>
-  raw === 'light' || raw === 'dark' ? raw : 'system';
+  raw === 'light' || raw === 'dark' || raw === 'midnight' ? raw : 'system';
 
 export const resolveTheme = (choice: ThemeChoice, prefersDark: boolean): ResolvedTheme =>
   choice === 'system' ? (prefersDark ? 'dark' : 'light') : choice;

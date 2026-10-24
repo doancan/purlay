@@ -1341,6 +1341,7 @@ export const tr = {
   'theme.system': 'Sistem',
   'theme.light': 'Açık',
   'theme.dark': 'Koyu',
+  'theme.midnight': 'Gece yarısı',
   'language.label': 'Dil',
   'language.en': 'English',
   'language.tr': 'Türkçe',

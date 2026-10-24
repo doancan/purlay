@@ -53,7 +53,7 @@ describe('preferences', () => {
       group(view, 'Theme')
         .getAllByRole('radio')
         .map((radio) => radio.closest('label')?.textContent),
-    ).toEqual(['System', 'Light', 'Dark']);
+    ).toEqual(['System', 'Light', 'Dark', 'Midnight']);
     expect(chosen(view, 'Theme')).toEqual(['system']);
     expect(
       group(view, 'Language')

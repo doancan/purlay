@@ -2,12 +2,13 @@
  * "Skip to the conversation" — the first thing Tab finds.
  *
  * Without it a keyboard user crosses the whole sidebar on every page load before
- * reaching the thing they came for. It is moved out of the viewport rather than
+ * reaching the thing they came for. It is moved wholly out of the viewport (stopped at the edge, its
+ * bottom border showed over a dialog's scrim) rather than
  * hidden (`display: none` would take it out of the tab order too) and slides into
  * view on focus, over everything (`z-toast`), with the same ring as any control.
  */
 const skipClasses =
-  'absolute left-4 top-0 z-toast -translate-y-full focus:top-2 rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-1 text-label text-ink focus:translate-y-0';
+  'absolute -top-full left-4 z-toast focus:top-2 rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-1 text-label text-ink';
 
 interface SkipLinkProps {
   /** The `id` of the element that holds the page's main content. */

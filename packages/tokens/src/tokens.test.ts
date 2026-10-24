@@ -71,13 +71,19 @@ describe('the real token file', () => {
     expect(audit(sound())).toEqual([]);
   });
 
-  test('has both themes complete, and dark first', () => {
+  test('has every theme complete, and dark first: black, the light one, and Midnight (D-184)', () => {
     const model = sound();
-    expect(model.themes.map((theme) => theme.id)).toEqual(['dark', 'light']);
+    expect(model.themes.map((theme) => theme.id)).toEqual(['dark', 'light', 'midnight']);
     expect(model.defaultTheme).toBe('dark');
     for (const color of model.colors) {
-      expect(Object.keys(color.resolved).sort()).toEqual(['dark', 'light']);
+      expect(Object.keys(color.resolved).sort()).toEqual(['dark', 'light', 'midnight']);
     }
+  });
+
+  test('draws Midnight dark: it is a dark theme for the platform’s scrollbars and form controls', () => {
+    const css = emit(sound())['tokens.css'];
+    const midnight = css.slice(css.indexOf("[data-theme='midnight']"));
+    expect(midnight.slice(0, midnight.indexOf('}'))).toContain('color-scheme: dark;');
   });
 
   test('carries no contrast figure in prose: the table owns the numbers', () => {
@@ -145,13 +151,15 @@ describe('the validator refuses', () => {
 
   test('a colour that is not in the accepted forms', () => {
     const file = copy();
-    damage(file, 'color', 'ink', { value: { dark: 'red', light: '#111418' } });
+    damage(file, 'color', 'ink', { value: { dark: 'red', midnight: 'red', light: '#111418' } });
     expect(problemsOf(file).join('\n')).toContain('"red" is not');
   });
 
   test('upper-case hex, which would make two spellings of one colour', () => {
     const file = copy();
-    damage(file, 'color', 'ink', { value: { dark: '#E6E8EB', light: '#111418' } });
+    damage(file, 'color', 'ink', {
+      value: { dark: '#E6E8EB', midnight: '#E6E8EB', light: '#111418' },
+    });
     expect(problemsOf(file).join('\n')).toContain('lower case');
   });
 
@@ -163,7 +171,9 @@ describe('the validator refuses', () => {
 
   test('an alias cycle', () => {
     const file = copy();
-    damage(file, 'color', 'danger-text', { value: { dark: '{focus-ring}', light: '#b91c1c' } });
+    damage(file, 'color', 'danger-text', {
+      value: { dark: '{focus-ring}', midnight: '{focus-ring}', light: '#b91c1c' },
+    });
     damage(file, 'color', 'focus-ring', { value: '{danger-text}' });
     expect(problemsOf(file).join('\n')).toContain('alias cycle');
   });
@@ -263,7 +273,7 @@ describe('the validator refuses', () => {
     expect(problemsOf(file).join('\n')).toContain('the same name as a colour');
   });
 
-  test('a theme that is neither dark nor light', () => {
+  test('a theme that is none of dark, light or midnight', () => {
     const file = copy();
     const color = file['color'];
     if (typeof color !== 'object' || color === null) throw new Error('no color');
@@ -273,7 +283,7 @@ describe('the validator refuses', () => {
         { id: 'sepia', name: 'Sepia' },
       ],
     });
-    expect(problemsOf(file).join('\n')).toContain('must be "dark" or "light"');
+    expect(problemsOf(file).join('\n')).toContain('must be "dark", "light" or "midnight"');
   });
 
   test('and reports every problem at once, not the first', () => {
@@ -285,9 +295,21 @@ describe('the validator refuses', () => {
 });
 
 describe('the audit refuses', () => {
+  test('a Midnight colour that has stopped being readable, as it does a dark or a light one (D-184)', () => {
+    const file = copy();
+    damage(file, 'color', 'ink-muted', {
+      value: { dark: '#a9a9b1', midnight: '#2a2f36', light: '#5a626e' },
+    });
+    const parsed = parseTokens(file);
+    if (!parsed.ok) throw new Error(parsed.problems.join('\n'));
+    expect(audit(parsed.model).join('\n')).toContain('ink-muted on surface-100 (midnight)');
+  });
+
   test('a colour that has stopped being readable', () => {
     const file = copy();
-    damage(file, 'color', 'ink-muted', { value: { dark: '#2a2f36', light: '#5a626e' } });
+    damage(file, 'color', 'ink-muted', {
+      value: { dark: '#2a2f36', midnight: '#2a2f36', light: '#5a626e' },
+    });
     const parsed = parseTokens(file);
     if (!parsed.ok) throw new Error(parsed.problems.join('\n'));
     expect(audit(parsed.model).join('\n')).toContain('ink-muted on surface-100 (dark)');
@@ -306,7 +328,7 @@ describe('the audit refuses', () => {
     }
     color.tokens.push({
       name: 'brand-new',
-      value: { dark: '#ffffff', light: '#000000' },
+      value: { dark: '#ffffff', light: '#000000', midnight: '#ffffff' },
       usage: 'x',
     });
     const parsed = parseTokens(file);
@@ -316,7 +338,9 @@ describe('the audit refuses', () => {
 
   test('a translucent colour in a pair, which has no contrast of its own', () => {
     const file = copy();
-    damage(file, 'color', 'ink', { value: { dark: '#e6e8eb80', light: '#111418' } });
+    damage(file, 'color', 'ink', {
+      value: { dark: '#e6e8eb80', midnight: '#e6e8eb80', light: '#111418' },
+    });
     const parsed = parseTokens(file);
     if (!parsed.ok) throw new Error(parsed.problems.join('\n'));
     expect(audit(parsed.model).join('\n')).toContain('no contrast of its own');
@@ -417,11 +441,14 @@ describe('the generated CSS', () => {
 
   test('defines every themed property in every theme, so no theme inherits another’s value', () => {
     const css = files['tokens.css'];
-    const dark = css.slice(0, css.indexOf("[data-theme='light']"));
-    const light = css.slice(css.indexOf("[data-theme='light']"), css.indexOf(':root {'));
+    const at = (id: string): number => css.indexOf(`[data-theme='${id}']`);
+    const dark = css.slice(0, at('light'));
+    const light = css.slice(at('light'), at('midnight'));
+    const midnight = css.slice(at('midnight'), css.indexOf(':root {'));
     for (const color of sound().colors) {
       expect(dark).toContain(`--${color.name}:`);
       expect(light).toContain(`--${color.name}:`);
+      expect(midnight).toContain(`--${color.name}:`);
     }
   });
 
