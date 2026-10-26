@@ -160,6 +160,7 @@ export const prepare = (options: PrepareOptions): Prepared => {
   const branch = `chore/release-v${version}`;
   run('git', 'switch', '-c', branch, 'origin/main');
   let pushed = false;
+  let issue: string | undefined;
   try {
     writeFileSync(join(root, 'package.json'), setVersion(packageJson, version));
     writeFileSync(join(root, 'docs/changelog/changes.md'), rolled.changes);
@@ -168,8 +169,25 @@ export const prepare = (options: PrepareOptions): Prepared => {
     run('git', 'commit', '-m', `chore(release): v${version}`);
     run('git', 'push', '-u', 'origin', branch);
     pushed = true;
+    // Every pull request names the issue it serves (`check:pr`), and a release is no exception: it
+    // gets one of its own, labelled `infra`, which is not held to an area of the code.
+    const filed = run(
+      'gh',
+      'issue',
+      'create',
+      '--title',
+      `Release v${version}`,
+      '--label',
+      'infra',
+      '--body',
+      `Cut v${version}: the version in package.json and the notes in docs/changelog/v${version}.md. Done when the pull request that carries them is merged, the server runs that commit, and the GitHub Release is published.`,
+    );
+    issue = /\/issues\/(\d+)\s*$/.exec(filed.trim())?.[1];
+    if (issue === undefined) throw new Error('gh issue create did not say which issue it made');
     const body = [
       `Releases v${version}: the version, and the notes moved out of Unreleased into docs/changelog/v${version}.md.`,
+      '',
+      `Closes #${issue}`,
       '',
       'Merging this deploys the commit to the server (the deploy workflow), then tags it',
       `v${version} and publishes the GitHub Release.`,
@@ -200,6 +218,14 @@ export const prepare = (options: PrepareOptions): Prepared => {
       ['git', ['switch', '-']],
       ['git', ['branch', '-D', branch]],
       ...(pushed ? ([['git', ['push', 'origin', '--delete', branch]]] as const) : []),
+      ...(issue === undefined
+        ? []
+        : ([
+            [
+              'gh',
+              ['issue', 'close', issue, '--comment', 'The release pull request could not be made.'],
+            ],
+          ] as const)),
     ];
     const left = steps
       .filter(([command, args]) => exec(command, args).code !== 0)

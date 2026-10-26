@@ -2767,6 +2767,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['scripts/image-smoke.test.ts'],
   },
   {
+    id: 'release-opens-a-pull-request-that-names-no-issue',
+    why: 'every release pull request fails the pull-request check for naming no issue, and the release waits on a person to notice',
+    file: 'scripts/release-prepare.ts',
+    find: '      `Closes #${issue}`,\n',
+    replace: "      '',\n",
+    tests: ['scripts/release.test.ts'],
+  },
+  {
+    id: 'release-leaves-an-issue-behind',
+    why: 'a release pull request that fails leaves an open Release issue for a release that was never made',
+    file: 'scripts/release-prepare.ts',
+    find: "['issue', 'close', issue, '--comment', 'The release pull request could not be made.'],",
+    replace: "['status'],",
+    tests: ['scripts/release.test.ts'],
+  },
+  {
     id: 'release-judges-a-stale-local-copy',
     why: 'a checkout that is behind main releases a version, or entries, that main no longer has',
     file: 'scripts/release-prepare.ts',
