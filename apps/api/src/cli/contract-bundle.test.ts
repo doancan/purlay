@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { assembleBundle } from '../contract/bundle';
-import { bundleProblems, writeBundle } from './contract-bundle';
+import { bundleProblems, main, writeBundle } from './contract-bundle';
 
 const made: string[] = [];
 const scratch = (): string => {
@@ -51,5 +51,38 @@ describe('writing the bundle and checking a directory against it', () => {
   test('a directory that is not there is a problem, not a pass', () => {
     const missing = join(scratch(), 'nowhere');
     expect(bundleProblems(bundle, missing)).toEqual([`${missing} cannot be read`]);
+  });
+});
+
+describe('the command', () => {
+  const quietly = <T>(work: () => T): T => {
+    const { log, error } = console;
+    console.log = (): void => undefined;
+    console.error = (): void => undefined;
+    try {
+      return work();
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+
+  test('writes with --out and then passes its own --check', () => {
+    const out = scratch();
+    expect(quietly(() => main(['--out', out], bundle))).toBe(0);
+    expect(quietly(() => main(['--check', out], bundle))).toBe(0);
+  });
+
+  test('fails --check on a directory that is not the bundle', () => {
+    const out = scratch();
+    quietly(() => main(['--out', out], bundle));
+    writeFileSync(join(out, 'contract.json'), '{}');
+    expect(quietly(() => main(['--check', out], bundle))).toBe(1);
+  });
+
+  test('is a usage error without a directory, in either mode', () => {
+    expect(quietly(() => main([], bundle))).toBe(2);
+    expect(quietly(() => main(['--out'], bundle))).toBe(2);
+    expect(quietly(() => main(['--check'], bundle))).toBe(2);
   });
 });

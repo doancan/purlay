@@ -699,6 +699,19 @@ describe('the endpoints', () => {
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
   });
 
+  test('authorising the native application (D-191): the challenge and state go up, the fixed address comes back', async () => {
+    const authorised = harness({ redirect: 'purlay://auth?code=c&state=s' });
+    const input = { challenge: 'a'.repeat(43), state: 'b'.repeat(22) };
+    expect(await authorised.api.authorizeNative(input)).toEqual({
+      redirect: 'purlay://auth?code=c&state=s',
+    });
+    expect(authorised.calls[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/native/authorize',
+      body: input,
+    });
+  });
+
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
     const methods = harness({ github: false, email: true, signUp: 'open' });
     expect(await methods.api.authMethods()).toEqual({

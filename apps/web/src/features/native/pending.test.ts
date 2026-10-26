@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { installDom } from '../../testing/dom';
 import {
+  browserNativePorts,
   captureNativeHandoff,
   forgetNativeHandoff,
   HANDOFF_TTL_MS,
@@ -167,5 +168,15 @@ describe('a pair that arrived another way — in a sign-in link’s fragment (D-
     expect(() => {
       forgetNativeHandoff(ports({ refuses: true }));
     }).not.toThrow();
+  });
+});
+
+describe('the browser’s own ports', () => {
+  test('keep in the tab, rewrite the address without a new history entry, and read the clock', () => {
+    const ports = browserNativePorts();
+    expect(ports.storage).toBe(window.sessionStorage);
+    ports.replace('/sign-in/native');
+    expect(window.location.pathname).toBe('/sign-in/native');
+    expect(Math.abs(ports.now() - Date.now())).toBeLessThan(5_000);
   });
 });

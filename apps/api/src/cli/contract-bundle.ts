@@ -44,8 +44,10 @@ export const bundleProblems = (bundle: ReadonlyMap<string, string>, dir: string)
   return problems;
 };
 
-const main = (argv: readonly string[]): number => {
-  const bundle = assembleBundle('.');
+export const main = (
+  argv: readonly string[],
+  bundle: ReadonlyMap<string, string> = assembleBundle('.'),
+): number => {
   const checkAt = argv.indexOf('--check');
   if (checkAt !== -1) {
     const dir = argv[checkAt + 1];
