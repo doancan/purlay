@@ -28,6 +28,11 @@ import {
   type ClientFrame,
   type ErrorCode,
   type ServerFrame,
+  CHECK_SESSION_AFTER_FAILURES,
+  PING_AFTER_IDLE_MS,
+  PONG_DEADLINE_MS,
+  STABLE_AFTER_MS,
+  TOO_BUSY_BACKOFF_STEP,
 } from '@purlay/types';
 import { reconnectDelay } from './backoff';
 import type { Clock } from './clock';
@@ -60,65 +65,11 @@ export type Schedule = (fn: () => void, ms: number) => () => void;
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'waiting' | 'ended';
 
 /**
- * How long a connection must hold before the backoff forgives it.
- *
- * Without this a server that accepts and then drops every connection is
- * "successfully connected" each time, and is retried at the shortest delay
- * forever. Long enough to outlast a handshake and a first replay; short enough
- * that a healthy reconnect is not penalised for the outage before it. (D-76)
- */
-export const STABLE_AFTER_MS = 10_000;
-
-/**
- * How long a connection may say nothing before it is asked whether it is there.
- *
- * Under the 60 s idle timeout that proxies and load balancers commonly apply to
- * a connection carrying nothing, so a quiet channel does not get the socket
- * closed from outside; and a busy connection is never pinged at all, because
- * every inbound frame counts as proof of life and restarts this wait. (D-82)
- */
-export const PING_AFTER_IDLE_MS = 25_000;
-
-/**
- * How long a `PING` may go unanswered — by anything — before the socket is
- * declared dead.
- *
- * A half-open socket (a sleeping laptop, a dead NAT mapping, a mobile handoff)
- * reads `open` until the operating system's TCP timeout, which is minutes. Fifteen
- * seconds outlasts a retransmission or two on a poor mobile link, and keeps the
- * worst case — silence, then this — at 40 s. (D-82)
- */
-export const PONG_DEADLINE_MS = 15_000;
-
-/**
- * How many handshakes in a row may fail before reaching `open` before the
- * session is asked about.
- *
- * The browser hides why a handshake failed — a refusal (401) and an outage both
- * surface as close code 1006 — so the only way to tell them apart is to ask the
- * API. Three failures is past a single dropped connection or a server restart,
- * and early enough that a signed-out user retries for seconds, not forever. (D-82)
- */
-export const CHECK_SESSION_AFTER_FAILURES = 3;
-
-/**
  * What asking the API about the session found. `ended` is a 401 and nothing
  * else; a network error or a 5xx is `unknown` — an outage is not a sign-out, and
  * reading one as the other would sign people out whenever the server is down.
  */
 export type SessionCheck = 'active' | 'ended' | 'unknown';
-
-/**
- * Where on the backoff ladder a `TOO_BUSY` close starts the wait.
- *
- * The server closes with 1013 — *try again later* — when it was handed more than
- * it could take in turn. Coming back after the first rung (half a second to a
- * second) is coming back into the same pile; the fourth (4–8 s) lets the queue
- * that caused it drain. It only ever raises the failures already counted, so a
- * long outage keeps its longer wait. Pacing (`subscribe`) is what keeps a healthy
- * client from earning this at all. (D-82)
- */
-export const TOO_BUSY_BACKOFF_STEP = 3;
 
 export interface ConnectionOptions {
   readonly url: string;

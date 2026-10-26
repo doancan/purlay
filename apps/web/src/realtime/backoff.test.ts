@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { BACKOFF, reconnectDelay } from './backoff';
+import { BACKOFF } from '@purlay/types';
+import { reconnectDelay } from './backoff';
 
 describe('reconnect backoff', () => {
   test('doubles from one second, drawing from the top half of each step', () => {

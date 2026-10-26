@@ -9,15 +9,16 @@ import {
   messageId,
   type ClientFrame,
   type ServerFrame,
-} from '@purlay/types';
-import { BACKOFF, reconnectDelay } from './backoff';
-import type { Clock } from './clock';
-import {
+  BACKOFF,
   CHECK_SESSION_AFTER_FAILURES,
   PING_AFTER_IDLE_MS,
   PONG_DEADLINE_MS,
   STABLE_AFTER_MS,
   TOO_BUSY_BACKOFF_STEP,
+} from '@purlay/types';
+import { reconnectDelay } from './backoff';
+import type { Clock } from './clock';
+import {
   createConnection,
   type Connection,
   type OpenSocket,

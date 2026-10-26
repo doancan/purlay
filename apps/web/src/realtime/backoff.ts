@@ -1,12 +1,4 @@
-/**
- * How long to wait before the next reconnect attempt (`ARCHITECTURE.md` §5.4).
- *
- * Exponential from one second, capped at thirty, so a server that is down is
- * not hammered. Jittered, because every client of a server that restarted lost
- * its connection at the same instant: without jitter they all come back at 1 s,
- * then all at 2 s, and the server meets the whole room in lockstep. (D-76)
- */
-export const BACKOFF = { baseMs: 1_000, capMs: 30_000 } as const;
+import { BACKOFF } from '@purlay/types';
 
 /**
  * `attempt` is the number of failures so far: 0 for the first retry.

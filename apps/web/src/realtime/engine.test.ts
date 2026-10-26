@@ -15,6 +15,9 @@ import {
   type ServerFrame,
   TYPING_TTL_MS,
   ACTIVE_EVERY_MS,
+  ACK_DEADLINE_MS,
+  OUTBOX_MAX_MESSAGES,
+  REPLAY_RETRY_DELAYS_MS,
 } from '@purlay/types';
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
@@ -24,15 +27,8 @@ import { fakeSchedule, memoryStorage, type MemoryStorage } from '../testing/fake
 import type { Api } from '../data/api';
 import type { Clock } from './clock';
 import type { SocketHandlers } from './connection';
-import {
-  ACK_DEADLINE_MS,
-  REPLAY_RETRY_DELAYS_MS,
-  UNNAMED,
-  createEngine,
-  type Engine,
-  type PendingMessage,
-} from './engine';
-import { MAX_STORED, pendingKey } from './pending-store';
+import { UNNAMED, createEngine, type Engine, type PendingMessage } from './engine';
+import { pendingKey } from './pending-store';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -1630,10 +1626,10 @@ describe('what was in flight when the page went', () => {
     const w = world({}, { storage });
     w.engine.start();
     w.open();
-    for (let i = 0; i < MAX_STORED + 5; i++)
+    for (let i = 0; i < OUTBOX_MAX_MESSAGES + 5; i++)
       w.engine.send({ channelId: CH, content: `m${String(i)}` });
-    expect((JSON.parse(storage.data[key] ?? '[]') as unknown[]).length).toBe(MAX_STORED);
-    expect(w.pending()).toHaveLength(MAX_STORED + 5);
+    expect((JSON.parse(storage.data[key] ?? '[]') as unknown[]).length).toBe(OUTBOX_MAX_MESSAGES);
+    expect(w.pending()).toHaveLength(OUTBOX_MAX_MESSAGES + 5);
   });
 
   test('survives storage that is missing, full or refuses: the send works, only the memory does not', () => {

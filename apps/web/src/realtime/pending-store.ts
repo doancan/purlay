@@ -20,7 +20,7 @@
  * send that does not work.
  */
 import { Value } from '@sinclair/typebox/value';
-import { Attachment, isMessageIdShape } from '@purlay/types';
+import { Attachment, isMessageIdShape, OUTBOX_MAX_CHARS, OUTBOX_MAX_MESSAGES } from '@purlay/types';
 import { noteStorageFailure, type ClientStorage } from '../data/browser-storage';
 
 export interface StoredMessage {
@@ -32,9 +32,6 @@ export interface StoredMessage {
   /** What it carries; absent in what an older page kept, which carried nothing. */
   readonly attachments?: readonly Attachment[];
 }
-
-export const MAX_STORED = 50;
-export const MAX_STORED_CHARS = 200_000;
 
 export const pendingKey = (userId: string): string => `purlay.pending.${userId}`;
 
@@ -66,7 +63,7 @@ export const loadStored = (storage: ClientStorage | null, userId: string): Store
     if (raw === null || raw === undefined) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isStored).slice(-MAX_STORED);
+    return parsed.filter(isStored).slice(-OUTBOX_MAX_MESSAGES);
   } catch {
     noteStorageFailure('pending-read');
     return [];
@@ -84,7 +81,7 @@ export const saveStored = (
     let chars = 0;
     for (const message of [...messages].reverse()) {
       chars += message.content.length;
-      if (kept.length >= MAX_STORED || chars > MAX_STORED_CHARS) break;
+      if (kept.length >= OUTBOX_MAX_MESSAGES || chars > OUTBOX_MAX_CHARS) break;
       kept.unshift(message);
     }
     if (kept.length === 0) storage?.removeItem(pendingKey(userId));
