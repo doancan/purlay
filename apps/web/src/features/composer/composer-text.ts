@@ -319,18 +319,25 @@ export interface KeyLike {
   readonly metaKey: boolean;
   readonly shiftKey: boolean;
   readonly altKey: boolean;
+  /** On a keyboard event itself: whether AltGraph is down (the DOM's own question; AltGr is Ctrl+Alt on Windows). */
+  readonly getModifierState?: (key: 'AltGraph') => boolean;
 }
 
 /**
  * What a key asks for in the box, or `null` when it is only typing (D-181). Either of Ctrl and Meta, as the
  * palette's key is read, so the behaviour never depends on the platform — only the tooltip's words do.
  * Ctrl+K is not here: it is the palette's. The digit keys are read by their *position* (`code`), since
- * Shift turns a digit into a different character on every layout.
+ * Shift turns a digit into a different character on every layout, and so is the one letter that needs
+ * Alt as well: Ctrl/Meta+Alt+Shift+C is a code block (Slack's chord; plain Ctrl+Shift+C is the browser's
+ * inspector, which a page cannot have). AltGr is Ctrl+Alt on Windows, and on some layouts (Polish
+ * programmer's, for one) AltGr+Shift+C types a letter, so a chord the browser says is AltGraph is typing.
  */
-export const formatKey = (
-  event: KeyLike,
-): Exclude<MarkdownKind, 'code' | 'mention'> | 'preview' | null => {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+export const formatKey = (event: KeyLike): Exclude<MarkdownKind, 'mention'> | 'preview' | null => {
+  if (!(event.ctrlKey || event.metaKey)) return null;
+  if (event.altKey) {
+    const chord = event.shiftKey && event.code === 'KeyC';
+    return chord && event.getModifierState?.('AltGraph') !== true ? 'code' : null;
+  }
   const letter = event.key.toLowerCase();
   if (!event.shiftKey) {
     if (letter === 'b') return 'bold';
@@ -345,4 +352,34 @@ export const formatKey = (
   if (event.code === 'Digit7') return 'numbers';
   if (event.code === 'Digit9') return 'quote';
   return null;
+};
+
+/**
+ * What Enter does, in the composer and in the editor of a sent message alike (D-188): Shift+Enter is a
+ * new line; Ctrl/Meta+Enter sends wherever the caret is; a plain Enter sends too, except inside a code
+ * fence that is still open, where it is a new line — a block of code is written a line at a time, and
+ * sending it half-typed is the one thing nobody meant. On a device that is only touch (`touchOnly`), a
+ * plain Enter is a new line too: a phone's keyboard has no Shift+Enter, so without this there is no way to
+ * write a second line, and Send is a button there. `null` for any other key.
+ */
+export const enterAction = (
+  event: KeyLike,
+  textBeforeCaret: string,
+  touchOnly = false,
+): 'submit' | 'newline' | null => {
+  if (event.key !== 'Enter') return null;
+  if (event.shiftKey) return 'newline';
+  if (event.metaKey || event.ctrlKey) return 'submit';
+  return touchOnly || insideFence(textBeforeCaret) ? 'newline' : 'submit';
+};
+
+/**
+ * A backtick typed over a selection wraps it in inline code instead of replacing it, as Slack does —
+ * the words are not lost to a keystroke. Ctrl+Alt is AltGr on Windows, where some layouts type the
+ * backtick itself, so it is let through; Ctrl or Meta alone is a shortcut and is not ours.
+ */
+export const typedWrap = (event: KeyLike, selection: Selection): 'inlineCode' | null => {
+  if (event.key !== '`' || selection.start === selection.end) return null;
+  if (event.metaKey || (event.ctrlKey && !event.altKey)) return null;
+  return 'inlineCode';
 };

@@ -16,7 +16,7 @@ import { cn } from './cn';
 type InputProps = Omit<React.ComponentPropsWithRef<'input'>, 'type' | 'children'>;
 
 const boxClasses =
-  'peer absolute inset-0 m-0 size-full cursor-pointer appearance-none border-hairline border-border-strong bg-surface-100 transition-colors duration-hover ease-standard checked:border-accent checked:bg-accent hover:border-ink-muted disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200';
+  'peer absolute inset-0 m-0 size-full cursor-pointer appearance-none border-hairline border-border-strong bg-surface-100 transition-colors duration-hover ease-standard checked:border-accent checked:bg-accent not-checked:not-disabled:hover:bg-surface-200 disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200';
 
 export const Checkbox = ({ className, ...rest }: InputProps): React.JSX.Element => (
   <span className="relative mt-1 inline-flex size-icon-md shrink-0">

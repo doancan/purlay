@@ -2,9 +2,9 @@
  * What can be done with a message, on the bar its row shows (`UX.md` §3, D-150): React, the slot for
  * Reply, Save, Pin and More — the same square controls, each with its tip and its key.
  *
- * **Where it sits.** On the row's own top edge, in the corner the message is not in: the right for
- * everyone else's, the left for your own. So it never covers the name over a bubble, the words in it,
- * or anything of the row above — it does not reach above its own row at all.
+ * **Where it sits.** On the row's own top edge, in its right corner, for every message (D-187: they all
+ * hang from the left). So it never covers the name over a message, the words in it, or anything of the
+ * row above — it does not reach above its own row at all.
  *
  * **More is on every message.** Copy text, Save and Pin again for whoever looks there, then Edit and
  * Delete on one's own; an owner or an admin may delete anybody's (`API.md`, D-103 §7), and is told
@@ -39,8 +39,6 @@ interface MessageActionsProps {
   readonly meId: string;
   /** The author's own, sent and not deleted: theirs to edit and delete. */
   readonly mine: boolean;
-  /** On the right edge of the conversation: the bar goes to the left corner. */
-  readonly outgoing: boolean;
   /** The row the bar is on, held while a menu from it is open (`active-row.ts`). */
   readonly rowKey: string;
   /** Whether this is the one row showing its bar (`active-row.ts`). */
@@ -56,7 +54,6 @@ export const MessageActions = ({
   message,
   meId,
   mine,
-  outgoing,
   rowKey,
   shown,
   actions,
@@ -94,7 +91,7 @@ export const MessageActions = ({
       inert={!shown}
       className={cn(
         'absolute top-0 z-popover flex items-center rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-float transition-opacity duration-hover ease-standard',
-        outgoing ? 'left-2' : 'right-2',
+        'right-2',
         // Hidden, it must not take a click meant for what is under it.
         !shown && 'pointer-events-none opacity-0',
       )}

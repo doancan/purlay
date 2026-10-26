@@ -280,9 +280,16 @@ const BlockNode = ({
         </p>
       );
     case 'heading':
-      // Emphasis at the body's size, not a title: a heading in a conversation is not an outline (D-101 §3).
+      // Bold and larger by level, as a paragraph and not a heading element: in a conversation it is not an
+      // outline (D-101 §3, D-189).
       return (
-        <p className={cn(TEXT, 'font-semibold')}>
+        <p
+          className={cn(
+            TEXT,
+            'font-semibold',
+            node.level === 1 ? 'text-display' : node.level === 2 ? 'text-title' : 'text-heading',
+          )}
+        >
           <Inlines nodes={node.children} scope={scope} />
         </p>
       );

@@ -74,19 +74,9 @@ export interface ThreadSummaryProps {
   readonly nowMinute: number;
   /** This root's thread is the one open in the panel. */
   readonly open: boolean;
-  /**
-   * The root is the person's own, on the right (D-119): the line is mirrored, so its status sits
-   * under the bubble it is about rather than a column away at the feed's other edge.
-   */
-  readonly outgoing?: boolean;
 }
 
-const ThreadSummaryView = ({
-  root,
-  nowMinute,
-  open,
-  outgoing = false,
-}: ThreadSummaryProps): React.JSX.Element => {
+const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const threads = useThreads();
@@ -161,12 +151,11 @@ const ThreadSummaryView = ({
           threads.open(root.id);
         }}
         className={cn(
-          // As wide as what it says, beside the bubble it belongs to: a full-width row put the status and
+          // As wide as what it says, under the message it belongs to: a full-width row put the status and
           // Show thread at the feed's two edges, a window's width apart (D-177).
           'mt-2 flex h-control w-fit max-w-full items-center gap-3 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
           // The one open in the panel is marked as such, so the eye finds where it came from.
           open && 'bg-accent-subtle',
-          outgoing && 'ml-auto flex-row-reverse',
         )}
       >
         <ThreadStatus root={root} nowMinute={nowMinute} />

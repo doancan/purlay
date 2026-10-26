@@ -7,6 +7,7 @@ import {
   asCodeBlock,
   broadcastMention,
   continueList,
+  enterAction,
   formatKey,
   insertMarkdown,
   insertText,
@@ -14,6 +15,7 @@ import {
   isLongPaste,
   rowsFor,
   trimEnd,
+  typedWrap,
   unitsLeft,
   unitsOver,
 } from './composer-text';
@@ -425,6 +427,7 @@ describe('which formatting a key asks for (D-181)', () => {
       metaKey: boolean;
       shiftKey: boolean;
       altKey: boolean;
+      getModifierState: (key: 'AltGraph') => boolean;
     }> = {},
   ): Parameters<typeof formatKey>[0] => ({
     key: k,
@@ -469,8 +472,116 @@ describe('which formatting a key asks for (D-181)', () => {
     ['for Shift with a letter that is not strike', key('b', { shiftKey: true })],
     ['for a digit without Shift', key('8', { code: 'Digit8' })],
     ["for Ctrl+K, which is the palette's", key('k')],
+    [
+      'for Alt+Shift+C without Ctrl or Meta',
+      key('c', { code: 'KeyC', ctrlKey: false, altKey: true, shiftKey: true }),
+    ],
+    [
+      'for Ctrl+Shift+C, which is the browser’s inspector',
+      key('c', { code: 'KeyC', shiftKey: true }),
+    ],
+    ['for Ctrl+Alt+C, without Shift', key('c', { code: 'KeyC', altKey: true })],
+    [
+      'for Ctrl+Alt+Shift+B, a different letter',
+      key('b', { code: 'KeyB', altKey: true, shiftKey: true }),
+    ],
+    [
+      'for AltGr+Shift+C, which types a letter on some layouts',
+      key('Ć', {
+        code: 'KeyC',
+        altKey: true,
+        shiftKey: true,
+        getModifierState: () => true,
+      }),
+    ],
   ])('nothing %s', (_name, event) => {
     expect(formatKey(event)).toBeNull();
+  });
+
+  test.each([
+    ['Ctrl', key('c', { code: 'KeyC', altKey: true, shiftKey: true })],
+    [
+      'Meta',
+      key('c', { code: 'KeyC', ctrlKey: false, metaKey: true, altKey: true, shiftKey: true }),
+    ],
+    // On a Mac Alt turns C into `ç`: the key is read by its position, like the digits.
+    [
+      'Meta, with the character Alt makes of it',
+      key('ç', { code: 'KeyC', ctrlKey: false, metaKey: true, altKey: true, shiftKey: true }),
+    ],
+  ])('%s+Alt+Shift+C is a code block', (_name, event) => {
+    expect(formatKey(event)).toBe('code');
+  });
+});
+
+describe('what Enter does (D-188)', () => {
+  const enter = (
+    over: Partial<Parameters<typeof enterAction>[0]> = {},
+  ): Parameters<typeof enterAction>[0] => ({
+    key: 'Enter',
+    code: 'Enter',
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...over,
+  });
+
+  test('sends, plain', () => {
+    expect(enterAction(enter(), 'hello')).toBe('submit');
+  });
+  test('Shift+Enter is a new line, with or without a modifier beside it', () => {
+    expect(enterAction(enter({ shiftKey: true }), 'hello')).toBe('newline');
+    expect(enterAction(enter({ shiftKey: true, ctrlKey: true }), 'hello')).toBe('newline');
+  });
+  test('Ctrl+Enter and Meta+Enter send, even inside a fence', () => {
+    expect(enterAction(enter({ ctrlKey: true }), '```\ncode')).toBe('submit');
+    expect(enterAction(enter({ metaKey: true }), '```\ncode')).toBe('submit');
+  });
+  test('plain Enter inside an open fence is a new line, and after its closing one it sends', () => {
+    expect(enterAction(enter(), '```ts\nlet a')).toBe('newline');
+    expect(enterAction(enter(), '```ts\nlet a\n```')).toBe('submit');
+  });
+  test('on a device that is only touch, a plain Enter is a new line: its keyboard has no Shift+Enter, and Send is a button', () => {
+    expect(enterAction(enter(), 'hello', true)).toBe('newline');
+    expect(enterAction(enter({ ctrlKey: true }), 'hello', true)).toBe('submit');
+    expect(enterAction(enter({ shiftKey: true }), 'hello', true)).toBe('newline');
+  });
+  test('any other key is not Enter', () => {
+    expect(enterAction(enter({ key: 'a', code: 'KeyA' }), 'hello')).toBeNull();
+  });
+});
+
+describe('a backtick typed over a selection wraps it (D-188)', () => {
+  const press = (
+    over: Partial<Parameters<typeof typedWrap>[0]> = {},
+  ): Parameters<typeof typedWrap>[0] => ({
+    key: '`',
+    code: 'Backquote',
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...over,
+  });
+  const selected = { start: 2, end: 6 };
+  const caret = { start: 2, end: 2 };
+
+  test('with words selected it asks for inline code', () => {
+    expect(typedWrap(press(), selected)).toBe('inlineCode');
+  });
+  test('with nothing selected it is only typing', () => {
+    expect(typedWrap(press(), caret)).toBeNull();
+  });
+  test('another character is only typing', () => {
+    expect(typedWrap(press({ key: 'a' }), selected)).toBeNull();
+  });
+  test('Ctrl or Meta with it is a shortcut of the browser’s, not ours', () => {
+    expect(typedWrap(press({ metaKey: true }), selected)).toBeNull();
+    expect(typedWrap(press({ ctrlKey: true }), selected)).toBeNull();
+  });
+  test('Ctrl+Alt is AltGr on Windows, where some layouts type a backtick', () => {
+    expect(typedWrap(press({ ctrlKey: true, altKey: true }), selected)).toBe('inlineCode');
   });
 });
 

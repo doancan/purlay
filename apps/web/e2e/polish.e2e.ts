@@ -23,7 +23,7 @@ const lefts = async (page: Page, selector: string): Promise<number[]> =>
   );
 
 test.describe('the columns of a channel', () => {
-  test('two edges, each one line: the avatars, the bubbles on the left, the bubbles on the right, the composer under them', async ({
+  test('one edge: the avatars, the messages beside them, the composer under them', async ({
     page,
     signIn,
     world,
@@ -33,44 +33,29 @@ test.describe('the columns of a channel', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('article').first()).toBeVisible();
 
-    // Everyone else's rows: the avatar column, then the bubble — each at one x (D-119).
-    const gutters = await lefts(page, 'article:not([data-outgoing]) > div:first-child');
-    const bubbles = await lefts(
-      page,
-      'article:not([data-outgoing]) > div:nth-child(2) [data-bubble]',
-    );
+    // Every row — whoever wrote it: the avatar column, then the message — each at one x (D-187).
+    const gutters = await lefts(page, '[role="feed"] > article > div:first-child');
+    const bodies = await lefts(page, '[role="feed"] > article [data-body]');
     expect(gutters).toHaveLength(1);
-    expect(bubbles).toHaveLength(1);
+    expect(bodies).toHaveLength(1);
     const [gutter] = gutters;
-    const [bubble] = bubbles;
-    if (gutter === undefined || bubble === undefined) throw new Error('no message rows on screen');
-    expect(bubble - gutter).toBe(48); // the 36px avatar + a 12px gap
-
-    // The person's own bubbles end on one right edge, the rows' right edge less their padding.
-    const rights = await page.evaluate(() => [
-      ...new Set(
-        [...document.querySelectorAll('article[data-outgoing] > div > div > [data-bubble]')]
-          .filter((node) => node.closest('article')?.parentElement?.getAttribute('role') === 'feed')
-          .map((node) => Math.round(node.getBoundingClientRect().right)),
-      ),
-    ]);
-    expect(rights.length).toBeLessThanOrEqual(1);
+    const [body] = bodies;
+    if (gutter === undefined || body === undefined) throw new Error('no message rows on screen');
+    expect(body - gutter).toBe(48); // the 36px avatar + a 12px gap
 
     // The composer card is under the rows: the feed and the composer are one column, the window's width.
     const cards = await lefts(page, '[data-composer-card]');
     const rows = await lefts(page, '[role="feed"] > article');
     expect(cards).toHaveLength(1);
     expect(rows).toContain(cards[0]);
-    // A thread's status line under somebody else's message starts where their bubble does.
+    // A thread's status line under a message starts where the message does.
     const status = page
-      .locator('article:not([data-outgoing])')
+      .locator('[role="feed"] > article')
       .getByRole('button', { name: /^(Open ·|Resolved by)/ })
       .first();
-    if ((await status.count()) > 0) {
-      expect(Math.round((await status.boundingBox())?.x ?? -1), 'a thread status line').toBe(
-        bubble,
-      );
-    }
+    // The seed has threads in this channel: a check that found none would say nothing (CONTRIBUTING §6.4).
+    expect(await status.count(), 'no thread status line on screen').toBeGreaterThan(0);
+    expect(Math.round((await status.boundingBox())?.x ?? -1), 'a thread status line').toBe(body);
   });
 });
 
@@ -224,7 +209,7 @@ test.describe("a message's hover controls (#653, D-150)", () => {
           bar.top < other.bottom &&
           other.top < bar.bottom;
         const name = element.querySelector('.font-semibold')?.getBoundingClientRect();
-        const text = element.querySelector('[data-bubble] p, [data-bubble] pre')?.firstChild;
+        const text = element.querySelector('[data-body] p, [data-body] pre')?.firstChild;
         let line: DOMRect | undefined;
         if (text !== null && text !== undefined) {
           const range = document.createRange();
@@ -235,7 +220,7 @@ test.describe("a message's hover controls (#653, D-150)", () => {
         return {
           intoTheRowAbove: above === undefined ? 0 : above.bottom - bar.top,
           overTheName: meets(name),
-          // A message under a name has a band above its bubble, and the bar stays in it. A grouped
+          // A message under a name has a band above its words, and the bar stays in it. A grouped
           // message has none: there the bar may cover its own first line's corner (D-150).
           overTheLine: name !== undefined && meets(line),
         };

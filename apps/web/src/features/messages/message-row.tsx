@@ -1,20 +1,20 @@
 /**
- * One message (`UX.md` §3, D-119): a conversation with two edges. Everyone else's messages are
- * on the left, in a bubble on `surface-200`, with an avatar in a fixed column and their name over
- * the first bubble of a group; your own are on the right, in a bubble on `accent-subtle`, with no
- * avatar and no name. The time is beside the name (or alone, on your side) in the mono face.
+ * One message (`UX.md` §3, D-187): a conversation with one edge. Every message — yours included —
+ * hangs from the left, with an avatar in a fixed column and the author's name over the first message
+ * of a group, the way Slack draws it; there is no bubble, so a code block, a table or a quote has the
+ * whole column to itself. The time is beside the name in the mono face.
  *
  * **Nothing here reflows.** The avatar and the name belong to the *first* message of a group, so a
  * message arriving below never changes the one above it; a grouped message (the same author
  * within five minutes) has neither, and its time is drawn in its place but invisible until the
  * row is the one showing its actions. The actions are a bar on the row's own top edge, in the
- * corner the message is not in (`message-actions.tsx`, D-150), there from the start and only faded
+ * top-right corner (`message-actions.tsx`, D-150), there from the start and only faded
  * in. A row is the same height whether the pointer is on it or not.
  *
- * **The row serves threads too.** It takes a `children` slot below the bubble for the line that
+ * **The row serves threads too.** It takes a `children` slot below the message for the line that
  * opens the thread in the panel, and an `actions` slot beside the reaction control, so the thread
  * slice adds to a message without editing it; a reply is the same row (grouped or not) in the
- * panel, with no thread of its own, on its author's side (D-122).
+ * panel, with no thread of its own, like any other (D-122).
  *
  * **It is memoised.** A channel renders a page of fifty and a new message must not
  * re-render them: the props are primitives and stable references (the message object is
@@ -131,8 +131,7 @@ const MessageRowView = ({
   const self = useRef<HTMLElement>(null);
   useRowStops(self);
 
-  // Which edge the message sits on: the person's own on the right, everyone else's on the left.
-  const outgoing = isMine(message, meId);
+  const own = isMine(message, meId);
 
   const time = (
     <time
@@ -151,7 +150,7 @@ const MessageRowView = ({
     <article
       ref={self}
       data-editable={mine ? '' : undefined}
-      data-outgoing={outgoing ? '' : undefined}
+      data-own={own ? '' : undefined}
       data-thread-open={threadOpen ? '' : undefined}
       data-landed={landed ? '' : undefined}
       data-message-row=""
@@ -163,78 +162,60 @@ const MessageRowView = ({
         'relative flex gap-3 rounded-lg px-2 transition-colors duration-hover ease-standard',
         grouped ? 'pt-1' : 'pt-3',
         landed && 'bg-warning-subtle',
-        outgoing && 'flex-row-reverse',
       )}
     >
-      {!outgoing && (
-        <div
-          className={cn(
-            'flex h-auto shrink-0 items-start justify-center gap-1',
-            compact ? 'size-avatar' : 'size-avatar-lg',
-          )}
-        >
-          {grouped ? (
-            <>
-              {sending}
-              {time}
-            </>
-          ) : (
-            <Avatar
-              name={author.displayName}
-              username={author.username}
-              size={compact ? 'md' : 'lg'}
-            />
-          )}
-        </div>
-      )}
+      <div
+        className={cn(
+          'flex h-auto shrink-0 items-start justify-center gap-1',
+          compact ? 'size-avatar' : 'size-avatar-lg',
+        )}
+      >
+        {grouped ? (
+          <>
+            {sending}
+            {time}
+          </>
+        ) : (
+          <Avatar
+            name={author.displayName}
+            username={author.username}
+            size={compact ? 'md' : 'lg'}
+          />
+        )}
+      </div>
 
-      <div className={cn('flex min-w-0 flex-1 flex-col', outgoing ? 'items-end' : 'items-start')}>
+      <div className="flex min-w-0 flex-1 flex-col items-start">
         {!grouped && (
-          <div className="mb-1 flex items-baseline gap-2 px-1">
-            {!outgoing && (
-              <span className="text-label font-semibold text-ink">{author.displayName}</span>
-            )}
+          <div className="mb-1 flex items-baseline gap-2">
+            <span className="text-label font-semibold text-ink">{author.displayName}</span>
             {time}
             {sending}
           </div>
         )}
         {mentionsMe && <VisuallyHidden>{`${t('message.mention')}. `}</VisuallyHidden>}
         <div
-          // The full column, so the bubble's five sixths are of the column and not of itself.
-          className={cn('flex w-full items-end gap-2', outgoing && 'flex-row-reverse')}
-        >
-          <div
-            data-bubble=""
-            className={cn(
-              'relative min-w-0 max-w-5/6 rounded-2xl px-3 py-2',
-              outgoing ? 'bg-accent-subtle' : 'bg-surface-200',
-              (dimmed || deleted) && 'text-ink-muted',
-              failed && 'border-l-marker border-danger',
-              editing && 'w-full max-w-full',
-            )}
-          >
-            {editing ? (
-              <MessageEditor message={message} />
-            ) : deleted ? (
-              <p>{t('message.deleted')}</p>
-            ) : event !== null ? (
-              <GitHubEventCard event={event} />
-            ) : (
-              renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
-            )}
-            {/* What is known about the message — edited, pinned — on one line under its words, apart. */}
-            <div className="mt-1 flex items-center gap-3 empty:hidden">
-              <EditedMark message={message} mine={isMine(message, meId)} />
-              {!deleted && <PinnedMark message={message} />}
-            </div>
-          </div>
-          {/* Your own grouped message has no avatar column, so its time waits beside the bubble. */}
-          {outgoing && grouped && (
-            <span className="flex shrink-0 items-center gap-1 pb-1">
-              {sending}
-              {time}
-            </span>
+          data-body=""
+          className={cn(
+            'relative w-full min-w-0',
+            (dimmed || deleted) && 'text-ink-muted',
+            // The marker hangs in the gutter's gap, so the words stay under the name.
+            failed && '-ml-2 border-l-marker border-danger pl-2',
           )}
+        >
+          {editing ? (
+            <MessageEditor message={message} />
+          ) : deleted ? (
+            <p>{t('message.deleted')}</p>
+          ) : event !== null ? (
+            <GitHubEventCard event={event} />
+          ) : (
+            renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
+          )}
+          {/* What is known about the message — edited, pinned — on one line under its words, apart. */}
+          <div className="mt-1 flex items-center gap-3 empty:hidden">
+            <EditedMark message={message} mine={own} />
+            {!deleted && <PinnedMark message={message} />}
+          </div>
         </div>
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
         {/* An event's words are its own summary: nothing in them to unfurl (D-134 §6). */}
@@ -287,7 +268,6 @@ const MessageRowView = ({
           message={message}
           meId={meId}
           mine={mine}
-          outgoing={outgoing}
           rowKey={rowKey}
           shown={on}
           actions={actions}

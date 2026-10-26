@@ -39,8 +39,12 @@ export type Align = 'left' | 'right' | 'center' | null;
 
 export type Block =
   | { readonly type: 'paragraph'; readonly children: readonly Inline[] }
-  /** Drawn at the body's size, bold: a heading in a conversation is emphasis, not a title (D-101). */
-  | { readonly type: 'heading'; readonly children: readonly Inline[] }
+  /**
+   * Bold, and larger by level (D-189): `#` is the display size, `##` the title's, and `###` to `######` the
+   * heading's — the type scale has three sizes above the body, so a deeper level has none left to be.
+   * It is still not an outline: nothing is a heading element, and nothing links to it.
+   */
+  | { readonly type: 'heading'; readonly level: 1 | 2 | 3; readonly children: readonly Inline[] }
   /** Only a fence makes one; `lang` is the info string's first word, or null. */
   | { readonly type: 'code'; readonly lang: string | null; readonly value: string }
   | { readonly type: 'blockquote'; readonly children: readonly Block[] }

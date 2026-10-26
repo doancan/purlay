@@ -101,7 +101,7 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
 - **Feed** — the single column: the whole width beside the sidebar, its rows from the left edge as
-  Slack's are, never centred with empty margins (D-175, D-177). A bubble is at most five sixths of it.
+  Slack's are, never centred with empty margins (D-175, D-177).
   Max width 1040px bounds only an empty state's sentence or a card drawn inside it.
 - **Member list** — collapsed by default. Presence is decoration, not information.
 - **Thread panel (440px)** — on the right of the channel, only while a thread is open (§4, D-122).
@@ -376,25 +376,25 @@ page of the same name.
   beside the picture close it, and focus goes back to the thumbnail; `←` `→` step through the message's
   pictures and stop at either end. While the picture loads its thumbnail stands in its place; one that
   does not load says so, with Retry. ⌘/Ctrl-click still opens the image in a tab.
-- **Two edges, in bubbles** (D-119, amending D-100). Everyone else's messages are on the left in a `surface-200`
-  bubble, with an avatar in a fixed column; your own are on the right in an `accent-subtle` bubble,
-  with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
-  card inside it, and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
-  colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are one column, the
-  main area's full width (D-177).
+- **One edge, no bubbles** (D-187, which reverses D-119 and returns to D-100's flat rows). Every message — yours included — hangs from the left of
+  the feed, with an avatar in a fixed column and the author's name over the first message of a group, the way
+  Slack draws it. There is no bubble and no tint: the words sit on the page, so a code block, a table or a quote
+  has the whole column — a heading is sized by its level (D-189) and a fenced block is coloured by its language (D-188) — and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
+  colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are one
+  column, the main area's full width (D-177). Direct messages are the same rows: a conversation with one other
+  person is not drawn differently from a channel.
 - **A person is named by their name** — the display name, as the sidebar names them — wherever they
   are named in words: the feed, a direct message's header, the inbox, search, the open questions,
   *Resolved by …*, and what a screen reader hears of a row. The handle appears only where it is the
   point: an `@mention`, the profile's handle line, and beside the name where people are picked.
-- **The header line** is over a group's first bubble: the name and the time on the left, the time
-  alone on the right, the time in the mono face.
+- **The header line** is over a group's first message: the name, then the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
-  their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
+  their time shows on hover, in the avatar's column.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
 - **Hover controls** are one floating bar — hairline edge, the float shadow — on the row's own top
-  edge, in the corner the message is not in: the right for everyone else's, the left for your own
-  (D-150, amending D-119 §6). It never reaches above its row, so it never covers the row above or
-  the name over a bubble; it never reflows the row, and the row itself is not tinted. **One bar on
+  edge, in its right corner (D-150, amending D-119 §6; D-187 puts every message on the left, so the
+  corner is the same for all). It never reaches above its row, so it never covers the row above or
+  the name over a message; it never reflows the row, and the row itself is not tinted. **One bar on
   the page**, across the feed and the thread panel: the row under the pointer, or the focused row
   while the keyboard is in use; a row whose menu is open keeps its bar. A thread's root, drawn in the
   feed and at the top of the open panel, is two rows: only the copy under the pointer shows it. On a
@@ -409,7 +409,7 @@ page of the same name.
   set as one row of tiles, the name of the one reached under it and yours marked as chosen, opening
   upward and kept inside the feed so it never covers the composer.
 - **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
-  the bubble has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
+  the message has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance. A chip's tooltip says who:
@@ -428,7 +428,7 @@ page of the same name.
 |---|---|---|
 | `sending` | Full opacity, subtle clock glyph beside the time | Paints in < 16ms, before any network call (`PRD.md` §5) |
 | `sent` | Glyph removed | On `ACK`. **The row does not move** — the id was final from the start (D-8) |
-| `failed` | The bubble's left edge in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
+| `failed` | The message's left edge in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
 
 **Writing is a member's** (D-156). A public channel the person has not joined is read with a bar in
 place of the composer — *You are reading #name without being a member* and **Join** — and a send that
@@ -456,9 +456,8 @@ Clicking it, or pressing `T` on the focused message, opens the thread **in the p
 right (D-122). The affordance is absent when there are no replies — an empty thread control on
 every message is clutter that teaches people to ignore that region. While a root's thread is in
 the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from. The line is as
-wide as what it says, beside the bubble on the bubble's side (D-177); under your own message, which
-sits on the right (§3), it is mirrored: the status under the bubble's edge, **Show thread** just
-before it — never the status a column away from the bubble it is about.
+wide as what it says, under the message's words and from their left edge (D-177, D-187) — never the
+status a column away from the message it is about.
 
 ### 4.2. The panel
 
@@ -489,7 +488,7 @@ before it — never the status a column away from the bubble it is about.
   state is read it is there and disabled, so the header does not move; when it could not be read,
   its tooltip says so and pressing it reads it again. A mention in the thread still arrives.
 - **The root**, its status and **Resolve / Reopen**, a rule labelled *N replies*, then the replies as
-  the feed draws them: two edges, grouped by the same rule (§3). The reply box is at the bottom, and
+  the feed draws them: one edge, grouped by the same rule (§3). The reply box is at the bottom, and
   keeps its draft per thread like the channel's (§5). There is no "also send to the channel": the
   product has no such thing.
 - **Focus**: opening moves it into the panel at once, whatever its root's state — the heading, or the
@@ -549,14 +548,20 @@ under it, and Send works while it is open (D-181).
 
 | Key | Action |
 |---|---|
-| `Enter` | Send |
+| `Enter` | Send — except inside a code fence that is still open, where it is a newline (D-188) |
+| `Cmd/Ctrl+Enter` | Send, wherever the caret is (on a phone `Enter` is a new line and the Send button sends); the hint under the box names it while the caret is inside a fence (D-188) |
 | `Shift+Enter` | Newline; in a list or a quote it carries the list on, and an empty item ends it (D-181) |
 | `Cmd/Ctrl+B` `I` `E` | Bold, italic, inline code |
 | `Cmd/Ctrl+Shift+X` `U` `7` `8` `9` `P` | Strike, link, numbered list, bulleted list, quote, preview (D-181) |
-| ` ``` ` then `Enter` | Opens a code block; `Enter` inside it inserts a newline, `Cmd/Ctrl+Enter` sends |
+| ` ``` ` then `Enter` | Opens a code block; see `Enter` above |
+| `Cmd/Ctrl+Alt+Shift+C` | A code block round the selection, or an empty one (D-188). Not on AltGr layouts that type a letter there |
+| a backtick over a selection | Wraps it in inline code instead of replacing it (D-188) |
 | `↑` on an empty composer | Edit your last message |
 | `Esc` | Cancel edit / close the thread panel / close palette |
 | `@` and a letter | Member autocomplete: who a mention here would reach, found by display name or handle without case or accents; `↑` `↓` move, `Enter` or `Tab` writes `@handle`, `Esc` closes it, and `Enter` while it is open never sends (D-110 §8). **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
+
+The editor of a sent message takes the composer's Enter, Shift+Enter and formatting keys, and the same
+IME and phone rules; it has no preview, no `↑` and no `@` list (D-188).
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
 the upload is still in flight, and it goes when the files land **even if the person has moved to another

@@ -716,7 +716,7 @@ export const en = {
   'saved.more': 'Load more',
   'message.editLabel': 'Edit your message',
   'message.editSave': 'Save',
-  'message.editHint': 'Enter to save · Esc to cancel',
+  'message.editHint': '{save} to save · Shift+Enter for a new line · Esc to cancel',
   'message.editFailed': 'Your edit was not saved.',
   'message.deleteTitle': 'Delete this message?',
   'message.deleteBody': 'It is replaced by a note that it was deleted. Its replies stay.',
@@ -1448,6 +1448,13 @@ export const en = {
   'shortcuts.italic': 'Italic',
   'shortcuts.link': 'Add a link',
   'shortcuts.preview': 'Preview the message',
+  'shortcuts.strike': 'Strikethrough',
+  'shortcuts.inlineCode': 'Inline code',
+  'shortcuts.codeBlock': 'Code block',
+  'shortcuts.bullets': 'Bulleted list',
+  'shortcuts.numbers': 'Numbered list',
+  'shortcuts.quote': 'Quote',
+  'shortcuts.editLast': 'Edit your last message, in an empty box',
   'shortcuts.or': 'or',
 
   // ── The setup wizard (D-179 §4, UX §11) ─────────────────────────────────

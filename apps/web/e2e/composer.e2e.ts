@@ -131,6 +131,71 @@ test.describe('Enter', () => {
   });
 });
 
+test.describe('code, written and read (D-188)', () => {
+  test('a fence keeps Enter for its lines, Ctrl+Enter sends it, and the block arrives coloured by its language', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.click();
+    await page.keyboard.type('```ts');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('const answer = 42;');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('return answer;');
+    await expect(box).toHaveValue('```ts\nconst answer = 42;\nreturn answer;');
+    // Nothing was sent by those Enters, and the hint says which key does.
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([]);
+    const hint = page.locator(`[id="${(await box.getAttribute('aria-describedby')) ?? ''}"]`);
+    await expect(hint).toContainText('Ctrl+Enter');
+    await page.keyboard.press('Control+Enter');
+    await expect(box).toHaveValue('');
+    const block = page.locator('figure', { hasText: 'const answer' });
+    await expect(block).toBeVisible();
+    // Coloured by the grammar the fence named: a keyword and a number carry different colours.
+    const colours = await block
+      .locator('code span span')
+      .evaluateAll((spans) =>
+        spans
+          .filter((span) => ['const', '42'].includes(span.textContent.trim()))
+          .map((span) => getComputedStyle(span).color),
+      );
+    expect(colours).toHaveLength(2);
+    expect(new Set(colours).size, 'a keyword and a number are one colour').toBe(2);
+  });
+
+  test('the code block chord opens a fence round the selection, and a backtick wraps it', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.fill('fix it');
+    await box.evaluate((element: HTMLTextAreaElement) => {
+      element.setSelectionRange(4, 6);
+    });
+    await box.press('Control+`');
+    // Ctrl with a backtick is the browser's: not ours, nothing wrapped.
+    await expect(box).toHaveValue('fix it');
+    await box.press('`');
+    await expect(box).toHaveValue('fix `it`');
+    await box.fill('fix it');
+    await box.evaluate((element: HTMLTextAreaElement) => {
+      element.setSelectionRange(4, 6);
+    });
+    await box.press('Control+Alt+Shift+C');
+    await expect(box).toHaveValue('fix \n```\nit\n```');
+  });
+});
+
 test.describe('a paste', () => {
   const paste = async (box: Locator, text: string): Promise<void> => {
     await box.evaluate((field, content) => {

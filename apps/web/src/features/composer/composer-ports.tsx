@@ -14,7 +14,15 @@ export interface ComposerPorts {
   /** Where drafts live; null when the page has none, and then nothing is remembered. */
   readonly storage: DraftStorage | null;
   readonly schedule: Schedule;
+  /** Whether the device is only touch — no pointer that hovers — so Enter is a line break (`enterAction`). */
+  readonly touchOnly?: () => boolean;
 }
+
+/** A phone, or a tablet with nothing attached: the primary pointer is coarse and cannot hover. */
+export const isTouchOnly = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(pointer: coarse) and (hover: none)').matches;
 
 export const ComposerPortsContext = createContext<ComposerPorts | null>(null);
 
@@ -30,4 +38,5 @@ const browserStorage = (): DraftStorage | null => {
 export const browserPorts = (): ComposerPorts => ({
   storage: browserStorage(),
   schedule: browserSchedule,
+  touchOnly: isTouchOnly,
 });
