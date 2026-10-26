@@ -40,8 +40,9 @@ export interface ClientRefusal {
 
 // Strict on purpose: lower-case platform, one space, a plain semantic version, a contract of at most
 // six digits. `$` without the multiline flag ends the input, so a trailing newline is not the shape.
+// A pre-release is dot-separated identifiers, none of them empty (`1.0.0-..` is not one), in at most 32 characters.
 const HEADER =
-  /^([a-z][a-z0-9-]{0,15})\/(\d{1,6}\.\d{1,6}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,32})?) contract\/(\d{1,6})$/;
+  /^([a-z][a-z0-9-]{0,15})\/(\d{1,6}\.\d{1,6}\.\d{1,6}(?:-(?=[0-9A-Za-z.-]{1,32} contract)[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?) contract\/(\d{1,6})$/;
 
 export const parseClientHeader = (value: string | null): ClientIdentity | null => {
   if (value === null) return null;

@@ -19,10 +19,10 @@ import {
   NativeAuthorizeResponse,
 } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
-import { NATIVE_TOKEN_BUDGET } from './rate-limit';
+import { AUTH_BUDGET, COSTLY_READ_BUDGET, NATIVE_TOKEN_BUDGET, WRITE_BUDGET } from './rate-limit';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { testConfig, testDependencies } from '../../testing/doubles';
+import { aRecordingLogger, testConfig, testDependencies } from '../../testing/doubles';
 
 const origin = 'https://purlay.test';
 const clock = fixedClock(new Date('2026-10-26T12:00:00.000Z'));
@@ -137,6 +137,40 @@ describe('integration: POST /api/native/authorize', () => {
     expect(made).toEqual([]);
   });
 
+  test('is charged to the person’s writes: past the budget it is told to wait, and somebody else is not', async () => {
+    const busy = await aSignedInUser(db, clock, 'writes-busy');
+    const calm = await aSignedInUser(db, clock, 'writes-calm');
+    // The shared app has no limits in force, as the other suites' do not; this one has the real ones.
+    const limited = createApp(
+      testDependencies({
+        database: db,
+        clock,
+        config: testConfig({ APP_URL: origin }),
+        rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
+      }),
+    );
+    const call = async (person: SignedInUser): Promise<Response> => {
+      const { challenge, state } = aVerifier();
+      return await post(
+        '/api/native/authorize',
+        { challenge, state },
+        { cookie: person.cookie, origin },
+        limited,
+      );
+    };
+    const statuses: number[] = [];
+    let retryAfter: string | null = null;
+    for (let i = 0; i < WRITE_BUDGET.burst + 1; i += 1) {
+      const response = await call(busy);
+      statuses.push(response.status);
+      if (response.status === 429) retryAfter = response.headers.get('retry-after');
+    }
+    expect(statuses.slice(0, WRITE_BUDGET.burst).every((status) => status === 200)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
+    expect(Number(retryAfter)).toBeGreaterThanOrEqual(1);
+    expect((await call(calm)).status).toBe(200);
+  });
+
   test('answers a redirect to the one address a native client is sent to, with the code and the state', async () => {
     const person = await aSignedInUser(db, clock, 'sayyes');
     const { challenge, state } = aVerifier();
@@ -205,6 +239,128 @@ describe('integration: POST /api/native/authorize', () => {
       }),
     );
     expect(response.status).toBe(415);
+  });
+});
+
+describe('integration: an operator can see a code being guessed, and never the code', () => {
+  test('a wrong verifier and a burnt code are warnings with their reason, and no line holds a code, a verifier or a digest', async () => {
+    const { log, lines } = aRecordingLogger();
+    const watched = createApp(
+      testDependencies({ database: db, clock, log, config: testConfig({ APP_URL: origin }) }),
+    );
+    const person = await aSignedInUser(db, clock, 'watched');
+    const pair = aVerifier();
+    const { code } = await authorize(person, pair);
+    const wrong = aVerifier();
+    for (let i = 0; i < 5; i += 1) {
+      expect((await token({ code, verifier: wrong.verifier }, {}, watched)).status).toBe(404);
+    }
+    expect(
+      (await token({ code: '9'.repeat(64), verifier: pair.verifier }, {}, watched)).status,
+    ).toBe(404);
+    const ours = lines.filter((line) =>
+      String(line['msg']).startsWith('native sign-in code refused'),
+    );
+    expect(ours.map((line) => line['msg'])).toEqual([
+      'native sign-in code refused: wrong-verifier',
+      'native sign-in code refused: wrong-verifier',
+      'native sign-in code refused: wrong-verifier',
+      'native sign-in code refused: wrong-verifier',
+      'native sign-in code refused: burnt',
+      'native sign-in code refused: unknown',
+    ]);
+    expect(ours.slice(0, 5).every((line) => line['level'] === 'warn')).toBe(true);
+    expect(ours[5]?.['level']).toBe('info');
+    const everything = JSON.stringify(lines);
+    for (const secret of [
+      code,
+      wrong.verifier,
+      pair.verifier,
+      createHash('sha256').update(code).digest('hex'),
+    ]) {
+      expect(everything).not.toContain(secret);
+    }
+  });
+
+  test('a code that opens writes no refusal', async () => {
+    const { log, lines } = aRecordingLogger();
+    const watched = createApp(
+      testDependencies({ database: db, clock, log, config: testConfig({ APP_URL: origin }) }),
+    );
+    const person = await aSignedInUser(db, clock, 'unwatched');
+    const pair = aVerifier();
+    const { code } = await authorize(person, pair);
+    expect((await token({ code, verifier: pair.verifier }, {}, watched)).status).toBe(204);
+    expect(
+      lines.filter((line) => String(line['msg']).startsWith('native sign-in code refused')),
+    ).toEqual([]);
+  });
+});
+
+describe('integration: a request that is not the shape never costs a code a guess', () => {
+  test('a verifier of the wrong length or alphabet is a 400 and the live code keeps all its guesses', async () => {
+    const person = await aSignedInUser(db, clock, 'shape-guesses');
+    const pair = aVerifier();
+    const { code } = await authorize(person, pair);
+    for (const verifier of [
+      '',
+      'short',
+      'x'.repeat(200),
+      `${pair.verifier.slice(0, 40)}!!!`,
+      'é'.repeat(43),
+    ]) {
+      const response = await token({ code, verifier });
+      expect(response.status).toBe(400);
+    }
+    const row = await db
+      .selectFrom('native_authorizations')
+      .select(['wrong_verifiers', 'spent_at'])
+      .where('user_id', '=', person.userId)
+      .executeTakeFirstOrThrow();
+    expect(row.wrong_verifiers).toBe(0);
+    expect(row.spent_at).toBeNull();
+    // And the code still opens for the application that has the right one.
+    expect((await token({ code, verifier: pair.verifier })).status).toBe(204);
+  });
+});
+
+describe('integration: a code belongs to the person who said yes', () => {
+  test('is the session of whoever authorised it, whoever else signs in on that browser before it is spent', async () => {
+    const ann = await aSignedInUser(db, clock, 'bound-ann');
+    const bob = await aSignedInUser(db, clock, 'bound-bob');
+    const hers = aVerifier();
+    const his = aVerifier();
+    const herCode = (await authorize(ann, hers)).code;
+    // The browser now holds Bob: the page said yes for him too, to another application, a moment later.
+    const hisCode = (await authorize(bob, his)).code;
+    const spentFirst = await token({ code: herCode, verifier: hers.verifier });
+    expect(spentFirst.status).toBe(204);
+    expect(await who(cookieOf(spentFirst))).toEqual({ status: 200, id: ann.userId });
+    const spentSecond = await token({ code: hisCode, verifier: his.verifier });
+    expect(await who(cookieOf(spentSecond))).toEqual({ status: 200, id: bob.userId });
+  });
+
+  test('is not another person’s for a cookie that arrives with it: the application sends nothing but the code and the verifier', async () => {
+    const ann = await aSignedInUser(db, clock, 'bound-ann-cookie');
+    const bob = await aSignedInUser(db, clock, 'bound-bob-cookie');
+    const pair = aVerifier();
+    const { code } = await authorize(ann, pair);
+    const spent = await token({ code, verifier: pair.verifier }, { cookie: bob.cookie });
+    expect(spent.status).toBe(204);
+    expect(await who(cookieOf(spent))).toEqual({ status: 200, id: ann.userId });
+  });
+
+  test('is never Bob’s for having been asked from his browser: authorising twice makes two codes, each its own person’s', async () => {
+    const ann = await aSignedInUser(db, clock, 'bound-two-ann');
+    const bob = await aSignedInUser(db, clock, 'bound-two-bob');
+    const a = aVerifier();
+    const b = aVerifier();
+    const [forAnn, forBob] = [await authorize(ann, a), await authorize(bob, b)];
+    expect(forAnn.code).not.toBe(forBob.code);
+    // Each code with the other's verifier is refused, and says nothing of whose it was.
+    const crossed = await token({ code: forAnn.code, verifier: b.verifier });
+    expect(crossed.status).toBe(404);
+    expect(cookieOf(crossed)).toBe('');
   });
 });
 
@@ -352,6 +508,14 @@ describe('integration: POST /api/native/token', () => {
     ['a device name with a newline', { device: { name: 'Mac\nSet-Cookie: x=1' } }],
     ['a device name with a control character', { device: { name: 'Mac\u0007' } }],
     ['a device name with a line separator', { device: { name: 'Mac ' } }],
+    [
+      'a device name that reverses what follows it',
+      { device: { name: 'Mac\u202eskcoLtnemirepxe' } },
+    ],
+    ['a device name with a zero-width space', { device: { name: 'Mac\u200bBook' } }],
+    ['a device name with a byte-order mark', { device: { name: '\ufeffMac' } }],
+    ['a device name with a directional isolate', { device: { name: 'Mac\u2066Book\u2069' } }],
+    ['a device name with a right-to-left mark', { device: { name: 'Mac\u200f' } }],
     ['a device with a field it does not declare', { device: { name: 'Mac', model: 'x' } }],
     ['a field the body does not declare', { extra: 1 }],
   ])('refuses %s with 400 before the code is looked at', async (_name, change) => {

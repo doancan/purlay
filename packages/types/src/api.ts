@@ -1237,8 +1237,14 @@ export const NATIVE_VERIFIER_PATTERN = '^[A-Za-z0-9_-]{43,128}$';
  */
 export const NATIVE_STATE_PATTERN = '^[A-Za-z0-9_-]{16,128}$';
 
-/** A name for the device, shown by whoever lists sessions: any characters but control and line-breaking ones. */
-export const NATIVE_DEVICE_NAME_PATTERN = '^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]{1,64}$';
+/**
+ * A name for the device, shown by whoever lists sessions: any characters but control and line-breaking
+ * ones, and the invisible ones that change how the text around them reads — zero-width and directional
+ * marks, embeddings, overrides and isolates, the byte-order mark — so a name cannot be made to look like
+ * another device's.
+ */
+export const NATIVE_DEVICE_NAME_PATTERN =
+  '^[^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]{1,64}$';
 
 /** The code, as `POST /api/native/authorize` makes it: 32 random bytes in hex. */
 export const NATIVE_CODE_PATTERN = '^[0-9a-f]{64}$';

@@ -402,6 +402,55 @@ describe('integration: the sign-in mail sweep', () => {
     });
   });
 
+  test('takes a native sign-in code only once it is MORE than a day past its end: exactly a day is kept, a millisecond more is taken (D-191)', async () => {
+    await withRollback(async (db) => {
+      const now = new Date('2026-10-26T12:00:00.000Z');
+      const mine = await aUserRow(db, 'native-edge-mine');
+      const theirs = await aUserRow(db, 'native-edge-theirs');
+      const day = 24 * 3_600_000;
+      const make = async (
+        who: { userId: string },
+        name: string,
+        expiresAgo: number,
+        spent = false,
+      ): Promise<void> => {
+        await db
+          .insertInto('native_authorizations')
+          .values({
+            id: messageId(now),
+            user_id: who.userId,
+            code_digest: await tokenDigest(name),
+            challenge: 'c'.repeat(43),
+            created_at: new Date(now.getTime() - expiresAgo - 120_000),
+            expires_at: new Date(now.getTime() - expiresAgo),
+            spent_at: spent ? new Date(now.getTime() - expiresAgo - 60_000) : null,
+          })
+          .execute();
+      };
+      await make(mine, 'exactly-a-day', day);
+      await make(mine, 'a-millisecond-more', day + 1);
+      // Spent or not makes no difference to the sweep: the end is what it reads, and a spent code's session is its own.
+      await make(mine, 'spent-long-ago', day + 1000, true);
+      await make(mine, 'spent-just-now', 1000, true);
+      // Somebody else's live code is nobody's to sweep.
+      await make(theirs, 'theirs-live', -60_000);
+      const swept = await sweepEmailSignIns({ database: db, clock: fixedClock(now) });
+      expect(swept.removed).toBe(2);
+      const left = await db
+        .selectFrom('native_authorizations')
+        .select('code_digest')
+        .where('user_id', 'in', [mine.userId, theirs.userId])
+        .execute();
+      const kept = left.map((row) => row.code_digest);
+      for (const name of ['exactly-a-day', 'spent-just-now', 'theirs-live']) {
+        expect(kept).toContain(await tokenDigest(name));
+      }
+      for (const name of ['a-millisecond-more', 'spent-long-ago']) {
+        expect(kept).not.toContain(await tokenDigest(name));
+      }
+    });
+  });
+
   test('takes the native sign-in codes a day past their end, and not before (D-191)', async () => {
     await withRollback(async (db) => {
       const now = new Date('2026-10-26T12:00:00.000Z');

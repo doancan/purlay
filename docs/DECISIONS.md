@@ -9176,6 +9176,25 @@ application a session of its own:
    operating system's registration of `purlay://` and not through the session that was waiting; the application
    accepts it only while an attempt is pending and only with that attempt's `state`.
 
+**Limits, stated** (found in a review of the change, written here so they are not discovered again):
+
+- A custom scheme cannot prove which application is asking. Any application on the Mac may register `purlay://`;
+  the challenge protects the code on its way, not the identity of whoever asked. The consent page therefore names
+  what the person can check — the account, the address, the server — and says plainly that it signs the
+  application in as that account.
+- The sixth authorisation inside two minutes makes the oldest code room without a word: the application holding it
+  gets the one refusal and starts again. A retry never locks anyone out; a displaced code is a cause of *does not
+  open*.
+- The address's budget is shared by whoever shares the address (and, without `TRUST_PROXY`, the whole proxy): ten
+  spent by another client leaves the next to wait up to ninety seconds inside a code's two minutes. The
+  application treats a `429` as *start again*. The handshake shares the sign-in budget on purpose (D-186): what
+  could be spent through it can be spent through `/auth/` already.
+- A refusal is written to the log with its reason and nothing else — a wrong verifier and a burnt code as warnings,
+  the rest as information — so a guessing campaign is visible, and never the code, its digest, the verifier or the
+  person.
+- A device name holds none of the invisible characters that change how text reads — zero-width and directional
+  marks, embeddings, overrides, isolates, the byte-order mark — so it cannot be made to look like another device.
+
 **Rejected.**
 
 - *A sign-in form of the application's own.* A second UI over D-179's throttles and policies; password managers,

@@ -325,6 +325,70 @@ describe('integration: what is refused, and that every refusal is the same', () 
     expect(await whoseSession(first?.token ?? '')).toBe(userId);
   });
 
+  test('a code already spent is not counted against, whatever verifier it is asked with: only a live code has guesses to lose', async () => {
+    const { userId } = await aSignedInPerson();
+    const { verifier, challenge } = aVerifier();
+    const { code } = await authorize(userId, challenge);
+    expect(await exchange(code, verifier)).toBeDefined();
+    for (let i = 0; i < NATIVE_WRONG_VERIFIERS_MAX + 2; i += 1) {
+      expect(await exchange(code, aVerifier().verifier)).toBeUndefined();
+    }
+    const row = await cloned.db
+      .selectFrom('native_authorizations')
+      .select('wrong_verifiers')
+      .where('code_digest', '=', await tokenDigest(code))
+      .executeTakeFirstOrThrow();
+    expect(row.wrong_verifiers).toBe(0);
+  });
+
+  // The caller is told why, for an operator's log; the person is never told (it is one answer, byte for byte).
+  test('says why it refused, to whoever asked to be told: unknown, wrong verifier, burnt, spent, expired, erased', async () => {
+    const reasons: string[] = [];
+    const told = async (code: string, verifier: string, at = clock): Promise<void> => {
+      await exchangeNativeCode(cloned.db, at, session, {
+        code,
+        verifier,
+        refused: (why) => reasons.push(why),
+      });
+    };
+    const { userId } = await aSignedInPerson();
+    const pair = aVerifier();
+    await told('0'.repeat(64), pair.verifier);
+    const { code } = await authorize(userId, pair.challenge);
+    await told(code, aVerifier().verifier);
+    for (let i = 1; i < NATIVE_WRONG_VERIFIERS_MAX; i += 1) await told(code, aVerifier().verifier);
+    await told(code, pair.verifier);
+    const other = await authorize(userId, pair.challenge);
+    expect(await exchange(other.code, pair.verifier)).toBeDefined();
+    await told(other.code, pair.verifier);
+    const lapsing = await authorize(userId, pair.challenge);
+    await told(lapsing.code, pair.verifier, later(NATIVE_CODE_TTL_MS));
+    expect(reasons).toEqual([
+      'unknown',
+      'wrong-verifier',
+      ...Array.from({ length: NATIVE_WRONG_VERIFIERS_MAX - 2 }, () => 'wrong-verifier'),
+      'burnt',
+      'burnt',
+      'spent',
+      'expired',
+    ]);
+  });
+
+  test('says nothing of a code it opened, and a refusal that has nobody to tell is still a refusal', async () => {
+    const reasons: string[] = [];
+    const { userId } = await aSignedInPerson();
+    const { verifier, challenge } = aVerifier();
+    const { code } = await authorize(userId, challenge);
+    const opened = await exchangeNativeCode(cloned.db, clock, session, {
+      code,
+      verifier,
+      refused: (why) => reasons.push(why),
+    });
+    expect(opened).toBeDefined();
+    expect(reasons).toEqual([]);
+    expect(await exchange('1'.repeat(64), verifier)).toBeUndefined();
+  });
+
   test('a code whose person has since been erased', async () => {
     const { userId } = await aSignedInPerson();
     const { verifier, challenge } = aVerifier();

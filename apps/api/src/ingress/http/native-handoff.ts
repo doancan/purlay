@@ -17,6 +17,7 @@ import {
 import type { Auth } from '../../modules/auth/better-auth';
 import { deriveAuthSecret } from '../../modules/auth/better-auth';
 import { authorizeNative, exchangeNativeCode } from '../../modules/auth/native-handoff';
+import type { Logger } from '../../platform/logging';
 import { SESSION_CLOCK } from '../../modules/auth/sessions';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
@@ -32,6 +33,7 @@ export interface NativeHandoffDependencies {
   readonly config: Config;
   readonly database: Executor;
   readonly clock: Clock;
+  readonly log: Logger;
 }
 
 /**
@@ -95,6 +97,13 @@ export const exchangeNativeToken = async (
       verifier,
       userAgent: sessionLabel(meta.clientHeader, name),
       ipAddress: meta.ipAddress,
+      // Why, for whoever reads the log; never the code, the verifier or the person. A guess is a warning, a code that
+      // simply does not exist is not one: every typo and every stale link would be.
+      refused: (reason) => {
+        const line = `native sign-in code refused: ${reason}`;
+        if (reason === 'wrong-verifier' || reason === 'burnt') dependencies.log.warn(line);
+        else dependencies.log.info(line);
+      },
     },
   );
   if (minted === undefined) {
