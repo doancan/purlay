@@ -15,3 +15,10 @@
  * (`CONTRIBUTING.md` §6.8).
  */
 export const CONTRACT_VERSION = 1;
+
+/**
+ * The version of the *bundle's own layout* — which files it holds and how each is written — bumped when a
+ * generator reading the old layout would misread the new one. Not the contract's: a bundle of a changed
+ * contract has the same layout (`apps/api/src/contract/bundle.ts`, D-192).
+ */
+export const CONTRACT_BUNDLE_FORMAT = 1;

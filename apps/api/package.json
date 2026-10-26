@@ -20,6 +20,7 @@
     "dev": "bun --env-file=../../.env run --watch src/index.ts"
   },
   "devDependencies": {
+    "@purlay/tokens": "workspace:*",
     "@types/nodemailer": "8.0.2"
   }
 }
