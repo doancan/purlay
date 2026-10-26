@@ -152,8 +152,9 @@ const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React
         }}
         className={cn(
           // As wide as what it says, under the message it belongs to: a full-width row put the status and
-          // Show thread at the feed's two edges, a window's width apart (D-177).
-          'mt-2 flex h-control w-fit max-w-full items-center gap-3 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
+          // Show thread at the feed's two edges, a window's width apart (D-177). Its padding hangs in the
+          // gutter (`-ml-2`), so it is the pill that starts under the words, not the button round it.
+          '-ml-2 mt-2 flex h-control w-fit max-w-full items-center gap-3 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
           // The one open in the panel is marked as such, so the eye finds where it came from.
           open && 'bg-accent-subtle',
         )}

@@ -55,7 +55,9 @@ test.describe('the columns of a channel', () => {
       .first();
     // The seed has threads in this channel: a check that found none would say nothing (CONTRIBUTING §6.4).
     expect(await status.count(), 'no thread status line on screen').toBeGreaterThan(0);
-    expect(Math.round((await status.boundingBox())?.x ?? -1), 'a thread status line').toBe(body);
+    // The pill the words are cut inside: its edge is the one drawn, and it starts where the words do.
+    const pill = status.getByText(/^(Open|Resolved)/).locator('xpath=..');
+    expect(Math.round((await pill.boundingBox())?.x ?? -1), 'a thread status line').toBe(body);
   });
 });
 

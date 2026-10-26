@@ -14,7 +14,13 @@ export const ShortcutsPage = (): React.JSX.Element => {
   return (
     <SettingsPage title={t('shortcuts.title')} description={t('shortcuts.description')}>
       <SettingsCard>
-        <div className="flex flex-col gap-6 px-6 py-5 max-narrow:px-4">
+        {/* Static words, in a page that scrolls: a keyboard reaches them by a stop of their own, or cannot scroll them. */}
+        <div
+          role="region"
+          aria-label={t('shortcuts.title')}
+          tabIndex={0}
+          className="flex flex-col gap-6 px-6 py-5 max-narrow:px-4"
+        >
           <ShortcutList mac={mac} level={2} />
         </div>
       </SettingsCard>
