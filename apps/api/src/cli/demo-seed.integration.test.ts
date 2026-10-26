@@ -229,7 +229,9 @@ describe('integration: a fresh session for a seeded person (#522 follow-up)', ()
       );
       expect(await me(token)).toBe(200);
     });
-  });
+    // It seeds the whole demo workspace through the API before it asks anything: about 4 s on a laptop that
+    // is doing nothing else, so under the five a test is given unless it says otherwise it fails on load.
+  }, 30_000);
 
   test('is refused outside a scratch database, and for somebody who is not there', async () => {
     await withRollback(async (db) => {
