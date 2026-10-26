@@ -9,6 +9,7 @@ import { createECDH } from 'node:crypto';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { tlsFromEnvironment } from '@purlay/db';
+import { CONTRACT_VERSION } from '@purlay/types';
 import { CONFIGURED, ConfigurationError, DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from './config';
 
 const valid = {
@@ -729,6 +730,16 @@ describe('the minimum native client', () => {
   test('refuses a contract higher than the one this server speaks', () => {
     const message = refusal({ ...valid, MIN_CLIENT_MACOS_CONTRACT: '999' });
     expect(message).toContain('MIN_CLIENT_MACOS_CONTRACT');
+  });
+
+  test('accepts the contract this server speaks, and refuses the next one up', () => {
+    expect(
+      loadConfig({ ...valid, MIN_CLIENT_MACOS_CONTRACT: String(CONTRACT_VERSION) })
+        .MIN_CLIENT_MACOS_CONTRACT,
+    ).toBe(CONTRACT_VERSION);
+    expect(
+      refusal({ ...valid, MIN_CLIENT_MACOS_CONTRACT: String(CONTRACT_VERSION + 1) }),
+    ).toContain('MIN_CLIENT_MACOS_CONTRACT');
   });
 
   test.each(['0', '-1', '1.5', 'one', '1e3'])('refuses a contract of %s', (value) => {

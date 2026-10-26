@@ -108,6 +108,15 @@ echo 'readme' > "$4/README.md"
 `,
   );
   chmodSync(bun, 0o755);
+  const tar = join(bin, 'tar');
+  writeFileSync(
+    tar,
+    `#!/usr/bin/env bash
+[ "\${TAR_FAIL:-0}" = "1" ] && { echo "tar: no space left on device" >&2; exit 2; }
+exec /usr/bin/tar "$@"
+`,
+  );
+  chmodSync(tar, 0o755);
   const gh = join(bin, 'gh');
   writeFileSync(
     gh,
@@ -354,6 +363,13 @@ describe('the contract bundle attached to a release (D-192)', () => {
     const outcome = publish(sandbox(), { BUNDLE_EMPTY: '1' });
     expect(outcome.code).not.toBe(0);
     expect(outcome.stderr).toContain('wrote no files');
+    expect(created(outcome)).toBe(false);
+  });
+
+  test('is never published unpacked: a tarball that cannot be made leaves no release behind', () => {
+    const outcome = publish(sandbox(), { TAR_FAIL: '1' });
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain('could not pack the contract bundle');
     expect(created(outcome)).toBe(false);
   });
 

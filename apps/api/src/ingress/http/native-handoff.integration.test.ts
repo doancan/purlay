@@ -284,6 +284,45 @@ describe('integration: POST /api/native/token', () => {
     expect(answers.map((answer) => answer.headers.get('set-cookie'))).toEqual([null, null, null]);
   });
 
+  test('is the same 404, byte for byte, for a code that lapsed, one that was burnt and one whose person was erased', async () => {
+    const { verifier, challenge, state } = aVerifier();
+    const reference = await token({ code: '2'.repeat(64), verifier });
+    const referenceBody = JSON.stringify(await reference.json());
+
+    const lapsed = await aSignedInUser(db, clock, 'lapsed');
+    const lapsedCode = (await authorize(lapsed, { challenge, state })).code;
+    await db
+      .updateTable('native_authorizations')
+      .set({
+        created_at: new Date(clock.now().getTime() - 600_000),
+        expires_at: new Date(clock.now().getTime() - 1_000),
+      })
+      .where('user_id', '=', lapsed.userId)
+      .execute();
+
+    const burnt = await aSignedInUser(db, clock, 'burnt');
+    const burntCode = (await authorize(burnt, { challenge, state })).code;
+    // Burnt the way a stranger would burn it: five wrong verifiers, over the wire.
+    for (let guess = 0; guess < 5; guess += 1) {
+      expect((await token({ code: burntCode, verifier: aVerifier().verifier })).status).toBe(404);
+    }
+
+    const erased = await aSignedInUser(db, clock, 'erased');
+    const erasedCode = (await authorize(erased, { challenge, state })).code;
+    await db
+      .updateTable('users')
+      .set({ deleted_at: clock.now() })
+      .where('id', '=', erased.userId)
+      .execute();
+
+    for (const code of [lapsedCode, burntCode, erasedCode]) {
+      const answer = await token({ code, verifier });
+      expect(answer.status).toBe(404);
+      expect(JSON.stringify(await answer.json())).toBe(referenceBody);
+      expect(answer.headers.get('set-cookie')).toBeNull();
+    }
+  });
+
   test('refuses a browser page: another site cannot spend a code', async () => {
     const person = await aSignedInUser(db, clock, 'page');
     const { verifier, challenge, state } = aVerifier();
@@ -346,6 +385,21 @@ describe('integration: POST /api/native/token', () => {
       .where('user_agent', 'like', 'Purlay for macOS%')
       .executeTakeFirstOrThrow();
     expect(row.user_agent).toBe('Purlay for macOS/1.2.3 (Doğancan’s MacBook Pro)');
+  });
+
+  test('records the device name without the spaces around it', async () => {
+    const person = await aSignedInUser(db, clock, 'trimmed');
+    const { verifier, challenge, state } = aVerifier();
+    const { code } = await authorize(person, { challenge, state });
+    const response = await token({ code, verifier, device: { name: '  Mac  ' } });
+    expect(response.status).toBe(204);
+    const row = await db
+      .selectFrom('sessions')
+      .select('user_agent')
+      .where('user_id', '=', person.userId)
+      .where('user_agent', 'like', 'Purlay for macOS%')
+      .executeTakeFirstOrThrow();
+    expect(row.user_agent).toBe('Purlay for macOS/unknown (Mac)');
   });
 
   test('says "unknown" for a version nobody gave, and never copies a header it did not parse', async () => {

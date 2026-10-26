@@ -126,6 +126,47 @@ describe('integration: making a code', () => {
     expect(live.map((row) => row.code_digest)).toContain(await tokenDigest(codes.at(-1) ?? ''));
   });
 
+  test('counts only the codes that are live: spent ones, though newer, take no room from a live one', async () => {
+    const { userId } = await aSignedInPerson();
+    const liveDigests: string[] = [];
+    for (let i = 0; i < NATIVE_LIVE_CODES_PER_USER - 2; i += 1) {
+      liveDigests.push(
+        await tokenDigest((await authorize(userId, aVerifier().challenge, later(i * 1_000))).code),
+      );
+    }
+    // Two newer codes, spent at once: they are rows, and they are not live.
+    for (let i = 0; i < 2; i += 1) {
+      const { verifier, challenge } = aVerifier();
+      const at = later(10_000 + i * 1_000);
+      const { code } = await authorize(userId, challenge, at);
+      expect(await exchange(code, verifier, at)).toBeDefined();
+    }
+    await authorize(userId, aVerifier().challenge, later(20_000));
+    const rows = await cloned.db
+      .selectFrom('native_authorizations')
+      .select('code_digest')
+      .where('user_id', '=', userId)
+      .execute();
+    for (const digest of liveDigests) expect(rows.map((row) => row.code_digest)).toContain(digest);
+    // Three live, two spent, and the one just made.
+    expect(rows).toHaveLength(NATIVE_LIVE_CODES_PER_USER - 2 + 2 + 1);
+  });
+
+  test('counts only the codes that are live: expired ones are not room to make, and none is deleted for being old', async () => {
+    const { userId } = await aSignedInPerson();
+    for (let i = 0; i < NATIVE_LIVE_CODES_PER_USER; i += 1) {
+      await authorize(userId, aVerifier().challenge, later(i * 1_000));
+    }
+    // Two minutes and a few seconds on, all five have lapsed: a sixth is the only live one, and removes nothing.
+    await authorize(userId, aVerifier().challenge, later(NATIVE_CODE_TTL_MS + 10_000));
+    const rows = await cloned.db
+      .selectFrom('native_authorizations')
+      .select('id')
+      .where('user_id', '=', userId)
+      .execute();
+    expect(rows).toHaveLength(NATIVE_LIVE_CODES_PER_USER + 1);
+  });
+
   test('never makes another person’s code room: the cap is per person', async () => {
     const first = await aSignedInPerson();
     const second = await aSignedInPerson();
