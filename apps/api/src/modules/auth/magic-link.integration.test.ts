@@ -78,6 +78,74 @@ describe('integration: asking for a link, as decided', () => {
   });
 });
 
+describe('integration: a link asked for by the native application (D-191)', () => {
+  const challenge = 'a'.repeat(43);
+  const state = 'b'.repeat(22);
+
+  /** The one letter a request makes, once what was left for after the answer has run. */
+  const letterFor = async (
+    db: Executor,
+    request: { readonly native?: { readonly challenge: string; readonly state: string } },
+  ): Promise<string> => {
+    await anAccount(db, 'native@example.test', true);
+    const outbox = aRecordingOutbox();
+    const links = aTestAuth(db, {
+      mailer: outbox,
+      settings: { github: undefined, signUp: 'invite-only' },
+    }).signInLinks;
+    if (links === undefined) throw new Error('sign-in by link is not on');
+    const later: (() => Promise<void>)[] = [];
+    await requestSignInLink(
+      {
+        database: db,
+        clock: fixedClock(NOW),
+        log: aRecordingLogger().log,
+        appUrl: 'https://purlay.test',
+        links,
+        later: (work) => {
+          later.push(work);
+        },
+      },
+      { email: 'native@example.test', locale: 'en', ...request },
+      '203.0.113.8',
+    );
+    for (const work of later) await work();
+    return JSON.stringify(outbox.posted);
+  };
+
+  const link = (letter: string): string =>
+    /https:\/\/purlay\.test\/sign-in\/email#[0-9a-zA-Z._~-]+/.exec(letter)?.[0] ?? '';
+
+  test('carries the challenge and the state in the link’s fragment, after the token, so no server log sees them', async () => {
+    await withRollback(async (db) => {
+      const url = link(await letterFor(db, { native: { challenge, state } }));
+      expect(url).toMatch(new RegExp(`#[0-9a-f]{64}~${challenge}~${state}$`));
+    });
+  });
+
+  test('carries nothing of the kind for a link nobody asked for the native application with', async () => {
+    await withRollback(async (db) => {
+      const url = link(await letterFor(db, {}));
+      expect(url).toMatch(/#[0-9a-f]{64}$/);
+      expect(url).not.toContain('~');
+    });
+  });
+
+  // The pair is the application's own word and is written into a mail the person opens: only what the
+  // contract's patterns allow reaches it, whatever got past the edge.
+  test.each([
+    ['a challenge that is too short', { challenge: 'x'.repeat(42), state }],
+    ['a challenge that is not base64url', { challenge: `${'x'.repeat(42)}&`, state }],
+    ['a state that ends the address', { challenge, state: `${'a'.repeat(16)}&x=` }],
+    ['a state that is too short', { challenge, state: 'a'.repeat(15) }],
+  ])('drops %s, and sends the link as any other', async (_name, pair) => {
+    await withRollback(async (db) => {
+      const url = link(await letterFor(db, { native: pair }));
+      expect(url).toMatch(/#[0-9a-f]{64}$/);
+    });
+  });
+});
+
 describe('integration: spending a link, as decided', () => {
   /** A library that records whether it was asked to spend, and spends nothing. */
   const aLibraryThatRecords = (): SignInLinks & { readonly asked: string[] } => {

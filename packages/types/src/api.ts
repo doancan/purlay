@@ -1212,6 +1212,53 @@ export const ClientInfo = Type.Object({
 export type ClientInfo = Static<typeof ClientInfo>;
 
 /**
+ * Where a native client is sent back once the person has said yes: a fixed address of the server's own
+ * choosing, so the client names no redirect and there is no open redirect to find (D-191). The one a
+ * client registers a scheme for.
+ */
+export const NATIVE_REDIRECT = 'purlay://auth';
+
+/**
+ * The application's challenge: the SHA-256 of a verifier it made and keeps, in base64url without padding —
+ * 43 characters. What binds the code it is about to be given to the application that asked for it.
+ */
+export const NATIVE_CHALLENGE_PATTERN = '^[A-Za-z0-9_-]{43}$';
+
+/** The application's verifier: 32 to 96 random bytes in base64url (43 to 128 characters). */
+export const NATIVE_VERIFIER_PATTERN = '^[A-Za-z0-9_-]{43,128}$';
+
+/**
+ * The application's own word, handed back in the redirect so it can tell the answer to its question from
+ * somebody else's. Only the characters of base64url, because it is written into a URL.
+ */
+export const NATIVE_STATE_PATTERN = '^[A-Za-z0-9_-]{16,128}$';
+
+/** A name for the device, shown by whoever lists sessions: any characters but control and line-breaking ones. */
+export const NATIVE_DEVICE_NAME_PATTERN = '^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]{1,64}$';
+
+/** The code, as `POST /api/native/authorize` makes it: 32 random bytes in hex. */
+export const NATIVE_CODE_PATTERN = '^[0-9a-f]{64}$';
+
+/** `POST /api/native/authorize` (D-191): the person, signed in, says yes to the application that sent them. */
+export const NativeAuthorizeRequest = FromClient({
+  challenge: Type.String({ pattern: NATIVE_CHALLENGE_PATTERN }),
+  state: Type.String({ pattern: NATIVE_STATE_PATTERN }),
+});
+export type NativeAuthorizeRequest = Static<typeof NativeAuthorizeRequest>;
+
+/** Where to send the browser next: `purlay://auth?code=…&state=…`. */
+export const NativeAuthorizeResponse = Type.Object({ redirect: Type.String() });
+export type NativeAuthorizeResponse = Static<typeof NativeAuthorizeResponse>;
+
+/** `POST /api/native/token` (D-191): the application spends its code with the verifier it never sent. */
+export const NativeTokenRequest = FromClient({
+  code: Type.String({ pattern: NATIVE_CODE_PATTERN }),
+  verifier: Type.String({ pattern: NATIVE_VERIFIER_PATTERN }),
+  device: FromClient({ name: Type.String({ pattern: NATIVE_DEVICE_NAME_PATTERN }) }),
+});
+export type NativeTokenRequest = Static<typeof NativeTokenRequest>;
+
+/**
  * `POST /auth/email` — send a sign-in link to this address, in this language. Answered `202` whatever
  * the address: whether an account has it is never said (D-138 §1). An invitation the asker holds rides
  * in the link's fragment, since the tab that holds it is not the one the mail opens (D-138 §4).
@@ -1220,6 +1267,8 @@ export const EmailSignInRequest = FromClient({
   email: Type.String({ format: 'email', maxLength: 254 }),
   locale: SignInLocale,
   invitation: Type.Optional(InvitationToken),
+  /** The native application's challenge and state, carried in the link's fragment (D-191). */
+  native: Type.Optional(NativeAuthorizeRequest),
 });
 export type EmailSignInRequest = Static<typeof EmailSignInRequest>;
 

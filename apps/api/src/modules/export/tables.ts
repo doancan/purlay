@@ -281,6 +281,8 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
     'the digest of the one link that verifies the setup administrator’s address: a credential, the server’s, never exported (D-179 §4.3)',
   invitation_passports:
     'digests of a cookie or of an address, each made from a live invitation link and spent by one sign-up: credentials, never exported (D-179 §5)',
+  native_authorizations:
+    'digests of one-time codes that hand a person’s session to the native application, and the challenge each is bound to: credentials, the person’s own, never exported (D-191)',
   setup_state:
     'where the server’s setup stands: digests of its one-time code and its claim, the throttle and the step reached — the server’s, not a workspace’s, and never exported (D-179 §4)',
 };

@@ -33,6 +33,8 @@ import type { GithubOptions, GithubProfile } from 'better-auth/social-providers'
 import { runWithTransaction } from '@better-auth/core/context';
 import {
   AUTH_BASE_PATH,
+  NATIVE_CHALLENGE_PATTERN,
+  NATIVE_STATE_PATTERN,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   passwordProblem,
@@ -805,15 +807,34 @@ const uniqueViolation = (error: unknown): boolean => {
 interface LinkLetter {
   readonly locale: SignInLocale;
   readonly invitation?: string;
+  /** The native application's challenge and state, which ride in the link's fragment (D-191). */
+  readonly native?: { readonly challenge: string; readonly state: string };
 }
 
 /** The language and invitation a link's message was asked with, as the library hands them back. */
 const letterOf = (metadata: Readonly<Record<string, unknown>> | undefined): LinkLetter => {
   const invitation = metadata?.['invitation'];
+  const native = metadata?.['native'];
+  const challenge =
+    typeof native === 'object' && native !== null
+      ? (native as Readonly<Record<string, unknown>>)['challenge']
+      : undefined;
+  const state =
+    typeof native === 'object' && native !== null
+      ? (native as Readonly<Record<string, unknown>>)['state']
+      : undefined;
   return {
     locale: metadata?.['locale'] === 'tr' ? 'tr' : 'en',
     // Only a token's shape: nothing an asker wrote reaches the mail (D-138 §4).
     ...(typeof invitation === 'string' && /^[0-9a-f]{64}$/.test(invitation) ? { invitation } : {}),
+    // The same, for the pair the application sends: the contract's own patterns, so a value that is not a
+    // base64url word never becomes part of an address a person opens.
+    ...(typeof challenge === 'string' &&
+    typeof state === 'string' &&
+    new RegExp(NATIVE_CHALLENGE_PATTERN).test(challenge) &&
+    new RegExp(NATIVE_STATE_PATTERN).test(state)
+      ? { native: { challenge, state } }
+      : {}),
   };
 };
 
@@ -1235,9 +1256,11 @@ export const createAuth = (deps: AuthDependencies): Auth => {
               // the shape the page reads from the fragment.
               generateToken: () => randomToken(),
               sendMagicLink: ({ email, token, metadata }) => {
-                const { locale, invitation } = letterOf(metadata);
-                // `<token>` or `<token>.<invitation>`: neither reaches a server's log (D-138 §4).
-                const url = `${deps.baseUrl}${SIGN_IN_PATH}/email#${token}${invitation === undefined ? '' : `.${invitation}`}`;
+                const { locale, invitation, native } = letterOf(metadata);
+                // `<token>`, then `.<invitation>` if one rode along, then `~<challenge>~<state>` if the native
+                // application asked: none of it reaches a server's log (D-138 §4, D-191). `~` is in neither hex
+                // nor base64url, so the parts cannot be mistaken for one another.
+                const url = `${deps.baseUrl}${SIGN_IN_PATH}/email#${token}${invitation === undefined ? '' : `.${invitation}`}${native === undefined ? '' : `~${native.challenge}~${native.state}`}`;
                 mailer.post(linkLetter(email, locale, url), 'sign-in');
                 return Promise.resolve();
               },

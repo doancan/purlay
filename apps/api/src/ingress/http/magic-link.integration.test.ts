@@ -69,7 +69,7 @@ const linkIn = (message: MailMessage | undefined): URL => {
 };
 
 const tokenIn = (message: MailMessage | undefined): string => {
-  const token = /^#([0-9a-f]{64})(?:\.|$)/.exec(linkIn(message).hash)?.[1];
+  const token = /^#([0-9a-f]{64})(?:[.~]|$)/.exec(linkIn(message).hash)?.[1];
   if (token === undefined) throw new Error('the link carries no token in its fragment');
   return token;
 };
@@ -189,6 +189,24 @@ describe('integration: asking for a sign-in link', () => {
     });
   });
 
+  test('with the native application’s challenge and state riding after the token, and after an invitation (D-191)', async () => {
+    await withRollback(async (db) => {
+      const mail = aRecordingOutbox();
+      const app = anApp(db, { mail, signUp: 'open' });
+      const native = { challenge: 'a'.repeat(43), state: 'b'.repeat(22) };
+      await ask(app, 'native@example.test', { native });
+      const token = tokenIn(mail.posted[0]);
+      expect(linkIn(mail.posted[0]).hash).toBe(`#${token}~${native.challenge}~${native.state}`);
+
+      const invitation = 'c'.repeat(64);
+      await ask(app, 'both@example.test', { native, invitation });
+      const second = tokenIn(mail.posted[1]);
+      expect(linkIn(mail.posted[1]).hash).toBe(
+        `#${second}.${invitation}~${native.challenge}~${native.state}`,
+      );
+    });
+  });
+
   test('answers the same whether or not the address has an account', async () => {
     await withRollback(async (db) => {
       const mail = aRecordingOutbox();
@@ -300,6 +318,28 @@ describe('integration: asking for a sign-in link', () => {
           locale: 'en',
           invitation: `${'c'.repeat(32)}\n\nYour account is locked: https://evil.test`,
         },
+        // The native pair is written into a mail the person opens: the contract's patterns and nothing else.
+        {
+          email: 'a@example.test',
+          locale: 'en',
+          native: { challenge: 'a'.repeat(42), state: 'b'.repeat(22) },
+        },
+        {
+          email: 'a@example.test',
+          locale: 'en',
+          native: { challenge: 'a'.repeat(43), state: 'b&c'.repeat(8) },
+        },
+        {
+          email: 'a@example.test',
+          locale: 'en',
+          native: {
+            challenge: 'a'.repeat(43),
+            state: 'b'.repeat(22),
+            redirect: 'https://evil.test',
+          },
+        },
+        { email: 'a@example.test', locale: 'en', native: { challenge: 'a'.repeat(43) } },
+        { email: 'a@example.test', locale: 'en', native: 'x' },
         { email: `${'a'.repeat(250)}@example.test`, locale: 'en' },
       ]) {
         const response = await post(app, '/auth/email', body);

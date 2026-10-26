@@ -134,6 +134,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('EXPORT_IN_PROGRESS'),
   /** A sign-in link that does not open — unknown, used, expired: one answer (D-138 §4). */
   Type.Literal('SIGN_IN_LINK_NOT_FOUND'),
+  /**
+   * A native sign-in code that does not open — unknown, spent, expired, burnt, its person erased, or a wrong
+   * verifier: one answer for all, so nothing says which (D-191).
+   */
+  Type.Literal('NATIVE_CODE_NOT_FOUND'),
   /** A repository's feed that does not exist, or is in a channel the caller cannot see (D-134). */
   Type.Literal('GITHUB_FEED_NOT_FOUND'),
   /** An external image the proxy will not or cannot show — one answer for every reason (#110). */
@@ -256,6 +261,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   EXPORT_NOT_FOUND: 404,
   EXPORT_IN_PROGRESS: 409,
   SIGN_IN_LINK_NOT_FOUND: 404,
+  NATIVE_CODE_NOT_FOUND: 404,
   GITHUB_FEED_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,

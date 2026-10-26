@@ -402,6 +402,41 @@ describe('integration: the sign-in mail sweep', () => {
     });
   });
 
+  test('takes the native sign-in codes a day past their end, and not before (D-191)', async () => {
+    await withRollback(async (db) => {
+      const now = new Date('2026-10-26T12:00:00.000Z');
+      const person = await aUserRow(db, 'native-sweep');
+      const day = 24 * 3_600_000;
+      const make = async (name: string, expiresAgo: number): Promise<void> => {
+        await db
+          .insertInto('native_authorizations')
+          .values({
+            id: messageId(now),
+            user_id: person.userId,
+            code_digest: await tokenDigest(name),
+            challenge: 'c'.repeat(43),
+            created_at: new Date(now.getTime() - expiresAgo - 120_000),
+            expires_at: new Date(now.getTime() - expiresAgo),
+          })
+          .execute();
+      };
+      // Ended a day and a second ago; ended a second short of a day ago; and live.
+      await make('ended-long', day + 1000);
+      await make('ended-recently', day - 1000);
+      await make('live', -60_000);
+      const swept = await sweepEmailSignIns({ database: db, clock: fixedClock(now) });
+      expect(swept.removed).toBe(1);
+      const left = await db
+        .selectFrom('native_authorizations')
+        .select('code_digest')
+        .where('user_id', '=', person.userId)
+        .execute();
+      expect(left.map((row) => row.code_digest).sort()).toEqual(
+        [await tokenDigest('ended-recently'), await tokenDigest('live')].sort(),
+      );
+    });
+  });
+
   test('takes the invitation passports a day past their hour or their use, and not before (D-179 §5)', async () => {
     await withRollback(async (db) => {
       const now = new Date('2026-10-14T12:00:00.000Z');

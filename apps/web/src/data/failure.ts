@@ -79,6 +79,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'INVITATION_NOT_FOUND':
     case 'EXPORT_NOT_FOUND':
     case 'SIGN_IN_LINK_NOT_FOUND':
+    case 'NATIVE_CODE_NOT_FOUND':
     case 'GITHUB_FEED_NOT_FOUND':
     case 'INCIDENT_NOT_FOUND':
     case 'IMAGE_NOT_AVAILABLE':

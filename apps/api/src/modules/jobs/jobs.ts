@@ -242,11 +242,18 @@ export const sweepEmailSignIns = async (dependencies: {
     .deleteFrom('invitation_passports')
     .where((eb) => eb.or([eb('expires_at', '<', before), eb('consumed_at', '<', before)]))
     .executeTakeFirst();
+  // And the native sign-in codes (D-191): none opens past its two minutes, and a spent one has made its
+  // session — a day is a margin for whoever reads the table to see what happened, not for a code.
+  const nativeCodes = await dependencies.database
+    .deleteFrom('native_authorizations')
+    .where('expires_at', '<', before)
+    .executeTakeFirst();
   return {
     removed:
       Number(links.numDeletedRows) +
       Number(counters.numDeletedRows) +
       adminLink +
-      Number(passports.numDeletedRows),
+      Number(passports.numDeletedRows) +
+      Number(nativeCodes.numDeletedRows),
   };
 };

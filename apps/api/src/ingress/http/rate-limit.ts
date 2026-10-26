@@ -91,6 +91,17 @@ export const SETUP_SECRET_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
 const PASSPORT_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
 
 /**
+ * Spending a native sign-in code per client (a /64 for IPv6), before the code is looked at (D-191): ten at
+ * once, then one every ninety seconds — ten in fifteen minutes, which is many more than anyone signs the
+ * application in. The route is public and a code in its body is all it needs, so this is what keeps one
+ * client from guessing at codes. Provisional (O-4).
+ */
+export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
+
+/** The route that spends a native sign-in code, charged to `NATIVE_TOKEN_BUDGET`. */
+const NATIVE_TOKEN_ROUTE = '/api/native/token';
+
+/**
  * Administration → Server per client (a /64 for IPv6), before the session is looked at: sixty at once,
  * then one every fifteen seconds — sixty in fifteen minutes. A page walked by one administrator asks
  * a handful. Charged to every method on every path under `/api/server`, to anybody who reaches it, so
@@ -158,6 +169,7 @@ export interface HttpBudgets {
   readonly setupSecrets?: RateBudget;
   readonly passports?: RateBudget;
   readonly serverAdmin?: RateBudget;
+  readonly nativeTokens?: RateBudget;
 }
 
 export interface HttpLimitDependencies {
@@ -201,6 +213,8 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
   const setupSecretBudget = budgets.setupSecrets ?? SETUP_SECRET_BUDGET;
   const passportBudget = budgets.passports ?? PASSPORT_BUDGET;
   const passports = inProcessRateLimiter(clock, passportBudget);
+  const nativeTokenBudget = budgets.nativeTokens ?? NATIVE_TOKEN_BUDGET;
+  const nativeTokens = inProcessRateLimiter(clock, nativeTokenBudget);
   const serverAdminBudget = budgets.serverAdmin ?? SERVER_ADMIN_BUDGET;
   const serverAdmin = inProcessRateLimiter(clock, serverAdminBudget);
   const byClass = {
@@ -245,6 +259,14 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
       return (await auth.consume(limitKeyFor(address)))
         ? undefined
         : retryAfterSeconds(budgets.auth);
+    }
+
+    // Public, so charged to the client, before the code in the body is looked at.
+    if (method === 'POST' && pathname === NATIVE_TOKEN_ROUTE) {
+      const address = clientAddress(peer, request.headers, trustProxy);
+      return (await nativeTokens.consume(limitKeyFor(address)))
+        ? undefined
+        : retryAfterSeconds(nativeTokenBudget);
     }
 
     if (pathname.startsWith('/auth/')) {

@@ -85,6 +85,15 @@ export const clearedSetupCookie = (): string => `${SETUP_COOKIE}=; ${SETUP_ATTRI
 export const clearedSessionCookie = (): string =>
   `${SESSION_COOKIE}=; ${ATTRIBUTES}; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 
+/**
+ * The session cookie as it is set on a client that is not a browser's own sign-in — the native
+ * application's, once its code is spent (D-191). The same name and the same attributes as the library's:
+ * a session made by either is the same kind of session, and the application keeps this value as the one
+ * thing it holds. `maxAgeSeconds` is how long the session lasts, so the application knows when to ask again.
+ */
+export const sessionCookie = (value: string, maxAgeSeconds: number): string =>
+  `${SESSION_COOKIE}=${value}; ${ATTRIBUTES}; Max-Age=${String(maxAgeSeconds)}`;
+
 /** One cookie's value out of a request's `Cookie` header, if it carries one. */
 export const readCookie = (cookieHeader: string | null, name: string): string | undefined => {
   if (cookieHeader === null) return undefined;

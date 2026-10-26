@@ -104,6 +104,9 @@ export const eraseAccount = async (
       .where('address_digest', '=', passportDigest)
       .execute();
   }
+  // And the codes that handed the person's session to the native application (D-191): by their id, since the
+  // tombstone keeps the row. Digests, long since spent or expired, but theirs.
+  await executor.deleteFrom('native_authorizations').where('user_id', '=', person.id).execute();
   // And the wrong passwords counted for the address, from whichever clients: kept under its digest.
   await executor
     .deleteFrom('rate_limits')
