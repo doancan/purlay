@@ -150,6 +150,7 @@ have it.
 - **Operations** — A backup no longer skips the attachments by chance, and a restore reads the dump before it replaces anything
 - **Operations** — A message edit naming several people, a leave, and concurrent sends into one channel no longer deadlock, and a database failure answers 503 within 3 seconds (D-87)
 - **Operations** — Several nodes started at once no longer deadlock on the migration lock, and a node migrating on start is no longer cut off at 30 seconds (D-86)
+- **Operations** — The image smoke test no longer reports a database that is still initialising as never ready; a deploy was refused for it (D-92)
 
 ### Security
 
