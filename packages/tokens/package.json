@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./tokens.css": "./src/generated/tokens.css",
     "./theme.css": "./src/generated/theme.css",
-    "./vocabulary": "./src/vocabulary.ts"
+    "./vocabulary": "./src/vocabulary.ts",
+    "./pairs": "./src/pairs.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "0.34.52"

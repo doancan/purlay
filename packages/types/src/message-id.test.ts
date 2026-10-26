@@ -144,3 +144,37 @@ describe('the id shape is lower-case', () => {
     expect(shapeOf(id.toUpperCase())).toBe(false);
   });
 });
+
+describe('an id made from chosen bytes (D-192)', () => {
+  // The layout is RFC 9562's version 7, and a client that is not this code — the macOS application — has to
+  // lay it out the same way. These are the vectors it is held to: the instant, ten bytes of randomness, and
+  // the id that comes of them.
+  const fill =
+    (byte: number) =>
+    (bytes: Uint8Array): void => {
+      bytes.fill(byte);
+    };
+
+  test('is a pure function of the instant and the bytes: nothing else enters it', () => {
+    const at = new Date(1_795_608_000_000);
+    expect(messageId(at, fill(0))).toBe(messageId(at, fill(0)));
+    expect(messageId(at, fill(0))).not.toBe(messageId(at, fill(1)));
+  });
+
+  test('puts the instant in the first 48 bits, the version 7 after them, and the variant bits 10', () => {
+    expect(messageId(new Date(0), fill(0))).toBe('00000000-0000-7000-8000-000000000000');
+    expect(messageId(new Date(0), fill(0xff))).toBe('00000000-0000-7fff-bfff-ffffffffffff');
+    expect(messageId(new Date(0xffff_ffff_ffff), fill(0))).toBe(
+      'ffffffff-ffff-7000-8000-000000000000',
+    );
+    expect(messageId(new Date(1), fill(0))).toBe('00000000-0001-7000-8000-000000000000');
+    expect(messageId(new Date(0x1_0000), fill(0))).toBe('00000001-0000-7000-8000-000000000000');
+  });
+
+  test('still draws from the platform when it is not told where from', () => {
+    const one = messageId(new Date(1_000));
+    const two = messageId(new Date(1_000));
+    expect(one).not.toBe(two);
+    expect(isMessageIdShape(one)).toBe(true);
+  });
+});

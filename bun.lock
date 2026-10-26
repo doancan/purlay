@@ -33,6 +33,7 @@
         "pino": "10.4.0",
       },
       "devDependencies": {
+        "@purlay/tokens": "workspace:*",
         "@types/nodemailer": "8.0.2",
       },
     },

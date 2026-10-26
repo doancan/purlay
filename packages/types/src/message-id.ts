@@ -63,10 +63,19 @@ const hex = (value: number, width: number): string => value.toString(16).padStar
  * itself. The client corrects `now` against the server's clock before calling
  * this (D-8, issue #21) — which is why the correction has somewhere to apply.
  */
-export const messageId = (now: Date): string => {
+export const messageId = (
+  now: Date,
+  /**
+   * Where the ten bytes of randomness come from: the platform's generator, unless a caller chooses —
+   * the contract bundle does, so the vectors a second implementation is held to are the same on every build.
+   */
+  fill: (bytes: Uint8Array) => void = (bytes) => {
+    crypto.getRandomValues(bytes);
+  },
+): string => {
   const milliseconds = now.getTime();
   const random = new Uint8Array(10);
-  crypto.getRandomValues(random);
+  fill(random);
 
   // 48 bits of time, then 4 bits of version, then 74 bits of randomness with the
   // two variant bits fixed — the layout RFC 9562 specifies for version 7.
