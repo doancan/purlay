@@ -2759,6 +2759,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['scripts/release-publish.test.ts'],
   },
   {
+    id: 'smoke-waits-on-the-temporary-database',
+    why: 'the wait ends on the server the image starts first for its init scripts, which is shut down a moment later, and a deploy is refused for a database that was about to be ready',
+    file: 'scripts/image-smoke.sh',
+    find: 'docker exec "$DATABASE" pg_isready -h 127.0.0.1 -U purlay -d purlay >/dev/null 2>&1 && break',
+    replace: 'docker exec "$DATABASE" pg_isready -U purlay -d purlay >/dev/null 2>&1 && break',
+    tests: ['scripts/image-smoke.test.ts'],
+  },
+  {
     id: 'release-judges-a-stale-local-copy',
     why: 'a checkout that is behind main releases a version, or entries, that main no longer has',
     file: 'scripts/release-prepare.ts',

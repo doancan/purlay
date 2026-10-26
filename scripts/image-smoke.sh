@@ -45,11 +45,14 @@ docker run -d --name "$DATABASE" --network "$NETWORK" \
   -e POSTGRES_USER=purlay -e POSTGRES_PASSWORD=purlay -e POSTGRES_DB=purlay \
   -e POSTGRES_INITDB_ARGS="--locale=C --encoding=UTF8" \
   "$POSTGRES_IMAGE" >/dev/null
+# Ready is the server that stays, over TCP. While the image runs its init scripts it starts a
+# temporary server that listens on the unix socket only, answers pg_isready, and is shut down a
+# moment later: a check over the socket ends the wait on it, and the next one finds nothing.
 for _ in $(seq 1 60); do
-  docker exec "$DATABASE" pg_isready -U purlay -d purlay >/dev/null 2>&1 && break
+  docker exec "$DATABASE" pg_isready -h 127.0.0.1 -U purlay -d purlay >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec "$DATABASE" pg_isready -U purlay -d purlay >/dev/null || { echo "FAIL: the throwaway database never became ready" >&2; exit 1; }
+docker exec "$DATABASE" pg_isready -h 127.0.0.1 -U purlay -d purlay >/dev/null || { echo "FAIL: the throwaway database never became ready" >&2; exit 1; }
 
 # The key is generated here: nothing in the repository is a usable secret.
 ENCRYPTION_KEY="$(head -c 32 /dev/urandom | base64)"

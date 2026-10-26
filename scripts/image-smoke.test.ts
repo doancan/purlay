@@ -13,7 +13,16 @@
  * name, with nothing published, and removes both when it ends. These tests keep it that way.
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const repo = join(import.meta.dir, '..');
@@ -59,5 +68,76 @@ describe('the image workflow', () => {
   test('does not start the development database for the smoke test', () => {
     const steps = workflow.split('\n').filter((line) => !line.trim().startsWith('#'));
     expect(steps.join('\n')).not.toMatch(/docker compose up[^\n]*postgres/);
+  });
+});
+
+/**
+ * Waiting for the database, run against a `docker` that answers the way the real image does.
+ *
+ * The official PostgreSQL image starts a TEMPORARY server while it runs its init scripts. It listens
+ * on the unix socket only, answers `pg_isready`, and is shut down a moment later; the server that
+ * stays opens TCP. A wait that asks over the socket stops on the temporary one and the very next
+ * question finds nothing: "the throwaway database never became ready", on a deploy and on a first try,
+ * and never on the second. The stub answers on a clock of calls: the first is the temporary server
+ * (socket only), the next two are the gap, and from the fourth on the real one answers both.
+ */
+describe('scripts/image-smoke.sh waits for the database that stays', () => {
+  const run = (
+    env: Record<string, string> = {},
+  ): { code: number; stderr: string; started: boolean } => {
+    const dir = mkdtempSync(join(tmpdir(), 'smoke-'));
+    try {
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      const put = (name: string, body: string): void => {
+        writeFileSync(join(bin, name), `#!/usr/bin/env bash\n${body}\n`);
+        chmodSync(join(bin, name), 0o755);
+      };
+      put('sleep', 'exit 0');
+      put(
+        'docker',
+        String.raw`case "$1 $2" in
+  "exec "*)
+    n=$(( $(cat "$DIR/calls" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$DIR/calls"
+    case " $* " in *" -h 127.0.0.1 "*) tcp=1 ;; *) tcp=0 ;; esac
+    if [ -n "$NEVER_READY" ]; then exit 1; fi
+    if [ "$n" -eq 1 ] && [ "$tcp" -eq 0 ]; then exit 0; fi   # the temporary server: socket only
+    if [ "$n" -ge 4 ]; then exit 0; fi                        # the server that stays
+    exit 1 ;;
+  "run -d")
+    case " $* " in *POSTGRES_USER=purlay*) exit 0 ;; esac
+    touch "$DIR/api-started"; exit 1 ;;                       # stop where the wait is over
+esac
+exit 0`,
+      );
+      const result = Bun.spawnSync(
+        ['bash', join(repo, 'scripts/image-smoke.sh'), 'purlay-api:test'],
+        {
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: { PATH: `${bin}:${process.env['PATH'] ?? ''}`, HOME: dir, DIR: dir, ...env },
+        },
+      );
+      return {
+        code: result.exitCode,
+        stderr: result.stderr.toString(),
+        started: existsSync(join(dir, 'api-started')),
+      };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test('is not taken in by the temporary server that the image starts first', () => {
+    const outcome = run();
+    expect(outcome.stderr).not.toContain('never became ready');
+    expect(outcome.started).toBe(true);
+  });
+
+  test('gives up, and says so, on a database that never comes', () => {
+    const outcome = run({ NEVER_READY: '1' });
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('the throwaway database never became ready');
+    expect(outcome.started).toBe(false);
   });
 });
