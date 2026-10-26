@@ -8,7 +8,7 @@
  * **It blocks on a regression, never on the line**, by the same rule as `budget:latency`: on a hosted
  * runner the channel switch measured 120–170 ms where a laptop measures 33 ms, and moves by tens of
  * percent between identical runs. The line itself is held where it means something — the browser
- * tests assert it on a developer's machine. Here a number fails when it jumped past the middle of main's last few runs (`historyOf`), and
+ * tests assert it on a developer's machine. Here a number fails when it jumped past the slowest of main's last few runs (`historyOf`), and
  * a number main measured that this run did not is a failure too: a measurement that quietly stopped
  * is not a pass. A run that measured nothing at all is refused.
  */
@@ -77,21 +77,16 @@ export const measured = async (folder: string, project: string): Promise<Measure
  * What a run is judged against: the last few runs that passed, oldest first. One run says what a runner
  * did that day, not what is normal — on a hosted runner the channel switch measured 58 ms in one run of
  * main and 107 in the next, identical — so a single lucky run kept as the baseline failed every change
- * after it (D-49, amended). The middle of the history is the normal, and while there are fewer than
- * `STEADY_FROM` runs to take a middle of, the factor is wider.
+ * after it (D-49, amended). The slowest of the history is the line: the same code measured 58, 72 and 124 ms on
+ * one kind of runner, so the spread is the envelope and a regression is a jump out of it. While there are fewer
+ * than `STEADY_FROM` runs to see a spread in, the factor is wider.
  */
 export const HISTORY_LENGTH = 5;
 const STEADY_FROM = 3;
 const STEADY_FACTOR = REGRESSION_FACTOR;
 const UNSTEADY_FACTOR = 2;
 
-const middle = (values: readonly number[]): number => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const at = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? (sorted[at] ?? Number.NaN)
-    : ((sorted[at - 1] ?? Number.NaN) + (sorted[at] ?? Number.NaN)) / 2;
-};
+const slowest = (values: readonly number[]): number => Math.max(...values);
 
 /** The kept file: `{ history: [...] }`, or what it was before — one run, flat — read as a history of one. */
 export const historyOf = (kept: unknown): readonly Measured[] => {
@@ -111,7 +106,7 @@ export const judge = (
   for (const { name } of MEASURES) {
     const value = now[name];
     const past = (history ?? []).flatMap((run) => (run[name] === undefined ? [] : [run[name]]));
-    const before = past.length === 0 ? undefined : middle(past);
+    const before = past.length === 0 ? undefined : slowest(past);
     const was = before === undefined ? '' : `, was ${before.toFixed(1)} ms`;
     if (value === undefined) {
       if (newest?.[name] === undefined) continue;

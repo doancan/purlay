@@ -8591,7 +8591,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'browser-budget-judges-against-the-last-run',
     why: 'one lucky run of main becomes the line, and every change after it fails the budget on a runner that merely had a slower minute',
     file: 'apps/api/src/cli/budget-browser.ts',
-    find: 'const before = past.length === 0 ? undefined : middle(past);',
+    find: 'const before = past.length === 0 ? undefined : slowest(past);',
     replace: 'const before = past.length === 0 ? undefined : past.at(-1);',
     tests: ['apps/api/src/cli/budget-browser.test.ts'],
   },
@@ -8605,7 +8605,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'browser-budget-history-grows-without-end',
-    why: 'the kept file grows by a run on every push to main, and the middle of an ever longer past stops following the runner',
+    why: 'the kept file grows by a run on every push to main, and the slowest of an ever longer past stops following the runner',
     file: 'apps/api/src/cli/budget-browser.ts',
     find: '.slice(-HISTORY_LENGTH);',
     replace: ';',
