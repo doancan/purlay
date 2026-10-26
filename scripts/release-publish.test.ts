@@ -329,12 +329,9 @@ describe('the contract bundle attached to a release (D-192)', () => {
     expect(create).toContain(TARBALL);
     expect(create).toContain(DIGEST);
     const listing = Bun.spawnSync(['tar', '-tzf', join(place.assets, TARBALL)]).stdout.toString();
-    expect(listing.split('\n').filter((line) => line !== '')).toEqual(
-      expect.arrayContaining([
-        'purlay-contract-v0.1.0/MANIFEST.json',
-        'purlay-contract-v0.1.0/README.md',
-      ]),
-    );
+    const entries = listing.split('\n').filter((line) => line !== '');
+    expect(entries).toContain('purlay-contract-v0.1.0/MANIFEST.json');
+    expect(entries).toContain('purlay-contract-v0.1.0/README.md');
   });
 
   test('has a digest file that verifies the tarball as `sha256sum -c` would read it', () => {
@@ -367,8 +364,8 @@ describe('the contract bundle attached to a release (D-192)', () => {
 
   test('is asked of the repository at this version: the one script a checkout has', () => {
     const outcome = publish(sandbox());
-    expect(outcome.calls.filter((call) => call.startsWith('bun '))).toEqual([
-      expect.stringMatching(/^bun run contract:bundle --out .+\/purlay-contract-v0\.1\.0$/),
-    ]);
+    const asked = outcome.calls.filter((call) => call.startsWith('bun '));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatch(/^bun run contract:bundle --out .+\/purlay-contract-v0\.1\.0$/);
   });
 });
