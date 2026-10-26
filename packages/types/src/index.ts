@@ -16,6 +16,7 @@ export * from './models';
 export * from './events';
 export * from './realtime';
 export * from './api';
+export * from './endpoints';
 export * from './message-id';
 export * from './sign-in';
 export * from './export';

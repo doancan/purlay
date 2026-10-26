@@ -407,6 +407,10 @@ export type CreateDirectMessageRequest = Static<typeof CreateDirectMessageReques
 export const WorkspaceMemberList = Type.Array(WorkspaceMember);
 export type WorkspaceMemberList = Static<typeof WorkspaceMemberList>;
 
+/** `GET /api/workspaces`: the caller's memberships, a workspace and the role in it each. */
+export const MembershipList = Type.Array(Membership);
+export type MembershipList = Static<typeof MembershipList>;
+
 /**
  * Why a person is told about a message (D-99 §1, D-29): named in it, sent it directly, answered in a
  * thread they are part of, or their question was resolved. The database's `notification_type`.
