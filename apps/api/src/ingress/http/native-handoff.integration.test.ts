@@ -306,6 +306,10 @@ describe('integration: POST /api/native/token', () => {
     ['a device with no name', { device: {} }],
     ['an empty device name', { device: { name: '' } }],
     ['a device name of 65 characters', { device: { name: 'x'.repeat(65) } }],
+    [
+      'a device name of spaces only, which the pattern lets by and the route does not',
+      { device: { name: '   ' } },
+    ],
     ['a device name with a newline', { device: { name: 'Mac\nSet-Cookie: x=1' } }],
     ['a device name with a control character', { device: { name: 'Mac\u0007' } }],
     ['a device name with a line separator', { device: { name: 'Mac ' } }],
