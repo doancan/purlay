@@ -182,7 +182,7 @@ const convert = (value: unknown, nameOf: Map<TSchema, string>, root: TSchema | n
   return value as Json;
 };
 
-export interface EndpointJson {
+interface EndpointJson {
   readonly id: string;
   readonly method: string;
   readonly path: string;
