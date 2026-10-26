@@ -189,38 +189,48 @@ describe('integration: signing in with a password (D-179 §4)', () => {
     });
   });
 
-  test('...and take the same time: the hash is done for an unknown address too', async () => {
-    const server = aServer();
-    const admin = await aPasswordAccount();
-    const SAMPLES = 60;
-    const known: number[] = [];
-    const unknown: number[] = [];
-    const time = async (email: string): Promise<number> => {
-      const started = performance.now();
-      const answered = await signIn(server, email, 'some password 123', aClient());
-      const took = performance.now() - started;
-      expect(answered.status).toBe(401);
-      return took;
-    };
-    // Warmed, then interleaved, so a drift of the machine falls on both alike.
-    await time(admin.email);
-    await time('warm@example.com');
-    for (let n = 0; n < SAMPLES; n += 1) {
-      known.push(await time(admin.email));
-      unknown.push(await time(`nobody-${String(n)}@example.com`));
-    }
-    const median = (values: number[]): number => {
-      const sorted = [...values].sort((a, b) => a - b);
-      return sorted[Math.floor(sorted.length / 2)] ?? 0;
-    };
-    const ratio = median(unknown) / median(known);
-    console.info(
-      `password sign-in timing, ${String(SAMPLES)} samples each: known-wrong median ${median(known).toFixed(2)} ms, unknown median ${median(unknown).toFixed(2)} ms, ratio ${ratio.toFixed(3)}`,
-    );
-    // Without the hash an unknown address answers in a small fraction of a known one's time.
-    expect(ratio).toBeGreaterThan(0.75);
-    expect(ratio).toBeLessThan(1.33);
-  });
+  // Every sample is a real password hash, 35 ms on a laptop and more on a CI runner: 122 of them took 4.3 s
+  // here, against the 5 s a test is given unless it says otherwise, so on the runner it timed out, and its
+  // loop went on writing to `rate_limits` under the test after it. The budget is the work, at up to
+  // eight times the laptop's hash.
+  const SAMPLES = 60;
+  const TIMING_BUDGET_MS = (SAMPLES * 2 + 2) * 280;
+
+  test(
+    '...and take the same time: the hash is done for an unknown address too',
+    async () => {
+      const server = aServer();
+      const admin = await aPasswordAccount();
+      const known: number[] = [];
+      const unknown: number[] = [];
+      const time = async (email: string): Promise<number> => {
+        const started = performance.now();
+        const answered = await signIn(server, email, 'some password 123', aClient());
+        const took = performance.now() - started;
+        expect(answered.status).toBe(401);
+        return took;
+      };
+      // Warmed, then interleaved, so a drift of the machine falls on both alike.
+      await time(admin.email);
+      await time('warm@example.com');
+      for (let n = 0; n < SAMPLES; n += 1) {
+        known.push(await time(admin.email));
+        unknown.push(await time(`nobody-${String(n)}@example.com`));
+      }
+      const median = (values: number[]): number => {
+        const sorted = [...values].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)] ?? 0;
+      };
+      const ratio = median(unknown) / median(known);
+      console.info(
+        `password sign-in timing, ${String(SAMPLES)} samples each: known-wrong median ${median(known).toFixed(2)} ms, unknown median ${median(unknown).toFixed(2)} ms, ratio ${ratio.toFixed(3)}`,
+      );
+      // Without the hash an unknown address answers in a small fraction of a known one's time.
+      expect(ratio).toBeGreaterThan(0.75);
+      expect(ratio).toBeLessThan(1.33);
+    },
+    TIMING_BUDGET_MS,
+  );
 
   test('a password over the limit is refused before it is hashed or counted', async () => {
     const server = aServer();

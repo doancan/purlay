@@ -141,7 +141,12 @@ describe('integration: trying a relay (D-179 §4.4)', () => {
     const relay = await relayFor({ silent: true });
     const started = performance.now();
     const result = failure(await trySmtp(urlOf(relay.port), { timeoutMs: 300 }));
-    expect(result).toEqual({ reason: 'unreachable', raw: 'no answer within 0.3 s' });
+    // A phase is bounded by the whole try's bound when that is shorter (the test below), so here the
+    // transport's greeting bound and the probe's own deadline are the same 300 ms and race: either speaks
+    // first, about one run in three. Both are the answer — nothing came — so the test holds the reason, the
+    // two words the operator may read, and that it did not hang.
+    expect(result.reason).toBe('unreachable');
+    expect(result.raw).toMatch(/^(no answer within 0\.3 s|ETIMEDOUT: Greeting never received)$/);
     expect(performance.now() - started).toBeLessThan(2_000);
   });
 
