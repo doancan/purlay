@@ -58,6 +58,7 @@ interface Sandbox {
   readonly sha: string;
   readonly log: string;
   readonly body: string;
+  readonly assets: string;
 }
 
 const sandbox = (
@@ -89,6 +90,24 @@ const sandbox = (
   const bin = join(root, 'bin');
   mkdirSync(bin);
   const body = join(root, 'release-body.md');
+  const assets = join(root, 'assets');
+  mkdirSync(assets);
+  const bun = join(bin, 'bun');
+  writeFileSync(
+    bun,
+    `#!/usr/bin/env bash
+set -u
+echo "bun $*" >> "$STUB_LOG"
+[ "$1 $2" = "run contract:bundle" ] || exit 97
+[ "\${BUNDLE_EXIT:-0}" = "0" ] || { echo "the bundle could not be built" >&2; exit "\${BUNDLE_EXIT}"; }
+[ "$3" = "--out" ] || exit 98
+mkdir -p "$4"
+[ "\${BUNDLE_EMPTY:-0}" = "1" ] && exit 0
+echo '{"format":1}' > "$4/MANIFEST.json"
+echo 'readme' > "$4/README.md"
+`,
+  );
+  chmodSync(bun, 0o755);
   const gh = join(bin, 'gh');
   writeFileSync(
     gh,
@@ -106,6 +125,7 @@ case "$1 $2" in
   "release create")
     while [ $# -gt 0 ]; do
       if [ "$1" = "--notes-file" ]; then cp "$2" "${body}"; fi
+      case "$1" in *.tar.gz|*.sha256) [ -f "$1" ] && cp "$1" "${assets}/" ;; esac
       shift
     done
     exit "\${CREATE_EXIT:-0}" ;;
@@ -114,7 +134,7 @@ exit 97
 `,
   );
   chmodSync(gh, 0o755);
-  return { root, checkout, sha, log: join(root, 'stub.log'), body };
+  return { root, checkout, sha, log: join(root, 'stub.log'), body, assets };
 };
 
 interface Outcome {
@@ -294,5 +314,61 @@ describe('a release', () => {
     const outcome = publish(sandbox(), { CREATE_EXIT: '1' });
     expect(outcome.code).not.toBe(0);
     expect(outcome.stderr).toContain('GitHub did not create');
+  });
+});
+
+describe('the contract bundle attached to a release (D-192)', () => {
+  const TARBALL = 'purlay-contract-v0.1.0.tar.gz';
+  const DIGEST = 'purlay-contract-v0.1.0.tar.gz.sha256';
+
+  test('is built, packed under one directory named for the tag, and attached with its digest', () => {
+    const place = sandbox();
+    const outcome = publish(place);
+    expect(outcome.code).toBe(0);
+    const create = outcome.calls.find((call) => call.startsWith('gh release create')) ?? '';
+    expect(create).toContain(TARBALL);
+    expect(create).toContain(DIGEST);
+    const listing = Bun.spawnSync(['tar', '-tzf', join(place.assets, TARBALL)]).stdout.toString();
+    expect(listing.split('\n').filter((line) => line !== '')).toEqual(
+      expect.arrayContaining([
+        'purlay-contract-v0.1.0/MANIFEST.json',
+        'purlay-contract-v0.1.0/README.md',
+      ]),
+    );
+  });
+
+  test('has a digest file that verifies the tarball as `sha256sum -c` would read it', () => {
+    const place = sandbox();
+    publish(place);
+    const line = readFileSync(join(place.assets, DIGEST), 'utf8');
+    expect(line).toMatch(/^[0-9a-f]{64} {2}purlay-contract-v0\.1\.0\.tar\.gz\n$/);
+    const check = Bun.spawnSync(['shasum', '-a', '256', '-c', DIGEST], { cwd: place.assets });
+    expect(check.exitCode).toBe(0);
+  });
+
+  test('is built before the release exists: a bundle that cannot be built leaves no release behind', () => {
+    const outcome = publish(sandbox(), { BUNDLE_EXIT: '1' });
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain('could not build the contract bundle');
+    expect(created(outcome)).toBe(false);
+  });
+
+  test('is never an empty one: a build that wrote nothing is refused', () => {
+    const outcome = publish(sandbox(), { BUNDLE_EMPTY: '1' });
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain('wrote no files');
+    expect(created(outcome)).toBe(false);
+  });
+
+  test('is built once the release is known to be needed, and not for one that exists', () => {
+    const outcome = publish(sandbox(), { RELEASE_VIEW: 'exists' });
+    expect(outcome.calls.some((call) => call.startsWith('bun '))).toBe(false);
+  });
+
+  test('is asked of the repository at this version: the one script a checkout has', () => {
+    const outcome = publish(sandbox());
+    expect(outcome.calls.filter((call) => call.startsWith('bun '))).toEqual([
+      expect.stringMatching(/^bun run contract:bundle --out .+\/purlay-contract-v0\.1\.0$/),
+    ]);
   });
 });

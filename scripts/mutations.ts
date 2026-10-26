@@ -9094,4 +9094,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'else if (false) problems.push',
     tests: ['apps/api/src/cli/contract-bundle.test.ts'],
   },
+  {
+    id: 'release-ignores-a-bundle-that-failed',
+    why: 'a bundle that cannot be built no longer stops the release: a release goes out without what a client is generated from',
+    file: 'scripts/release-publish.sh',
+    find: ' || fail "could not build the contract bundle for $TAG"',
+    replace: ' || true',
+    tests: ['scripts/release-publish.test.ts'],
+  },
+  {
+    id: 'release-attaches-an-empty-bundle',
+    why: 'a build that wrote nothing is packed and published as the contract',
+    file: 'scripts/release-publish.sh',
+    find: '[ -n "$(ls -A "$WORK/$BUNDLE" 2>/dev/null)" ] || fail "the contract bundle build wrote no files"\n',
+    replace: '',
+    tests: ['scripts/release-publish.test.ts'],
+  },
+  {
+    id: 'release-attaches-no-digest',
+    why: 'the bundle is published without the digest a client pins it by',
+    file: 'scripts/release-publish.sh',
+    find: ' "$WORK/$BUNDLE.tar.gz.sha256" \\\n  --target',
+    replace: ' \\\n  --target',
+    tests: ['scripts/release-publish.test.ts'],
+  },
 ];
