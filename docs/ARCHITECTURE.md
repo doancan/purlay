@@ -886,6 +886,17 @@ it happened exits 1 too. The API and the scheduler both (`installCrashHandlers` 
 #634). Nothing is left running half-alive. The scheduler and each job process are tracked
 the same way, through the same `errorTrackingFor` (#635).
 
+**Deploying is a script now** (D-185): on the team's server, a merge to `main` does steps 1 and 2 below by
+itself, builds the new image and tries it before the switch, and checks in the end that the API and the scheduler
+run the commit that was built (`scripts/deploy.sh`, started by the `deploy` workflow on the server's runner). When
+that is not so, it goes back by steps 5 and 6. By hand, on any server with the same layout:
+`DEPLOY_ROOT=… scripts/deploy.sh <full commit hash>` from a checkout of that commit. The deployment directory
+holds `releases/<8 hex>/` (one per deploy, and the running one must be one of them), the `current` link to the
+running one, `backups/`, the env file (with its previous copy as `.prev`) and `deploys.log`, one line per deploy,
+rollback or refusal. A deploy that was cut off after it switched leaves `.switching`, and the next deploy refuses
+to start until someone has looked at the site and removed it. The steps below stay, because they are what the
+script does and what to do when it exits 2.
+
 **Upgrading and rolling back** (the one home of this runbook; `CONFIG.md` points here). Every step below
 was run, and the failure in the last-but-one paragraph was reproduced, not reasoned out.
 

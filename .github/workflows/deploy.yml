@@ -1,0 +1,98 @@
+# Deploy a merge to main to the server, and release it when the version says so (D-185).
+#
+# **It runs on the server's own runner, and never on a pull request.** A self-hosted runner executes
+# whatever the workflow tells it to, on a machine that holds the production database and its
+# secrets; a pull request's workflow is written by whoever opened it. So the only triggers are a
+# push to main (a commit that passed the required checks and was merged) and a person starting it by
+# hand. The server is outbound-only: the runner asks GitHub for work, nothing reaches in.
+#
+# - `deploy`: back up, build the image on the server, try it, switch, check what is running, and put
+#   everything back if it is not the commit (`scripts/deploy.sh`). One at a time, and a deploy that is
+#   running is never cancelled by the next push: the next one waits its turn.
+# - `release`: after a deploy that succeeded, tag and publish the version in package.json when it has
+#   no tag yet (`scripts/release-publish.sh`). `bun run release` opens the pull request that sets it.
+#
+# By hand (Actions -> deploy -> Run workflow, from main) it deploys the commit named, which is how a bad
+# deploy is undone: name the last good one. It must be on main, and it never publishes a release. Run from
+# any other branch it does nothing.
+#
+# The server's own settings are repository variables, not files here (D-73): DEPLOY_ROOT (required),
+# ENV_FILE and COMPOSE_OVERRIDES (optional; see scripts/deploy.sh).
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Full hash of a commit on main to deploy (empty: the tip of main)'
+        required: false
+        type: string
+
+# One deploy at a time, and the one in progress finishes: cancelling it halfway is how a migration is
+# left half done.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # A hand-started run lets the person pick the branch the workflow file is read from; only main's
+    # copy of it, and only main's tip or a commit on main, may run on the server.
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, purlay-server]
+    timeout-minutes: 30
+    steps:
+      # A hand-started deploy names a commit; only one that is on main may be deployed. Judged BEFORE
+      # anything is checked out, so a value that is not a commit on main fetches nothing. `behind` is
+      # "an ancestor of main", `identical` is main itself.
+      - name: the commit is on main
+        if: inputs.commit != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "give a full 40-digit commit hash" >&2; exit 1; }
+          status="$(gh api "repos/$REPOSITORY/compare/main...$COMMIT" --jq .status)"
+          case "$status" in
+            behind | identical) echo "$COMMIT is on main ($status)" ;;
+            *) echo "$COMMIT is not on main (compare says: $status)" >&2; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+          # Nothing here pushes; the token stays out of .git/config where later steps could read it.
+          persist-credentials: false
+
+      - name: deploy
+        env:
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          ENV_FILE: ${{ vars.ENV_FILE }}
+          COMPOSE_OVERRIDES: ${{ vars.COMPOSE_OVERRIDES }}
+        run: scripts/deploy.sh "$(git rev-parse HEAD)"
+
+  release:
+    # Only after a push that deployed: a hand-started deploy, a rollback among them, tags nothing.
+    needs: deploy
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, linux, x64, purlay-server]
+    timeout-minutes: 5
+    permissions:
+      # Create the tag and the GitHub Release.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: tag and publish the version, if it is a new one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: scripts/release-publish.sh "$(git rev-parse HEAD)"

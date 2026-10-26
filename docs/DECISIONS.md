@@ -8838,6 +8838,70 @@ Midnight from the device (no such setting exists).
 `theme-init.js`, a glyph, two strings, and the gallery's third frame. No contract, route or stored data
 beyond the device's `purlay.theme`.
 
+### D-185. `main` is the one branch, a merge deploys, and a release is a version someone chose
+
+**Decided (the owner, 2026-10-26), builds on D-73, D-86, D-92, D-94 and D-95.** How a change reaches the
+team's server, and what a release is, were a list of commands run by hand: build on the server (the Mac
+cannot, D-92), copy the source, change `PURLAY_IMAGE`, `up -d`, look. Now:
+
+- **One long-lived branch.** Work happens on `feat/`, `fix/`, `chore/`, `refactor/` and `docs/` branches and
+  reaches `main` by a pull request that passes the required checks. There is no `develop`.
+- **A merge deploys.** Every commit that lands on `main` is deployed to the server by the `deploy`
+  workflow, on a **self-hosted runner on that server**, which runs `scripts/deploy.sh`: build the image there
+  from the commit, smoke-test that image, back up, switch, and check that the API and the scheduler run *this
+  commit* (the image carries it as a label). The backup is taken after the build and the smoke test, so a
+  build that fails costs no backup and a rollback loses seconds, not the minutes a build takes. One deploy at
+  a time, and one in progress is never cancelled. The runner only asks GitHub for work; nothing reaches the
+  server from outside. A hand-started run only runs from `main`.
+- **A failure goes back the way `ARCHITECTURE.md` says, and no other.** Before the switch nothing has changed
+  and nothing is restored. After it, the migration may have run and an older image does not start on a
+  newer schema (D-86), so the way back is **the backup taken a minute earlier**: stop the API, restore the
+  database alone (`--no-bucket`, D-95), put the old image and release back, start. What was written since the
+  backup is what a rollback costs. A deploy told to stop (a cancelled job, a timeout) goes back the same way; one
+  that is killed outright leaves a marker, and the next deploy refuses to start until someone has looked. A
+  rollback that fails too exits 2 and names the backup.
+- **A release is a version, and merging a pull request makes it.** The root `package.json`'s `version` is its
+  one home. `bun run release -- minor` opens a pull request that sets it and moves what is under
+  *Unreleased* into `docs/changelog/v<x.y.z>.md`; when that merges, the deploy is followed by a tag and a
+  GitHub Release (`scripts/release-publish.sh`). A merge that leaves the version alone deploys and releases
+  nothing: numbers mark moments the owner chose, they are not a count of merges. A hand-started deploy of an
+  earlier commit on `main` is how a bad deploy is undone, and it tags nothing.
+- **The changelog is in one shape.** Keep a Changelog: **Added, Changed, Deprecated, Removed, Fixed, Security**,
+  one line per bullet, with a bold area and the decision in parentheses, so that a person scans a release in two
+  minutes instead of reading a transcript. `changes.md` says how to write an entry; `scripts/changelog.test.ts`
+  holds the files to it and `bun run release` refuses an Unreleased that is not. What was written before the
+  first release, in prose, is kept as it was (`docs/changelog/pre-0.1.0.md`).
+- **What the runner may run is held by a test.** The server holds the production database, so the workflow
+  that runs there starts only on a push to `main` or by hand, never on a pull request, and only the release
+  job may write (`scripts/deploy-workflow.test.ts`).
+
+**Considered and rejected.**
+
+- *A `develop` branch (GitFlow).* It answers a question this product does not ask — several versions
+  supported at once — and costs two merges and two CI runs per change, a branch that drifts from `main`, and a
+  third path for a fix. If a stop before production is wanted, an approval on the deploy is cheaper than a
+  branch.
+- *A version number per merge* (release-please, semantic-release). With one server and no outside users, it is
+  a number nobody chose, and it fights a changelog written by hand under *Unreleased*.
+- *Deploying only on a tag.* One environment and a team using it is the feedback this phase exists for (S-1);
+  waiting for a tag delays it for no safety the checks and the backup do not already give.
+- *GitHub's hosted runners for the deploy.* They cannot reach a server that accepts nothing from outside, and
+  the pipeline has been unavailable for billing more than once.
+- *Running the old image to go back.* It refuses the newer schema (D-86); this was reproduced, not reasoned.
+- *Publishing to GHCR as part of this.* `image.yml` and `scripts/release-image.sh` (D-92) stay as they are: that
+  is how a self-hoster gets an image, and nobody is waiting on it for the team's server.
+
+**Accepted.** A migration that passes the smoke test and the health check but is wrong in what it does is
+not caught; the backup is what is left. The site is unavailable for as long as a migration runs (about 18 s
+for a 15 s one, `ARCHITECTURE.md`), and every service is recreated when a file the stack mounts changes. A runner
+on the production host is the highest-value thing to protect in the pipeline. GitHub keeps one run waiting behind
+the one in progress, so merges that queue behind a deploy are deployed as the last of them (each commit contains
+the ones before it); a release whose merge was skipped this way is tagged at the commit that was deployed. Entries
+merged after a release pull request was opened conflict with it in `changes.md`: run `bun run release` again.
+
+**Cost of reversing.** One workflow, three scripts and their tests. Going back to deploying by hand is
+stopping the runner; the runbook in `ARCHITECTURE.md` is unchanged.
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

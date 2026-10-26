@@ -1,5 +1,6 @@
 {
   "name": "purlay",
+  "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -55,6 +56,7 @@
     "lint:fix": "eslint . --fix",
     "mutate": "bun run scripts/run-mutations.ts",
     "queue": "bun run scripts/queue.ts",
+    "release": "bun run scripts/release.ts",
     "schedule": "bun run apps/api/src/cli/schedule.ts",
     "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --path-ignore-patterns '**/*.integration.test.ts'",
     "test:all": "bun --no-env-file --env-file=.env.test run scripts/test-all.ts",

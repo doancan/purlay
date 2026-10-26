@@ -415,6 +415,44 @@ inside and outside the container, because Caddy listens on the port in its site 
 issued only if 80 and 443 can be reached from the internet, so moving them is for a host that already
 uses them, a deployment behind another proxy, or one with certificates of its own.
 
+**Behind a proxy of your own.** When something else ends TLS — a company proxy, Cloudflare in front of one —
+the stack's Caddy is switched off and the API is published on the private address instead, in a Compose file
+the server keeps beside its env file (`COMPOSE_OVERRIDES` in `scripts/deploy.sh` names it; it is a
+server's file, not this repository's, D-73):
+
+```yaml
+services:
+  proxy:
+    profiles: ['disabled']        # not started, and `docker compose up` leaves it alone
+  api:
+    ports:
+      - '10.0.0.119:3001:3001'    # the private address, never 0.0.0.0: this port speaks plain HTTP
+```
+
+The proxy sends HTTP to that port with `Host` and `X-Forwarded-Proto: https` as the browser sent them,
+**passes WebSocket upgrades** (without them the page loads but messages arrive only on a reload), and
+`APP_URL` stays the public `https://` origin. **`TRUST_PROXY` means exactly one proxy** (D-81): the API takes
+the *last* `X-Forwarded-For` entry as the client. With Cloudflare in front of a proxy of your own, that last
+entry is a Cloudflare address unless your proxy rewrites it, and every sign-in then shares one rate-limit
+bucket and `sessions.ip_address` records Cloudflare. So have the proxy say who Cloudflare saw, and trust
+`CF-Connecting-IP` only from Cloudflare's own ranges (cloudflare.com/ips) — otherwise anyone who reaches
+the proxy directly can write it. For nginx:
+
+```nginx
+# one `set_real_ip_from` line per range at cloudflare.com/ips-v4 and /ips-v6
+set_real_ip_from 173.245.48.0/20;
+real_ip_header   CF-Connecting-IP;
+proxy_set_header X-Forwarded-For   $remote_addr;   # replace it; never $proxy_add_x_forwarded_for
+proxy_set_header X-Forwarded-Proto https;
+proxy_set_header Host              $host;
+proxy_http_version 1.1;
+proxy_set_header Upgrade           $http_upgrade;
+proxy_set_header Connection        "upgrade";
+```
+
+Check it, do not trust it: sign in, then `SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1`
+must be your address, not Cloudflare's.
+
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
 (D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
 nightly, in UTC. When it starts it first runs, once, each job that has never succeeded (`jobs:first`), so a
