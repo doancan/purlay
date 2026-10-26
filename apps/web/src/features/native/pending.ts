@@ -69,8 +69,10 @@ export const captureNativeHandoff = (
   if (location.pathname !== PATH) return;
   const pair = fromSearch(location.search);
   if (pair === null) return;
+  // No storage to keep it in: it stays in the address, which is then the only place the screen can read it from.
+  if (ports.storage === null) return;
   try {
-    ports.storage?.setItem(
+    ports.storage.setItem(
       KEY,
       JSON.stringify({ challenge: pair.challenge, state: pair.state, at: ports.now() }),
     );
@@ -83,17 +85,19 @@ export const captureNativeHandoff = (
 
 /**
  * A pair that arrived another way — in a sign-in link's fragment, which opened in this tab — kept as one
- * the page was opened with would be. One that is not the shape is not kept.
+ * the page was opened with would be. One that is not the shape is not kept. Whether it was kept is answered.
  */
-export const keepNativeHandoff = (pair: NativeHandoff, ports: NativePorts): void => {
-  if (!shaped(pair)) return;
+export const keepNativeHandoff = (pair: NativeHandoff, ports: NativePorts): boolean => {
+  if (!shaped(pair) || ports.storage === null) return false;
   try {
-    ports.storage?.setItem(
+    ports.storage.setItem(
       KEY,
       JSON.stringify({ challenge: pair.challenge, state: pair.state, at: ports.now() }),
     );
+    return true;
   } catch {
-    // Unkept: the person starts again from the application, which asks again.
+    // Unkept: the caller says so to the person, or carries the pair in the address instead.
+    return false;
   }
 };
 
@@ -121,7 +125,8 @@ export const pendingNativeHandoff = (
   } catch {
     return fromSearch(location.search);
   }
-  if (kept === null) return null;
+  // Nothing kept: a write may have been refused where a read was not, which left the pair in the address.
+  if (kept === null) return fromSearch(location.search);
   let held: unknown;
   try {
     held = JSON.parse(kept);

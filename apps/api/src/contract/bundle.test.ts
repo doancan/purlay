@@ -94,6 +94,38 @@ describe('the contract', () => {
     expect(problems).toEqual(['Odd: allOf']);
   });
 
+  test.each([
+    ['a property', { type: 'object', properties: { a: { type: 'string', allOf: [] } } }],
+    ['an item', { type: 'array', items: { type: 'string', not: {} } }],
+    ['a union member', { anyOf: [{ type: 'string' }, { type: 'string', oneOf: [] }] }],
+    [
+      'an open object’s values',
+      { type: 'object', additionalProperties: { type: 'string', $defs: {} } },
+    ],
+    [
+      'a pattern property',
+      { type: 'object', patternProperties: { '^x': { type: 'string', not: {} } } },
+    ],
+  ])('sees a keyword outside the vocabulary under %s', (_where, schema) => {
+    expect(
+      vocabularyProblems({ ...contract, schemas: { Odd: schema }, endpoints: [] }),
+    ).toHaveLength(1);
+  });
+
+  test('sees one in an endpoint’s query, body and responses, named by the endpoint', () => {
+    const odd = { type: 'string', allOf: [] } as never;
+    const problems = vocabularyProblems({
+      ...contract,
+      schemas: {},
+      endpoints: [
+        { id: 'q', method: 'GET', path: '/q', auth: 'none', query: odd, responses: {} },
+        { id: 'b', method: 'POST', path: '/b', auth: 'none', body: odd, responses: {} },
+        { id: 'r', method: 'GET', path: '/r', auth: 'none', responses: { '200': odd } },
+      ],
+    });
+    expect(problems.sort()).toEqual(['b: allOf', 'q: allOf', 'r: allOf']);
+  });
+
   test('leaks nothing a client cannot read: no symbol, no function, no undefined', () => {
     const text = JSON.stringify(contract);
     expect(JSON.parse(text)).toEqual(contract);
@@ -286,6 +318,11 @@ describe('the assembled bundle', () => {
     };
     expect(pairs.pairs.length).toBeGreaterThan(20);
     expect(pairs.pairs.every((pair) => pair.minimum === 3 || pair.minimum === 4.5)).toBe(true);
+  });
+
+  test('is never assembled from a contract the generator is not taught: it throws, naming the keyword', () => {
+    const odd = { ...contract, schemas: { Odd: { type: 'string', allOf: [] } as never } };
+    expect(() => assembleBundle('.', odd)).toThrow('Odd: allOf');
   });
 
   test('is the same when assembled again: two builds of one commit are one bundle', () => {

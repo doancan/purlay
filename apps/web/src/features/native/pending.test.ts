@@ -17,27 +17,30 @@ const STATE = 'b'.repeat(22);
 const NOW = 1_800_000_000_000;
 
 const ports = (
-  options: { refuses?: boolean; now?: number } = {},
+  options: { refuses?: boolean; now?: number; noStorage?: boolean } = {},
 ): NativePorts & { kept: Map<string, string>; urls: string[] } => {
   const kept = new Map<string, string>();
   const urls: string[] = [];
   return {
     kept,
     urls,
-    storage: {
-      getItem: (key): string | null => {
-        if (options.refuses === true) throw new Error('blocked');
-        return kept.get(key) ?? null;
-      },
-      setItem: (key, value): void => {
-        if (options.refuses === true) throw new Error('blocked');
-        kept.set(key, value);
-      },
-      removeItem: (key): void => {
-        if (options.refuses === true) throw new Error('blocked');
-        kept.delete(key);
-      },
-    },
+    storage:
+      options.noStorage === true
+        ? null
+        : {
+            getItem: (key): string | null => {
+              if (options.refuses === true) throw new Error('blocked');
+              return kept.get(key) ?? null;
+            },
+            setItem: (key, value): void => {
+              if (options.refuses === true) throw new Error('blocked');
+              kept.set(key, value);
+            },
+            removeItem: (key): void => {
+              if (options.refuses === true) throw new Error('blocked');
+              kept.delete(key);
+            },
+          },
     replace: (url): void => {
       urls.push(url);
     },
@@ -139,6 +142,24 @@ describe('the native application’s challenge and state, as the page is opened 
     });
   });
 
+  test('a tab with no storage at all leaves them in the address, where the screen still finds them', () => {
+    const p = ports({ noStorage: true });
+    captureNativeHandoff(at(`?challenge=${CHALLENGE}&state=${STATE}`), p);
+    expect(p.urls).toEqual([]);
+    expect(pendingNativeHandoff(p, { search: `?challenge=${CHALLENGE}&state=${STATE}` })).toEqual({
+      challenge: CHALLENGE,
+      state: STATE,
+    });
+  });
+
+  test('a tab that holds nothing still finds them in the address, when a write was refused and a read was not', () => {
+    const p = ports();
+    expect(pendingNativeHandoff(p, { search: `?challenge=${CHALLENGE}&state=${STATE}` })).toEqual({
+      challenge: CHALLENGE,
+      state: STATE,
+    });
+  });
+
   test('a tab that cannot be read, and an address with nothing, hold nothing', () => {
     expect(pendingNativeHandoff(ports({ refuses: true }), { search: '' })).toBeNull();
   });
@@ -156,6 +177,17 @@ describe('a pair that arrived another way — in a sign-in link’s fragment (D-
     keepNativeHandoff({ challenge: 'x', state: STATE }, p);
     keepNativeHandoff({ challenge: CHALLENGE, state: 'a&b' }, p);
     expect(p.kept.size).toBe(0);
+  });
+
+  test('says whether it was kept: yes for a tab that holds it, no for one that cannot, and no for what is not the shape', () => {
+    expect(keepNativeHandoff({ challenge: CHALLENGE, state: STATE }, ports())).toBe(true);
+    expect(
+      keepNativeHandoff({ challenge: CHALLENGE, state: STATE }, ports({ refuses: true })),
+    ).toBe(false);
+    expect(
+      keepNativeHandoff({ challenge: CHALLENGE, state: STATE }, ports({ noStorage: true })),
+    ).toBe(false);
+    expect(keepNativeHandoff({ challenge: 'x', state: STATE }, ports())).toBe(false);
   });
 
   test('is not kept by a tab that refuses, and says nothing', () => {

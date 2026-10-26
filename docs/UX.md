@@ -953,7 +953,7 @@ question. Only the button asks the server for a code; the answer is `purlay://�
 and the card says *Back to Purlay for Mac — you can close this tab once the app has opened*, with **Open Purlay
 for Mac again**, which opens the same code and makes no other. A page with no question — never asked, or ten
 minutes old — says *This sign-in has expired* and offers *Go to Purlay*. The emailed link may open in another
-browser, in which case the pair rides in the link's fragment after the token (`#<token>~<challenge>~<state>`)
+browser, in which case the pair rides in the link's fragment after the token (`#<token>[.<invitation>]~<challenge>~<state>`)
 and the sign-in keeps it for that tab.
 
 ---

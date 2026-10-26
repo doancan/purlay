@@ -41,6 +41,7 @@ describe('the client header', () => {
     ['a newline', 'macos/1.0.0 contract/1\nx'],
     ['a version that is not semantic', 'macos/one contract/1'],
     ['a version of two parts', 'macos/1.0 contract/1'],
+    ['build metadata, which is no part of the shape', 'macos/1.0.0+212 contract/1'],
     ['a version past thirty-two characters', `macos/1.0.0-${'a'.repeat(40)} contract/1`],
   ])('%s is no client', (_name, value) => {
     expect(parseClientHeader(value)).toBeNull();
@@ -60,6 +61,16 @@ describe('comparing versions', () => {
     ['1.0.0-rc.2', '1.0.0-rc.10', -1],
     ['1.0.0-alpha', '1.0.0-beta', -1],
     ['1.0.0-1', '1.0.0-alpha', -1],
+    ['1.0.0-alpha', '1.0.0-1', 1],
+    // A hyphen inside a pre-release belongs to it: only the first one separates it from the core.
+    ['1.0.0-rc-1', '1.0.0-rc-2', -1],
+    ['1.0.0-rc-2', '1.0.0-rc-1', 1],
+    ['1.0.0-rc-1', '1.0.0-rc-1', 0],
+    // The shorter list of identifiers is the earlier, when all it has are shared.
+    ['1.0.0-rc', '1.0.0-rc.1', -1],
+    ['1.0.0-rc.1', '1.0.0-rc', 1],
+    ['1.2.0', '1.1.9', 1],
+    ['1.1.9', '1.2.0', -1],
   ] as const)('%s against %s is %d', (a, b, expected) => {
     expect(Math.sign(compareVersions(a, b))).toBe(expected);
   });

@@ -179,7 +179,15 @@ export const EmailSignInScreen = (): React.JSX.Element => {
       if (link.invitation !== null) keepInvitation(link.invitation, ports);
       // The link was asked for by the native application, and may have opened in another browser than the one
       // the application's session is waiting in: what it carried is this tab's now, and home goes on to the consent.
-      if (link.native !== null) keepNativeHandoff(link.native, browserNativePorts());
+      // A tab that cannot keep it carries it in the address to the consent instead, where it is read from.
+      if (link.native !== null && !keepNativeHandoff(link.native, browserNativePorts())) {
+        const query = new URLSearchParams({
+          challenge: link.native.challenge,
+          state: link.native.state,
+        });
+        navigate(`${href('signInNative')}?${query.toString()}`, { replace: true });
+        return;
+      }
       navigate(href('home'), { replace: true });
     } catch (failure) {
       setSigningIn(false);

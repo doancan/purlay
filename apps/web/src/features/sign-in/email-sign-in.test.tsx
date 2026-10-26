@@ -325,6 +325,30 @@ describe('a sign-in link, opened', () => {
     expect(here(view)).toBe('/sign-in/native');
   });
 
+  test('a link that carried the pair, opened in a tab that cannot keep it, goes to the consent with it in the address', async () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+    // A tab with site data blocked: reading `sessionStorage` itself throws.
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get: (): Storage => {
+        throw new Error('blocked');
+      },
+    });
+    try {
+      const view = await open(`#${TOKEN}~${CHALLENGE}~${STATE}`, {
+        previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
+        consumeEmailSignIn: () => Promise.resolve(),
+      });
+      act(() => {
+        fireEvent.click(view.getByRole('button', { name: 'Sign in' }));
+      });
+      await settle();
+      expect(here(view)).toBe(`/sign-in/native?challenge=${PAIR.challenge}&state=${PAIR.state}`);
+    } finally {
+      if (original !== undefined) Object.defineProperty(window, 'sessionStorage', original);
+    }
+  });
+
   test('a link with no pair leaves whatever this tab held alone', async () => {
     window.sessionStorage.setItem(NATIVE_KEY, 'held');
     const view = await open(`#${TOKEN}`, {
