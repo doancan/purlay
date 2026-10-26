@@ -8611,4 +8611,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: ';',
     tests: ['apps/api/src/cli/budget-browser.test.ts'],
   },
+  {
+    id: 'callback-with-one-state-runs-alongside',
+    why: 'a callback used twice at once lets both reach GitHub with one code, and the person who was signed in is told GitHub is unavailable',
+    file: 'apps/api/src/ingress/http/auth.ts',
+    find: 'const before = answering.get(state) ?? Promise.resolve();',
+    replace: 'const before = Promise.resolve();',
+    tests: ['apps/api/src/ingress/http/auth-callback-queue.test.ts'],
+  },
 ];

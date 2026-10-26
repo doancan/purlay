@@ -338,6 +338,34 @@ const libraryOrNotFound = (answered: Response): Response => {
   return answered;
 };
 
+/** The callbacks being answered, by the state each carries, and the end of the line of each. */
+const answering = new Map<string, Promise<unknown>>();
+
+/**
+ * One callback at a time for one state. The library reads a state and spends it in two steps, so two
+ * callbacks arriving together (a double click, a browser that retries) can both read it before either
+ * spends it, and then both go to GitHub with one code: the second is refused as a spent code and the
+ * person is told GitHub is unavailable, when the first has just signed them in. Queued, the second reads
+ * a state that is gone and is told its try is over (D-62, D-121 §3). This server is one process, so
+ * the queue is a map; a callback with no state has nothing to wait for. An entry is removed once nothing
+ * is queued behind it, so the map holds only what is in flight.
+ */
+export const oneAtATime = async <T>(state: string | null, work: () => Promise<T>): Promise<T> => {
+  if (state === null || state === '') return await work();
+  const before = answering.get(state) ?? Promise.resolve();
+  const mine = before.then(work, work);
+  const line = mine.then(
+    () => undefined,
+    () => undefined,
+  );
+  answering.set(state, line);
+  try {
+    return await mine;
+  } finally {
+    if (answering.get(state) === line) answering.delete(state);
+  }
+};
+
 /**
  * Everything under `AUTH_BASE_PATH` that no route of ours answers: the library's own routes, served
  * by its handler (D-179). Its callback for GitHub is the one exception to the library's own
@@ -379,7 +407,11 @@ export const answerAuth = async (
     });
     return asResponse(sentBack(dependencies.config, 'failed'));
   }
-  return callbackAnswer(dependencies, request, await dependencies.auth.answer(request));
+  return callbackAnswer(
+    dependencies,
+    request,
+    await oneAtATime(url.searchParams.get('state'), () => dependencies.auth.answer(request)),
+  );
 };
 
 /** `GET /api/me/sign-in` — the ways the caller signs in, their own only (D-176). */
