@@ -679,6 +679,7 @@ missing specified behaviour and does not merge.
 | Invite people (dialog) | n/a — always the link, and the address field where the server sends mail | The send and the link buttons busy while they ask; the field is held | *Could not send the invitations* / *Could not make a link* above the link, the addresses kept; each address refused named with its reason (not an address, a daily limit, no mail on this server), the rest *asked of the mail server*, never *sent*; the link shown whatever happened |
 | Administration → Server (Settings → Server) | Each way in not connected says what that stops and offers to connect it; the two policies always have a value | Skeleton cards | A failed try as in the wizard, nothing kept and what was typed still there; the settings that could not be read, with Retry; a secret the key could not open, on its card; a setup still open, said in a sentence; anybody who is not the administrator is *not found* |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
+| Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191) |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
 | How you sign in (Sessions & account) | n/a — always an address, and whether a link to it signs in; the GitHub row is there only when GitHub is linked, and is not offered otherwise | Skeleton in the card | Retry in the card (D-176, D-179) |
@@ -939,3 +940,44 @@ under it *Invite your team and the conversation can start. They sign in with an 
 with **Invite people** — the dialog of §2, where mail is connected adding an address field above **Make a
 link** and the link beside **Copy**. A send that is refused or fails says so, in words (§2, *By email*), and leaves the
 link to copy; nothing says *sent* or *delivered* that was not.
+
+**The native application's consent** is `/sign-in/native?challenge=…&state=…` (D-191). The application opens it
+in the system browser, and the page asks — it never decides. The two values leave the address as the page
+reads them and wait in the tab for ten minutes (`sessionStorage`), through GitHub's round trip, a password
+sign-in or an emailed link, as an invitation's token does (D-115); a tab whose storage cannot be reached keeps
+them in the address. Somebody not signed in is sent to sign-in, which says *Sign in to continue to Purlay for
+Mac*, and the front door brings them back here (an invitation in hand comes first). Signed in, the card is
+*Open Purlay for Mac?* — naming the person, their address and this server — with **Open Purlay for Mac** (focused),
+**Cancel**, and *Sign out of this browser and use another account*, which signs this browser out and keeps the
+question. Only the button asks the server for a code; the answer is `purlay://…`, opened by a full navigation,
+and the card says *Back to Purlay for Mac — you can close this tab once the app has opened*, with **Open Purlay
+for Mac again**, which opens the same code and makes no other. A page with no question — never asked, or ten
+minutes old — says *This sign-in has expired* and offers *Go to Purlay*. The emailed link may open in another
+browser, in which case the pair rides in the link's fragment after the token (`#<token>~<challenge>~<state>`)
+and the sign-in keeps it for that tab.
+
+---
+
+## 12. The native client
+
+The macOS application (D-186) implements this document's behaviour — the feed's rules (§6), the thread
+panel (§4), the composer (§5), the keyboard model (§7), the required states (§8) — and **departs only where
+the platform's own convention is better, each departure written here in the change that makes it**, so the
+web is not the only place behaviour is specified. What is decided so far:
+
+- **Layout.** The system split view in place of the rail: one sidebar holding the rail's destinations (inbox,
+  open questions, saved, search) above the channels; the content column; and **one inspector** for the thread,
+  files, pins and incident panels, one at a time as §2 says. The members list is a popover from the channel's
+  header. Window minimum 720 × 480 points.
+- **Look.** The system's controls, toolbar, sidebar and sheets, in the system's current design language, with
+  the message feed, code blocks and cards drawn in this product's tokens (D-97). Light and dark follow the
+  system; there is no theme picker, and no Midnight (D-184).
+- **Keys.** Every row of §7 is bound: to a menu command where the platform has one, otherwise in the focused
+  list. A bare letter (`R`, `T`, `E`) is never a menu equivalent, so typing in the composer cannot trigger it.
+- **Notifications.** What interrupts is what the badge counts (D-148), as a local notice while the
+  application is running and not in front, never in Deep Work, never for what was waiting when it opened;
+  the Dock badge carries the same count. The application does not receive Web Push, so it is silent when
+  quit (`PRD.md` §4).
+- **What stays in the browser.** Setting a server up, workspace administration, the audit log, retention,
+  exports and the GitHub feeds: the application opens the right page.
+- **Signing in** is §11's consent: the application has no sign-in form of its own.

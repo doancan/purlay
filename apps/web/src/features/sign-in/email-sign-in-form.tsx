@@ -24,6 +24,7 @@ import { Button } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { TextField } from '../../ui/text-field';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
+import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
 
 interface Failure {
   readonly field: 'email' | 'form';
@@ -136,6 +137,9 @@ export const EmailSignInForm = ({
     setBusy('link');
     setFailure(null);
     const invitation = pendingInvitation(browserInvitationPorts(), window.location);
+    // The native application's question, if this tab holds one: the mail may open in another browser, so
+    // the pair rides in the link, as an invitation does (D-191).
+    const native = pendingNativeHandoff(browserNativePorts(), window.location);
     try {
       if (beforeLink !== undefined && !(await beforeLink(address))) {
         setBusy(null);
@@ -145,6 +149,7 @@ export const EmailSignInForm = ({
         email: address,
         locale,
         ...(invitation === null ? {} : { invitation }),
+        ...(native === null ? {} : { native }),
       });
       setSentTo(address);
       setSwitched(true);

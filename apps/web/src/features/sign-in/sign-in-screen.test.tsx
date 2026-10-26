@@ -11,6 +11,7 @@ import { ApiError } from '../../data/errors';
 import { installDom } from '../../testing/dom';
 import { anApi } from '../../testing/fake-api';
 import { renderApp } from '../../testing/render';
+import { systemClock } from '../../system-clock';
 import type { Locale } from '../../i18n/types';
 
 installDom();
@@ -273,5 +274,53 @@ describe('what the screen offers is what the server has connected', () => {
     expect(view.queryByRole('link', { name: GITHUB })).not.toBeNull();
     expect(view.queryByText(/could not check which sign‑in options/)).toBeNull();
     view.unmount();
+  });
+});
+
+describe('signing in for the native application (D-191)', () => {
+  const hold = (age = 0): void => {
+    window.sessionStorage.setItem(
+      'purlay.native',
+      JSON.stringify({
+        challenge: 'a'.repeat(43),
+        state: 'b'.repeat(22),
+        at: systemClock.now().getTime() - age,
+      }),
+    );
+  };
+  const visit = async (locale: Locale): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+    const view = await renderApp(<Outlet />, { path: '/sign-in', api: signedOut(false), locale });
+    await settle();
+    return view;
+  };
+
+  test('says what the person is signing in for, so the page is not a stranger’s', async () => {
+    hold();
+    try {
+      const view = await visit('en');
+      expect(view.getByText('Sign in to continue to Purlay for Mac.')).toBeDefined();
+    } finally {
+      window.sessionStorage.clear();
+    }
+  });
+
+  test('says it in Turkish for a person who reads that', async () => {
+    hold();
+    try {
+      const view = await visit('tr');
+      expect(view.getByText('Purlay for Mac’e devam etmek için giriş yap.')).toBeDefined();
+    } finally {
+      window.sessionStorage.clear();
+    }
+  });
+
+  test('says nothing of the kind where the tab holds no question, or one gone stale', async () => {
+    expect((await visit('en')).queryByText(/Purlay for Mac/)).toBeNull();
+    hold(11 * 60_000);
+    try {
+      expect((await visit('en')).queryByText(/Purlay for Mac/)).toBeNull();
+    } finally {
+      window.sessionStorage.clear();
+    }
   });
 });

@@ -10,6 +10,7 @@
  * forgotten as on sign-out. Each card that replaces another puts focus on its button (`UX.md` §7).
  */
 import { useQuery } from '@tanstack/react-query';
+import { NATIVE_CHALLENGE_PATTERN, NATIVE_STATE_PATTERN } from '@purlay/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { useApi } from '../../data/api-provider';
@@ -25,16 +26,33 @@ import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { LogoMark, Notice } from '../shell/notice';
 import { browserInvitationPorts, keepInvitation } from '../invitations/pending';
+import { browserNativePorts, keepNativeHandoff, type NativeHandoff } from '../native/pending';
 
-const FRAGMENT = /^#([0-9a-f]{64})(?:\.([0-9a-f]{64}))?$/;
+// `<token>`, then `.<invitation>` if one rode along, then `~<challenge>~<state>` if the native application
+// asked (D-191). The pair is written by the server with the contract's patterns and read with the same.
+const FRAGMENT = new RegExp(
+  `^#([0-9a-f]{64})(?:\\.([0-9a-f]{64}))?(?:~(${NATIVE_CHALLENGE_PATTERN.slice(1, -1)})~(${NATIVE_STATE_PATTERN.slice(1, -1)}))?$`,
+);
 
-/** The link's token, and the invitation it carried — or nothing, for a fragment that is not one. */
+/**
+ * The link's token, the invitation it carried and the native application's pair — or nothing, for a
+ * fragment that is not one. A pair is both words or neither: half of one is not a link.
+ */
 export const readSignInLink = (
   hash: string,
-): { readonly token: string; readonly invitation: string | null } | null => {
+): {
+  readonly token: string;
+  readonly invitation: string | null;
+  readonly native: NativeHandoff | null;
+} | null => {
   const match = FRAGMENT.exec(hash);
   if (match?.[1] === undefined) return null;
-  return { token: match[1], invitation: match[2] ?? null };
+  const [, token, invitation, challenge, state] = match;
+  return {
+    token,
+    invitation: invitation ?? null,
+    native: challenge !== undefined && state !== undefined ? { challenge, state } : null,
+  };
 };
 
 const notFound = (failure: unknown): boolean =>
@@ -159,6 +177,9 @@ export const EmailSignInScreen = (): React.JSX.Element => {
     try {
       await signInByLink(link.token);
       if (link.invitation !== null) keepInvitation(link.invitation, ports);
+      // The link was asked for by the native application, and may have opened in another browser than the one
+      // the application's session is waiting in: what it carried is this tab's now, and home goes on to the consent.
+      if (link.native !== null) keepNativeHandoff(link.native, browserNativePorts());
       navigate(href('home'), { replace: true });
     } catch (failure) {
       setSigningIn(false);

@@ -19,7 +19,7 @@
  * It is the first thing anyone sees of the product, so it is a card on the navigation tone with the
  * product's mark, not a heading on a blank page (D-100).
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { signInFailureIn, type SignInFailure } from '@purlay/types';
 import { useAuthMethods, useMe } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -29,6 +29,7 @@ import { Button, buttonStyle } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
+import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
 import { LogoMark } from '../shell/notice';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
@@ -79,6 +80,10 @@ export const SignInScreen = (): React.JSX.Element => {
   // Each is offered only once the server has said it works (`EmailSignInForm` asks for itself).
   const mail = methods.data?.email === true;
   const github = methods.data?.github === true;
+  // The native application sent the person here and is waiting for their answer (D-191): say so.
+  const [forNative] = useState(
+    () => pendingNativeHandoff(browserNativePorts(), window.location) !== null,
+  );
   const failure = signInFailureIn(search);
   const reason = new URLSearchParams(search).get('reason');
   const note =
@@ -105,6 +110,9 @@ export const SignInScreen = (): React.JSX.Element => {
             <p role="status" className="text-balance text-label text-warning-text">
               {note}
             </p>
+          )}
+          {forNative && (
+            <p className="text-balance text-label text-ink-muted">{t('signIn.native')}</p>
           )}
         </div>
         {methods.data === undefined && !methods.isError ? (

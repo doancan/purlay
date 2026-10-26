@@ -23,6 +23,7 @@ import { LogoMark } from './notice';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
+import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
 
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -165,12 +166,19 @@ export const Home = (): React.JSX.Element | null => {
     () => pendingInvitation(browserInvitationPorts(), window.location) !== null,
   );
 
+  // Or from signing in for the native application, which sent the person here and is still waiting for
+  // an answer (D-191). An invitation in hand comes first: it is a join the person started themselves.
+  const [asked] = useState(
+    () => pendingNativeHandoff(browserNativePorts(), window.location) !== null,
+  );
+
   useEffect(() => {
     if (invited) navigate(href('invite'), { replace: true });
+    else if (asked) navigate(href('signInNative'), { replace: true });
     else if (first !== undefined) navigate(href('workspace', { slug: first }), { replace: true });
-  }, [invited, first, navigate]);
+  }, [invited, asked, first, navigate]);
 
-  if (invited || first !== undefined) return null;
+  if (invited || asked || first !== undefined) return null;
   return (
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">

@@ -19,6 +19,8 @@ const ROUTES = {
   signIn: SIGN_IN_PATH,
   // A sign-in link's page; its token is in the fragment, never the path (D-138 §4).
   signInEmail: `${SIGN_IN_PATH}/email`,
+  // Where the native application sends a person to say yes (D-191); its pair waits in the tab.
+  signInNative: `${SIGN_IN_PATH}/native`,
   // Making an account, where the server lets anybody (R51); by invitation it says so and points back.
   signUp: '/sign-up',
   invite: '/invite',

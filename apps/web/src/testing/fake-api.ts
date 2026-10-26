@@ -19,6 +19,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   authMethods: () => Promise.resolve({ github: true, email: false, signUp: 'invite-only' }),
   // A server already set up, as the sign-in card's tests assume.
   setupStatus: () => Promise.resolve({ open: false, appUrl: 'http://localhost' }),
+  authorizeNative: unexpected('authorizeNative'),
   requestEmailSignIn: unexpected('requestEmailSignIn'),
   signInWithPassword: unexpected('signInWithPassword'),
   changePassword: unexpected('changePassword'),

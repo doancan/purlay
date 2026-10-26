@@ -1024,8 +1024,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sign-in-sweep-keeps-old-links',
     why: 'every address anybody typed stays in verifications for good',
     file: 'apps/api/src/modules/jobs/jobs.ts',
-    find: "    .where('expires_at', '<', before)\n",
-    replace: "    .where('expires_at', '<', new Date(0))\n",
+    find: "    .deleteFrom('verifications')\n    .where('expires_at', '<', before)\n",
+    replace: "    .deleteFrom('verifications')\n    .where('expires_at', '<', new Date(0))\n",
     tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
   },
   {
