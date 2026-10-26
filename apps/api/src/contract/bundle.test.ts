@@ -256,7 +256,10 @@ describe('the assembled bundle', () => {
     expect(manifest.format).toBe(CONTRACT_BUNDLE_FORMAT);
     expect(manifest.serverVersion).toBe(SERVER_VERSION);
     expect(manifest.contractVersion).toBe(CONTRACT_VERSION);
-    const listed = manifest.files.map((entry) => entry.path).sort();
+    // In path order, as written: a manifest that follows declaration order is not one two builds agree on.
+    const written = manifest.files.map((entry) => entry.path);
+    expect(written).toEqual(written.slice().sort());
+    const listed = written.slice().sort();
     const present = [...bundle.keys()].filter((path) => path !== 'MANIFEST.json').sort();
     expect(listed).toEqual(present);
     for (const entry of manifest.files) {
