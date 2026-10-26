@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { judge, main, measured } from './budget-browser';
+import { HISTORY_LENGTH, historyOf, judge, main, measured } from './budget-browser';
 
 const folderWith = (files: Record<string, unknown>): string => {
   const folder = mkdtempSync(join(tmpdir(), 'purlay-budget-browser-'));
@@ -59,13 +59,12 @@ describe('the judgement', () => {
   });
 
   test('fails a jump past the factor and the floor, and says which', () => {
-    const verdict = judge(
-      { 'channel switch, median': 220, 'cold load, median of five': 410 },
-      {
-        'channel switch, median': 140,
-        'cold load, median of five': 400,
-      },
-    );
+    const run = { 'channel switch, median': 140, 'cold load, median of five': 400 };
+    const verdict = judge({ 'channel switch, median': 220, 'cold load, median of five': 410 }, [
+      run,
+      run,
+      run,
+    ]);
     expect(verdict.regressed).toBe(true);
     expect(verdict.lines).toEqual([
       'cold load, median of five: 410.0 ms, was 400.0 ms',
@@ -73,13 +72,36 @@ describe('the judgement', () => {
     ]);
   });
 
+  test('is judged against the middle of the runs, so one lucky run is not the line', () => {
+    const history = [107, 95, 101, 99, 58].map((value) => ({ 'channel switch, median': value }));
+    const verdict = judge({ 'channel switch, median': 124 }, history);
+    expect(verdict.regressed).toBe(false);
+    expect(verdict.lines).toEqual(['channel switch, median: 124.0 ms, was 99.0 ms']);
+  });
+
+  test('is wider while there are fewer than three runs to take a middle of', () => {
+    const one = [{ 'channel switch, median': 76 }];
+    expect(judge({ 'channel switch, median': 124 }, one).regressed).toBe(false);
+    expect(judge({ 'channel switch, median': 160 }, one).regressed).toBe(true);
+    const three = [76, 76, 76].map((value) => ({ 'channel switch, median': value }));
+    expect(judge({ 'channel switch, median': 124 }, three).regressed).toBe(true);
+  });
+
   test('fails a number main measured and this run did not', () => {
-    const verdict = judge(
-      { 'cold load, median of five': 400 },
+    const verdict = judge({ 'cold load, median of five': 400 }, [
       { 'cold load, median of five': 400, 'channel switch, median': 140 },
-    );
+    ]);
     expect(verdict.regressed).toBe(true);
     expect(verdict.lines).toContain('channel switch, median: not measured, was 140.0 ms — MISSING');
+  });
+});
+
+describe('the kept file', () => {
+  test('is a history, and what it was before — one run, flat — is a history of one', () => {
+    expect(historyOf({ history: [{ a: 1 }, { a: 2 }] })).toEqual([{ a: 1 }, { a: 2 }]);
+    expect(historyOf({ 'channel switch, median': 76 })).toEqual([{ 'channel switch, median': 76 }]);
+    expect(historyOf(null)).toEqual([]);
+    expect(historyOf('nonsense')).toEqual([]);
   });
 });
 
@@ -117,9 +139,33 @@ describe('the command', () => {
       keep,
     ]);
     expect(second.code).toBe(1);
-    // A regression is not adopted: the baseline is still the run that passed.
-    expect(JSON.parse(await Bun.file(keep).text())).toMatchObject({
-      'channel switch, median': 140,
+    // A regression is not adopted: the history is still the run that passed.
+    const kept = JSON.parse(await Bun.file(keep).text()) as { history: Record<string, number>[] };
+    expect(kept.history).toHaveLength(1);
+    expect(kept.history[0]).toMatchObject({ 'channel switch, median': 140 });
+  });
+
+  test('keeps the last few runs that passed, and no more', async () => {
+    const keep = join(mkdtempSync(join(tmpdir(), 'purlay-budget-keep-')), 'browser.json');
+    for (let run = 0; run < HISTORY_LENGTH + 3; run += 1) {
+      const files = {
+        ...wide('chromium-dark'),
+        'channel-switch-chromium-dark.json': { p50: 140 + run },
+      };
+      const result = await main([
+        '--project',
+        'chromium-dark',
+        '--from',
+        folderWith(files),
+        '--keep',
+        keep,
+      ]);
+      expect(result.code).toBe(0);
+    }
+    const kept = JSON.parse(await Bun.file(keep).text()) as { history: Record<string, number>[] };
+    expect(kept.history).toHaveLength(HISTORY_LENGTH);
+    expect(kept.history.at(-1)).toMatchObject({
+      'channel switch, median': 140 + HISTORY_LENGTH + 2,
     });
   });
 });

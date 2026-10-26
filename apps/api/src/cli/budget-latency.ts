@@ -34,8 +34,11 @@ export const REGRESSION_FACTOR = 1.5;
 const NOISE_FLOOR_MS = 20;
 
 /** D-49's one rule for a noisy number: it regressed when it is past both the factor and the floor. */
-export const jumped = (value: number, before: number | undefined): boolean =>
-  before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);
+export const jumped = (
+  value: number,
+  before: number | undefined,
+  factor: number = REGRESSION_FACTOR,
+): boolean => before !== undefined && value > Math.max(before * factor, NOISE_FLOOR_MS);
 
 /** Under the per-connection and per-user budgets of ten a second (`rate-limiter.ts`). */
 const PACE_MS = 125;

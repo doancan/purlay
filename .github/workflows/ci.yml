@@ -191,7 +191,7 @@ jobs:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
 
       # Cold load, keystroke to paint and the channel switch (D-49), as the tests above measured
-      # them: blocking on a regression against main's last run of this project, never on the line,
+      # them: blocking on a regression against the middle of main's last runs of this project, never on the line,
       # which a hosted runner sits far above. Kept and shared as the latency budgets are (#73).
       - name: the last browser measurement on main
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
