@@ -13,6 +13,7 @@ import {
   AUTH_BUDGET,
   COSTLY_READ_BUDGET,
   GITHUB_CALL_BUDGET,
+  NATIVE_TOKEN_BUDGET,
   WRITE_BUDGET,
   httpLimits,
   retryAfterSeconds,
@@ -128,6 +129,9 @@ describe('the budgets in force', () => {
     expect(WRITE_BUDGET).toEqual({ perSecond: 10, burst: 20 });
     // A page of cards and pictures is asked for at once; their own bucket holds more than a burst.
     expect(COSTLY_READ_BUDGET).toEqual({ perSecond: 10, burst: 60 });
+    // Ten attempts at once, then one every ninety seconds, per client address (D-191): written out here,
+    // so changing the number is changing this line and not only the constant a test would read back.
+    expect(NATIVE_TOKEN_BUDGET).toEqual({ perSecond: 1 / 90, burst: 10 });
     // Under the hourly quota of the workspace's one GitHub token, however many members ask.
     expect(GITHUB_CALL_BUDGET.burst + GITHUB_CALL_BUDGET.perSecond * 3600).toBeLessThan(5_000);
   });
@@ -177,5 +181,57 @@ describe('rate limiting GET /api/client (D-186)', () => {
     }
     expect((await ask(app, '203.0.113.99, 198.51.100.1')).status).toBe(429);
     expect((await ask(app, '198.51.100.2')).status).toBe(200);
+  });
+});
+
+describe('rate limiting POST /api/native/token (D-191)', () => {
+  const clockAt = (
+    start: number,
+  ): { clock: ReturnType<typeof fixedClock>; advance: (ms: number) => void } => {
+    let at = start;
+    return {
+      clock: { now: (): Date => new Date(at) },
+      advance: (ms): void => {
+        at += ms;
+      },
+    };
+  };
+  const spend = new Request('https://purlay.test/api/native/token', { method: 'POST' });
+
+  test('a client gets ten, then is told to wait ninety seconds', async () => {
+    const admit = httpLimits({
+      auth: anAuthThatMustNotBeTouched(),
+      clock: fixedClock(NOW),
+      trustProxy: false,
+    });
+    for (let i = 0; i < 10; i += 1) expect(await admit(spend, '203.0.113.9')).toBeUndefined();
+    expect(await admit(spend, '203.0.113.9')).toBe(90);
+  });
+
+  test('is per address: one client spending its ten leaves another its own', async () => {
+    const admit = httpLimits({
+      auth: anAuthThatMustNotBeTouched(),
+      clock: fixedClock(NOW),
+      trustProxy: false,
+    });
+    for (let i = 0; i < 11; i += 1) await admit(spend, '203.0.113.9');
+    expect(await admit(spend, '203.0.113.9')).toBe(90);
+    expect(await admit(spend, '203.0.113.10')).toBeUndefined();
+  });
+
+  test('refills one attempt every ninety seconds, and not before', async () => {
+    const time = clockAt(NOW.getTime());
+    const admit = httpLimits({
+      auth: anAuthThatMustNotBeTouched(),
+      clock: time.clock,
+      trustProxy: false,
+    });
+    for (let i = 0; i < 10; i += 1) await admit(spend, '203.0.113.9');
+    expect(await admit(spend, '203.0.113.9')).toBe(90);
+    time.advance(89_000);
+    expect(await admit(spend, '203.0.113.9')).not.toBeUndefined();
+    time.advance(1_000);
+    expect(await admit(spend, '203.0.113.9')).toBeUndefined();
+    expect(await admit(spend, '203.0.113.9')).not.toBeUndefined();
   });
 });

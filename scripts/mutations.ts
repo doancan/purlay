@@ -9118,4 +9118,46 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: ' \\\n  --target',
     tests: ['scripts/release-publish.test.ts'],
   },
+  {
+    id: 'native-cap-counts-spent-codes',
+    why: 'spent codes count toward the five: a person who has used their codes finds a live one evicted by a newer spent row',
+    file: 'apps/api/src/modules/auth/native-handoff.ts',
+    find: "      .where('user_id', '=', userId)\n      .where('spent_at', 'is', null)\n      .where('expires_at', '>', now)\n      .orderBy('created_at', 'desc')",
+    replace:
+      "      .where('user_id', '=', userId)\n      .where('expires_at', '>', now)\n      .orderBy('created_at', 'desc')",
+    tests: ['apps/api/src/modules/auth/native-handoff.integration.test.ts'],
+  },
+  {
+    id: 'native-cap-counts-expired-codes',
+    why: 'expired codes count toward the five, so a lapsed row is removed to make room that was never needed',
+    file: 'apps/api/src/modules/auth/native-handoff.ts',
+    find: "      .where('user_id', '=', userId)\n      .where('spent_at', 'is', null)\n      .where('expires_at', '>', now)\n      .orderBy('created_at', 'desc')",
+    replace:
+      "      .where('user_id', '=', userId)\n      .where('spent_at', 'is', null)\n      .orderBy('created_at', 'desc')",
+    tests: ['apps/api/src/modules/auth/native-handoff.integration.test.ts'],
+  },
+  {
+    id: 'native-token-burst-widened',
+    why: 'the burst for spending a native code is a thousand, not ten: guessing a code is nearly free for a client',
+    file: 'apps/api/src/ingress/http/rate-limit.ts',
+    find: 'export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };',
+    replace: 'export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 1000 };',
+    tests: ['apps/api/src/ingress/http/rate-limit.test.ts'],
+  },
+  {
+    id: 'native-token-refill-quickened',
+    why: 'the budget refills a thousand times faster than the stated one attempt in ninety seconds',
+    file: 'apps/api/src/ingress/http/rate-limit.ts',
+    find: 'export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };',
+    replace: 'export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 10, burst: 10 };',
+    tests: ['apps/api/src/ingress/http/rate-limit.test.ts'],
+  },
+  {
+    id: 'native-device-name-untrimmed',
+    why: 'a device name is recorded with the spaces around it, and a name of spaces only is a name',
+    file: 'apps/api/src/ingress/http/native-handoff.ts',
+    find: '  const name = device.name.trim();',
+    replace: '  const name = device.name;',
+    tests: ['apps/api/src/ingress/http/native-handoff.integration.test.ts'],
+  },
 ];
