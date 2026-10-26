@@ -7,7 +7,32 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import * as contract from '../packages/types/src/realtime';
+import {
+  ACK_DEADLINE_MS,
+  BACKOFF,
+  CHECK_SESSION_AFTER_FAILURES,
+  OUTBOX_MAX_CHARS,
+  OUTBOX_MAX_MESSAGES,
+  PING_AFTER_IDLE_MS,
+  PONG_DEADLINE_MS,
+  REPLAY_RETRY_DELAYS_MS,
+  STABLE_AFTER_MS,
+  TOO_BUSY_BACKOFF_STEP,
+} from './realtime';
+
+/** `packages/types/src/realtime.ts`'s exports, listed: a scan over every export of the package would flag names that merely collide. */
+const contract = {
+  ACK_DEADLINE_MS,
+  BACKOFF,
+  CHECK_SESSION_AFTER_FAILURES,
+  OUTBOX_MAX_CHARS,
+  OUTBOX_MAX_MESSAGES,
+  PING_AFTER_IDLE_MS,
+  PONG_DEADLINE_MS,
+  REPLAY_RETRY_DELAYS_MS,
+  STABLE_AFTER_MS,
+  TOO_BUSY_BACKOFF_STEP,
+};
 
 const walk = (directory: string): string[] =>
   readdirSync(directory).flatMap((entry) => {
