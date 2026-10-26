@@ -116,6 +116,12 @@ export interface NativeSessionTerms {
 }
 
 /**
+ * Why a code did not open, for an operator's log and for nobody else: the person is told one thing whichever it was,
+ * and a client that guesses learns nothing from the difference.
+ */
+export type NativeRefusal = 'unknown' | 'spent' | 'expired' | 'burnt' | 'erased' | 'wrong-verifier';
+
+/**
  * Spends a code for a session, or says nothing: `undefined` is every way it can fail, and is the same
  * for each. Infrastructure that fails — the database is down — is thrown, never read as a refusal.
  */
@@ -128,9 +134,12 @@ export const exchangeNativeCode = async (
     verifier,
     userAgent,
     ipAddress,
+    refused,
   }: {
     readonly code: string;
     readonly verifier: string;
+    /** Told why when the code does not open; never given the code, its digest or the person. */
+    readonly refused?: (reason: NativeRefusal) => void;
   } & IssueOptions,
 ): Promise<IssuedSession | undefined> => {
   // Before anything is looked up, so a code that does not exist costs the same hash as one that does.
@@ -155,14 +164,28 @@ export const exchangeNativeCode = async (
       .where('native_authorizations.code_digest', '=', digest)
       .forUpdate(['native_authorizations'])
       .executeTakeFirst();
-    if (found === undefined) return undefined;
+    if (found === undefined) {
+      refused?.('unknown');
+      return undefined;
+    }
 
     // Spent, expired, burnt, or its person erased: nothing is counted and nothing is made.
     const live =
       found.spent_at === null &&
       found.expires_at.getTime() > now.getTime() &&
       found.deleted_at === null;
-    if (!live) return undefined;
+    if (!live) {
+      refused?.(
+        found.spent_at !== null
+          ? 'spent'
+          : found.deleted_at !== null
+            ? 'erased'
+            : found.wrong_verifiers >= NATIVE_WRONG_VERIFIERS_MAX
+              ? 'burnt'
+              : 'expired',
+      );
+      return undefined;
+    }
 
     if (!sameChallenge(found.challenge, supplied)) {
       const wrong = found.wrong_verifiers + 1;
@@ -175,6 +198,7 @@ export const exchangeNativeCode = async (
         })
         .where('id', '=', found.id)
         .execute();
+      refused?.(wrong >= NATIVE_WRONG_VERIFIERS_MAX ? 'burnt' : 'wrong-verifier');
       return undefined;
     }
 

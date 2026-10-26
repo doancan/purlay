@@ -49,36 +49,45 @@ export const bundleProblems = (bundle: ReadonlyMap<string, string>, dir: string)
   return problems;
 };
 
+const USAGE = 'usage: contract:bundle --out DIR | --check DIR';
+
+/** The one mode and its directory, or why the arguments are not that: a flag is never read as a directory, and nothing is ignored. */
+const readArguments = (
+  argv: readonly string[],
+): { mode: 'out' | 'check'; dir: string } | { problem: string } => {
+  const [flag, dir, ...rest] = argv;
+  if (flag !== '--out' && flag !== '--check') {
+    return { problem: flag === undefined ? USAGE : `${USAGE}\nunknown argument: ${flag}` };
+  }
+  if (dir === undefined || dir.startsWith('--')) return { problem: USAGE };
+  if (rest.length > 0) return { problem: `${USAGE}\nunexpected: ${rest.join(' ')}` };
+  return { mode: flag === '--out' ? 'out' : 'check', dir };
+};
+
 export const main = (
   argv: readonly string[],
   bundle: ReadonlyMap<string, string> = assembleBundle('.'),
 ): number => {
-  const checkAt = argv.indexOf('--check');
-  if (checkAt !== -1) {
-    const dir = argv[checkAt + 1];
-    if (dir === undefined) {
-      console.error('usage: contract:bundle --check DIR');
-      return 2;
-    }
+  const parsed = readArguments(argv);
+  if ('problem' in parsed) {
+    console.error(parsed.problem);
+    return 2;
+  }
+  const { mode, dir } = parsed;
+  if (mode === 'check') {
     const problems = bundleProblems(bundle, dir);
     for (const problem of problems) console.error(problem);
     if (problems.length > 0) return 1;
     console.log(`${dir} is this commit's bundle (${String(bundle.size)} files)`);
     return 0;
   }
-  const outAt = argv.indexOf('--out');
-  const out = outAt === -1 ? undefined : argv[outAt + 1];
-  if (out === undefined) {
-    console.error('usage: contract:bundle --out DIR | --check DIR');
-    return 2;
-  }
   try {
-    writeBundle(bundle, out);
+    writeBundle(bundle, dir);
   } catch (failure) {
     console.error(failure instanceof Error ? failure.message : 'could not write the bundle');
     return 1;
   }
-  console.log(`wrote ${String(bundle.size)} files to ${out}`);
+  console.log(`wrote ${String(bundle.size)} files to ${dir}`);
   return 0;
 };
 

@@ -43,6 +43,13 @@ describe('the client header', () => {
     ['a version of two parts', 'macos/1.0 contract/1'],
     ['build metadata, which is no part of the shape', 'macos/1.0.0+212 contract/1'],
     ['a version past thirty-two characters', `macos/1.0.0-${'a'.repeat(40)} contract/1`],
+    ['a pre-release with nothing after the hyphen', 'macos/1.0.0- contract/1'],
+    ['a pre-release that is only dots', 'macos/1.0.0-.. contract/1'],
+    [
+      'the header twice, as a proxy folds it into one line',
+      'macos/1.0.0 contract/1, macos/1.0.0 contract/1',
+    ],
+    ['a contract with a leading plus', 'macos/1.0.0 contract/+1'],
   ])('%s is no client', (_name, value) => {
     expect(parseClientHeader(value)).toBeNull();
   });

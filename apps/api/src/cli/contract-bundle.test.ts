@@ -112,4 +112,23 @@ describe('the command', () => {
     expect(quietly(() => main(['--out'], bundle))).toBe(2);
     expect(quietly(() => main(['--check'], bundle))).toBe(2);
   });
+
+  test('is a usage error when both modes are asked, rather than doing one and ignoring the other', () => {
+    const out = scratch();
+    expect(quietly(() => main(['--out', out, '--check', out], bundle))).toBe(2);
+    expect(quietly(() => main(['--check', out, '--out', out], bundle))).toBe(2);
+    expect(existsSync(out)).toBe(false);
+  });
+
+  test('is a usage error when a flag stands where the directory should, so a flag is never made into a directory', () => {
+    expect(quietly(() => main(['--out', '--check'], bundle))).toBe(2);
+    expect(quietly(() => main(['--check', '--out'], bundle))).toBe(2);
+    expect(existsSync('--check')).toBe(false);
+  });
+
+  test('is a usage error for a flag it does not know, so a typo is not a silent no-op', () => {
+    const out = scratch();
+    expect(quietly(() => main(['--chek', out], bundle))).toBe(2);
+    expect(quietly(() => main(['--out', out, '--force'], bundle))).toBe(2);
+  });
 });

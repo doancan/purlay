@@ -33,4 +33,10 @@ have it.
 
 - **Sign-in** — An emailed sign-in link can carry the application's pending sign-in into the browser that opens it (D-191)
 
+### Security
+
+- **Native app** — A device name can no longer hold zero-width or directional characters, so a session cannot be made to read as another device's in the sessions list (D-191)
+- **Native app** — A wrong sign-in verifier or a burnt code is a warning in the server's log with its reason, and nothing in the log can open a session (D-191)
+- **Client version** — A client header with an empty pre-release identifier is no longer taken for a version (D-190)
+
 ---
