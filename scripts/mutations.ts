@@ -8990,4 +8990,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "    path: '/api/native/authorize',\n    auth: 'none',",
     tests: ['apps/api/src/ingress/http/endpoints.test.ts'],
   },
+  {
+    id: 'corpus-loses-the-depth-bound',
+    why: 'the corpus no longer has a body shown as typed for its depth: a client that never bounds depth passes every case',
+    file: 'packages/markdown/src/corpus.ts',
+    find: "{ name: 'bounds/depth', input: OUTLINE_LEVELS(MARKDOWN_DEPTH_MAX) },",
+    replace: "{ name: 'bounds/depth', input: 'x' },",
+    tests: ['packages/markdown/src/corpus.test.ts'],
+  },
+  {
+    id: 'corpus-loses-the-centre-alignment',
+    why: 'the corpus no longer has a centred column: a client that cannot draw one passes every case',
+    file: 'packages/markdown/src/corpus.ts',
+    find: '|:--|:-:|--:|---|',
+    replace: '|:--|:--|--:|---|',
+    tests: ['packages/markdown/src/corpus.test.ts'],
+  },
+  {
+    id: 'corpus-writes-an-address-as-an-object',
+    why: "a link's address is written as the engine's own class and reaches the bundle as an empty object: every client is told a link goes nowhere",
+    file: 'packages/markdown/src/corpus.ts',
+    find: '    if (value instanceof SafeHref) return value.href;\n',
+    replace: '',
+    tests: ['packages/markdown/src/corpus.test.ts'],
+  },
 ];

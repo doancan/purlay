@@ -6,3 +6,4 @@ export * from './metadata';
 export * from './mentions';
 export * from './prose';
 export * from './plain';
+export * from './corpus';
