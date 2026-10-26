@@ -17,7 +17,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 // Side effect: registers the string formats. TypeBox rejects every value for a
 // format it does not know — valid ones included — so this is not optional.
-import '@purlay/types';
+import { CONTRACT_VERSION } from '@purlay/types';
 import { smtpUrlProblem } from './smtp-address';
 
 /**
@@ -135,6 +135,17 @@ export const Environment = Type.Object({
   /** Mail to a relay past this machine is sent only over TLS — `smtps://`, or STARTTLS on `smtp://` —
    *  unless this says the link is private (D-138 §6). */
   SMTP_ALLOW_PLAINTEXT: Type.Boolean({ default: false }),
+
+  /** The lowest an installed macOS client may be and still be served (D-186): the wire contract it was
+   *  built against, and its version in semantic-version order. Either or both; none is no limit. A
+   *  client below either is answered `426 CLIENT_TOO_OLD`, with the download address if one is set.
+   *  The contract may not be above the one this server speaks: that would refuse every client. */
+  MIN_CLIENT_MACOS_CONTRACT: Type.Optional(Type.Integer({ minimum: 1 })),
+  MIN_CLIENT_MACOS_VERSION: Type.Optional(
+    Type.String({ pattern: '^\\d{1,6}\\.\\d{1,6}\\.\\d{1,6}(?:-[0-9A-Za-z.-]{1,32})?$' }),
+  ),
+  /** Where a person is sent for a newer macOS client: shown by the app, so `https://` and nothing else. */
+  MACOS_DOWNLOAD_URL: Type.Optional(Type.String({ format: 'uri' })),
 });
 
 /**
@@ -296,6 +307,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   }
   problems.push(...mailProblems(config));
   problems.push(...githubAppProblems(config));
+  problems.push(...nativeClientProblems(config));
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {
       problems.push(
@@ -308,6 +320,35 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
 
   if (problems.length > 0) throw new ConfigurationError(problems);
   return config;
+};
+
+/**
+ * The macOS minimum (D-186). A contract above the one this server speaks refuses every client there
+ * is, and is found by the first person who tries to sign in; a download address that is not `https://`
+ * sends a person somewhere a network can rewrite. Both are refused at boot, never quoting the value.
+ */
+const nativeClientProblems = (config: Config): string[] => {
+  const problems: string[] = [];
+  if (
+    config.MIN_CLIENT_MACOS_CONTRACT !== undefined &&
+    config.MIN_CLIENT_MACOS_CONTRACT > CONTRACT_VERSION
+  ) {
+    problems.push(
+      `MIN_CLIENT_MACOS_CONTRACT: this server speaks contract ${String(CONTRACT_VERSION)}; a higher minimum would refuse every client`,
+    );
+  }
+  if (config.MACOS_DOWNLOAD_URL !== undefined) {
+    let url: URL | undefined;
+    try {
+      url = new URL(config.MACOS_DOWNLOAD_URL);
+    } catch {
+      url = undefined;
+    }
+    if (url?.protocol !== 'https:') {
+      problems.push('MACOS_DOWNLOAD_URL: must be an https:// address');
+    }
+  }
+  return problems;
 };
 
 /** A host that is this machine, spelled as a URL's hostname spells it. */

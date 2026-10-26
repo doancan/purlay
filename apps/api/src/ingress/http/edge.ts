@@ -9,6 +9,7 @@
 import { MAX_FRAME_BYTES } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import { isAppOrigin } from '../../platform/origin';
+import type { ClientRefusal } from './client-policy';
 import { refusalFor } from './errors';
 
 /**
@@ -274,4 +275,27 @@ export const unsupportedMediaTypeResponse = (headers: Record<string, string>): R
       message: 'A request body must be application/json.',
     }),
     headers,
+  );
+
+/**
+ * An installed client this server no longer serves: `426`, as the status says it with an `Upgrade`
+ * header (RFC 9110 §15.5.22), and a body the application acts on — what the server still serves and
+ * where to get it (`ClientTooOldDetails`). Answered before the body is read or a session looked up,
+ * so what is refused costs the server nothing, and a stranger learns nothing from it.
+ */
+export const clientTooOldResponse = (
+  refusal: ClientRefusal,
+  headers: Record<string, string>,
+): Response =>
+  refused(
+    new AppError({
+      code: 'CLIENT_TOO_OLD',
+      message: 'This version of Purlay is too old for this server. Update it to go on.',
+      details: {
+        minContractVersion: refusal.minContract,
+        minAppVersion: refusal.minVersion,
+        downloadUrl: refusal.downloadUrl,
+      },
+    }),
+    { ...headers, upgrade: 'purlay-client' },
   );

@@ -1188,6 +1188,30 @@ export const AuthMethods = Type.Object({
 export type AuthMethods = Static<typeof AuthMethods>;
 
 /**
+ * What a client that is not a browser learns before anybody signs in (`GET /api/client`, `API.md` §2,
+ * D-186): which server this is, which wire contract it speaks, the address it answers to — the only
+ * one the socket's `Origin` check accepts — the minimum an installed client must meet, and the same
+ * sign-in methods the sign-in screen offers, so one call is enough to draw it.
+ *
+ * `minClient` is per platform, and every limit in it may be `null`: a limit the operator did not set.
+ */
+export const ClientMinimum = Type.Object({
+  contractVersion: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  appVersion: Type.Union([Type.String(), Type.Null()]),
+  downloadUrl: Type.Union([Type.String(), Type.Null()]),
+});
+export type ClientMinimum = Static<typeof ClientMinimum>;
+
+export const ClientInfo = Type.Object({
+  server: Type.Object({ version: Type.String() }),
+  contractVersion: Type.Integer({ minimum: 1 }),
+  appUrl: Type.String(),
+  minClient: Type.Object({ macos: ClientMinimum }),
+  auth: AuthMethods,
+});
+export type ClientInfo = Static<typeof ClientInfo>;
+
+/**
  * `POST /auth/email` — send a sign-in link to this address, in this language. Answered `202` whatever
  * the address: whether an account has it is never said (D-138 §1). An invitation the asker holds rides
  * in the link's fragment, since the tab that holds it is not the one the mail opens (D-138 §4).
