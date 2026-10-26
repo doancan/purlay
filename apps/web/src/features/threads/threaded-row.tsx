@@ -14,7 +14,6 @@
 import { memo, useCallback, useMemo } from 'react';
 import { IconButton } from '../../ui/icon-button';
 import { useI18n } from '../../i18n/i18n-provider';
-import { isMine } from '../messages/author';
 import { MessageRow, type MessageRowProps } from '../messages/message-row';
 import { useThreadView, useThreads } from './thread-context';
 import { ThreadSummary } from './thread-summary';
@@ -42,13 +41,10 @@ const ThreadedMessageRowView = (row: ThreadedMessageRowProps): React.JSX.Element
       ) : undefined,
     [threaded, label, reply],
   );
-  const outgoing = isMine(message, row.meId);
   const summary = useMemo(
     () =>
-      threaded ? (
-        <ThreadSummary root={message} nowMinute={nowMinute} open={open} outgoing={outgoing} />
-      ) : undefined,
-    [threaded, message, nowMinute, open, outgoing],
+      threaded ? <ThreadSummary root={message} nowMinute={nowMinute} open={open} /> : undefined,
+    [threaded, message, nowMinute, open],
   );
 
   return (

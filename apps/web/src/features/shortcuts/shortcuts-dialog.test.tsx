@@ -49,9 +49,27 @@ describe('the reference', () => {
       'Send from inside a code block',
       'Edit your own message',
       'Start or end Deep Work',
+      'Strikethrough',
+      'Inline code',
+      'Code block',
+      'Bulleted list',
+      'Numbered list',
+      'Quote',
+      'Edit your last message, in an empty box',
     ]) {
       expect(text).toContain(sentence);
     }
+  });
+
+  test.each([
+    ['a Mac', true, ['⌘', '⌥', '⇧', 'C']],
+    ['everyone else', false, ['Ctrl', 'Alt', 'Shift', 'C']],
+  ] as const)('gives the code block its chord, spelled for %s', async (_who, mac, keys) => {
+    const view = await open(mac);
+    const row = view.getByText('Code block').closest('li');
+    expect([...(row?.querySelectorAll('kbd') ?? [])].map((key) => key.textContent)).toEqual([
+      ...keys,
+    ]);
   });
 
   test('spells the modifiers for a Mac', async () => {

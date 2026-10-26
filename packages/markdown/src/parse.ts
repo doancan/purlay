@@ -114,7 +114,11 @@ export const narrowTree = (root: Root, text: string): MessageTree => {
           out.push({ type: 'paragraph', children: inlines(node.children, depth + 1) });
           break;
         case 'heading':
-          out.push({ type: 'heading', children: inlines(node.children, depth + 1) });
+          out.push({
+            type: 'heading',
+            level: node.depth <= 1 ? 1 : node.depth === 2 ? 2 : 3,
+            children: inlines(node.children, depth + 1),
+          });
           break;
         case 'code':
           out.push({ type: 'code', lang: node.lang ?? null, value: node.value });

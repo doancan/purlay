@@ -45,6 +45,7 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import {
   broadcastMention,
   continueList,
+  enterAction,
   formatKey,
   insertMarkdown,
   insertText,
@@ -53,6 +54,7 @@ import {
   asCodeBlock,
   rowsFor,
   trimEnd,
+  typedWrap,
   unitsLeft,
   unitsOver,
   type MarkdownKind,
@@ -66,6 +68,7 @@ import { draftKey, readDraft, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { renderContent } from '../content/render-content';
+import { duringComposition, useComposition } from './composition';
 import { EmojiPicker } from './emoji-picker';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -120,7 +123,7 @@ const Inner = ({
   const hintsId = useId();
   // Where the caret goes after a change that is made by script (a paste, an undo).
   const caret = useRef<number | null>(null);
-  const composing = useRef(false);
+  const composing = useComposition(field);
   const latest = useRef(text);
   latest.current = text;
   // Held above the composer, per place, with a send asked for while they were still uploading: a
@@ -165,29 +168,6 @@ const Inner = ({
   useEffect(() => {
     if (autoFocus) field.current?.focus();
   }, [autoFocus]);
-
-  // Native listeners, not React props: React only wires composition events where the
-  // engine advertises `CompositionEvent`, and the flag must not depend on that.
-  useEffect(() => {
-    const element = field.current;
-    if (element === null) return undefined;
-    const start = (): void => {
-      composing.current = true;
-    };
-    const end = (): void => {
-      // Safari fires the keydown that ends a composition *after* compositionend, so the
-      // flag is cleared a turn later, once that key has been seen and ignored.
-      window.setTimeout(() => {
-        composing.current = false;
-      }, 0);
-    };
-    element.addEventListener('compositionstart', start);
-    element.addEventListener('compositionend', end);
-    return (): void => {
-      element.removeEventListener('compositionstart', start);
-      element.removeEventListener('compositionend', end);
-    };
-  }, []);
 
   useEffect(() => {
     if (caret.current !== null) {
@@ -332,7 +312,7 @@ const Inner = ({
     // person pressing Enter: the event says so itself, an engine that reports `Process`
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
     // by the flag the composition events keep.
-    if (event.nativeEvent.isComposing || event.key === 'Process' || composing.current) return;
+    if (duringComposition(event, composing)) return;
     if (open && mention !== null) {
       const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -368,31 +348,34 @@ const Inner = ({
       event.currentTarget.blur();
       return;
     }
-    if (event.key !== 'Enter') return;
-    if (event.shiftKey) {
-      // In a list or a quote the line break carries it on, and an empty item ends it; elsewhere the
-      // browser's own line break is right (D-181).
-      const box = event.currentTarget;
-      if (!event.metaKey && !event.ctrlKey && box.selectionStart === box.selectionEnd) {
-        const carried = continueList(box.value, box.selectionStart);
-        if (carried !== null) {
-          event.preventDefault();
-          caret.current = carried.caret;
-          change(carried.text);
-        }
-      }
+    const box = event.currentTarget;
+    const wrapped = typedWrap(event, { start: box.selectionStart, end: box.selectionEnd });
+    if (wrapped !== null) {
+      event.preventDefault();
+      insert(wrapped);
       return;
     }
-    if (event.metaKey || event.ctrlKey) {
+    const action = enterAction(
+      event,
+      box.value.slice(0, box.selectionStart),
+      ports.touchOnly?.() ?? false,
+    );
+    if (action === null) return;
+    if (action === 'submit') {
       event.preventDefault();
       send();
       return;
     }
-    const before = event.currentTarget.value.slice(0, event.currentTarget.selectionStart);
-    // Inside a fence Enter is a newline: the browser's own behaviour, left alone.
-    if (insideFence(before)) return;
-    event.preventDefault();
-    send();
+    // A new line. In a list or a quote it carries the marker on, and an empty item ends the list;
+    // elsewhere — and inside a fence — the browser's own line break is right (D-181, D-188).
+    if (!event.metaKey && !event.ctrlKey && box.selectionStart === box.selectionEnd) {
+      const carried = continueList(box.value, box.selectionStart);
+      if (carried !== null) {
+        event.preventDefault();
+        caret.current = carried.caret;
+        change(carried.text);
+      }
+    }
   };
 
   // A send that was waiting goes once nothing is uploading; if something failed meanwhile, it says so.
@@ -489,10 +472,13 @@ const Inner = ({
 
   const compact = parentId !== undefined;
   const empty = trimEnd(text) === '';
+  // Inside an open fence, and on a phone, Enter is a new line, so the key that sends is the one the hint
+  // names (D-188) — and the field's description, which a screen reader reads at every width, says it too.
+  const fenced = insideFence(text.slice(0, caretAt)) || (ports.touchOnly?.() ?? false);
   const hints = (
     <>
       <span className="whitespace-nowrap">
-        <Kbd>Enter</Kbd> {t('composer.hint.send')}
+        <Kbd>{fenced ? chord(labels.mod, labels.enter) : 'Enter'}</Kbd> {t('composer.hint.send')}
       </span>
       <span className="whitespace-nowrap">
         <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
@@ -700,7 +686,13 @@ const Inner = ({
                 'inline-code',
                 chord(labels.mod, 'E'),
               )}
-              {tool(8, 'code', t('composer.codeBlock'), 'code-block')}
+              {tool(
+                8,
+                'code',
+                t('composer.codeBlock'),
+                'code-block',
+                chord(labels.mod, labels.alt, labels.shift, 'C'),
+              )}
             </div>
             <IconButton
               label={t('composer.preview')}

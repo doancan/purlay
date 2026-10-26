@@ -135,8 +135,19 @@ describe('what is rendered', () => {
     ]);
   });
 
-  test('an ATX heading is a heading, whatever its level', () => {
-    expect(blocks('### Release')).toEqual([{ type: 'heading', children: [text('Release')] }]);
+  test('an ATX heading is a heading, and says its level, at most 3: the sizes there are are three', () => {
+    expect(blocks('### Release')).toEqual([
+      { type: 'heading', level: 3, children: [text('Release')] },
+    ]);
+    expect(blocks('# Release')).toEqual([
+      { type: 'heading', level: 1, children: [text('Release')] },
+    ]);
+    expect(blocks('## Release')).toEqual([
+      { type: 'heading', level: 2, children: [text('Release')] },
+    ]);
+    expect(blocks('###### Release')).toEqual([
+      { type: 'heading', level: 3, children: [text('Release')] },
+    ]);
   });
 
   test('links to http, https and mailto, written or bare', () => {

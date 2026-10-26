@@ -1,7 +1,7 @@
 /**
  * Who a message is by, asked in one place (D-134 §6). A person's message has its sender; a message a
  * repository's feed posted has none, and is GitHub's. Every screen that names an author, and every
- * rule that asks "is this mine?" — the side a bubble sits on, the edit shortcut, grouping, the new
+ * rule that asks "is this mine?" — the edit shortcut, grouping, the new
  * divider, following the bottom, typing — asks here, so an event is nobody's and never yours.
  */
 import { isErased, type Message } from '@purlay/types';

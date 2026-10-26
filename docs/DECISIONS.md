@@ -4290,7 +4290,7 @@ is made — on the server for metadata, in the browser for rendering — and bot
 
 **3 · Headings are emphasis.** `#` makes a heading, drawn at the body's size in bold: a heading in a
 conversation is emphasis, not a title, and a full-size one breaks the feed's rhythm. Decided by the
-owner, with *as typed* and *a real heading* rejected.
+owner, with *as typed* and *a real heading* rejected. *Amended 2026-10-26 by D-189:* a heading has a size by its level (still not a heading element).
 
 **4 · Code is a fence.** Four spaces are indentation; only a fence makes code, so an indented log or
 the continuation of a list is not turned into a block without a language. Decided by the owner. The
@@ -5234,7 +5234,7 @@ the Starred section, collapsible sections, the typing line and the member stack 
 
 ---
 
-### D-119. A conversation has two edges: bubbles, and your own messages on the right
+### D-119. A conversation has two edges: bubbles, and your own messages on the right — reversed by D-187
 
 **Amends D-100 §avatars-and-no-bubbles, D-110 §5 and `UX.md` §3.** The owner looked at the channel
 drawn to D-118 and asked for it "not like Slack, left and right". The reference is the Superdesign
@@ -6739,7 +6739,7 @@ together; on a phone Reply stood taller than the rest.
 
 1. **The bar sits on its own row's top edge, in the corner the message is not in** — the right for
    everyone else's, the left for your own — the way Slack and Linear put it top-right, mirrored for
-   the second edge D-119 drew. It starts at the row's top and never reaches above it, so nothing of
+   the second edge D-119 drew. *Amended 2026-10-26 by D-187:* there is one edge now, so it is the right for every message. It starts at the row's top and never reaches above it, so nothing of
    another message is ever under it, on any window; a message under a name has a band above its
    bubble and the bar stays inside it. A *grouped* message has no band: there a wide bubble's first
    line may lose its corner to its own bar while that row is the one. Accepted: the alternatives
@@ -7773,7 +7773,7 @@ The owner, judging it live, found the product too narrow. The widths are tokens
 **Decided.**
 
 1. `size-feed-max` 760px → 1040px: the feed, the composer under it and the list screens that share
-   its column (D-158). A bubble is still at most five sixths of the feed (D-119), so a line stays
+   its column (D-158). A bubble is still at most five sixths of the feed (D-119; *no bubble since D-187*), so a line stays
    readable while a code block, a diff and a card get the room they lacked.
 2. `size-settings` 720px → 960px, and `size-field` 320px → 360px, so a settings row's label and its
    control both breathe and a description is not wrapped into a column.
@@ -7890,7 +7890,7 @@ however wide or narrow the window is. The owner asked for exactly that and rever
    main area's full width, their content from its left edge. Nothing centres them; the gutter is the
    only margin — 24px on the feed, the composer, a list screen and the headers above them, 40px on a Settings page, and
    16px each below `size-narrow`.
-2. A bubble is still at most five sixths of the feed (D-119): the cap on a line moves with the window.
+2. A bubble is still at most five sixths of the feed (D-119; *dropped by D-187: a line is the feed's width*): the cap on a line moves with the window.
 3. `size-feed-max` stays and bounds only what is drawn inside a column — an empty state's sentence, a
    GitHub card — not a column. `size-settings` bounds only the welcome screen, a focused one-time step.
 4. A thread's line under a message — its status and **Show thread** — is as wide as what it says and
@@ -8745,7 +8745,7 @@ the contrast pairs to keep the old light values (the pairs are the gate, D-97 §
 **Cost of reversing.** The six light `nav-*` values, the three moved light values, the two lines in the shell
 that no longer force the theme and `inNav`'s pin: tokens and one file each. No contract, route or key.
 
-### D-181. The composer's formatting row, emoji picker and preview — extends D-110
+### D-181. The composer's formatting row, emoji picker and preview — extends D-110 (keys amended by D-188)
 
 **Decided (the owner, 2026-10-23).** The owner called the message box "very weak" next to the competition's.
 D-110 allowed three inserting buttons (bold, code block, mention); the renderer draws far more than that
@@ -8977,6 +8977,96 @@ sign-in milestone closes.
 
 **Reverses if** the app is not kept up to the web client's behaviour for two consecutive releases — then it is
 archived and the web client is the product, which D-51 was.
+
+### D-187. One edge again: every message hangs from the left, in no bubble — reverses D-119
+
+**Reverses D-119 and amends D-150 §1, D-177 and `UX.md` §3, §4.1 and §4.2.** The owner's audit of the interface
+(2026-10-26): messages are to sit on the left "like Slack", everywhere, direct messages included. D-119 had made the
+opposite trade at the owner's request and recorded what it cost; this is the owner making the first trade again, and
+the cost D-119 named — a bubble in a bubble around a code block — goes with it.
+
+**Decided.**
+
+1. **One edge.** A message by anyone, you included, is drawn as everyone else's was: the avatar in its fixed column,
+   the display name and the time over the first message of a group, the words beside the avatar's column. The
+   row has no `flex-row-reverse` and no `data-outgoing`; `data-own` marks it for a test and for nothing visual.
+2. **No bubble.** The message body is a block without a fill, a radius or a border (`data-body`). The tint that
+   told your side from theirs (`accent-subtle` against `surface-200`) is not needed with one side, and a fill under
+   every message made a code block, a table and a quote three boxes deep. A failed send keeps its danger edge; a
+   mention of you still fills your own `@name` (D-119 §5); a resolved thread's root is still muted.
+3. **The bar of actions is at the row's top-right for every message** (the corner D-150 chose for other people's),
+   and a thread's status line sits under the words from the left edge, as D-177 had it for theirs.
+4. **The row is not made of one shape any more**, so there is no five-sixths cap: a line is as long as the feed.
+   Long lines of prose are the feed's width, as in Slack; the composer and the feed already share it (D-177).
+
+**Rejected.** *Keeping the bubbles and only moving yours to the left* — the two fills would then tell apart nothing
+the name does not, and the box-in-a-box remains. *Keeping the right edge on a phone* — the second edge was a
+feature of the whole screen, not of a width.
+
+**Cost of reversing:** `message-row.tsx`, `message-actions.tsx`, `thread-summary.tsx`, their tests, `polish.e2e.ts`
+and this paragraph; D-119's reasoning for the two edges is intact above for whoever wants it back. No contract,
+route, keyboard path or required state depends on which side a message is drawn on.
+
+### D-188. Writing and reading a message: Enter by context, code that is seen, and one grammar for an edge
+
+**Amends D-110, D-181 and `UX.md` §3, §5.** The owner's audit of the interface (2026-10-26) asked for the
+composer's code controls to be checked, Markdown to read properly, the send keys to be tested, code to be
+formatted by its type, and the borders to stop disagreeing.
+
+**Decided.**
+
+1. **Enter is one function, `enterAction`, and the composer and the editor of a sent message both ask it.** Shift+Enter
+   is a new line (and carries a list or a quote on); Ctrl/Meta+Enter sends from anywhere; a plain Enter sends, except
+   inside a code fence that is still open, where it is a new line. The editor of a sent message did not know the fence:
+   Enter inside a block of code saved the half-edited message. It now also takes the formatting keys and Shift+Enter's
+   list continuation. **On a device that is only touch** (`(pointer: coarse) and (hover: none)`) a plain Enter is a new
+   line, since a phone's keyboard has no Shift+Enter and the composer had no way to write a second line there; Send is
+   the button, and Ctrl/Meta+Enter still sends from an attached keyboard. While the caret is inside an open fence the hint under the box names the key that sends
+   (`Ctrl+Enter` / `⌘↵`) rather than saying Enter does, and so does the editor's, which names the key that saves; the
+   composition (IME) rule is one hook, `composition.ts`, for both boxes — the editor had none, and an IME's confirming
+   Enter saved a half-composed edit.
+2. **A code block has a key**: Ctrl/Meta+Alt+Shift+C, read by the key's position (Alt turns C into `ç` on a Mac), shown
+   in the tooltip of the button. Plain Ctrl+Shift+C is the browser's inspector and a page cannot have it. **A backtick
+   typed over a selection wraps it** in inline code instead of replacing it; Ctrl+Alt is let through, as it is AltGr on
+   Windows layouts that type a backtick. The same care applies to the code chord: a chord the browser reports as `AltGraph`
+   is a letter on layouts such as the Polish programmer's, and is left to type it.
+3. **A fence names its language, and the language is coloured.** The grammars grew from 14 to 33 (Java, C, C++, C#,
+   PHP, Ruby, Kotlin, Swift, Dockerfile, TOML, XML, GraphQL, SCSS, Lua, INI, PowerShell, Makefile, nginx, protobuf, and their
+   usual spellings: `c++`, `c#`, `rb`, `kt`, `gql`, `ps1`), each still a chunk loaded on first use, so the initial
+   bundle is unchanged. A language that is not known stays plain, as before. The colour was there but could not be seen:
+   `syntax-keyword` was `#2c2c54` in the light theme and `#c4c4ee` in the dark — the ink, within a shade — so a keyword
+   looked like any other word. It is now a violet (`#6d28d9` / `#c4a7ff`), passing the same contrast pairs.
+4. **One grammar for an edge**, held by `styles.test.ts`. At rest an edge is `border-subtle` (a card, a divider) or
+   `border-strong` (a control the line is the only cue for); **hover changes the fill, never the line**; selected is
+   `accent`; a fault is `danger`; focus is the one ring. The outliers were a reaction chip and a checkbox whose edge
+   went to the dark ink on hover, the jump field's edge going to the dark navigation ink, and the channel details tabs
+   underlining the selected tab in ink (black) where every other selection is the accent. Two hover edges remain, named
+   in the test: the primary button's (`accent` to `accent-hover`, the same hue a step on) and the avatar ring in the
+   sidebar, which is the sidebar's own ground.
+
+**Rejected.** *A second key for "send" inside a fence only* — Ctrl+Enter already sends everywhere; the hint now says so.
+*Highlighting with no language by guessing it* — a guess that is sometimes wrong colours a message wrongly, and the
+language costs the writer three characters.
+
+**Cost of reversing:** `enterAction`, `typedWrap` and the `formatKey` chord are in `composer-text.ts` with their tests;
+the grammars are lines in `highlight.ts`; the colours are two values in `tokens.json`; the border test is one block.
+
+### D-189. A heading in a message has a size — amends D-101 §3
+
+**Amends D-101 §3.** D-101 drew every heading as bold text at the body's size, on the reasoning that a heading in a
+conversation is not an outline. The owner wrote Markdown in the composer and found the `#` lines no different from
+the paragraph under them (2026-10-26): a heading nobody can tell from bold text is a heading that does not work.
+
+**Decided.** The narrowed tree keeps the heading's level, clamped to 1–3 (`level` on the `heading` block, additive: the
+server's metadata, plain-text and prose readers ignore it). `#` is drawn at the `display` size, `##` at `title`, and
+`###` to `######` at `heading` — the type scale has three sizes above the body, so a fourth level has none left to be.
+All are semibold. They remain paragraphs, not heading elements: nothing in a message joins the page's outline, a
+screen reader's heading list is the screen's and not the conversation's, and a message cannot take `h1` from the page.
+
+**Rejected.** *Real `h1`–`h6` elements* — a hostile or careless `# x` in a feed of fifty would reorder the page's
+structure for assistive technology. *Keeping the body size and relying on weight* — what the owner saw not working.
+
+**Cost of reversing:** one field on one node, one branch in `render-content.tsx`, and their tests.
 
 ---
 

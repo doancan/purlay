@@ -38,7 +38,14 @@ type RowKey =
   | 'shortcuts.bold'
   | 'shortcuts.italic'
   | 'shortcuts.link'
-  | 'shortcuts.preview';
+  | 'shortcuts.preview'
+  | 'shortcuts.strike'
+  | 'shortcuts.inlineCode'
+  | 'shortcuts.codeBlock'
+  | 'shortcuts.bullets'
+  | 'shortcuts.numbers'
+  | 'shortcuts.quote'
+  | 'shortcuts.editLast';
 
 type GroupKey =
   'shortcuts.group.navigation' | 'shortcuts.group.messages' | 'shortcuts.group.composer';
@@ -86,7 +93,14 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
       { label: 'shortcuts.codeSend', keys: (k) => [[k.mod, k.enter]] },
       { label: 'shortcuts.bold', keys: (k) => [[k.mod, 'B']] },
       { label: 'shortcuts.italic', keys: (k) => [[k.mod, 'I']] },
+      { label: 'shortcuts.strike', keys: (k) => [[k.mod, k.shift, 'X']] },
+      { label: 'shortcuts.inlineCode', keys: (k) => [[k.mod, 'E']] },
+      { label: 'shortcuts.codeBlock', keys: (k) => [[k.mod, k.alt, k.shift, 'C']] },
       { label: 'shortcuts.link', keys: (k) => [[k.mod, k.shift, 'U']] },
+      { label: 'shortcuts.bullets', keys: (k) => [[k.mod, k.shift, '8']] },
+      { label: 'shortcuts.numbers', keys: (k) => [[k.mod, k.shift, '7']] },
+      { label: 'shortcuts.quote', keys: (k) => [[k.mod, k.shift, '9']] },
+      { label: 'shortcuts.editLast', keys: () => [['↑']] },
       { label: 'shortcuts.preview', keys: (k) => [[k.mod, k.shift, 'P']] },
     ],
   },

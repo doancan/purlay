@@ -866,7 +866,7 @@ describe('a send on its way', () => {
       view.world.timers.advance(ACK_DEADLINE_MS);
     });
     const row = view.getByText('hello').closest('[data-message-row]');
-    expect(row?.querySelector('[data-bubble]')?.className).toContain('border-danger');
+    expect(row?.querySelector('[data-body]')?.className).toContain('border-danger');
     expect(row?.textContent).toContain('Failed to send');
     expect(view.getByText('Message failed to send')).toBeDefined();
 

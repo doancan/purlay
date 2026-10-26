@@ -52,6 +52,61 @@ describe('the application’s classes', () => {
   });
 });
 
+describe('the edges (D-188)', () => {
+  // One grammar for a line: at rest `border-subtle` (a card, a divider) or `border-strong` (a control the
+  // line is the only cue for); hover changes the *fill*, never the line; selected is `accent`, a fault is
+  // `danger`. A line that darkens on hover in one place and goes blue in another is the inconsistency this
+  // refuses, so the few hover edges that exist are named, and a new one has to be added here on purpose.
+  const HOVER_EDGES = new Set(['hover:border-accent-hover', 'group-hover:border-nav-hover']);
+  /** An edge colour that depends on hover, on a group's or a peer's hover too, whichever sides it draws. */
+  const hoverEdge = (name: string): boolean => /(^|[:-])hover:border-/.test(name);
+  /** An edge drawn in the ink colour, with any variant before it. */
+  const inkEdge = (name: string): boolean => /(^|:)border(-[trblxy])?-ink/.test(name);
+  const classes = application
+    .flatMap((path) => classesIn(relative(root, path), readFileSync(path, 'utf8')))
+    .map((found) => found.candidate);
+
+  test('the classes were found at all, and so are the hover edges that are named', () => {
+    expect(classes.some((name) => name === 'border-hairline')).toBe(true);
+    // A filter that matches nothing proves nothing (CONTRIBUTING §6.4): each exemption is really there.
+    for (const named of HOVER_EDGES) expect(classes, named).toContain(named);
+  });
+
+  test('the filters see what they are for', () => {
+    for (const name of [
+      'hover:border-ink-muted',
+      'group-hover:border-danger',
+      'peer-hover:border-accent',
+      'hover:border-b-accent',
+      'md:hover:border-border-strong',
+    ]) {
+      expect(hoverEdge(name), name).toBe(true);
+    }
+    for (const name of ['border-accent', 'hover:bg-surface-200', 'hover:text-ink']) {
+      expect(hoverEdge(name), name).toBe(false);
+    }
+    for (const name of [
+      'border-ink',
+      'border-b-ink',
+      'hover:border-ink',
+      'max-narrow:border-t-ink',
+    ]) {
+      expect(inkEdge(name), name).toBe(true);
+    }
+    for (const name of ['border-border-strong', 'border-accent']) {
+      expect(inkEdge(name), name).toBe(false);
+    }
+  });
+
+  test('no edge changes colour on hover except the two that are named', () => {
+    expect(classes.filter((name) => hoverEdge(name) && !HOVER_EDGES.has(name))).toEqual([]);
+  });
+
+  test('no edge is the ink colour: selected is the accent, not black', () => {
+    expect(classes.filter(inkEdge)).toEqual([]);
+  });
+});
+
 describe('the accent', () => {
   // `accent` is a fill: dark navy in both themes, so the words a dark page needs
   // are `accent-text` (D-110). A bare `text-accent` would draw navy on near-black,

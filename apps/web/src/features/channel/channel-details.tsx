@@ -640,7 +640,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
               className={cn(
                 'flex h-control items-center gap-2 border-b-marker text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
                 each === tab
-                  ? 'border-ink text-ink'
+                  ? 'border-accent text-ink'
                   : 'border-transparent text-ink-muted hover:text-ink',
               )}
             >

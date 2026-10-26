@@ -222,12 +222,20 @@ describe('markdown', () => {
     expect(view.getByText('c').tagName).toBe('DEL');
   });
 
-  test('a heading is emphasis at the body size, not a title in the outline (D-101 §3)', async () => {
-    const view = await mount('# Release\n\nnotes');
+  test('a heading is bold and sized by its level, and is not an element of the outline (D-101 §3, D-189)', async () => {
+    const view = await mount('# One\n\n## Two\n\n### Three\n\n###### Six\n\nnotes');
     expect(body(view).querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
-    const heading = view.getByText('Release');
-    expect(heading.tagName).toBe('P');
-    expect(heading.className).toContain('font-semibold');
+    for (const [name, size] of [
+      ['One', 'text-display'],
+      ['Two', 'text-title'],
+      ['Three', 'text-heading'],
+      ['Six', 'text-heading'],
+    ] as const) {
+      const heading = view.getByText(name);
+      expect(heading.tagName).toBe('P');
+      expect(heading.className).toContain('font-semibold');
+      expect(heading.className).toContain(size);
+    }
   });
 
   test('four spaces are indentation, not code (D-101 §4)', async () => {

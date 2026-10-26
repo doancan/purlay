@@ -120,7 +120,7 @@ const Chip = ({
         className={
           mine
             ? 'inline-flex h-6 items-center gap-1 rounded-sm border-hairline border-accent-text bg-accent-subtle px-2 text-caption font-medium text-accent-text'
-            : 'inline-flex h-6 items-center gap-1 rounded-sm border-hairline border-border-subtle bg-surface-050 px-2 text-caption font-medium text-ink-muted transition-colors duration-hover ease-standard hover:border-ink-muted'
+            : 'inline-flex h-6 items-center gap-1 rounded-sm border-hairline border-border-subtle bg-surface-050 px-2 text-caption font-medium text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink'
         }
       >
         <span aria-hidden="true">{reaction.emoji}</span>

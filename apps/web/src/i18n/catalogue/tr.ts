@@ -709,7 +709,7 @@ export const tr = {
   'saved.more': 'Daha fazla yükle',
   'message.editLabel': 'Mesajını düzenle',
   'message.editSave': 'Kaydet',
-  'message.editHint': 'Kaydetmek için Enter · vazgeçmek için Esc',
+  'message.editHint': 'Kaydetmek için {save} · yeni satır için Shift+Enter · vazgeçmek için Esc',
   'message.editFailed': 'Düzenlemen kaydedilmedi.',
   'message.deleteTitle': 'Bu mesaj silinsin mi?',
   'message.deleteBody': 'Yerine silindiğini söyleyen bir not gelir. Yanıtları kalır.',
@@ -1407,6 +1407,13 @@ export const tr = {
   'shortcuts.italic': 'İtalik',
   'shortcuts.link': 'Bağlantı ekle',
   'shortcuts.preview': 'Mesajı önizle',
+  'shortcuts.strike': 'Üstü çizili',
+  'shortcuts.inlineCode': 'Satır içi kod',
+  'shortcuts.codeBlock': 'Kod bloğu',
+  'shortcuts.bullets': 'Madde işaretli liste',
+  'shortcuts.numbers': 'Numaralı liste',
+  'shortcuts.quote': 'Alıntı',
+  'shortcuts.editLast': 'Boş kutuda son mesajını düzenle',
   'shortcuts.or': 'ya da',
 
   // ── Kurulum sihirbazı (D-179 §4, UX §11) ────────────────────────────────

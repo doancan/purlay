@@ -25,7 +25,7 @@ export const JumpField = (): React.JSX.Element | null => {
       type="button"
       onClick={open}
       aria-keyshortcuts="Control+K Meta+K"
-      className="flex h-row w-full shrink-0 items-center gap-2 rounded-md border-hairline border-nav-border bg-nav-hover px-2 text-label text-nav-ink-muted transition-colors duration-hover ease-standard hover:border-nav-ink-muted max-narrow:h-touch"
+      className="flex h-row w-full shrink-0 items-center gap-2 rounded-md border-hairline border-nav-border bg-nav-hover px-2 text-label text-nav-ink-muted transition-colors duration-hover ease-standard hover:text-nav-ink max-narrow:h-touch"
     >
       <Icon name="search" />
       <span className="flex-1 text-left">{t('sidebar.jump')}</span>

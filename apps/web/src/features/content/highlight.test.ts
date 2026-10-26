@@ -30,6 +30,18 @@ describe('which grammar a fence names', () => {
     ['sql', 'sql'],
     ['html', 'html'],
     ['css', 'css'],
+    ['c++', 'cpp'],
+    ['c#', 'csharp'],
+    ['cs', 'csharp'],
+    ['rb', 'ruby'],
+    ['kt', 'kotlin'],
+    ['docker', 'dockerfile'],
+    ['gql', 'graphql'],
+    ['ps1', 'powershell'],
+    ['protobuf', 'proto'],
+    ['java', 'java'],
+    ['swift', 'swift'],
+    ['toml', 'toml'],
   ])('%s is %s', (name, grammar) => {
     expect<string | null>(grammarFor(name)).toBe(grammar);
   });

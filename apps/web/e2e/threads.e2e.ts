@@ -101,14 +101,15 @@ test.describe('opening and closing a thread', () => {
 });
 
 test.describe('the line under a root', () => {
-  test('on your own message it sits under your bubble, at the edge the bubble is on', async ({
+  test('on your own message it sits under the words, from the same left edge as everyone’s', async ({
     page,
     signIn,
     room,
     api,
   }) => {
-    // Found by an audit: the status of your own question sat at the feed's far left, a column
-    // away from the bubble it belongs to.
+    // Found by an audit when your own messages were on the right: the status of your own question sat at
+    // the feed's far left, a column away from the message it belongs to. Now there is one edge (D-187),
+    // and the status starts where the words do.
     const made = await room({ members: ['dogancan', 'alice', 'bob'] });
     const question = `who owns the pool limits in ${made.name}?`;
     const root = await api('alice').say(made.id, question);
@@ -118,14 +119,14 @@ test.describe('the line under a root', () => {
     const row = rowWith(page, question).first();
     const status = row.locator('[data-thread-summary]').getByText(/^Open · 1 reply/);
     await expect(status).toBeVisible();
-    const bubble = await row.locator('[data-bubble]').first().boundingBox();
+    const body = await row.locator('[data-body]').first().boundingBox();
     // The pill the words are cut inside, not the words: its edge is the one drawn.
     const pill = await status.locator('xpath=..').boundingBox();
-    if (bubble === null || pill === null) throw new Error('the bubble or its status is not drawn');
+    if (body === null || pill === null) throw new Error('the message or its status is not drawn');
     expect(
-      Math.abs(bubble.x + bubble.width - (pill.x + pill.width)),
-      'the status ends where the bubble ends',
-    ).toBeLessThanOrEqual(12);
+      Math.abs(body.x - pill.x),
+      'the status starts where the message does',
+    ).toBeLessThanOrEqual(2);
   });
 });
 

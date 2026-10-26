@@ -82,6 +82,8 @@ interface Options {
   readonly api?: Api;
   readonly locale?: 'en' | 'tr';
   readonly open?: boolean;
+  /** A device with no pointer that hovers: a phone. */
+  readonly touchOnly?: boolean;
 }
 
 interface Mounted {
@@ -123,7 +125,13 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
       <WorkspaceScopeProvider slug="acme" notFound={null}>
         <RealtimeProvider>
           <OutboxProvider>
-            <ComposerPortsContext.Provider value={{ storage, schedule: timers.schedule }}>
+            <ComposerPortsContext.Provider
+              value={{
+                storage,
+                schedule: timers.schedule,
+                touchOnly: () => options.touchOnly === true,
+              }}
+            >
               <Holder />
             </ComposerPortsContext.Provider>
           </OutboxProvider>
@@ -1013,6 +1021,113 @@ describe('Shift+Enter in a list carries it on; Enter still sends (D-181)', () =>
     await user.click(box());
     await user.keyboard('```{Shift>}{Enter}{/Shift}- x{Shift>}{Enter}{/Shift}');
     expect(box().value).toBe('```\n- x\n');
+  });
+});
+
+describe('Enter, Shift+Enter and code (D-188)', () => {
+  test('inside an open fence a plain Enter is a new line and sends nothing', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('```ts{Enter}let a = 1;{Enter}let b = 2;');
+    expect(box().value).toBe('```ts\nlet a = 1;\nlet b = 2;');
+    expect(sent()).toEqual([]);
+  });
+
+  test('Ctrl+Enter sends from inside the fence, the whole block as written', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('```{Enter}x{Control>}{Enter}{/Control}');
+    expect(sent().map((frame) => frame.content)).toEqual(['```\nx']);
+  });
+
+  test('once the fence is closed, Enter sends again', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('```{Enter}x{Enter}```{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['```\nx\n```']);
+  });
+
+  test('Shift+Enter in a quote carries the marker on', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('> said{Shift>}{Enter}{/Shift}more');
+    expect(box().value).toBe('> said\n> more');
+    expect(sent()).toEqual([]);
+  });
+
+  test('while the caret is in an open fence the hint names the key that sends', async () => {
+    const { box, user } = await mount();
+    await user.click(box());
+    const hint = (): string =>
+      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.textContent ?? '';
+    expect(hint()).toContain('Enter');
+    expect(hint()).not.toContain('Ctrl+Enter');
+    await user.keyboard('```{Enter}x');
+    expect(hint()).toContain('Ctrl+Enter');
+    await user.keyboard('{Enter}```');
+    expect(hint()).not.toContain('Ctrl+Enter');
+  });
+
+  test('the code block chord opens a fence round the selection, whatever Alt makes of the letter', async () => {
+    const { box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('fix it');
+    act(() => {
+      box().setSelectionRange(4, 6);
+    });
+    // Built by hand: happy-dom answers `getModifierState('AltGraph')` with `altKey`, which no browser does.
+    const chord = new KeyboardEvent('keydown', {
+      key: 'ç',
+      code: 'KeyC',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(chord, 'getModifierState', { value: () => false });
+    act(() => {
+      box().dispatchEvent(chord);
+    });
+    expect(box().value).toBe('fix \n```\nit\n```');
+  });
+
+  test('a backtick typed over a selection wraps it instead of replacing it', async () => {
+    const { box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('fix it');
+    act(() => {
+      box().setSelectionRange(4, 6);
+    });
+    fireEvent.keyDown(box(), { key: '`', code: 'Backquote' });
+    expect(box().value).toBe('fix `it`');
+    expect(sent()).toEqual([]);
+  });
+
+  test('a backtick with nothing selected is only typing', async () => {
+    const { box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('a`b');
+    expect(box().value).toBe('a`b');
+  });
+});
+
+describe('on a phone (D-188)', () => {
+  test('Enter is a line break, because there is no Shift+Enter, and the Send button sends', async () => {
+    const { view, box, user, sent } = await mount({ touchOnly: true });
+    await user.click(box());
+    await user.keyboard('one{Enter}two');
+    expect(box().value).toBe('one\ntwo');
+    expect(sent()).toEqual([]);
+    await user.click(view.getByRole('button', { name: /Send/ }));
+    expect(sent().map((frame) => frame.content)).toEqual(['one\ntwo']);
+  });
+
+  test('a keyboard that is attached still sends with Ctrl+Enter', async () => {
+    const { box, user, sent } = await mount({ touchOnly: true });
+    await user.click(box());
+    await user.keyboard('one{Control>}{Enter}{/Control}');
+    expect(sent().map((frame) => frame.content)).toEqual(['one']);
   });
 });
 
