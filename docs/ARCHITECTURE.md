@@ -556,6 +556,13 @@ A socket subscribes to its topics **before** its session is confirmed by a secon
 while it opens is seen by one or heard by the other (D-85, amended). A replay read after a revocation was observed does not
 write that channel's messages (D-85, amended).
 
+**A client that is not a browser** (the macOS application, D-186) meets the same upgrade with two things the
+browser does for itself, set by the client: the session as an explicit `Cookie` header, and `Origin` equal to
+`APP_URL` — D-39's check is an equality, and `GET /api/client` is where the client learns the value. It also
+sends `X-Purlay-Client`; one below the served minimum is answered `426 CLIENT_TOO_OLD` at the upgrade, a status
+the client can act on, where a socket that closes tells it nothing (D-190). A browser sends no such header and
+is served.
+
 ### 7.3. The isolation mechanism
 
 The rule "every query filters on `workspace_id`" fails eventually if it depends on remembering.
