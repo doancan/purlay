@@ -8,13 +8,13 @@
  * **It blocks on a regression, never on the line**, by the same rule as `budget:latency`: on a hosted
  * runner the channel switch measured 120–170 ms where a laptop measures 33 ms, and moves by tens of
  * percent between identical runs. The line itself is held where it means something — the browser
- * tests assert it on a developer's machine. Here a number fails when it jumped past main's last, and
+ * tests assert it on a developer's machine. Here a number fails when it jumped past the middle of main's last few runs (`historyOf`), and
  * a number main measured that this run did not is a failure too: a measurement that quietly stopped
  * is not a pass. A run that measured nothing at all is refused.
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { jumped, optionOf } from './budget-latency';
+import { jumped, optionOf, REGRESSION_FACTOR } from './budget-latency';
 
 /**
  * Each number: its name in the report, the file it is in, and where in that file. The middle of
@@ -73,24 +73,57 @@ export const measured = async (folder: string, project: string): Promise<Measure
   return found;
 };
 
-/** The lines to print, and whether the run regressed against the baseline, if there is one. */
+/**
+ * What a run is judged against: the last few runs that passed, oldest first. One run says what a runner
+ * did that day, not what is normal — on a hosted runner the channel switch measured 58 ms in one run of
+ * main and 107 in the next, identical — so a single lucky run kept as the baseline failed every change
+ * after it (D-49, amended). The middle of the history is the normal, and while there are fewer than
+ * `STEADY_FROM` runs to take a middle of, the factor is wider.
+ */
+export const HISTORY_LENGTH = 5;
+const STEADY_FROM = 3;
+const STEADY_FACTOR = REGRESSION_FACTOR;
+const UNSTEADY_FACTOR = 2;
+
+const middle = (values: readonly number[]): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? (sorted[at] ?? Number.NaN)
+    : ((sorted[at - 1] ?? Number.NaN) + (sorted[at] ?? Number.NaN)) / 2;
+};
+
+/** The kept file: `{ history: [...] }`, or what it was before — one run, flat — read as a history of one. */
+export const historyOf = (kept: unknown): readonly Measured[] => {
+  if (typeof kept !== 'object' || kept === null) return [];
+  const found = (kept as { readonly history?: unknown }).history;
+  return Array.isArray(found) ? (found as Measured[]) : [kept as Measured];
+};
+
+/** The lines to print, and whether the run regressed against the history, if there is one. */
 export const judge = (
   now: Measured,
-  baseline: Measured | null,
+  history: readonly Measured[] | null,
 ): { readonly regressed: boolean; readonly lines: readonly string[] } => {
   let regressed = false;
   const lines: string[] = [];
+  const newest = history?.at(-1);
   for (const { name } of MEASURES) {
     const value = now[name];
-    const before = baseline?.[name];
+    const past = (history ?? []).flatMap((run) => (run[name] === undefined ? [] : [run[name]]));
+    const before = past.length === 0 ? undefined : middle(past);
     const was = before === undefined ? '' : `, was ${before.toFixed(1)} ms`;
     if (value === undefined) {
-      if (before === undefined) continue;
+      if (newest?.[name] === undefined) continue;
       regressed = true;
       lines.push(`${name}: not measured${was} — MISSING`);
       continue;
     }
-    const worse = jumped(value, before);
+    const worse = jumped(
+      value,
+      before,
+      past.length >= STEADY_FROM ? STEADY_FACTOR : UNSTEADY_FACTOR,
+    );
     if (worse) regressed = true;
     lines.push(`${name}: ${value.toFixed(1)} ms${was}${worse ? ' — REGRESSED' : ''}`);
   }
@@ -109,14 +142,15 @@ export const main = async (
   }
   const keepFile = optionOf(args, '--keep');
   const kept = keepFile === undefined ? undefined : await readJson(keepFile);
-  const baseline = kept === undefined ? null : (kept as Measured);
-  const { regressed, lines } = judge(now, baseline);
-  // A regression is not adopted: the next run is judged against the last one that passed.
+  const history = kept === undefined ? null : historyOf(kept);
+  const { regressed, lines } = judge(now, history);
+  // A regression is not adopted: the next run is judged against the runs that passed.
   if (keepFile !== undefined && !regressed) {
-    await Bun.write(keepFile, `${JSON.stringify(now, null, 2)}\n`);
+    const next = [...(history ?? []), now].slice(-HISTORY_LENGTH);
+    await Bun.write(keepFile, `${JSON.stringify({ history: next }, null, 2)}\n`);
   }
   const said =
-    keepFile !== undefined && baseline === null
+    keepFile !== undefined && history === null
       ? ['no baseline yet: this run is recorded, nothing compared']
       : [];
   return { lines: [...said, ...lines], code: regressed ? 1 : 0 };

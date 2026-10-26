@@ -1753,6 +1753,13 @@ answers already written.
 it renders; it is slow because of how much it ships and how much it holds. The remedy is these two
 numbers, enforced from the first build — not a different rendering architecture (D-50).
 
+*Amended 2026-10-26 (browser budgets):* "a regression against main's last run" meant one run, and one run is not what is
+normal: the channel switch measured 58 ms in one run of main and 107 in the next, identical, so a lucky run kept as the
+baseline failed the browser job of every change after it — a change to the API included — until somebody re-ran it, which is
+the gate D-49 says people learn to ignore. The kept file is now the last five runs that passed, a regression is judged
+against their middle, and while there are fewer than three the factor is 2 and not 1.5. A regression is still never
+adopted, and the line itself is still held where it means something, by the tests on a developer's machine.
+
 ---
 
 ### D-50. The client stays a single-page application, with a prerendered shell
