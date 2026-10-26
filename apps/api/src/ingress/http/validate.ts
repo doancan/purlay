@@ -52,7 +52,9 @@ export const queryOf = (
   const query: Record<string, unknown> = Object.fromEntries(url.searchParams);
   for (const key of convert.numbers ?? []) {
     const value = url.searchParams.get(key);
-    if (value !== null) query[key] = Number(value);
+    // Only plain digits become a number: `Number` also reads `0x10`, `1e1`, `1.0`, a blank and
+    // padding, and a query that is not an integer is for the schema to refuse, not to be rounded.
+    if (value !== null && /^-?\d+$/.test(value)) query[key] = Number(value);
   }
   for (const key of convert.booleans ?? []) {
     const value = url.searchParams.get(key);

@@ -385,6 +385,56 @@ describe('integration: messages', () => {
   });
 });
 
+describe('integration: a read says no to a query it does not understand', () => {
+  const refused = async (path: (channelId: string) => string): Promise<void> => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'msg-strict');
+      const channelId = await aChannel(db, alice, 'msg-strict-ws');
+      const response = await call(db, 'GET', path(channelId), { cookie: alice.cookie });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+    });
+  };
+
+  test('a misspelt cursor is refused, not read as the first page', async () => {
+    await refused((id) => `/api/channels/${id}/messages?beforeId=${crypto.randomUUID()}`);
+  });
+
+  test('a cursor given twice is refused, not read by its first value', async () => {
+    await refused(
+      (id) =>
+        `/api/channels/${id}/messages?before=${crypto.randomUUID()}&before=${crypto.randomUUID()}`,
+    );
+  });
+
+  test.each(['0x10', '1e1', '1.0', '', ' 5', '+5'])(
+    'a limit written %p is refused',
+    async (limit) => {
+      await refused((id) => `/api/channels/${id}/messages?limit=${encodeURIComponent(limit)}`);
+    },
+  );
+
+  test('the open questions and a search refuse the same', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'msg-strict-more');
+      const channelId = await aChannel(db, alice, 'msg-strict-more-ws');
+      const { workspace_id: workspaceId } = await db
+        .selectFrom('channels')
+        .select('workspace_id')
+        .where('id', '=', channelId)
+        .executeTakeFirstOrThrow();
+      for (const path of [
+        `/api/workspaces/${workspaceId}/unresolved?limit=0x10`,
+        `/api/workspaces/${workspaceId}/search?q=hello&limit=1e1`,
+        `/api/workspaces/${workspaceId}/search?q=hello&q=again`,
+      ]) {
+        const response = await call(db, 'GET', path, { cookie: alice.cookie });
+        expect([path, response.status]).toEqual([path, 400]);
+      }
+    });
+  });
+});
+
 describe('integration: writing needs membership of the channel (D-156)', () => {
   test('a public channel seen and not joined refuses a message and a reply alike, writes nothing, and takes both once joined', async () => {
     await withRollback(async (db) => {

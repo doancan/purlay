@@ -301,6 +301,23 @@ it already holds by id. **The acknowledgement says where each channel's replay s
 `nextCursor` of `null` means it reached the present; anything else means it was one page, and the
 client continues over HTTP with `?after=` from there. (D-65)
 
+**The replay is of new root messages only, and a client re-reads the rest.** `SUBSCRIBE` replays
+the root messages after the cursor that are not deleted. It does not replay an edit, a deletion, a
+reaction, a pin, a thread reply, a read mark or a membership change that happened while the client
+was away: a message the client holds and others deleted is shown until it reads the feed again. So a
+client, on every `ACK` after a reconnect, re-reads what it shows — the open channel's feed, the open
+thread, the channel list, the notification inbox and the unread counts — and does not take a
+reconnect for being up to date. The web client does so in `apps/web/src/realtime/engine.ts`
+(`resync`); any other client owes the same, and it is not in the contract bundle because it is
+behaviour, not a shape.
+
+**A `SUBSCRIBE` is judged whole.** One channel the person can no longer see makes the whole frame
+`ERROR CHANNEL_NOT_FOUND`, naming none: no `ACK`, no replay for the channels that were fine, and they
+stay unsubscribed (D-34 — the answer for a channel one may not know about is the answer for one that
+is not there). `ACCESS_REVOKED` went to the socket that was closed, and is not replayed. After that
+error a client reads its channel list again, drops the channels it no longer has, and subscribes to
+the rest.
+
 **The cursor advances on any live frame — which is safe only once that continuation is complete.**
 A replay that was one page ends at its `nextCursor`; everything between there and the present is
 still missing. If a live `MESSAGE_CREATED` then moved the cursor past the gap and the socket dropped

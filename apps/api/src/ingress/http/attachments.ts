@@ -44,13 +44,20 @@ const savedName = (attachment: ReadableAttachment): string =>
     ? `${attachment.fileName.replace(/\.[^.]*$/, '')}.webp`
     : attachment.fileName;
 
+/** RFC 5987 `attr-char`: `encodeURIComponent` leaves `'()*` raw, and a strict parser reads them as syntax. */
+const encodedName = (name: string): string =>
+  encodeURIComponent(name).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
 /** The headers a download is served with (RFC 6266 for the name, RFC 5987 for its encoding). */
 const downloadHeaders = (attachment: ReadableAttachment): Record<string, string> => {
   const image = attachment.kind === 'image';
   const name = savedName(attachment);
   return {
     'content-type': image ? 'image/webp' : 'application/octet-stream',
-    'content-disposition': `${image ? 'inline' : 'attachment'}; filename="${asciiFallback(name)}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    'content-disposition': `${image ? 'inline' : 'attachment'}; filename="${asciiFallback(name)}"; filename*=UTF-8''${encodedName(name)}`,
     'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'none'; frame-ancestors 'none'; sandbox",
     'cross-origin-resource-policy': 'same-origin',
