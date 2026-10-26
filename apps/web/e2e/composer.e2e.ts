@@ -158,6 +158,8 @@ test.describe('code, written and read (D-188)', () => {
     const block = page.locator('figure', { hasText: 'const answer' });
     await expect(block).toBeVisible();
     // Coloured by the grammar the fence named: a keyword and a number carry different colours.
+    // The grammar is a chunk loaded on first use: the block is plain until it arrives.
+    await expect(block.locator('code span span').first()).toBeVisible();
     const colours = await block
       .locator('code span span')
       .evaluateAll((spans) =>
