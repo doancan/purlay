@@ -452,9 +452,22 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         ...(SETUP_PATH.test(new URL(request.url).pathname) ? { 'x-robots-tag': 'noindex' } : {}),
       };
       Object.assign(set.headers, headers);
+      // A request turned away here never reaches `onAfterResponse`, and it is the one the person who
+      // holds its id most needs a line for: written now, as sent except under the library's, whose
+      // paths can carry a token and are written as `/auth/*`.
+      const turnedAway = (response: Response): Response => {
+        const { pathname } = new URL(request.url);
+        log.info('request', {
+          method: request.method,
+          path: pathname.startsWith('/auth/') ? '/auth/*' : pathname,
+          status: response.status,
+          ms: Math.round(performance.now() - (currentRequest()?.startedAt ?? performance.now())),
+        });
+        return response;
+      };
       // Before the body is read or a session looked up (D-39 item 2).
       if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
-        return crossSiteResponse(headers);
+        return turnedAway(crossSiteResponse(headers));
       }
       // An installed client this server no longer serves is told so, with what to get (D-186): before the
       // body is read or a session looked up, and not for the two things such a client needs in order to
@@ -464,18 +477,19 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           request.headers.get('x-purlay-client'),
           clientPolicyOf(dependencies.config),
         );
-        if (tooOld !== null) return clientTooOldResponse(tooOld, headers);
+        if (tooOld !== null) return turnedAway(clientTooOldResponse(tooOld, headers));
       }
       if (isUploadRequest(request)) {
         const refusal = uploadRefusal(request, ATTACHMENT_BYTES_MAX);
-        if (refusal !== null) return edgeRefusalResponse(refusal, headers);
+        if (refusal !== null) return turnedAway(edgeRefusalResponse(refusal, headers));
       } else if (isWebhookRequest(request)) {
         const refusal = webhookRefusal(request);
-        if (refusal !== null) return edgeRefusalResponse(refusal, headers);
+        if (refusal !== null) return turnedAway(edgeRefusalResponse(refusal, headers));
       } else {
-        if (hasUnsupportedMediaType(request)) return unsupportedMediaTypeResponse(headers);
+        if (hasUnsupportedMediaType(request))
+          return turnedAway(unsupportedMediaTypeResponse(headers));
         const tooMuch = bodyRefusal(request, JSON_BODY_MAX_BYTES);
-        if (tooMuch !== null) return edgeRefusalResponse(tooMuch, headers);
+        if (tooMuch !== null) return turnedAway(edgeRefusalResponse(tooMuch, headers));
       }
       return undefined;
     })
@@ -511,7 +525,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = refusal.status;
       return refusal.body;
     })
-    .onAfterResponse(({ request, path, route, set }) => {
+    .onAfterResponse(({ request, path, route, set, responseValue }) => {
       const started = currentRequest()?.startedAt;
       // A balancer and the container's own health check poll these every few seconds; at
       // info they were most of the log. A probe that FAILS is not lost: readiness writes the
@@ -520,7 +534,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       write('request', {
         method: request.method,
         path: writtenPath(route, path),
-        status: set.status,
+        // A handler that returns a `Response` (the library's routes) leaves `set.status` unset.
+        status: responseValue instanceof Response ? responseValue.status : set.status,
         ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
       });
     })

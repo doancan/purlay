@@ -223,6 +223,17 @@ describe('integration: reading an attachment', () => {
     });
   });
 
+  test("a name with ' ( ) * is encoded whole, so a strict parser reads it back as it was", async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const id = await upload(world, world.owner, "it's (1)*.pdf", new Uint8Array([1]));
+      const response = await world.call('GET', `/api/attachments/${id}`, world.owner);
+      const header = response.headers.get('content-disposition') ?? '';
+      expect(header).toContain("filename*=UTF-8''it%27s%20%281%29%2A.pdf");
+      expect(decodeURIComponent(header.split("filename*=UTF-8''")[1] ?? '')).toBe("it's (1)*.pdf");
+    });
+  });
+
   test('an image is drawn: inline, as the WebP it was stored as, and so is its thumbnail', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);

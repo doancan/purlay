@@ -33,6 +33,12 @@ have it.
 
 - **Sign-in** — An emailed sign-in link can carry the application's pending sign-in into the browser that opens it (D-191)
 
+### Fixed
+
+- **Messages** — A history, thread, open-questions or search request with a query it does not know, a repeated parameter or a `limit` such as `0x10` is refused instead of answered as the first page
+- **Messages** — A download's file name is encoded whole, so a name holding `'`, `(`, `)` or `*` reads back as it was
+- **Operations** — A request turned away at the edge (too large, wrong type, cross-site, client too old) is written to the log under its request id, and a sign-in library answer is logged with the status it went out with
+
 ### Security
 
 - **Native app** — A device name can no longer hold zero-width or directional characters, so a session cannot be made to read as another device's in the sessions list (D-191)

@@ -58,22 +58,6 @@ export interface HistoryDependencies {
 /** Sending needs the one send path's boundary and bus as well. */
 export interface MessageDependencies extends HistoryDependencies, SendDependencies {}
 
-/**
- * Query strings arrive as text. The contract's types are `integer` and `uuid`, so
- * `limit` is converted before validation rather than after — a string `"50"`
- * would otherwise be refused by the very schema that documents the default.
- */
-const asPageQuery = (url: URL): Record<string, unknown> => {
-  const query: Record<string, unknown> = {};
-  for (const key of ['before', 'after'] as const) {
-    const value = url.searchParams.get(key);
-    if (value !== null) query[key] = value;
-  }
-  const limit = url.searchParams.get('limit');
-  if (limit !== null) query['limit'] = Number(limit);
-  return query;
-};
-
 export const readHistory = async (
   dependencies: HistoryDependencies,
   request: Request,
@@ -82,7 +66,7 @@ export const readHistory = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
-  const query = validated(PageQuery, asPageQuery(new URL(request.url)));
+  const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await messageHistory(database, context, query);
 };
 
@@ -128,7 +112,7 @@ export const readThread = async (
   const { userId } = await requireSession(dependencies.auth, request);
   // A deleted root with replies keeps its place in the feed, and its thread with it (D-103 §7).
   const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
-  const query = validated(PageQuery, asPageQuery(new URL(request.url)));
+  const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await threadReplies(database, root, query);
 };
 
@@ -226,12 +210,10 @@ export const readUnresolved = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const url = new URL(request.url);
-  const channelId = url.searchParams.get('channelId');
-  const { channelId: one, ...query } = validated(UnresolvedQuery, {
-    ...asPageQuery(url),
-    ...(channelId === null ? {} : { channelId }),
-  });
+  const { channelId: one, ...query } = validated(
+    UnresolvedQuery,
+    queryOf(new URL(request.url), { numbers: ['limit'] }),
+  );
   // One channel's questions narrow the visible set and never widen it: a channel the caller cannot
   // see is not found, as search says it (D-34).
   const visible = await visibleChannelIds(database, context);
@@ -251,12 +233,9 @@ export const readSearch = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const url = new URL(request.url);
-  const query = asPageQuery(url);
-  for (const key of ['q', 'channelId', 'senderId'] as const) {
-    const value = url.searchParams.get(key);
-    if (value !== null) query[key] = key === 'q' ? value.trim() : value;
-  }
+  const query = queryOf(new URL(request.url), { numbers: ['limit'] });
+  // `q` is trimmed before it is measured: three spaces and a letter are not a search.
+  if (typeof query['q'] === 'string') query['q'] = query['q'].trim();
   const search = validated(SearchQuery, query);
   return await searchIn(database, context, await visibleChannelIds(database, context), search);
 };

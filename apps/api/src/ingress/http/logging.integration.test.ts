@@ -98,6 +98,58 @@ describe('integration: the log', () => {
     });
   });
 
+  test('a request the edge turns away is written, under the id its response carries', async () => {
+    const { log, lines } = aRecordingLogger();
+    const app = createApp(
+      testDependencies({ database: aDatabaseThatMustNotBeTouched(), clock, log }),
+    );
+    const tooLarge = await app.handle(
+      new Request('https://purlay.test/api/workspaces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': '70000' },
+        body: 'x'.repeat(10),
+      }),
+    );
+    const wrongType = await app.handle(
+      new Request('https://purlay.test/api/workspaces', {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain' },
+        body: 'hello',
+      }),
+    );
+    expect([tooLarge.status, wrongType.status]).toEqual([413, 415]);
+    await written(lines, () => lines.filter((line) => line['msg'] === 'request').length === 2);
+    expect(lines.filter((line) => line['msg'] === 'request')).toMatchObject([
+      {
+        level: 'info',
+        requestId: tooLarge.headers.get('x-request-id'),
+        status: 413,
+        path: '/api/workspaces',
+      },
+      {
+        level: 'info',
+        requestId: wrongType.headers.get('x-request-id'),
+        status: 415,
+        path: '/api/workspaces',
+      },
+    ]);
+  });
+
+  test('a library answer is written with the status it went out with', async () => {
+    const { log, lines } = aRecordingLogger();
+    const app = createApp(testDependencies({ database: cloned.db, clock, log }));
+    const response = await app.handle(
+      new Request('https://purlay.test/auth/sign-in/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://purlay.test' },
+        body: JSON.stringify({ email: 'nobody@purlay.test', password: 'not the password at all' }),
+      }),
+    );
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    const line = await written(lines, (candidate) => candidate['msg'] === 'request');
+    expect(line['status']).toBe(response.status);
+  });
+
   test('health probes are written at debug, so a balancer polling them does not fill the log', async () => {
     await withRollback(async (db) => {
       const { log, lines } = aRecordingLogger();

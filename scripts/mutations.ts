@@ -3156,8 +3156,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'search-words-not-trimmed',
     why: 'two spaces and a letter are measured as three characters, a search the trigram index cannot serve',
     file: 'apps/api/src/ingress/http/messages.ts',
-    find: "    if (value !== null) query[key] = key === 'q' ? value.trim() : value;\n",
-    replace: '    if (value !== null) query[key] = value;\n',
+    find: "  if (typeof query['q'] === 'string') query['q'] = query['q'].trim();\n",
+    replace: '',
     tests: ['apps/api/src/ingress/http/search.integration.test.ts'],
   },
   {
@@ -8631,7 +8631,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'client-too-old-served',
     why: 'a client below the minimum is let through to the handler: the app keeps talking to a server it can no longer follow, and decodes what it no longer understands',
     file: 'apps/api/src/ingress/http/app.ts',
-    find: '        if (tooOld !== null) return clientTooOldResponse(tooOld, headers);\n',
+    find: '        if (tooOld !== null) return turnedAway(clientTooOldResponse(tooOld, headers));\n',
     replace: '',
     tests: [
       'apps/api/src/ingress/http/client-handshake.test.ts',
@@ -9252,5 +9252,47 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  const name = device.name.trim();',
     replace: '  const name = device.name;',
     tests: ['apps/api/src/ingress/http/native-handoff.integration.test.ts'],
+  },
+  {
+    id: 'history-query-ignores-the-unknown',
+    why: 'a misspelt or repeated cursor is read as the first page: a client that mistypes `beforeId` pages the same newest rows for ever and is never told',
+    file: 'apps/api/src/ingress/http/messages.ts',
+    find: "  const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));\n  return await messageHistory(",
+    replace:
+      '  const query = validated(PageQuery, Object.fromEntries(new URL(request.url).searchParams));\n  return await messageHistory(',
+    tests: ['apps/api/src/ingress/http/messages.integration.test.ts'],
+  },
+  {
+    id: 'limit-read-by-number',
+    why: 'a limit is converted with `Number`, which reads 0x10, 1e1, 1.0 and a blank as integers: the schema never sees what the client wrote',
+    file: 'apps/api/src/ingress/http/validate.ts',
+    find: 'if (value !== null && /^-?\\d+$/.test(value)) query[key] = Number(value);',
+    replace: 'if (value !== null) query[key] = Number(value);',
+    tests: ['apps/api/src/ingress/http/messages.integration.test.ts'],
+  },
+  {
+    id: 'download-name-leaves-syntax-raw',
+    why: "the encoded filename keeps ' ( ) * raw, which RFC 5987 reads as syntax: a strict parser misreads the name a person sees",
+    file: 'apps/api/src/ingress/http/attachments.ts',
+    find: "/['()*]/g,",
+    replace: '/[]/g,',
+    tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
+  },
+  {
+    id: 'edge-refusal-unlogged',
+    why: 'a request turned away at the edge writes no line: the id a refused client quotes finds nothing, in the one case where it is most needed',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: "        log.info('request', {\n          method: request.method,\n          path: pathname.startsWith",
+    replace:
+      "        log.debug('request', {\n          method: request.method,\n          path: pathname.startsWith",
+    tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
+  },
+  {
+    id: 'library-status-logged-unset',
+    why: 'the log line takes its status from `set` only, so every answer the library returns whole is written 200 and auth failures hide from a 4xx alert',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: 'status: responseValue instanceof Response ? responseValue.status : set.status,',
+    replace: 'status: set.status,',
+    tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
 ];

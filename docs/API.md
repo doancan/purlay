@@ -28,7 +28,16 @@ exists. This applies to every workspace-scoped route without exception. (D-21)
 returns newer rows **oldest-first** — the order a reconnect appends them in (`ARCHITECTURE.md`
 §5.4). Asking for both at once is a `400`: choosing one silently would hand a client a page it
 did not ask for and could not tell apart. `?limit=` is capped at 100 (default 50). `OFFSET` is
-never accepted. (D-8)
+never accepted. (D-8) A query the route does not know, a parameter given twice, and a `limit` that
+is not plain digits (`0x10`, `1e1`, `1.0`, blank) are `400 VALIDATION_FAILED`, never read as a first
+page.
+
+**`after` is a cursor, not a watermark** (D-65). A message sent while its author was offline is
+accepted up to a minute behind the server clock (D-33) and so can sort *below* the newest id a client
+holds; `?after=<newest id>` never returns it. A client that catches up over HTTP asks from
+`REPLAY_OVERLAP_MS` before the newest id's time (the contract bundle's constants carry the number;
+the socket replay applies it itself) and drops the ids it already holds. Only the first request of a
+catch-up is moved back: the `nextCursor` of a page is passed back as it came.
 
 ```jsonc
 { "data": [ /* … */ ], "nextCursor": "0199155c-6200-7b7f-…" }  // null when exhausted
@@ -56,10 +65,10 @@ account for it. `message` is for humans and may change. (D-47)
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`); a `/setup` route to anybody but the setup's holder (`SETUP_UNAVAILABLE`, §2) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
 | `411` | `LENGTH_REQUIRED` — a `POST`/`PUT`/`PATCH`/`DELETE` with a body and no `Content-Length` (chunked): its size cannot be judged before it is read (D-109 §4) |
-| `413` | `PAYLOAD_TOO_LARGE` — a JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame), or an upload over `attachment_size_limit`, refused at the edge by its `Content-Length` before it is read (D-80, D-109 §4) |
+| `413` | `PAYLOAD_TOO_LARGE` — a JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame), or an upload over `attachment_size_limit`, refused at the edge by its `Content-Length` before it is read (D-80, D-109 §4). A body past the transport's own cap (`ATTACHMENT_BYTES_MAX`) is refused by the runtime before any of this runs: `413` with **no body and no `x-request-id`** — a client takes the status alone as "too large" |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` — a `POST`/`PUT`/`PATCH`/`DELETE` whose body is not `application/json` (a form, `text/plain`, or a body with no type). A request with no body at all, such as logout, is unaffected (D-80) |
 | `426` | `CLIENT_TOO_OLD` — an installed client (the macOS app) whose `X-Purlay-Client` header names a wire contract or a version below what this server still serves (`MIN_CLIENT_MACOS_*`, `CONFIG.md`); `details` says the lowest contract and version and where to get a newer one, and the response carries `Upgrade: purlay-client`. Answered at the edge, before the body is read or a session looked up, to every route but `GET /api/client` and `/health*` — and to the socket upgrade, as this status, not as a socket that closes. A header that is not exactly `<platform>/<semver> contract/<n>`, and a browser, which sends none, is served (D-186) |
-| `429` | Rate limited (`RATE_LIMITED`), or the setup locked by five wrong codes (`SETUP_LOCKED`, §2) — each with `Retry-After` in seconds |
+| `429` | Rate limited (`RATE_LIMITED`), or the setup locked by five wrong codes (`SETUP_LOCKED`, §2) — each with `Retry-After` in whole seconds — the pacing of the budget (one token's refill), not the time left until this caller may try; there are no `RateLimit-*` headers on any answer. A request turned away at the edge (`413`, `415`, `411`, `426`, cross-site `403`) is written to the log under its `x-request-id` like any other |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
 | `503` | This process should not receive traffic — `/health/ready` while not ready or draining for shutdown — or, from any endpoint, `DATABASE_UNAVAILABLE`: no database connection within 3 s, or a process that has started and not yet read its settings from the database (D-179 §6); nothing was changed, retry shortly (D-87) |
 
