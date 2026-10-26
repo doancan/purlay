@@ -458,7 +458,7 @@ what let it through, not who.
    `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in
    `DECISIONS.md`, with what you rejected and why.
 5. **Verify.** `bun run verify`, with the database (§2). Paste real output.
-6. **Log it.** Notable changes go to `docs/changelog/changes.md`.
+6. **Log it.** Notable changes go under *Unreleased* in `docs/changelog/changes.md`, in the shape its header describes.
 
 **Running it.** `bun run dev` starts both processes; `bun run dev:api` and `bun run dev:web` start
 one. They read the root `.env` (each passes it with `--env-file`, since each runs from its own
@@ -506,6 +506,9 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   database; a push to see what CI says spends minutes a local run spends nothing on. Once pushed,
   push again only to fix what the run found — and a pull request's superseded run is cancelled
   (`concurrency` in every workflow).
+- **Releasing and deploying** are D-185, not this section: a merge to `main` deploys to the server by itself,
+  and `bun run release -- <patch|minor|major>` opens the pull request whose merge is a release. There is no
+  `develop` branch.
 - **The browser jobs run when a screen can have moved.** Four jobs are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or
   `ci.yml` (`bun run ci:changes`), and on main always.

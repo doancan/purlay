@@ -118,11 +118,15 @@ for f, s in docs.items():
 # fact and its home is the manifest that installs it, so §2 names choices and
 # never numbers (D-56). DECISIONS.md keeps the exemption because it records dated
 # history — "the documents said PostgreSQL 16" has to stay sayable.
-VERSION_OWNERS = {"docs/DECISIONS.md", "docs/changelog/changes.md"}
+VERSION_OWNERS = {"docs/DECISIONS.md"}
 # A spike record exists to say which versions were actually resolved on a
 # given day. Naming them is its entire job, so the whole directory is an
 # owner — the same reasoning as the changelog. (D-57)
-VERSION_OWNER_PREFIXES = ("docs/spikes/",)
+VERSION_OWNER_PREFIXES = ("docs/spikes/", "docs/changelog/")
+# Every file under docs/changelog/ is history — the changelog, the release notes of each version and what
+# was written before the first release — and is judged as history by the checks below that say so.
+def is_changelog(f):
+    return f.startswith("docs/changelog/")
 TECHNOLOGIES = ["PostgreSQL", "Bun", "React", "Vite", "Tailwind", "Kysely",
                 "TypeBox", "ElysiaJS", "Elysia", "TypeScript", "ESLint", "Prettier",
                 "Zustand", "Turborepo"]
@@ -153,7 +157,7 @@ for f, body in docs.items():
 count_re = re.compile(r"(\d+)\s+decisions\b")
 real = len(defined["D"])
 for f, body in docs.items():
-    if f == "docs/changelog/changes.md":
+    if is_changelog(f):
         continue  # historical entries record what was true on their date
     for m in count_re.finditer(body):
         if int(m.group(1)) != real:
@@ -167,7 +171,7 @@ for n in sorted(defined["D"]):
     # The changelog mentions every decision by construction, so it cannot count
     # as propagation — that would make this check pass for a decision nothing acts on.
     cited = any(re.search(rf"\bD-{n}\b", body) for f, body in docs.items()
-                if f not in {"docs/DECISIONS.md", "docs/changelog/changes.md"})
+                if f != "docs/DECISIONS.md" and not is_changelog(f))
     if not cited:
         problems["decision never cited outside DECISIONS.md"].append(f"D-{n}")
 
@@ -179,7 +183,7 @@ for n in sorted(defined["D"]):
 # has to be acknowledged rather than noticed later.
 LOCK = pathlib.Path("docs/sections.lock.json")
 current = {f: {n: t for n, t in sorted(TITLES[f].items()) if t}
-           for f in sorted(docs) if f != "docs/changelog/changes.md"}
+           for f in sorted(docs) if not is_changelog(f)}
 
 if "--write-sections" in sys.argv:
     LOCK.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")

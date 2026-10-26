@@ -86,6 +86,8 @@ looking for the error codes to a file that does not have them.
 | What the supply chain is held to: pinned Actions, the audit gate, licences | `scripts/workflow-pins.test.ts`, `scripts/audit-gate.ts`, `scripts/licenses.ts` (D-91) |
 | The deployable image: bases, user, health check | `Dockerfile`, held by `scripts/dockerfile.test.ts` and `scripts/image-smoke.sh` (D-92) |
 | The production stack: what is published, what it needs | `docker-compose.production.yml`, held by `scripts/production-compose.integration.test.ts` (D-94) |
+| What changed, and how an entry is written | `docs/changelog/changes.md` (its header is the rule), held by `scripts/changelog.test.ts` (D-185) |
+| How a merge reaches the server, and what a release is | `.github/workflows/deploy.yml`, `scripts/deploy.sh`, `scripts/release.ts` (starts `scripts/release-prepare.ts`), `scripts/release-publish.sh`, held by `scripts/deploy.test.ts`, `scripts/deploy-workflow.test.ts`, `scripts/release.test.ts` and `scripts/release-publish.test.ts` (D-185); the version is the root `package.json`'s |
 | What a backup is and how a restore is judged | `scripts/backup.sh`, `scripts/restore.sh`, `scripts/compare-databases.sh`, rehearsed by `scripts/restore-rehearsal.sh` (D-95); the bucket half is `scripts/bucket-copy.ts` and its manifest, `scripts/bucket-manifest.ts` |
 | What is reported to an error tracker, and when | `apps/api/src/platform/error-tracking.ts` — the logger's `error` lines, only with `ERROR_TRACKING_DSN` set (D-96) |
 | Which rules the build enforces | `eslint.config.mjs`, demonstrated by `scripts/verify-enforcement.ts` |
