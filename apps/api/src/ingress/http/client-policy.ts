@@ -53,7 +53,10 @@ export const parseClientHeader = (value: string | null): ClientIdentity | null =
 };
 
 const identifiersOf = (version: string): { core: number[]; pre: string[] } => {
-  const [core, pre] = version.split('-', 2) as [string, string | undefined];
+  // Only the first hyphen separates the pre-release from the core; a hyphen after it is the pre-release's own.
+  const dash = version.indexOf('-');
+  const core = dash === -1 ? version : version.slice(0, dash);
+  const pre = dash === -1 ? undefined : version.slice(dash + 1);
   return {
     core: core.split('.').map(Number),
     pre: pre === undefined ? [] : pre.split('.'),

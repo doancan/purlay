@@ -449,10 +449,20 @@ const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 const DOCUMENTS = ['UX.md', 'API.md', 'ARCHITECTURE.md', 'DECISIONS.md'] as const;
 
 /** The bundle, as path → text, for the repository at `root`. */
-export const assembleBundle = (root: string): Map<string, string> => {
+export const assembleBundle = (
+  root: string,
+  contract: Contract = buildContract(),
+): Map<string, string> => {
+  // A keyword the generator is not taught is a build failure here, where a release is made — not only a test.
+  const outside = vocabularyProblems(contract);
+  if (outside.length > 0) {
+    throw new Error(
+      `the contract uses keywords the generator is not taught: ${outside.join(', ')}`,
+    );
+  }
   const files = new Map<string, string>();
   files.set('README.md', README);
-  files.set('contract.json', json(buildContract()));
+  files.set('contract.json', json(contract));
   files.set('tokens.json', readFileSync(join(root, 'packages/tokens/tokens.json'), 'utf8'));
   files.set('pairs.json', json({ format: 1, pairs: PAIRS, exempt: EXEMPT }));
   files.set('fixtures/message-ids.json', json(buildMessageIdVectors()));

@@ -7,7 +7,7 @@
  * `--check` is exact in both directions: a file missing, a file that differs, and a file that should not be there
  * are each a failure, because a client pins the bundle and a bundle with an extra file is not the bundle.
  */
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { assembleBundle } from '../contract/bundle';
 
@@ -19,6 +19,10 @@ const filesUnder = (root: string, at = root): string[] =>
   );
 
 export const writeBundle = (bundle: ReadonlyMap<string, string>, out: string): void => {
+  // `--out .` must not empty what it names: only an empty directory, or one that is a bundle already, is replaced.
+  if (existsSync(out) && readdirSync(out).length > 0 && !existsSync(join(out, 'MANIFEST.json'))) {
+    throw new Error(`${out} is not empty and is not a bundle; refusing to replace it`);
+  }
   rmSync(out, { recursive: true, force: true });
   for (const [path, text] of bundle) {
     const target = join(out, path);
@@ -33,8 +37,9 @@ export const bundleProblems = (bundle: ReadonlyMap<string, string>, dir: string)
   let present: string[];
   try {
     present = filesUnder(dir);
-  } catch {
-    return [`${dir} cannot be read`];
+  } catch (failure) {
+    const why = failure instanceof Error && 'code' in failure ? String(failure.code) : 'unknown';
+    return [`${dir} cannot be read: ${why}`];
   }
   for (const [path, text] of bundle) {
     if (!present.includes(path)) problems.push(`missing: ${path}`);
@@ -67,7 +72,12 @@ export const main = (
     console.error('usage: contract:bundle --out DIR | --check DIR');
     return 2;
   }
-  writeBundle(bundle, out);
+  try {
+    writeBundle(bundle, out);
+  } catch (failure) {
+    console.error(failure instanceof Error ? failure.message : 'could not write the bundle');
+    return 1;
+  }
   console.log(`wrote ${String(bundle.size)} files to ${out}`);
   return 0;
 };
