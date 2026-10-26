@@ -72,14 +72,16 @@ describe('the judgement', () => {
     ]);
   });
 
-  test('is judged against the middle of the runs, so one lucky run is not the line', () => {
-    const history = [107, 95, 101, 99, 58].map((value) => ({ 'channel switch, median': value }));
-    const verdict = judge({ 'channel switch, median': 124 }, history);
-    expect(verdict.regressed).toBe(false);
-    expect(verdict.lines).toEqual(['channel switch, median: 124.0 ms, was 99.0 ms']);
+  test('is judged against the slowest of the runs, so a lucky run is not the line and a slow one is not a regression', () => {
+    // Identical code measured 58, 72 and 124 ms on the same kind of runner (D-49, amended).
+    const history = [107, 95, 124, 99, 58].map((value) => ({ 'channel switch, median': value }));
+    const slow = judge({ 'channel switch, median': 150 }, history);
+    expect(slow.regressed).toBe(false);
+    expect(slow.lines).toEqual(['channel switch, median: 150.0 ms, was 124.0 ms']);
+    expect(judge({ 'channel switch, median': 190 }, history).regressed).toBe(true);
   });
 
-  test('is wider while there are fewer than three runs to take a middle of', () => {
+  test('is wider while there are fewer than three runs to see the spread of', () => {
     const one = [{ 'channel switch, median': 76 }];
     expect(judge({ 'channel switch, median': 124 }, one).regressed).toBe(false);
     expect(judge({ 'channel switch, median': 160 }, one).regressed).toBe(true);
