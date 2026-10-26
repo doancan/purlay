@@ -15,6 +15,7 @@ installDom();
 describe('matching an address', () => {
   test.each<readonly [string, string, Record<string, string>]>([
     ['/sign-in', 'signIn', {}],
+    ['/sign-in/native', 'signInNative', {}],
     ['/', 'home', {}],
     ['/w/acme', 'workspace', { slug: 'acme' }],
     ['/w/acme/c/0199-aa', 'channel', { slug: 'acme', channelId: '0199-aa' }],

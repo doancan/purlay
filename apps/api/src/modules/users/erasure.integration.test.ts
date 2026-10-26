@@ -359,7 +359,11 @@ describe('integration: erasing an account', () => {
       await make(ada.userId, 'ada-two');
       await make(bob.userId, 'bob-one');
       await erase(db, await signedIn(db, room, 'ada'), ada.username);
-      const left = await db.selectFrom('native_authorizations').select('user_id').execute();
+      const left = await db
+        .selectFrom('native_authorizations')
+        .select('user_id')
+        .where('user_id', 'in', [ada.userId, bob.userId])
+        .execute();
       const mine = left.filter((row) => row.user_id === ada.userId);
       expect(mine).toEqual([]);
       expect(left.filter((row) => row.user_id === bob.userId)).toHaveLength(1);

@@ -37,6 +37,8 @@ import {
   StorageUsage,
   WorkspaceExport,
   AuthMethods,
+  NativeAuthorizeResponse,
+  type NativeAuthorizeRequest,
   MySignIn,
   EmailSignInPreview,
   type EmailSignInRequest,
@@ -306,6 +308,8 @@ export interface Api {
   readonly authMethods: (signal?: AbortSignal) => Promise<AuthMethods>;
   /** Whether the server is open to setup, and the address it is configured for (D-179 §4). */
   readonly setupStatus: (signal?: AbortSignal) => Promise<SetupStatusAnswer>;
+  /** The signed-in person says yes to the native application: the address to send the browser to (D-191). */
+  readonly authorizeNative: (input: NativeAuthorizeRequest) => Promise<NativeAuthorizeResponse>;
   /** Asks for a sign-in link; `202` whatever the address (D-138 §1). */
   readonly requestEmailSignIn: (input: EmailSignInRequest) => Promise<void>;
   /** Password sign-in, the library's route; a refusal is a `LibraryFailure`. The session cookie is set. */
@@ -743,6 +747,13 @@ export const createApi = (http: Http): Api => {
       http.request('GET', '/api/auth/methods', AuthMethods, options({}, signal)),
     setupStatus: (signal) =>
       http.request('GET', '/setup/status', SetupStatusAnswer, options({}, signal)),
+    authorizeNative: (input) =>
+      http.request(
+        'POST',
+        '/api/native/authorize',
+        NativeAuthorizeResponse,
+        options({ body: input }),
+      ),
     requestEmailSignIn: (input) => http.send('POST', '/auth/email', options({ body: input })),
     signInWithPassword: (input) => http.library('/auth/sign-in/email', input),
     changePassword: (input) =>

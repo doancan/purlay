@@ -34,6 +34,7 @@ import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { SavedScreen } from '../features/saved/saved-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
+import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
 import { LazySetupScreen, LazyVerifyScreen } from '../features/setup/load';
 import { FIRST_SECTION } from '../features/settings/sections';
@@ -84,6 +85,12 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return <SignInScreen />;
     case 'signInEmail':
       return <EmailSignInScreen />;
+    case 'signInNative':
+      return (
+        <SessionGate>
+          <LazyNativeSignInScreen />
+        </SessionGate>
+      );
     case 'signUp':
       return <SignUpScreen />;
     case 'setup':

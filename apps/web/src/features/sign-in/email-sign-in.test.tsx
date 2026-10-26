@@ -16,6 +16,7 @@ import { WORKSPACE, aSession, aSignedInApi } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { renderApp } from '../../testing/render';
 import { expectFocusOn } from '../../testing/focus';
+import { systemClock } from '../../system-clock';
 import { readSignInLink } from './email-sign-in-screen';
 
 installDom();
@@ -23,6 +24,10 @@ installDom();
 const TOKEN = 'a'.repeat(64);
 const INVITATION = 'c'.repeat(64);
 const KEY = 'purlay.invitation';
+const NATIVE_KEY = 'purlay.native';
+const CHALLENGE = 'x'.repeat(43);
+const STATE = 'y'.repeat(22);
+const PAIR = { challenge: CHALLENGE, state: STATE };
 
 const settle = async (): Promise<void> => {
   for (let turn = 0; turn < 4; turn++) {
@@ -130,6 +135,50 @@ describe('the email form on the sign-in card', () => {
     expect(view.getByRole('status').textContent).toContain('bağlantı yolda');
   });
 
+  test('carries the native application’s pair this tab holds, since the mail may open in another browser', async () => {
+    window.sessionStorage.setItem(
+      NATIVE_KEY,
+      JSON.stringify({ ...PAIR, at: systemClock.now().getTime() }),
+    );
+    const asked: EmailSignInRequest[] = [];
+    const view = await visit(
+      '/sign-in',
+      signedOut({
+        requestEmailSignIn: async (input) => {
+          asked.push(input);
+          await Promise.resolve();
+        },
+      }),
+    );
+    const user = person();
+    await user.type(view.getByRole('textbox', { name: 'Email address' }), 'ada@example.test');
+    await user.click(view.getByRole('button', { name: 'Email me a sign-in link instead' }));
+    await settle();
+    expect(asked).toEqual([{ email: 'ada@example.test', locale: 'en', native: PAIR }]);
+  });
+
+  test('does not carry one that has gone stale, nor ask the person to think of it', async () => {
+    window.sessionStorage.setItem(
+      NATIVE_KEY,
+      JSON.stringify({ ...PAIR, at: systemClock.now().getTime() - 11 * 60_000 }),
+    );
+    const asked: EmailSignInRequest[] = [];
+    const view = await visit(
+      '/sign-in',
+      signedOut({
+        requestEmailSignIn: async (input) => {
+          asked.push(input);
+          await Promise.resolve();
+        },
+      }),
+    );
+    const user = person();
+    await user.type(view.getByRole('textbox', { name: 'Email address' }), 'ada@example.test');
+    await user.click(view.getByRole('button', { name: 'Email me a sign-in link instead' }));
+    await settle();
+    expect(asked).toEqual([{ email: 'ada@example.test', locale: 'en' }]);
+  });
+
   test('a refused address is said under the field, which is marked wrong', async () => {
     const view = await visit(
       '/sign-in',
@@ -194,11 +243,22 @@ describe('a sign-in link, opened', () => {
     return await visit('/sign-in/email', signedOut(api), locale);
   };
 
-  test('reads a token, or a token and an invitation, and nothing else', () => {
-    expect(readSignInLink(`#${TOKEN}`)).toEqual({ token: TOKEN, invitation: null });
+  test('reads a token, with an invitation and the native application’s pair if they rode along, and nothing else', () => {
+    expect(readSignInLink(`#${TOKEN}`)).toEqual({ token: TOKEN, invitation: null, native: null });
     expect(readSignInLink(`#${TOKEN}.${INVITATION}`)).toEqual({
       token: TOKEN,
       invitation: INVITATION,
+      native: null,
+    });
+    expect(readSignInLink(`#${TOKEN}~${CHALLENGE}~${STATE}`)).toEqual({
+      token: TOKEN,
+      invitation: null,
+      native: PAIR,
+    });
+    expect(readSignInLink(`#${TOKEN}.${INVITATION}~${CHALLENGE}~${STATE}`)).toEqual({
+      token: TOKEN,
+      invitation: INVITATION,
+      native: PAIR,
     });
     for (const hash of [
       '',
@@ -207,6 +267,15 @@ describe('a sign-in link, opened', () => {
       `#${TOKEN.slice(1)}`,
       `#${TOKEN.toUpperCase()}`,
       `#${TOKEN}x`,
+      // A pair is both words, each the shape (the contract's patterns): half of one is no link.
+      `#${TOKEN}~`,
+      `#${TOKEN}~${CHALLENGE}`,
+      `#${TOKEN}~${CHALLENGE}~`,
+      `#${TOKEN}~${'x'.repeat(42)}~${STATE}`,
+      `#${TOKEN}~${CHALLENGE}~${'y'.repeat(15)}`,
+      `#${TOKEN}~${CHALLENGE}~${STATE}&x`,
+      `#${TOKEN}~${CHALLENGE}~${STATE}~z`,
+      `#${TOKEN}~${CHALLENGE}.${STATE}`,
     ]) {
       expect(readSignInLink(hash)).toBeNull();
     }
@@ -237,6 +306,36 @@ describe('a sign-in link, opened', () => {
     expect(here(view)).toBe('/invite');
     // Replaced, not pushed: Back does not return to a spent link.
     expect(view.world.history.stack).not.toContain('/sign-in/email');
+  });
+
+  test('a link that carried the native application’s pair keeps it for this tab, and home goes on to the consent', async () => {
+    const view = await open(`#${TOKEN}~${CHALLENGE}~${STATE}`, {
+      previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
+      consumeEmailSignIn: () => Promise.resolve(),
+    });
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Sign in' }));
+    });
+    await settle();
+    const kept = JSON.parse(window.sessionStorage.getItem(NATIVE_KEY) ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    expect({ challenge: kept['challenge'], state: kept['state'] }).toEqual(PAIR);
+    expect(here(view)).toBe('/sign-in/native');
+  });
+
+  test('a link with no pair leaves whatever this tab held alone', async () => {
+    window.sessionStorage.setItem(NATIVE_KEY, 'held');
+    const view = await open(`#${TOKEN}`, {
+      previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
+      consumeEmailSignIn: () => Promise.resolve(),
+    });
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Sign in' }));
+    });
+    await settle();
+    expect(window.sessionStorage.getItem(NATIVE_KEY)).toBe('held');
   });
 
   test('a link with no token says so, and asks nothing', async () => {
