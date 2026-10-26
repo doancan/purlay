@@ -266,6 +266,24 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 | `MAIL_FROM` | — | — | The address sign-in links come from; set with `SMTP_URL`, or neither (D-138) |
 | `SMTP_ALLOW_PLAINTEXT` | — | `false` | Says that the link to a relay past this machine is private, so `smtp://` need not upgrade to TLS — as `DATABASE_ALLOW_PLAINTEXT` does for the database (D-138 §6). A relay whose certificate no public authority signed is refused, the wizard's try included (`tls-failed`); nothing turns the check off. Give the server the authority instead: `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` in its environment, read by the runtime at start (measured with Bun and nodemailer, `probes.integration.test.ts`) — or use a relay with a public certificate (D-179 §4.4) |
 
+## Native clients (D-186)
+
+An installed client — the macOS application — is updated on its own schedule, so it will meet servers newer
+than itself, and a server may stop serving one that is too old. These say how old is too old. All three are
+optional and independent; none set is no limit, which is the default and what a server nobody has installed an
+application against wants. A client below either limit is answered `426 CLIENT_TOO_OLD` before anything else is
+looked at (`API.md` §1), and the application shows where to get a newer one.
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `MIN_CLIENT_MACOS_CONTRACT` | — | unset | The lowest wire contract (`CONTRACT_VERSION` in `@purlay/types`) a macOS client may have been built against: an integer from 1. **Refused at boot above the contract this server speaks**, since that would refuse every client there is. Raising it is the emergency brake: every older client is shown the update screen at its next request |
+| `MIN_CLIENT_MACOS_VERSION` | — | unset | The lowest application version, `major.minor.patch` with an optional `-pre-release`, compared in semantic-version order (a pre-release is below its release) |
+| `MACOS_DOWNLOAD_URL` | — | unset | Where the application sends a person for a newer one. `https://` only: it is where the app sends a person, and a network can rewrite anything else |
+
+A browser is never refused by these: it ships with the server. The header the client says its version in, and
+what is read of it, are `API.md` §2 (`GET /api/client`); a header that is not exactly the shape is no client, and
+is served.
+
 ## Limits
 
 Runtime-tunable limits. The **enforced** values live where they are enforced; these only

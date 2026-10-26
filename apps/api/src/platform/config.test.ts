@@ -693,3 +693,65 @@ describe('the SMTP address is one a transport can be built from (D-179 §6)', ()
     ).toBe('smtps://u:pa%23ss@mail.example.com');
   });
 });
+
+describe('the minimum native client', () => {
+  const minimum = {
+    MIN_CLIENT_MACOS_CONTRACT: '1',
+    MIN_CLIENT_MACOS_VERSION: '0.2.0',
+    MACOS_DOWNLOAD_URL: 'https://example.test/purlay',
+  };
+
+  test('is no limit, with none of it set', () => {
+    const config = loadConfig(valid);
+    expect(config.MIN_CLIENT_MACOS_CONTRACT).toBeUndefined();
+    expect(config.MIN_CLIENT_MACOS_VERSION).toBeUndefined();
+    expect(config.MACOS_DOWNLOAD_URL).toBeUndefined();
+  });
+
+  test('is read as written, the contract as a number', () => {
+    const config = loadConfig({ ...valid, ...minimum });
+    expect(config.MIN_CLIENT_MACOS_CONTRACT).toBe(1);
+    expect(config.MIN_CLIENT_MACOS_VERSION).toBe('0.2.0');
+    expect(config.MACOS_DOWNLOAD_URL).toBe('https://example.test/purlay');
+  });
+
+  test('may be any one of the three', () => {
+    expect(
+      loadConfig({ ...valid, MIN_CLIENT_MACOS_VERSION: '1.0.0' }).MIN_CLIENT_MACOS_VERSION,
+    ).toBe('1.0.0');
+    expect(loadConfig({ ...valid, MIN_CLIENT_MACOS_CONTRACT: '1' }).MIN_CLIENT_MACOS_CONTRACT).toBe(
+      1,
+    );
+  });
+
+  // A minimum above what this very server speaks would refuse every client there is, and it would be
+  // found by the first person who tried to sign in: refused at boot instead (CONFIG.md).
+  test('refuses a contract higher than the one this server speaks', () => {
+    const message = refusal({ ...valid, MIN_CLIENT_MACOS_CONTRACT: '999' });
+    expect(message).toContain('MIN_CLIENT_MACOS_CONTRACT');
+  });
+
+  test.each(['0', '-1', '1.5', 'one', '1e3'])('refuses a contract of %s', (value) => {
+    expect(refusal({ ...valid, MIN_CLIENT_MACOS_CONTRACT: value })).toContain(
+      'MIN_CLIENT_MACOS_CONTRACT',
+    );
+  });
+
+  test.each(['1.0', 'v1.0.0', '1.0.0.0', 'latest', '1.0.0 ', '1.0.0-'])(
+    'refuses a version of %j',
+    (value) => {
+      expect(refusal({ ...valid, MIN_CLIENT_MACOS_VERSION: value })).toContain(
+        'MIN_CLIENT_MACOS_VERSION',
+      );
+    },
+  );
+
+  test.each([
+    'http://example.test/x',
+    'ftp://example.test/x',
+    'example.test/x',
+    'javascript:alert(1)',
+  ])('refuses a download address of %j: a person is sent there by the app', (value) => {
+    expect(refusal({ ...valid, MACOS_DOWNLOAD_URL: value })).toContain('MACOS_DOWNLOAD_URL');
+  });
+});

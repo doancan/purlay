@@ -237,6 +237,7 @@ const uploadRefusal = (
     case 'ADMIN_LINK_NOT_FOUND':
     case 'CHANNEL_NAME_TAKEN':
     case 'CHANNEL_NOT_FOUND':
+    case 'CLIENT_TOO_OLD':
     case 'EMAIL_SIGN_IN_UNAVAILABLE':
     case 'EXPORT_IN_PROGRESS':
     case 'EXPORT_NOT_FOUND':

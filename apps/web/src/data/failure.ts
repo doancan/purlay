@@ -137,6 +137,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'SETTINGS_CHANGE_FAILED':
     case 'SERVER_CHANGE_REFUSED':
     case 'ADMIN_LINK_NOT_FOUND':
+    // Said to an installed client by its header, which the web client never sends (D-186).
+    case 'CLIENT_TOO_OLD':
     // GitHub's answers, never a person's: no screen calls the webhook (D-134 §4).
     case 'WEBHOOK_SIGNATURE_INVALID':
     case 'GITHUB_REPOSITORY_MISMATCH':

@@ -12,7 +12,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 411 | 413 | 415 | 429 | 500 | 503;
+export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 411 | 413 | 415 | 426 | 429 | 500 | 503;
 
 /**
  * Every failure this API can express.
@@ -28,6 +28,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('INVALID_MESSAGE_ID'),
   /** A request body that is not `application/json`. Refused before it is read. (D-80) */
   Type.Literal('UNSUPPORTED_MEDIA_TYPE'),
+  /**
+   * An installed client whose contract or version is below what this server still serves, refused at
+   * the edge before anything else is looked at (`API.md` §1 `426`, D-186). The body says what to get.
+   */
+  Type.Literal('CLIENT_TOO_OLD'),
   // Authentication
   /**
    * Every reason a session does not resolve — absent, expired, revoked, or owned
@@ -227,6 +232,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   GITHUB_ACCOUNT_TAKEN: 409,
 
   UNSUPPORTED_MEDIA_TYPE: 415,
+  CLIENT_TOO_OLD: 426,
 
   PAYLOAD_TOO_LARGE: 413,
   LENGTH_REQUIRED: 411,
@@ -341,6 +347,17 @@ export const ServerChangeRefusedDetails = Type.Object({
 });
 export type ServerChangeRefusedDetails = Static<typeof ServerChangeRefusedDetails>;
 
+/**
+ * What a client too old to be served is told (`426 CLIENT_TOO_OLD`): the lowest contract and version the
+ * server still serves — `null` for a limit the operator did not set — and where to get a newer one.
+ */
+export const ClientTooOldDetails = Type.Object({
+  minContractVersion: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  minAppVersion: Type.Union([Type.String(), Type.Null()]),
+  downloadUrl: Type.Union([Type.String(), Type.Null()]),
+});
+export type ClientTooOldDetails = Static<typeof ClientTooOldDetails>;
+
 export const AppErrorBody = Type.Union([
   Type.Object({
     code: Type.Literal('VALIDATION_FAILED'),
@@ -373,6 +390,11 @@ export const AppErrorBody = Type.Union([
     details: ServerChangeRefusedDetails,
   }),
   Type.Object({
+    code: Type.Literal('CLIENT_TOO_OLD'),
+    message: Type.String(),
+    details: ClientTooOldDetails,
+  }),
+  Type.Object({
     // Derived, so the codes are listed once. A new code lands here automatically
     // rather than in a second list somebody has to remember to update.
     code: Type.Exclude(
@@ -384,6 +406,7 @@ export const AppErrorBody = Type.Union([
         Type.Literal('SETUP_STEP_REFUSED'),
         Type.Literal('SETTINGS_CHANGE_FAILED'),
         Type.Literal('SERVER_CHANGE_REFUSED'),
+        Type.Literal('CLIENT_TOO_OLD'),
       ]),
     ),
     message: Type.String(),

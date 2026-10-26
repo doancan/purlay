@@ -27,6 +27,8 @@ import { askForSignInLink, consumeSignIn, previewSignIn } from './magic-link';
 import { afterAnswer } from '../../platform/after-answer';
 import type { SignInLinkDependencies } from '../../modules/auth/magic-link';
 import { authMethods } from './auth-methods';
+import { clientInfo, clientPolicyOf } from './client-info';
+import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { Elysia, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
@@ -74,6 +76,7 @@ import {
   unsupportedMediaTypeResponse,
   responseHeaders,
   DOCUMENT_HEADERS,
+  clientTooOldResponse,
 } from './edge';
 import { clientFileFor, isUnchanged, type Client } from './client';
 import { refusalFor } from './errors';
@@ -452,6 +455,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
         return crossSiteResponse(headers);
       }
+      // An installed client this server no longer serves is told so, with what to get (D-186): before the
+      // body is read or a session looked up, and not for the two things such a client needs in order to
+      // learn it — liveness, and `GET /api/client` itself.
+      if (!isOutsideClientPolicy(new URL(request.url).pathname)) {
+        const tooOld = clientRefusal(
+          request.headers.get('x-purlay-client'),
+          clientPolicyOf(dependencies.config),
+        );
+        if (tooOld !== null) return clientTooOldResponse(tooOld, headers);
+      }
       if (isUploadRequest(request)) {
         const refusal = uploadRefusal(request, ATTACHMENT_BYTES_MAX);
         if (refusal !== null) return edgeRefusalResponse(refusal, headers);
@@ -529,6 +542,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
+    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth))
     .post('/auth/email', async ({ request, body, set, server }) => {
       await askForSignInLink(
         signInLinks(),

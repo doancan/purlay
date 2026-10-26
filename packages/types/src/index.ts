@@ -10,6 +10,7 @@
  * compile time (`ARCHITECTURE.md` §2).
  */
 export * from './formats';
+export * from './contract-version';
 export * from './errors';
 export * from './models';
 export * from './events';

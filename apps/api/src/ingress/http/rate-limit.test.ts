@@ -7,6 +7,7 @@
  * budget, and these would see it.
  */
 import { describe, expect, test } from 'bun:test';
+import { unconnectedDatabase } from '@purlay/db';
 import { createApp } from './app';
 import {
   AUTH_BUDGET,
@@ -129,5 +130,52 @@ describe('the budgets in force', () => {
     expect(COSTLY_READ_BUDGET).toEqual({ perSecond: 10, burst: 60 });
     // Under the hourly quota of the workspace's one GitHub token, however many members ask.
     expect(GITHUB_CALL_BUDGET.burst + GITHUB_CALL_BUDGET.perSecond * 3600).toBeLessThan(5_000);
+  });
+});
+
+describe('rate limiting GET /api/client (D-186)', () => {
+  const ask = async (app: ReturnType<typeof createApp>, address = ''): Promise<Response> =>
+    await app.handle(
+      new Request('https://purlay.test/api/client', {
+        headers: address === '' ? {} : { 'x-forwarded-for': address },
+      }),
+    );
+  const anApp = (trustProxy: boolean): ReturnType<typeof createApp> =>
+    createApp(
+      testDependencies({
+        database: unconnectedDatabase(),
+        config: testConfig({ TRUST_PROXY: trustProxy }),
+        rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
+      }),
+    );
+
+  // Public and asked before anybody has signed in, so it is charged to the address, not to a user: it
+  // is the one route a stranger can call at will that is not under /auth/.
+  test('a client gets the sign-in burst, then 429 with a Retry-After', async () => {
+    const app = anApp(false);
+    const statuses: number[] = [];
+    for (let i = 0; i < AUTH_BUDGET.burst + 3; i += 1) statuses.push((await ask(app)).status);
+    expect(statuses.slice(0, AUTH_BUDGET.burst).every((status) => status === 200)).toBe(true);
+    expect(statuses.slice(AUTH_BUDGET.burst)).toEqual([429, 429, 429]);
+    const refused = await ask(app);
+    expect(refused.headers.get('retry-after')).toBe(String(retryAfterSeconds(AUTH_BUDGET)));
+  });
+
+  test('it is the sign-in bucket: what a client spends here it does not have for /auth/', async () => {
+    const app = anApp(false);
+    for (let i = 0; i < AUTH_BUDGET.burst; i += 1) await ask(app);
+    const signOut = await app.handle(
+      new Request('https://purlay.test/auth/logout', { method: 'POST' }),
+    );
+    expect(signOut.status).toBe(429);
+  });
+
+  test('behind a trusted proxy each address has its own, and a spoofed prefix buys nothing', async () => {
+    const app = anApp(true);
+    for (let i = 0; i < AUTH_BUDGET.burst; i += 1) {
+      expect((await ask(app, `203.0.113.${String(i + 1)}, 198.51.100.1`)).status).toBe(200);
+    }
+    expect((await ask(app, '203.0.113.99, 198.51.100.1')).status).toBe(429);
+    expect((await ask(app, '198.51.100.2')).status).toBe(200);
   });
 });

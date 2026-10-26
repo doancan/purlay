@@ -238,6 +238,15 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
         : retryAfterSeconds(passportBudget);
     }
 
+    // Asked by a client before anybody has signed in, as the sign-in screen asks the setup's status: it is
+    // sign-in traffic, charged to the client's address (D-186).
+    if (method === 'GET' && pathname === '/api/client') {
+      const address = clientAddress(peer, request.headers, trustProxy);
+      return (await auth.consume(limitKeyFor(address)))
+        ? undefined
+        : retryAfterSeconds(budgets.auth);
+    }
+
     if (pathname.startsWith('/auth/')) {
       const address = clientAddress(peer, request.headers, trustProxy);
       return (await auth.consume(limitKeyFor(address)))
