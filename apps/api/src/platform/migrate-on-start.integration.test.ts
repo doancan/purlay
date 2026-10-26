@@ -169,10 +169,13 @@ const recoveryInConfigDocument = (): string => {
   return statement;
 };
 
+// Every database the tests made is dropped, one at a time, each `with (force)` — which waits for its
+// connections to end, and takes seconds on a loaded runner. Under the five a hook is given unless it says
+// otherwise, the drops outlived the hook and the run failed with a test that had no name.
 afterAll(async () => {
   for (const name of created) await sql`drop database ${sql.id(name)} with (force)`.execute(admin);
   await admin.destroy();
-});
+}, 120_000);
 
 describe('integration: migrate on start', () => {
   test('an empty database is migrated to the latest, and starting again changes nothing', async () => {
