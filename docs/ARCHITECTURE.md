@@ -66,7 +66,7 @@ this document named a superseded database major for months, and named a web fram
 while nothing had installed the framework at all. The check that keeps every other document free
 of versions now applies to this one too — and it caught this paragraph naming them. (D-56)
 
-**Not in the stack, deliberately:** an ORM (D-20) · Tauri before Phase 3 (D-14) · any client-side
+**Not in the stack, deliberately:** an ORM (D-20) · a Tauri shell, dropped by D-186 · any client-side
 database (D-19) · `citext`, dropped in favour of an explicit `COLLATE "C"` (D-40) · an i18n
 framework (D-41) · **a component library with opinions** (D-52) — headless primitives *are* in the
 stack, because focus and ARIA fail silently when hand-written; an imposed visual identity is not,

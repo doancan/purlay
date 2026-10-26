@@ -203,13 +203,13 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 
 ### Phase 3 — Polish
 
-Tauri desktop shell (D-14) · **mobile as an installable progressive web application** — one
-client in a shell, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
+**native macOS client in Swift, in its own repository** (D-186) · **mobile as an installable
+progressive web application** — one client, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
 bus (D-7, D-25) · **OIDC single sign-on, gated on demand** (D-31)
 
-> **Native Swift clients are not planned** — not deferred (D-51). The bar for desktop and mobile is
-> polish, not platform nativeness, which is the trade every interface exemplar we measure against
-> has also made.
+> **Native Swift exists for macOS only** (D-186, which supersedes D-51 here). Mobile stays an
+> installable web application, Windows and Linux use the web client, and no native iOS client is
+> planned. The macOS client has its own track in its own repository and does not wait for this phase.
 
 ---
 

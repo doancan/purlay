@@ -135,8 +135,9 @@ serving 30 people does not need one, and the seam to add one later is already in
 Owned by `ARCHITECTURE.md` §4, with the dependency direction lint enforces. Not drawn twice: a
 tree copied into a second file is a tree that will describe a directory somebody moved.
 
-`apps/desktop` (Tauri) arrives in **Phase 3**, not before. Mobile is the same client installed
-from the browser, not a second codebase. (`DECISIONS.md` D-14, D-51)
+The macOS client is a native Swift application in its own repository, `purlay-macos`, and is not in this
+tree; it consumes the contract this repository exports. Mobile is the same web client installed from the
+browser, not a second codebase. (`DECISIONS.md` D-51, D-186)
 
 ## Current status
 

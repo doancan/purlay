@@ -290,7 +290,8 @@ is the N+1 the project rules already forbid.
 **Amended 2026-09-09 by D-51**, which settled what the desktop and mobile clients *are*: one
 client in a shell, with the bar at polish rather than platform nativeness. Native Swift clients
 are not planned, and mobile is an installable progressive web application rather than the separate
-"mobile client" this phase list originally implied.
+"mobile client" this phase list originally implied. **Amended 2026-10-26 by D-186:** the desktop client is a
+native Swift application for macOS, and the Tauri shell is not built.
 
 The `<35MB idle` figure is removed from all documents. It is the footprint of an empty Tauri
 shell; a React 19 app with a tokenizer and a live socket inside WKWebView realistically idles
@@ -1785,6 +1786,10 @@ trade a proven interaction model for an unmeasured fear.
 
 ### D-51. Desktop and mobile are the same client in a shell, and the bar is polish rather than nativeness
 
+**Amended 2026-10-26 by D-186:** macOS now gets a native Swift client in its own repository, and the Tauri shell
+is dropped. Mobile as an installable web application, and the web client for Windows and Linux, stand as written
+below; "native Swift clients are not planned" no longer does for macOS.
+
 The quality bar was set by naming two groups: Vercel, Supabase and GitHub for interface quality,
 and Microsoft, Adobe and Google for the macOS and iOS applications. Those halves pull apart, and
 the tension is worth recording rather than resolving quietly.
@@ -2096,8 +2101,10 @@ client that has not been rebuilt. The asymmetry is the point: strict about what 
 about what we emit.
 
 **Rejected: tolerating unknown fields.** The usual argument is a third-party client on an older or
-newer version. There is no third-party client — D-51 ships one client with the server — so the
-tolerance would buy nothing and cost a silent failure mode.
+newer version. There is no third-party client, so the tolerance would buy nothing and cost a silent failure
+mode. (D-51 once added: one client ships with the server. D-186 ends that for macOS: the app is updated on its
+own schedule, which is why *responses* are additive and the app ignores fields it does not know — this rule
+is about what the server accepts, and is unchanged.)
 
 ---
 
@@ -8901,6 +8908,71 @@ merged after a release pull request was opened conflict with it in `changes.md`:
 
 **Cost of reversing.** One workflow, three scripts and their tests. Going back to deploying by hand is
 stopping the runner; the runbook in `ARCHITECTURE.md` is unchanged.
+
+### D-186. macOS gets a native Swift client in its own repository, drawn in Liquid Glass — supersedes D-51's "not planned"
+
+**Decided (the owner, 2026-10-26), supersedes the native-client clause of D-51 and the Tauri shell of D-14.**
+D-51 chose one wrapped client and named its own reversal: "paying customers asking for it, with numbers". That
+trigger has not fired. The owner has chosen to go native anyway, for the platform's own feel and performance, and
+this decision records that as a choice made against D-51's reasoning, not as a measurement that overturned it.
+
+- **A native application for macOS, written in Swift.** SwiftUI is the default; AppKit is used where SwiftUI is
+  the wrong tool — the message feed's scrolling and the composer's text editing are the two expected places, and
+  each such choice is recorded where it is made. The interface follows Apple's current design language, Liquid
+  Glass, by using the system's own controls, toolbars, sidebars and materials rather than drawing glass by hand,
+  and follows the system's accessibility settings (reduced transparency, increased contrast, reduced motion). It
+  needs the macOS release that introduced Liquid Glass; older releases are not supported.
+- **Its own repository, `purlay-macos`**, under the same owner, open source under the same licence and contributor
+  agreement as this one (D-1). It is not a directory in this repository: this one is built, linted and verified
+  with Bun tooling an Xcode project would fight, and the Swift client needs its own pipeline on macOS runners with
+  signing and notarization, which must not block `main` here.
+- **Distributed outside the App Store**: a signed, notarized download updated in place. Store review and the
+  AGPL do not sit together, and a release channel the owner does not control is a cost D-51 already counted.
+- **The contract keeps one home.** `packages/types` stays the owner of models, frames, shapes and error codes
+  (`OVERVIEW.md`). This repository publishes a machine-readable export of it, versioned with the server; the Swift
+  repository pins one version of that export, generates its `Codable` types from it and never writes a wire type
+  by hand. A contract test runs the client against a real server of the pinned version, so drift is a red build
+  rather than a decoding error in someone's app.
+- **The visual values keep one home too.** `packages/tokens/tokens.json` owns colour, spacing and type (D-97). The
+  Swift client generates its content-area values from it. System chrome — window, toolbar, sidebar, controls — is
+  the system's and is not re-skinned.
+- **Behaviour is `UX.md`'s.** The native client implements the same layout, thread interaction, keyboard model and
+  states. Where the platform's convention is better, the departure is written into `UX.md` in the change that
+  makes it; the web client is not the only place behaviour is specified.
+- **The server no longer ships one client with it.** The app is installed by people and updated on its own
+  schedule, so it will meet servers newer than itself. Responses are already additive (D-58) and the Swift client
+  ignores fields it does not know; what it must also have is a way to declare its version and be told to update
+  when a server needs a newer one. That mechanism is part of the plan, and is not built yet.
+
+**What stays as D-51 decided.** Mobile is the installable web application. Windows and Linux use the web client.
+No native iOS client is planned; a macOS app in SwiftUI makes one cheaper later, which is not a reason to start
+it. The Tauri shell is dropped rather than built beside the native one: two desktop clients on the platform that
+has one of them native is the "three mediocre clients" D-51 warned about, and D-2 says subtract.
+
+**Considered and rejected.**
+
+- *A directory in this repository (`apps/macos`).* One place for the contract, but it puts an Xcode project under
+  `verify`, `knip`, `check:pr` and `mutate`, and a macOS pipeline under a CI that has been unavailable for billing
+  more than once. The generated export gives the same single home for the contract without the coupling.
+- *The Tauri shell of D-14.* It was the cheaper road and is the road the owner declined: a web view in a native
+  frame is what this decision exists to leave.
+- *Mac Catalyst or a cross-platform toolkit.* They give a native binary and not a native feel, which is the
+  property being bought.
+- *The Mac App Store.* See above.
+
+**Accepted.** Everything D-51 listed, now incurred: a second design system, a second release channel, notarization,
+platform expertise and permanent maintenance, and an Apple Developer account. Two clients to keep behaviourally
+equal, held by `UX.md` and the contract test rather than by sharing code. Features land on the web first, as the
+reference, and reach the app after. The app's first release is smaller than the web client by design, and its
+contents are the plan's to decide.
+
+**Open.** Whether the Apple Developer account exists and in whose name; the first release's screens; how the app
+signs in, given that a browser session is a cookie (`ARCHITECTURE.md` §7.1) — a spike before the plan commits.
+
+**Reverses if** the app is not kept up to the web client's behaviour for two consecutive releases — then it is
+archived and the web client is the product, which D-51 was.
+
+---
 
 ## Part D — Open, deliberately
 
