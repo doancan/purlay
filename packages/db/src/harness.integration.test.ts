@@ -7,9 +7,11 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
+import pg from 'pg';
 import {
   buildIntegrationTemplate,
   cloneIntegrationDatabase,
+  backendsGone,
   closeIntegrationDatabase,
   dropDatabases,
   integrationDatabase,
@@ -100,6 +102,58 @@ describe('integration harness', () => {
  * test that crosses them is saying that the next file's `beforeAll` is about to
  * time out.
  */
+describe('integration harness: dropping a database whose connections are still closing', () => {
+  const urlOf = (name: string): string => {
+    const url = new URL(process.env['DATABASE_URL'] ?? '');
+    url.pathname = `/${name}`;
+    return url.toString();
+  };
+  const scratchDatabase = async (): Promise<string> => {
+    const name = `purlay_drop_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    const admin = new pg.Client({ connectionString: urlOf('postgres') });
+    await admin.connect();
+    await admin.query(`create database ${name}`);
+    await admin.end();
+    return name;
+  };
+
+  test('is waited for: nobody is connected, so there is nothing to wait for', async () => {
+    const name = await scratchDatabase();
+    try {
+      const started = performance.now();
+      expect(await backendsGone(name, 1_000)).toBe(true);
+      expect(performance.now() - started).toBeLessThan(500);
+    } finally {
+      await dropDatabases([name]);
+    }
+  });
+
+  test('a connection that ends on its own is waited for by the drop, and is not killed by it', async () => {
+    const name = await scratchDatabase();
+    const client = new pg.Client({ connectionString: urlOf(name) });
+    await client.connect();
+    const failures: unknown[] = [];
+    client.on('error', (error) => failures.push(error));
+    setTimeout(() => void client.end(), 150);
+    // Not `backendsGone` first: the drop itself is what must wait, or it kills the connection mid-hang-up.
+    await dropDatabases([name]);
+    expect(failures).toEqual([]);
+  });
+
+  test('a connection that never ends is waited for only so long, and then the drop is by force', async () => {
+    const name = await scratchDatabase();
+    const client = new pg.Client({ connectionString: urlOf(name) });
+    await client.connect();
+    client.on('error', () => undefined);
+    try {
+      expect(await backendsGone(name, 100)).toBe(false);
+    } finally {
+      await dropDatabases([name]);
+      await client.end().catch(() => undefined);
+    }
+  });
+});
+
 describe('integration harness cost', () => {
   const TEMPLATE_BUDGET_MS = 2_500;
   const CLONE_BUDGET_MS = 1_000;

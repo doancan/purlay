@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabase, readMigrationFiles, sql } from '@purlay/db';
+import { createDatabase, dropDatabases, readMigrationFiles, sql } from '@purlay/db';
 import type { Executor } from '@purlay/db';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
@@ -169,11 +169,10 @@ const recoveryInConfigDocument = (): string => {
   return statement;
 };
 
-// Every database the tests made is dropped, one at a time, each `with (force)` — which waits for its
-// connections to end, and takes seconds on a loaded runner. Under the five a hook is given unless it says
-// otherwise, the drops outlived the hook and the run failed with a test that had no name.
+// Every database the tests made, dropped together and after their connections have closed
+// (`dropDatabases`); one at a time and forced, they outlived the five seconds a hook is given.
 afterAll(async () => {
-  for (const name of created) await sql`drop database ${sql.id(name)} with (force)`.execute(admin);
+  await dropDatabases(created);
   await admin.destroy();
 }, 120_000);
 

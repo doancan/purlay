@@ -8619,4 +8619,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'const before = Promise.resolve();',
     tests: ['apps/api/src/ingress/http/auth-callback-queue.test.ts'],
   },
+  {
+    id: 'drop-kills-closing-connections',
+    why: 'a drop that follows a pool’s end at once kills a connection halfway through hanging up, and the run dies of an unhandled error between two tests',
+    file: 'packages/db/src/testing.ts',
+    find: '        await backendsGone(name, CLOSING_WITHIN_MS);\n',
+    replace: '',
+    tests: ['packages/db/src/harness.integration.test.ts'],
+  },
 ];

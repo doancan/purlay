@@ -102,6 +102,35 @@ export const closeIntegrationDatabase = async (): Promise<void> => {
   }
 };
 
+/** How long a drop waits for the connections of its database to finish closing before it forces them. */
+const CLOSING_WITHIN_MS = 1_000;
+
+/**
+ * Whether nobody is connected to the database any more, waiting up to `within` ms for the ones that are
+ * closing. A pool says it has ended when its clients have been told to, not when their sockets are gone,
+ * so a drop that follows `db.destroy()` at once can reach a connection halfway through hanging up. `with
+ * (force)` then kills it, the client reads a fatal "terminating connection due to administrator command"
+ * with its error listener already removed, and the run dies of an unhandled error between two tests —
+ * which it did, on a loaded runner, one pipeline run in several. Asked on `admin`'s own connection, so
+ * the answer is the server's and not the pool's.
+ */
+export const backendsGone = async (name: string, within: number): Promise<boolean> => {
+  const admin = connect<unknown>(onDatabase(integrationUrl(), 'postgres'), 1);
+  try {
+    const until = performance.now() + within;
+    for (;;) {
+      const { rows } = await sql<{
+        n: string;
+      }>`select count(*)::text as n from pg_stat_activity where datname = ${name}`.execute(admin);
+      if (rows[0]?.n === '0') return true;
+      if (performance.now() >= until) return false;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  } finally {
+    await admin.destroy();
+  }
+};
+
 /**
  * Drops databases the test run created — all at once, on purpose.
  *
@@ -123,6 +152,8 @@ export const dropDatabases = async (names: readonly string[]): Promise<void> => 
   try {
     await Promise.all(
       names.map(async (name) => {
+        // What is closing is let to close; what is not, is forced (`with (force)` is the fallback).
+        await backendsGone(name, CLOSING_WITHIN_MS);
         await sql`drop database ${sql.id(name)} with (force)`.execute(admin);
       }),
     );
