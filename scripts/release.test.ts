@@ -148,6 +148,11 @@ const SHOWN: Record<string, Partial<ExecResult>> = {
   'git show origin/main:docs/changelog/changes.md': { stdout: CHANGES },
 };
 
+/** What `gh issue create` says: every release gets an issue of its own, for the pull request to close. */
+const ISSUE: Record<string, Partial<ExecResult>> = {
+  'gh issue create': { stdout: 'https://github.com/acme/purlay/issues/12\n' },
+};
+
 /** A checkout holding the two files, and an `exec` that records and answers as the case says. */
 const checkout = (answers: Record<string, Partial<ExecResult>> = {}): Recorder => {
   const root = mkdtempSync(join(tmpdir(), 'release-prepare-'));
@@ -160,7 +165,7 @@ const checkout = (answers: Record<string, Partial<ExecResult>> = {}): Recorder =
     const line = [command, ...args].join(' ');
     calls.push(line);
     // A key ending in `$` is the whole command; any other is how it begins.
-    const answer = Object.entries({ ...SHOWN, ...answers }).find(([key]) =>
+    const answer = Object.entries({ ...SHOWN, ...ISSUE, ...answers }).find(([key]) =>
       key.endsWith('$') ? line === key.slice(0, -1) : line.startsWith(key),
     )?.[1];
     return { code: 0, stdout: '', stderr: '', ...answer };
@@ -197,6 +202,7 @@ describe('preparing a release', () => {
       'git add package.json docs/changelog',
       'git commit -m chore(release): v0.1.0',
       `git push -u origin ${BRANCH}`,
+      'gh issue create',
       'gh pr create',
     ];
     const positions = order.map((prefix) => at(place, prefix));
@@ -219,6 +225,16 @@ describe('preparing a release', () => {
     expect(create).toContain(`--head ${BRANCH}`);
     expect(create).toContain('deploys');
     expect(create).toContain('v0.1.0');
+  });
+
+  test('gives the release an issue of its own, and the pull request closes it', () => {
+    const place = checkout(PR);
+    prepare(options(place));
+    const issue = place.calls.find((call) => call.startsWith('gh issue create')) ?? '';
+    expect(issue).toContain('--title Release v0.1.0');
+    expect(issue).toContain('--label infra');
+    const create = place.calls.find((call) => call.startsWith('gh pr create')) ?? '';
+    expect(create).toContain('Closes #12');
   });
 
   test('a commit message with no assistant in it and no project-management word', () => {
@@ -300,6 +316,20 @@ describe('when it fails half way', () => {
     expect(at(place, `git push origin --delete ${BRANCH}`)).toBeGreaterThan(
       at(place, `git push -u origin ${BRANCH}`),
     );
+  });
+
+  test('a pull request that GitHub refuses closes the issue it opened, so none is left behind', () => {
+    const place = checkout({ 'gh pr create': { code: 1, stderr: 'rate limited' } });
+    expect(() => prepare(options(place))).toThrow('rate limited');
+    expect(place.calls.some((call) => call.startsWith('gh issue close 12'))).toBe(true);
+  });
+
+  test('an issue that cannot be made stops the release, with no issue to close', () => {
+    const place = checkout({ 'gh issue create': { stdout: 'created\n' } });
+    expect(() => prepare(options(place))).toThrow('did not say which issue');
+    expect(place.calls.some((call) => call.startsWith('gh pr create'))).toBe(false);
+    expect(place.calls.some((call) => call.startsWith('gh issue close'))).toBe(false);
+    expect(place.calls).toContain(`git branch -D ${BRANCH}`);
   });
 
   test('says so when the clean-up could not run, instead of leaving the person on the branch unaware', () => {
