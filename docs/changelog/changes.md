@@ -23,6 +23,14 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **Native app** — A person signs in to the macOS application in their browser and authorises it with one click; it gets a session of its own (D-191)
+- **Native app** — The server says which client versions it still serves and where to get a newer one, and refuses an older one with a clear answer (D-190)
+- **Operations** — Every release carries the contract bundle a non-browser client is generated from, with its digest (D-192)
+
+### Changed
+
+- **Sign-in** — An emailed sign-in link can carry the application's pending sign-in into the browser that opens it (D-191)
 
 ---
