@@ -8966,8 +8966,14 @@ equal, held by `UX.md` and the contract test rather than by sharing code. Featur
 reference, and reach the app after. The app's first release is smaller than the web client by design, and its
 contents are the plan's to decide.
 
-**Open.** Whether the Apple Developer account exists and in whose name; the first release's screens; how the app
-signs in, given that a browser session is a cookie (`ARCHITECTURE.md` §7.1) — a spike before the plan commits.
+**Open.** Whether the Apple Developer account exists and in whose name, and the first release's screens — the owner's,
+and neither blocks the design. **How the app signs in** is not open: a browser session is a cookie
+(`ARCHITECTURE.md` §7.1), so the app signs in once through the system browser and is handed a session of its own, by a
+one-time code bound to a secret only the app holds. That handoff is a decision of its own, in the server work the app
+waits for. Its parts were run — the system browser's session delivering a custom-scheme callback, the app holding the
+session as an explicit `Cookie` header, the login keychain under the sandbox — and what was not run (other default
+browsers, the GitHub round trip, the emailed link in a second browser) is checked against a real server before the
+sign-in milestone closes.
 
 **Reverses if** the app is not kept up to the web client's behaviour for two consecutive releases — then it is
 archived and the web client is the product, which D-51 was.
