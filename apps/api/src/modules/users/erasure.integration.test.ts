@@ -337,6 +337,35 @@ describe('integration: erasing an account', () => {
     return { id: ada.userId, email, name: ada.username };
   };
 
+  test('the native sign-in codes the erased person made go with them, and nobody else’s do (D-191)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      const make = async (userId: string, name: string): Promise<void> => {
+        await db
+          .insertInto('native_authorizations')
+          .values({
+            id: messageId(clock.now()),
+            user_id: userId,
+            code_digest: await tokenDigest(name),
+            challenge: 'c'.repeat(43),
+            created_at: clock.now(),
+            expires_at: new Date(clock.now().getTime() + 120_000),
+          })
+          .execute();
+      };
+      await make(ada.userId, 'ada-one');
+      await make(ada.userId, 'ada-two');
+      await make(bob.userId, 'bob-one');
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const left = await db.selectFrom('native_authorizations').select('user_id').execute();
+      const mine = left.filter((row) => row.user_id === ada.userId);
+      expect(mine).toEqual([]);
+      expect(left.filter((row) => row.user_id === bob.userId)).toHaveLength(1);
+    });
+  });
+
   test('the passports made for the erased address go with it, and no other address’s or cookie’s does', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['bob', 'ada']);

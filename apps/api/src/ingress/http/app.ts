@@ -28,6 +28,7 @@ import { afterAnswer } from '../../platform/after-answer';
 import type { SignInLinkDependencies } from '../../modules/auth/magic-link';
 import { authMethods } from './auth-methods';
 import { clientInfo, clientPolicyOf } from './client-info';
+import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { Elysia, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
@@ -543,6 +544,24 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
     .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth))
+    // The native application's way in (D-191): the browser's page says yes, the application spends the code.
+    .post(
+      '/api/native/authorize',
+      async ({ request, body }) => await authorizeNativeClient(dependencies, request, body),
+    )
+    .post('/api/native/token', async ({ request, body, set, server }) =>
+      respond(
+        set,
+        await exchangeNativeToken(dependencies, body, {
+          clientHeader: request.headers.get('x-purlay-client'),
+          ipAddress: clientAddress(
+            peerOf(server, request),
+            request.headers,
+            dependencies.config.TRUST_PROXY,
+          ),
+        }),
+      ),
+    )
     .post('/auth/email', async ({ request, body, set, server }) => {
       await askForSignInLink(
         signInLinks(),

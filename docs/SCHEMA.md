@@ -1709,6 +1709,48 @@ CREATE INDEX idx_invitation_passports_consumed ON invitation_passports (consumed
     WHERE consumed_at IS NOT NULL;
 ```
 
+### 9.9. `native_authorizations`
+
+What lets the native application sign in without a password of its own (D-191): a one-time code, made while
+a person is signed in in a browser and spent by the application that started the flow. Read and written by
+`modules/auth/native-handoff.ts`.
+
+- **The code is never stored**: `code_digest` is the SHA-256 of its 64 hex digits (`platform/tokens.ts`), unique.
+  A copy of the table spends nothing.
+- **Bound to a secret the application keeps**: `challenge` is the base64url SHA-256 of a verifier the
+  application made and never sent (43 characters). Spending a code needs the verifier.
+- **Two minutes, once**: `expires_at` is two minutes after `created_at` on the server's clock; `spent_at` is set
+  by the spend that mints the session, under a lock on the row, so of two at once one wins.
+- **Wrong guesses are counted and committed with their refusal**: `wrong_verifiers`, 0 to 5; at five the code is
+  burnt (`expires_at` brought to that moment). A wrong guess never burns it earlier.
+- **A person's own**: `user_id`, `ON DELETE CASCADE`; at most five live per person, the oldest making room, counted
+  under a lock on the person's row.
+- A day past its expiry the daily sweep deletes the row; an erasure deletes the person's rows.
+
+Instance-wide; never exported.
+
+```sql
+CREATE TABLE native_authorizations (
+    id               UUID PRIMARY KEY,
+    user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_digest      TEXT NOT NULL,
+    challenge        TEXT NOT NULL,
+    wrong_verifiers  SMALLINT NOT NULL DEFAULT 0,
+    created_at       TIMESTAMPTZ NOT NULL,
+    expires_at       TIMESTAMPTZ NOT NULL,
+    spent_at         TIMESTAMPTZ,
+
+    CONSTRAINT native_authorizations_code_is_a_digest CHECK (code_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT native_authorizations_challenge_is_a_digest CHECK (challenge ~ '^[A-Za-z0-9_-]{43}$'),
+    CONSTRAINT native_authorizations_wrong_verifiers_bounded CHECK (wrong_verifiers BETWEEN 0 AND 5),
+    CONSTRAINT native_authorizations_lasts CHECK (expires_at >= created_at),
+    CONSTRAINT native_authorizations_code_unique UNIQUE (code_digest)
+);
+
+CREATE INDEX idx_native_authorizations_user ON native_authorizations (user_id, expires_at);
+CREATE INDEX idx_native_authorizations_expiry ON native_authorizations (expires_at);
+```
+
 ---
 
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
@@ -1862,6 +1904,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0053_invitation_passports.sql invitation_passports: the digest of a cookie or an address, made from a live invitation link and spent by one sign-up  (D-179 §5)
 0054_server_audit_log.sql    server_audit_log: who changed which of the server's own settings, never the value  (D-26, D-179 §4.8)
 0055_backfill_existing_identities.sql accounts rows for users who have a github_id, email_verified for those who existed before 0047: an upgraded install signs in  (D-179 §7)
+0056_native_authorizations.sql native_authorizations: the digest of a one-time code that hands a person's session to the native application, and the challenge it is bound to  (D-191)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

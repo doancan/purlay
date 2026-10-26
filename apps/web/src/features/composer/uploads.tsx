@@ -259,6 +259,7 @@ const uploadRefusal = (
     case 'MESSAGE_ID_CONFLICT':
     case 'MESSAGE_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
+    case 'NATIVE_CODE_NOT_FOUND':
     case 'PINS_LIMIT':
     case 'PUSH_UNAVAILABLE':
     case 'REAUTHENTICATION_REQUIRED':

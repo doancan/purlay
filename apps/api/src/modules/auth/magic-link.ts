@@ -162,6 +162,7 @@ export const requestSignInLink = async (
       await links.issue(email, {
         locale: input.locale,
         ...(input.invitation === undefined ? {} : { invitation: input.invitation }),
+        ...(input.native === undefined ? {} : { native: input.native }),
       });
     } else if (fate === 'github') {
       links.outbox.post(githubLetter(email, input.locale, appUrl), 'sign-in');

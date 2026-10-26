@@ -248,6 +248,17 @@ export interface MessageVersions {
   workspace_id: string;
 }
 
+export interface NativeAuthorizations {
+  challenge: string;
+  code_digest: string;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+  id: string;
+  spent_at: Timestamp | null;
+  user_id: string;
+  wrong_verifiers: Generated<number>;
+}
+
 export interface Notifications {
   channel_id: string;
   created_at: Generated<Timestamp>;
@@ -474,6 +485,7 @@ export interface DB {
   mentions: Mentions;
   message_versions: MessageVersions;
   messages: Messages;
+  native_authorizations: NativeAuthorizations;
   notifications: Notifications;
   object_deletions: ObjectDeletions;
   pinned_messages: PinnedMessages;

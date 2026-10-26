@@ -89,6 +89,11 @@ x-environment: &environment
   SMTP_URL: ${SMTP_URL:-}
   MAIL_FROM: ${MAIL_FROM:-}
   SMTP_ALLOW_PLAINTEXT: ${SMTP_ALLOW_PLAINTEXT:-false}
+  # The lowest an installed macOS client may be and still be served (D-186): empty is no limit, which the
+  # configuration reads as unset. Named here or it never reaches the container, whatever production.env says.
+  MIN_CLIENT_MACOS_CONTRACT: ${MIN_CLIENT_MACOS_CONTRACT:-}
+  MIN_CLIENT_MACOS_VERSION: ${MIN_CLIENT_MACOS_VERSION:-}
+  MACOS_DOWNLOAD_URL: ${MACOS_DOWNLOAD_URL:-}
 
 services:
   api:
