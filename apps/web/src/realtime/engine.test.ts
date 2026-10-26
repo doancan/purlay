@@ -1975,3 +1975,122 @@ describe('announcing that the person is here', () => {
     expect(w.engine.store.getState().degraded).toEqual({});
   });
 });
+
+describe('a send whose id the server finds too old (D-33, D-8)', () => {
+  /** A clock the test moves: ids are minted from it, as the page mints them from the server's. */
+  const movable = (): { readonly clock: Clock; readonly advance: (ms: number) => void } => {
+    let at = T0;
+    return {
+      clock: { now: () => new Date(at) },
+      advance: (ms): void => {
+        at += ms;
+      },
+    };
+  };
+  const tooOld = (refId: string): ServerFrame =>
+    frame({
+      event: 'ERROR',
+      data: { code: 'INVALID_MESSAGE_ID', message: 'That message id is not plausible.' },
+      refId,
+      ts: T0,
+    });
+  const SENT = (w: World, content: string): { id: string }[] =>
+    w.sentOps('MESSAGE_SEND').filter((sent) => sent.payload['content'] === content);
+
+  // The server accepts a new id for sixty-five seconds, and an old one only if it is the sender's own
+  // row in that channel (`messages.ts`): so a refusal as `INVALID_MESSAGE_ID` of an id that has aged out
+  // says the server does not hold this message. Retrying the same id could never succeed.
+  test('is sent again under a fresh id, once the old one was refused as too old and is not plausible', () => {
+    const t = movable();
+    const w = world({}, { clock: t.clock });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'late' });
+    w.timers.advance(ACK_DEADLINE_MS);
+    expect(w.pending()[0]?.delivery).toBe('failed');
+    t.advance(90_000);
+
+    w.engine.retry(id);
+    w.deliver(tooOld(id));
+
+    const sends = SENT(w, 'late');
+    expect(sends.map((sent) => sent.id).slice(0, 2)).toEqual([id, id]);
+    const fresh = sends.at(-1)?.id ?? '';
+    expect(sends).toHaveLength(3);
+    expect(fresh).not.toBe(id);
+    // One message, under its new id, sending: the old row is not left behind as a second.
+    expect(w.pending().map((p) => [p.id, p.delivery, p.content])).toEqual([
+      [fresh, 'sending', 'late'],
+    ]);
+    w.deliver(ack(fresh));
+    expect(w.pending()[0]?.delivery).toBe('sent');
+  });
+
+  test('keeps what the message was: its channel, its parent and its attachments', () => {
+    const t = movable();
+    const w = world({}, { clock: t.clock });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'reply', parentId: 'root-1' });
+    w.timers.advance(ACK_DEADLINE_MS);
+    t.advance(90_000);
+    w.engine.retry(id);
+    w.deliver(tooOld(id));
+    const last = w.sentOps('MESSAGE_SEND').at(-1);
+    expect(last?.payload).toMatchObject({ channelId: CH, content: 'reply', parentId: 'root-1' });
+  });
+
+  test('once: a fresh id refused as too old too is a failure the person sees, not a loop', () => {
+    const t = movable();
+    const w = world({}, { clock: t.clock });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'skewed' });
+    w.timers.advance(ACK_DEADLINE_MS);
+    t.advance(90_000);
+    w.engine.retry(id);
+    w.deliver(tooOld(id));
+    const fresh = SENT(w, 'skewed').at(-1)?.id ?? '';
+    // The answer comes after another long wait, so the fresh id has aged out too: only the limit of one try
+    // stands between this and a message that is sent again for as long as the network is slow.
+    t.advance(90_000);
+    w.deliver(tooOld(fresh));
+    expect(SENT(w, 'skewed')).toHaveLength(3);
+    expect(w.pending().map((p) => [p.delivery, p.reason])).toEqual([
+      ['failed', 'INVALID_MESSAGE_ID'],
+    ]);
+  });
+
+  test('not when the id is still plausible: then it is the clock that is wrong, and a new id would be too', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'now' });
+    w.deliver(tooOld(id));
+    expect(SENT(w, 'now')).toHaveLength(1);
+    expect(w.pending().map((p) => [p.id, p.delivery, p.reason])).toEqual([
+      [id, 'failed', 'INVALID_MESSAGE_ID'],
+    ]);
+  });
+
+  test('another refusal of an old id is the same refusal as ever, and is not re-minted', () => {
+    const t = movable();
+    const w = world({}, { clock: t.clock });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'refused' });
+    w.timers.advance(ACK_DEADLINE_MS);
+    t.advance(90_000);
+    w.engine.retry(id);
+    w.deliver(
+      frame({
+        event: 'ERROR',
+        data: { code: 'INTERNAL', message: 'no' },
+        refId: id,
+        ts: T0,
+      }),
+    );
+    expect(SENT(w, 'refused')).toHaveLength(2);
+    expect(w.pending()[0]?.reason).toBe('INTERNAL');
+  });
+});

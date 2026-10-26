@@ -8915,4 +8915,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
+  {
+    id: 'stale-id-never-reminted',
+    why: 'a message refused as too old is only ever sent again under the same id: Retry after a long outage or a reload fails every time, and the words are lost with it',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: "          if (frame.data.code === 'INVALID_MESSAGE_ID' && remint(refId)) return;\n",
+    replace: '',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
+  {
+    id: 'remint-without-limit',
+    why: 'a fresh id refused as too old is sent again under another, and another: a clock that is wrong makes the page send for ever',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '    if (pending === undefined || reminted.has(oldId)) return false;\n',
+    replace: '    if (pending === undefined) return false;\n',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
+  {
+    id: 'remint-of-a-plausible-id',
+    why: 'an id that is still plausible is replaced when the server refuses it: a duplicate is made of a message the server may hold',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '    if (isPlausibleMessageId(oldId, serverClock.now())) return false;\n',
+    replace: '',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
 ];

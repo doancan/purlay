@@ -31,6 +31,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
+  isPlausibleMessageId,
   messageId,
   TYPING_TTL_MS,
   ACTIVE_EVERY_MS,
@@ -385,6 +386,37 @@ export const createEngine = (options: EngineOptions): Engine => {
     if (find(id) !== undefined) update(id, { delivery: 'failed', reason });
   };
 
+  // Ids made by `remint`: a second refusal of one of these is a failure for the person, never another try.
+  const reminted = new Set<string>();
+  /**
+   * A message the server refused as `INVALID_MESSAGE_ID` that has simply aged out — more than the
+   * plausibility window (D-33) old by the server's clock — is sent again under a fresh id. The server takes
+   * an old id only when it is already the sender's own row in that channel (`messages.ts`); anything else is
+   * this refusal, so it does not hold the message, and retrying the same id could never succeed: a message
+   * kept across a reload, or one that waited out a long disconnect, would fail on every Retry. One try: an
+   * id that is still plausible, or a fresh one refused again, means the clock is wrong and a new id would be
+   * too — that is shown, not looped. Returns whether it sent again.
+   */
+  const remint = (oldId: string): boolean => {
+    const pending = find(oldId);
+    if (pending === undefined || reminted.has(oldId)) return false;
+    if (isPlausibleMessageId(oldId, serverClock.now())) return false;
+    const id = messageId(serverClock.now());
+    reminted.add(id);
+    timers.get(oldId)?.();
+    timers.delete(oldId);
+    const fresh: PendingMessage = {
+      ...pending,
+      id,
+      createdAt: serverClock.now().toISOString(),
+      delivery: 'sending',
+      reason: null,
+    };
+    change((all) => all.map((p) => (p.id === oldId ? fresh : p)));
+    transmit(fresh);
+    return true;
+  };
+
   /** The ids a send names, on either door; none when it carries nothing. */
   const carried = (pending: PendingMessage): { attachmentIds?: string[] } =>
     pending.attachments.length === 0
@@ -589,6 +621,7 @@ export const createEngine = (options: EngineOptions): Engine => {
           // An announcement the server would not take — the channel went, or the budget is spent —
           // costs the room a hint and nothing else; the channel itself is told by its own frames.
         } else if (refId !== undefined && find(refId) !== undefined) {
+          if (frame.data.code === 'INVALID_MESSAGE_ID' && remint(refId)) return;
           fail(refId, frame.data.code);
         } else if (refId !== undefined && reported.delete(refId)) {
           // A refused subscription the connection already told us about.
