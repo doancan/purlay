@@ -596,6 +596,12 @@ export const WORKSPACE_WIDE_READS: readonly string[] = [
 /** Endpoints with no tenant to cross, each with the reason. */
 export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
+  'GET /api/client':
+    'nobody is signed in yet: what this server is and the oldest client it serves, the same for every caller (D-190)',
+  'POST /api/native/authorize':
+    'hands the caller’s own session to their own application and names no workspace; the code is bound to the caller and a secret only the application holds (D-191)',
+  'POST /api/native/token':
+    'nobody is signed in yet: the code and verifier name the person who authorised, whatever the caller claims (D-191)',
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
