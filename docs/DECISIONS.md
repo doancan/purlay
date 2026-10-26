@@ -5379,6 +5379,13 @@ back (#490). The sign-in screen already read `?error`; nothing ever sent it.
 - *A reason per GitHub `error` value.* The others (`redirect_uri_mismatch`, `application_suspended`)
   are the operator's misconfiguration; the person can only retry, and the operator reads the log.
 
+*Amended 2026-10-26:* a callback that carries a state another callback is still being answered for waits for it
+(`oneAtATime`, `ingress/http/auth.ts`). The library reads a state and spends it in two steps, so two callbacks arriving
+together (a double click, a retrying browser) could both read it and both go to GitHub with one code; the second was
+refused as a spent code and told *GitHub is unavailable* when the first had just signed the person in. Queued, it reads a
+state that is gone and is `expired`, as §3 says. Found as a failure of one run in about a hundred and fifty of the test
+for it, on main's own pipeline.
+
 **Cost of reversing:** the branch in `app.ts`'s error hook, `abandonSignIn` in `ingress/http/auth.ts`,
 `packages/types/src/sign-in.ts`, seven catalogue lines per locale, and this paragraph. No stored data
 depends on it.
