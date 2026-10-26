@@ -9,6 +9,10 @@
 # request is what makes this script publish. Every other merge finds the tag already there, or
 # the version still 0.0.0, and does nothing — version numbers mark moments, not merges.
 #
+# The release carries the contract bundle (`bun run contract:bundle`, D-192) as `purlay-contract-<tag>.tar.gz` with
+# its digest: what a client that is not the browser's own is generated from, at exactly this version. It is built
+# before the release exists, so a bundle that cannot be built leaves no release without one.
+#
 # The GitHub Release's body is the release's notes (without their title) under a link to the file at the
 # tag. A body is limited to 125,000 characters; notes that would not fit are replaced by the link alone.
 set -euo pipefail
@@ -47,7 +51,8 @@ NOTES="docs/changelog/$TAG.md"
 [ -f "$NOTES" ] || fail "$NOTES does not exist: 'bun run release' writes it in the pull request that sets the version"
 
 BODY="$(mktemp)"
-trap 'rm -f "$BODY"' EXIT
+WORK="$(mktemp -d)"
+trap 'rm -rf "$BODY" "$WORK"' EXIT
 LIMIT=120000
 LINK="Full notes: https://github.com/$GITHUB_REPOSITORY/blob/$TAG/$NOTES"
 {
@@ -60,6 +65,16 @@ if [ "$(wc -c < "$BODY")" -gt "$LIMIT" ]; then
   printf '%s\n\nThe notes are too long for a release body; read them at the link.\n' "$LINK" > "$BODY"
 fi
 
-gh release create "$TAG" --target "$SHA" --title "Purlay $TAG" --notes-file "$BODY" --latest \
+BUNDLE="purlay-contract-$TAG"
+bun run contract:bundle --out "$WORK/$BUNDLE" || fail "could not build the contract bundle for $TAG"
+[ -n "$(ls -A "$WORK/$BUNDLE" 2>/dev/null)" ] || fail "the contract bundle build wrote no files"
+tar -czf "$WORK/$BUNDLE.tar.gz" -C "$WORK" "$BUNDLE" || fail "could not pack the contract bundle"
+# `sha256sum -c` and `shasum -a 256 -c` read the same line: hash, two spaces, the name.
+if command -v sha256sum >/dev/null 2>&1; then DIGEST_CMD=(sha256sum); else DIGEST_CMD=(shasum -a 256); fi
+(cd "$WORK" && "${DIGEST_CMD[@]}" "$BUNDLE.tar.gz" > "$BUNDLE.tar.gz.sha256") \
+  || fail "could not take the digest of the contract bundle"
+
+gh release create "$TAG" "$WORK/$BUNDLE.tar.gz" "$WORK/$BUNDLE.tar.gz.sha256" \
+  --target "$SHA" --title "Purlay $TAG" --notes-file "$BODY" --latest \
   || fail "GitHub did not create the release $TAG"
 echo "published $TAG at $SHA"
