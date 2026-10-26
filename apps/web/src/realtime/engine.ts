@@ -43,6 +43,8 @@ import {
   PRESENCE_GRACE_MS,
   type PresenceChange,
   type ServerFrame,
+  ACK_DEADLINE_MS,
+  REPLAY_RETRY_DELAYS_MS,
 } from '@purlay/types';
 import type { Api } from '../data/api';
 import {
@@ -72,16 +74,6 @@ import {
 } from './connection';
 import { loadStored, saveStored, type StoredMessage } from './pending-store';
 import { createServerClock } from './server-clock';
-
-/** How long a send may wait for its ACK before it is shown as failed (`UX.md` §3.1). */
-export const ACK_DEADLINE_MS = 3_000;
-
-/**
- * How long a replay continuation waits before it asks again, and so how many times it tries:
- * one more attempt after each wait. Capped — a feed with a hole in it is better refetched
- * whole than chased forever — and short, because the person is looking at the channel.
- */
-export const REPLAY_RETRY_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000];
 
 /** Refused for a reason waiting will not change: the channel is gone, or the person lost it. */
 const PERMANENT: ReadonlySet<string> = new Set(['CHANNEL_NOT_FOUND', 'FORBIDDEN']);

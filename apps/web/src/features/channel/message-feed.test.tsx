@@ -9,6 +9,7 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
 import type { Channel, Message, ReadChannelResponse } from '@purlay/types';
+import { ACK_DEADLINE_MS } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { installDom } from '../../testing/dom';
@@ -31,7 +32,6 @@ import {
   someChannels,
 } from '../../testing/fixtures';
 import { person } from '../../testing/user';
-import { ACK_DEADLINE_MS } from '../../realtime/engine';
 import * as Content from '../content/render-content';
 import { SEEK_LIMIT_PAGES } from './message-feed';
 import { READ_DEBOUNCE_MS } from './use-mark-read';

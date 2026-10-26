@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
 import type { Attachment, Message, ThreadFollow, ThreadPage } from '@purlay/types';
+import { ACK_DEADLINE_MS } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -33,7 +34,6 @@ import {
   someChannels,
 } from '../../testing/fixtures';
 import { person } from '../../testing/user';
-import { ACK_DEADLINE_MS } from '../../realtime/engine';
 import { expectFocusOn, pressTab, tabOrder } from '../../testing/focus';
 
 installDom();

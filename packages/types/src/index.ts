@@ -14,6 +14,7 @@ export * from './contract-version';
 export * from './errors';
 export * from './models';
 export * from './events';
+export * from './realtime';
 export * from './api';
 export * from './message-id';
 export * from './sign-in';
