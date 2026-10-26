@@ -50,7 +50,7 @@ export const NATIVE_LIVE_CODES_PER_USER = 5;
 export const NATIVE_WRONG_VERIFIERS_MAX = 5;
 
 /** What a verifier is the digest of, as an application must compute it: SHA-256, base64url, no padding. */
-export const nativeChallengeOf = (verifier: string): string =>
+const nativeChallengeOf = (verifier: string): string =>
   createHash('sha256').update(verifier).digest('base64url');
 
 const sameChallenge = (stored: string, supplied: string): boolean => {

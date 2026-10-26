@@ -18,7 +18,7 @@ export interface ClientIdentity {
 }
 
 /** What the operator decided about one platform. `null` is no limit. */
-export interface PlatformPolicy {
+interface PlatformPolicy {
   /** The lowest wire contract the server still serves (`CONTRACT_VERSION` in `@purlay/types`). */
   readonly contract: number | null;
   /** The lowest application version, in semantic-version order. */
