@@ -20,6 +20,8 @@ import { Icon } from '../../components/icon';
 import { initialsOf } from '../../ui/avatar';
 import { Dialog } from '../../ui/dialog';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
+import { useToast } from '../../ui/toast';
+import { useContentPorts } from '../content/content-ports';
 import { useSession } from '../session/session';
 import { CreateWorkspace } from '../shell/home';
 import { useWorkspace } from '../shell/workspace';
@@ -39,6 +41,20 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
   // The dialog is in the deferred chunk (D-163).
   const deferred = useDeferred([inviting, setInviting]);
   const [creating, setCreating] = useState(false);
+  const { show } = useToast();
+  const { copy } = useContentPorts();
+  /** The workspace's own address, whole: what a person pastes to somebody who already has an account. */
+  const copyLink = (): void => {
+    const link = new URL(href('workspace', { slug: workspace.slug }), window.location.origin).href;
+    copy(link).then(
+      () => {
+        show({ message: t('rowMenu.linkCopied') });
+      },
+      () => {
+        show({ message: t('failure.copy') });
+      },
+    );
+  };
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Inviting and the workspace's settings are an owner's and an admin's (D-115, D-146); a member is
   // not offered what would be refused.
@@ -60,10 +76,18 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
               <VisuallyHidden>{t('sidebar.switch')}</VisuallyHidden>
             </button>
           ) : (
+            // Inset and rounded as every row under it is, so the hover and the focus ring sit inside the
+            // column instead of running into the rail and the hairline; the tile is the rail's, smaller.
             <button
               type="button"
-              className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover"
+              className="flex h-control min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover max-narrow:h-touch"
             >
+              <span
+                aria-hidden="true"
+                className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-accent text-caption text-on-accent"
+              >
+                {initialsOf(workspace.name)}
+              </span>
               <span className="min-w-0 flex-1 truncate text-title text-nav-ink">
                 {workspace.name}
               </span>
@@ -107,6 +131,9 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
             {t('invite.admin.entry')}
           </MenuItem>
         )}
+        <MenuItem glyph="invite" onSelect={copyLink}>
+          {t('sidebar.workspace.copyLink')}
+        </MenuItem>
         {mayInvite && (
           <>
             <MenuSeparator />

@@ -26,11 +26,20 @@ const byActivity = (a: Channel, b: Channel): number => {
 const joined = (channels: readonly Channel[]): Channel[] =>
   channels.filter((c) => c.state !== null);
 
-/** Channels the person is in, not DMs and not starred, by name — a place stays put (D-160). */
-export const joinedChannels = (channels: readonly Channel[]): Channel[] =>
+const byName = (a: Channel, b: Channel): number => (a.name ?? '').localeCompare(b.name ?? '');
+
+/**
+ * Channels the person is in, not DMs and not starred, by name — a place stays put (D-160). A person who
+ * asked for it (`order: 'activity'`, D-195) has them by what was written in them last instead, which moves
+ * rows by design: the default is the one that never does.
+ */
+export const joinedChannels = (
+  channels: readonly Channel[],
+  order: 'name' | 'activity' = 'name',
+): Channel[] =>
   joined(channels)
     .filter((c) => c.type !== 'direct_message' && !c.starred)
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    .sort(order === 'activity' ? byActivity : byName);
 
 /**
  * The channels the person starred (D-132), kept apart above the rest — by name, not activity: a
