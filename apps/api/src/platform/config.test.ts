@@ -766,3 +766,90 @@ describe('the minimum native client', () => {
     expect(refusal({ ...valid, MACOS_DOWNLOAD_URL: value })).toContain('MACOS_DOWNLOAD_URL');
   });
 });
+
+describe('single sign-on is a setting, off while unset (D-200)', () => {
+  const oidc = {
+    OIDC_ISSUER: 'https://login.example.com/tenant-1',
+    OIDC_CLIENT_ID: 'purlay-client',
+    OIDC_CLIENT_SECRET: 'sso-secret-value',
+  };
+
+  test('a server boots with none of it, in production too: off, nothing to send anywhere', () => {
+    const config = loadConfig(valid);
+    expect([config.OIDC_ISSUER, config.OIDC_CLIENT_ID, config.OIDC_CLIENT_SECRET]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(() => loadConfig(production)).not.toThrow();
+  });
+
+  test('all three are read when all three are set, the label with them', () => {
+    const config = loadConfig({ ...valid, ...oidc, OIDC_NAME: 'Acme SSO' });
+    expect([config.OIDC_ISSUER, config.OIDC_CLIENT_ID, config.OIDC_NAME]).toEqual([
+      oidc.OIDC_ISSUER,
+      oidc.OIDC_CLIENT_ID,
+      'Acme SSO',
+    ]);
+  });
+
+  test.each(Object.keys(oidc))(
+    'without %s alone it is refused, naming the three and never the value',
+    (left) => {
+      const partial = Object.fromEntries(Object.entries(oidc).filter(([key]) => key !== left));
+      const message = refusal({ ...valid, ...partial });
+      expect(message).toContain(
+        'OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET: set all three, or none',
+      );
+      expect(message).not.toContain('sso-secret-value');
+    },
+  );
+
+  test('empty strings are unset, as a compose file passes them', () => {
+    const config = loadConfig({
+      ...valid,
+      OIDC_ISSUER: '',
+      OIDC_CLIENT_ID: '',
+      OIDC_CLIENT_SECRET: '',
+    });
+    expect(config.OIDC_ISSUER).toBeUndefined();
+  });
+
+  test.each([
+    ['not an address', 'login.example.com'],
+    ['plain http to another machine', 'http://login.example.com'],
+    ['a query', 'https://login.example.com/?tenant=1'],
+    ['a fragment', 'https://login.example.com/#x'],
+    ['credentials', 'https://user:pass@login.example.com'],
+  ])('an issuer that is %s is refused', (_what, issuer) => {
+    expect(refusal({ ...valid, ...oidc, OIDC_ISSUER: issuer })).toContain('OIDC_ISSUER:');
+  });
+
+  test('an issuer is kept exactly as written: the token carries it byte for byte', () => {
+    for (const issuer of ['https://login.example.com/', 'https://login.example.com/tenant-1']) {
+      expect(loadConfig({ ...valid, ...oidc, OIDC_ISSUER: issuer }).OIDC_ISSUER).toBe(issuer);
+    }
+  });
+
+  test('http is allowed to this machine, for a provider run beside the server', () => {
+    expect(() =>
+      loadConfig({ ...valid, ...oidc, OIDC_ISSUER: 'http://127.0.0.1:9000' }),
+    ).not.toThrow();
+    expect(() =>
+      loadConfig({ ...valid, ...oidc, OIDC_ISSUER: 'http://localhost:9000' }),
+    ).not.toThrow();
+  });
+
+  test.each([
+    ['a control character', 'Ac\u0000me'],
+    ['a direction override', 'Acme‮'],
+    ['more than forty characters', 'x'.repeat(41)],
+    ['space around it', ' Acme'],
+  ])('a label with %s is refused', (_what, name) => {
+    expect(refusal({ ...valid, ...oidc, OIDC_NAME: name })).toContain('OIDC_NAME:');
+  });
+
+  test('a label with no provider is read and does nothing: it is a seed like the rest', () => {
+    expect(loadConfig({ ...valid, OIDC_NAME: 'Acme' }).OIDC_NAME).toBe('Acme');
+  });
+});

@@ -15,6 +15,7 @@ import {
 const SETTINGS: ServerSettings = {
   signUp: 'invite-only',
   github: { clientId: 'Iv1.app', clientSecret: 'gh-secret-value' },
+  oidc: undefined,
   smtp: {
     smtpUrl: 'smtp://mailer:pa%3Ass@relay.example.com:587',
     from: 'purlay@example.com',
@@ -30,6 +31,7 @@ describe('the view of the settings, which is all a response may carry', () => {
     expect(view).toEqual({
       signUp: 'invite-only',
       github: { clientId: 'Iv1.app', clientSecret: { set: true } },
+      oidc: null,
       smtp: {
         // Where the relay is, and nothing of who signs in to it: some relays take a token as the user.
         address: { set: true, host: 'smtp://relay.example.com:587' },
@@ -51,6 +53,7 @@ describe('the view of the settings, which is all a response may carry', () => {
       settingsView({
         signUp: 'open',
         github: undefined,
+        oidc: undefined,
         smtp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
@@ -58,6 +61,7 @@ describe('the view of the settings, which is all a response may carry', () => {
     ).toEqual({
       signUp: 'open',
       github: null,
+      oidc: null,
       smtp: null,
       workspaceCreators: { kind: 'first' },
       setupCompletedAt: null,

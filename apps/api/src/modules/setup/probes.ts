@@ -25,16 +25,31 @@
  * the code from its log), only while it is open, and only under the claim (the endpoint's to require).
  */
 import net from 'node:net';
-import { normalisedMailbox, type ProbeReason, type ProbeResult } from '@purlay/types';
+import {
+  normalisedMailbox,
+  OIDC_CALLBACK,
+  type ProbeReason,
+  type ProbeResult,
+} from '@purlay/types';
 import {
   letter,
   transportOptions,
   type MailMessage,
   type SmtpTransportFactory,
 } from '../../platform/mail';
+import { systemClock } from '../../platform/clock';
 import { readCapped } from '../../platform/http-body';
+import type { Logger } from '../../platform/logging';
 import { smtpUrlProblem } from '../../platform/smtp-address';
 import { githubEndpoints, type GithubFetch, type GitHubUrls } from '../auth/better-auth';
+import {
+  createOidcProvider,
+  OidcDiscoveryError,
+  tokenRequest,
+  type Discovery,
+  type OidcCredentials,
+  type OidcFetch,
+} from '../auth/oidc';
 import type { SmtpSettings } from './settings';
 import type { ServerAdminSession, SetupSession } from './setup';
 
@@ -240,6 +255,97 @@ export const probeGitHub = async (
     const said = rawReply(`${code ?? name ?? 'Error'}: ${message}`, [credentials.clientSecret]);
     return failed(isTlsCode(code) ? 'tls-failed' : 'unreachable', said);
   }
+};
+
+export interface OidcProbeDependencies {
+  /** The platform's own `fetch`, never following a redirect (the type requires it). */
+  readonly fetch: OidcFetch;
+  /** `APP_URL`: the callback address the provider is sent with the code it is tried with. */
+  readonly appUrl: string;
+  /** Where what a try meets is said, as a sign-in says it; the reply shown to the operator is the probe's own. */
+  readonly log: Logger;
+}
+
+/** The code every provider probe sends: never issued, so the provider can only refuse it. */
+export const OIDC_PROBE_CODE = 'purlay-probe-code-never-issued';
+
+/**
+ * Whether the provider is one this server can sign in through, and takes this client (D-200 §2, D-179 §4.4).
+ * Three calls, each bounded (`OIDC_TIMEOUT_MS`) and none followed through a redirect: its discovery document,
+ * checked as a sign-in checks it (`discover` — the issuer it names is the one given, every endpoint secure,
+ * the code flow with S256 offered); its key set; and the token endpoint, sent this client's credentials with a
+ * code nobody was ever given. A provider weighs the client before the code: `invalid_grant` says the pair is
+ * good and only the code is not; `invalid_client` is a refused secret. Nothing is kept of what it answers.
+ */
+export const probeOidc = async (
+  _authority: ProbeAuthority,
+  credentials: OidcCredentials,
+  { fetch, appUrl, log }: OidcProbeDependencies,
+): Promise<ProbeResult> => {
+  const secrets = [credentials.clientSecret];
+  const said = (error: unknown): string => {
+    const { code, name, message } = fieldsOf(error);
+    return rawReply(`${code ?? name ?? 'Error'}: ${message}`, secrets);
+  };
+  let metadata: Discovery;
+  try {
+    const provider = createOidcProvider(credentials, 'probe', {
+      fetch,
+      clock: systemClock,
+      log,
+      onIdentity: (): void => undefined,
+    });
+    metadata = await provider.check();
+  } catch (error) {
+    if (error instanceof OidcDiscoveryError) {
+      const { code } = fieldsOf(error.cause);
+      if (error.reason === 'unreachable') {
+        return failed(isTlsCode(code) ? 'tls-failed' : 'unreachable', said(error.cause ?? error));
+      }
+      return failed(error.reason, rawReply(error.message, secrets));
+    }
+    return failed('unreachable', said(error));
+  }
+  let answer: { readonly status: number; readonly json: unknown };
+  try {
+    answer = await tokenRequest(
+      metadata,
+      credentials,
+      {
+        code: OIDC_PROBE_CODE,
+        codeVerifier: 'purlay-probe-verifier-purlay-probe-verifier-purlay',
+        redirectURI: `${appUrl}${OIDC_CALLBACK}`,
+      },
+      fetch,
+    );
+  } catch (error) {
+    const { code } = fieldsOf(error instanceof OidcDiscoveryError ? error.cause : error);
+    return failed(
+      isTlsCode(code) ? 'tls-failed' : 'unreachable',
+      said(error instanceof OidcDiscoveryError ? (error.cause ?? error) : error),
+    );
+  }
+  const body = typeof answer.json === 'object' && answer.json !== null ? answer.json : {};
+  const said_ = (body as Readonly<Record<string, unknown>>)['error'];
+  const error = typeof said_ === 'string' ? said_ : undefined;
+  if (answer.status === 400 && error === 'invalid_grant') return { ok: true };
+  if (error === 'invalid_client' || answer.status === 401) {
+    return failed(
+      'secret-rejected',
+      rawReply(`HTTP ${String(answer.status)}: ${error ?? ''}`, secrets),
+    );
+  }
+  if (error === 'unauthorized_client') {
+    return failed(
+      'client-unknown',
+      rawReply(`HTTP ${String(answer.status)}: unauthorized_client`, secrets),
+    );
+  }
+  // A token for a code nobody was given is no provider's answer; it goes nowhere.
+  return failed(
+    'unexpected-reply',
+    rawReply(`HTTP ${String(answer.status)}: ${error ?? 'not an OAuth error'}`, secrets),
+  );
 };
 
 /** Why nodemailer gave up, as one of the reasons; anything it does not name is `unexpected-reply`. */

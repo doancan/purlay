@@ -28,6 +28,7 @@ import {
   type OAuth2Tokens,
 } from 'better-auth';
 import { APIError, createAuthMiddleware, isAPIError } from 'better-auth/api';
+import type { OAuthProvider } from '@better-auth/core/oauth2';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import type { GithubOptions, GithubProfile } from 'better-auth/social-providers';
 import { runWithTransaction } from '@better-auth/core/context';
@@ -71,10 +72,21 @@ import { revokeOtherSessionsById } from './revoke-other-sessions';
 import { linkLetter, type SignInLocale } from './sign-in-letters';
 import { heldTransaction, rememberingTransactions } from './sign-up-transaction';
 import { consumePassport, passportAllows } from '../workspaces/invitation-passport';
+import {
+  createOidcProvider,
+  OIDC_PROVIDER_ID,
+  type OidcCredentials,
+  type OidcProfile,
+} from './oidc';
 
 /** What the instance reads from the server's own settings, so a change takes a restart, not a deploy. */
 export interface AuthSettings {
   readonly github: { readonly clientId: string; readonly clientSecret: string } | undefined;
+  /**
+   * The organisation's single sign-on provider (D-200): `undefined` is off — nothing is registered, and nothing
+   * is sent to anybody. `name` labels the sign-in button; `undefined` is `Single sign-on`.
+   */
+  readonly oidc: (OidcCredentials & { readonly name: string | undefined }) | undefined;
   readonly signUp: 'invite-only' | 'open';
 }
 
@@ -190,6 +202,8 @@ export const deriveAuthSecret = (encryptionKey: string): string =>
  */
 interface SignInRound {
   profile: GitHubProfile | undefined;
+  /** The single sign-on account a verified token vouched for, as the library keeps it (D-200). */
+  oidcAccountId?: string | undefined;
   made: boolean;
   /** The person a request that ends sessions acts for, and the sessions they had before it ran. */
   ending?: { readonly userId: string; readonly sessionIds: readonly string[] };
@@ -340,6 +354,17 @@ const githubExchange = (exchange: ReturnType<typeof exchangeCode>): BetterAuthPl
         provider.id === 'github' ? { ...provider, validateAuthorizationCode: exchange } : provider,
       ),
     },
+  }),
+});
+
+/**
+ * Registers the single sign-on provider with the library, beside GitHub's: a plugin's `init` may hand the context
+ * its own values, and the library serves `/sign-in/social` and `/callback/:id` for whatever providers it holds.
+ */
+const oidcRegistration = (provider: OAuthProvider<OidcProfile>): BetterAuthPlugin => ({
+  id: 'purlay-oidc',
+  init: (context) => ({
+    context: { socialProviders: [...context.socialProviders, provider] },
   }),
 });
 
@@ -902,6 +927,12 @@ export type Auth = ReturnType<typeof betterAuth> & {
    * provider it does not have, so what starts a GitHub sign-in asks this first (R38, D-179 §4).
    */
   readonly github: boolean;
+  /**
+   * The single sign-on provider's button, where one is connected: the name it carries, `undefined` for the
+   * default the client words in the person's language (D-200). `undefined` where none is connected, and then
+   * `GET /auth/oidc` is the route that does not exist.
+   */
+  readonly oidc: { readonly name: string | undefined } | undefined;
   /** Who may make an account here: anybody (`open`) or only an invitation's holder (`invite-only`). */
   readonly signUp: AuthSettings['signUp'];
   /**
@@ -1030,6 +1061,21 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         }
       : undefined;
   };
+
+  // Built from the settings and connected to nothing: the provider is asked nothing until somebody presses the
+  // button (D-200 §2). Unset, there is no provider, no plugin and no route.
+  const oidcProvider =
+    settings.oidc === undefined
+      ? undefined
+      : createOidcProvider(settings.oidc, settings.oidc.name ?? 'Single sign-on', {
+          fetch: get,
+          clock: deps.clock,
+          log,
+          onIdentity: (accountId): void => {
+            const round = signInRounds.getStore();
+            if (round !== undefined) round.oidcAccountId = accountId;
+          },
+        });
 
   const options: BetterAuthOptions = {
     baseURL: deps.baseUrl,
@@ -1266,6 +1312,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
               },
             }),
           ]),
+      ...(oidcProvider === undefined ? [] : [oidcRegistration(oidcProvider.provider)]),
       ...(settings.github === undefined
         ? []
         : [githubExchange(exchangeCode(settings.github, endpoints.token, get, log))]),
@@ -1433,15 +1480,21 @@ export const createAuth = (deps: AuthDependencies): Auth => {
    */
   const lostSignUpRace = async (round: SignInRound, response: Response): Promise<boolean> => {
     const location = response.headers.get('location');
-    if (round.profile === undefined || location === null) return false;
+    const key =
+      round.profile !== undefined
+        ? { providerId: 'github', accountId: String(round.profile.id) }
+        : round.oidcAccountId !== undefined
+          ? { providerId: OIDC_PROVIDER_ID, accountId: round.oidcAccountId }
+          : undefined;
+    if (key === undefined || location === null) return false;
     if (new URL(location, deps.baseUrl).searchParams.get('error') !== 'unable_to_create_user') {
       return false;
     }
     const won = await deps.database
       .selectFrom('accounts')
       .select('id')
-      .where('provider_id', '=', 'github')
-      .where('account_id', '=', String(round.profile.id))
+      .where('provider_id', '=', key.providerId)
+      .where('account_id', '=', key.accountId)
       .executeTakeFirst();
     return won !== undefined;
   };
@@ -1510,6 +1563,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     routeOf: (pathname: string): string => libraryRoute(routes, pathname),
     signInLinks,
     github: settings.github !== undefined,
+    oidc: settings.oidc === undefined ? undefined : { name: settings.oidc.name },
     signUp: settings.signUp,
     passwordSignIn: async (email, password, headers): Promise<Response> => {
       const round: SignInRound = { profile: undefined, made: false };

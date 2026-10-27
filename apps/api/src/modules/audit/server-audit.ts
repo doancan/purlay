@@ -14,6 +14,8 @@ import { messageId } from '@purlay/types';
 export type ServerAuditAction =
   | 'server.github_connected'
   | 'server.github_disconnected'
+  | 'server.oidc_connected'
+  | 'server.oidc_disconnected'
   | 'server.smtp_connected'
   | 'server.smtp_disconnected'
   | 'server.sign_up_changed'

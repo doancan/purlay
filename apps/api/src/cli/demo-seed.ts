@@ -218,7 +218,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
       baseUrl: config.APP_URL,
       secret,
       log,
-      settings: { github: undefined, signUp: 'invite-only' },
+      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
       githubUrls: { web: config.GITHUB_URL, api: config.GITHUB_API_URL },
       sessionTtlDays: config.SESSION_TTL_DAYS,
       // Nobody listens: the seed opens no socket.

@@ -12,7 +12,7 @@ import { cn } from '../../ui/cn';
 import { TextField } from '../../ui/text-field';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { isSetupFailure } from './client';
-import { failureWords, REASONS } from './errors';
+import { failureWords, reasonWords } from './errors';
 import { movementClass, useReducedMotion } from './motion';
 
 /**
@@ -93,12 +93,15 @@ export const Note = ({
  */
 export const ProbeFailure = ({
   result,
+  channel,
 }: {
   readonly result: Extract<ProbeResult, { ok: false }>;
+  /** Whose try it was, where its words differ from GitHub's and the mail server's (D-200). */
+  readonly channel?: 'oidc';
 }): React.JSX.Element => {
   const { t } = useI18n();
   const reduced = useReducedMotion();
-  const words = REASONS[result.reason];
+  const words = reasonWords(result.reason, channel);
   return (
     <section
       role="alert"

@@ -8,7 +8,8 @@
  *   `SIGN_IN_LINK_NOT_FOUND` — for a link never made, spent, expired, or one whose account may not
  *   sign in by it. Whether an account has the address is never said.
  * - **Who a link signs in.** An account made by email or linked to GitHub, its address verified.
- *   Never an account GitHub made (D-138 §2: it is told to use GitHub instead), an erased one, or one
+ *   Never an account GitHub made (D-138 §2: it is told to use GitHub instead), one single sign-on is linked
+ *   to (D-200 §6), an erased one, or one
  *   whose address was never proven: the library would remove its password and end its sessions
  *   (D-179 §4, measured) — the setup administrator's is such an account (Ruling R32). An address no
  *   account has gets a link where sign-up is open, and where it is invite-only only while a passport
@@ -28,6 +29,7 @@ import type { Logger } from '../../platform/logging';
 import { tokenDigest } from '../../platform/tokens';
 import { counted } from './counters';
 import type { SignInLinks } from './better-auth';
+import { OIDC_PROVIDER_ID } from './oidc';
 import { githubLetter } from './sign-in-letters';
 
 /** How many messages an address may be sent in an hour (O-4: provisional). */
@@ -76,7 +78,7 @@ const fateOf = async (
 ): Promise<Fate> => {
   const account = await executor
     .selectFrom('users')
-    .select(['github_id', 'github_connected_at', 'deleted_at', 'email_verified'])
+    .select(['id', 'github_id', 'github_connected_at', 'deleted_at', 'email_verified'])
     .where('email', '=', email)
     .executeTakeFirst();
   // No account: the link makes one, where anybody may (D-179 §5) — and, where only the invited may, for
@@ -93,6 +95,16 @@ const fateOf = async (
   // Its address never proven: the library would remove its password and end its sessions as it
   // signed in (D-179 §4). Nothing is sent, and the asker is answered as for any address.
   if (!account.email_verified) return 'nothing';
+  // An account the organisation's single sign-on is linked to is signed into by it alone (D-200 §6): a
+  // mailbox is not a second door past the provider that decides who still works there. Nothing is sent, and
+  // the asker is answered as for any address.
+  const sso = await executor
+    .selectFrom('accounts')
+    .select('id')
+    .where('user_id', '=', account.id)
+    .where('provider_id', '=', OIDC_PROVIDER_ID)
+    .executeTakeFirst();
+  if (sso !== undefined) return 'nothing';
   return madeByGitHub(account) ? 'github' : 'link';
 };
 

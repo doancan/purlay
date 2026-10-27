@@ -13,6 +13,8 @@ describe('the reasons a try fails (D-179 §4.4)', () => {
       'recipient-refused',
       'message-refused',
       'unexpected-reply',
+      'issuer-mismatch',
+      'discovery-invalid',
     ]);
     // A GitHub callback address cannot be tried without a browser (Ruling R47).
     expect(PROBE_REASONS).not.toContain('callback-mismatch');

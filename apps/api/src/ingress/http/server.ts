@@ -17,7 +17,9 @@
 import {
   ServerCreatorsRequest,
   ServerDisconnectRequest,
+  OIDC_NAME_MAX,
   ServerGitHubRequest,
+  ServerOidcRequest,
   ServerPolicyRequest,
   ServerSmtpRequest,
   type ProbeResult,
@@ -28,6 +30,7 @@ import {
   changeCreators,
   changePolicy,
   connectGitHub,
+  connectOidc,
   connectRelay,
   disconnect,
   serverSettingsOf,
@@ -36,6 +39,7 @@ import {
 } from '../../modules/setup/server-admin';
 import { requireServerAdmin, type ServerAdminSession } from '../../modules/setup/setup';
 import { AppError } from '../../platform/errors';
+import { oidcIssuerProblem, oidcNameProblem } from '../../platform/oidc-address';
 import { refusedField, said, swapping, type SetupDependencies } from './setup';
 import { validated } from './validate';
 
@@ -109,6 +113,40 @@ export const connectGitHubApp = async (
     );
   });
 
+/**
+ * `POST /api/server/oidc` — the single sign-on provider tried (its discovery, its keys, the client); `200` with
+ * the outcome either way, and kept only if it worked (D-200 §2). An issuer or a name the settings could not hold
+ * is refused as input before anything is called.
+ */
+export const connectOidcProvider = async (
+  dependencies: ServerDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ProbeResult> =>
+  await asAdmin(dependencies, request, async (admin, module) => {
+    const input = validated(ServerOidcRequest, body);
+    const issuerProblem = oidcIssuerProblem(input.issuer);
+    if (issuerProblem !== undefined) {
+      throw refusedField('That cannot be tried.', 'issuer', issuerProblem);
+    }
+    const name = input.name === undefined || input.name === '' ? undefined : input.name;
+    const nameProblem = name === undefined ? undefined : oidcNameProblem(name, OIDC_NAME_MAX);
+    if (nameProblem !== undefined) throw refusedField('That cannot be tried.', 'name', nameProblem);
+    return await connectOidc(
+      {
+        ...module,
+        oidc: {
+          // The platform's own `fetch`, to the issuer's addresses: never redirected (the type requires it).
+          fetch: async (url, init) => await fetch(url, init),
+          appUrl: dependencies.config.APP_URL,
+          log: dependencies.log,
+        },
+      },
+      admin,
+      { issuer: input.issuer, clientId: input.clientId, clientSecret: input.clientSecret, name },
+    );
+  });
+
 /** `POST /api/server/smtp` — the relay tried with a test letter to the caller; kept only if it worked. */
 export const connectMailRelay = async (
   dependencies: ServerDependencies,
@@ -141,11 +179,11 @@ const confirmationIn = async (request: Request): Promise<boolean> => {
   return validated(ServerDisconnectRequest, body).confirmLastChannel === true;
 };
 
-/** `DELETE /api/server/github` and `/smtp` — one way in disconnected; `204`. */
+/** `DELETE /api/server/github`, `/smtp` and `/oidc` — one way in disconnected; `204`. */
 export const disconnectChannel = async (
   dependencies: ServerDependencies,
   request: Request,
-  channel: 'github' | 'smtp',
+  channel: 'github' | 'smtp' | 'oidc',
 ): Promise<void> => {
   await asAdmin(dependencies, request, async (admin, module) => {
     const confirmed = await confirmationIn(request);

@@ -19,6 +19,7 @@ import { credentialCipher, SealBroken } from '../../platform/crypto';
 import { testConfig } from '../../testing/doubles';
 import {
   envSeedOf,
+  ignoredEnvironment,
   importFromEnvOnce,
   readSettings,
   readSettingsToBoot,
@@ -74,6 +75,7 @@ describe('integration: the server settings (D-179 §6)', () => {
       expect(await readSettings(db, cipher)).toEqual({
         signUp: 'invite-only',
         github: undefined,
+        oidc: undefined,
         smtp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
@@ -87,6 +89,7 @@ describe('integration: the server settings (D-179 §6)', () => {
       await saveSettings(db, cipher, clock, {
         signUp: 'open',
         github: GITHUB,
+        oidc: undefined,
         smtp: SMTP,
         workspaceCreators: { kind: 'listed', logins: new Set(['Ada', 'grace-h']) },
         setupCompletedAt: finished,
@@ -94,6 +97,7 @@ describe('integration: the server settings (D-179 §6)', () => {
       expect(await readSettings(db, cipher)).toEqual({
         signUp: 'open',
         github: GITHUB,
+        oidc: undefined,
         smtp: SMTP,
         // Lower case, as a login is compared (D-169).
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace-h']) },
@@ -187,6 +191,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         expect(booted.settings).toEqual({
           signUp: 'open',
           github: undefined,
+          oidc: undefined,
           smtp: undefined,
           workspaceCreators: { kind: 'anyone' },
           setupCompletedAt: undefined,
@@ -262,6 +267,7 @@ describe('integration: the server settings (D-179 §6)', () => {
       expect(await readSettings(db, cipher)).toMatchObject({
         signUp: 'open',
         github: GITHUB,
+        oidc: undefined,
         smtp: SMTP,
         workspaceCreators: { kind: 'anyone' },
       });
@@ -384,6 +390,7 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
       expect(imported).toEqual({
         signUp: 'invite-only',
         github: GITHUB,
+        oidc: undefined,
         smtp: { ...SMTP, allowPlaintext: true },
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace']) },
         setupCompletedAt: undefined,
@@ -413,6 +420,7 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
       expect(await readSettings(db, cipher)).toEqual({
         signUp: 'invite-only',
         github: { clientId: 'client-id', clientSecret: 'client-secret' },
+        oidc: undefined,
         // A plaintext permission with no relay is nothing to keep.
         smtp: undefined,
         workspaceCreators: { kind: 'first' },
@@ -506,4 +514,192 @@ describe('integration: two processes starting at once import once', () => {
       await clone.drop();
     }
   }, 30_000);
+});
+
+describe('integration: the single sign-on settings (D-200)', () => {
+  const OIDC = {
+    issuer: 'https://login.example.com/tenant-1',
+    clientId: 'purlay-client',
+    clientSecret: 'sso-secret-c19e42',
+    name: 'Acme SSO',
+  };
+
+  const sealedColumn = async (db: Executor): Promise<string | null> =>
+    (
+      await db
+        .selectFrom('server_settings')
+        .select('oidc_client_secret_encrypted')
+        .where('id', '=', true)
+        .executeTakeFirstOrThrow()
+    ).oidc_client_secret_encrypted;
+
+  test('a provider is saved whole and read back, the issuer exactly as written', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { oidc: OIDC });
+      expect((await readSettings(db, cipher)).oidc).toEqual(OIDC);
+      // Without a label the default is the client's to word: stored as nothing.
+      await saveSettings(db, cipher, clock, { oidc: { ...OIDC, name: undefined } });
+      expect((await readSettings(db, cipher)).oidc).toEqual({ ...OIDC, name: undefined });
+      expect(settingsView(await readSettings(db, cipher)).oidc?.name).toBeNull();
+      // A trailing slash is part of the issuer: a token's `iss` is compared byte for byte.
+      await saveSettings(db, cipher, clock, { oidc: { ...OIDC, issuer: `${OIDC.issuer}/` } });
+      expect((await readSettings(db, cipher)).oidc?.issuer).toBe(`${OIDC.issuer}/`);
+    });
+  });
+
+  test('stores the client secret encrypted, under its own column, and never returns it', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { oidc: OIDC });
+      const stored = await sealedColumn(db);
+      expect(stored).not.toBeNull();
+      expect(stored).not.toContain(OIDC.clientSecret);
+      expect(Buffer.from(stored ?? '', 'base64').toString('utf8')).not.toContain(OIDC.clientSecret);
+      const sealed = Buffer.from(stored ?? '', 'base64');
+      expect(await cipher.open(sealed, 'server_settings.oidc_client_secret_encrypted')).toBe(
+        OIDC.clientSecret,
+      );
+      expect(
+        await failure(cipher.open(sealed, 'server_settings.github_client_secret_encrypted')),
+      ).toBeInstanceOf(SealBroken);
+      const view = settingsView(await readSettings(db, cipher));
+      expect(view.oidc).toEqual({
+        issuer: OIDC.issuer,
+        clientId: OIDC.clientId,
+        clientSecret: { set: true },
+        name: OIDC.name,
+      });
+      expect(JSON.stringify(view)).not.toContain(OIDC.clientSecret);
+    });
+  });
+
+  test('a sealed secret copied into GitHub’s column does not open there', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { oidc: OIDC, github: GITHUB });
+      await db
+        .updateTable('server_settings')
+        .set({ github_client_secret_encrypted: await sealedColumn(db) })
+        .execute();
+      expect(await failure(readSettings(db, cipher))).toBeInstanceOf(SealBroken);
+    });
+  });
+
+  test('a secret sealed under another key is read as unset and named, the row untouched', async () => {
+    await withRollback(async (db) => {
+      const other = credentialCipher(
+        Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      );
+      await saveSettings(db, other, clock, { oidc: OIDC });
+      const before = await sealedColumn(db);
+      const booted = await readSettingsToBoot(db, cipher);
+      expect([booted.needsReentry, booted.settings.oidc]).toEqual([['oidc'], undefined]);
+      expect(await sealedColumn(db)).toBe(before);
+    });
+  });
+
+  test('null clears the provider, label and all, and a patch that names nothing of it leaves it', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { oidc: OIDC });
+      await saveSettings(db, cipher, clock, { signUp: 'open' });
+      expect((await readSettings(db, cipher)).oidc).toEqual(OIDC);
+      await saveSettings(db, cipher, clock, { oidc: null });
+      const row = await db
+        .selectFrom('server_settings')
+        .select(['oidc_issuer', 'oidc_client_id', 'oidc_client_secret_encrypted', 'oidc_name'])
+        .where('id', '=', true)
+        .executeTakeFirstOrThrow();
+      expect(Object.values(row)).toEqual([null, null, null, null]);
+    });
+  });
+
+  test('refuses what the sign-in could not use, before a statement is sent', async () => {
+    await withRollback(async (db) => {
+      for (const patch of [
+        { oidc: { ...OIDC, issuer: '' } },
+        { oidc: { ...OIDC, clientId: '' } },
+        { oidc: { ...OIDC, clientSecret: '' } },
+        { oidc: { ...OIDC, issuer: 'http://login.example.com' } },
+        { oidc: { ...OIDC, issuer: 'https://login.example.com/?tenant=1' } },
+        { oidc: { ...OIDC, issuer: 'https://login.example.com/#x' } },
+        { oidc: { ...OIDC, issuer: 'https://u:p@login.example.com' } },
+        { oidc: { ...OIDC, issuer: 'login.example.com' } },
+        { oidc: { ...OIDC, name: '' } },
+        { oidc: { ...OIDC, name: ' Acme' } },
+        { oidc: { ...OIDC, name: 'Ac\u0000me' } },
+        { oidc: { ...OIDC, name: 'x'.repeat(41) } },
+      ]) {
+        const refused = await failure(saveSettings(db, cipher, clock, patch));
+        expect(refused).toBeInstanceOf(Error);
+        expect({ patch, byTheDatabase: String(refused).includes('violates') }).toEqual({
+          patch,
+          byTheDatabase: false,
+        });
+      }
+    });
+  });
+
+  test.each<[string, boolean, Record<string, string | null>, string]>([
+    [
+      'an issuer without a client',
+      false,
+      { oidc_issuer: 'https://login.example.com' },
+      'server_settings_oidc_triple',
+    ],
+    [
+      'a client id without its secret',
+      false,
+      { oidc_client_id: 'only-the-id' },
+      'server_settings_oidc_triple',
+    ],
+    [
+      'a label with nothing to label',
+      false,
+      { oidc_name: 'orphan' },
+      'server_settings_oidc_name_needs_provider',
+    ],
+    ['a blank label', true, { oidc_name: '' }, 'server_settings_oidc_not_blank'],
+    ['a blank client id', true, { oidc_client_id: '' }, 'server_settings_oidc_not_blank'],
+  ])('the database refuses %s, whoever writes it', async (_what, connected, set, constraint) => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, connected ? { oidc: OIDC } : {});
+      const refused = await failure(
+        db.updateTable('server_settings').set(set).where('id', '=', true).execute(),
+      );
+      expect(String(refused)).toContain(constraint);
+    });
+  });
+
+  test('the environment’s provider is imported once, and named after as ignored', async () => {
+    await withRollback(async (db) => {
+      await db.deleteFrom('server_settings').execute();
+      const config = testConfig({
+        OIDC_ISSUER: OIDC.issuer,
+        OIDC_CLIENT_ID: OIDC.clientId,
+        OIDC_CLIENT_SECRET: OIDC.clientSecret,
+        OIDC_NAME: OIDC.name,
+      });
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(config))).toBe('imported');
+      expect((await readSettings(db, cipher)).oidc).toEqual(OIDC);
+      for (const name of ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_NAME']) {
+        expect(ignoredEnvironment(config)).toContain(name);
+      }
+      // The environment is edited and the server restarted: nothing changes.
+      const changed = testConfig({
+        OIDC_ISSUER: 'https://another.example.com',
+        OIDC_CLIENT_ID: 'x',
+        OIDC_CLIENT_SECRET: 'y',
+      });
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(changed))).toBe('already');
+      expect((await readSettings(db, cipher)).oidc).toEqual(OIDC);
+    });
+  });
+
+  test('an environment with none of it imports no provider, and names none as ignored', async () => {
+    await withRollback(async (db) => {
+      await db.deleteFrom('server_settings').execute();
+      const config = testConfig({});
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(config))).toBe('imported');
+      expect((await readSettings(db, cipher)).oidc).toBeUndefined();
+      expect(ignoredEnvironment(config).filter((name) => name.startsWith('OIDC_'))).toEqual([]);
+    });
+  });
 });

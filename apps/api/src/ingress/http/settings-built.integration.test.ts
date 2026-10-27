@@ -143,6 +143,7 @@ describe('integration: a server built from its settings', () => {
       expect(await (await app.handle(new Request(`${ORIGIN}/api/auth/methods`))).json()).toEqual({
         github: true,
         email: true,
+        oidc: null,
         signUp: 'open',
       });
       services.mail?.post(
@@ -169,6 +170,7 @@ describe('integration: a server built from its settings', () => {
     expect(await (await app.handle(new Request(`${ORIGIN}/api/auth/methods`))).json()).toEqual({
       github: true,
       email: false,
+      oidc: null,
       signUp: 'open',
     });
   });
@@ -186,6 +188,7 @@ describe('integration: a server built from its settings', () => {
     expect(await (await app.handle(new Request(`${ORIGIN}/api/auth/methods`))).json()).toEqual({
       github: false,
       email: false,
+      oidc: null,
       signUp: 'open',
     });
     const button = await app.handle(new Request(`${ORIGIN}/auth/github`));

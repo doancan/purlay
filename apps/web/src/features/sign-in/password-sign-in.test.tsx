@@ -34,7 +34,8 @@ const visit = async (
       signedIn
         ? Promise.resolve(aSession())
         : Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-    authMethods: () => Promise.resolve({ github: false, email: false, signUp: 'invite-only' }),
+    authMethods: () =>
+      Promise.resolve({ github: false, email: false, oidc: null, signUp: 'invite-only' }),
     ...overrides,
     ...(overrides.signInWithPassword === undefined
       ? {}

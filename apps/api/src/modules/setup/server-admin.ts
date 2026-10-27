@@ -23,6 +23,7 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import {
+  OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type ProbeResult,
   type ServerSettingsAnswer,
@@ -41,9 +42,11 @@ import {
   candidateRefusal,
   GITHUB_PROBE_TIMEOUT_MS,
   probeGitHub,
+  probeOidc,
   probeSmtp,
   SMTP_PROBE_TIMEOUT_MS,
   type GitHubProbeDependencies,
+  type OidcProbeDependencies,
 } from './probes';
 import {
   applySettings,
@@ -53,6 +56,13 @@ import {
 } from './runtime';
 import { readSettingsToBoot, settingsView, type SmtpSettings } from './settings';
 import { setupStatus, type ServerAdminSession } from './setup';
+
+/** What each way in being disconnected is called on the trail. */
+const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc', ServerAuditAction>> = {
+  github: 'server.github_disconnected',
+  smtp: 'server.smtp_disconnected',
+  oidc: 'server.oidc_disconnected',
+};
 
 /** Why a change was refused beyond a failed swap (`409 SERVER_CHANGE_REFUSED`). */
 export type ServerChangeRefusal = 'last-channel' | 'not-connected' | 'setup-unfinished';
@@ -122,7 +132,12 @@ export const serverSettingsOf = async (
     needsReentry: current.needsReentry,
     appUrl,
     githubCallbackUrl: `${appUrl}${SIGN_IN_CALLBACK}`,
-    channels: { github: current.auth.github, email: current.mail !== undefined },
+    oidcCallbackUrl: `${appUrl}${OIDC_CALLBACK}`,
+    channels: {
+      github: current.auth.github,
+      email: current.mail !== undefined,
+      oidc: current.auth.oidc !== undefined,
+    },
     adminEmail: (await addressOf(database, admin)).email,
   };
 };
@@ -146,6 +161,33 @@ export const connectGitHub = async (
     { github: candidate },
     dependencies.change,
     audited(dependencies, admin, 'server.github_connected'),
+  );
+  return result;
+};
+
+/**
+ * The single sign-on provider tried under the administrator's authority — its discovery, its keys and the
+ * client's credentials (`probeOidc`) — and, only if it all worked, kept and served (D-200 §2). The secret
+ * is sealed in the settings and never answered; a try that failed saves nothing and says why.
+ */
+export const connectOidc = async (
+  dependencies: ServerAdminDependencies & { readonly oidc: OidcProbeDependencies },
+  admin: ServerAdminSession,
+  candidate: {
+    readonly issuer: string;
+    readonly clientId: string;
+    readonly clientSecret: string;
+    readonly name: string | undefined;
+  },
+): Promise<ProbeResult> => {
+  await afterTheSetup(dependencies.database);
+  const result = await probeOidc(admin, candidate, dependencies.oidc);
+  if (!result.ok) return result;
+  await applySettings(
+    dependencies.database,
+    { oidc: candidate },
+    dependencies.change,
+    audited(dependencies, admin, 'server.oidc_connected'),
   );
   return result;
 };
@@ -196,13 +238,13 @@ const testLetter = (to: string, appUrl: string, locale: SignInLocale): MailMessa
 };
 
 /**
- * One of the two ways in disconnected. Refused when it is not connected, and — unless
+ * One of the three ways in disconnected. Refused when it is not connected, and — unless
  * `confirmLastChannel` — when it was the last way in for other people.
  */
 export const disconnect = async (
   dependencies: ServerAdminDependencies,
   admin: ServerAdminSession,
-  channel: 'github' | 'smtp',
+  channel: 'github' | 'smtp' | 'oidc',
   current: RuntimeServices,
   confirmLastChannel: boolean,
 ): Promise<void> => {
@@ -210,25 +252,27 @@ export const disconnect = async (
   // A secret the key could not open is read as unset, but its ciphertext is there: disconnecting it
   // clears it, under the same last-way-in rule, so a card that says *enter it again* can also let it go.
   const connected =
-    (channel === 'github'
-      ? current.settings.github !== undefined
-      : current.settings.smtp !== undefined) || current.needsReentry.includes(channel);
+    {
+      github: current.settings.github !== undefined,
+      smtp: current.settings.smtp !== undefined,
+      oidc: current.settings.oidc !== undefined,
+    }[channel] || current.needsReentry.includes(channel);
   if (!connected) throw new ServerChangeRefused('not-connected');
-  const record = audited(
-    dependencies,
-    admin,
-    channel === 'github' ? 'server.github_disconnected' : 'server.smtp_disconnected',
-  );
+  const record = audited(dependencies, admin, DISCONNECTED[channel]);
   try {
     await applySettings(
       dependencies.database,
-      channel === 'github' ? { github: null } : { smtp: null },
+      { github: { github: null }, smtp: { smtp: null }, oidc: { oidc: null } }[channel],
       dependencies.change,
       async (transaction) => {
         if (!confirmLastChannel) {
           // What this transaction saved, under the swap's lock: the other way is still there, or not.
           const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
-          if (settings.github === undefined && settings.smtp === undefined) {
+          if (
+            settings.github === undefined &&
+            settings.smtp === undefined &&
+            settings.oidc === undefined
+          ) {
             throw new ServerChangeRefused('last-channel');
           }
         }

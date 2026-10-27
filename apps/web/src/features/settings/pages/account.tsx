@@ -69,6 +69,17 @@ const SignInCard = (): React.JSX.Element => {
           >
             <span className="min-w-0 truncate text-label text-ink">{signIn.data.email}</span>
           </SettingsRow>
+          {signIn.data.oidc && (
+            <SettingsRow
+              label={t('settings.account.oidc')}
+              description={t('settings.account.oidcSignsIn')}
+            >
+              <span className="flex min-w-0 items-center gap-2 text-label text-ink">
+                <Icon name="lock" />
+                <span className="truncate">{t('settings.account.oidcLinked')}</span>
+              </span>
+            </SettingsRow>
+          )}
           {signIn.data.github !== null && (
             <SettingsRow
               label={t('settings.account.github')}

@@ -256,7 +256,12 @@ describe('integration: a change of the settings, served without a restart', () =
     const served = github.serve(0);
     try {
       const server = await aServer(served.url);
-      expect(await methods(server)).toEqual({ github: false, email: false, signUp: 'invite-only' });
+      expect(await methods(server)).toEqual({
+        github: false,
+        email: false,
+        oidc: null,
+        signUp: 'invite-only',
+      });
       expect((await authorizeAt(server))[0]).toBe(404);
 
       await applySettings(
@@ -264,7 +269,12 @@ describe('integration: a change of the settings, served without a restart', () =
         { github: GITHUB_STUB_CREDENTIALS, signUp: 'open' },
         server.change,
       );
-      expect(await methods(server)).toEqual({ github: true, email: false, signUp: 'open' });
+      expect(await methods(server)).toEqual({
+        github: true,
+        email: false,
+        oidc: null,
+        signUp: 'open',
+      });
       // The real mounted handler, through GitHub at `GITHUB_URL`: a person signs in.
       const button = await server.app.handle(new Request(`${ORIGIN}/auth/github`));
       expect(button.status).toBe(302);
@@ -278,7 +288,12 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(github.refusals).toEqual([]);
 
       await applySettings(cloned.db, { github: null }, server.change);
-      expect(await methods(server)).toEqual({ github: false, email: false, signUp: 'open' });
+      expect(await methods(server)).toEqual({
+        github: false,
+        email: false,
+        oidc: null,
+        signUp: 'open',
+      });
       expect((await authorizeAt(server))[0]).toBe(404);
       expect(server.holder.current()?.auth.github).toBe(false);
     } finally {
@@ -291,13 +306,23 @@ describe('integration: a change of the settings, served without a restart', () =
     const second = await aScriptedRelay();
     try {
       const server = await aServer();
-      expect(await methods(server)).toEqual({ github: false, email: false, signUp: 'invite-only' });
+      expect(await methods(server)).toEqual({
+        github: false,
+        email: false,
+        oidc: null,
+        signUp: 'invite-only',
+      });
       expect(await askForLink(server, 'ada@example.test')).toBe(503);
       expect('signInMagicLink' in (server.holder.current()?.auth.api ?? {})).toBe(false);
 
       // Who may sign up is built into the instance: the same change opens it.
       await applySettings(cloned.db, { smtp: relayOf(first), signUp: 'open' }, server.change);
-      expect(await methods(server)).toEqual({ github: false, email: true, signUp: 'open' });
+      expect(await methods(server)).toEqual({
+        github: false,
+        email: true,
+        oidc: null,
+        signUp: 'open',
+      });
       expect('signInMagicLink' in (server.holder.current()?.auth.api ?? {})).toBe(true);
       expect(await askForLink(server, 'ada@example.test')).toBe(202);
       expect(recipients(first)).toEqual(['ada@example.test']);
@@ -318,7 +343,12 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(recipients(first)).toHaveLength(2);
 
       await applySettings(cloned.db, { smtp: null }, server.change);
-      expect(await methods(server)).toEqual({ github: false, email: false, signUp: 'open' });
+      expect(await methods(server)).toEqual({
+        github: false,
+        email: false,
+        oidc: null,
+        signUp: 'open',
+      });
       expect('signInMagicLink' in (server.holder.current()?.auth.api ?? {})).toBe(false);
       expect(await askForLink(server, 'ada@example.test')).toBe(503);
       expect([recipients(first).length, recipients(second).length]).toEqual([2, 1]);
@@ -389,7 +419,12 @@ describe('integration: a change of the settings, served without a restart', () =
     expect(closed).toEqual(['candidate']);
     expect(server.holder.current()).toBe(serving);
     expect(await readSettings(cloned.db, cipher)).toEqual(saved);
-    expect(await methods(server)).toEqual({ github: false, email: false, signUp: 'invite-only' });
+    expect(await methods(server)).toEqual({
+      github: false,
+      email: false,
+      oidc: null,
+      signUp: 'invite-only',
+    });
   });
 
   test('a commit the database does not confirm swaps nothing, and says to restart', async () => {

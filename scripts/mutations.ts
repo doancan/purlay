@@ -58,6 +58,8 @@ const LIFECYCLE_TESTS = 'apps/api/src/lifecycle.test.ts';
 const GITHUB_ENDPOINT_TESTS = 'apps/api/src/ingress/http/github-endpoints.integration.test.ts';
 const SERVER_TESTS = 'apps/api/src/ingress/http/server.integration.test.ts';
 const SERVER_ADMIN = 'apps/api/src/modules/setup/server-admin.ts';
+const OIDC = 'apps/api/src/modules/auth/oidc.ts';
+const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
 const RESET_PASSWORD = 'apps/api/src/modules/setup/reset-password.ts';
 const RESET_CLI = 'apps/api/src/cli/admin-reset-password.ts';
 const RESET_TESTS = 'apps/api/src/cli/admin-reset-password.integration.test.ts';
@@ -5050,9 +5052,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'auth-cancel-read-after-the-state',
     why: 'a cancel in a second tab is told as an expired sign-in, the wrong instruction (D-121 §4)',
     file: AUTH_INGRESS,
-    find: "  const declined = url.searchParams.get('error');\n  if (declined !== null) {\n    if (declined === DECLINED) return asResponse(sentBack(dependencies.config, 'cancelled'));",
+    find: "  const declined = url.searchParams.get('error');\n  if (declined !== null) {\n    if (declined === DECLINED) return asResponse(sentBack(config, 'cancelled'));",
     replace:
-      "  const declined = url.searchParams.get('error');\n  if (declined === 'never') {\n    if (declined === DECLINED) return asResponse(sentBack(dependencies.config, 'cancelled'));",
+      "  const declined = url.searchParams.get('error');\n  if (declined === 'never') {\n    if (declined === DECLINED) return asResponse(sentBack(config, 'cancelled'));",
     tests: [AUTH_TESTS],
   },
   {
@@ -5215,8 +5217,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'auth-library-reason-inherited-key',
     why: 'a library reason named like a property every object has is read as a reason of ours, and the address carries `undefined`',
     file: AUTH_INGRESS,
-    find: '  const known = Object.hasOwn(FAILURE_FOR_LIBRARY_CODE, code)\n',
-    replace: '  const known = code in FAILURE_FOR_LIBRARY_CODE\n',
+    find: '    Object.hasOwn(table, code) ? table[code] : undefined;\n',
+    replace: '    code in table ? table[code] : undefined;\n',
     tests: ['apps/api/src/ingress/http/sign-in-failure.test.ts'],
   },
   {
@@ -6547,7 +6549,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'github-start-no-provider-guard',
     why: 'a server with no GitHub app sends the library a provider it lacks: a thrown 500 for whoever pressed the button',
     file: AUTH_INGRESS,
-    find: '  if (!auth.github) throw notSetUp();\n',
+    find: '  if (!connected(auth, provider)) throw notSetUp(provider);\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/auth-methods.test.ts'],
   },
@@ -6555,7 +6557,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'github-social-route-no-provider-guard',
     why: "the library's own social route answers a 500 and an error in the log on a server with no GitHub app",
     file: AUTH_INGRESS,
-    find: '    if (url.pathname === SOCIAL_SIGN_IN) throw notSetUp();\n',
+    find: "  if (url.pathname === SOCIAL_SIGN_IN && !auth.github && auth.oidc === undefined) {\n    throw notSetUp('github');\n  }\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/auth-methods.test.ts'],
   },
@@ -6563,8 +6565,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'github-callback-no-provider-says-failed',
     why: 'a stale callback on a server with no GitHub says the sign-in failed, as a defect, instead of expired',
     file: AUTH_INGRESS,
-    find: "      return asResponse(sentBack(dependencies.config, 'expired'));\n",
-    replace: "      return asResponse(sentBack(dependencies.config, 'failed'));\n",
+    find: "    return asResponse(sentBack(config, 'expired'));\n  }\n  if (provider === undefined) {",
+    replace:
+      "    return asResponse(sentBack(config, 'failed'));\n  }\n  if (provider === undefined) {",
     tests: ['apps/api/src/ingress/http/auth-methods.test.ts'],
   },
   {
@@ -6652,7 +6655,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'web-no-method-says-nothing',
     why: 'a server with neither way connected shows an empty card: a person is left with nothing and no word why',
     file: 'apps/web/src/features/sign-in/sign-in-screen.tsx',
-    find: '            {!methods.isError && !github && !mail && (\n',
+    find: '            {!methods.isError && !github && oidc === null && !mail && (\n',
     replace: '            {false && (\n',
     tests: ['apps/web/src/features/sign-in/sign-in-screen.test.tsx'],
   },
@@ -6668,8 +6671,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'web-email-alone-keeps-its-rule',
     why: 'the email form, when it is the only way in, hangs from a rule with nothing above it and wears the secondary button',
     file: 'apps/web/src/features/sign-in/sign-in-screen.tsx',
-    find: '<EmailSignInForm alone={!github && !methods.isError && mail} withPassword mail={mail} />',
-    replace: '<EmailSignInForm alone={false} withPassword mail={mail} />',
+    find: 'alone={!github && oidc === null && !methods.isError && mail}',
+    replace: 'alone={false}',
     tests: ['apps/web/src/features/sign-in/sign-in-screen.test.tsx'],
   },
   {
@@ -7944,9 +7947,9 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'invite-leaves-for-github-without-the-passport',
     why: 'the invitation page leaves for GitHub whatever the passport answered: a refused newcomer is sent to a sign-up the server then refuses, with no word of why',
-    file: 'apps/web/src/features/sign-in/github-button.tsx',
-    find: '                if (goOn) leave.to(GITHUB_PATH);',
-    replace: '                leave.to(GITHUB_PATH);',
+    file: 'apps/web/src/features/sign-in/provider-button.tsx',
+    find: '                if (goOn) leave.to(href);',
+    replace: '                leave.to(href);',
     tests: ['apps/web/src/features/invitations/invite-screen.test.tsx'],
   },
   {
@@ -9631,5 +9634,146 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '{mine.length > 0 && shown.length === 0 && !collapsed ? (',
     replace: '{mine.length > 0 && shown.length === 0 ? (',
     tests: ['apps/web/src/features/sidebar/sidebar-preferences.test.tsx'],
+  },
+
+  // ── Single sign-on (D-200): each check that makes a provider's word believable ──
+  {
+    id: 'oidc-nonce-not-compared',
+    why: 'a token issued for another sign-in is believed: the replay a nonce exists to stop',
+    file: OIDC,
+    find: "    if (payload['nonce'] !== nonce)\n      throw new Error('the token is not the one this sign-in asked for');",
+    replace: '',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-audience-not-checked',
+    why: 'a token the provider issued to another application is believed here: anybody with an account at the provider is signed in',
+    file: OIDC,
+    find: '      audience: clientId,\n',
+    replace: '',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-issuer-of-token-not-checked',
+    why: 'a token signed by another issuer is believed: a mix-up',
+    file: OIDC,
+    find: '      issuer,\n      audience: clientId,',
+    replace: '      audience: clientId,',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-algorithms-from-the-token',
+    why: 'the token chooses how it is verified: an unsigned or shared-secret token is believed',
+    file: OIDC,
+    find: '      algorithms: [...metadata.algorithms],\n',
+    replace: '',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-unverified-address-signs-in',
+    why: 'an address the provider did not call verified links to, or makes, an account: account takeover by an address nobody holds',
+    file: OIDC,
+    find: '    if (email === undefined || !yes) {',
+    replace: '    if (email === undefined) {',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-discovery-issuer-not-compared',
+    why: 'a discovery document that names another issuer is believed, so its endpoints and keys decide who is signed in',
+    file: OIDC,
+    find: "  if (json['issuer'] !== issuer) {",
+    replace: '  if (false) {',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-endpoint-may-be-insecure',
+    why: 'an https issuer whose document points at an http endpoint sends the client secret and the browser over a cleartext connection',
+    file: OIDC,
+    find: "(issuer.protocol === 'https:' && url.protocol !== 'https:')",
+    replace: 'false',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-pkce-not-required-of-the-provider',
+    why: 'a provider that ignores the PKCE challenge is accepted: a stolen code redeems at the callback',
+    file: OIDC,
+    find: "!(strings(challenges) ?? []).includes('S256')",
+    replace: 'false',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-account-key-without-issuer',
+    why: 'a subject that repeats under another provider is the same account: whoever the new provider says is `42` is the old `42`',
+    file: OIDC,
+    find: 'export const accountKeyOf = (issuer: string, subject: string): string => `${issuer}|${subject}`;',
+    replace: 'export const accountKeyOf = (_issuer: string, subject: string): string => subject;',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-id-token-accepted-from-a-client',
+    why: 'a client posts an id_token to the sign-in route and is signed in with no redirect, no state and no nonce',
+    file: OIDC,
+    find: 'options: { disableIdTokenSignIn: true },',
+    replace:
+      'options: { disableIdTokenSignIn: false, verifyIdToken: () => Promise.resolve(true) },',
+    tests: [OIDC_TESTS],
+    equivalent:
+      'a second lock refuses the same request: the profile call needs the nonce of a callback, which this route never has, so the token is refused there (`id_token in the sign-in route` is tested, and is refused)',
+  },
+  {
+    id: 'oidc-key-set-refetched-on-every-unknown-key',
+    why: 'a stream of tokens with made-up key ids is a stream of requests to the provider, from this server',
+    file: OIDC,
+    find: 'now() - lastFetchedAt < KEYS_COOLDOWN_MS',
+    replace: 'false',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-key-rotation-never-picked-up',
+    why: 'a provider that rotates its signing key signs nobody in until the server restarts',
+    file: OIDC,
+    find: '          if (!unknown || attempt > 0 ||',
+    replace: '          if (true || !unknown || attempt > 0 ||',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-linking-needs-no-verified-local-address',
+    why: 'the provider links to an account whose own address was never proven: the pre-hijack of D-138 §3',
+    file: BETTER_AUTH,
+    find: 'accountLinking: { enabled: true, requireLocalEmailVerified: true },',
+    replace: 'accountLinking: { enabled: true, requireLocalEmailVerified: false },',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-linked-account-gets-email-links',
+    why: 'a mailbox is a second door into an account the organisation signs in by its provider, past whoever decides who still works there',
+    file: 'apps/api/src/modules/auth/magic-link.ts',
+    find: "  if (sso !== undefined) return 'nothing';\n",
+    replace: '',
+    tests: ['apps/api/src/modules/auth/magic-link.integration.test.ts'],
+  },
+  {
+    id: 'oidc-secret-stored-unsealed',
+    why: 'the client secret is written to the settings as typed: anybody with a database dump has the provider’s credential',
+    file: SETTINGS,
+    find: '    written.oidc_client_secret_encrypted = await sealed(\n      cipher,\n      clientSecret,\n      SEALED_IN.oidcClientSecret,\n    );',
+    replace: '    written.oidc_client_secret_encrypted = clientSecret;',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'oidc-disconnect-ignores-last-way-in',
+    why: 'disconnecting the last way in leaves only the administrator’s password, with no question asked',
+    file: SERVER_ADMIN,
+    find: '          if (\n            settings.github === undefined &&\n            settings.smtp === undefined &&\n            settings.oidc === undefined\n          ) {',
+    replace: '          if (false) {',
+    tests: [SERVER_TESTS],
+  },
+  {
+    id: 'oidc-probe-keeps-a-provider-that-failed',
+    why: 'a provider whose secret was refused is saved and served: every sign-in through it fails for everybody',
+    file: SERVER_ADMIN,
+    find: '  const result = await probeOidc(admin, candidate, dependencies.oidc);\n  if (!result.ok) return result;',
+    replace: '  const result = await probeOidc(admin, candidate, dependencies.oidc);',
+    tests: [SERVER_TESTS],
   },
 ];
