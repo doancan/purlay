@@ -237,6 +237,37 @@ export const MenuRadioItem = ({
   </RadixMenu.RadioItem>
 );
 
+interface MenuCheckboxItemProps {
+  readonly checked: boolean;
+  readonly onCheckedChange: (checked: boolean) => void;
+  readonly children: React.ReactNode;
+}
+
+/**
+ * A switch among several that are set together: it says *on* with a check (`aria-checked`, never only a tint) and
+ * leaves the menu open, so a few can be set without opening it again. A choice of one among several is
+ * `MenuRadioItem`, which closes it.
+ */
+export const MenuCheckboxItem = ({
+  checked,
+  onCheckedChange,
+  children,
+}: MenuCheckboxItemProps): React.JSX.Element => (
+  <RadixMenu.CheckboxItem
+    checked={checked}
+    onCheckedChange={onCheckedChange}
+    onSelect={(event) => {
+      event.preventDefault();
+    }}
+    className={cn(itemClasses, toneClasses.default)}
+  >
+    <span className="flex-1">{children}</span>
+    <RadixMenu.ItemIndicator>
+      <Icon name="confirm" />
+    </RadixMenu.ItemIndicator>
+  </RadixMenu.CheckboxItem>
+);
+
 /**
  * A row of square choices that are glyphs rather than words — the quick reactions. Each is a
  * checkbox item, so one already chosen says so (`aria-checked`) and not only by its tint, and the

@@ -237,7 +237,7 @@ describe('the keyboard', () => {
       within(places(view)).getByRole('button', { name: 'Switch workspace' }).focus();
     });
     const names: string[] = [];
-    for (let step = 0; step < 8; step++) {
+    for (let step = 0; step < 9; step++) {
       await person().tab();
       const active = document.activeElement;
       names.push(
@@ -251,7 +251,10 @@ describe('the keyboard', () => {
       'Search',
       'Saved',
       'Settings',
-      'acme-eng',
+      // The tile's two letters come first in its text and are hidden from a screen reader, which hears the name.
+      'AEacme-eng',
+      // Beside the name, before the jump field: the person's own arrangement of the column (D-195).
+      'Sidebar options',
       expect.stringMatching(/^Jump to…/) as unknown as string,
     ]);
   });

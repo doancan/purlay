@@ -9362,6 +9362,86 @@ contract would show a deleted message for as long as it ran, and nothing in the 
 **Reverses if** the replay learns to carry changes itself, in which case this endpoint is the catch-up for what the
 replay's budget could not carry; or if a purge that a client must see is wanted, in which case the removals are logged
 by the purge and carried on the first page of a walk.
+### D-195. A person arranges their own sidebar, by what is shown — builds on D-110, D-118 §6, D-132, D-160
+
+**Context.** The sidebar listed everything the person had joined, always, in one fixed order, and the workspace's name
+at its head was a button that ran from the rail to the hairline, so its hover and its focus ring touched both. Slack,
+Linear and Notion all let a person fold what they do not need and leave out what they do not want: Slack folds a section
+but keeps what is unread and the open conversation under its name, filters to unread and sorts by name or recency; Linear
+hides what is not used and offers a menu for the arrangement; Notion folds a section by its heading. For a team of
+a few dozen channels the difference is a column that is read and one that is scrolled.
+
+**Decision.**
+1. **The head of the column** is the workspace's tile, its name and the switcher chevron, inset and rounded as every row
+   under it is, so nothing in the column touches the rail or the hairline; **Sidebar options** is beside it, and the jump
+   field lines up with the rows.
+2. **A heading folds its section.** It is a button (`aria-expanded`, its name still the section's), with a chevron after
+   the name that is drawn on hover and focus, always once folded, and always on a touch window. A folded section keeps
+   under it **what is unread, what mentions the person, a channel with an incident open and the open row** — a fold never hides what is waiting or what is on fire.
+3. **Sidebar options** is one menu: *Show* — everything, or only what is unread (the same keep-rule, plus the open row);
+   *Sort channels* — by name, which keeps a place where it was (D-160, and still the default), or by what was written
+   in them last; *Sections* — Conversations and People may be switched off, **Channels may not**, and what the person
+   starred stays (D-132); a section that is off is still drawn for the one conversation the person is in, under its
+   heading, until they go elsewhere — a row is never taken from under them; *Hide muted channels* — a muted **channel** goes unless it mentions the person, has an incident open or is
+   the open one, and a starred one stays whatever it is; conversations and people are not channels and are never left
+   out for being muted (a muted person is still the only way to that conversation); **Reset sidebar**, offered only while something is changed. The button is
+   drawn filled and its name says *changed* while anything is: a sidebar that shows less than the workspace has must
+   not look like one that shows all.
+4. **Kept in the browser, per person and per workspace** (`purlay.sidebar.<user>.<workspace>`), read once and written on
+   change; a page whose storage refuses arranges the sidebar for as long as it is open and leaves the note D-126's other
+   keys leave (`data-storage-failed`). It holds no words and no channel, so a sign-out does not forget it, and the person's
+   id is in the key so the next person on the machine finds their own.
+**Rejected.**
+- *A compact row height.* D-118 §6 puts density in what is shown, not in compression; this decision is that, in menu form.
+- *Dragging sections or channels into an order of one's own.* A saved order is the saved layout D-110 declined: another
+  state to keep right as channels come and go, and the one place that would move a row under a pointer. If it is wanted it
+  is its own decision, with the server keeping it.
+- *A resizable sidebar.* `UX.md` §2 keeps no resizable panes; unchanged.
+- *Custom sections, and a sort or filter per section.* Slack's own paid tier; for the size of team this is built for, one
+  menu for the whole column is enough, and the second knob is where a menu becomes a settings page.
+- *Keeping it on the server.* It would follow the person to every device and give the macOS client the same arrangement;
+  it needs a table, an endpoint and a conflict rule, for a thing that is changed in passing. Not now.
+- *A switch to turn Channels off.* A sidebar with no way into a channel, whose only way back is a menu inside it.
+
+**Accepted.** A section switched off hides what is waiting in it too: a direct message from somebody is reachable
+from the inbox on the rail, which is where what needs the person is gathered (D-106), and is listed again the moment
+the section is back. The arrangement is per device: two browsers of one person differ until each is set. A fold of a section
+with nothing waiting shows a heading and nothing else, which is the point.
+
+**Reverses if** a per-person preference store is built on the server (the web and the macOS client would read one
+arrangement): the keys here are then migrated into it and this one's storage is dropped.
+
+### D-196. The initial JavaScript is a backstop, not a ceiling for features — amends D-49, `PRD.md` §5
+
+**Context.** `PRD.md` §5 fixes the initial bundle at 250 KB gzipped and D-49 makes it a blocking gate, as the one
+*deterministic* stand-in for what a person feels, which is time: cold load to an interactive channel (< 1.5 s), a
+channel switch (< 100 ms), a keystroke painted (< 16 ms) — each recorded per commit and failed on a regression. Over
+the product's first weeks the stand-in began to decide things the time never did. The overlays went into a deferred
+chunk (D-163) when the bundle stood at 246.72 KB; the sidebar's arrangement (D-195) came to 250.20 KB and was
+meant to lose a menu item, a tooltip and a sentence, and to have its menu made asynchronous, to finish at 249.95 KB.
+A number that is rebuilt around by every feature is a ceiling on the product, and the product is what grows.
+
+**Decision.**
+1. **The cap is 400 KB gzipped.** The gate is unchanged in kind: `bun run budget:web` blocks, names the chunks and,
+   with a source map, what grew in the largest. It is there so that an accident — a library imported whole, a locale
+   that is no longer lazy, a grammar in the first chunk — fails loudly; the shape checks (one catalogue, no
+   highlighter grammar, the initial modules in one file) stay as they are.
+2. **A feature is put where it belongs, not where it fits.** Nothing is cut, left out or made asynchronous to pass
+   the number. Deferring a thing nobody needs for the first screen is still a good choice — D-163's chunk stays as it
+   was built — but it is made for **time**, judged by the time budgets and not by bytes.
+3. **What a person feels keeps its own gates.** The cold-load, channel-switch and keystroke budgets, and the
+   latency and idle-memory ones, are unchanged and are what is read when the first load seems slow.
+
+**Rejected.**
+- *No cap at all.* A rule needs a mechanism: with none, a 2 MB import is found by somebody's phone. The gate stays,
+  at a size that the next few features do not touch.
+- *A cap that rises with each feature.* The raising is the churn this removes; when 400 KB is near, that is a
+  decision about what the first screen needs, taken with the time budgets in hand.
+
+**Accepted.** The first load costs more bytes as the product grows. If that shows in the time budgets, the remedy is
+chosen from them — what the first screen loads, what is cached, what is deferred — and not from a byte count.
+
+**Reverses if** the time budgets are found not to see a cost that the bytes would have.
 
 ## Part D — Open, deliberately
 

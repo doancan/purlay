@@ -645,6 +645,7 @@ describe('the workspace menu', () => {
       'side-project',
       'Create workspace…',
       'Invite people…',
+      en['sidebar.workspace.copyLink'],
       en['workspace.settings.entry'],
     ]);
   });
@@ -664,6 +665,8 @@ describe('the workspace menu', () => {
     expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
       'acme-eng',
       'Create workspace…',
+      // Anyone may pass the workspace's address on: it opens only for somebody who is already in.
+      en['sidebar.workspace.copyLink'],
     ]);
   });
 
@@ -692,6 +695,7 @@ describe('the workspace menu', () => {
     expect(places.map((p) => p.place)).toEqual([
       'Create workspace…',
       'Invite people…',
+      en['sidebar.workspace.copyLink'],
       en['workspace.settings.entry'],
     ]);
     expect(places.filter((p) => p.glyph === undefined)).toEqual([]);
@@ -728,6 +732,7 @@ describe('the workspace menu', () => {
       'acme-eng',
       'Create workspace…',
       'Invite people…',
+      en['sidebar.workspace.copyLink'],
       en['workspace.settings.entry'],
     ]);
   });
@@ -1182,12 +1187,16 @@ describe('browsing channels', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab reaches the jump field, the channels and their buttons, in that order — the places are on the rail', async () => {
+  test('Tab reaches the jump field, the channels’ heading and buttons, in that order — the places are on the rail', async () => {
     const view = await open();
     act(() => {
       view.getByRole('button', { name: /^Jump to…/ }).focus();
     });
     expect(document.activeElement?.textContent).toMatch(/^Jump to…(⌘|Ctrl)K$/);
+    await person().tab();
+    // The heading is a button that folds the section, and the first stop in it (D-195).
+    expect(document.activeElement?.textContent.trim()).toBe('Channels');
+    expect(document.activeElement?.getAttribute('aria-expanded')).toBe('true');
     await person().tab();
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Browse channels');
     await person().tab();

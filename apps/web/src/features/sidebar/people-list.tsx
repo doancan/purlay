@@ -11,7 +11,8 @@
  *
  * Alone in a workspace, the section says so under the person's own row (`UX.md` §8), and offers an
  * owner or an admin the invite dialog the workspace menu opens; a member is not offered what the
- * server would refuse them (D-115).
+ * server would refuse them (D-115). The person may fold the section or switch it off (D-195); a person with no
+ * conversation yet has nothing waiting, so a folded section, or only what is unread, lists the ones who do.
  */
 import { useDescribeFailure } from '../../data/failure';
 import { useState } from 'react';
@@ -31,6 +32,9 @@ import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { ActionRow, ChannelRow } from './channel-row';
 import { people } from './ordering';
+import { useSidebarPreferences } from './preferences-context';
+import { rowOf, shownRows, withToggled } from './preferences';
+import { SectionHeading } from './section-heading';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
 /** A person's avatar, with the dot that says they are online (D-136). */
@@ -63,7 +67,7 @@ const OnlineWords = ({
   ) : null;
 };
 
-export const PeopleList = (): React.JSX.Element => {
+export const PeopleList = (): React.JSX.Element | null => {
   const { t } = useI18n();
   const { workspace, role } = useWorkspace();
   const { user: me } = useSession();
@@ -98,88 +102,118 @@ export const PeopleList = (): React.JSX.Element => {
   const entries = people(members.data ?? [], channels.data ?? []);
   const alone = entries.every((entry) => entry.user.id === me.id);
   const mayInvite = role === 'owner' || role === 'admin';
+  const { preferences, change } = useSidebarPreferences();
+  const collapsed = preferences.collapsed.includes('people');
+  const off = preferences.hidden.includes('people');
+  const rows = entries.map((entry) => ({
+    ...(entry.direct === null
+      ? { id: entry.user.id, unread: false, mentions: 0, muted: false, incident: false }
+      : rowOf(entry.direct)),
+    entry,
+  }));
+  // Switched off, the section is drawn only for the person whose conversation is open (a row with a
+  // conversation is that channel's, so the open one is the one the address names).
+  const shown = off
+    ? rows.filter((row) => row.id === currentId)
+    : shownRows(rows, {
+        collapsed,
+        unreadOnly: preferences.unreadOnly,
+        // A muted conversation is still somebody, and the only way to open it: only channels are left out.
+        hideMuted: false,
+        currentId,
+      });
+  if (off && shown.length === 0) return null;
 
   return (
     <section aria-labelledby="sidebar-people" className="flex flex-col">
-      <h2 id="sidebar-people" className="px-2 py-1 text-label text-nav-ink-muted">
+      <SectionHeading
+        id="sidebar-people"
+        controls="sidebar-list-people"
+        collapsed={collapsed}
+        onToggle={() => {
+          change({ collapsed: withToggled(preferences.collapsed, 'people') });
+        }}
+      >
         {t('sidebar.people')}
-      </h2>
-      {waiting && !failed ? (
-        <SectionLoading label={t('common.loading')} />
-      ) : failed ? (
-        <SectionError
-          title={t('state.channels.error.title')}
-          body={t('state.channels.error.body')}
-          retryLabel={t('common.retry')}
-          onRetry={() => {
-            void members.refetch();
-            void channels.refetch();
-          }}
-        />
-      ) : (
-        <ul className="flex flex-col">
-          {entries.map(({ user, direct }) => {
-            const label = (
-              <>
-                {user.displayName}
-                {user.id === me.id ? (
-                  <span className="font-normal"> {t('sidebar.you')}</span>
-                ) : null}
-                <OnlineWords userId={user.id} meId={me.id} />
-              </>
-            );
-            return (
-              <li key={user.id}>
-                {direct === null ? (
-                  <ActionRow
-                    avatar={<PersonAvatar user={user} meId={me.id} />}
-                    unread={false}
-                    mentions={0}
-                    disabled={opening === user.id}
-                    onClick={() => {
-                      void open(user.id);
-                    }}
-                  >
-                    {label}
-                  </ActionRow>
-                ) : (
-                  <ChannelRow
-                    slug={workspace.slug}
-                    channel={direct}
-                    current={direct.id === currentId}
-                    avatar={<PersonAvatar user={user} meId={me.id} />}
-                    unread={(direct.state?.unreadCount ?? 0) > 0}
-                    mentions={direct.state?.unreadMentionCount ?? 0}
-                    muted={direct.notificationLevel === 'none'}
-                  >
-                    {label}
-                  </ChannelRow>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {!waiting && !failed && alone ? (
-        <SectionEmpty
-          title={t('sidebar.people.empty')}
-          body={t('sidebar.people.emptyBody')}
-          {...(mayInvite
-            ? {
-                action: (
-                  <Button
-                    glyph="person"
-                    onClick={() => {
-                      setInviting(true);
-                    }}
-                  >
-                    {t('invite.admin.entry')}
-                  </Button>
-                ),
-              }
-            : {})}
-        />
-      ) : null}
+      </SectionHeading>
+      <div id="sidebar-list-people">
+        {waiting && !failed ? (
+          <SectionLoading label={t('common.loading')} />
+        ) : failed ? (
+          <SectionError
+            title={t('state.channels.error.title')}
+            body={t('state.channels.error.body')}
+            retryLabel={t('common.retry')}
+            onRetry={() => {
+              void members.refetch();
+              void channels.refetch();
+            }}
+          />
+        ) : (
+          <ul className="flex flex-col">
+            {shown.map(({ entry: { user, direct } }) => {
+              const label = (
+                <>
+                  {user.displayName}
+                  {user.id === me.id ? (
+                    <span className="font-normal"> {t('sidebar.you')}</span>
+                  ) : null}
+                  <OnlineWords userId={user.id} meId={me.id} />
+                </>
+              );
+              return (
+                <li key={user.id}>
+                  {direct === null ? (
+                    <ActionRow
+                      avatar={<PersonAvatar user={user} meId={me.id} />}
+                      unread={false}
+                      mentions={0}
+                      disabled={opening === user.id}
+                      onClick={() => {
+                        void open(user.id);
+                      }}
+                    >
+                      {label}
+                    </ActionRow>
+                  ) : (
+                    <ChannelRow
+                      slug={workspace.slug}
+                      channel={direct}
+                      current={direct.id === currentId}
+                      avatar={<PersonAvatar user={user} meId={me.id} />}
+                      unread={(direct.state?.unreadCount ?? 0) > 0}
+                      mentions={direct.state?.unreadMentionCount ?? 0}
+                      muted={direct.notificationLevel === 'none'}
+                    >
+                      {label}
+                    </ChannelRow>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {!waiting && !failed && alone && !off && !collapsed && !preferences.unreadOnly ? (
+          <SectionEmpty
+            title={t('sidebar.people.empty')}
+            body={t('sidebar.people.emptyBody')}
+            {...(mayInvite
+              ? {
+                  action: (
+                    <Button
+                      glyph="person"
+                      onClick={() => {
+                        setInviting(true);
+                      }}
+                    >
+                      {t('invite.admin.entry')}
+                    </Button>
+                  ),
+                }
+              : {})}
+          />
+        ) : null}
+      </div>
       {mayInvite && deferred !== null ? (
         <deferred.InviteDialog open={inviting} onOpenChange={setInviting} />
       ) : null}

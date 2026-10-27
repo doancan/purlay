@@ -26,6 +26,21 @@ describe('channels the person is in', () => {
     expect(names(list)).toEqual(['alpha', 'new', 'old', 'zeta']);
   });
 
+  test('by what was written in them last, only when the person asked for it (D-195)', () => {
+    const list = joinedChannels(
+      [
+        aChannel('1', 'zeta', { lastMessageAt: at(5) }),
+        aChannel('2', 'alpha'),
+        aChannel('3', 'old', { lastMessageAt: at(1) }),
+        aChannel('4', 'new', { lastMessageAt: at(9) }),
+        aChannel('5', 'beta'),
+      ],
+      'activity',
+    );
+    // Newest first; the ones nobody has written in after every one somebody has, by name.
+    expect(names(list)).toEqual(['new', 'zeta', 'old', 'alpha', 'beta']);
+  });
+
   test('leaves out what they have not joined, and direct messages, which are people', () => {
     const list = joinedChannels([
       aChannel('1', 'api'),

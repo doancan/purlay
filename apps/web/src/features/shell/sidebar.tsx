@@ -16,6 +16,10 @@ import { StarredList } from '../sidebar/starred-list';
 import { ConversationList } from '../sidebar/conversation-list';
 import { JumpField } from '../sidebar/jump-field';
 import { PeopleList } from '../sidebar/people-list';
+import { SidebarOptions } from '../sidebar/sidebar-options';
+import { SidebarPreferencesProvider } from '../sidebar/preferences-context';
+import { useSession } from '../session/session';
+import { useWorkspace } from './workspace';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
 import { useRoute } from '../../router/router-provider';
 import { LazySettingsNav } from '../settings/load';
@@ -29,6 +33,8 @@ interface SidebarProps {
 export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element => {
   const { t } = useI18n();
   const { match } = useRoute();
+  const { user } = useSession();
+  const { workspace } = useWorkspace();
   // While a settings page is open, the column lists the settings' pages instead (D-146).
   const settings = match.name === 'settings' || match.name === 'settingsHome';
   return (
@@ -43,9 +49,17 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
       {settings ? (
         <LazySettingsNav />
       ) : (
-        <>
-          <WorkspaceMenu door="name" />
-          <div className="px-3 pb-3">
+        // Remounted for each person and workspace, so one's folds are never drawn in another (D-195).
+        <SidebarPreferencesProvider
+          key={`${user.id}.${workspace.id}`}
+          userId={user.id}
+          workspaceId={workspace.id}
+        >
+          <div className="flex h-header shrink-0 items-center gap-1 px-2">
+            <WorkspaceMenu door="name" />
+            <SidebarOptions />
+          </div>
+          <div className="px-2 pb-3">
             <JumpField />
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
@@ -60,7 +74,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
               <PeopleList />
             </div>
           </div>
-        </>
+        </SidebarPreferencesProvider>
       )}
       <footer className="shrink-0 border-t-hairline border-nav-border p-1">
         <AccountMenu />

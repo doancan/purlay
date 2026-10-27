@@ -33,7 +33,7 @@
 
 One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118), the dark theme neutral black with a black navigation, and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
-for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-110).
+for no benefit at this size; what the person arranges about the sidebar is what it shows, not where things sit (D-195). Regions are separated by tone and one hairline, not by boxes (D-110).
 
 ```
  ┌────┬──────────────────┬────────────────────────────────────────────────┬─────────┐
@@ -58,9 +58,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (264px)** — the workspace name with a chevron, which opens the **workspace menu** (the
-  workspaces to switch to, **Create workspace…**, and for an owner or an admin **Invite people…** and
-  **Workspace settings**, D-146), the jump
+- **Sidebar (264px)** — the workspace's tile and name with a chevron, inset and rounded as the rows are, which
+  opens the **workspace menu** (the workspaces to switch to, **Create workspace…**, and for an owner or an admin
+  **Invite people…** and **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
   (D-132) — the channels, by name so that a new message never moves a row (D-160), under a heading that carries **Browse channels** and **New channel**, always
@@ -79,6 +79,18 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
+- **Sidebar options and folding** (D-195) — the column is the person's to arrange, by **what is shown**, never by how
+  tightly (D-118 §6). Each section's heading is a button that folds it; a folded section keeps listed what is unread,
+  what mentions the person, a channel with an incident open and the open row, so a fold never hides what is waiting or
+  what is on fire. **Sidebar options** (a menu beside
+  the workspace's name) holds: *Show* — everything or only what is unread (and the open row); *Sort channels* — by name
+  (the default, a place stays put, D-160) or by what was written in them last; *Sections* — Conversations and People may
+  be switched off (and are still drawn for the conversation the person is in, until they leave it), Channels may not; *Hide muted channels* — a muted channel goes unless it mentions the person, has an
+  incident open or is the open one, and a starred channel stays (conversations and people are never left out for being
+  muted); **Reset sidebar**, offered only while something is changed. The button is filled
+  while anything is changed, and its name says *changed*. A list emptied by these says *Nothing unread.* or *Nothing to show
+  with these options.* in the section's quiet tone, never as an error. Kept in the browser, per person and workspace; a
+  browser that refuses storage still arranges the column while the page is open.
 - **Browse channels** — the public channels the person has not joined, by name (D-160), each saying
   what it is before it is joined: its name, and on one quiet line how many people are in it (*12
   members*) and its topic, cut with an ellipsis; **Join** on the row joins and goes there. Past eight
