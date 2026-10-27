@@ -19,7 +19,7 @@ import { messageId, type Message } from '@purlay/types';
 export type Persona = 'dogancan' | 'alice' | 'bob' | 'carol';
 
 /*
- * Who does what, because the write budget is per person (10 a second, a burst of 20; a send over
+ * Who does what, because the write budget is per person (10 a second, a burst of 60; a send over
  * the socket that exceeds it fails with "You are going too fast") and a project's tests run in
  * parallel against one world:
  *   dogancan, alice  the people a test drives through the page. Their budget is the page's.

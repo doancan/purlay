@@ -17,7 +17,8 @@ import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 // Side effect: registers the string formats. TypeBox rejects every value for a
 // format it does not know — valid ones included — so this is not optional.
-import { CONTRACT_VERSION } from '@purlay/types';
+import { CONTRACT_VERSION, OIDC_NAME_MAX } from '@purlay/types';
+import { oidcIssuerProblem, oidcNameProblem } from './oidc-address';
 import { smtpUrlProblem } from './smtp-address';
 
 /**
@@ -77,6 +78,13 @@ export const Environment = Type.Object({
    *  neither: neither is a server that waits in setup mode for the wizard to connect GitHub (R38). */
   GITHUB_CLIENT_ID: Type.Optional(Type.String({ minLength: 1 })),
   GITHUB_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1 })),
+  /** A seed, as the GitHub app is (D-200): the OpenID Connect provider single sign-on goes through. The
+   *  issuer, the client id and the client secret are all three or none; `OIDC_NAME` is the button's label.
+   *  None is single sign-on off, and nothing is sent anywhere. */
+  OIDC_ISSUER: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
+  OIDC_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+  OIDC_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
+  OIDC_NAME: Type.Optional(Type.String({ minLength: 1, maxLength: OIDC_NAME_MAX })),
   /** Where a GitHub sign-in is sent and its code redeemed: another for a GitHub Enterprise Server, or
    *  a stand-in on this machine for a run that cannot reach GitHub. Checked in `loadConfig`. */
   GITHUB_URL: Type.String({ minLength: 1, default: GITHUB_URL_DEFAULT }),
@@ -164,6 +172,7 @@ export type Config = Static<typeof Environment>;
 /** Never printed, never logged, never included in an error. (`ARCHITECTURE.md` §10) */
 const SECRETS: ReadonlySet<string> = new Set([
   'GITHUB_CLIENT_SECRET',
+  'OIDC_CLIENT_SECRET',
   'DATABASE_URL',
   'ENCRYPTION_KEY',
   'S3_SECRET_ACCESS_KEY',
@@ -307,6 +316,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   }
   problems.push(...mailProblems(config));
   problems.push(...githubAppProblems(config));
+  problems.push(...oidcProblems(config));
   problems.push(...nativeClientProblems(config));
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {
@@ -423,6 +433,33 @@ const githubAppProblems = (config: Config): string[] =>
   (config.GITHUB_CLIENT_ID === undefined) !== (config.GITHUB_CLIENT_SECRET === undefined)
     ? ['GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: set both, or neither']
     : [];
+
+/**
+ * The single sign-on provider (D-200): the issuer, the client id and the secret are all three or none, the
+ * issuer one this server can sign in through, the name one a button can carry. Refused here, before the
+ * first start copies it into the settings, where it would stop every start after. Never quotes a value.
+ */
+const oidcProblems = (config: Config): string[] => {
+  const given = [config.OIDC_ISSUER, config.OIDC_CLIENT_ID, config.OIDC_CLIENT_SECRET];
+  const problems: string[] = [];
+  if (given.some((value) => value === undefined) && given.some((value) => value !== undefined)) {
+    problems.push('OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET: set all three, or none');
+  } else if (config.OIDC_ISSUER !== undefined) {
+    const problem = oidcIssuerProblem(config.OIDC_ISSUER);
+    if (problem !== undefined) problems.push(`OIDC_ISSUER: ${problem}`);
+  }
+  if (config.OIDC_NAME !== undefined && given.every((value) => value === undefined)) {
+    // A label with no provider would be dropped at the first start without a word.
+    problems.push(
+      'OIDC_NAME: set with OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET, or not at all',
+    );
+  }
+  if (config.OIDC_NAME !== undefined) {
+    const problem = oidcNameProblem(config.OIDC_NAME, OIDC_NAME_MAX);
+    if (problem !== undefined) problems.push(`OIDC_NAME: ${problem}`);
+  }
+  return problems;
+};
 
 const vapidProblems = (publicKey: string, privateKey: string): string[] => {
   // One spelling: the browser hands back the key it was given, and a second spelling of the same

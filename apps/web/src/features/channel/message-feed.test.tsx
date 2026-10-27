@@ -549,6 +549,52 @@ describe('older messages', () => {
     view.unmountAll();
   });
 
+  test('leaving the channel keeps its newest page and lets the older ones go, so coming back draws one page (D-199)', async () => {
+    const view = await mountChannel(twoPages(() => Promise.resolve(page(older))));
+    scrollTo(view, 100);
+    act(() => {
+      view.feed.sentinelVisible();
+    });
+    await settle();
+    const held = (): number =>
+      view.world.client.getQueryData<{ pages: unknown[] }>(keys.messages(IDS.api))?.pages.length ??
+      0;
+    expect(view.container.querySelectorAll('[data-message-row]')).toHaveLength(4);
+    expect(held()).toBe(2);
+    view.unmountAll();
+    expect(held()).toBe(1);
+    expect(
+      view.world.client.getQueryData<{ pages: { data: Message[] }[] }>(keys.messages(IDS.api))
+        ?.pages[0]?.data,
+    ).toHaveLength(2);
+  });
+
+  test('leaving while an older page is still on its way trims as well: the cancelled read does not put the pages back (D-199)', async () => {
+    const view = await mountChannel({
+      api: {
+        messages: (_c, query) =>
+          query?.before === undefined
+            ? Promise.resolve(page(newer, messageIdAt(5)))
+            : new Promise(() => undefined),
+      },
+    });
+    // Two pages are held, the second made by hand, and a third is asked for and never answered.
+    view.world.client.setQueryData(keys.messages(IDS.api), {
+      pageParams: [undefined, messageIdAt(5)],
+      pages: [page(newer, messageIdAt(5)), page(older, messageIdAt(3))],
+    });
+    scrollTo(view, 100);
+    act(() => {
+      view.feed.sentinelVisible();
+    });
+    await settle();
+    expect(view.getByText('Loading older messages')).toBeDefined();
+    view.unmountAll();
+    expect(
+      view.world.client.getQueryData<{ pages: unknown[] }>(keys.messages(IDS.api))?.pages,
+    ).toHaveLength(1);
+  });
+
   test('a page that lands after the box changed size gives the reader the place they had since', async () => {
     let release: (value: ReturnType<typeof page>) => void = () => undefined;
     const view = await mountChannel({

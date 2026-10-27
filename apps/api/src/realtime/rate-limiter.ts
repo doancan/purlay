@@ -6,10 +6,11 @@
  * hold the interface; the in-process bucket below is the only implementation in
  * Phase 0–2, and swapping it is an adapter, not a refactor (D-7).
  *
- * **The numbers are provisional (O-4).** Ten frames a second with a burst of
- * twenty is the working value §5.5 records, and it is generous for what Phase 0
- * sends — messages, subscriptions, pings; typing indicators, the real volume,
- * arrive in Phase 1. What closes O-4 is a measurement, written there.
+ * **The numbers are decided (D-198, closing O-4).** Ten frames a second with a burst
+ * of sixty, measured against what a page sends (`frame-profiles.ts`): the sustained
+ * rate is above anything a person produces, and the burst is what a full outbox
+ * (`OUTBOX_MAX_MESSAGES`, fifty sends) costs when it is sent on a reconnect, with
+ * the subscription and the page's own upkeep beside it.
  */
 import type { Clock } from '../platform/clock';
 
@@ -30,8 +31,8 @@ export interface RateBudget {
   readonly burst: number;
 }
 
-/** §5.5's working value. Provisional until O-4 is closed by a measurement. */
-export const SOCKET_FRAME_BUDGET: RateBudget = { perSecond: 10, burst: 20 };
+/** §5.5's value, decided by D-198: measured, and held by `frame-profiles.test.ts`. */
+export const SOCKET_FRAME_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
 
 /**
  * How many sockets may be open (D-84, amended). The frame budget above is per

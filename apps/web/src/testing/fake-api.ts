@@ -16,7 +16,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   createWorkspace: unexpected('createWorkspace'),
   // The sign-in card asks on every visit, so a test of anything that lands there need not say so:
   // GitHub alone, as a server without mail answers. A test of email sign-in says otherwise.
-  authMethods: () => Promise.resolve({ github: true, email: false, signUp: 'invite-only' }),
+  authMethods: () =>
+    Promise.resolve({ github: true, email: false, oidc: null, signUp: 'invite-only' }),
   // A server already set up, as the sign-in card's tests assume.
   setupStatus: () => Promise.resolve({ open: false, appUrl: 'http://localhost' }),
   authorizeNative: unexpected('authorizeNative'),
@@ -110,6 +111,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
       emailLinks: false,
       hasPassword: false,
       github: { login: 'ada' },
+      oidc: false,
     }),
   signOut: unexpected('signOut'),
   renameWorkspace: unexpected('renameWorkspace'),

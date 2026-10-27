@@ -17,7 +17,7 @@ import { aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import { SetupFailure } from '../../setup/client';
-import { REASONS } from '../../setup/errors';
+import { REASONS, reasonWords } from '../../setup/errors';
 import type { ServerClient } from '../server-client';
 import { ServerClientProvider } from '../server-context';
 
@@ -38,6 +38,7 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
   settings: {
     signUp: 'invite-only',
     github: null,
+    oidc: null,
     smtp: null,
     workspaceCreators: { kind: 'first' },
     setupCompletedAt: '2026-10-01T00:00:00.000Z',
@@ -45,7 +46,8 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
   needsReentry: [],
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
-  channels: { github: false, email: false },
+  oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  channels: { github: false, email: false, oidc: false },
   adminEmail: 'admin@example.test',
   ...over,
 });
@@ -54,6 +56,7 @@ const CONNECTED = anAnswer({
   settings: {
     signUp: 'open',
     github: { clientId: 'Iv1.abc123', clientSecret: { set: true } },
+    oidc: null,
     smtp: {
       address: { set: true, host: 'smtp://mail.example.test:587' },
       from: 'purlay@example.test',
@@ -62,7 +65,7 @@ const CONNECTED = anAnswer({
     workspaceCreators: { kind: 'listed', logins: ['ada', 'grace'] },
     setupCompletedAt: '2026-10-01T00:00:00.000Z',
   },
-  channels: { github: true, email: true },
+  channels: { github: true, email: true, oidc: false },
 });
 
 const unexpected = (name: string) => (): Promise<never> =>
@@ -71,6 +74,7 @@ const unexpected = (name: string) => (): Promise<never> =>
 const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
   settings: () => Promise.resolve(anAnswer()),
   github: unexpected('github'),
+  oidc: unexpected('oidc'),
   smtp: unexpected('smtp'),
   disconnect: unexpected('disconnect'),
   policy: unexpected('policy'),
@@ -290,7 +294,7 @@ describe('Settings → Server', () => {
     const asked: [string, boolean][] = [];
     const only = anAnswer({
       settings: { ...CONNECTED.settings, smtp: null },
-      channels: { github: true, email: false },
+      channels: { github: true, email: false, oidc: false },
     });
     const view = await render(
       aClient({
@@ -581,6 +585,218 @@ describe('Settings → Server, the forms and what stops them', () => {
     });
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
+    view.unmount();
+  });
+});
+
+const OIDC_VIEW = {
+  issuer: 'https://login.example.test/tenant-1',
+  clientId: 'purlay-client',
+  clientSecret: { set: true as const },
+  name: 'Acme SSO',
+};
+
+const WITH_OIDC = anAnswer({
+  settings: { ...anAnswer().settings, oidc: OIDC_VIEW },
+  channels: { github: false, email: false, oidc: true },
+});
+
+describe('Settings → Server — single sign-on (D-200)', () => {
+  const OIDC_REASONS_A_TRY_GIVES = [
+    'secret-rejected',
+    'client-unknown',
+    'unreachable',
+    'tls-failed',
+    'unexpected-reply',
+    'issuer-mismatch',
+    'discovery-invalid',
+  ] as const;
+
+  const fill = async (scope: Scope, secret = 'shh-sso'): Promise<void> => {
+    await person().type(scope.getByLabelText('Issuer'), ' https://login.example.test/tenant-1 ');
+    await person().type(scope.getByLabelText('Client ID'), ' purlay-client ');
+    await person().type(scope.getByLabelText('Client secret'), secret);
+  };
+
+  test('says nothing is connected, what that stops, and the address to register at the provider', async () => {
+    const view = await render(aClient());
+    const sso = card(view, 'Single sign-on');
+    expect(sso.getByText('Not connected')).toBeDefined();
+    expect(sso.getByText(en['settings.server.oidc.empty'])).toBeDefined();
+    expect(sso.getByRole('button', { name: 'Connect single sign-on' })).toBeDefined();
+    expect(view.getByRole('main').textContent).toContain('https://purlay.test/auth/callback/oidc');
+    view.unmount();
+  });
+
+  test('shows the provider connected — its issuer and the client, never the secret', async () => {
+    const view = await render(aClient({ settings: () => Promise.resolve(WITH_OIDC) }));
+    const sso = card(view, 'Single sign-on');
+    expect(sso.getByText('Connected')).toBeDefined();
+    expect(sso.getByText('Issuer https://login.example.test/tenant-1')).toBeDefined();
+    expect(sso.getByText('Client ID purlay-client')).toBeDefined();
+    expect(sso.getByRole('button', { name: 'Replace provider' })).toBeDefined();
+    expect(view.getByRole('main').textContent).not.toContain('shh');
+    view.unmount();
+  });
+
+  test('the try is disabled until the issuer, the client and the secret are all there', async () => {
+    const view = await render(aClient());
+    const sso = card(view, 'Single sign-on');
+    await person().click(sso.getByRole('button', { name: 'Connect single sign-on' }));
+    const submit = sso.getByRole('button', { name: 'Try the connection and save' });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    await person().type(sso.getByLabelText('Issuer'), 'https://x.example.test');
+    await person().type(sso.getByLabelText('Client ID'), 'id');
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    await person().type(sso.getByLabelText('Client secret'), 's');
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+    view.unmount();
+  });
+
+  test('a provider that works is sent trimmed with its label, the form closes, and the card says it was saved', async () => {
+    const sent: unknown[] = [];
+    let saved = false;
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(saved ? WITH_OIDC : anAnswer()),
+        oidc: (candidate) => {
+          sent.push(candidate);
+          saved = true;
+          return Promise.resolve({ ok: true });
+        },
+      }),
+    );
+    const sso = card(view, 'Single sign-on');
+    await person().click(sso.getByRole('button', { name: 'Connect single sign-on' }));
+    await fill(sso);
+    await person().type(sso.getByLabelText('Button label'), 'Acme SSO');
+    await person().click(sso.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(sent).toEqual([
+      {
+        issuer: 'https://login.example.test/tenant-1',
+        clientId: 'purlay-client',
+        clientSecret: 'shh-sso',
+        name: 'Acme SSO',
+      },
+    ]);
+    expect(sso.getByText('Saved. Single sign-on uses this provider from now on.')).toBeDefined();
+    // The secret goes one way: the form is closed and nothing on the page carries it.
+    expect(sso.queryByLabelText('Client secret')).toBeNull();
+    expect(view.getByRole('main').textContent).not.toContain('shh-sso');
+    view.unmount();
+  });
+
+  test.each(OIDC_REASONS_A_TRY_GIVES)(
+    'a try that fails for %s is said in words for a provider, keeps what was typed, and offers another try',
+    async (reason) => {
+      const failed: ProbeResult = { ok: false, reason, raw: '<b>the provider said no</b>' };
+      const view = await render(aClient({ oidc: () => Promise.resolve(failed) }));
+      const sso = card(view, 'Single sign-on');
+      await person().click(sso.getByRole('button', { name: 'Connect single sign-on' }));
+      await fill(sso);
+      await person().click(sso.getByRole('button', { name: 'Try the connection and save' }));
+      await settle();
+      expect(sso.getByText(en[reasonWords(reason, 'oidc').what])).toBeDefined();
+      // The provider's own words, as text: never read as markup.
+      expect(sso.getByText('<b>the provider said no</b>')).toBeDefined();
+      expect(sso.getByLabelText<HTMLInputElement>('Client secret').value).toBe('shh-sso');
+      expect(sso.getByRole('button', { name: 'Try again' })).toBeDefined();
+      // Never the GitHub words for a provider's failure.
+      expect(sso.queryByText(/GitHub/)).toBeNull();
+      view.unmount();
+    },
+  );
+
+  test('a call that failed outright is told as a failure, and keeps the form', async () => {
+    const view = await render(
+      aClient({ oidc: () => Promise.reject(new SetupFailure(500, 'INTERNAL', 'no')) }),
+    );
+    const sso = card(view, 'Single sign-on');
+    await person().click(sso.getByRole('button', { name: 'Connect single sign-on' }));
+    await fill(sso);
+    await person().click(sso.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(sso.getByRole('alert')).toBeDefined();
+    expect(sso.getByLabelText<HTMLInputElement>('Client secret').value).toBe('shh-sso');
+    view.unmount();
+  });
+
+  test('cancelling closes the form and forgets the try', async () => {
+    const view = await render(aClient());
+    const sso = card(view, 'Single sign-on');
+    await person().click(sso.getByRole('button', { name: 'Connect single sign-on' }));
+    await person().click(sso.getByRole('button', { name: 'Cancel' }));
+    expect(sso.queryByLabelText('Issuer')).toBeNull();
+    expect(sso.getByRole('button', { name: 'Connect single sign-on' })).toBeDefined();
+    view.unmount();
+  });
+
+  test('disconnecting asks first, names what stops, and says the strong thing when it is the last way in', async () => {
+    const asked: [string, boolean][] = [];
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(WITH_OIDC),
+        disconnect: (channel, confirm) => {
+          asked.push([channel, confirm]);
+          return Promise.resolve();
+        },
+      }),
+    );
+    const sso = card(view, 'Single sign-on');
+    await person().click(sso.getByRole('button', { name: 'Disconnect' }));
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.getByText(en['settings.server.oidc.disconnectBody'])).toBeDefined();
+    expect(dialog.getByText(en['settings.server.lastWay'])).toBeDefined();
+    await person().click(dialog.getByRole('button', { name: 'Disconnect anyway' }));
+    await settle();
+    expect(asked).toEqual([['oidc', true]]);
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(sso.getByText(en['settings.server.oidc.disconnected'])).toBeDefined();
+    view.unmount();
+  });
+
+  test('with another way in serving, the question is the plain one, and it is sent unconfirmed', async () => {
+    const asked: [string, boolean][] = [];
+    const view = await render(
+      aClient({
+        settings: () =>
+          Promise.resolve({
+            ...WITH_OIDC,
+            channels: { github: true, email: false, oidc: true },
+          }),
+        disconnect: (channel, confirm) => {
+          asked.push([channel, confirm]);
+          return Promise.resolve();
+        },
+      }),
+    );
+    await person().click(card(view, 'Single sign-on').getByRole('button', { name: 'Disconnect' }));
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.queryByText(en['settings.server.lastWay'])).toBeNull();
+    await person().click(dialog.getByRole('button', { name: 'Disconnect' }));
+    await settle();
+    expect(asked).toEqual([['oidc', false]]);
+    view.unmount();
+  });
+
+  test('a secret the key could not open says so, with the form already open and a way to let it go', async () => {
+    const view = await render(
+      aClient({ settings: () => Promise.resolve(anAnswer({ needsReentry: ['oidc'] })) }),
+    );
+    const sso = card(view, 'Single sign-on');
+    expect(sso.getByText(en['settings.server.reentry'])).toBeDefined();
+    expect(sso.getByLabelText('Client secret')).toBeDefined();
+    await person().click(sso.getByRole('button', { name: 'Disconnect' }));
+    expect(
+      within(view.getByRole('dialog')).getByText(en['settings.server.oidc.disconnectBody']),
+    ).toBeDefined();
+    view.unmount();
+  });
+
+  test('has no axe violations connected or not', async () => {
+    const view = await render(aClient({ settings: () => Promise.resolve(WITH_OIDC) }));
+    await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();
   });
 });

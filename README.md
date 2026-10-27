@@ -39,7 +39,7 @@ line clamping, and GitHub PR/Issue links that render as live cards with CI and r
 No audio, video or screen sharing. No app marketplace. No workflow builder. No AI summaries. No
 SAML. **No open core, and no per-seat pricing.** These are permanent non-goals, not a roadmap —
 refusing them is the product. The full list is in [`docs/PRD.md`](docs/PRD.md) §6. (OIDC single
-sign-on is gated on demand rather than refused — see D-31.)
+sign-on is built, not refused — see D-31 and D-200.)
 
 **If you are happy with [Zulip](https://zulip.com), stay there.** It has a better threading
 model than ours and a decade of work behind it. Purlay differs by being lighter to operate and
@@ -99,7 +99,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 197 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 200 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |

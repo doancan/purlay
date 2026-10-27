@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Sign-in** — A server can be connected to the organisation's OpenID Connect provider (Okta, Entra ID, Keycloak and the like) in Administration → Server or by `OIDC_ISSUER`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`: people sign in with it beside GitHub and email, and it is linked to an existing account only when both the provider and that account's address are verified (D-200)
 - **Native app** — A person signs in to the macOS application in their browser and authorises it with one click; it gets a session of its own (D-191)
 - **Native app** — The server says which client versions it still serves and where to get a newer one, and refuses an older one with a clear answer (D-190)
 - **Operations** — Every release carries the contract bundle a non-browser client is generated from, with its digest (D-192)
@@ -35,10 +36,12 @@ have it.
 ### Changed
 
 - **Operations** — `CONFIG.md` says how to set up SPF, DKIM and DMARC for the sign-in mail, and why bounces are not handled by the server
+- **Performance** — Going back to a channel after reading far back through its history opens it as fast as any other: a channel that is left keeps its newest messages and reads the older ones again as they are scrolled to, instead of drawing them all at once (2.1 s for 2,000 messages before); the feed is not virtualized (D-199)
 - **Process** — Phase 1 ends on what is built and verified end to end, not on a team staying off another product for thirty days; the cloud no longer waits on that count (D-197)
 - **Performance** — The first-load JavaScript gate is a backstop at 400 KB gzipped, no longer a ceiling a feature is cut or deferred to fit; the time budgets are unchanged (D-196)
 - **Sidebar** — The workspace's name at the head of the column has its tile and sits inset and rounded like the rows, so its hover and focus no longer touch the rail and the hairline; the jump field lines up with the rows (D-195)
 - **Sign-in** — An emailed sign-in link can carry the application's pending sign-in into the browser that opens it (D-191)
+- **Messages** — A person back from a long disconnect has every unsent message sent, up to the fifty a client keeps, where the server used to refuse all but the first eighteen: the burst a connection or a person's writes may spend at once is sixty frames, the rate still ten a second (D-198)
 
 ### Fixed
 

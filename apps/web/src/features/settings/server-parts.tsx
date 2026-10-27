@@ -63,7 +63,7 @@ export const Inset = ({
 );
 
 /**
- * Disconnecting GitHub or the mail server, asked first. When the other way in is not there, the dialog
+ * Disconnecting GitHub, single sign-on or the mail server, asked first. When the other way in is not there, the dialog
  * says before the button that this is the last one, and the button says it again; when the server
  * refuses for that reason although the page thought otherwise (somebody else changed it), the dialog
  * turns into that question and nothing has been taken.
@@ -77,7 +77,7 @@ export const DisconnectDialog = ({
   body,
   done,
 }: {
-  readonly channel: 'github' | 'smtp';
+  readonly channel: 'github' | 'smtp' | 'oidc';
   readonly view: ServerSettingsAnswer;
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
@@ -92,7 +92,10 @@ export const DisconnectDialog = ({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [forced, setForced] = useState(false);
-  const otherServes = channel === 'github' ? view.channels.email : view.channels.github;
+  // Another way in serves, or this is the last one: the page's own reading, which the server then confirms.
+  const otherServes = (['github', 'email', 'oidc'] as const).some(
+    (other) => other !== (channel === 'smtp' ? 'email' : channel) && view.channels[other],
+  );
   const last = !otherServes || forced;
 
   const disconnect = async (): Promise<void> => {

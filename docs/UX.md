@@ -601,9 +601,9 @@ thread never arrives in its feed (D-171). Only a member of the channel is heard 
 
 ## 6. Scroll and unread
 
-The hardest problem in the product, and the subject of **O-5**.
+The hardest problem in the product, and the subject of O-5, closed by D-199.
 
-**Rules that hold regardless of how O-5 is decided:**
+**Rules that hold however the feed is drawn:**
 
 - **Anchor on read position, not on bottom.** If the user is scrolled up, incoming messages must
   not move the viewport. A "N new messages ↓" pill appears instead.
@@ -632,11 +632,13 @@ The hardest problem in the product, and the subject of **O-5**.
   the channel — *That message no longer exists, or you can't see it.* — and the channel opens as it
   is.
 
-**On O-5:** variable-height rows defeat naive virtualization, and a
-wrong guess here is expensive. Phase 1 ships **unvirtualized with a 50-message window** and
-paginates on scroll. Virtualization is adopted only if dogfooding shows a measurable problem,
-against the `< 100ms` channel-switch budget in `PRD.md` §5. Building it speculatively would
-trade a certain cost for a hypothetical benefit.
+**Virtualization (O-5, D-199).** The feed is **not virtualized**: it draws a window of 50 messages and paginates on
+scroll, and every page a reader scrolls back through stays mounted for as long as the channel is on screen. Measured
+on 2,000 heavy messages the window switches in 52 ms against the `< 100ms` budget of `PRD.md` §5; what did not hold
+was *returning* to a channel after a long read, which drew every page again (2.1 s). So a channel that leaves the
+screen **keeps its newest page and no more**: coming back draws the window, and older history is read again a page at
+a time as the reader scrolls to it. The scroll-anchoring rules above are unchanged by this and hold on every page that
+is read.
 
 ---
 
@@ -839,7 +841,7 @@ and says that GitHub's page *"The redirect_uri MUST match the registered callbac
 afterwards. It is **the server administrator's alone** — `isServerAdmin` on `GET /api/me`, never a
 workspace role: an owner of a workspace is not offered it, and its address is *not found* for everybody
 else, as the server answers `404` to the same people. It has its own heading in the navigation, *Server*,
-under the account's and the workspace's, and is in the palette. Four cards, in this order, over one query
+under the account's and the workspace's, and is in the palette. Five cards, in this order, over one query
 that is read again after every change and never polled:
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
@@ -849,6 +851,16 @@ that is read again after every change and never polled:
   fails is the wizard's three parts — what happened, how to put it right, what GitHub answered — with the
   field outlined, nothing kept and what was typed still there; one that works closes the form and says
   *Saved. GitHub sign-in uses this app from now on.*
+- **Single sign-on** (D-200) — the organisation's OpenID Connect provider: the status (*Connected* with its issuer
+  and the client ID, or *Not connected* and one sentence on what that stops), the redirect address to register at
+  the provider with **Copy**, **Connect single sign-on** (or **Replace provider**) opening four fields — the
+  issuer, the client ID, the client secret and an optional button label — a note that people are linked to an
+  existing account only when the provider says their address is verified and that account's is too, **Try the
+  connection and save**, and **Disconnect**. It is tried as GitHub's is (one button, nothing kept on a failure,
+  what was typed still there), with the words said for a provider: *The provider knows this client and refused its
+  secret.*, *The provider does not know this client.*, *That address answers, but its discovery document names
+  another issuer.*, *That is not an OpenID Connect provider this server can sign in through.*, and the provider's
+  own reply as text. There is **no wizard step for it**.
 - **E-mail** — the relay's host (never its user or password), the sender, **Replace mail server**, and
   **Disconnect**. Under the fields it says where the test goes: *We will send a test message to
   ⟨your address⟩* — a plain letter, no link; **Send a test message and save** is the one button, and the
@@ -860,7 +872,7 @@ that is read again after every change and never polled:
   by the server after; **Save** is enabled only when something changed.
 
 **Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
-remain — the page knows from which of GitHub and the mail server serve — it says so **before** the button
+remain — the page knows from which of GitHub, single sign-on and the mail server serve — it says so **before** the button
 (*This is the last way for other people to sign in. Afterwards only your own password signs in…*) and the
 button reads **Disconnect anyway**; the server is told so outright (`confirmLastChannel`). If the page was
 wrong about it — somebody else changed the settings meanwhile — the server's refusal turns the same dialog
@@ -917,6 +929,17 @@ screen says *Too many attempts. Try again in N minutes.* from `Retry-After` — 
 locked, for it is not (D-179 §4); a server that did not answer is not blamed on the person. At the foot,
 where the policy is *open*, *No account yet? **Create an account*** (the sign-up screen); where it is
 *invite-only*, *Accounts are created by invitation.*, with no link.
+
+**Single sign-on** (D-200) is the first button where a provider is connected, *Continue with ⟨label⟩* — the
+operator's own label, shown as text, or *single sign-on* (*tek oturum açma*) — above GitHub's, as a secondary
+button like it, leaving for `/auth/oidc`; the sign-up screen and an invitation page offer it as they offer GitHub
+(the invitation page asks for its passport first). A server whose only way in is single sign-on has the button, the
+password form and no *not set up* sentence. Two reasons are its own: *`oidc-unavailable`* — "Single sign-on could
+not be reached, or did not give an identity this server trusts — wait a moment and try again, and if it stays, tell
+whoever runs this server." — and *`email-unverified`* — "Single sign-on did not say your email address is verified,
+so it cannot sign you in. Ask whoever runs your organisation's sign-in to verify it." Neither says which check
+failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
+longer signs in to that account.
 
 **When a GitHub sign-in did not finish**, one sentence says what happened and what to do, above the
 button, and never blames the person (D-121). Two are new with D-179 §5. *`signup-closed`* — an

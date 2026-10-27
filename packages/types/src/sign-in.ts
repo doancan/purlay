@@ -26,6 +26,14 @@ export const AUTH_BASE_PATH = '/auth';
  */
 export const SIGN_IN_CALLBACK = `${AUTH_BASE_PATH}/callback/github`;
 
+/**
+ * Where the browser is sent to start a single sign-on and where the provider sends it back (D-200): the
+ * start is a route of Purlay's, the callback the library's own under its base path, answered as a
+ * redirect to the sign-in screen when it fails, exactly as GitHub's is (D-121).
+ */
+export const OIDC_START_PATH = '/auth/oidc';
+export const OIDC_CALLBACK = `${AUTH_BASE_PATH}/callback/oidc`;
+
 /** How long a sign-in link opens (D-138 §4): the server's expiry and every sentence that names it. */
 export const SIGN_IN_LINK_TTL_MINUTES = 15;
 
@@ -53,6 +61,13 @@ export const SignInFailure = Type.Union([
   Type.Literal('signup-closed'),
   /** GitHub could not be reached, refused, or answered something unusable. */
   Type.Literal('github-unavailable'),
+  /**
+   * The organisation's single sign-on could not be reached, refused, or answered something that is not
+   * a valid identity: an id_token whose signature, issuer, audience, expiry or nonce is wrong (D-200).
+   */
+  Type.Literal('oidc-unavailable'),
+  /** The single sign-on gave no address, or did not say it was verified: it is never linked on that (D-200 §3). */
+  Type.Literal('email-unverified'),
   /** Too many sign-ins from here, or no database connection in time: wait, then retry. */
   Type.Literal('busy'),
   /** Anything else. The cause is in the server's log, never in the address. */

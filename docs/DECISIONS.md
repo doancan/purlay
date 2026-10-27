@@ -829,6 +829,9 @@ alternative when D-11 was written, has since been deprecated.
 *Amended 2026-10-21 by D-179:* `better-auth` is the library now, for the reasons of sign-in, sessions and
 setup, not for OIDC. OIDC is still built only when an operator asks.
 
+*Amended 2026-10-27 by D-200:* the condition is gone and OIDC is built — a third way in beside GitHub and email, with
+the linking rule and the checks that make a provider's word believable. SAML stays refused.
+
 ---
 
 ### D-32. Work is tracked in GitHub Issues and Projects
@@ -9477,6 +9480,261 @@ product.
 **Reverses if** the owner's team, or a customer, reports that a verified product is not one they can work in, which
 the check above would then be missing.
 
+### D-198. The frame budget is ten a second with a burst of sixty, decided from a measurement — closes O-4, amends D-66, D-81, D-84
+
+**Context.** D-66's limiter was written with a working value, ten frames a second and a burst of twenty per
+connection, and O-4 held the decision open until a week of a team's use could say whether any legitimate person
+met it. Nothing now waits for a team (the phase no longer ends on one), so the number is decided from what a page
+sends. `bun run measure:frames` (`apps/api/src/realtime/frame-profiles.ts`) runs each profile through the limiter
+the server runs — the connection's bucket, and the user's write bucket a send is also charged to — and reports
+the frames, the most in any second, the most at one instant and what was refused. What each profile assumes of
+the client is pinned against the real engine and connection in `apps/web/src/realtime/frame-profiles.test.ts`.
+
+**Measured** (the client says typing at most once per `TYPING_TTL_MS / 2` per channel, ACTIVE once a minute, a
+ping per idle spell; a channel switch is no frame, because a page is subscribed to every channel its person is in):
+
+| Profile | Frames | Peak per second | At one instant | Refused at 10 / 20 | Refused at 10 / 60 |
+|---|---|---|---|---|---|
+| Fastest typing (17 keys a second), 5 min | 117 | 3 | 3 | 0 | 0 |
+| A short message every second, 5 min | 617 | 4 | 3 | 0 | 0 |
+| A paste, sent | 2 | 2 | 1 | 0 | 0 |
+| Four channels a second, a key in each | 240 | 4 | 1 | 0 | 0 |
+| Eight channels a second, a key in each | 480 | 8 | 1 | 0 | 0 |
+| Outbox of 20 sent on reconnect | 22 | 22 | 22 | 2 | 0 |
+| **Full outbox (50) sent on reconnect** | 52 | 52 | 52 | **32** | 0 |
+| Resubscribe 100 / 1,000 channels | 1 / 10 | 1 / 10 | 1 | 0 | 0 |
+| Resubscribe 3,500 channels, 50 ms round trip | 35 | 20 | 1 | 0 | 0 |
+| Resubscribe 3,500 channels, 20 ms round trip | 36 | 25 | 1 | 1 | 0 |
+| Resubscribe 3,500 channels, 5 ms round trip | 37 | 22 | 1 | 2 | 0 |
+| A flood of 500 at once | 500 | 500 | 500 | 480 | 440 |
+
+Another tab is another connection with its own bucket, so several tabs change no row; the write bucket is the
+user's, and a send it refuses is shown in the same table.
+
+**Decision.**
+1. **Ten frames a second, a burst of sixty** — per connection, and the same for a user's writes (D-81). The
+   sustained rate is unchanged: no profile a person produces passes eight a second, and those that approach it are
+   a key in a new channel every 125 ms. What was wrong was the burst: after a long disconnect the client sends
+   every unsent message in one instant (`OUTBOX_MAX_MESSAGES`, fifty) beside the subscription and its upkeep —
+   fifty-two frames, of which twenty were taken and thirty-two refused as `RATE_LIMITED`, which the client shows as
+   a failed send. Sixty keeps eight frames over the worst profile.
+2. **`FRAME_QUEUE_MAX` is sixty-four**, still above the burst (D-84): a connection inside its budget never meets
+   it. A test holds the relation and a mutation tries it.
+3. **The profiles stay as a test.** Every legitimate profile must pass with no refusal, a flood must still be
+   refused, and the budget D-66 shipped with must still fail the full outbox — so a change to the outbox size, the
+   typing interval or the subscription's chunk that outgrows the budget fails there, not in a person's session.
+   `report:frames` stays as the check in use.
+
+**Rejected.**
+- *Keeping ten and twenty.* It refuses a person coming back from a gap with more than eighteen unsent messages, and
+  the close for a full queue follows.
+- *Pacing the client's resend instead.* Waiting for each answer, as subscriptions do (D-82), still sends faster than
+  ten a second, and a `RATE_LIMITED` for a send is a failed message, not a retry; the right change is to the
+  number, which the client is deliberately not told (D-82).
+- *A higher sustained rate.* Nothing measured needs it, and it is the figure that bounds a flood that goes on.
+- *A burst of one hundred.* More room than the outbox needs; it is also the size of the flood a connection may
+  start with, and of the queue held behind it.
+
+**Accepted.** A burst of sixty is a flood's first sixty frames instead of twenty, then ten a second; at most 64
+frames of up to 64 KB wait per connection, which is a bound only a hostile client reaches (frames are a few hundred
+bytes). Tabs that each hold the same stored outbox send each message once per tab: the id is the same, so the
+server keeps one, and a refusal for the user's write bucket there is shown as a failed copy the other tab's
+delivery has already answered.
+
+**Reverses if** `report:frames` over a real stretch of use shows a legitimate refusal, or a peak above the burst
+at the 99th percentile; or `OUTBOX_MAX_MESSAGES` is raised past the margin the test holds.
+
+### D-199. The feed is not virtualized: a channel out of view keeps its newest page, and the rest is measured — closes O-5, builds on D-197, D-49
+
+**Context.** O-5 asked whether the feed must be virtualized, to be answered against the channel-switch budget
+(`PRD.md` §5, < 100 ms) once the team had used Phase 1 for a week. D-197 took the week away: the measurement is taken
+with a synthetic load and decided from it. The load is the worst the product draws, not an average one:
+`apps/web/e2e/feed-scale.e2e.ts` seeds a channel of **2,000 messages through the real API** — eight in ten heavy
+(a ten-line TypeScript block, a long markdown body with headings, lists, a quotation and links, two GitHub
+pull-request and issue cards, a picture, a root with three replies), the newest fifty all heavy — and drives the real
+production client in Chromium at 1440 px, as a person does: opens the channel, scrolls to the top until a page loads,
+repeats, goes to another channel and comes back. A heavy row is about 83 elements. The window of fifty was never the
+risk; **the unbounded part was what the feed keeps after a person scrolls back**: `useMessages` is an infinite query
+with no page cap and the feed mounts every page it holds, and the pages stayed cached when the channel was left.
+
+**What was measured** (one Chromium on the author's laptop, 20 switches away and back, 30 keys typed; the heap is the
+collector's `JSHeapUsedSize` after a collection; elements are `document.getElementsByTagName('*')`):
+
+| | window (50) | 500 loaded | 2,000 loaded |
+|---|---|---|---|
+| elements in the document | 3,419 | 42,282 | 166,444 |
+| JavaScript heap, in view | 25 MB | 125 MB | 454 MB |
+| keystroke in the composer to the next frame, p50 / p95 | 1.8 / 16.3 ms | 5.9 / 19.1 ms | 41.8 / 42.8 ms |
+| older page: top reached to its rows drawn, p50 / p95 | — | 83 / 95 ms (9 pages) | 113 / 153 ms (39 pages) |
+| **switch back to the channel, before the fix**, p50 / p95 | 47 / 52 ms | **409 / 437 ms** | **1,959 / 2,113 ms** |
+| **switch back to the channel, after the fix**, p50 / p95 | 47 / 52 ms | 48 / 50 ms | 49 / 50 ms |
+
+The window passes with a wide margin (the switch 52 ms of 100; a keystroke inside one frame). What did not is the way
+back to a channel after a long read: everything that had been scrolled through was drawn again, at 0.8 ms a row —
+four times the budget at five hundred messages and twenty times at two thousand. The mounted rows were not bounded.
+
+**Decision.**
+1. **The feed is not virtualized.** The window holds the budget; the one place it did not was a consequence of what
+   was *kept*, not of how the rows are drawn, and keeping less is a smaller change than a virtual list over
+   variable-height rows (the scroll-anchoring rules of `UX.md` §6 are exactly what such a list makes hard).
+2. **A channel that is no longer on screen keeps its newest page and lets the older ones go**
+   (`keepNewestPage` in `data/cache.ts`, called as the feed goes away). A channel opens at its newest messages or at
+   its unread marker, so what was scrolled through is not what a person returns for; it is read again, a page at a
+   time, if it is scrolled to. The newest page stays whole: it is what the switch draws from the cache, what a read
+   position names, and what a message that arrives meanwhile is written into. The way back is the window's, 50 ms,
+   whatever was read before.
+3. **Held by a test and by the budget.** A unit test and the feed's test hold the trim (two mutations in
+   `scripts/mutations.ts`). The browser test holds a *count*, which a shared runner cannot excuse — what a channel
+   draws on return is at most two pages — and its times join the existing mechanism: `bun run budget:browser` reads
+   the median switch back after 2,000 messages and the median keystroke with 2,000 loaded from the same
+   `test-results/performance` files as the rest, and blocks on a regression against main's last runs (D-49). On a
+   person's machine the switch back is held to 100 ms and the keystroke at 500 loaded to two frames.
+
+**Rejected.**
+- *Virtualizing the list* (a windowed list with measured row heights). It would bound what is mounted whatever a
+  person does, and it is the answer if the in-view cost below is ever felt. It was not chosen because the measured
+  failure was not the list in view but the cache outliving it; a virtual list over rows that change height when an
+  image decodes, a card arrives or a highlighter finishes puts a scroll-position bug in the one place the product
+  promises none (`UX.md` §1, §6), to fix a cost a trim removes.
+- *`maxPages` on the infinite query.* It drops pages from the end opposite the one being read — here the *newest* —
+  and the feed would then need to read newer pages on the way down and to place arriving messages in a list that
+  no longer reaches the present: the machinery of a message's window (D-149), moved onto the channel everyone reads.
+- *CSS `content-visibility` on rows.* It saves layout and paint, not the elements, the fibers or the heap, and its
+  estimated heights move the scroll position under a reader.
+- *Trimming on return instead of on leaving.* It would do the work on the switch's own path.
+- *Leaving it, because two thousand messages in one sitting is rare.* It is forty scrolls to the top, but the cost
+  was paid by the *next* visit, to a channel the person had left, and it grows without bound.
+
+**Accepted.** Inside one visit nothing is bounded: after forty scrolls to the top, 2,000 messages are mounted, the
+heap is 454 MB and a keystroke takes 42 ms to its frame — over a frame, well under the 100 ms at which typing feels
+late — and an older page takes 113 ms to draw. At 500 loaded these are 125 MB, 19 ms and 83 ms, no worse than the
+window within the noise of the machine. This is recorded, not hidden: `feed-scale.e2e.ts` writes it on every run,
+and the 2,000-message keystroke is watched for a regression by `budget:browser`. History a person wants far back is
+better reached by search and by a message's link (D-149), which open at the message.
+
+**Reverses if** the keystroke with the messages a reader typically has loaded (about 1,000) is found over 33 ms on a
+machine a team member uses, or the heap of a long visit is reported as a tab that is killed or slow — then the
+mounted rows are bounded in view as well, and virtualization is reopened with this table as its baseline; or if the
+switch back, with the trim in place, is measured over 100 ms.
+
+### D-200. Single sign-on by OpenID Connect, as a third way in — builds on D-31, D-138, D-179, D-191; closes #88
+
+**Context.** D-31 moved SSO from a permanent non-goal to "OIDC, only if an operator asks", and D-179 made the library
+that owns identity one that can do it. The condition is gone: an organisation with an identity provider is the
+customer the audit log (D-26) and the capacity ceiling (D-25) were written for, and a way in that is built after
+somebody asks is one built under a deadline. The cost is a security decision, not a screen: a provider that is
+believed too easily is an account takeover for everyone on the server. SAML stays refused (D-31, `PRD.md` §6).
+
+**Decided.**
+
+1. **Authorization code with PKCE, `openid email profile`, and the `id_token` as the only identity.** The browser is
+   sent to the provider by `GET /auth/oidc` with the library's `state` (its row and `__Host-` cookie, D-62), a `nonce`
+   and an S256 challenge; the provider sends it back to `GET /auth/callback/oidc`, where the library checks the state
+   and this server redeems the code itself — client secret in the `Authorization` header (or the body, for a
+   provider that takes it only there), the verifier, never redirected, ten seconds, at most 256 KB read. The access
+   token is never used, and nothing of the provider's is kept: no token reaches `accounts` (`withoutTokens`). The
+   userinfo endpoint is never read — an identity is what a signed token says, not what an unsigned answer does.
+2. **What is checked, and where it is decided** (`modules/auth/oidc.ts`, once, for the sign-in and the probe).
+   *Discovery* is fetched when a sign-in needs it and never at start or at save — **while no provider is set,
+   nothing is sent anywhere** (the self-host path) — from `<issuer>/.well-known/openid-configuration`; the `issuer`
+   in it must equal the configured one byte for byte (Discovery §4.3: a mismatch is how a mix-up is made), every
+   endpoint must be `https` (`http` only to this machine), and a provider that does not offer the code flow with
+   S256, or signs with nothing asymmetric, is refused. *The token*: signature against the provider's keys with an
+   algorithm from an allow-list (`RS*`, `PS*`, `ES*`, `EdDSA` — never `none`, never `HS*`, never the token's own say);
+   `iss` is the issuer; `aud` contains this client's id and, with several audiences, `azp` is it; `exp`, `iat`, `sub`
+   present, thirty seconds of skew, no token older than ten minutes; `nonce` is exactly the one this sign-in made
+   (the library refuses a callback with none to bind to). Also the callback's own `iss` parameter (RFC 9207) when the
+   provider sends one. *Keys* (JWKS) are cached ten minutes; a token signed by a key not in the cache fetches the set
+   again once, and not again for thirty seconds, so rotation works and a stream of forged `kid`s is not a stream of
+   requests to the provider. A client-submitted `id_token` on the library's sign-in route is refused
+   (`disableIdTokenSignIn`): the only way in is the redirect.
+3. **Who an account is, and when an existing one is linked.** An account is `(issuer, sub)` — stored as
+   `accounts.account_id = "<issuer>|<sub>"` under `provider_id = "oidc"`: a `sub` is unique only within its issuer, so
+   a server later pointed at another provider cannot be signed into somebody's account by a `sub` that repeats.
+   **A person whose address differs at the provider from the one on their account is still their account** (the
+   subject decides, not the address), and **an account has one identity at the provider**: the library links a
+   callback it does not know to the account whose address matches, so a new subject carrying a recycled or
+   changed address is refused where the row is made (`identity_conflict`, `failed`), never added beside the old. **An address links to an existing account only if both sides say it is
+   verified**: the token must carry `email_verified` of `true` (or the string `"true"`, which some providers send)
+   and an address that is one mailbox written one way (D-138 §7), and the existing account's own `email_verified`
+   must be true (`requireLocalEmailVerified`, as for GitHub, D-179 §5). Anything else is refused and said:
+   `email-unverified` for a provider that does not vouch, `email-taken` for an account whose address was never
+   proven — **no account is made, linked or touched**. This is the takeover that is closed: an identity provider
+   that lets anybody register an address they do not hold must not be a way into the account of the person who does.
+   *What is trusted* is the provider the operator chose, for the addresses it vouches for: an operator who connects
+   a provider that verifies addresses loosely has decided that, as one who connects a mail relay has decided who
+   reads the links. A multi-tenant issuer whose `iss` varies per tenant is not supported — a fixed issuer is the rule.
+4. **Configuration, as GitHub's and the relay's are** (D-179 §6). `OIDC_ISSUER`, `OIDC_CLIENT_ID`,
+   `OIDC_CLIENT_SECRET` (all three or none; the secret is sealed in `server_settings.oidc_client_secret_encrypted`
+   with its column bound in, like `SMTP_URL`) and `OIDC_NAME` (the button's label, optional) are **a seed**, read on
+   the first start only; afterwards Administration → Server is the home. It is **tried before it is kept** — the
+   discovery document, the key set, and the token endpoint sent this client's credentials with a code nobody was
+   given (`invalid_grant` says the pair is good; `invalid_client` is a refused secret) — under the administrator's
+   authority and one rate class with the rest of `/api/server` (`SERVER_ADMIN_BUDGET`). Off while unset: no provider is
+   registered, no route answers (`GET /auth/oidc` is `404 ROUTE_NOT_FOUND`) and `AuthMethods.oidc` is `null`.
+   **The setup wizard has no step of its own for it**: a first-time server is set up with a way in that proves who the
+   first person is (the administrator's password, GitHub or mail), and single sign-on is connected from Administration →
+   Server, or by the seed variables on the first start. Disconnecting is refused as the last way in unless the
+   administrator says so (`confirmLastChannel`), counting the third way now.
+5. **One session, one set of rules.** The session, its cookie (`__Host-`, `HttpOnly`, `Secure`, `SameSite=Lax`, a fixed
+   lifetime, hashed at rest, D-11, D-179 §3), the state cookie, the origin rule (D-39), the closed routes and sign-up
+   policy (`admittedByPassport`, which an invitation passport satisfies through the same callback) are the library's
+   and ours, unchanged: the provider is one more `OAuthProvider` the library is handed, not a path round it. A sign-up
+   lost to the same account made at once is sent round once, as GitHub's is (D-78). **The native application's
+   handoff works with it with no change** (D-191): the page keeps `{challenge, state}` in the tab across the redirect, as
+   it does across GitHub's. Each rate limit that applies to `/auth/*` (the `auth` class, per client) applies to the
+   start and the callback.
+6. **An account single sign-on is linked to is signed into by it alone, while the provider is connected.** The emailed
+   link (D-138) is not sent to an address whose account has an `oidc` account row: asking is answered `202` as for any
+   address and nothing is sent, and a link already sent is refused when spent (`fateOf` is asked again). **GitHub is
+   not linked to such an account by address either** (`identity_conflict`). Disconnect the provider and both doors
+   open again: nobody is shut out by a way in that is gone. A mailbox is not a second door past the
+   provider that decides who still works there. *Accepted:* the person has no fallback when the provider is down;
+   the server administrator has a password (R30).
+7. **Names.** The display name is the token's `name`, cleaned as GitHub's is (controls and direction overrides taken
+   out, cut to the column), else the username; the username is made from the address as an email account's is (D-138
+   §5). **No picture is taken**: a `picture` is an address of somebody else's that every viewer's browser would be
+   sent to. The button's label is plain text of at most 40 visible characters, never markup, and its default is
+   worded in the person's language (`Continue with single sign-on`).
+8. **The trail.** Connecting, replacing and disconnecting the provider are on the server's audit trail
+   (`server.oidc_connected`, `server.oidc_disconnected`), written in the transaction that saves it, never the value. A
+   refused sign-in is in the log by the check that refused it (`JWTClaimValidationFailed`, `JWSSignatureVerificationFailed`
+   …) and never carries a token or a claim.
+9. **Errors reach the person as one reason from the closed set** (D-121): `oidc-unavailable` (the provider did not
+   answer, refused the code, or sent a token this server does not believe — the person cannot tell which, and is not
+   told), `email-unverified`, and the existing `cancelled`, `expired`, `email-taken`, `signup-closed`, `busy`,
+   `failed`; the sentences are in `UX.md` §11 and both languages.
+
+**Rejected.**
+
+- *`discoveryUrl` and the library's generic provider plugin as it ships.* It discovers at start (a network call from a
+  server that has been told to send nothing), takes the discovery document's issuer on trust, follows redirects with
+  a client secret in the body, has no deadline on its token call, and falls back to the userinfo endpoint when a
+  token carries no `id_token`. Each of those is a place a provider's failure becomes ours; the provider here is the
+  library's interface, written to the checks above.
+- *Linking by address whatever the provider says* — the takeover of §3. *Linking by `sub` alone* — an account with no
+  address to anchor it on, which D-38 refuses.
+- *An allow-list of email domains (`OIDC_ALLOWED_DOMAINS`).* The provider decides who may sign in to this application
+  (that is what an application assignment is); a second list here is a second place for it to go stale. It can be added
+  without changing anything above.
+- *A step in the setup wizard.* Three screens and a finish rule for a way in an organisation sets up after the first
+  person has signed in; the seed variables cover the one-command install.
+- *Reading the userinfo endpoint for the address or name.* Unsigned, and one more call that is the provider's to fail.
+- *Provider logout (RP-initiated).* Signing out of Purlay ends Purlay's session (D-193); ending the person's session at the
+  provider is theirs.
+- *SAML.* D-31.
+
+**Accepted.** A provider that does not send `email_verified` — some Microsoft tenants do not — cannot be used until it
+does; that is the provider's claim to make, and the setting says why in the sign-in screen's words. A person whose
+address is changed at the provider and then matched to another existing account is refused (`email-taken`), not merged.
+Deprovisioning at the provider ends nothing here until the session expires (`SESSION_TTL_DAYS`); a server that needs it
+sooner signs the person out from the devices list (D-193). The `OIDC_*` seed is ignored after the first start, as
+GitHub's is, and named in the log.
+
+**Reverses if** a provider's `id_token` is found to be believed in some case §2 does not name, or the linking rule of §3
+turns away the people it should let in more often than it stops the ones it should not: then the rule changes, and
+this entry with it. Dropping the way in is `DELETE /api/server/oidc` and a migration that drops four columns.
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.
@@ -9489,27 +9747,16 @@ Recorded so they are not silently assumed. None block Phase 0.
   per-workspace window that defaults to infinite, erasure is two deliberately separate
   operations, and export is NDJSON plus the attachment blobs. Implementation is Phase 2; the
   decision is no longer open.
-- **O-4 · Rate limiting — the number.** The limiter is written (D-66); the budget it enforces is
-  §5.5's working value, ten frames a second with a burst of twenty, per connection, and that value
-  is still a guess. Phase 0 sends little — messages, subscriptions, pings — so nothing it does can
-  confirm or refute the number; typing indicators (Phase 1) are the volume that will. *Closed by a
-  measurement during Phase 1 dogfooding:* the highest frame rate a connection reaches in normal
-  use, as the 99th percentile over a week, and the count of `RATE_LIMITED` refusals that week —
-  which must be zero for legitimate use. Both are recorded: each socket's closing line carries
-  `frames`, `peakPerSecond` and `refused` (#61, `realtime/frame-meter.ts`), so the week is a query
-  over the log — `bun run report:frames <log>` is that query, and says whether the week closes it.
+- ~~**O-4 · Rate limiting — the number.**~~ **Closed by D-198:** ten frames a second with a burst of sixty,
+  decided from a synthetic measurement of what a page sends (`bun run measure:frames`) instead of a week of dogfooding;
+  the closing line of each socket and `bun run report:frames` stay as the check in use.
 - ~~**O-7 · What the command palette is built on.**~~ **Closed by D-98 §7:** a Radix `Dialog`
   holding a hand-written listbox that follows the WAI-ARIA combobox pattern, held by `axe` and a
   keyboard-path test; `cmdk` is not adopted.
 - ~~**O-6 · The two markdown packages D-36 named as categories.**~~ **Closed by D-101:** one
   engine, `mdast-util-from-markdown` with four GFM extensions, on both sides, narrowed to what the
   product renders and bounded so a body past the bounds is shown as typed.
-- **O-5 · Scroll virtualization.** Variable-height rows — code blocks, cards, pictures, and until
-  D-122 inline expandable threads — are the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
-  ship **unvirtualized** with a 50-message window — and the scroll-anchoring rules that hold
-  either way. What remains open is whether to adopt virtualization at all, decided against the
-  `< 100ms` channel-switch budget. *Measure first.* **How it is measured in use:** every switch is a
-  `purlay:channel-switch` entry in the browser's own performance timeline, from the change of address to
-  the frame that draws the new channel's rows (`apps/web/src/app/switch-timing.ts`); nothing leaves the
-  device (D-44). After a week of the team's use, each person reads theirs in the console with
-  `performance.getEntriesByName('purlay:channel-switch')` before closing the tab.
+- ~~**O-5 · Scroll virtualization.**~~ **Closed by D-199:** not adopted — measured on a 2,000-message channel of heavy
+  rows, the window of fifty switches in 52 ms; what broke the budget was the older pages a channel kept after it was
+  left (2.1 s to come back), so a channel out of view now keeps its newest page only. `purlay:channel-switch` stays
+  in the page (`apps/web/src/app/switch-timing.ts`) for anyone who wants their own numbers.

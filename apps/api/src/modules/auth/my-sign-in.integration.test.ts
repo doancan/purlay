@@ -66,11 +66,13 @@ describe('integration: how an account signs in', () => {
         emailLinks: true,
         hasPassword: false,
         github: null,
+        oidc: false,
       });
       expect(await mySignIn(db, withPassword)).toMatchObject({
         emailLinks: true,
         hasPassword: true,
         github: null,
+        oidc: false,
       });
     });
   });
@@ -83,6 +85,7 @@ describe('integration: how an account signs in', () => {
         emailLinks: false,
         hasPassword: false,
         github: { login: 'octocat' },
+        oidc: false,
       });
     });
   });
@@ -94,6 +97,23 @@ describe('integration: how an account signs in', () => {
         emailLinks: true,
         github: { login: 'linked' },
       });
+    });
+  });
+
+  test('single sign-on is named only for the account it is linked to, and never for anybody else’s', async () => {
+    await withRollback(async (db) => {
+      const linked = await made(db);
+      const other = await made(db);
+      await db
+        .insertInto('accounts')
+        .values({
+          user_id: linked,
+          account_id: 'https://idp.example.test|sub-1',
+          provider_id: 'oidc',
+        })
+        .execute();
+      expect(await mySignIn(db, linked)).toMatchObject({ oidc: true });
+      expect(await mySignIn(db, other)).toMatchObject({ oidc: false });
     });
   });
 

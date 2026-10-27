@@ -49,7 +49,7 @@ import {
   type AuthResponse,
 } from './auth';
 import { endMySession, readMySessions } from './devices';
-import { AUTH_BASE_PATH, SIGN_IN_CALLBACK } from '@purlay/types';
+import { AUTH_BASE_PATH, OIDC_CALLBACK, SIGN_IN_CALLBACK } from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
 import {
@@ -121,6 +121,7 @@ import {
   changeSignUpPolicy,
   changeWorkspaceCreators,
   connectGitHubApp,
+  connectOidcProvider,
   connectMailRelay,
   disconnectChannel,
   readServerSettings,
@@ -507,8 +508,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
       // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
-      if (path === SIGN_IN_CALLBACK) {
-        return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code));
+      if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK) {
+        return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
       }
       const where = writtenPath(route, path);
       // The client is told INTERNAL and nothing else; the cause is written here.
@@ -559,6 +560,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
+    .get('/auth/oidc', async ({ set }) => respond(set, await startSignIn(dependencies, 'oidc')))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
     .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth))
     // The native application's way in (D-191): the browser's page says yes, the application spends the code.
@@ -674,11 +676,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, body }) => await connectGitHubApp(setup, request, body),
     )
     .post(
+      '/api/server/oidc',
+      async ({ request, body }) => await connectOidcProvider(setup, request, body),
+    )
+    .post(
       '/api/server/smtp',
       async ({ request, body }) => await connectMailRelay(setup, request, body),
     )
     .delete('/api/server/github', async ({ request, set }) => {
       await disconnectChannel(setup, request, 'github');
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/server/oidc', async ({ request, set }) => {
+      await disconnectChannel(setup, request, 'oidc');
       set.status = 204;
       return '';
     })

@@ -25,8 +25,17 @@ export interface ServerClient {
     readonly clientId: string;
     readonly clientSecret: string;
   }) => Promise<ProbeResult>;
+  readonly oidc: (candidate: {
+    readonly issuer: string;
+    readonly clientId: string;
+    readonly clientSecret: string;
+    readonly name: string;
+  }) => Promise<ProbeResult>;
   readonly smtp: (candidate: RelayTry) => Promise<ProbeResult>;
-  readonly disconnect: (channel: 'github' | 'smtp', confirmLastChannel: boolean) => Promise<void>;
+  readonly disconnect: (
+    channel: 'github' | 'smtp' | 'oidc',
+    confirmLastChannel: boolean,
+  ) => Promise<void>;
   readonly policy: (signUp: 'invite-only' | 'open') => Promise<void>;
   readonly creators: (workspaceCreators: CreatorsChoice) => Promise<void>;
 }
@@ -37,9 +46,11 @@ const isAnswer = (value: unknown): value is ServerSettingsAnswer =>
   Array.isArray(value['needsReentry']) &&
   typeof value['appUrl'] === 'string' &&
   typeof value['githubCallbackUrl'] === 'string' &&
+  typeof value['oidcCallbackUrl'] === 'string' &&
   isRecord(value['channels']) &&
   typeof value['channels']['github'] === 'boolean' &&
   typeof value['channels']['email'] === 'boolean' &&
+  typeof value['channels']['oidc'] === 'boolean' &&
   typeof value['adminEmail'] === 'string';
 
 export const createServerClient = (fetchFn: SetupFetch): ServerClient => {
@@ -56,6 +67,7 @@ export const createServerClient = (fetchFn: SetupFetch): ServerClient => {
       return json;
     },
     github: (candidate) => probe('/api/server/github', candidate),
+    oidc: (candidate) => probe('/api/server/oidc', candidate),
     smtp: (candidate) => probe('/api/server/smtp', candidate),
     disconnect: async (channel, confirmLastChannel): Promise<void> => {
       await call(

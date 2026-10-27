@@ -31,7 +31,8 @@ const ANSWER = {
   needsReentry: [],
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
-  channels: { github: true, email: false },
+  oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  channels: { github: true, email: false, oidc: false },
   adminEmail: 'admin@example.test',
 };
 
@@ -79,6 +80,19 @@ describe('trying a channel', () => {
     expect(w.seen[0]?.path).toBe('/api/server/github');
     expect(w.seen[0]?.init.method).toBe('POST');
     expect(w.seen[0]?.init.body).toBe('{"clientId":"a","clientSecret":"b"}');
+  });
+
+  test('posts the provider candidate and returns the verdict', async () => {
+    const w = world(200, JSON.stringify({ ok: true }));
+    const verdict = await createServerClient(w.fetch).oidc({
+      issuer: 'https://idp.example.test',
+      clientId: 'a',
+      clientSecret: 'b',
+      name: 'Acme SSO',
+    });
+    expect(verdict).toEqual({ ok: true });
+    expect(w.seen[0]?.path).toBe('/api/server/oidc');
+    expect(w.seen[0]?.init.method).toBe('POST');
   });
 
   test('posts the relay candidate and returns a refused verdict as it is', async () => {

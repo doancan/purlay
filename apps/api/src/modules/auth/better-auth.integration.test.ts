@@ -81,7 +81,11 @@ const authWith = (over: Partial<AuthDependencies> = {}): Auth =>
     secret: deriveAuthSecret(DEVELOPMENT_ENCRYPTION_KEY),
     mailer: outbox(() => Promise.resolve(), log),
     log,
-    settings: { github: { clientId: 'client', clientSecret: 'secret' }, signUp: 'open' },
+    settings: {
+      github: { clientId: 'client', clientSecret: 'secret' },
+      oidc: undefined,
+      signUp: 'open',
+    },
     githubUrls: { web: GITHUB_URL_DEFAULT, api: GITHUB_API_URL_DEFAULT },
     sessionTtlDays: 30,
     bus: nobodyListening,

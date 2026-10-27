@@ -689,12 +689,14 @@ describe('the endpoints', () => {
       emailLinks: true,
       hasPassword: false,
       github: null,
+      oidc: false,
     });
     expect(await read.api.mySignIn()).toEqual({
       email: 'a@example.test',
       emailLinks: true,
       hasPassword: false,
       github: null,
+      oidc: false,
     });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
   });
@@ -713,10 +715,11 @@ describe('the endpoints', () => {
   });
 
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
-    const methods = harness({ github: false, email: true, signUp: 'open' });
+    const methods = harness({ github: false, email: true, oidc: null, signUp: 'open' });
     expect(await methods.api.authMethods()).toEqual({
       github: false,
       email: true,
+      oidc: null,
       signUp: 'open',
     });
     expect(methods.calls[0]).toMatchObject({ method: 'GET', url: '/api/auth/methods' });

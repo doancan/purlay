@@ -11,7 +11,7 @@ import type { PlainKey } from '../../i18n/types';
 import type { SetupFailure } from './client';
 
 /** The field a reason points at, outlined on the screen that has it. */
-type ProbeField = 'clientId' | 'clientSecret' | 'smtpUrl' | 'from' | 'admin';
+type ProbeField = 'clientId' | 'clientSecret' | 'smtpUrl' | 'from' | 'admin' | 'issuer';
 
 /** How far a mail try got: the index of the line it stopped at, in `MAIL_STAGES`. */
 export type MailStage = 0 | 1 | 2 | 3;
@@ -92,7 +92,62 @@ export const REASONS: Record<ProbeReason, ReasonWords> = {
     field: 'smtpUrl',
     stoppedAt: 1,
   },
+  'issuer-mismatch': {
+    what: 'setup.reason.issuer-mismatch.what',
+    fix: ['setup.reason.issuer-mismatch.fix1', 'setup.reason.issuer-mismatch.fix2'],
+    field: 'issuer',
+    stoppedAt: null,
+  },
+  'discovery-invalid': {
+    what: 'setup.reason.discovery-invalid.what',
+    fix: ['setup.reason.discovery-invalid.fix1', 'setup.reason.discovery-invalid.fix2'],
+    field: 'issuer',
+    stoppedAt: null,
+  },
 };
+
+/**
+ * What the reasons a single sign-on provider's try can give mean for it, in place of the GitHub and mail words
+ * above (D-200): the same closed set, said for the provider. The two reasons only a provider gives
+ * (`issuer-mismatch`, `discovery-invalid`) are in `REASONS` and are not repeated; a reason a provider's try
+ * cannot give (a mail relay's) has no entry and falls back to `REASONS`.
+ */
+const OIDC_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
+  'secret-rejected': {
+    what: 'setup.oidc.reason.secret-rejected.what',
+    fix: ['setup.oidc.reason.secret-rejected.fix1', 'setup.oidc.reason.secret-rejected.fix2'],
+    field: 'clientSecret',
+    stoppedAt: null,
+  },
+  'client-unknown': {
+    what: 'setup.oidc.reason.client-unknown.what',
+    fix: ['setup.oidc.reason.client-unknown.fix1', 'setup.oidc.reason.client-unknown.fix2'],
+    field: 'clientId',
+    stoppedAt: null,
+  },
+  unreachable: {
+    what: 'setup.oidc.reason.unreachable.what',
+    fix: ['setup.oidc.reason.unreachable.fix1', 'setup.oidc.reason.unreachable.fix2'],
+    field: 'issuer',
+    stoppedAt: null,
+  },
+  'tls-failed': {
+    what: 'setup.oidc.reason.tls-failed.what',
+    fix: ['setup.oidc.reason.tls-failed.fix1', 'setup.oidc.reason.tls-failed.fix2'],
+    field: 'issuer',
+    stoppedAt: null,
+  },
+  'unexpected-reply': {
+    what: 'setup.oidc.reason.unexpected-reply.what',
+    fix: ['setup.oidc.reason.unexpected-reply.fix1', 'setup.oidc.reason.unexpected-reply.fix2'],
+    field: 'clientSecret',
+    stoppedAt: null,
+  },
+};
+
+/** The words for a reason as it is said for one channel's try. */
+export const reasonWords = (reason: ProbeReason, channel: 'oidc' | undefined): ReasonWords =>
+  (channel === 'oidc' ? OIDC_REASONS[reason] : undefined) ?? REASONS[reason];
 
 /** The sentence for a call that failed: a plain one, or the wait `Retry-After` asked for, in minutes. */
 export const failureWords = (

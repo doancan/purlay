@@ -204,7 +204,7 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 
 **native macOS client in Swift, in its own repository** (D-186) · **mobile as an installable
 progressive web application** — one client, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
-bus (D-7, D-25) · **OIDC single sign-on, gated on demand** (D-31)
+bus (D-7, D-25) · **OIDC single sign-on, built** (D-31, D-200)
 
 > **Native Swift exists for macOS only** (D-186, which supersedes D-51 here). Mobile stays an
 > installable web application, Windows and Linux use the web client, and no native iOS client is
@@ -273,7 +273,7 @@ contractually requires one (D-28)
 
 > **SSO left this list on 2026-09-09.** D-25 set a multi-node capacity ceiling and D-26 added an
 > audit log; both describe an organisation that has an identity provider, so "never SSO" had
-> become an internal contradiction. It is now **OIDC, Phase 3, gated on demand** (D-31). SAML
+> become an internal contradiction. It is now **OIDC** (D-31), built by D-200 without the wait for a request. SAML
 > itself stays permanently refused — XML signature handling for the same outcome at ten times the
 > cost. A non-goal that another decision contradicts teaches readers the whole list is
 > negotiable, which is why this is stated plainly rather than quietly reworded.
@@ -285,13 +285,13 @@ entity · magic-link auth in MVP · GitHub webhook feeds in MVP · Tauri in MVP 
 
 ## 7. Open Questions
 
-Two questions are deliberately unresolved, O-4 and O-5; both are closed by measuring Phase 1 in use.
+One question is deliberately unresolved, O-4; it is closed by measuring Phase 1 under load.
 Each is recorded with its context, its candidate answers and the phase it must be decided in.
 
 > **Single source of truth:** `DECISIONS.md` Part D. Summarised here only as a pointer —
 > ~~O-1 message editing~~ (closed by D-103) · ~~O-2 invitations~~ (closed by D-115) · ~~O-3 retention & export~~ (closed by D-27) ·
 > ~~O-6 the markdown packages~~ (closed by D-101) · ~~O-7 the palette's base~~ (closed by D-98 §7) ·
-> O-4 rate limiting · O-5 list virtualization.
+> ~~O-5 list virtualization~~ (closed by D-199) · O-4 rate limiting.
 
 A task that runs into one of these has found a decision to be made, not a gap to be filled
 quietly. Stop and decide it, then record it as a numbered decision.

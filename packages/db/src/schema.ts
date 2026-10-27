@@ -341,6 +341,10 @@ export interface ServerSettings {
   id: Generated<boolean>;
   imported_from_env_at: Timestamp | null;
   mail_from: string | null;
+  oidc_client_id: string | null;
+  oidc_client_secret_encrypted: string | null;
+  oidc_issuer: string | null;
+  oidc_name: string | null;
   setup_completed_at: Timestamp | null;
   sign_up: Generated<string>;
   smtp_allow_plaintext: Generated<boolean>;

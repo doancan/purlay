@@ -52,6 +52,10 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 |---|---|---|---|
 | `GITHUB_CLIENT_ID` | — | unset | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38). **A seed**: read on the first start only, into the server's settings, and ignored after (below). **Both of this and `GITHUB_CLIENT_SECRET`, or neither**: one without the other refuses to start. Neither is how a fresh server starts: it waits in setup mode, and the setup page connects GitHub |
 | `GITHUB_CLIENT_SECRET` | — | unset | **Secret.** Never logged. **A seed**, as `GITHUB_CLIENT_ID`, and set with it or not at all; kept encrypted in the settings |
+| `OIDC_ISSUER` | — | unset | The organisation's OpenID Connect provider (D-200): its issuer, `https://…` (`http://` only to this machine), exactly as the provider puts it in a token — no query, no fragment, never normalised; its `/.well-known/openid-configuration` is fetched when somebody presses the button, **never at start or at save**. **A seed**: read on the first start only, into the server's settings, and ignored after. **All three of this, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`, or none**: one without the others refuses to start. **None is single sign-on off: no provider is registered, `GET /auth/oidc` is `404`, and nothing is sent to anybody** |
+| `OIDC_CLIENT_ID` | — | unset | The client this server is registered as at the provider. A seed, as `OIDC_ISSUER`, and set with it. Register `APP_URL/auth/callback/oidc` as its redirect URI, with the authorization code flow and PKCE |
+| `OIDC_CLIENT_SECRET` | — | unset | **Secret.** Never logged. A seed, as `OIDC_ISSUER`, and set with it; kept encrypted in the settings, bound to its column |
+| `OIDC_NAME` | — | unset | What the sign-in button says after *Continue with*: at most 40 visible characters, plain text. A seed, only with the other three (alone it would be dropped at the first start without a word, so it refuses to start); unset says *single sign-on* in the person's language |
 | `GITHUB_URL` | — | `https://github.com` | Where a GitHub sign-in is sent to authorise and its code is redeemed (`/login/oauth/…`). Another only for a GitHub Enterprise Server, or for a stand-in for GitHub on this machine in a run that cannot reach the real one. `https://`, or `http://` to `localhost`, `127.0.0.1` or `[::1]` alone, in any environment; a path is kept, a trailing slash dropped, and credentials, a query or a fragment refused. A deployment's shape, not a setting: never in the browser (D-179) |
 | `GITHUB_API_URL` | — | `https://api.github.com` | GitHub's API, where a sign-in reads the person and their addresses (`/user`, `/user/emails`): `https://<host>/api/v3` on an Enterprise Server. Checked as `GITHUB_URL` is |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
@@ -79,6 +83,7 @@ its migrations are in.
 | A seed of the settings | Where it is changed after the first start |
 |---|---|
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the setup wizard's GitHub step, then Administration → Server; the secret is stored encrypted and never shown again |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_NAME` | Administration → Server (there is no wizard step for it, D-200 §4); the provider is tried — discovery, its keys, the client's credentials — before anything is kept; the secret is stored encrypted and never shown again |
 | `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` | the wizard's email step, then Administration → Server; the address is stored encrypted, since it carries the relay's password, and shown only as its host — not even the user, which for some relays is the token |
 | `WORKSPACE_CREATORS` | Administration → Server; the rule is D-155's |
 | Who may sign up (`invite-only` or `open`) | no variable: one choice in setup, then Administration → Server; `invite-only` by default |
@@ -318,15 +323,15 @@ configure what is not already a database constraint.
 | `UNFURL_CACHE_TTL_SECONDS` | — | `300` | Positive cache (`ARCHITECTURE.md` §8.3) |
 | `UNFURL_NEGATIVE_TTL_SECONDS` | — | `3600` | Negative cache — without it one dead link re-hits the GitHub API forever |
 
-> **HTTP limits are not configurable here either, and are provisional (O-4, D-81).** Sign-in: 30
+> **HTTP limits are not configurable here either, and the writes' budget is the socket's (D-81, D-198).** Sign-in: 30
 > requests per client address at once, then one every two seconds. Writes: 10 a second with a burst
-> of 20 per signed-in user, the socket's own budget. A refusal is `429` with `Retry-After`. The
+> of 60 per signed-in user, the socket's own budget. A refusal is `429` with `Retry-After`. The
 > numbers live in `apps/api/src/ingress/http/rate-limit.ts`. The largest JSON body is 64 KiB, the
 > socket's frame (D-80).
 >
 > The socket's limits are **not** configurable here. The frame cap is part of the wire contract —
 > `MAX_FRAME_BYTES` in `@purlay/types` — so an operator changing it would part the server from every
-> client built against it. The rate budget is one provisional number until **O-4** closes, in
+> client built against it. The rate budget is one number, decided by D-198, in
 > `apps/api/src/realtime/rate-limiter.ts` (D-66).
 >
 > Attachment size is **not** configurable here either: it is enforced by the `attachment_size_limit`

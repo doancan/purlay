@@ -196,7 +196,8 @@ describe('invite people', () => {
 
 /** A server that can send mail: the same answer the sign-in screen reads. */
 const withMail: Partial<Api> = {
-  authMethods: () => Promise.resolve({ github: true, email: true, signUp: 'invite-only' }),
+  authMethods: () =>
+    Promise.resolve({ github: true, email: true, oidc: null, signUp: 'invite-only' }),
 };
 
 const queuedFor = (...outcomes: InvitationMailResult[]): Promise<CreatedInvitation> =>

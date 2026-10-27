@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AUTH_BASE_PATH,
+  OIDC_CALLBACK,
+  OIDC_START_PATH,
   SIGN_IN_CALLBACK,
   SIGN_IN_PATH,
   SignInFailure,
@@ -15,6 +17,11 @@ describe('where GitHub sends the browser back (D-179, R13)', () => {
     expect(AUTH_BASE_PATH).toBe('/auth');
     expect(SIGN_IN_CALLBACK).toBe('/auth/callback/github');
   });
+
+  test('and where the single sign-on provider does (D-200): a start of ours, the library’s callback', () => {
+    expect(OIDC_START_PATH).toBe('/auth/oidc');
+    expect(OIDC_CALLBACK).toBe('/auth/callback/oidc');
+  });
 });
 
 describe('the address a failed sign-in comes back to', () => {
@@ -26,6 +33,8 @@ describe('the address a failed sign-in comes back to', () => {
       'email-taken',
       'signup-closed',
       'github-unavailable',
+      'oidc-unavailable',
+      'email-unverified',
       'busy',
       'failed',
     ]);

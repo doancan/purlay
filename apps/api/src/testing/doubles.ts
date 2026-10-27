@@ -190,6 +190,7 @@ export const testDependencies = ({
                     clientId: config.GITHUB_CLIENT_ID,
                     clientSecret: config.GITHUB_CLIENT_SECRET,
                   },
+            oidc: undefined,
             signUp,
           },
           mailer: mail,
