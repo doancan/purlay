@@ -2,7 +2,7 @@
 
 > Authority: `DECISIONS.md` records *why* and is binding. This file records *what we are
 > building and for whom*. `ARCHITECTURE.md` and `SCHEMA.md` record *how*.
-> **Status:** Phase 1 — MVP, gated on S-1. What is done is `bun run queue`, not a line here
+> **Status:** Phase 1 — MVP, ends on what is built and verified (D-197). What is done is `bun run queue`, not a line here
 > (`OVERVIEW.md`, Current status).
 
 ---
@@ -89,14 +89,13 @@ Four audiences, four tests. Ordered: the first can kill a feature, the last cann
 
 | # | Audience | Success is | Failure looks like |
 |---|---|---|---|
-| **S-1** | The owner's own team | The team stops opening Slack for internal discussion, and stays off it for 30 consecutive days. | People keep a Slack tab open "for the important stuff." |
+| **S-1** | Product quality | Every Phase 1 capability works end to end in a browser at both widths and themes, `bun run verify` passes, and the deployed build is the newest commit (D-197). | A capability that is listed but fails on a real screen, or a green build that nobody has looked at. |
 | **S-2** | Self-hosting community | A stranger deploys it from the README without opening an issue, and comes back a week later. | Every deployment needs hand-holding. |
 | **S-3** | Cloud customers | A team pays for a workspace, stays a second month, and never files a ticket that a self-hoster could not have solved from the README. | Revenue arrives with a support load that consumes the engineering budget. |
 | **S-4** | Portfolio | A reviewer can trace any feature from `PRD.md` → `DECISIONS.md` → schema → code in under five minutes. | The code is fine but nobody can tell what was decided or why. |
 
-**S-1 is the only gate on Phase 1.** If the owner's team will not switch, no amount of community
-interest or revenue makes the product real — and **no cloud work begins until S-1 has been met**
-(D-1).
+**S-1 is the only gate on Phase 1**, and it is a check that can be run, not a habit to wait for
+(D-197). **No cloud work begins until S-1 has been met and the self-host path (S-2) is real** (D-1).
 
 ---
 
@@ -121,7 +120,7 @@ Nothing else. No threads, no markdown rendering, no uploads.
 
 ### Phase 1 — MVP (gates on S-1)
 
-Everything the owner's team needs to abandon Slack.
+Everything a team needs to work in Purlay instead of a general-purpose chat product.
 
 **4.1 · Messaging**
 Resolvable threads · GitHub Flavored Markdown · fenced code blocks with language badge,
@@ -190,7 +189,7 @@ channels (D-125)
 
 ### Phase 2.5 — Cloud (v0.4.0)
 
-Gates on S-3, and **cannot start before S-1 is met**. (D-1)
+Gates on S-3, and **cannot start before S-1 is met and S-2 is real**. (D-1)
 
 Multi-node deployment behind a sticky load balancer with the shared `EventBus`, `PresenceRegistry`
 and `RateLimiter` adapters (D-7, D-25) · per-workspace subscription billing through a merchant of
