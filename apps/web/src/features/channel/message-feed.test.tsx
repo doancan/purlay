@@ -549,6 +549,26 @@ describe('older messages', () => {
     view.unmountAll();
   });
 
+  test('leaving the channel keeps its newest page and lets the older ones go, so coming back draws one page (D-199)', async () => {
+    const view = await mountChannel(twoPages(() => Promise.resolve(page(older))));
+    scrollTo(view, 100);
+    act(() => {
+      view.feed.sentinelVisible();
+    });
+    await settle();
+    const held = (): number =>
+      view.world.client.getQueryData<{ pages: unknown[] }>(keys.messages(IDS.api))?.pages.length ??
+      0;
+    expect(view.container.querySelectorAll('[data-message-row]')).toHaveLength(4);
+    expect(held()).toBe(2);
+    view.unmountAll();
+    expect(held()).toBe(1);
+    expect(
+      view.world.client.getQueryData<{ pages: { data: Message[] }[] }>(keys.messages(IDS.api))
+        ?.pages[0]?.data,
+    ).toHaveLength(2);
+  });
+
   test('a page that lands after the box changed size gives the reader the place they had since', async () => {
     let release: (value: ReturnType<typeof page>) => void = () => undefined;
     const view = await mountChannel({

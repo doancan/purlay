@@ -17,6 +17,7 @@ import {
   channelStateChanged,
   messageCreated,
   messageRevised,
+  keepNewestPage,
   newestMessageId,
   patchMessage,
   reactionsUpdated,
@@ -654,5 +655,47 @@ describe('reading again what may have changed (#540)', () => {
     expect(reads()).toBe(1);
     expect(client.getQueryState(['thread', 'root'])?.status).toBe('error');
     stop();
+  });
+});
+
+describe('a channel out of view keeps its newest page and no more (O-5, D-199)', () => {
+  const OTHER = '00000000-0000-4000-8000-0000000000c2';
+
+  test('older pages are let go and the newest is kept as it was, with the cursor that reads on from it', () => {
+    const client = new QueryClient();
+    const held = {
+      pageParams: [undefined, id(2), id(1)],
+      pages: [
+        { data: [message(6), message(5)], nextCursor: id(5) },
+        { data: [message(4), message(3)], nextCursor: id(3) },
+        { data: [message(2), message(1)], nextCursor: null },
+      ],
+    };
+    client.setQueryData(keys.messages(CH), held);
+    keepNewestPage(client, CH);
+    const after = client.getQueryData<Pages>(keys.messages(CH));
+    expect(after?.pages).toEqual([held.pages[0]] as Pages['pages']);
+    expect(after?.pageParams).toEqual([undefined]);
+    // What a read position names is still the newest message.
+    expect(newestMessageId(client, CH)).toBe(id(6));
+  });
+
+  test('a channel with one page, none, or in another window is left alone', () => {
+    const client = new QueryClient();
+    const one = pages([message(2), message(1)]);
+    client.setQueryData(keys.messages(CH), one);
+    const window = pages([message(4)], [message(3)]);
+    client.setQueryData(keys.messagesAround(CH, id(3)), window);
+    const other = pages([message(9)], [message(8)]);
+    client.setQueryData(keys.messages(OTHER), other);
+    keepNewestPage(client, CH);
+    keepNewestPage(client, '00000000-0000-4000-8000-0000000000c9');
+    // The very object: nothing was written, so nothing that watches the cache is woken.
+    expect(client.getQueryData(keys.messages(CH))).toBe(one);
+    expect(client.getQueryData(keys.messagesAround(CH, id(3)))).toBe(window);
+    expect(client.getQueryData(keys.messages(OTHER))).toBe(other);
+    expect(
+      client.getQueryData(keys.messages('00000000-0000-4000-8000-0000000000c9')),
+    ).toBeUndefined();
   });
 });
