@@ -2,8 +2,11 @@
 #
 # `scripts/restore-rehearsal.sh` brings up a throwaway copy of the production stack,
 # fills it, backs it up, restores into a new database and bucket, and fails unless the
-# two are identical; then it destroys every volume and rebuilds from the backup alone.
-# Weekly, and on any pull request that touches what it exercises.
+# two are identical; then it destroys every volume and rebuilds from the backup alone; then it
+# switches WAL archiving on, loses everything again, and recovers to a noted time from a shipped
+# copy of the archive (point-in-time recovery, D-202). Its measurements (how long each restore took,
+# how late the newest commit reached the archive) are written to the run's summary: that is the
+# recorded outcome and its date. Weekly, and on any pull request that touches what it exercises.
 #
 # **Runs on every pull request, so that it can be a required check.** A workflow that a
 # path filter skips reports nothing, and a pull request that broke `backup.sh` could merge
@@ -29,14 +32,14 @@ permissions:
 jobs:
   rehearse:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       # To list the files of the pull request.
       pull-requests: read
     env:
       # What the rehearsal builds, runs and restores.
-      PATTERN: '^(scripts/(backup|restore|compare-databases|ops-common|production-init|restore-rehearsal|pr-touches)\.sh|scripts/(rehearsal-|bucket-)[^/]*\.ts|docs/spikes/backup-restore\.seed\.sql|docker-compose\.production\.yml|docker/|Dockerfile|\.dockerignore|apps/api/|packages/(db|types)/|bun\.lock|\.github/workflows/restore-rehearsal\.yml)'
+      PATTERN: '^(scripts/(backup|restore|restore-pitr|prune-wal|check-backup|compare-databases|ops-common|production-init|restore-rehearsal|pr-touches)\.sh|scripts/(rehearsal-|bucket-)[^/]*\.ts|docs/spikes/backup-restore\.seed\.sql|docker-compose\.production\.yml|docker/|Dockerfile|\.dockerignore|apps/api/|packages/(db|types)/|bun\.lock|\.github/workflows/restore-rehearsal\.yml)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,9 +67,10 @@ jobs:
 
       # Builds the image itself, so the rehearsal runs against the code in this
       # commit. The secrets it generates are throwaway and die with the stack.
-      - name: back up, restore into a fresh database and bucket, compare, then rebuild after a total loss
+      - name: back up, restore into a fresh database and bucket, compare, rebuild after a total loss, then recover to a noted time
         if: steps.changes.outputs.relevant == 'true'
-        run: scripts/restore-rehearsal.sh
+        # What it measured is appended to the run's summary: each run leaves its numbers and its date.
+        run: REHEARSAL_RESULT_FILE="$GITHUB_STEP_SUMMARY" scripts/restore-rehearsal.sh
 
       - name: nothing the rehearsal exercises changed
         if: steps.changes.outputs.relevant != 'true'
