@@ -75,6 +75,7 @@ const fateOf = async (
   clock: Clock,
   email: string,
   signUp: SignInLinks['signUp'],
+  ssoConnected: boolean,
 ): Promise<Fate> => {
   const account = await executor
     .selectFrom('users')
@@ -98,12 +99,14 @@ const fateOf = async (
   // An account the organisation's single sign-on is linked to is signed into by it alone (D-200 §6): a
   // mailbox is not a second door past the provider that decides who still works there. Nothing is sent, and
   // the asker is answered as for any address.
-  const sso = await executor
-    .selectFrom('accounts')
-    .select('id')
-    .where('user_id', '=', account.id)
-    .where('provider_id', '=', OIDC_PROVIDER_ID)
-    .executeTakeFirst();
+  const sso = !ssoConnected
+    ? undefined
+    : await executor
+        .selectFrom('accounts')
+        .select('id')
+        .where('user_id', '=', account.id)
+        .where('provider_id', '=', OIDC_PROVIDER_ID)
+        .executeTakeFirst();
   if (sso !== undefined) return 'nothing';
   return madeByGitHub(account) ? 'github' : 'link';
 };
@@ -169,7 +172,7 @@ export const requestSignInLink = async (
   // After the answer, what depends on the address: whether it has an account, and the link the library
   // makes for it — a row written and a message queued, which an answer that waited for them would time.
   later(async () => {
-    const fate = await fateOf(database, clock, email, links.signUp);
+    const fate = await fateOf(database, clock, email, links.signUp, links.oidc);
     if (fate === 'link') {
       await links.issue(email, {
         locale: input.locale,
@@ -226,7 +229,10 @@ export const previewSignInLink = async (
     .where('expires_at', '>', systemClock.now())
     .executeTakeFirst();
   const email = row === undefined ? undefined : addressOf(row.value);
-  if (email === undefined || (await fateOf(database, clock, email, links.signUp)) !== 'link') {
+  if (
+    email === undefined ||
+    (await fateOf(database, clock, email, links.signUp, links.oidc)) !== 'link'
+  ) {
     throw linkNotFound();
   }
   return { email };

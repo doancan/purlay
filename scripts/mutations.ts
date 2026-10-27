@@ -1074,9 +1074,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sign-in-link-account-read-before-the-answer',
     why: 'the account is read before the answer and only the link left for after: the answer’s time says whether the address has an account',
     file: 'apps/api/src/modules/auth/magic-link.ts',
-    find: '  later(async () => {\n    const fate = await fateOf(database, clock, email, links.signUp);\n',
+    find: '  later(async () => {\n    const fate = await fateOf(database, clock, email, links.signUp, links.oidc);\n',
     replace:
-      '  const fate = await fateOf(database, clock, email, links.signUp);\n  later(async () => {\n',
+      '  const fate = await fateOf(database, clock, email, links.signUp, links.oidc);\n  later(async () => {\n',
     tests: ['apps/api/src/ingress/http/magic-link-race.integration.test.ts'],
   },
   {
@@ -9775,5 +9775,29 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  const result = await probeOidc(admin, candidate, dependencies.oidc);\n  if (!result.ok) return result;',
     replace: '  const result = await probeOidc(admin, candidate, dependencies.oidc);',
     tests: [SERVER_TESTS],
+  },
+  {
+    id: 'oidc-second-subject-linked-by-address',
+    why: 'a recycled or changed address with a new subject is added beside the old identity, and signs in as the person who left',
+    file: BETTER_AUTH,
+    find: '      ? held.some((row) => row.account_id !== account.accountId)\n',
+    replace: '      ? false\n',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-owned-account-linked-to-github',
+    why: 'GitHub signs in to an account single sign-on owns by address, past the provider that decides who still works there',
+    file: BETTER_AUTH,
+    find: '      : held.length > 0;\n',
+    replace: '      : false;\n',
+    tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-link-closed-with-no-provider',
+    why: 'accounts single sign-on made keep no way back in once the provider is disconnected: a link is silently not sent to people who have none other',
+    file: 'apps/api/src/modules/auth/magic-link.ts',
+    find: '  const sso = !ssoConnected\n',
+    replace: '  const sso = false\n',
+    tests: ['apps/api/src/modules/auth/magic-link.integration.test.ts'],
   },
 ];

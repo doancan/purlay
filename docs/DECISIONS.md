@@ -9511,7 +9511,9 @@ believed too easily is an account takeover for everyone on the server. SAML stay
    `accounts.account_id = "<issuer>|<sub>"` under `provider_id = "oidc"`: a `sub` is unique only within its issuer, so
    a server later pointed at another provider cannot be signed into somebody's account by a `sub` that repeats.
    **A person whose address differs at the provider from the one on their account is still their account** (the
-   subject decides, not the address). **An address links to an existing account only if both sides say it is
+   subject decides, not the address), and **an account has one identity at the provider**: the library links a
+   callback it does not know to the account whose address matches, so a new subject carrying a recycled or
+   changed address is refused where the row is made (`identity_conflict`, `failed`), never added beside the old. **An address links to an existing account only if both sides say it is
    verified**: the token must carry `email_verified` of `true` (or the string `"true"`, which some providers send)
    and an address that is one mailbox written one way (D-138 §7), and the existing account's own `email_verified`
    must be true (`requireLocalEmailVerified`, as for GitHub, D-179 §5). Anything else is refused and said:
@@ -9541,9 +9543,11 @@ believed too easily is an account takeover for everyone on the server. SAML stay
    handoff works with it with no change** (D-191): the page keeps `{challenge, state}` in the tab across the redirect, as
    it does across GitHub's. Each rate limit that applies to `/auth/*` (the `auth` class, per client) applies to the
    start and the callback.
-6. **An account single sign-on is linked to is signed into by it alone.** The emailed link (D-138) is not sent to an
-   address whose account has an `oidc` account row: asking is answered `202` as for any address and nothing is sent,
-   and a link already sent is refused when spent (`fateOf` is asked again). A mailbox is not a second door past the
+6. **An account single sign-on is linked to is signed into by it alone, while the provider is connected.** The emailed
+   link (D-138) is not sent to an address whose account has an `oidc` account row: asking is answered `202` as for any
+   address and nothing is sent, and a link already sent is refused when spent (`fateOf` is asked again). **GitHub is
+   not linked to such an account by address either** (`identity_conflict`). Disconnect the provider and both doors
+   open again: nobody is shut out by a way in that is gone. A mailbox is not a second door past the
    provider that decides who still works there. *Accepted:* the person has no fallback when the provider is down;
    the server administrator has a password (R30).
 7. **Names.** The display name is the token's `name`, cleaned as GitHub's is (controls and direction overrides taken

@@ -197,6 +197,19 @@ describe('what discovery must say', () => {
     expect(await reasonOf(discover(ISSUER, answering(answer)))).toBe('discovery-invalid');
   });
 
+  test('a reply that is cut off while it is read is the provider not answering, not a document that was wrong', async () => {
+    const cut = (): Response =>
+      new Response(
+        new ReadableStream({
+          start(controller): void {
+            controller.error(new Error('connection reset'));
+          },
+        }),
+        { status: 200 },
+      );
+    expect(await reasonOf(discover(ISSUER, answering(cut)))).toBe('unreachable');
+  });
+
   test('a provider nothing answers for is unreachable, and says what the transport said', async () => {
     const failure = new TypeError('fetch failed');
     try {
@@ -399,6 +412,12 @@ describe('redeeming the code', () => {
     const { identity, stub } = await signingIn(ada, { discovery: 'basic-refused' });
     expect(identity).toBe('refused');
     expect(stub.refusals).toEqual(['invalid_client']);
+  });
+
+  test('a client the provider no longer accepts is written at error: every sign-in fails until the operator acts', async () => {
+    const { lines } = await signingIn(ada, { discovery: 'basic-refused' });
+    const said = lines.find((line) => String(line['msg']).includes('gave no id_token'));
+    expect(said).toMatchObject({ level: 'error', oidcError: 'invalid_client' });
   });
 
   test('no verifier, no request: the code is no use to anybody who did not start this sign-in', async () => {

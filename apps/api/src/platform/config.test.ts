@@ -849,7 +849,7 @@ describe('single sign-on is a setting, off while unset (D-200)', () => {
     expect(refusal({ ...valid, ...oidc, OIDC_NAME: name })).toContain('OIDC_NAME:');
   });
 
-  test('a label with no provider is read and does nothing: it is a seed like the rest', () => {
-    expect(loadConfig({ ...valid, OIDC_NAME: 'Acme' }).OIDC_NAME).toBe('Acme');
+  test('a label with no provider is refused: it would be dropped at the first start without a word', () => {
+    expect(refusal({ ...valid, OIDC_NAME: 'Acme' })).toContain('OIDC_NAME: set with OIDC_ISSUER');
   });
 });

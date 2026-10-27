@@ -106,7 +106,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
   ]);
   const me = await screen.request.get('/api/me');
   expect(me.status()).toBe(200);
-  expect(await me.json()).toMatchObject({ email: 'ada.sso@example.test' });
+  expect(await me.json()).toMatchObject({ user: { email: 'ada.sso@example.test' } });
   // The session cookie is the library's, as every way in's.
   const cookies = await newcomer.cookies();
   const session = cookies.find((cookie) => cookie.name === '__Host-purlay_session');

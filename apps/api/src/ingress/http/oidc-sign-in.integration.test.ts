@@ -21,7 +21,17 @@ import {
   testDependencies,
 } from '../../testing/doubles';
 import type { Clock } from '../../platform/clock';
-import { cookiesFrom, type StartedSignIn } from '../../testing/github-sign-in';
+import {
+  aGitHubFor,
+  aGitHubPerson,
+  cookiesFrom,
+  returnFromGitHub,
+  startGitHubSignIn,
+  type StartedSignIn,
+} from '../../testing/github-sign-in';
+import { GITHUB_STUB_CREDENTIALS } from '../../testing/github-stub';
+import { aTestAuth } from '../../testing/signed-in';
+import { OIDC_STUB_CREDENTIALS } from '../../testing/oidc-stub';
 import {
   anOidcStub,
   type OidcBehaviour,
@@ -380,6 +390,65 @@ describe('integration: account linking by address (D-200 §3)', () => {
         ...(keys.length === 2 ? [`https://other-idp.example.test|${person.sub}`] : []),
       ].sort(),
     );
+  });
+});
+
+describe('integration: one identity per account (D-200 §3, §6)', () => {
+  test('a new subject carrying the address of an account that already has an identity is refused, and links nothing', async () => {
+    const person = aPerson();
+    const server = await aServer(person);
+    const first = await expectSignedIn(
+      server,
+      await signInWithOidc(server.app, ORIGIN, server.stub),
+    );
+    // The provider recycles the mailbox: another person, another subject, the same verified address.
+    server.stub.person = { ...person, sub: `recycled-${unique()}` };
+    expectSentBack(await signInWithOidc(server.app, ORIGIN, server.stub), 'failed');
+    const rows = await db
+      .selectFrom('accounts')
+      .select('account_id')
+      .where('user_id', '=', first)
+      .where('provider_id', '=', OIDC_PROVIDER_ID)
+      .execute();
+    expect(rows).toHaveLength(1);
+    expect(server.lines.some((line) => line['libraryError'] === 'identity_conflict')).toBe(true);
+    // The first subject still signs in.
+    server.stub.person = person;
+    await expectSignedIn(server, await signInWithOidc(server.app, ORIGIN, server.stub));
+  });
+
+  test('GitHub is not linked by address to an account single sign-on owns', async () => {
+    const person = aPerson();
+    const github = aGitHubFor(aGitHubPerson('sso-owner', { email: person.email }));
+    const stub = await anOidcStub(person);
+    const config = testConfig({ APP_URL: ORIGIN });
+    const backplane = inProcessBackplane();
+    const lines = aRecordingLogger();
+    const auth = aTestAuth(db, {
+      baseUrl: ORIGIN,
+      settings: {
+        github: GITHUB_STUB_CREDENTIALS,
+        oidc: { issuer: stub.issuer(), ...OIDC_STUB_CREDENTIALS, name: undefined },
+        signUp: 'open',
+      },
+      // Two providers, one fetch: the issuer's addresses are the provider's, the rest GitHub's.
+      fetch: async (url, init) =>
+        url.startsWith(stub.issuer()) ? await stub.fetch(url, init) : await github.fetch(url, init),
+      bus: backplane.node(() => undefined, NO_LOG),
+      log: lines.log,
+      sessionTtlDays: config.SESSION_TTL_DAYS,
+    });
+    const app = createApp(testDependencies({ database: db, config, auth, backplane }));
+    const owner = await expectSignedIn(
+      { app, auth, stub, lines: lines.lines },
+      await signInWithOidc(app, ORIGIN, stub),
+    );
+    const started = await startGitHubSignIn(app, ORIGIN, github);
+    const back = await returnFromGitHub(app, ORIGIN, started);
+    expect(back.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
+    expect(
+      await db.selectFrom('accounts').select('provider_id').where('user_id', '=', owner).execute(),
+    ).toEqual([{ provider_id: OIDC_PROVIDER_ID }]);
   });
 });
 
