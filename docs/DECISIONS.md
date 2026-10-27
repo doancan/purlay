@@ -9755,15 +9755,19 @@ to the other; the quota is granted once per node. The self-hosted product is unc
 2. **Bun's own client, no dependency** (`CONTRIBUTING.md` §1.12). It has commands, scripts and pub/sub. It was measured
    not to subscribe again after its connection came back (a publish after a Redis restart reached nobody) and to give up
    after twenty tries, so the link owns reconnection: a lost connection is replaced by a *new* client after a wait that
-   doubles from 250 ms to 15 s with jitter, for ever, and every channel is subscribed again on it. A command never waits
-   for a connection (offline it fails at once, connected it fails after two seconds), and nothing is left unhandled.
+   doubles from 250 ms to 15 s with jitter, for ever (starting over only once a connection has held for ten seconds, so
+   a Redis that accepts and drops is backed off from), and every channel is subscribed again on it. A command never waits
+   for a connection (offline it fails at once, connected it fails after two seconds and ends that connection), a
+   connection that goes silent without closing is found by a ping every five seconds, and nothing is left unhandled.
 3. **The bus is one Redis channel for the cluster, filtered in the node.** A publisher never fans out itself: it publishes
    and hears its own frame back, as every node does, so a frame is delivered once on each node, in the order Redis took
    it, and a channel's frames are in one order everywhere. The replay and changes-feed logic (D-82, D-190, D-194) is not
    touched. **While Redis is away** a node delivers to its own sockets (the people on it still hear each other); with only
    the subscription down, it also publishes for the others and delivers directly, since its echo will not come. **When the
    subscription is made again, frames were missed**, so the node closes its sockets with `RESTARTING` and they replay from
-   their cursors: what a deploy does (D-72), by the code that already exists.
+   their cursors: what a deploy does (D-72), by the code that already exists. **A frame that never reached Redis** from a
+   node whose own connection was away leaves the other nodes' subscriptions up and nothing to tell them: each frame
+   carries its publisher's name and a count, and a node that hears a hole in a count treats it as a gap, the same way.
 4. **The limiters that are keyed beyond one connection are shared; the per-connection one is not.** A token bucket in one
    Lua script on Redis's clock — read, refill, spend and write in one step, so two nodes cannot both spend the same
    tokens — named per budget (a user's writes and a user's costly reads never share a bucket) and expiring by itself when
@@ -9776,16 +9780,17 @@ to the other; the quota is granted once per node. The self-hosted product is unc
    For as long as Redis is away the quota is the in-process one, N times on N nodes, which is what the product always
    had; the line says so at `warn` while connected and at `debug` while the link has already said it is down.
 6. **Typing is one key per person and channel**, the in-memory rule on Redis's clock (tell the room when there is no window
-   or it is half spent); unreachable, the room is told — a frame too many, never a wrong answer (D-25).
+   or it is half spent); unreachable, this node's own window answers — a frame too many per node, never a wrong answer (D-25).
 7. **Who is online is a claim per node.** A hash per person holds each node's claim with the time it lapses and the version of
    the last change; a node renews its claims every ten seconds and they lapse in thirty, so **a node that dies leaves nobody
-   online for longer than that** — read as offline by every snapshot, told to nobody (a client reads the snapshot again
-   when it reconnects). A join or leave is given a version only when it changes whether the person is online *anywhere*:
+   online for longer than that**: read as offline by every snapshot, and **told by whichever node finds them first** — an
+   index of when each person's last claim lapses is swept at every renewal, and the version is given once. A node that
+   stops gives its claims up, so a deploy is told within a renewal; a person held elsewhere is not. A join or leave is given a version only when it changes whether the person is online *anywhere*:
    the first socket on a second node, and the last on one of two, tell nobody. Versions come from Redis's clock and only
    grow, so two nodes with clocks apart still agree which change is later, and a snapshot's version is smaller than every
    change after it. Calls for one person are made in order on a node. Unreachable: a person is online here whatever the
-   record says (told, at this node's version), a leave is not told (the claim lapses), and a read is answered from the
-   node's own sockets.
+   record says (told, at a version larger than any the record gave), a leave is not told (the claim lapses and is swept),
+   and a read is answered from the node's own sockets.
 8. **Readiness.** A node that has **never** reached Redis since it started is not ready (a wrong address is found by the
    deploy, not by a user); a node that has, and loses it, stays ready and says so in its log. Every node refusing traffic
    because the shared piece blinked would be the outage; `/health/ready` still says a word and the log the reason.
@@ -9812,9 +9817,9 @@ to the other; the quota is granted once per node. The self-hosted product is unc
 
 **Accepted.**
 - Each node hears every frame published anywhere and drops those it has no socket for.
-- A publish that times out *after* Redis took it is delivered twice to the node that fell back to direct delivery; a frame
-  is idempotent on its id and version, and a client keeps the larger.
-- A dead node's people read as online for up to thirty seconds. While Redis is away the quota is N times; presence is each
+- A publish that times out *after* Redis took it is delivered twice to the node that fell back to direct delivery, and
+  after later frames; a frame is idempotent on its id and version, a client keeps the larger, and the sockets replay.
+- A dead node's people read as online, and are told so, for up to thirty seconds and one renewal after it died. While Redis is away the quota is N times; presence is each
   node's own, and the sockets of a node that missed frames replay on its return — a reconnection storm the size of a deploy.
 - The scripts are sent whole with each call (`EVAL`, not `EVALSHA`): a few hundred bytes a call, no `NOSCRIPT` to handle.
 - One Redis with one primary. Redis Cluster is not supported: the presence read is one script over many keys.

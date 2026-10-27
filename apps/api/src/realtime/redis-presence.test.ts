@@ -3,47 +3,59 @@
  * correctly across nodes is held against a real Redis (`shared.redis.integration.test.ts`).
  */
 import { describe, expect, test } from 'bun:test';
+import { fixedClock } from '../platform/clock';
 import { aRecordingLogger } from '../testing/doubles';
+import { inMemoryPresenceRegistry } from './presence';
 import { aFakeLink, refusedWith } from '../testing/redis';
 import { PRESENCE_NODE_TTL_MS } from './online';
 import {
+  LAPSE_INDEX,
   ONLINE_PREFIX,
   TYPING_PREFIX,
   redisPresenceDirectory,
   redisPresenceRegistry,
 } from './redis-presence';
 
+const anOwnWindow = (): ReturnType<typeof inMemoryPresenceRegistry> =>
+  inMemoryPresenceRegistry(fixedClock(new Date('2026-09-09T12:00:00Z')));
+
 describe('typing, shared', () => {
   test('asks for the person’s window in the channel, with its length, and answers what Redis says', async () => {
     const link = aFakeLink();
     const answers = [1, 0];
     link.behaviour.script = (): unknown => answers.shift();
-    const registry = redisPresenceRegistry(link, aRecordingLogger().log);
+    const registry = redisPresenceRegistry(link, aRecordingLogger().log, anOwnWindow());
     expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(true);
     expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(false);
     expect(link.scripts[0]?.keys).toEqual([`${TYPING_PREFIX}c1:u1`]);
     expect(link.scripts[0]?.args).toEqual(['5000']);
   });
 
-  test('with Redis away the room is told: a frame too many, never a wrong answer', async () => {
+  test('with Redis away this node’s own window answers: still a frame per half window, never a flood', async () => {
     const link = aFakeLink();
     link.state.connected = false;
-    const registry = redisPresenceRegistry(link, aRecordingLogger().log);
+    const registry = redisPresenceRegistry(link, aRecordingLogger().log, anOwnWindow());
     expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(true);
+    expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(false);
+    registry.stopTyping('c1', 'u1');
     expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(true);
   });
 
   test('an answer it does not understand tells the room too', async () => {
     const link = aFakeLink();
     link.behaviour.script = (): unknown => 'x';
-    expect(await redisPresenceRegistry(link, aRecordingLogger().log).startTyping('c', 'u', 1)).toBe(
-      true,
-    );
+    expect(
+      await redisPresenceRegistry(link, aRecordingLogger().log, anOwnWindow()).startTyping(
+        'c',
+        'u',
+        1,
+      ),
+    ).toBe(true);
   });
 
   test('stopping ends the window in Redis without waiting, and a failing Redis is no error', async () => {
     const link = aFakeLink();
-    const registry = redisPresenceRegistry(link, aRecordingLogger().log);
+    const registry = redisPresenceRegistry(link, aRecordingLogger().log, anOwnWindow());
     registry.stopTyping('c1', 'u1');
     await Promise.resolve();
     expect(link.sent).toEqual([{ command: 'DEL', args: [`${TYPING_PREFIX}c1:u1`] }]);
@@ -59,9 +71,9 @@ describe('who is online, shared', () => {
     expect(await directory.join('u1')).toBe(1_700_000_000_001);
     expect(await directory.join('u1')).toBeNull();
     expect(await directory.leave('u1')).toBe(1_700_000_000_002);
-    expect(link.scripts[0]?.keys).toEqual([`${ONLINE_PREFIX}u1`]);
-    expect(link.scripts[0]?.args).toEqual(['node-a', String(PRESENCE_NODE_TTL_MS)]);
-    expect(link.scripts[2]?.args).toEqual(['node-a']);
+    expect(link.scripts[0]?.keys).toEqual([`${ONLINE_PREFIX}u1`, LAPSE_INDEX]);
+    expect(link.scripts[0]?.args).toEqual(['node-a', String(PRESENCE_NODE_TTL_MS), 'u1']);
+    expect(link.scripts[2]?.args).toEqual(['node-a', 'u1']);
   });
 
   test('among reads every key in one call and keeps the people who are online, each at their version', async () => {
@@ -95,6 +107,29 @@ describe('who is online, shared', () => {
     expect(await directory.version()).toBe(1_700_000_000_123);
     link.behaviour.send = (): unknown => 'x';
     expect(await refusedWith(directory.version())).toContain('clock');
+  });
+
+  test('release and sweep name this node, the index and the claims’ prefix; a sweep returns each person once, offline', async () => {
+    const link = aFakeLink();
+    const directory = redisPresenceDirectory(link, 'node-a');
+    link.behaviour.script = (): unknown => 1;
+    await directory.release(['u1', 'u2']);
+    expect(link.scripts.map((script) => script.keys)).toEqual([
+      [`${ONLINE_PREFIX}u1`, LAPSE_INDEX],
+      [`${ONLINE_PREFIX}u2`, LAPSE_INDEX],
+    ]);
+    expect(link.scripts[0]?.args).toEqual(['node-a', 'u1']);
+    link.behaviour.script = (): unknown => ['u1', 77, 'u2', 78];
+    expect(await directory.sweep()).toEqual([
+      { userId: 'u1', online: false, version: 77 },
+      { userId: 'u2', online: false, version: 78 },
+    ]);
+    expect(link.scripts.at(-1)?.keys).toEqual([LAPSE_INDEX]);
+    expect(link.scripts.at(-1)?.args[0]).toBe(ONLINE_PREFIX);
+    link.behaviour.script = (): unknown => ['u1'];
+    expect(await refusedWith(directory.sweep())).toContain('something else');
+    link.behaviour.script = (): unknown => [1, 2];
+    expect(await refusedWith(directory.sweep())).toContain('something else');
   });
 
   test('a Redis that is away rejects: the caller decides what that means', async () => {

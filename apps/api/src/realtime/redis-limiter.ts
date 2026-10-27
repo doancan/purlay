@@ -84,7 +84,9 @@ export const redisRateLimiter = ({
     forget: (key): void => {
       local.forget(key);
       // Best effort: the key expires by itself once it would have refilled, so a miss costs nothing.
-      link.send('DEL', [keyOf(key)]).catch(() => undefined);
+      link.send('DEL', [keyOf(key)]).catch((error: unknown) => {
+        log.debug('a bucket could not be dropped early', { limiter: name, err: error });
+      });
     },
   };
 };

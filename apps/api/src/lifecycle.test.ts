@@ -433,4 +433,25 @@ describe('what a drained process closes last (D-201)', () => {
     await closeAfterDrain(held)();
     expect(steps).toEqual(['pool', 'redis', 'pool']);
   });
+
+  test('and when the pool will not close, the connections are closed all the same', async () => {
+    let closed = false;
+    const held = {
+      services: runtimeServicesHolder(createLogger({ level: 'silent' })),
+      errorTracker: { flush: async (): Promise<boolean> => await Promise.resolve(true) },
+      database: {
+        destroy: async (): Promise<void> => {
+          await Promise.resolve();
+          throw new Error('the pool would not close');
+        },
+      },
+      redis: {
+        close: (): void => {
+          closed = true;
+        },
+      },
+    };
+    await closeAfterDrain(held)().catch(() => undefined);
+    expect(closed).toBe(true);
+  });
 });

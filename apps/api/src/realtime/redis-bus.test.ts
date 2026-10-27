@@ -194,4 +194,52 @@ describe('the shared bus', () => {
     expect(a.heard).toEqual([]);
     expect(a.bus.size()).toEqual({ topics: 0, sockets: 0 });
   });
+
+  test('a frame its publisher could not get to Redis is found by the others, whose subscriptions never dropped', async () => {
+    const { links, log } = cluster(2);
+    const publisher = links[0]!;
+    let gapsA = 0;
+    let gapsB = 0;
+    const a = nodeOn(publisher, log, () => {
+      gapsA += 1;
+    });
+    nodeOn(links[1]!, log, () => {
+      gapsB += 1;
+    });
+    const works = publisher.behaviour.send;
+    await a.bus.publish('channel:t', frame(1));
+    publisher.behaviour.send = (): unknown => {
+      throw new Error('redis is not connected');
+    };
+    await a.bus.publish('channel:t', frame(2));
+    publisher.behaviour.send = works;
+    expect([gapsA, gapsB]).toEqual([0, 0]);
+    await a.bus.publish('channel:t', frame(3));
+    // The others were told; the publisher, which delivered the lost one itself, was not.
+    expect([gapsA, gapsB]).toEqual([0, 1]);
+  });
+
+  test('frames counted in order, or from a backplane that restarted, are no hole', () => {
+    const { links, log } = cluster(1);
+    const link = links[0]!;
+    let gaps = 0;
+    nodeOn(link, log, () => {
+      gaps += 1;
+    });
+    const hear = (origin: string, seq: number): void => {
+      link.deliver(
+        BUS_CHANNEL,
+        JSON.stringify({ topic: 'channel:t', frame: frame(seq), origin, seq }),
+      );
+    };
+    hear('x', 7);
+    hear('x', 8);
+    hear('x', 9);
+    // Restarted: counting again from one.
+    hear('x', 1);
+    hear('x', 2);
+    expect(gaps).toBe(0);
+    hear('x', 4);
+    expect(gaps).toBe(1);
+  });
 });

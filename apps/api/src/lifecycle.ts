@@ -217,9 +217,13 @@ export interface HeldAfterDrain {
 export const closeAfterDrain =
   ({ push, services, errorTracker, database, redis }: HeldAfterDrain) =>
   async (): Promise<void> => {
-    await push?.flush();
-    await services.sends.flush();
-    await errorTracker.flush();
-    await database.destroy();
-    redis?.close();
+    try {
+      await push?.flush();
+      await services.sends.flush();
+      await errorTracker.flush();
+      await database.destroy();
+    } finally {
+      // Whatever above failed, the connections and their timers do not outlive the shutdown.
+      redis?.close();
+    }
   };

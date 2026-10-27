@@ -17,9 +17,10 @@
  * `PresenceDirectory` (`redis-presence.ts`) a person is online while any node holds a socket of theirs: the
  * first socket on any node tells, the last on the last node tells after the grace, and a second node
  * holding them changes nothing. Each node keeps its entries alive while it runs and they lapse by
- * themselves when it dies, so a dead node's people are read as offline within `PRESENCE_NODE_TTL_MS`
- * (told to nobody: a client reads the snapshot again at its next reconnect). A directory that cannot be
- * reached never stops a socket from opening: the node answers from what it knows itself, and says so.
+ * themselves when it dies, so a dead node's people are read as offline within `PRESENCE_NODE_TTL_MS`, and
+ * every node's renewal also sweeps: whoever finds a person whose last claim lapsed tells their co-members,
+ * once. A node that stops gives its claims up, so a deploy is told within a renewal. A directory that cannot
+ * be reached never stops a socket from opening: the node answers from what it knows itself, and says so.
  */
 import { PRESENCE_GRACE_MS, type PresenceChange } from '@purlay/types';
 import type { Clock } from '../platform/clock';
@@ -39,6 +40,13 @@ export interface PresenceDirectory {
   readonly among: (userIds: readonly string[]) => Promise<readonly PresenceChange[]>;
   /** A version every later change is larger than. */
   readonly version: () => Promise<number>;
+  /** This node is stopping: its claims are given up, and anybody it alone held is due to be told offline. */
+  readonly release: (userIds: readonly string[]) => Promise<void>;
+  /**
+   * People whose last claim lapsed and whom nobody has told of: a node that died, was stopped, or could not
+   * say they left. Each is returned once, to whoever asks first, at the version that says they are offline.
+   */
+  readonly sweep: () => Promise<readonly PresenceChange[]>;
 }
 
 /** How long a node's claim on a person lasts without being renewed, and so how stale a dead node's people are. */
@@ -97,6 +105,11 @@ export const onlinePresence = ({
   let last = 0;
   /** The largest version a snapshot was read at: every later change is larger than it. */
   let read = 0;
+  /** A version the shared record gave: this node's own, if it must make one, is larger than it. */
+  const seen = (version: number): number => {
+    last = Math.max(last, version);
+    return version;
+  };
   const next = (): number => {
     last = Math.max(last + 1, read + 1, clock.now().getTime());
     return last;
@@ -173,11 +186,28 @@ export const onlinePresence = ({
             log.debug('presence could not be renewed', { userId, err: error });
             return;
           }
-          if (joined !== null && online.has(userId))
-            tell({ userId, online: true, version: joined });
+          if (joined !== null && online.has(userId)) {
+            tell({ userId, online: true, version: seen(joined) });
+          }
         });
       }
+      sweepLapsed();
       cancelRenewal = after(timers, DIRECTORY_RENEW_MS, renew);
+    };
+    /** Tells of people nobody held any longer and nobody told of: a node died, or stopped, or could not say. */
+    const sweepLapsed = (): void => {
+      const swept: Promise<void> = directory
+        .sweep()
+        .then((gone) => {
+          for (const change of gone) tell({ ...change, version: seen(change.version) });
+        })
+        .catch((error: unknown) => {
+          log.debug('presence could not be swept', { err: error });
+        })
+        .finally(() => {
+          running.delete(swept);
+        });
+      running.add(swept);
     };
     cancelRenewal = after(timers, DIRECTORY_RENEW_MS, renew);
   }
@@ -211,7 +241,7 @@ export const onlinePresence = ({
           });
           joined = version;
         }
-        if (joined !== null) tell({ userId, online: true, version: joined });
+        if (joined !== null) tell({ userId, online: true, version: seen(joined) });
         await Promise.resolve();
       });
     },
@@ -238,7 +268,7 @@ export const onlinePresence = ({
             });
             return;
           }
-          if (left !== null) tell({ userId, online: false, version: left });
+          if (left !== null) tell({ userId, online: false, version: seen(left) });
           await Promise.resolve();
         });
       });
@@ -268,12 +298,18 @@ export const onlinePresence = ({
         return read;
       };
       if (directory === undefined) return local();
-      return directory.version().catch((error: unknown) => {
-        log.warn('presence could not reach the shared record; versioning from this node', {
-          err: error,
+      return directory
+        .version()
+        .then((version) => {
+          read = Math.max(read, version);
+          return seen(version);
+        })
+        .catch((error: unknown) => {
+          log.warn('presence could not reach the shared record; versioning from this node', {
+            err: error,
+          });
+          return local();
         });
-        return local();
-      });
     },
 
     stop: (): void => {
@@ -283,6 +319,20 @@ export const onlinePresence = ({
       for (const cancel of retries) cancel();
       retries.clear();
       cancelRenewal();
+      if (directory !== undefined && online.size > 0) {
+        // The claims of a node that is going are given up, so the room is told within a sweep, not a lapse.
+        const released: Promise<void> = directory
+          .release([...online.keys()])
+          .catch((error: unknown) => {
+            log.warn('presence claims could not be released; they lapse by themselves', {
+              err: error,
+            });
+          })
+          .finally(() => {
+            running.delete(released);
+          });
+        running.add(released);
+      }
     },
 
     settled: async (): Promise<void> => {
