@@ -10,6 +10,8 @@ import { fixedClock } from '../../platform/clock';
 import { NOW, aRecordingLogger, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { userTopic, type EventBus } from '../../platform/events';
+import { joinByInvitation } from './invitations';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -72,6 +74,71 @@ describe('integration: invitations over HTTP', () => {
         memberships: { workspace: { id: string } }[];
       };
       expect(me.memberships.map((m) => m.workspace.id)).toEqual([workspaceId]);
+    });
+  });
+
+  test('joining refreshes every workspace member, once, and tells no outsider', async () => {
+    await withRollback(async (db) => {
+      const told: string[] = [];
+      const base = testDependencies({ database: db, clock });
+      const bus: EventBus = {
+        publish: (topic, frame): Promise<void> => {
+          if (frame.event === 'WORKSPACE_UPDATED') told.push(topic);
+          return Promise.resolve();
+        },
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      };
+      const call = caller(db);
+      const { owner, workspaceId, token } = await aLink(db, call, 'ih-live-members');
+      const newcomer = await aSignedInUser(db, clock, 'ih-live-newcomer');
+      const outsider = await aSignedInUser(db, clock, 'ih-live-outsider');
+      const request = new Request(`${ORIGIN}/api/invitations/accept`, {
+        method: 'POST',
+        headers: { cookie: newcomer.cookie },
+      });
+      expect(await joinByInvitation({ ...base, bus }, request, { token })).toMatchObject({
+        workspace: { id: workspaceId },
+        role: 'member',
+      });
+      expect(told.sort()).toEqual([userTopic(owner.userId), userTopic(newcomer.userId)].sort());
+      expect(told).not.toContain(userTopic(outsider.userId));
+      told.splice(0);
+      await joinByInvitation({ ...base, bus }, request, { token });
+      expect(told).toEqual([]);
+      const failure: unknown = await joinByInvitation({ ...base, bus }, request, {
+        token: 'f'.repeat(64),
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(failure).toMatchObject({ body: { code: 'INVITATION_NOT_FOUND' } });
+      expect(told).toEqual([]);
+    });
+  });
+
+  test('a publication failure does not turn an accepted invitation into an error', async () => {
+    await withRollback(async (db) => {
+      const base = testDependencies({ database: db, clock });
+      const bus: EventBus = {
+        publish: (): Promise<void> => Promise.reject(new Error('bus unavailable')),
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      };
+      const call = caller(db);
+      const { workspaceId, token } = await aLink(db, call, 'ih-publish-failure');
+      const newcomer = await aSignedInUser(db, clock, 'ih-publish-newcomer');
+      const response = await joinByInvitation(
+        { ...base, bus },
+        new Request(`${ORIGIN}/api/invitations/accept`, {
+          method: 'POST',
+          headers: { cookie: newcomer.cookie },
+        }),
+        { token },
+      );
+      expect(response).toMatchObject({ workspace: { id: workspaceId }, role: 'member' });
     });
   });
 

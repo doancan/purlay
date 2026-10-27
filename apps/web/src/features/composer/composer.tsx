@@ -519,7 +519,7 @@ const Inner = ({
     <button
       type="button"
       onClick={send}
-      aria-disabled={empty}
+      aria-disabled={empty && uploads.items.length === 0}
       aria-label={t('composer.send')}
       className={cn(
         'inline-flex h-control shrink-0 items-center justify-center gap-2 rounded-md bg-accent text-label font-medium text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:h-touch',

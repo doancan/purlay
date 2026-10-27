@@ -35,3 +35,7 @@ A spike that only reports "it works" has not been written down. (D-57)
 | [`cross-browser.md`](cross-browser.md) | 2026-10-13 | WebKit passes 124 of 132 and Firefox (on Linux) 126 of 132; every failure is the engine's or the harness's — Tab past the last element, no `first-paint`, a synthetic paste, offline emulation, CDP — no product defect |
 | [`nodemailer.md`](nodemailer.md) | 2026-10-14 | Sends in order and UTF-8, honours its timeout, refuses a server without STARTTLS when told to — and the first run said otherwise because its script was never type-checked |
 | [`resources.md`](resources.md) | 2026-10-15 | Every container bounded at several times its measured memory; Garage's fsync costs 2.5 ms at p95 and is on |
+
+## Product journey audits
+
+- [First-use journey](first-use-journey.md), 2026-10-27: Two first-use defects reproduced and fixed; 30 browser cases and the fresh two-person journey now pass, with targeted regressions.

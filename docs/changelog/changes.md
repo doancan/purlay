@@ -45,6 +45,9 @@ have it.
 
 ### Fixed
 
+- **Workspace** — A newly invited member appears in already-open member lists and can be added to a channel without reloading (D-115, D-124)
+- **Files** — A ready attachment enables Send even with no message text, including on touch-only devices (D-109)
+
 - **Messages** — A history, thread, open-questions or search request with a query it does not know, a repeated parameter or a `limit` such as `0x10` is refused instead of answered as the first page
 - **Messages** — A download's file name is encoded whole, so a name holding `'`, `(`, `)` or `*` reads back as it was
 - **Operations** — A request turned away at the edge (too large, wrong type, cross-site, client too old) is written to the log under its request id, and a sign-in library answer is logged with the status it went out with

@@ -22,6 +22,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aUserRow } from '../../testing/users';
 import {
   acceptInvitation as acceptIn,
+  type AcceptedInvitation,
   createInvitation as createIn,
   listInvitations,
   previewInvitation,
@@ -29,7 +30,7 @@ import {
 } from './invitations';
 import { changeRole, removeMember } from './members';
 import type { Clock } from '../../platform/clock';
-import type { CreatedInvitation, Membership } from '@purlay/types';
+import type { CreatedInvitation } from '@purlay/types';
 import { requireChannelById } from '../../platform/channels';
 
 /** The writing services take a transaction (#232); inside the harness's, one joins it. */
@@ -54,7 +55,7 @@ const acceptInvitation = async (
   clock: Clock,
   userId: string,
   token: string,
-): Promise<Membership> =>
+): Promise<AcceptedInvitation> =>
   await atomicallyOn(db)(async (transaction) => await acceptIn(transaction, clock, userId, token));
 
 const TTL_MS = INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -219,7 +220,7 @@ describe('integration: joining by a link', () => {
         .where('user_id', '=', already)
         .execute();
 
-      const joined = await acceptInvitation(db, clock, already, made.token);
+      const { membership: joined } = await acceptInvitation(db, clock, already, made.token);
       expect(joined.workspace.id).toBe(room.workspaceId);
       expect(joined.role).toBe('member');
     });
@@ -237,7 +238,7 @@ describe('integration: joining by a link', () => {
         await removeMember(transaction, clock, await as(db, other, 'in-otherowner17'), person);
       });
 
-      expect((await acceptInvitation(db, clock, person, made.token)).workspace.id).toBe(
+      expect((await acceptInvitation(db, clock, person, made.token)).membership.workspace.id).toBe(
         room.workspaceId,
       );
     });
@@ -255,7 +256,7 @@ describe('integration: joining by a link', () => {
         expiresAt: made.invitation.expiresAt,
         member: false,
       });
-      const joined = await acceptInvitation(db, clock, stranger.userId, made.token);
+      const { membership: joined } = await acceptInvitation(db, clock, stranger.userId, made.token);
       expect(joined).toMatchObject({ workspace: { id: room.workspaceId }, role: 'member' });
       expect((await previewInvitation(db, clock, stranger.userId, made.token)).member).toBe(true);
       expect(
@@ -279,9 +280,13 @@ describe('integration: joining by a link', () => {
 
       const first = await acceptInvitation(db, clock, stranger.userId, made.token);
       clock.advance(1_000);
-      expect(await acceptInvitation(db, clock, stranger.userId, made.token)).toEqual(first);
+      const repeated = await acceptInvitation(db, clock, stranger.userId, made.token);
+      expect(repeated.membership).toEqual(first.membership);
+      expect([...first.memberIds].sort()).toEqual([owner.userId, stranger.userId].sort());
+      expect(repeated.memberIds).toEqual([]);
       expect(await acceptInvitation(db, clock, owner.userId, made.token)).toMatchObject({
-        role: 'owner',
+        membership: { role: 'owner' },
+        memberIds: [],
       });
       const joins = (await auditOf(db, room.workspaceId)).filter(
         (row) => row.action === 'member.joined',
@@ -299,7 +304,9 @@ describe('integration: joining by a link', () => {
       const onTime = await aUserRow(db, 'in-ontime7');
 
       clock.advance(TTL_MS - 1);
-      expect((await acceptInvitation(db, clock, onTime.userId, made.token)).role).toBe('member');
+      expect((await acceptInvitation(db, clock, onTime.userId, made.token)).membership.role).toBe(
+        'member',
+      );
       clock.advance(1);
       expect(await refusal(previewInvitation(db, clock, late.userId, made.token))).toBe(
         'INVITATION_NOT_FOUND',
@@ -357,7 +364,7 @@ describe('integration: joining by a link', () => {
         await atomicallyOn(db)(
           async (transaction) => await acceptIn(transaction, clock, stranger.userId, made.token),
         )
-      ).role;
+      ).membership.role;
 
     expect(await Promise.all([join(), join()])).toEqual(['member', 'member']);
     const rows = await db
@@ -416,7 +423,9 @@ describe('integration: joining by a link', () => {
         'INVITATION_NOT_FOUND',
       );
       const fresh = await createInvitation(db, clock, owner);
-      expect((await acceptInvitation(db, clock, person.userId, fresh.token)).role).toBe('member');
+      expect((await acceptInvitation(db, clock, person.userId, fresh.token)).membership.role).toBe(
+        'member',
+      );
     });
   });
 });

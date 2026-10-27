@@ -88,6 +88,22 @@ test.describe('the first run', () => {
     await second.getByRole('button', { name: 'Join 1 channel' }).click();
     await expect(second).toHaveURL(new RegExp(`${general}$`));
 
+    // The founder already cached the workspace's member list before the invitee joined.
+    // Add that genuinely new member without a reload or a visit to the members screen.
+    const channelName = `first-team-${suffix}`;
+    await (await openNav(first)).getByRole('button', { name: 'New channel' }).click();
+    await first.getByLabel('Name', { exact: true }).fill(channelName);
+    await first.getByRole('button', { name: 'Create channel' }).click();
+    await expect(first.getByRole('heading', { name: channelName, exact: true })).toBeVisible();
+    await first.getByRole('button', { name: 'Add people' }).click();
+    const people = first.getByRole('dialog', { name: `Add people to ${channelName}` });
+    await people.getByLabel('Find a person').fill(joiner.username);
+    await people.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(people.getByRole('button', { name: 'Added' })).toBeDisabled();
+    await first.keyboard.press('Escape');
+    await first.goto(general);
+    await expect(composer(first)).toBeVisible();
+
     // ── The second writes; the first sees it, live ───────────────────────────────────────────────
     const words = `hello from the second person ${suffix}`;
     await composer(second).fill(words);
