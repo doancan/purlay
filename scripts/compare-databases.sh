@@ -24,9 +24,11 @@ USAGE="usage: compare-databases.sh <database> <database> | --snapshot <database>
 summary() { # <database>
   local db="$1" table
   for table in $tables; do
+    # A table that cannot be read is a MISSING line, never the error's text: that would be taken for
+    # a table of its own, and a snapshot would record it as the state to be matched.
     in_postgres psql -U "$DB_USER" -d "$db" -Atc \
       "select '$table', count(*), md5(coalesce(string_agg(t::text, E'\n' order by t::text), '')) from \"$table\" t" \
-      2>&1 || echo "$table|MISSING|MISSING"
+      2>/dev/null || echo "$table|MISSING|MISSING"
   done
   in_postgres psql -U "$DB_USER" -d "$db" -Atc \
     "select 'indexes', count(*), '' from pg_indexes where schemaname = 'public'
@@ -43,7 +45,12 @@ catalogue_tables() { # <database>
 case "${1:-}" in
   --snapshot)
     tables="$(catalogue_tables "${2:?$USAGE}")"
-    summary "$2"
+    taken="$(summary "$2")"
+    # What is written down is what later restores are held to: one that could not be read is no snapshot.
+    if printf '%s\n' "$taken" | grep -F 'MISSING' >/dev/null; then
+      die "a table of $2 could not be read; there is no snapshot to take ($(printf '%s\n' "$taken" | grep -F 'MISSING' | cut -d'|' -f1 | tr '\n' ' '))"
+    fi
+    printf '%s\n' "$taken"
     exit 0
     ;;
   --against)
@@ -73,7 +80,9 @@ while IFS='|' read -r name count sum; do
   printf '%-26s %12s  %-32s  %s\n' "$name" "$count" "$sum" "$verdict"
 done <<<"$left"
 # A table the other side has and the snapshot never listed is a difference too.
-extra="$(comm -13 <(printf '%s\n' "$left" | cut -d'|' -f1 | sort) <(in_postgres psql -U "$DB_USER" -d "$B" -Atc "select tablename from pg_tables where schemaname = 'public'" | sort))"
+present="$(in_postgres psql -U "$DB_USER" -d "$B" -Atc "select tablename from pg_tables where schemaname = 'public'")" \
+  || die "could not list the tables of $B"
+extra="$(comm -13 <(printf '%s\n' "$left" | cut -d'|' -f1 | sort) <(printf '%s\n' "$present" | sort))"
 if [ -n "$extra" ]; then
   echo "tables only in $B: $(echo "$extra" | tr '\n' ' ')" >&2
   status=1

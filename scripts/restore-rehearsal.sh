@@ -96,7 +96,13 @@ BACKUP="$(scripts/backup.sh "$OUT" | tail -n 1)"
 [ -f "$BACKUP/bucket/manifest.json" ] || { echo "the backup has no bucket" >&2; ls -R "$BACKUP" >&2; exit 1; }
 # Archiving is off, so no base backup: the nightly dump of a self-hoster who never asked for more.
 [ ! -e "$BACKUP/base.tar.gz" ] || { echo "a base backup was taken with archiving off" >&2; exit 1; }
-scripts/check-backup.sh "$OUT" --wal
+scripts/check-backup.sh "$OUT"
+# --wal says the operator relies on archiving, and archiving is off: that is a failure, not a pass.
+if scripts/check-backup.sh "$OUT" --wal >"$WORK/wal-off.out" 2>&1; then
+  echo "check-backup --wal passed on a database that does not archive" >&2
+  exit 1
+fi
+grep -q "ARCHIVING IS OFF" "$WORK/wal-off.out" || { cat "$WORK/wal-off.out" >&2; exit 1; }
 if scripts/restore-pitr.sh "$BACKUP" --to '2026-10-27 12:00:00+00' --archive "$WORK" --into "$WORK/nopitr" >"$WORK/nopitr.out" 2>&1; then
   echo "a point-in-time restore went ahead from a backup that has no base backup" >&2
   exit 1
@@ -218,11 +224,12 @@ echo "== point-in-time: archiving is switched on and the database restarts"
   echo "WAL_ARCHIVE=on"
   echo "WAL_ARCHIVE_TIMEOUT=$ARCHIVE_SECONDS"
 } >>"$ENV_FILE"
+# The API stays down for the whole of this phase: a row it wrote between the snapshot and the noted
+# time would be a difference the recovery was right to have.
 compose stop api
 compose up -d --wait postgres
 [ "$(pg -c 'show archive_mode')" = on ] || { echo "archiving did not switch on" >&2; compose logs postgres >&2; exit 1; }
 [ "$(pg -c 'show archive_timeout')" = "${ARCHIVE_SECONDS}s" ] || { echo "archive_timeout is not what the env file says" >&2; exit 1; }
-compose up -d --wait api
 
 echo "== a backup with archiving on holds a base backup, checked and checksummed"
 PITR_BACKUP="$(scripts/backup.sh "$WORK/pitr-backups" | tail -n 1)"
@@ -246,16 +253,23 @@ pg -c "update pitr_probe set note = 'edited after' where id % 50 = 0"
 pg -c "delete from pitr_probe where id between 100 and 120"
 pg -c "drop table pitr_probe"
 pg -c "create table pitr_probe (id int primary key, batch text not null, note text not null)"
-COMMITTED="$(pg -c "select clock_timestamp()")"
+# A few closed segments of the archive, so that a gap in the middle of it can be made below.
+for tail in 1 2 3; do
+  pg -c "insert into pitr_probe values ($((1000 + tail)), 'C', 'tail $tail')"
+  pg -c "select pg_switch_wal()" >/dev/null
+done
+scripts/compare-databases.sh --snapshot purlay >"$WORK/at-the-end.txt"
+# The segment the newest commit is in, and so what has to reach the archive for it to be safe.
+COMMITTED_WAL="$(pg -c "select pg_walfile_name(pg_current_wal_insert_lsn())")"
 
 # What the database could lose: the time between the last commit and the segment that holds it being
 # in the archive. PostgreSQL closes a segment after archive_timeout seconds of activity, so it is
 # bounded by that, which is what the documented RPO is.
-echo "== the newest commit reaches the archive within archive_timeout"
+echo "== the segment holding the newest commit reaches the archive within archive_timeout (and ten seconds to copy it)"
 RPO_STARTED=$SECONDS
-until [ "$(pg -c "select last_archived_time > '$COMMITTED'::timestamptz from pg_stat_archiver")" = t ]; do
-  [ $((SECONDS - RPO_STARTED)) -le $((ARCHIVE_SECONDS * 4)) ] \
-    || { echo "the newest commit was not archived within four times archive_timeout" >&2; pg -c 'select * from pg_stat_archiver' >&2; exit 1; }
+until [ "$(pg -c "select coalesce(last_archived_wal collate \"C\" >= '$COMMITTED_WAL', false) from pg_stat_archiver")" = t ]; do
+  [ $((SECONDS - RPO_STARTED)) -le $((ARCHIVE_SECONDS + 10)) ] \
+    || { echo "the segment holding the newest commit was not archived within archive_timeout and ten seconds" >&2; pg -c 'select * from pg_stat_archiver' >&2; exit 1; }
   sleep 1
 done
 RPO_SECONDS=$((SECONDS - RPO_STARTED))
@@ -271,6 +285,7 @@ SOURCE="$(wal_archive_source)"
 docker run --rm --user root -v "$SOURCE:/from:ro" -v "$SHIPPED:/to" --entrypoint sh "$DB_IMAGE" -c \
   "cp -a /from/. /to/ && chown -R $(id -u):$(id -g) /to"
 SHIPPED_COUNT="$(find "$SHIPPED" -name '*.gz' | wc -l | tr -d ' ')"
+echo "shipped: $(find "$SHIPPED" -name '*.gz' | sort | xargs -n1 basename | tr '\n' ' ')"
 [ "$SHIPPED_COUNT" -gt 1 ] || { echo "the shipped archive holds $SHIPPED_COUNT segments" >&2; exit 1; }
 # Nothing may be left of the archive's disk.
 compose down --volumes
@@ -281,13 +296,13 @@ if scripts/restore-pitr.sh "$PITR_BACKUP" --to '2026-10-27 12:00:00' --archive "
   echo "a time without a zone was accepted" >&2
   exit 1
 fi
-grep -q 'not a time with a zone' "$WORK/refused-1.out" || { cat "$WORK/refused-1.out" >&2; exit 1; }
+grep -q 'not a time with a zone' "$WORK/refused-1.out" || { echo "refused-1 was refused for another reason:" >&2; cat "$WORK/refused-1.out" >&2; exit 1; }
 
 if scripts/restore-pitr.sh "$PITR_BACKUP" --to '2000-01-01 00:00:00+00' --archive "$SHIPPED" --into "$WORK/refused-2" >"$WORK/refused-2.out" 2>&1; then
   echo "a time before the base backup was complete was accepted" >&2
   exit 1
 fi
-grep -q 'before the base backup was complete' "$WORK/refused-2.out" || { cat "$WORK/refused-2.out" >&2; exit 1; }
+grep -q 'before the base backup was complete' "$WORK/refused-2.out" || { echo "refused-2 was refused for another reason:" >&2; cat "$WORK/refused-2.out" >&2; exit 1; }
 [ ! -e "$WORK/refused-2" ] || { echo "a refused restore left its directory" >&2; exit 1; }
 
 # The segments after the base backup are missing: the archive ends before the noted time.
@@ -299,7 +314,30 @@ if scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$WORK/archive
   echo "a recovery went ahead on an archive that does not reach the time" >&2
   exit 1
 fi
-grep -q 'archive ends before' "$WORK/refused-3.out" || { cat "$WORK/refused-3.out" >&2; exit 1; }
+grep -q 'archive ends before' "$WORK/refused-3.out" || { echo "refused-3 was refused for another reason:" >&2; cat "$WORK/refused-3.out" >&2; exit 1; }
+
+# A segment missing from the MIDDLE of the archive: --to latest must not call the shorter history a recovery.
+cp -R "$SHIPPED" "$WORK/archive-gap"
+# The segment right after the one the base backup began in.
+SECOND="$(find "$WORK/archive-gap" -name '[0-9A-F]*.gz' ! -name '*.backup.gz' | sort | grep -A1 "$START_WAL" | tail -n 1)"
+[ -n "$SECOND" ] && [ "$(basename "$SECOND" .gz)" != "$START_WAL" ] || { echo "the shipped archive has no segment after the one the base backup began in" >&2; exit 1; }
+rm -f "$SECOND"
+if scripts/restore-pitr.sh "$PITR_BACKUP" --to latest --archive "$WORK/archive-gap" --into "$WORK/refused-5" >"$WORK/refused-5.out" 2>&1; then
+  echo "--to latest went ahead on an archive with a segment missing from the middle" >&2
+  exit 1
+fi
+grep -q 'archive holds up to' "$WORK/refused-5.out" || { echo "refused-5 was refused for another reason:" >&2; cat "$WORK/refused-5.out" >&2; exit 1; }
+
+# A damaged segment: it would read to the server as the end of the archive.
+cp -R "$SHIPPED" "$WORK/archive-damaged"
+# The segment right after the one the base backup began in.
+SECOND="$(find "$WORK/archive-damaged" -name '[0-9A-F]*.gz' ! -name '*.backup.gz' | sort | grep -A1 "$START_WAL" | tail -n 1)"
+head -c 40 "$SECOND" >"$SECOND.cut" && mv "$SECOND.cut" "$SECOND"
+if scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$WORK/archive-damaged" --into "$WORK/refused-6" >"$WORK/refused-6.out" 2>&1; then
+  echo "a recovery went ahead on an archive with a damaged segment" >&2
+  exit 1
+fi
+grep -q 'damaged' "$WORK/refused-6.out" || { echo "refused-6 was refused for another reason:" >&2; cat "$WORK/refused-6.out" >&2; exit 1; }
 
 cp -R "$SHIPPED" "$WORK/archive-headless"
 rm -f "$WORK/archive-headless/$START_WAL.gz"
@@ -307,7 +345,7 @@ if scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$WORK/archive
   echo "a recovery went ahead on an archive without its starting segment" >&2
   exit 1
 fi
-grep -q 'does not hold' "$WORK/refused-4.out" || { cat "$WORK/refused-4.out" >&2; exit 1; }
+grep -q 'does not hold' "$WORK/refused-4.out" || { echo "refused-4 was refused for another reason:" >&2; cat "$WORK/refused-4.out" >&2; exit 1; }
 [ -z "$(docker ps -a -q --filter 'name=purlay-pitr-')" ] || { echo "a refused restore left a container behind" >&2; exit 1; }
 
 echo "== recover to $NOTED, from the base backup and the shipped archive, into a new instance"
@@ -316,6 +354,10 @@ scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$SHIPPED" --expe
 RESTORE_SECONDS=$((SECONDS - RESTORE_STARTED))
 [ -z "$(docker ps -a -q --filter 'name=purlay-pitr-')" ] || { echo "the recovery left a container behind" >&2; exit 1; }
 [ -z "$(docker volume ls -q --filter 'name=purlay-pitr-')" ] || { echo "the recovery left a volume behind" >&2; exit 1; }
+
+echo "== --to latest recovers everything the archive holds: the state at the end, tail rows included"
+scripts/restore-pitr.sh "$PITR_BACKUP" --to latest --archive "$SHIPPED" --expect "$WORK/at-the-end.txt" --into "$WORK/pitr-latest" >/dev/null
+[ -z "$(docker ps -a -q --filter 'name=purlay-pitr-')" ] || { echo "the recovery left a container behind" >&2; exit 1; }
 
 echo "== applying it: the rebuilt stack takes the recovered database through the ordinary restore"
 compose up -d --wait postgres garage
@@ -329,4 +371,4 @@ compose up -d --wait api
 
 result "restore rehearsal: logical restore of database and bucket after a total loss took ${LOGICAL_SECONDS} s"
 result "restore rehearsal: point-in-time restore to a noted time took ${RESTORE_SECONDS} s (shipped archive of ${SHIPPED_COUNT} segments, base backup of $(wc -c <"$PITR_BACKUP/base.tar.gz" | tr -d ' ') bytes)"
-result "restore rehearsal: the newest commit was in the archive ${RPO_SECONDS} s after it was made (archive_timeout ${ARCHIVE_SECONDS} s)"
+result "restore rehearsal: the segment holding the newest commit was in the archive ${RPO_SECONDS} s after the commit (archive_timeout ${ARCHIVE_SECONDS} s)"

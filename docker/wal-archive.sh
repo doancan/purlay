@@ -39,6 +39,9 @@ partial="$archive/.$name.$$.partial"
 trap 'rm -f "$partial"' EXIT
 gzip -c "$source_file" >"$partial"
 gzip -t "$partial"
+# The data is on disk before the name that makes it a segment exists: a power cut must not leave a
+# name on a file that is empty or short, which the next attempt would refuse as "a different file".
+sync
 # Atomic, and fails if the name appeared in the meantime.
 ln "$partial" "$target"
 # The directory entry is on disk before PostgreSQL is told it may recycle the segment.

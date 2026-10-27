@@ -22,12 +22,12 @@ compose() {
 }
 
 # `psql`/`pg_dump`/`pg_restore` inside the database container, so their version is
-# the server's and nothing needs installing on the host. POSTGRES_CONTAINER names a plain
+# the server's and nothing needs installing on the host. PURLAY_POSTGRES_CONTAINER names a plain
 # container instead (the instance scripts/restore-pitr.sh recovers into, D-202), so the
 # comparison tooling can judge a database that is not the stack's.
 in_postgres() {
-  if [ -n "${POSTGRES_CONTAINER:-}" ]; then
-    docker exec -i "$POSTGRES_CONTAINER" "$@"
+  if [ -n "${PURLAY_POSTGRES_CONTAINER:-}" ]; then
+    docker exec -i "$PURLAY_POSTGRES_CONTAINER" "$@"
   else
     compose exec -T postgres "$@"
   fi

@@ -7,11 +7,15 @@
 #
 # The newest purlay-<time> directory that holds a database.dump and a SHA256SUMS is judged by the
 # time in its NAME, not its modification time (a copy, a rsync or a restore of the directory changes
-# that). Default limit: 26 hours — a nightly backup plus the two hours a slow night may take.
+# that), and its files are read back against SHA256SUMS: a backup that is the right age and cannot be
+# restored is not a backup. Default limit: 26 hours — a nightly backup plus the two hours a slow night
+# may take. A name in the future, or not a real date, is a failure, never the newest.
 #
-# --wal also asks the database about archiving: when it is on, the newest backup must hold a base
-# backup, and the archiver must not be failing right now (its last failure no later than its last
-# success). Archiving off is reported, and is not a failure: it is the default.
+# --wal says "I rely on point-in-time recovery" and asks the database about it: archiving must be ON
+# (a stack recreated without its env file runs with it off and nothing else would say so), the newest
+# backup must hold a base backup named in its sums, the archiver must not be failing right now, and no
+# segment may have waited more than 15 minutes to be archived (a hung archive_command fails nothing
+# and succeeds at nothing, and pg_wal fills the data disk). Without --wal archiving is not looked at.
 #
 # Environment (for --wal only): COMPOSE_FILE, ENV_FILE (see ops-common.sh).
 set -euo pipefail
@@ -53,25 +57,35 @@ for candidate in "$DIR"/purlay-*; do
   [ -d "$candidate" ] || continue
   name="$(basename "$candidate")"
   [[ "$name" =~ ^purlay-[0-9]{8}T[0-9]{6}Z$ ]] || continue
+  # A real calendar date and clock time: `epoch_of` would turn month 99 into some day, silently.
+  stamp="${name#purlay-}"
+  month=$((10#${stamp:4:2})); day=$((10#${stamp:6:2})); hour=$((10#${stamp:9:2})); minute=$((10#${stamp:11:2})); second=$((10#${stamp:13:2}))
+  { [ "$month" -ge 1 ] && [ "$month" -le 12 ] && [ "$day" -ge 1 ] && [ "$day" -le 31 ] && [ "$hour" -le 23 ] && [ "$minute" -le 59 ] && [ "$second" -le 60 ]; } || continue
   [ -s "$candidate/database.dump" ] && [ -s "$candidate/SHA256SUMS" ] || continue
   if [ -z "$newest" ] || [[ "$name" > "$newest" ]]; then newest="$name"; fi
 done
 [ -n "$newest" ] || die "BACKUP MISSING: no complete backup (database.dump and SHA256SUMS) in $DIR"
 
 age=$(($(date -u +%s) - $(epoch_of "${newest#purlay-}")))
+# Five minutes of clock skew between this host and whatever made the name; more is a name nobody made.
+[ "$age" -ge -300 ] || die "BACKUP NAME IN THE FUTURE: $newest is dated after now. A wrong clock, or a directory that is not a backup of this host; it is not trusted, and neither is the check until it is gone"
 hours=$((age / 3600))
 [ "$age" -le $((MAX_HOURS * 3600)) ] || die "BACKUP STALE: the newest backup in $DIR is $newest, $hours hours old; the limit is $MAX_HOURS. Is the cron line running, and what does its log say?"
-echo "backup ok: $newest, $hours hours old (limit $MAX_HOURS)"
+(cd "$DIR/$newest" && sha256_check -c SHA256SUMS >/dev/null 2>&1) || die "BACKUP DAMAGED: $newest does not match its SHA256SUMS (a file is missing, changed or truncated)"
+echo "backup ok: $newest, $hours hours old (limit $MAX_HOURS), checksums match"
 
 if [ "$WAL" = 1 ]; then
   archiving="$(in_postgres psql -U "$DB_USER" -d postgres -Atc 'show archive_mode')" || die "could not ask the database about archiving"
-  if [ "$archiving" = on ]; then
-    [ -s "$DIR/$newest/base.tar.gz" ] || die "WAL archiving is on but the newest backup, $newest, has no base backup: point-in-time recovery cannot start from it"
-    failing="$(in_postgres psql -U "$DB_USER" -d postgres -Atc "select last_failed_time is not null and (last_archived_time is null or last_failed_time > last_archived_time) from pg_stat_archiver")" \
-      || die "could not read pg_stat_archiver"
-    [ "$failing" != t ] || die "WAL ARCHIVING IS FAILING: the last attempt failed and none has succeeded since (select * from pg_stat_archiver). pg_wal is filling the database's disk; fix the archive, or set WAL_ARCHIVE=off to stop it"
-    echo "wal ok: archiving is on, the newest backup has a base backup, and the archiver is not failing"
-  else
-    echo "wal: archiving is off (point-in-time recovery is not in use)"
-  fi
+  case "$archiving" in on | always) ;; *) die "WAL ARCHIVING IS OFF but --wal says it is relied on: WAL_ARCHIVE is not on in the running database (the env file lost it? the stack recreated without it?). No base backup is being made and no segment kept" ;; esac
+  [ -s "$DIR/$newest/base.tar.gz" ] && [ -s "$DIR/$newest/base.meta" ] \
+    || die "WAL archiving is on but the newest backup, $newest, has no base backup: point-in-time recovery cannot start from it"
+  grep -F -e './base.tar.gz' -e './base.meta' "$DIR/$newest/SHA256SUMS" >/dev/null \
+    || die "the newest backup's base backup is not in its SHA256SUMS"
+  failing="$(in_postgres psql -U "$DB_USER" -d postgres -Atc "select coalesce(last_failed_time is not null and (last_archived_time is null or last_failed_time > last_archived_time), false) from pg_stat_archiver")" \
+    || die "could not read pg_stat_archiver"
+  [ "$failing" = f ] || die "WAL ARCHIVING IS FAILING: the last attempt failed and none has succeeded since (select * from pg_stat_archiver). pg_wal is filling the database's disk; fix the archive, or set WAL_ARCHIVE=off to stop it"
+  waiting="$(in_postgres psql -U "$DB_USER" -d postgres -Atc "select count(*) from pg_ls_archive_statusdir() where name like '%.ready' and modification < now() - interval '15 minutes'")" \
+    || die "could not read the archive status directory"
+  [ "$waiting" = 0 ] || die "WAL ARCHIVING IS STALLED: $waiting segments have waited more than 15 minutes to be archived (a hung mount? a full disk?). pg_wal is filling the database's disk"
+  echo "wal ok: archiving is on, the newest backup has a base backup, the archiver is not failing and nothing waits"
 fi

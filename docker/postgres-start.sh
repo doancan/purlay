@@ -20,8 +20,12 @@ case "${WAL_ARCHIVE:-off}" in
     archive="${WAL_ARCHIVE_DIR:-/wal-archive}"
     [ -d "$archive" ] || { echo "WAL_ARCHIVE=on but $archive is not mounted" >&2; exit 1; }
     # A volume or a directory made by root: the server runs as postgres and must be able to write it.
-    chown postgres:postgres "$archive" && chmod 750 "$archive" \
-      || { echo "cannot hand $archive to the postgres user; archiving would fail on every segment" >&2; exit 1; }
+    # A mount that cannot be chowned (an NFS export with root_squash) may still be writable by the
+    # postgres user as it is: say so and go on; if it is not, every archive attempt fails, loudly, and
+    # scripts/check-backup.sh --wal says so.
+    if ! { chown postgres:postgres "$archive" && chmod 750 "$archive"; }; then
+      echo "warning: could not hand $archive to the postgres user; archiving works only if it is already writable by it" >&2
+    fi
     set -- "$@" \
       -c archive_mode=on \
       -c 'archive_command=sh /usr/local/bin/purlay-wal-archive.sh "%p" "%f"' \
