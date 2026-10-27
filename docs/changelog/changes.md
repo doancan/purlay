@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Operations** — A hosted deployment of several nodes shares one Redis, set with `REDIS_URL`: a message, a sign-out, who is online and who is typing reach every node, and a person's write limit is one limit across them. A Redis that goes away is degraded service, not an outage. Without `REDIS_URL` nothing changes and nothing connects (D-201)
 - **Sign-in** — A server can be connected to the organisation's OpenID Connect provider (Okta, Entra ID, Keycloak and the like) in Administration → Server or by `OIDC_ISSUER`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`: people sign in with it beside GitHub and email, and it is linked to an existing account only when both the provider and that account's address are verified (D-200)
 - **Native app** — A person signs in to the macOS application in their browser and authorises it with one click; it gets a session of its own (D-191)
 - **Native app** — The server says which client versions it still serves and where to get a newer one, and refuses an older one with a clear answer (D-190)
