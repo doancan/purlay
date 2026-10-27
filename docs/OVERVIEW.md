@@ -147,8 +147,8 @@ browser, not a second codebase. (`DECISIONS.md` D-51, D-186)
 
 **Phase 1 — MVP.** Phase 0, the walking skeleton, is behind it.
 
-Exit criterion: S-1 (`PRD.md` §3) — the owner's team stops opening Slack for internal discussion,
-and stays off it for 30 consecutive days.
+Exit criterion: S-1 (`PRD.md` §3, D-197) — every Phase 1 capability works end to end in a browser, `bun run verify`
+passes and the deployed build is the newest commit.
 
 How much of it is done is deliberately not written here: a progress line is stale the moment a
 pull request merges, and a document that says "not started" about a repository with code in it
