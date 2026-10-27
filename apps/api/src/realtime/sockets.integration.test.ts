@@ -546,7 +546,9 @@ describe('integration: two real sockets', () => {
   test('a connection that sends past its budget is refused frame by frame, by id', async () => {
     const room = await aRoom();
     const alice = await connect(room.alice);
-    const sent = Array.from({ length: SOCKET_FRAME_BUDGET.burst + 5 }, (_, i) => {
+    // A few past the burst, and fewer than the queue holds: more is a flood the connection is closed for (D-84).
+    const over = 3;
+    const sent = Array.from({ length: SOCKET_FRAME_BUDGET.burst + over }, (_, i) => {
       const id = messageId(at(i));
       alice.send({ id, op: 'PING', payload: {} });
       return id;
@@ -559,11 +561,11 @@ describe('integration: two real sockets', () => {
     expect(answers.filter((f) => f?.event === 'PONG')).toHaveLength(SOCKET_FRAME_BUDGET.burst);
     const refused = answers.filter((f) => f?.event === 'ERROR');
     expect(new Set(refused.map((f) => f.data.code))).toEqual(new Set(['RATE_LIMITED' as const]));
-    expect(refused).toHaveLength(5);
-    // Each refusal is counted in the log: the measurement O-4 waits for.
+    expect(refused).toHaveLength(over);
+    // Each refusal is counted in the log: what `report:frames` reads.
     expect(
       recorded.lines.filter((line) => line['msg'] === 'frame refused: over the rate budget').length,
-    ).toBeGreaterThanOrEqual(5);
+    ).toBeGreaterThanOrEqual(over);
 
     // The budget is the connection's: another connection of the same user starts full.
     const again = await connect(room.alice);
