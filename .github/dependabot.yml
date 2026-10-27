@@ -26,6 +26,9 @@ updates:
     ignore:
       - dependency-name: knip
         versions: ['>=6.42.0']
+      # The types are the Bun runtime's version, which moves with the Dockerfile and packageManager together
+      # (scripts/environment.test.ts), never alone.
+      - dependency-name: '@types/bun'
     commit-message:
       prefix: chore
 
