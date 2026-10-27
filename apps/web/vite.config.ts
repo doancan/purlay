@@ -82,7 +82,7 @@ export default defineConfig({
     // Kept only when asked for: `bun run budget:web` uses a source map to name what grew
     // inside the largest chunk, and a map served to everyone is not something to ship.
     sourcemap: process.env['PURLAY_SOURCEMAP'] === '1' ? 'hidden' : false,
-    rollupOptions: {
+    rolldownOptions: {
       // The push worker is an entry of its own, at the root and under a name that never changes:
       // a worker's scope is where it is served from, and a browser finds it again by its address
       // (D-126). It imports nothing the page does, so it is one file — a worker that is a classic
