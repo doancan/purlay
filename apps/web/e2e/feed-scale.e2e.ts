@@ -202,7 +202,7 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
 
     // Cards come from GitHub through the server; here from the test, so every card draws.
     await page.route('**/api/integrations/github/unfurl', async (route) => {
-      const url = String((route.request().postDataJSON() as { url: string }).url);
+      const { url } = route.request().postDataJSON() as { url: string };
       const number = Number(/\/(\d+)$/.exec(url)?.[1] ?? '1');
       await route.fulfill({
         json: {
