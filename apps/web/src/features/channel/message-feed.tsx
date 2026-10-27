@@ -260,9 +260,11 @@ export const MessageFeed = ({
   const feed = useMessages(channelId, around);
   // Leaving the channel lets its older pages go, so coming back draws one page and not everything that
   // was scrolled through (O-5, D-199). Off the switch's critical path: it runs as this feed goes away.
+  // **After `useMessages`, and in a synchronous cleanup:** the query's own unsubscribe, which cancels an older
+  // page still on its way and puts back the pages from before it, must run first or it undoes the trim.
   const client = useQueryClient();
   useEffect(
-    () => () => {
+    (): (() => void) => () => {
       keepNewestPage(client, channelId);
     },
     [client, channelId],
