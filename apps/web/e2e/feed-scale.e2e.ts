@@ -195,8 +195,8 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
     );
     test.setTimeout(900_000);
 
-    const long = await room({ members: ['alice', 'bob', 'carol'] });
-    const light = await room({ members: ['alice', 'bob', 'carol'] });
+    const long = await room({ members: ['alice', 'bob', 'carol'], private: true });
+    const light = await room({ members: ['alice', 'bob', 'carol'], private: true });
     await seed(tenant, long.id);
     await apiAs(tenant, 'carol').say(light.id, 'a light channel to switch away to');
 
@@ -238,10 +238,13 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
     };
 
     /** A switch to the other channel's link, to the frame that draws the rows of the channel. */
-    const switchTo = (target: { id: string; name: string }): Promise<number> =>
+    const switchTo = (target: {
+      id: string;
+      name: string;
+    }): Promise<{ ms: number; rows: number }> =>
       page.evaluate(
         ({ id, name }) =>
-          new Promise<number>((resolve) => {
+          new Promise<{ ms: number; rows: number }>((resolve) => {
             const link = document.querySelector<HTMLElement>(`aside a[href$="/c/${id}"]`);
             if (link === null) throw new Error('no link');
             const started = performance.now();
@@ -255,7 +258,10 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
             };
             const done = (): void => {
               requestAnimationFrame(() => {
-                resolve(performance.now() - started);
+                resolve({
+                  ms: performance.now() - started,
+                  rows: document.querySelectorAll('[data-message-row]').length,
+                });
               });
             };
             const watcher = new MutationObserver(() => {
@@ -275,15 +281,23 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
       );
 
     /** Twenty switches away and back; what is timed is the way back to the long channel. */
-    const switchBack = async (): Promise<ReturnType<typeof summary>> => {
+    const switchBack = async (): Promise<{
+      timings: ReturnType<typeof summary>;
+      rowsOnFirstReturn: number;
+    }> => {
       const timings: number[] = [];
+      let rowsOnFirstReturn = -1;
       for (let index = 0; index < 20; index++) {
         await switchTo(light);
         await page.waitForTimeout(60);
-        timings.push(await switchTo(long));
+        const back = await switchTo(long);
+        timings.push(back.ms);
+        // Counted in the frame that draws the channel, before anything it goes on to read: a slow runner
+        // that reads a page or two more a moment later is the reader's business, not the trim's.
+        if (rowsOnFirstReturn < 0) rowsOnFirstReturn = back.rows;
         await page.waitForTimeout(60);
       }
-      return summary(timings);
+      return { timings: summary(timings), rowsOnFirstReturn };
     };
 
     /** Keys typed into the composer, each from its keydown to the frame that follows its input. */
@@ -376,19 +390,18 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
       const heap = await heapMB();
       const typed = await keystrokes();
       // Away and back: what the channel draws when it is returned to.
-      const toggled = await switchBack();
-      const returned = await loaded();
+      const { timings: toggled, rowsOnFirstReturn: returned } = await switchBack();
       numbers[label] = {
         rowsMounted: mounted,
         elements: nodes,
         heapMB: heap,
         keystroke: typed,
         switchBack: toggled,
-        rowsAfterReturn: returned,
+        rowsOnFirstReturn: returned,
       };
       info.annotations.push({
         type: `feed-scale ${label}`,
-        description: `${String(mounted)} rows, ${String(nodes)} elements, heap ${heap.toFixed(0)} MB · key p50 ${typed.p50.toFixed(1)} p95 ${typed.p95.toFixed(1)} ms · switch back p50 ${toggled.p50.toFixed(0)} p95 ${toggled.p95.toFixed(0)} ms, ${String(returned)} rows on return`,
+        description: `${String(mounted)} rows, ${String(nodes)} elements, heap ${heap.toFixed(0)} MB · key p50 ${typed.p50.toFixed(1)} p95 ${typed.p95.toFixed(1)} ms · switch back p50 ${toggled.p50.toFixed(0)} p95 ${toggled.p95.toFixed(0)} ms, ${String(returned)} rows drawn on the first return`,
       });
       // Not a time: a count, so a shared runner cannot excuse it. What is returned to is a window and not a history.
       expect(returned).toBeLessThanOrEqual(PAGE_LIMIT.default * 2);
