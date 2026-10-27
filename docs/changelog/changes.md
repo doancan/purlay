@@ -35,6 +35,7 @@ have it.
 ### Changed
 
 - **Operations** — `CONFIG.md` says how to set up SPF, DKIM and DMARC for the sign-in mail, and why bounces are not handled by the server
+- **Performance** — Going back to a channel after reading far back through its history opens it as fast as any other: a channel that is left keeps its newest messages and reads the older ones again as they are scrolled to, instead of drawing them all at once (2.1 s for 2,000 messages before); the feed is not virtualized (D-199)
 - **Process** — Phase 1 ends on what is built and verified end to end, not on a team staying off another product for thirty days; the cloud no longer waits on that count (D-197)
 - **Performance** — The first-load JavaScript gate is a backstop at 400 KB gzipped, no longer a ceiling a feature is cut or deferred to fit; the time budgets are unchanged (D-196)
 - **Sidebar** — The workspace's name at the head of the column has its tile and sits inset and rounded like the rows, so its hover and focus no longer touch the rail and the hairline; the jump field lines up with the rows (D-195)

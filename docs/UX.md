@@ -601,9 +601,9 @@ thread never arrives in its feed (D-171). Only a member of the channel is heard 
 
 ## 6. Scroll and unread
 
-The hardest problem in the product, and the subject of **O-5**.
+The hardest problem in the product, and the subject of O-5, closed by D-199.
 
-**Rules that hold regardless of how O-5 is decided:**
+**Rules that hold however the feed is drawn:**
 
 - **Anchor on read position, not on bottom.** If the user is scrolled up, incoming messages must
   not move the viewport. A "N new messages ↓" pill appears instead.
@@ -632,11 +632,13 @@ The hardest problem in the product, and the subject of **O-5**.
   the channel — *That message no longer exists, or you can't see it.* — and the channel opens as it
   is.
 
-**On O-5:** variable-height rows defeat naive virtualization, and a
-wrong guess here is expensive. Phase 1 ships **unvirtualized with a 50-message window** and
-paginates on scroll. Virtualization is adopted only if dogfooding shows a measurable problem,
-against the `< 100ms` channel-switch budget in `PRD.md` §5. Building it speculatively would
-trade a certain cost for a hypothetical benefit.
+**Virtualization (O-5, D-199).** The feed is **not virtualized**: it draws a window of 50 messages and paginates on
+scroll, and every page a reader scrolls back through stays mounted for as long as the channel is on screen. Measured
+on 2,000 heavy messages the window switches in 52 ms against the `< 100ms` budget of `PRD.md` §5; what did not hold
+was *returning* to a channel after a long read, which drew every page again (2.1 s). So a channel that leaves the
+screen **keeps its newest page and no more**: coming back draws the window, and older history is read again a page at
+a time as the reader scrolls to it. The scroll-anchoring rules above are unchanged by this and hold on every page that
+is read.
 
 ---
 
