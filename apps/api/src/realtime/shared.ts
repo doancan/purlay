@@ -9,7 +9,7 @@ import type { Logger } from '../platform/logging';
 import type { RedisLink } from '../platform/redis';
 import type { Backplane } from './bus';
 import type { PresenceDirectory } from './online';
-import type { PresenceRegistry } from './presence';
+import { inMemoryPresenceRegistry, type PresenceRegistry } from './presence';
 import { inProcessLimiters, type LimiterFactory } from './rate-limiter';
 import { redisBackplane } from './redis-bus';
 import { redisRateLimiter } from './redis-limiter';
@@ -41,7 +41,7 @@ export const sharedRealtime = (link: RedisLink, clock: Clock, log: Logger): Shar
         local: inProcessLimiters(clock)(name, budget),
         log,
       }),
-    typing: redisPresenceRegistry(link, log),
+    typing: redisPresenceRegistry(link, log, inMemoryPresenceRegistry(clock)),
     directory: redisPresenceDirectory(link, crypto.randomUUID()),
     problem: link.problem,
   },

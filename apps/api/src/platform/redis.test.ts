@@ -8,7 +8,9 @@ import { aRecordingLogger } from '../testing/doubles';
 import { refusedWith } from '../testing/redis';
 import {
   COMMAND_TIMEOUT_MS,
+  KEEPALIVE_MS,
   RECONNECT_BASE_MS,
+  STABLE_MS,
   RECONNECT_MAX_MS,
   connectRedis,
   type RedisClientLike,
@@ -72,9 +74,12 @@ const timersRecorded = (): RedisTimers & {
       const timer = armed[handle as number];
       if (timer !== undefined) timer.cleared = true;
     },
-    /** Fires the oldest timer still armed and returns the wait it had. */
+    /** Fires the oldest reconnection still waiting and returns the wait it had. */
     next: (): number => {
-      const timer = armed.find((t) => !t.cleared);
+      const timer = armed.find(
+        (t) =>
+          !t.cleared && t.ms !== KEEPALIVE_MS && t.ms !== STABLE_MS && t.ms !== COMMAND_TIMEOUT_MS,
+      );
       if (timer === undefined) throw new Error('no timer is armed');
       timer.cleared = true;
       timer.fire();
@@ -170,7 +175,7 @@ describe('the Redis link', () => {
     await settle();
     // Both connections refused: two timers, each the first wait.
     const waits: number[] = [];
-    for (let round = 0; round < 7; round += 1) {
+    for (let round = 0; round < 6; round += 1) {
       const before = w.timers.armed.filter((t) => !t.cleared).length;
       expect(before).toBeGreaterThan(0);
       waits.push(w.timers.next());
@@ -260,7 +265,9 @@ describe('the Redis link', () => {
   test('closing stops every retry, closes both connections, and is safe twice', async () => {
     const w = world(['refuses', 'connects']);
     await settle();
-    const retry = w.timers.armed.find((t) => !t.cleared);
+    const retry = w.timers.armed.find(
+      (t) => !t.cleared && t.ms !== KEEPALIVE_MS && t.ms !== STABLE_MS,
+    );
     expect(retry).toBeDefined();
     w.link.close();
     w.link.close();
@@ -279,5 +286,76 @@ describe('the Redis link', () => {
     await settle();
     expect(w.clients.every((client) => client.closed)).toBe(true);
     expect(w.link.connected()).toBe(false);
+  });
+
+  test('a connection that goes silent without closing is found by its keepalive and made again', async () => {
+    const w = world([]);
+    await settle();
+    // The second: the subscription's, after the commands'.
+    const alive = w.timers.armed.filter((t) => !t.cleared && t.ms === KEEPALIVE_MS)[1];
+    expect(alive).toBeDefined();
+    // The ping is never answered: the timeout that races it fires.
+    const client = w.clients[1]!;
+    client.send = (): Promise<unknown> => new Promise<unknown>(() => undefined);
+    alive?.fire();
+    await settle();
+    w.timers.armed
+      .filter((t) => !t.cleared && t.ms === COMMAND_TIMEOUT_MS)
+      .at(-1)
+      ?.fire();
+    await settle();
+    expect(w.link.subscribed()).toBe(false);
+    expect(client.closed).toBe(true);
+  });
+
+  test('an answered keepalive arms the next one, and leaves the connection alone', async () => {
+    const w = world([]);
+    await settle();
+    w.timers.armed.find((t) => !t.cleared && t.ms === KEEPALIVE_MS)?.fire();
+    await settle();
+    expect(w.link.connected()).toBe(true);
+    expect(
+      w.timers.armed.filter((t) => !t.cleared && t.ms === KEEPALIVE_MS).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test('a command that is never answered ends its connection, so the next ones do not wait too', async () => {
+    const w = world([], () => new Promise<unknown>(() => undefined));
+    await settle();
+    const pending = w.link.send('GET', ['k']);
+    await settle();
+    w.timers.armed.find((t) => !t.cleared && t.ms === COMMAND_TIMEOUT_MS)?.fire();
+    expect(await refusedWith(pending)).toContain('timed out');
+    expect(w.link.connected()).toBe(false);
+    expect(w.clients[0]?.closed).toBe(true);
+  });
+
+  test('the wait to retry starts over only after the connection has held, not as it comes up', async () => {
+    const w = world([]);
+    await settle();
+    w.clients[0]?.drop();
+    expect(w.timers.next()).toBe(RECONNECT_BASE_MS);
+    await settle();
+    // Up again, but dropped before it was stable: the next wait is longer.
+    w.clients[2]?.drop();
+    expect(w.timers.next()).toBe(RECONNECT_BASE_MS * 2);
+    await settle();
+    w.timers.armed
+      .filter((t) => !t.cleared && t.ms === STABLE_MS)
+      .at(-1)
+      ?.fire();
+    w.clients[3]?.drop();
+    expect(w.timers.next()).toBe(RECONNECT_BASE_MS);
+  });
+
+  test('a subscription that cannot be made on a live connection ends that connection', async () => {
+    const w = world([]);
+    await settle();
+    const client = w.clients[1]!;
+    client.subscribe = (): Promise<void> => Promise.reject(new Error('subscribe refused'));
+    w.link.subscribe('late', () => undefined);
+    await settle();
+    expect(w.link.subscribed()).toBe(false);
+    expect(client.closed).toBe(true);
   });
 });

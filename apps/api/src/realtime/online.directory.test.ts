@@ -17,6 +17,8 @@ const sharedRecord = (
 ): { directoryFor: (node: string) => PresenceDirectory; down: { value: boolean } } => {
   const claims = new Map<string, Map<string, number>>();
   const versions = new Map<string, number>();
+  /** The lapse index: people nobody has been told are gone. */
+  const due = new Set<string>();
   const down = { value: false };
   const live = (userId: string): number => {
     const held = claims.get(userId) ?? new Map<string, number>();
@@ -41,13 +43,32 @@ const sharedRecord = (
         guard();
         const before = live(userId);
         claims.get(userId)?.set(node, now() + PRESENCE_NODE_TTL_MS);
+        due.add(userId);
         return before > 0 ? null : bump(userId);
       },
       leave: async (userId): Promise<number | null> => {
         await Promise.resolve();
         guard();
         claims.get(userId)?.delete(node);
-        return live(userId) > 0 ? null : bump(userId);
+        if (live(userId) > 0) return null;
+        due.delete(userId);
+        return bump(userId);
+      },
+      release: async (userIds): Promise<void> => {
+        await Promise.resolve();
+        guard();
+        for (const userId of userIds) claims.get(userId)?.delete(node);
+      },
+      sweep: async (): Promise<readonly PresenceChange[]> => {
+        await Promise.resolve();
+        guard();
+        const gone: PresenceChange[] = [];
+        for (const userId of [...due]) {
+          if (live(userId) > 0) continue;
+          due.delete(userId);
+          gone.push({ userId, online: false, version: bump(userId) });
+        }
+        return gone;
       },
       among: async (userIds): Promise<readonly PresenceChange[]> => {
         await Promise.resolve();
@@ -197,7 +218,7 @@ describe('who is online across nodes', () => {
     expect(b.told.map((c) => c.online)).toEqual([true]);
   });
 
-  test('a node whose claims lapsed while it stalled tells the person back online on its next renewal', async () => {
+  test('a node whose claims lapsed while it stalled: the person is told gone, then back, in order', async () => {
     const world = cluster();
     const a = world.node();
     a.online.arrived('alice');
@@ -205,7 +226,10 @@ describe('who is online across nodes', () => {
     world.now.value += PRESENCE_NODE_TTL_MS + 1;
     a.timers.fireDue(PRESENCE_NODE_TTL_MS / 3);
     await a.online.settled();
-    expect(a.told.map((c) => c.online)).toEqual([true, true]);
+    // Their claim lapsed unrenewed, so they were told gone; then renewed, so told back: in that order.
+    expect(a.told.map((c) => c.online)).toEqual([true, false, true]);
+    const versions = a.told.map((c) => c.version);
+    expect(versions).toEqual([...versions].sort((x, y) => x - y));
   });
 
   test('a join is never overtaken by the leave after it, however the record answers', async () => {
@@ -266,5 +290,64 @@ describe('who is online across nodes', () => {
     await a.online.settled();
     a.online.stop();
     expect(a.timers.armed.every((t) => t.cleared)).toBe(true);
+  });
+
+  test('a node that dies without a word: whoever renews next tells the room, once', async () => {
+    const world = cluster();
+    const dying = world.node();
+    const living = world.node();
+    dying.online.arrived('bob');
+    await dying.online.settled();
+    world.now.value += PRESENCE_NODE_TTL_MS + 1;
+    living.timers.fireDue(PRESENCE_NODE_TTL_MS / 3);
+    await living.online.settled();
+    expect(living.told.map((c) => [c.userId, c.online])).toEqual([['bob', false]]);
+    world.now.value += 1;
+    living.timers.fireDue(PRESENCE_NODE_TTL_MS / 3);
+    await living.online.settled();
+    expect(living.told).toHaveLength(1);
+  });
+
+  test('a node that stops gives its claims up: a person who does not come back elsewhere is told gone at the next sweep', async () => {
+    const world = cluster();
+    const stopping = world.node();
+    const staying = world.node();
+    stopping.online.arrived('bob');
+    stopping.online.arrived('carol');
+    await stopping.online.settled();
+    // Carol reconnects to the other node as the first closes; Bob does not.
+    staying.online.arrived('carol');
+    await staying.online.settled();
+    stopping.online.stop();
+    await stopping.online.settled();
+    staying.timers.fireDue(PRESENCE_NODE_TTL_MS / 3);
+    await staying.online.settled();
+    expect(staying.told.map((c) => [c.userId, c.online])).toEqual([['bob', false]]);
+    expect(await staying.online.onlineAmong(['bob', 'carol'])).toMatchObject([{ userId: 'carol' }]);
+  });
+
+  test('a release that fails is said, and the claims lapse by themselves', async () => {
+    const world = cluster();
+    const stopping = world.node();
+    stopping.online.arrived('bob');
+    await stopping.online.settled();
+    world.record.down.value = true;
+    stopping.online.stop();
+    await stopping.online.settled();
+    expect(
+      stopping.lines.some((line) => String(line['msg']).includes('could not be released')),
+    ).toBe(true);
+  });
+
+  test('a version this node makes itself is larger than any the record gave', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    const given = a.told[0]?.version ?? 0;
+    world.record.down.value = true;
+    a.online.arrived('bob');
+    await a.online.settled();
+    expect((a.told[1]?.version ?? 0) > given).toBe(true);
   });
 });

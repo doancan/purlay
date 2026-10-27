@@ -9,12 +9,18 @@ import type { ServerFrame } from '@purlay/types';
 import { channelTopic, type Topic } from '../platform/events';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
-import { bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
+import { KEEPALIVE_MS, bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
 import { aDroppableProxy, aRealLink, redisUrlForTests, refusedWith } from '../testing/redis';
+import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter } from './rate-limiter';
 import { redisBackplane } from './redis-bus';
 import { redisRateLimiter } from './redis-limiter';
-import { ONLINE_PREFIX, redisPresenceDirectory, redisPresenceRegistry } from './redis-presence';
+import {
+  LAPSE_INDEX,
+  ONLINE_PREFIX,
+  redisPresenceDirectory,
+  redisPresenceRegistry,
+} from './redis-presence';
 
 const silent = createLogger({ level: 'silent' });
 const links: RedisLink[] = [];
@@ -183,10 +189,93 @@ describe('integration: who is online across nodes', () => {
   });
 });
 
+describe('integration: people nobody told of (D-201)', () => {
+  /** Sweeps until it has heard of these people: the index is shared with every other test's. */
+  const sweptOf = async (
+    directory: ReturnType<typeof redisPresenceDirectory>,
+    users: readonly string[],
+  ): Promise<{ userId: string; online: boolean; version: number }[]> => {
+    const found: { userId: string; online: boolean; version: number }[] = [];
+    for (let round = 0; round < 20; round += 1) {
+      found.push(...(await directory.sweep()).filter((change) => users.includes(change.userId)));
+    }
+    return found;
+  };
+
+  test('a node that died is found by the next sweep of any node, once, at a version after the join', async () => {
+    const link = await node();
+    const dead = redisPresenceDirectory(link, 'node-dead');
+    const live = redisPresenceDirectory(await node(), 'node-live');
+    const user = unique('user');
+    const joined = (await dead.join(user)) ?? 0;
+    // Not due yet: the claim is alive.
+    expect(await sweptOf(live, [user])).toEqual([]);
+    await link.send('HSET', [`${ONLINE_PREFIX}${user}`, 'n:node-dead', String(Date.now() - 1_000)]);
+    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), user]);
+    const gone = await sweptOf(live, [user]);
+    expect(gone).toHaveLength(1);
+    expect(gone[0]?.online).toBe(false);
+    expect(gone[0]?.version ?? 0).toBeGreaterThan(joined);
+    expect(await sweptOf(live, [user])).toEqual([]);
+    expect(await live.among([user])).toEqual([]);
+  });
+
+  test('a person who is renewed is never swept, and a person who left properly is not told twice', async () => {
+    const link = await node();
+    const a = redisPresenceDirectory(link, 'node-a');
+    const sweeper = redisPresenceDirectory(await node(), 'node-sweeper');
+    const user = unique('user');
+    const left = unique('user');
+    await a.join(user);
+    await a.join(left);
+    expect(await a.leave(left)).not.toBeNull();
+    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), user]);
+    // The index says lapsed, but the claim is live: the sweep only moves the entry on.
+    expect(await sweptOf(sweeper, [user, left])).toEqual([]);
+    expect(await sweeper.among([user])).toHaveLength(1);
+  });
+
+  test('a node that stops gives its claims up: told gone unless the person is held elsewhere', async () => {
+    const a = redisPresenceDirectory(await node(), 'node-a');
+    const b = redisPresenceDirectory(await node(), 'node-b');
+    const sweeper = redisPresenceDirectory(await node(), 'node-sweeper');
+    const alone = unique('user');
+    const shared = unique('user');
+    await a.join(alone);
+    await a.join(shared);
+    await b.join(shared);
+    await a.release([alone, shared]);
+    const gone = await sweptOf(sweeper, [alone, shared]);
+    expect(gone.map((change) => change.userId)).toEqual([alone]);
+    expect(await sweeper.among([alone, shared])).toMatchObject([{ userId: shared }]);
+  });
+});
+
+describe('integration: a connection that is alive stays alive', () => {
+  test('a link idle past its keepalive, subscribed, is still connected and still hears', async () => {
+    const topic = channelTopic(unique('idle'));
+    const idle = await busNode(topic);
+    const other = await busNode(topic);
+    await Bun.sleep(KEEPALIVE_MS * 2 + 1_500);
+    expect(idle.link.connected()).toBe(true);
+    expect(idle.gaps()).toBe(0);
+    await other.publish(frame(1));
+    await until(() => idle.heard.length === 1, 'a frame after the keepalives');
+  }, 20_000);
+});
+
 describe('integration: one typing window across nodes', () => {
   test('the room is told once per half window however many nodes the person types through', async () => {
-    const a = redisPresenceRegistry(await node(), silent);
-    const b = redisPresenceRegistry(await node(), silent);
+    const a = redisPresenceRegistry(
+      await node(),
+      silent,
+      inMemoryPresenceRegistry(fixedClock(new Date())),
+    );
+    const b = redisPresenceRegistry(
+      await node(),
+      silent,
+      inMemoryPresenceRegistry(fixedClock(new Date())),
+    );
     const channel = unique('channel');
     const user = unique('user');
     expect(await a.startTyping(channel, user, 400)).toBe(true);
@@ -201,8 +290,16 @@ describe('integration: one typing window across nodes', () => {
   });
 
   test('a message arriving ends the window on every node', async () => {
-    const a = redisPresenceRegistry(await node(), silent);
-    const b = redisPresenceRegistry(await node(), silent);
+    const a = redisPresenceRegistry(
+      await node(),
+      silent,
+      inMemoryPresenceRegistry(fixedClock(new Date())),
+    );
+    const b = redisPresenceRegistry(
+      await node(),
+      silent,
+      inMemoryPresenceRegistry(fixedClock(new Date())),
+    );
     const channel = unique('channel');
     const user = unique('user');
     expect(await a.startTyping(channel, user, 5_000)).toBe(true);

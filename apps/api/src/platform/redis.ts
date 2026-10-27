@@ -48,6 +48,10 @@ export const COMMAND_TIMEOUT_MS = 2_000;
 /** The first wait before trying again, and the longest. */
 export const RECONNECT_BASE_MS = 250;
 export const RECONNECT_MAX_MS = 15_000;
+/** How often an idle connection is asked it is alive: a connection that went silent without closing is lost. */
+export const KEEPALIVE_MS = 5_000;
+/** How long a connection must stay up before the wait to retry starts over: a flapping Redis is backed off from. */
+export const STABLE_MS = 10_000;
 
 export interface RedisLink {
   /** Runs one command. Rejects when not connected, on an error reply, and after `COMMAND_TIMEOUT_MS`. */
@@ -86,6 +90,11 @@ interface Slot {
   everUp: boolean;
   attempts: number;
   timer: unknown;
+  /** The keepalive and the stability timers of the connection that is up. */
+  alive: unknown;
+  stable: unknown;
+  /** Declares the connection that is current lost. */
+  lose: ((reason: unknown) => void) | undefined;
 }
 
 const describe = (error: unknown): string =>
@@ -98,10 +107,20 @@ export const connectRedis = ({
   jitter = Math.random,
 }: RedisOptions): RedisLink => {
   let closed = false;
-  const channels = new Map<string, (message: string) => void>();
+  const channels: [channel: string, listener: (message: string) => void][] = [];
   const resubscribed = new Set<() => void>();
-  const commands: Slot = { client: undefined, up: false, everUp: false, attempts: 0, timer: null };
-  const listening: Slot = { client: undefined, up: false, everUp: false, attempts: 0, timer: null };
+  const slotOf = (): Slot => ({
+    client: undefined,
+    up: false,
+    everUp: false,
+    attempts: 0,
+    timer: null,
+    alive: null,
+    stable: null,
+    lose: undefined,
+  });
+  const commands = slotOf();
+  const listening = slotOf();
 
   const connect = (role: 'commands' | 'subscription', slot: Slot): void => {
     if (closed) return;
@@ -114,6 +133,9 @@ export const connectRedis = ({
       const wasUp = slot.up;
       slot.up = false;
       slot.client = undefined;
+      slot.lose = undefined;
+      timers.clear(slot.alive);
+      timers.clear(slot.stable);
       try {
         client.close();
       } catch {
@@ -135,7 +157,30 @@ export const connectRedis = ({
         connect(role, slot);
       }, wait);
     };
+    slot.lose = lose;
     client.onClose(lose);
+    /** Asks the connection whether it is alive, now and every `KEEPALIVE_MS`: silence is loss. */
+    const keepAlive = (): void => {
+      slot.alive = timers.set(() => {
+        if (lost || closed) return;
+        let timer: unknown;
+        const silent = new Promise<never>((_resolve, reject) => {
+          timer = timers.set(() => {
+            reject(new Error('redis did not answer a ping'));
+          }, COMMAND_TIMEOUT_MS);
+        });
+        Promise.race([client.send('PING', []), silent]).then(
+          () => {
+            timers.clear(timer);
+            keepAlive();
+          },
+          (error: unknown) => {
+            timers.clear(timer);
+            lose(error);
+          },
+        );
+      }, KEEPALIVE_MS);
+    };
     const opening = async (): Promise<void> => {
       await client.connect();
       if (role === 'subscription') {
@@ -151,7 +196,12 @@ export const connectRedis = ({
         const again = slot.everUp;
         slot.up = true;
         slot.everUp = true;
-        slot.attempts = 0;
+        // The wait to retry starts over only once the connection has held: one that drops as it comes up
+        // is retried ever more slowly, not at the same pace for ever.
+        slot.stable = timers.set(() => {
+          slot.attempts = 0;
+        }, STABLE_MS);
+        keepAlive();
         if (again) {
           log.info('redis connection restored', { role });
           if (role === 'subscription') {
@@ -178,13 +228,18 @@ export const connectRedis = ({
     const client = commands.client;
     if (!commands.up || client === undefined) throw new Error('redis is not connected');
     let timer: unknown;
+    const timedOut = new Error(`redis ${command} timed out`);
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = timers.set(() => {
-        reject(new Error(`redis ${command} timed out`));
+        reject(timedOut);
       }, COMMAND_TIMEOUT_MS);
     });
     try {
       return await Promise.race([client.send(command, args), timeout]);
+    } catch (error) {
+      // A command that was never answered is a connection that is sick: made again, not waited on again.
+      if (error === timedOut) commands.lose?.(error);
+      throw error;
     } finally {
       timers.clear(timer);
     }
@@ -195,11 +250,13 @@ export const connectRedis = ({
     script: async (source, keys, args) =>
       await send('EVAL', [source, String(keys.length), ...keys, ...args]),
     subscribe: (channel, listener): void => {
-      channels.set(channel, listener);
+      channels.push([channel, listener]);
       const client = listening.client;
       if (listening.up && client !== undefined) {
         client.subscribe(channel, listener).catch((error: unknown) => {
-          log.error('redis subscribe failed', { err: describe(error) });
+          // A subscription that was not made is a node that would be deaf while it says it listens.
+          log.error('redis subscribe failed; reconnecting', { err: describe(error) });
+          listening.lose?.(error);
         });
       }
     },
@@ -215,6 +272,8 @@ export const connectRedis = ({
       closed = true;
       for (const slot of [commands, listening]) {
         timers.clear(slot.timer);
+        timers.clear(slot.alive);
+        timers.clear(slot.stable);
         slot.up = false;
         try {
           slot.client?.close();

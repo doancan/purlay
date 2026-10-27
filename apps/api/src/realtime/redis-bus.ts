@@ -18,7 +18,9 @@
  * people on this node still hear each other. If only the subscription is down, the frame is also published,
  * for the other nodes, and delivered here directly, since its echo will not come. When the subscription is
  * made again, frames published meanwhile were missed, so each node is told (`onGap`) and sends its sockets
- * back to replay from their cursors (D-190): the cursor logic is untouched, it is what is used. The one
+ * back to replay from their cursors (D-190): the cursor logic is untouched, it is what is used. A frame that
+ * never reached Redis leaves the others' subscriptions up, so each carries its publisher's name and a count, and
+ * a hole in a count is a gap too. The one
  * duplicate this allows is a publish that timed out after Redis had taken it; a frame is idempotent on its id
  * and version, and a client keeps the larger.
  */
@@ -33,6 +35,9 @@ export const BUS_CHANNEL = 'purlay:bus';
 interface Envelope {
   readonly topic: Topic;
   readonly frame: ServerFrame;
+  /** Which backplane published it, and its count: a hole in the count is a frame that never arrived. */
+  readonly origin: string;
+  readonly seq: number;
 }
 
 /** What crosses between nodes is checked on arrival: another version of the server wrote it. */
@@ -48,8 +53,11 @@ const envelopeOf = (message: string): Envelope | undefined => {
   const frame: unknown = Reflect.get(parsed, 'frame');
   if (typeof topic !== 'string' || typeof frame !== 'object' || frame === null) return undefined;
   if (typeof Reflect.get(frame, 'event') !== 'string') return undefined;
+  const origin: unknown = Reflect.get(parsed, 'origin');
+  const seq: unknown = Reflect.get(parsed, 'seq');
+  if (typeof origin !== 'string' || typeof seq !== 'number') return undefined;
   // The topic's shape is the contract's; a frame is checked as far as the hub reads it.
-  return { topic: topic as Topic, frame: frame as ServerFrame };
+  return { topic: topic as Topic, frame: frame as ServerFrame, origin, seq };
 };
 
 interface Node {
@@ -59,6 +67,14 @@ interface Node {
 
 export const redisBackplane = (link: RedisLink, log: Logger): Backplane => {
   const nodes = new Set<Node>();
+  /** This backplane's name on the channel, and how many frames it has tried to publish. */
+  const origin = crypto.randomUUID();
+  let published = 0;
+  /** The last count heard from each backplane. A restarted one starts again at one, which is no hole. */
+  const heardFrom = new Map<string, number>();
+  const tellGap = (): void => {
+    for (const node of nodes) node.gap?.();
+  };
   const fanOutHere = (topic: Topic, frame: ServerFrame): void => {
     for (const node of nodes) node.fanOut(topic, frame);
   };
@@ -70,11 +86,24 @@ export const redisBackplane = (link: RedisLink, log: Logger): Backplane => {
       log.warn('a frame from the shared bus could not be read; dropped', { bytes: message.length });
       return;
     }
+    const before = heardFrom.get(envelope.origin);
+    heardFrom.delete(envelope.origin);
+    heardFrom.set(envelope.origin, envelope.seq);
+    // Bounded: a node that restarts is a new name, and the oldest names are not heard from again.
+    if (heardFrom.size > 1_000) heardFrom.delete(heardFrom.keys().next().value ?? '');
     fanOutHere(envelope.topic, envelope.frame);
+    // A frame that its publisher could not get to Redis leaves a hole in its count, and nobody's
+    // subscription was ever lost: this is the only place the others can find out.
+    if (envelope.origin !== origin && before !== undefined && envelope.seq > before + 1) {
+      log.warn('a frame was lost between nodes; sockets are sent back to replay it', {
+        missed: envelope.seq - before - 1,
+      });
+      tellGap();
+    }
   });
   link.onResubscribed(() => {
     log.warn('the shared bus was away; sockets are sent back to replay what they missed');
-    for (const node of nodes) node.gap?.();
+    tellGap();
   });
 
   return {
@@ -85,8 +114,12 @@ export const redisBackplane = (link: RedisLink, log: Logger): Backplane => {
         publish: async (topic: Topic, frame: ServerFrame): Promise<void> => {
           // Its echo comes back only while the subscription is up.
           let here = !link.subscribed();
+          published += 1;
           try {
-            await link.send('PUBLISH', [BUS_CHANNEL, JSON.stringify({ topic, frame })]);
+            await link.send('PUBLISH', [
+              BUS_CHANNEL,
+              JSON.stringify({ topic, frame, origin, seq: published }),
+            ]);
           } catch (error) {
             here = true;
             log.warn('the shared bus did not take a frame; delivering on this node only', {

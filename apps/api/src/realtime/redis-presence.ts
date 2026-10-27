@@ -33,46 +33,95 @@ redis.call('SET', KEYS[1], tostring(now), 'PX', ttl)
 return 1
 `;
 
-/** Counts the live claims on a person, dropping the lapsed ones. */
+/** Counts the live claims on a person, dropping the lapsed ones, and says when the last of them lapses. */
 const LIVE = `
 local function live(key, now)
   local all = redis.call('HGETALL', key)
   local count = 0
+  local latest = 0
   for i = 1, #all, 2 do
     if string.sub(all[i], 1, 2) == 'n:' then
-      if tonumber(all[i + 1]) <= now then
+      local lapses = tonumber(all[i + 1])
+      if lapses <= now then
         redis.call('HDEL', key, all[i])
       else
         count = count + 1
+        if lapses > latest then latest = lapses end
       end
     end
   end
-  return count
+  return count, latest
 end
 local function bump(key, now)
   return math.max(now + 1, (tonumber(redis.call('HGET', key, 'v')) or 0) + 1)
 end
 `;
 
-/** ARGV: node, ttl. A version when nobody held them before, 0 when somebody did (this node renewing, or another). */
+/**
+ * KEYS: the person's claims, the lapse index. ARGV: node, ttl, person. A version when nobody held them before,
+ * 0 when somebody did (this node renewing, or another). The index says when the person's last claim lapses, so
+ * that somebody can tell the room they are gone when nobody did (`SWEEP_SCRIPT`).
+ */
 const JOIN_SCRIPT = `${NOW}${LIVE}
 local before = live(KEYS[1], now)
 redis.call('HSET', KEYS[1], 'n:' .. ARGV[1], now + tonumber(ARGV[2]))
 redis.call('PEXPIRE', KEYS[1], ARGV[2])
+redis.call('ZADD', KEYS[2], now + tonumber(ARGV[2]), ARGV[3])
 if before > 0 then return 0 end
 local version = bump(KEYS[1], now)
 redis.call('HSET', KEYS[1], 'v', version)
 return version
 `;
 
-/** ARGV: node. A version when no node holds them now, 0 when another still does. The version outlives the claims. */
+/** KEYS: claims, index. ARGV: node, person. A version when no node holds them now, 0 when another still does. */
 const LEAVE_SCRIPT = `${NOW}${LIVE}
 redis.call('HDEL', KEYS[1], 'n:' .. ARGV[1])
-if live(KEYS[1], now) > 0 then return 0 end
+local rest, latest = live(KEYS[1], now)
+if rest > 0 then
+  redis.call('ZADD', KEYS[2], latest, ARGV[2])
+  return 0
+end
+redis.call('ZREM', KEYS[2], ARGV[2])
 local version = bump(KEYS[1], now)
 redis.call('HSET', KEYS[1], 'v', version)
 redis.call('PEXPIRE', KEYS[1], 60000)
 return version
+`;
+
+/**
+ * A node that is stopping gives its claim up: if nobody else holds the person, the index says they are due at
+ * once, and the next sweep of any node tells the room — unless they have come back elsewhere meanwhile.
+ * KEYS: claims, index. ARGV: node, person.
+ */
+const RELEASE_SCRIPT = `${NOW}${LIVE}
+redis.call('HDEL', KEYS[1], 'n:' .. ARGV[1])
+if live(KEYS[1], now) == 0 then redis.call('ZADD', KEYS[2], now, ARGV[2]) end
+return 1
+`;
+
+/**
+ * Whoever finds a person whose last claim lapsed — a node that died, was stopped, or could not say they left —
+ * and nobody told, tells: the version, once (the index entry goes with it). A person who has come back since
+ * is only given their later lapse. KEYS: the index. ARGV: the claims' prefix, how many at most.
+ */
+const SWEEP_SCRIPT = `${NOW}${LIVE}
+local due = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', now, 'LIMIT', 0, tonumber(ARGV[2]))
+local gone = {}
+for _, person in ipairs(due) do
+  local key = ARGV[1] .. person
+  local rest, latest = live(key, now)
+  if rest > 0 then
+    redis.call('ZADD', KEYS[1], latest, person)
+  else
+    redis.call('ZREM', KEYS[1], person)
+    local version = bump(key, now)
+    redis.call('HSET', key, 'v', version)
+    redis.call('PEXPIRE', key, 60000)
+    gone[#gone + 1] = person
+    gone[#gone + 1] = version
+  end
+end
+return gone
 `;
 
 /** One answer per key: the version when somebody holds them, 0 when nobody does. */
@@ -90,8 +139,16 @@ return answers
 
 export const TYPING_PREFIX = 'purlay:typing:';
 export const ONLINE_PREFIX = 'purlay:online:';
+export const LAPSE_INDEX = 'purlay:online-lapse';
+/** How many lapsed people one sweep tells of. */
+const SWEEP_BATCH = 100;
 
-export const redisPresenceRegistry = (link: RedisLink, log: Logger): PresenceRegistry => ({
+export const redisPresenceRegistry = (
+  link: RedisLink,
+  log: Logger,
+  /** What answers while Redis does not: this node's own windows, which still keep a typist to a frame per half window. */
+  local: PresenceRegistry,
+): PresenceRegistry => ({
   startTyping: async (channelId, userId, ttlMs): Promise<boolean> => {
     try {
       const answer = await link.script(
@@ -104,15 +161,18 @@ export const redisPresenceRegistry = (link: RedisLink, log: Logger): PresenceReg
       throw new Error('the typing script answered something else');
     } catch (error) {
       (link.connected() ? log.warn : log.debug)(
-        'the shared typing record could not answer; telling the room',
+        'the shared typing record could not answer; using this node’s own window',
         { err: error },
       );
-      return true;
+      return await local.startTyping(channelId, userId, ttlMs);
     }
   },
   stopTyping: (channelId, userId): void => {
+    local.stopTyping(channelId, userId);
     // Not waited for: the send has been answered, and the window ends by itself within its length.
-    link.send('DEL', [`${TYPING_PREFIX}${channelId}:${userId}`]).catch(() => undefined);
+    link.send('DEL', [`${TYPING_PREFIX}${channelId}:${userId}`]).catch((error: unknown) => {
+      log.debug('a typing window could not be ended early', { err: error });
+    });
   },
 });
 
@@ -127,12 +187,46 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
     asVersion(
       await link.script(
         JOIN_SCRIPT,
-        [`${ONLINE_PREFIX}${userId}`],
-        [nodeId, String(PRESENCE_NODE_TTL_MS)],
+        [`${ONLINE_PREFIX}${userId}`, LAPSE_INDEX],
+        [nodeId, String(PRESENCE_NODE_TTL_MS), userId],
       ),
     ),
   leave: async (userId) =>
-    asVersion(await link.script(LEAVE_SCRIPT, [`${ONLINE_PREFIX}${userId}`], [nodeId])),
+    asVersion(
+      await link.script(LEAVE_SCRIPT, [`${ONLINE_PREFIX}${userId}`, LAPSE_INDEX], [nodeId, userId]),
+    ),
+  release: async (userIds): Promise<void> => {
+    await Promise.all(
+      userIds.map(
+        async (userId) =>
+          await link.script(
+            RELEASE_SCRIPT,
+            [`${ONLINE_PREFIX}${userId}`, LAPSE_INDEX],
+            [nodeId, userId],
+          ),
+      ),
+    );
+  },
+  sweep: async (): Promise<readonly PresenceChange[]> => {
+    const answer = await link.script(
+      SWEEP_SCRIPT,
+      [LAPSE_INDEX],
+      [ONLINE_PREFIX, String(SWEEP_BATCH)],
+    );
+    if (!Array.isArray(answer) || answer.length % 2 !== 0) {
+      throw new Error('the presence script answered something else');
+    }
+    const gone: PresenceChange[] = [];
+    for (let at = 0; at < answer.length; at += 2) {
+      const userId: unknown = answer[at];
+      const version: unknown = answer[at + 1];
+      if (typeof userId !== 'string' || typeof version !== 'number') {
+        throw new Error('the presence script answered something else');
+      }
+      gone.push({ userId, online: false, version });
+    }
+    return gone;
+  },
   among: async (userIds): Promise<readonly PresenceChange[]> => {
     if (userIds.length === 0) return [];
     const answers = await link.script(
