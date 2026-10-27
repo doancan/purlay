@@ -46,6 +46,7 @@ import {
   Uuid,
 } from './models';
 import { PresenceChange } from './events';
+import { REPLAY_OVERLAP_MS } from './message-id';
 
 /**
  * Keyset pagination, always. `nextCursor` is the id to pass back **as whichever
@@ -260,6 +261,44 @@ export type EditMessageRequest = Static<typeof EditMessageRequest>;
 
 export const MessagePage = Page(Message);
 export type MessagePage = Static<typeof MessagePage>;
+
+/**
+ * How far behind the watermark a client holds, a read of the changes reaches back (D-194): the time a write may
+ * take between stamping a row and committing it, which is the only way a change can be stamped before a reader's
+ * watermark and be missing from that reader's answer. A client discards what it already holds by id and version,
+ * as it does for a replay (D-65).
+ */
+export const CHANGES_OVERLAP_MS = REPLAY_OVERLAP_MS;
+
+/** An opaque cursor into the changes of a channel: where the page ended and the watermark the walk began at. */
+export const CHANGES_CURSOR_PATTERN =
+  '^[0-9]{13}\\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.[0-9]{13}$';
+
+/**
+ * `GET /api/channels/:channelId/changes` (D-194): with neither parameter, only the watermark; with `since` — the
+ * `asOf` the client holds — the first page of what changed after it; with `after`, the next. They are not given
+ * together: `after` carries the watermark of the walk it continues.
+ */
+export const ChangesQuery = FromClient({
+  since: Type.Optional(Timestamp),
+  after: Type.Optional(Type.String({ pattern: CHANGES_CURSOR_PATTERN })),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type ChangesQuery = Static<typeof ChangesQuery>;
+
+/**
+ * The messages a channel's change touched, oldest change first — a root or a reply, a deleted one as its tombstone
+ * — each as it now stands. `asOf` is the server's clock when the walk began and is the same on every page of it: a
+ * client keeps it, and asks `since` it, once the last page (`nextCursor` null) has been read.
+ */
+export const ChangePage = Type.Object({
+  data: Type.Array(Message),
+  nextCursor: Type.Union([Type.String({ pattern: CHANGES_CURSOR_PATTERN }), Type.Null()]),
+  asOf: Timestamp,
+});
+export type ChangePage = Static<typeof ChangePage>;
 
 /** How many roots a window around a message holds on each side of the one it is around (D-149). */
 export const MESSAGE_WINDOW_SIDE = 25;
@@ -1310,6 +1349,32 @@ export const MySignIn = Type.Object({
   ]),
 });
 export type MySignIn = Static<typeof MySignIn>;
+
+/**
+ * `GET /api/me/sessions` — where the caller is signed in (D-193): each live session of theirs, newest use first. A
+ * session is named by what the person chose, never by what the server knows of it: the native application's
+ * device name, and `null` for a browser's. No address, no user agent and nothing that could end the session
+ * but its own `id` (D-179 §3).
+ */
+export const DeviceSession = Type.Object({
+  id: Uuid,
+  /** `native` where the session was handed to the application by a code (D-191); every other is a `browser`. */
+  kind: Type.Union([Type.Literal('browser'), Type.Literal('native')]),
+  name: Type.Union([Type.String(), Type.Null()]),
+  createdAt: Type.String({ format: 'date-time' }),
+  /** Refreshed at most once an hour (D-60): precise to *when was this device last seen*, not to the minute. */
+  lastUsedAt: Type.String({ format: 'date-time' }),
+  expiresAt: Type.String({ format: 'date-time' }),
+  /** The session this request came in on: ending it is signing out. */
+  current: Type.Boolean(),
+});
+export type DeviceSession = Static<typeof DeviceSession>;
+
+export const DeviceSessionList = Type.Object({ data: Type.Array(DeviceSession) });
+export type DeviceSessionList = Static<typeof DeviceSessionList>;
+
+/** The most live sessions one answer names: a person with more than this has been signing in without signing out. */
+export const DEVICE_SESSIONS_MAX = 100;
 
 // ── The setup in the browser (D-179 §4) ──────────────────────────────────────
 // The answers are plain types in `setup.ts` (`SetupStatus`, `SetupState`, …): the browser only reads

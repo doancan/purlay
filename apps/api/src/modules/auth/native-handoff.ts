@@ -134,6 +134,7 @@ export const exchangeNativeCode = async (
     verifier,
     userAgent,
     ipAddress,
+    deviceName,
     refused,
   }: {
     readonly code: string;
@@ -213,7 +214,7 @@ export const exchangeNativeCode = async (
       terms.secret,
       found.user_id,
       terms.sessionTtlDays,
-      { userAgent, ipAddress },
+      { userAgent, ipAddress, deviceName },
     );
   });
 };

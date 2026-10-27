@@ -29,6 +29,10 @@ have it.
 - **Native app** — The server says which client versions it still serves and where to get a newer one, and refuses an older one with a clear answer (D-190)
 - **Operations** — Every release carries the contract bundle a non-browser client is generated from, with its digest (D-192)
 
+- **Sign-in** — A person sees where they are signed in, by device name and when it was last used, and ends one place without ending the rest (D-193)
+
+- **Messages** — A client that was away asks what happened to a channel's messages since it last heard — edits, deletions, reactions taken back, replies, and messages that arrived late — and is answered by the messages themselves (D-194)
+
 ### Changed
 
 - **Sign-in** — An emailed sign-in link can carry the application's pending sign-in into the browser that opens it (D-191)

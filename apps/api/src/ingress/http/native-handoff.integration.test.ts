@@ -551,6 +551,25 @@ describe('integration: POST /api/native/token', () => {
     expect(row.user_agent).toBe('Purlay for macOS/1.2.3 (Doğancan’s MacBook Pro)');
   });
 
+  test('names the session by the device, so a device list can show it and ending it is by its id', async () => {
+    const person = await aSignedInUser(db, clock, 'device-named');
+    const { verifier, challenge, state } = aVerifier();
+    const { code } = await authorize(person, { challenge, state });
+    const response = await token({
+      code,
+      verifier,
+      device: { name: '  Doğancan’s MacBook Pro  ' },
+    });
+    expect(response.status).toBe(204);
+    const rows = await db
+      .selectFrom('sessions')
+      .select(['device_name', 'user_agent'])
+      .where('user_id', '=', person.userId)
+      .where('device_name', 'is not', null)
+      .execute();
+    expect(rows.map((row) => row.device_name)).toEqual(['Doğancan’s MacBook Pro']);
+  });
+
   test('records the device name without the spaces around it', async () => {
     const person = await aSignedInUser(db, clock, 'trimmed');
     const { verifier, challenge, state } = aVerifier();
@@ -651,5 +670,40 @@ describe('integration: a session the handoff made, on a real socket', () => {
     });
     expect(out.status).toBe(204);
     expect(await closed).toBe(CLOSE_CODES.SESSION_ENDED);
+  });
+
+  test('is ended from the other device’s list, its socket with it, and the device doing the ending stays in', async () => {
+    const person = await aSignedInUser(db, clock, 'socket-list');
+    const { verifier, challenge, state } = aVerifier();
+    const { code } = await authorize(person, { challenge, state });
+    const value = cookieOf(await token({ code, verifier }));
+    const socket = await connect(value);
+    const closed = new Promise<number>((resolve) => {
+      socket.addEventListener('close', (event) => {
+        resolve(event.code);
+      });
+    });
+    const listed = await fetch(`http://127.0.0.1:${String(port)}/api/me/sessions`, {
+      headers: { cookie: person.cookie },
+    });
+    const { data } = (await listed.json()) as {
+      data: { id: string; kind: string; name: string | null }[];
+    };
+    const mac = data.find((place) => place.kind === 'native');
+    expect(mac?.name).toBe(DEVICE.name);
+    const ended = await fetch(`http://127.0.0.1:${String(port)}/api/me/sessions/${mac?.id ?? ''}`, {
+      method: 'DELETE',
+      headers: { cookie: person.cookie, origin },
+    });
+    expect(ended.status).toBe(204);
+    expect(await closed).toBe(CLOSE_CODES.SESSION_ENDED);
+    expect((await who(value)).status).toBe(401);
+    expect(
+      (
+        await fetch(`http://127.0.0.1:${String(port)}/api/me`, {
+          headers: { cookie: person.cookie },
+        })
+      ).status,
+    ).toBe(200);
   });
 });

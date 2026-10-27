@@ -301,15 +301,16 @@ it already holds by id. **The acknowledgement says where each channel's replay s
 `nextCursor` of `null` means it reached the present; anything else means it was one page, and the
 client continues over HTTP with `?after=` from there. (D-65)
 
-**The replay is of new root messages only, and a client re-reads the rest.** `SUBSCRIBE` replays
-the root messages after the cursor that are not deleted. It does not replay an edit, a deletion, a
-reaction, a pin, a thread reply, a read mark or a membership change that happened while the client
-was away: a message the client holds and others deleted is shown until it reads the feed again. So a
-client, on every `ACK` after a reconnect, re-reads what it shows — the open channel's feed, the open
-thread, the channel list, the notification inbox and the unread counts — and does not take a
-reconnect for being up to date. The web client does so in `apps/web/src/realtime/engine.ts`
-(`resync`); any other client owes the same, and it is not in the contract bundle because it is
-behaviour, not a shape.
+**The replay is of new root messages only; what else happened is read from the changes.** `SUBSCRIBE` replays
+the root messages after the cursor that are not deleted. It does not replay an edit, a deletion, a reaction, a thread
+reply, a resolved thread or a redaction made while the client was away. A client asks for those: for each channel it
+shows, `GET /api/channels/:id/changes?since=<the asOf it holds>`, pages to the end, applies each message it is given
+by id (a deleted one is a tombstone to show), and keeps the `asOf` of that walk. It takes its first `asOf` from the same
+route asked with nothing, at the moment it loads a channel's history. A client with no `asOf` for a channel, or one
+it does not trust, reads the history again. What the changes do not carry — the channel list, pins, memberships, the
+inbox, unread counts — is read again after every acknowledgement, as the web client's `resync` does
+(`apps/web/src/realtime/engine.ts`). **A message the retention purge deleted is not in the walk** (the job has no bus,
+D-139 §3): a client that must not show one reads the history again after a purge. (D-194)
 
 **A `SUBSCRIBE` is judged whole.** One channel the person can no longer see makes the whole frame
 `ERROR CHANNEL_NOT_FOUND`, naming none: no `ACK`, no replay for the channels that were fine, and they

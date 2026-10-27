@@ -126,6 +126,8 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('ATTACHMENT_ID_CONFLICT'),
   Type.Literal('ATTACHMENT_NOT_FOUND'),
+  /** A session of the caller's that is not there to end: unknown, already ended, or somebody else's — one answer (D-193). */
+  Type.Literal('SESSION_NOT_FOUND'),
   /** A link that does not open — unknown, expired, revoked, or its workspace gone: one answer (D-115). */
   Type.Literal('INVITATION_NOT_FOUND'),
   /** An export that is not there to download: unknown, not ready, downloaded already or expired (D-140). */
@@ -257,6 +259,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   GITHUB_REPOSITORY_MISMATCH: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
+  SESSION_NOT_FOUND: 404,
   INVITATION_NOT_FOUND: 404,
   EXPORT_NOT_FOUND: 404,
   EXPORT_IN_PROGRESS: 409,

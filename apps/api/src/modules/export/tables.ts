@@ -115,6 +115,8 @@ export const COLUMNS: Columns = {
     resolved_at: 'export',
     resolved_by: 'export',
     state_version: 'omit',
+    // Bookkeeping for a client catching up (D-194), as the row's version is: not the workspace's data.
+    changed_at: 'omit',
   },
   reactions: {
     id: 'export',

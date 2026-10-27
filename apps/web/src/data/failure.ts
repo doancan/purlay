@@ -76,6 +76,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
+    case 'SESSION_NOT_FOUND':
     case 'INVITATION_NOT_FOUND':
     case 'EXPORT_NOT_FOUND':
     case 'SIGN_IN_LINK_NOT_FOUND':
