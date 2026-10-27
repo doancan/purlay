@@ -3,7 +3,7 @@
  *
  * Run, not read: each case is a repository and a deployment directory made for the purpose, with
  * `docker`, the backup, the restore and the smoke test replaced by stubs that write what they were
- * asked to a log and answer as the case says. So "a failed build changes nothing" and "a failed start
+ * asked to a log and answer as the case says. So "a failed pull changes nothing" and "a failed start
  * restores the backup and puts the old image back" are behaviour this file watches happen — no
  * daemon, no database, no network.
  *
@@ -71,23 +71,23 @@ const stub = (path: string, body: string): void => {
 const DOCKER = String.raw`
 case "$1" in
   info) exit "__D__{DOCKER_INFO_EXIT:-0}" ;;
-  build)
-    cat "$DEPLOY_ROOT/.deploy.lock/pid" > __ROOT__/lock-during-build 2>/dev/null
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        --label) case "$2" in org.opencontainers.image.revision=*) echo "__D__{2#*=}" > __ROOT__/built-revision ;; esac ;;
-        -t) echo "$2" > __ROOT__/built-tag ;;
+  pull)
+    cat "$DEPLOY_ROOT/.deploy.lock/pid" > __ROOT__/lock-during-pull 2>/dev/null
+    echo "__D__{2##*:sha-}" > __ROOT__/built-revision
+    exit "__D__{PULL_EXIT:-0}" ;;
+  image)
+    if [ "$2" = inspect ]; then
+      case "$4" in
+        *RepoDigests*) echo "__D__{DIGEST_SEEN:-ghcr.io/acme/purlay-api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}" ;;
+        *) if [ -n "__D__{PUBLISHED_REVISION:-}" ]; then echo "$PUBLISHED_REVISION"; else cat __ROOT__/built-revision; fi ;;
       esac
-      shift
-    done
-    exit "__D__{BUILD_EXIT:-0}" ;;
-  tag) exit "__D__{TAG_EXIT:-0}" ;;
-  image) exit 0 ;;
+    fi
+    exit 0 ;;
   inspect)
     built="$(cat __ROOT__/built-revision 2>/dev/null || echo none)"
     image="$(cat __ROOT__/last-up-image 2>/dev/null || echo none)"
     case "$image" in
-      *"sha-__D__{built:0:8}") seen="$built" ;;
+      *"@sha256:"*) seen="$built" ;;
       *) seen="0000000000000000000000000000000000000000" ;;
     esac
     container="__D__{@: -1}"
@@ -218,6 +218,7 @@ const environment = (place: Sandbox, env: Record<string, string>): Record<string
   HOME: place.root,
   STUB_LOG: place.log,
   DEPLOY_ROOT: place.deployment,
+  IMAGE_REPOSITORY: 'ghcr.io/acme/purlay-api',
   ...env,
 });
 
@@ -400,20 +401,20 @@ describe('one deploy at a time', () => {
   test('holds the lock while it works, and lets it go when it is done or fails', () => {
     const place = sandbox();
     expect(deploy(place).code).toBe(0);
-    expect(readFileSync(join(place.root, 'lock-during-build'), 'utf8').trim()).toMatch(/^\d+$/);
+    expect(readFileSync(join(place.root, 'lock-during-pull'), 'utf8').trim()).toMatch(/^\d+$/);
     expect(existsSync(join(place.deployment, '.deploy.lock'))).toBe(false);
     const failed = sandbox();
-    deploy(failed, { BUILD_EXIT: '1' });
+    deploy(failed, { PULL_EXIT: '1' });
     expect(existsSync(join(failed.deployment, '.deploy.lock'))).toBe(false);
   });
 });
 
 describe('a failure before the switch changes nothing and restores nothing', () => {
-  test('a build that fails: no smoke test, no backup, the running site untouched', () => {
+  test('a pull that fails: no smoke test, no backup, the running site untouched', () => {
     const place = sandbox();
-    const outcome = deploy(place, { BUILD_EXIT: '1' });
+    const outcome = deploy(place, { PULL_EXIT: '1' });
     expect(outcome.code).not.toBe(0);
-    expect(outcome.stderr).toContain('the image did not build');
+    expect(outcome.stderr).toContain('the image could not be pulled');
     expect(called(outcome, 'image-smoke.sh')).toBe(false);
     expect(called(outcome, 'backup.sh')).toBe(false);
     expect(called(outcome, 'compose')).toBe(false);
@@ -434,7 +435,7 @@ describe('a failure before the switch changes nothing and restores nothing', () 
     unchanged(place);
   });
 
-  test('a backup that fails: the image was built and tried, and still nothing is switched', () => {
+  test('a backup that fails: the image was pulled and tried, and still nothing is switched', () => {
     const place = sandbox();
     const outcome = deploy(place, { BACKUP_EXIT: '1' });
     expect(outcome.code).not.toBe(0);
@@ -455,19 +456,27 @@ describe('a failure before the switch changes nothing and restores nothing', () 
     unchanged(place);
   });
 
-  test('an image that cannot be given its name: the files are put back, nothing is restored', () => {
+  test('a published image for another commit never reaches the backup or switch', () => {
     const place = sandbox();
-    const outcome = deploy(place, { TAG_EXIT: '1' });
+    const outcome = deploy(place, { PUBLISHED_REVISION: 'c'.repeat(40) });
     expect(outcome.code).not.toBe(0);
-    expect(outcome.stderr).toContain('the files could not be switched');
-    expect(called(outcome, ' up ')).toBe(false);
-    expect(called(outcome, 'restore.sh')).toBe(false);
+    expect(outcome.stderr).toContain('the published image is not commit');
+    expect(called(outcome, 'backup.sh')).toBe(false);
     unchanged(place);
   });
 
-  test('a deploy of the commit that is running: a build that fails does not remove it', () => {
+  test('an invalid digest never reaches the backup or switch', () => {
+    const place = sandbox();
+    const outcome = deploy(place, { DIGEST_SEEN: 'ghcr.io/other/image@sha256:' + 'b'.repeat(64) });
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain('invalid image digest');
+    expect(called(outcome, 'backup.sh')).toBe(false);
+    unchanged(place);
+  });
+
+  test('a deploy of the commit that is running: a pull that fails does not remove it', () => {
     const place = sandbox({ running: 'same-commit' });
-    const outcome = deploy(place, { BUILD_EXIT: '1' });
+    const outcome = deploy(place, { PULL_EXIT: '1' });
     expect(outcome.code).not.toBe(0);
     expect(current(place)).toBe(place.short);
     expect(
@@ -488,7 +497,7 @@ describe('a failure after the switch goes back the way the runbook says', () => 
     expect(restore).toBeGreaterThan(stop);
     expect(outcome.calls[indexOfCall(outcome, 'restore.sh') - 1] ?? '').not.toContain('failed');
     // The first start saw the new image and release; the second, after the restore, the old ones.
-    expect(up(place, 1).image).toBe(`purlay-api:sha-${place.short}`);
+    expect(up(place, 1).image).toBe('ghcr.io/acme/purlay-api@sha256:' + 'b'.repeat(64));
     expect(up(place, 1).release).toBe(`releases/${place.short}`);
     expect(up(place, 2).image).toBe(`purlay-api:sha-${OLD}`);
     expect(up(place, 2).release).toBe(`releases/${OLD}`);
@@ -591,33 +600,28 @@ describe('a failure after the switch goes back the way the runbook says', () => 
 });
 
 describe('a deploy', () => {
-  test('builds once, tries that build, backs up, and only then gives it its name and starts it', () => {
+  test('pulls once, tests the digest, backs up, then starts without a server build', () => {
     const place = sandbox();
     const outcome = deploy(place);
     expect(outcome.code).toBe(0);
-    const order = ['docker build', 'image-smoke.sh', 'backup.sh', 'docker tag', ' up '];
+    const order = ['docker pull', 'image-smoke.sh', 'backup.sh', ' up '];
     const positions = order.map((fragment) => indexOfCall(outcome, fragment));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-    expect(callsWith(outcome, 'docker build')).toHaveLength(1);
-    const build = callsWith(outcome, 'docker build')[0] ?? '';
-    expect(build).toContain(`org.opencontainers.image.revision=${place.sha}`);
-    expect(build).toContain(`-t purlay-api:candidate-${place.short}`);
+    expect(callsWith(outcome, 'docker pull')).toHaveLength(1);
+    expect(called(outcome, 'docker build')).toBe(false);
+    expect(called(outcome, 'docker tag')).toBe(false);
     expect(outcome.calls[indexOfCall(outcome, 'image-smoke.sh')]).toContain(
-      `purlay-api:candidate-${place.short}`,
-    );
-    expect(outcome.calls[indexOfCall(outcome, 'docker tag')]).toContain(
-      `purlay-api:candidate-${place.short} purlay-api:sha-${place.short}`,
+      'ghcr.io/acme/purlay-api@sha256:' + 'b'.repeat(64),
     );
     expect(called(outcome, 'restore.sh')).toBe(false);
-    expect(outcome.stdout).toContain(`deployed ${place.short}`);
   });
 
   test('starts the stack on the new image and the new release, and waits for it to be healthy', () => {
     const place = sandbox();
     const outcome = deploy(place);
     expect(outcome.code).toBe(0);
-    expect(up(place, 1).image).toBe(`purlay-api:sha-${place.short}`);
+    expect(up(place, 1).image).toBe('ghcr.io/acme/purlay-api@sha256:' + 'b'.repeat(64));
     expect(up(place, 1).release).toBe(`releases/${place.short}`);
     expect(up(place, 1).command).toContain('up -d --wait --wait-timeout 900');
     expect(up(place, 1).command).not.toContain('--force-recreate');
@@ -630,10 +634,12 @@ describe('a deploy', () => {
     expect(up(place, 1).command).toContain('--wait-timeout 120');
   });
 
-  test('names the image by the commit, never by a moving word', () => {
+  test('pins the image digest, never by a moving word', () => {
     const place = sandbox();
     const outcome = deploy(place);
-    expect(envFile(place)).toContain(`PURLAY_IMAGE=purlay-api:sha-${place.short}`);
+    expect(envFile(place)).toContain(
+      'PURLAY_IMAGE=ghcr.io/acme/purlay-api@sha256:' + 'b'.repeat(64),
+    );
     expect(outcome.calls.join('\n')).not.toContain('latest');
   });
 
@@ -716,7 +722,7 @@ describe('what it forgets', () => {
     );
   });
 
-  test('the newest ones it is told to keep, by age, and removes the images of the others', () => {
+  test('the newest ones it is told to keep, by age, and leaves shared Docker images alone', () => {
     const place = sandbox();
     const names = ['1111111a', '2222222b', '3333333c', '4444444d'];
     for (const [index, name] of names.entries()) {
@@ -731,7 +737,7 @@ describe('what it forgets', () => {
       [OLD, place.short, '4444444d'].sort(),
     );
     for (const gone of ['1111111a', '2222222b', '3333333c']) {
-      expect(called(outcome, `docker image rm purlay-api:sha-${gone}`)).toBe(true);
+      expect(called(outcome, `docker image rm purlay-api:sha-${gone}`)).toBe(false);
     }
     expect(called(outcome, 'docker image rm purlay-api:sha-4444444d')).toBe(false);
     expect(called(outcome, `docker image rm purlay-api:sha-${place.short}`)).toBe(false);

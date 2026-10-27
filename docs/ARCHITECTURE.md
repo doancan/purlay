@@ -911,11 +911,13 @@ it happened exits 1 too. The API and the scheduler both (`installCrashHandlers` 
 #634). Nothing is left running half-alive. The scheduler and each job process are tracked
 the same way, through the same `errorTrackingFor` (#635).
 
+First installation and runner configuration are in [DEPLOY.md](DEPLOY.md).
+
 **Deploying is a script now** (D-185): on the team's server, a merge to `main` does steps 1 and 2 below by
-itself, builds the new image and tries it before the switch, and checks in the end that the API and the scheduler
-run the commit that was built (`scripts/deploy.sh`, started by the `deploy` workflow on the server's runner). When
+itself after the image workflow succeeds, pulls the published image by digest and tries it before the switch,
+and checks in the end that the API and the scheduler run the published commit (`scripts/deploy.sh`, started by the `deploy` workflow on the server's runner). When
 that is not so, it goes back by steps 5 and 6. By hand, on any server with the same layout:
-`DEPLOY_ROOT=… scripts/deploy.sh <full commit hash>` from a checkout of that commit. The deployment directory
+`DEPLOY_ROOT=… IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>` from a checkout of that commit. The deployment directory
 holds `releases/<8 hex>/` (one per deploy, and the running one must be one of them), the `current` link to the
 running one, `backups/`, the env file (with its previous copy as `.prev`) and `deploys.log`, one line per deploy,
 rollback or refusal. A deploy that was cut off after it switched leaves `.switching`, and the next deploy refuses

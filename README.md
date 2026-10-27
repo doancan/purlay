@@ -65,7 +65,10 @@ was nearly built.
 
 ## Self-hosting
 
-On a server with Docker and the compose plugin, and a public name whose ports 80 and 443 reach it:
+For the first installation and automatic image-based updates, follow [the deployment guide](docs/DEPLOY.md).
+No separate repository is needed; GitHub Actions publishes the image to GHCR and the server pulls it.
+
+For a standalone installation, on a server with Docker and the compose plugin, and a public name whose ports 80 and 443 reach it:
 
 1. `cp docker/production.env.example production.env`, and fill in every empty value; each says how to
    make it. Keep the file private.

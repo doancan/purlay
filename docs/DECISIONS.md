@@ -8870,15 +8870,18 @@ beyond the device's `purlay.theme`.
 
 **Decided (the owner, 2026-10-26), builds on D-73, D-86, D-92, D-94 and D-95.** How a change reaches the
 team's server, and what a release is, were a list of commands run by hand: build on the server (the Mac
-cannot, D-92), copy the source, change `PURLAY_IMAGE`, `up -d`, look. Now:
+cannot, D-92), copy the source, change `PURLAY_IMAGE`, `up -d`, look.
+**Amended 2026-10-27:** use the image published by CI rather than rebuilding on production; keep the
+Docker and deployment files in this repository. First installation is in `docs/DEPLOY.md`. Now:
 
 - **One long-lived branch.** Work happens on `feat/`, `fix/`, `chore/`, `refactor/` and `docs/` branches and
   reaches `main` by a pull request that passes the required checks. There is no `develop`.
 - **A merge deploys.** Every commit that lands on `main` is deployed to the server by the `deploy`
-  workflow, on a **self-hosted runner on that server**, which runs `scripts/deploy.sh`: build the image there
-  from the commit, smoke-test that image, back up, switch, and check that the API and the scheduler run *this
-  commit* (the image carries it as a label). The backup is taken after the build and the smoke test, so a
-  build that fails costs no backup and a rollback loses seconds, not the minutes a build takes. One deploy at
+  workflow after the `image` workflow succeeds for a push to this repository's `main`. A **self-hosted
+  runner on that server** runs `scripts/deploy.sh`: pull the published full-commit tag from GHCR, resolve
+  and pin its digest, verify the revision label, smoke-test, back up, switch, and check that the API and
+  scheduler run *this commit*. No application build runs on production. The backup is taken after the
+  pull and smoke test, so an image failure costs no backup and the backup is close to the switch. One deploy at
   a time, and one in progress is never cancelled. The runner only asks GitHub for work; nothing reaches the
   server from outside. A hand-started run only runs from `main`.
 - **A failure goes back the way `ARCHITECTURE.md` says, and no other.** Before the switch nothing has changed
@@ -8893,15 +8896,16 @@ cannot, D-92), copy the source, change `PURLAY_IMAGE`, `up -d`, look. Now:
   *Unreleased* into `docs/changelog/v<x.y.z>.md`; when that merges, the deploy is followed by a tag and a
   GitHub Release (`scripts/release-publish.sh`). A merge that leaves the version alone deploys and releases
   nothing: numbers mark moments the owner chose, they are not a count of merges. A hand-started deploy of an
-  earlier commit on `main` is how a bad deploy is undone, and it tags nothing.
+  earlier commit on `main` tags nothing; undoing migrations requires the database restore procedure.
+  The release job runs on a GitHub-hosted runner and checks out exactly the deployed commit.
 - **The changelog is in one shape.** Keep a Changelog: **Added, Changed, Deprecated, Removed, Fixed, Security**,
   one line per bullet, with a bold area and the decision in parentheses, so that a person scans a release in two
   minutes instead of reading a transcript. `changes.md` says how to write an entry; `scripts/changelog.test.ts`
   holds the files to it and `bun run release` refuses an Unreleased that is not. What was written before the
   first release, in prose, is kept as it was (`docs/changelog/pre-0.1.0.md`).
 - **What the runner may run is held by a test.** The server holds the production database, so the workflow
-  that runs there starts only on a push to `main` or by hand, never on a pull request, and only the release
-  job may write (`scripts/deploy-workflow.test.ts`).
+  that runs there starts only after a successful image publication from `main` or by hand, never on a
+  pull request. Deploy has `packages: read`, and only the release job may write (`scripts/deploy-workflow.test.ts`).
 
 **Considered and rejected.**
 
