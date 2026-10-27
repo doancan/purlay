@@ -145,6 +145,7 @@ describe('with no provider above it', () => {
     const view = render(<Probe />);
     expect(held(view)).toEqual(DEFAULT_PREFERENCES);
     await person().click(view.getByRole('button', { name: 'unread' }));
+    await person().click(view.getByRole('button', { name: 'reset' }));
     expect(held(view)).toEqual(DEFAULT_PREFERENCES);
   });
 });
