@@ -223,14 +223,17 @@ describe('docker/postgres-start.sh, the switch', () => {
     },
   );
 
-  test('on, with the archive not mounted, or not handed over to postgres, stops: archiving would fail on every segment', () => {
+  test('on, with the archive not mounted, stops: archiving would fail on every segment', () => {
     const { outcome, args } = start({ WAL_ARCHIVE: 'on', WAL_ARCHIVE_DIR: '/does/not/exist' });
     expect(outcome.code).not.toBe(0);
     expect(args).toBeNull();
-    const refused = start({ WAL_ARCHIVE: 'on', CHOWN_EXIT: '1' });
-    expect(refused.outcome.code).not.toBe(0);
-    expect(refused.outcome.stderr).toContain('cannot hand');
-    expect(refused.args).toBeNull();
+  });
+
+  test('on, with a directory that cannot be handed over (root_squash), warns and goes on: it may already be writable', () => {
+    const { outcome, args } = start({ WAL_ARCHIVE: 'on', CHOWN_EXIT: '1' });
+    expect(outcome.code).toBe(0);
+    expect(outcome.stderr).toContain('warning: could not hand');
+    expect(args).toContain('archive_mode=on');
   });
 
   test('the compose file wires it: off by default, the wrapper as the entrypoint, the archive and both scripts mounted', () => {
@@ -284,10 +287,12 @@ case "$1" in
       pg_basebackup)
         [ "$STUB_BASEBACKUP_EXIT" = 0 ] || exit "$STUB_BASEBACKUP_EXIT"
         tar -czf - -C "$STUB_BASE_LABEL_DIR" backup_label ;;
+      test) [ -z "$STUB_ARCHIVE_MISSING" ] || exit 1 ;;
       psql)
         case "$*" in
           *archive_mode*) echo "$STUB_ARCHIVE_MODE" ;;
           *pg_stat_archiver*) echo "$STUB_ARCHIVER_FAILING" ;;
+          *pg_ls_archive_statusdir*) echo "$STUB_ARCHIVE_WAITING" ;;
           *clock_timestamp*) echo "2026-10-27 01:00:05.123456+00" ;;
         esac ;;
       pg_archivecleanup) echo "pg_archivecleanup: keeping WAL file $*" ;;
@@ -347,6 +352,8 @@ const stubEnv = (place: Stack, extra: Record<string, string> = {}): Record<strin
   STUB_LOG: place.log,
   STUB_ARCHIVE_MODE: 'off',
   STUB_ARCHIVER_FAILING: 'f',
+  STUB_ARCHIVE_WAITING: '0',
+  STUB_ARCHIVE_MISSING: '',
   STUB_BASEBACKUP_EXIT: '0',
   STUB_BASE_LABEL_DIR: join(place.root, 'label'),
   COMPOSE_FILE: join(place.deployment, 'current/docker-compose.production.yml'),
@@ -361,6 +368,19 @@ const stamp = (date: Date): string =>
     .replace(/\.\d{3}Z$/, 'Z');
 const hoursAgo = (hours: number): string => stamp(new Date(Date.now() - hours * 3_600_000));
 
+/** Writes the SHA256SUMS of the directory's other files, the way write_checksums does. */
+const sums = (path: string): void => {
+  const made = Bun.spawnSync(
+    [
+      'sh',
+      '-c',
+      'find . -type f ! -name SHA256SUMS | sort | while read f; do shasum -a 256 "$f"; done > SHA256SUMS',
+    ],
+    { cwd: path },
+  );
+  if (made.exitCode !== 0) throw new Error(made.stderr.toString());
+};
+
 const backupDirectory = (
   backups: string,
   name: string,
@@ -368,7 +388,9 @@ const backupDirectory = (
 ): string => {
   const path = join(backups, `purlay-${name}`);
   mkdirSync(path);
-  for (const file of files) writeFileSync(join(path, file), 'x');
+  for (const file of files.filter((f) => f !== 'SHA256SUMS')) writeFileSync(join(path, file), 'x');
+  // A SHA256SUMS that is true, as backup.sh writes it: the check reads the files back against it.
+  if (files.includes('SHA256SUMS')) sums(path);
   return path;
 };
 
@@ -420,6 +442,15 @@ describe('scripts/check-backup.sh, the hook that says a night was missed', () =>
     expect(check(place, [place.backups]).code).toBe(1);
   });
 
+  test('a newer directory that is not whole is passed over for the whole one before it', () => {
+    const place = stack();
+    backupDirectory(place.backups, hoursAgo(5));
+    backupDirectory(place.backups, hoursAgo(1), ['database.dump']);
+    const outcome = check(place, [place.backups]);
+    expect(outcome.code).toBe(0);
+    expect(outcome.stdout).toContain('5 hours old');
+  });
+
   test('the age is the time in the name, not the directory modification time a copy resets', () => {
     const place = stack();
     const path = backupDirectory(place.backups, hoursAgo(40));
@@ -438,12 +469,61 @@ describe('scripts/check-backup.sh, the hook that says a night was missed', () =>
     expect(Number(hours)).toBe(expected);
   });
 
-  test('--wal: archiving off is reported, and is not a failure', () => {
+  test('--wal: archiving off fails, because --wal says it is relied on; without --wal it is not looked at', () => {
     const place = stack();
     backupDirectory(place.backups, hoursAgo(1));
     const outcome = check(place, ['--wal', place.backups]);
-    expect(outcome.code).toBe(0);
-    expect(outcome.stdout).toContain('archiving is off');
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('ARCHIVING IS OFF');
+    expect(check(place, [place.backups]).code).toBe(0);
+  });
+
+  test('a name in the future, or not a date, is never the newest backup', () => {
+    const place = stack();
+    backupDirectory(place.backups, hoursAgo(40));
+    backupDirectory(place.backups, '20991231T000000Z');
+    backupDirectory(place.backups, '20269999T999999Z');
+    const outcome = check(place, [place.backups]);
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('BACKUP NAME IN THE FUTURE');
+    const only = stack();
+    backupDirectory(only.backups, '20269999T999999Z');
+    expect(check(only, [only.backups]).stderr).toContain('BACKUP MISSING');
+  });
+
+  test('a backup that is the right age but does not match its sums is damaged, not fine', () => {
+    const place = stack();
+    const path = backupDirectory(place.backups, hoursAgo(1));
+    writeFileSync(join(path, 'database.dump'), 'truncated');
+    const outcome = check(place, [place.backups]);
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('BACKUP DAMAGED');
+  });
+
+  test('--wal: a base backup that the sums do not name is refused', () => {
+    const place = stack();
+    const path = backupDirectory(place.backups, hoursAgo(1), ['database.dump', 'SHA256SUMS']);
+    writeFileSync(join(path, 'base.tar.gz'), 'x');
+    writeFileSync(join(path, 'base.meta'), 'x');
+    const outcome = check(place, ['--wal', place.backups], { STUB_ARCHIVE_MODE: 'on' });
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('not in its SHA256SUMS');
+  });
+
+  test('--wal: segments that have waited too long to be archived fail, though nothing has failed', () => {
+    const place = stack();
+    backupDirectory(place.backups, hoursAgo(1), [
+      'database.dump',
+      'base.tar.gz',
+      'base.meta',
+      'SHA256SUMS',
+    ]);
+    const outcome = check(place, ['--wal', place.backups], {
+      STUB_ARCHIVE_MODE: 'on',
+      STUB_ARCHIVE_WAITING: '3',
+    });
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('ARCHIVING IS STALLED');
   });
 
   test('--wal: archiving on, and a newest backup with no base backup, fails', () => {
@@ -456,7 +536,12 @@ describe('scripts/check-backup.sh, the hook that says a night was missed', () =>
 
   test('--wal: archiving on with a base backup passes, and a failing archiver fails', () => {
     const place = stack();
-    backupDirectory(place.backups, hoursAgo(1), ['database.dump', 'SHA256SUMS', 'base.tar.gz']);
+    backupDirectory(place.backups, hoursAgo(1), [
+      'database.dump',
+      'base.tar.gz',
+      'base.meta',
+      'SHA256SUMS',
+    ]);
     expect(check(place, ['--wal', place.backups], { STUB_ARCHIVE_MODE: 'on' }).code).toBe(0);
     const failing = check(place, ['--wal', place.backups], {
       STUB_ARCHIVE_MODE: 'on',
@@ -619,8 +704,11 @@ describe('scripts/restore-pitr.sh, before it creates anything', () => {
 // ── the retention rule ───────────────────────────────────────────────────────────────────────────
 
 describe('scripts/prune-wal.sh, retention tied to the base backups', () => {
-  const prune = (place: Stack, args: readonly string[]): Outcome =>
-    run(['bash', join(repo, 'scripts/prune-wal.sh'), ...args], stubEnv(place));
+  const prune = (
+    place: Stack,
+    args: readonly string[],
+    extra: Record<string, string> = { STUB_ARCHIVE_MODE: 'on' },
+  ): Outcome => run(['bash', join(repo, 'scripts/prune-wal.sh'), ...args], stubEnv(place, extra));
   const base = (place: Stack, name: string, startWal: string, dir = place.backups): void => {
     const path = backupDirectory(dir, name, ['database.dump', 'SHA256SUMS']);
     writeFileSync(
@@ -661,6 +749,27 @@ describe('scripts/prune-wal.sh, retention tied to the base backups', () => {
     const cleanup = calls(place).filter((call) => call.includes('pg_archivecleanup'));
     expect(cleanup[0]).toContain(' -n ');
     expect(calls(place).some((call) => call.includes('find /wal-archive'))).toBe(false);
+  });
+
+  test('with archiving off in the running database it prunes nothing: the mount is there either way', () => {
+    const place = stack();
+    base(place, '20261027T010000Z', '000000010000000000000020');
+    const outcome = prune(place, [place.backups], { STUB_ARCHIVE_MODE: 'off' });
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('archiving is off');
+    expect(calls(place).some((call) => call.includes('pg_archivecleanup'))).toBe(false);
+  });
+
+  test('when the oldest base backup began in a segment the archive does not hold, nothing is pruned', () => {
+    const place = stack();
+    base(place, '20261027T010000Z', '000000010000000000000020');
+    const outcome = prune(place, [place.backups], {
+      STUB_ARCHIVE_MODE: 'on',
+      STUB_ARCHIVE_MISSING: '1',
+    });
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr).toContain('does not hold');
+    expect(calls(place).some((call) => call.includes('pg_archivecleanup'))).toBe(false);
   });
 
   test('with no base backup it removes nothing: a mistyped path must not empty an archive', () => {

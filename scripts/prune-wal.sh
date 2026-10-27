@@ -37,9 +37,15 @@ done
 [ "$found" -gt 0 ] || die "no base backup under $*: nothing was pruned (the archive is only of use with one)"
 
 echo "keeping every WAL segment from $oldest, the oldest of $found base backups"
-in_postgres test -d /wal-archive || die "the database container has no /wal-archive; is WAL_ARCHIVE set?"
+# /wal-archive is mounted whether or not archiving is on, so the mount proves nothing: ask the server.
+archiving="$(in_postgres psql -U "$DB_USER" -d postgres -Atc 'show archive_mode')" || die "could not ask the database whether it archives; nothing was pruned"
+case "$archiving" in on | always) ;; *) die "WAL archiving is off in the running database; there is nothing to prune, and nothing was" ;; esac
+# Everything below the oldest kept segment goes. If that segment is not in the archive, the base backup
+# names another cluster's, or the archive was replaced, and "everything below" could be everything.
+in_postgres test -f "/wal-archive/$oldest.gz" \
+  || die "the archive does not hold $oldest.gz, where the oldest base backup began: that backup can no longer be restored to a point in time, or its base.meta is from another archive. Nothing was pruned; remove that backup if it is obsolete"
 # `-x .gz`: the archive stores each segment compressed. Prints what it removes.
-in_postgres pg_archivecleanup ${DRY[@]+"${DRY[@]}"} -d -x .gz /wal-archive "$oldest.gz" 2>&1 | sed 's/^pg_archivecleanup: //' || die "pg_archivecleanup failed"
+in_postgres pg_archivecleanup ${DRY[@]+"${DRY[@]}"} -d -x .gz /wal-archive "$oldest.gz" 2>&1 | sed 's/^pg_archivecleanup: //' || die "pg_archivecleanup failed; nothing is known to be pruned"
 # A copy that was cut short by a crash is hidden and unreadable by a restore; an hour is long past any run.
 if [ ${#DRY[@]} -eq 0 ]; then
   in_postgres find /wal-archive -maxdepth 1 -name '.*.partial' -mmin +60 -delete

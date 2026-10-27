@@ -9853,10 +9853,11 @@ that is, until somebody needs it.
    inside the database container so its version is the server's), beside the dump, with `base.label` and `base.meta`
    recording the segment it began in and the moment it was complete, in the same `SHA256SUMS`. A bounded wait: the
    backup fails if the archive does not take its last segment.
-4. **`scripts/restore-pitr.sh` restores to a named time into a new instance.** The base backup is unpacked into a new
-   volume and a new PostgreSQL from the stack's own image replays the archive to `--to` (a time with a zone, or
-   `latest`) in a container with **no network** and the archive **read-only**, so it cannot reach the live database or
-   add to the archive. It promotes, is compared with a snapshot (`compare-databases.sh --snapshot` / `--against`) if
+4. **`scripts/restore-pitr.sh` restores to a named time into a new instance.** The archive is copied into a new
+   volume as root and every segment read back whole (the server is a different user from whoever shipped it, and a
+   segment it cannot read looks to it like the end of the archive); the base backup is unpacked into another; and a
+   new PostgreSQL from the stack's own image replays to `--to` (a time with a zone, or `latest`) in a container with
+   **no network** and the copy **read-only**, so it cannot reach the live database or add to the archive. It promotes, is compared with a snapshot (`compare-databases.sh --snapshot` / `--against`) if
    given, and writes a backup-shaped directory that the existing, guarded `restore.sh` applies (staging, rename,
    the old one kept). It refuses, naming why, a time before the base backup was complete (checked by the script, not
    left to PostgreSQL, whose own refusal needs a commit inside the base backup's window), an archive that ends or has a gap before
@@ -9865,15 +9866,16 @@ that is, until somebody needs it.
    time, writes and deletes more, ships the archive off, destroys every volume, recovers to the time from the shipped
    copy, applies it with `restore.sh` and fails unless the comparison finds exactly the rows from before the time.
    It also proves each refusal and that nothing is left running. Its measurements are recorded in the run's summary.
-6. **A hook says a night was missed**: `scripts/check-backup.sh` exits non-zero when no whole backup exists or the newest
-   is older than 26 hours (by its name's time), and with `--wal` when the archiver is failing or the newest backup has
-   no base backup under archiving. The cron lines in `CONFIG.md` name the paths of the layout `deploy.sh` makes and a
+6. **A hook says a night was missed**: `scripts/check-backup.sh` exits non-zero when no whole backup exists, the newest
+   is older than 26 hours (by its name's time, never a future one) or does not match its sums, and with `--wal` (which
+   declares that archiving is relied on) when archiving is off, the archiver is failing or stalled, or the newest backup
+   has no base backup named in its sums. The cron lines in `CONFIG.md` name the paths of the layout `deploy.sh` makes and a
    test builds that layout and runs them as cron would.
 7. **The stated numbers**: RPO 60 seconds with archiving on (`WAL_ARCHIVE_TIMEOUT`), 24 hours without; RTO is the
    rehearsal's measurement, recorded, with a design target of an hour for 10 GB that is an extrapolation until measured.
    A test ties the numbers in `CONFIG.md` to the compose default and the script's limit.
 8. **Object storage**: the repository states what the bucket must have (versioning, no right to delete a version, a
-   lifecycle no shorter than the retention window); it calls no storage service. Garage keeps no versions.
+   lifecycle no shorter than the retention window); it calls no storage service. Garage is believed to keep no versions (untested here; the document says to recheck).
 
 **Rejected.**
 - *Logical backups only, more often.* A dump every hour reads the whole database twenty-four times a day for an RPO of
@@ -9904,7 +9906,9 @@ that is, until somebody needs it.
   copy-off-host line, and a failing archive (full or unmounted) fills the data disk's `pg_wal` until the database stops,
   which `check-backup.sh --wal` and a separate disk are the defences against, not the stack.
 - **Archiving costs disk and a little write time**: a compressed segment per `archive_timeout` of activity, and every
-  backup now also reads the whole database a second time (the base backup beside the dump).
+  backup now also reads the whole database a second time (the base backup beside the dump). A backup waits on the
+  archive for its last segment, so a broken archive fails the backup after `BASE_BACKUP_TIMEOUT` (half an hour), and
+  with it a deploy, which takes one first, until the archive is mended or switched off.
 - **The archive holds everything in the clear and an erasure does not reach it** until the base backups that need it are
   rotated out (`DATA.md`); the shipping job runs as root because the segments are the postgres user's, `0600`.
 - **Changing the switch restarts the database**, once.

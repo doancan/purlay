@@ -56,11 +56,12 @@ echo "database: $(wc -c <"$DIR/database.dump" | tr -d ' ') bytes, $(grep -c 'TAB
 # env file says so: the file is what was meant, the setting is what is running. The base backup is the
 # starting point a restore replays the archive from; without it the archive restores nothing.
 ARCHIVING="$(in_postgres psql -U "$DB_USER" -d postgres -Atc 'show archive_mode')" || die "could not ask the database whether it archives"
-if [ "$ARCHIVING" = on ]; then
+if [ "$ARCHIVING" = on ] || [ "$ARCHIVING" = always ]; then
   echo "base backup: taking one (WAL archiving is on)"
   # Written straight to a file, not through a pipeline, like the dump: a failed pg_basebackup in a
   # pipe can leave a valid-looking file and a zero exit. It waits for its last WAL segment to be
-  # archived, so a failing archive would hang it: bounded, and the failure is the backup's.
+  # archived, so a failing archive would hang it: bounded (BASE_BACKUP_TIMEOUT seconds), and the
+  # failure is the backup's, which also stops a deploy that takes one first.
   in_postgres timeout "${BASE_BACKUP_TIMEOUT:-1800}" pg_basebackup -U "$DB_USER" -D - --format=tar --compress=gzip \
     --wal-method=fetch --checkpoint=fast --label "purlay-$STAMP" >"$DIR/base.tar.gz" \
     || die "the base backup failed or did not finish; if WAL archiving is failing, that is why (docs/CONFIG.md, Point-in-time recovery)"

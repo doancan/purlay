@@ -561,13 +561,16 @@ fails if any script a line names is not where that line looks. On a checkout tha
 (no `releases/`), drop `current/` and the two variables.
 
 **The last line is the monitoring hook.** `scripts/check-backup.sh <backups-dir>` exits non-zero, and
-says why on standard error, when there is no whole backup in the directory or the newest one is
-older than 26 hours, judged by the time in its name (a copy resets modification times). A job that stopped
+says why on standard error, when there is no whole backup in the directory, when the newest one is
+older than 26 hours (judged by the time in its name, since a copy resets modification times; a name dated
+in the future is refused), or when its files do not match its `SHA256SUMS` — it reads the backup back each
+morning, because a backup of the right age that cannot be restored is not one. A job that stopped
 running, a disk that was not mounted and a backup that failed every night all end in the same message,
 which cron mails to `MAILTO` when the host can send mail, with `>/dev/null` so that a good night is
 silent. Where it cannot, follow it with `&& curl -fsS -m 10 <check-in address>` of an uptime monitor,
 which also notices a cron that stopped running at all. `--wal` adds the archive checks of the next
-section. Run it by hand after changing the cron: a monitor you have never seen fail is a belief.
+section and is for a deployment that relies on them. Run it by hand after changing the cron: a monitor you
+have never seen fail is a belief.
 
 Every deploy takes its own backup into `backups/` as well, but that one is a safeguard for a rollback,
 not the nightly: look at the newest directory's date after the first night.
@@ -614,14 +617,15 @@ never overwrites what it did not make unless told `--replace`.
 **Point-in-time recovery (D-202).** The nightly dump restores the database as it was at 01:00. **Point-in-time recovery** restores it as it was
 at any moment since, such as the minute before somebody deleted a channel — by keeping every change the
 database makes (its write-ahead log, WAL) beside a physical copy to replay it from. It is **off by default**:
-a deployment that never sets it runs, and backs up, exactly as before. It covers the database only; the
+a deployment that never sets it runs, and backs up, with the PostgreSQL settings it always had (the database
+container is recreated once, at the next `up`, to take the wrapper that reads the switch). It covers the database only; the
 attachment bucket is a separate matter (below).
 
 | Variable | Default | Notes |
 |---|---|---|
 | `WAL_ARCHIVE` | `off` | `on` archives every WAL segment to the archive directory, and makes `backup.sh` take a base backup beside the dump. Anything but `on` or `off` stops the database from starting, naming it. **Changing it restarts the database** (`docker compose … up -d`); the archive is of no use until the next `backup.sh` has made a base backup |
 | `WAL_ARCHIVE_TIMEOUT` | `60` | Seconds. A segment is closed and archived this long after the last one, if anything was written: the most the newest writes can be behind in the archive, and so the RPO |
-| `WAL_ARCHIVE_PATH` | a named volume | Where the archive lives: a **host path** (`/srv/purlay-wal`), ideally another disk or a mount of another machine. Unset, a Docker volume on the same disk as the database |
+| `WAL_ARCHIVE_PATH` | a named volume | Where the archive lives: a **host path** (`/srv/purlay-wal`), ideally another disk or a mount of another machine. Unset, a Docker volume on the same disk as the database. The filesystem must support hard links (not CIFS, nor some FUSE mounts): the archive command uses one to make a segment appear whole. The directory is handed to the postgres user at start; where that cannot be done (an NFS export with `root_squash`) the database warns and goes on, and archiving works only if it can already write there |
 
 **What the archive is.** One compressed file per 16 MB segment, written by `docker/wal-archive.sh`:
 atomically (a hidden temporary file, then a hard link, so a reader never sees half a segment), never over a
@@ -639,20 +643,25 @@ the copy runs as root. Segments never change once written, so the copy needs no 
 
 ```
 # root's crontab, with WAL_ARCHIVE_PATH=/srv/purlay-wal. Every five minutes.
-*/5 * * * * rsync -a --ignore-existing /srv/purlay-wal/ backup@other-host:/srv/purlay-wal/ >>/var/log/purlay-wal-ship.log 2>&1
+*/5 * * * * rsync -a --ignore-existing /srv/purlay-wal/ backup@other-host:/srv/purlay-wal/ >>/var/log/purlay-wal-ship.log 2>&1 || echo "purlay wal copy failed: see /var/log/purlay-wal-ship.log"
 ```
 
 Where it lands it is the operator's to encrypt, as the backups are. A recovery needs only that copy and a
-base backup (also off the host, above).
+base backup (also off the host, above). A restore does not need the copy to belong to anyone in particular:
+`restore-pitr.sh` reads it as root into a copy of its own, reads every segment back, and recovers from that.
 
 **Retention is tied to the base backups, not to the clock.** A base backup restores to any moment from its
 end to the end of the archive, and needs every segment from the one it began in; so the rule is *keep every
 segment since the oldest base backup still on disk*. `scripts/prune-wal.sh <backups-dir>…` applies it after
-the backups' own retention, and removes nothing when it finds no base backup (a mistyped path must not empty
-an archive). Add it after the purge line, only when the archive is on:
+the backups' own retention. It takes **every** directory that holds base backups (the nightly ones and the
+deploys' own, `/srv/purlay/backups`, which keep five regardless of age): it keeps from the oldest of them all.
+It removes nothing when it finds no base backup (a mistyped path must not empty an archive), when archiving is
+off in the running database, or when the oldest base backup began in a segment the archive does not hold (a
+backup from another archive, which could make "everything below it" everything). Add it after the purge line,
+only when the archive is on, and let a failure be heard, as the others:
 
 ```
-55 1 * * * cd /srv/purlay && COMPOSE_FILE=/srv/purlay/current/docker-compose.production.yml ENV_FILE=/srv/purlay/production.env current/scripts/prune-wal.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1
+55 1 * * * cd /srv/purlay && COMPOSE_FILE=/srv/purlay/current/docker-compose.production.yml ENV_FILE=/srv/purlay/production.env current/scripts/prune-wal.sh /srv/purlay-backups /srv/purlay/backups >>/srv/purlay-backups/backup.log 2>&1 || echo "purlay wal prune failed: see /srv/purlay-backups/backup.log"
 ```
 
 Without it the archive grows for ever. `--dry-run` says what it would remove. The copy off the host is its own
@@ -662,9 +671,18 @@ retention to set.
 `pg_wal`, on the data disk, until it can. If the archive's disk is full or unmounted, the archiver fails
 every attempt (`pg_stat_archiver.failed_count` rises, and the log says `archive command failed`) and the data
 disk fills until the database stops. The two defences: the archive on a different disk from the data, and
-`scripts/check-backup.sh --wal <backups-dir>`, which fails when the last archive attempt failed and none
-has succeeded since, or when the newest backup has no base backup while archiving is on — run it from the
-same cron line as the age check. To let the database go on without archiving while you mend the disk, set
+`scripts/check-backup.sh --wal <backups-dir>`, which fails when archiving is **off** (a stack recreated without
+its env file runs without it, and nothing else would say so), when the last archive attempt failed and none
+has succeeded since, when a segment has waited more than 15 minutes to be archived (a hung mount fails
+nothing and succeeds at nothing), or when the newest backup has no base backup named in its sums. Use it
+**instead of** the age check's line, for a deployment that relies on archiving:
+
+```
+15 7 * * * cd /srv/purlay && COMPOSE_FILE=/srv/purlay/current/docker-compose.production.yml ENV_FILE=/srv/purlay/production.env current/scripts/check-backup.sh --wal /srv/purlay-backups >/dev/null
+```
+
+A backup that waits on the archive fails after `BASE_BACKUP_TIMEOUT` seconds (1800), and a deploy takes a
+backup first, so a broken archive stops deploys until it is mended or switched off. To let the database go on without archiving while you mend the disk, set
 `WAL_ARCHIVE=off` and restart: the held segments are released, and point-in-time recovery has a gap from
 then until a new base backup.
 
@@ -673,11 +691,14 @@ then until a new base backup.
 - **RPO with archiving on: 60 seconds** — `WAL_ARCHIVE_TIMEOUT`. What a crash of the server *and* its disk
   loses is the writes of the last minute not yet in a closed segment, plus whatever had not yet been copied
   off the host (the cron above: five minutes). On the same disk and no copy, the server's death loses the
-  archive too, and the RPO is the last backup.
+  archive too, and the RPO is the last backup. The rehearsal checks the segment holding its newest commit is
+  in the archive within `archive_timeout` and ten seconds to copy it, at a timeout of ten seconds; sixty is
+  the setting, not a separate measurement.
 - **RPO without it: 24 hours** — the nightly dump.
 - **RTO:** the time to unpack the base backup and replay the WAL since it, then apply the result with
   `restore.sh`. It grows with the database's size at the disk's speed, and with the segments since the base
-  backup (at most a day of them). The rehearsal restores a database of 8 MB with four segments in **5 seconds**
+  backup (at most a day of them). The rehearsal restores a database of 8 MB (a base backup of 8.6 MB and seven
+  archived files) in **5 seconds**
   (2 s for the logical restore of the same data, bucket included), on one run on a laptop on 2026-10-27;
   CI's weekly run records its own in the run's summary. That says the machinery is quick, not that
   your database is: your own monthly rehearsal (below) prints your number, and the design target that
@@ -692,10 +713,11 @@ scripts/restore-pitr.sh /srv/purlay-backups/purlay-20261027T010001Z --to '2026-1
 scripts/restore-pitr.sh <backup> --to latest --archive <dir>       # everything the archive holds
 ```
 
-It checks the backup's sums and that the archive holds the segment the base backup began in, then unpacks the
-base backup into a **new** Docker volume and starts a **new** PostgreSQL from the stack's own image in a
-container with **no network** and the archive mounted **read-only**: it cannot reach the live database and
-cannot add to the archive. It replays to the time, waits for the instance to promote itself, compares what it
+It checks the backup's sums and that the archive holds the segment the base backup began in, copies the
+archive into a **new** Docker volume (as root: whoever shipped it may own it) and reads every segment back
+whole, unpacks the base backup into another, and starts a **new** PostgreSQL from the stack's own image in a
+container with **no network** and that copy mounted **read-only**: it cannot reach the live database and
+cannot add to the archive, which it only ever reads. It replays to the time, waits for the instance to promote itself, compares what it
 holds with `--expect <snapshot>` if you have one (`scripts/compare-databases.sh --snapshot purlay` taken when
 you know the state), and writes a backup-shaped directory, `purlay-pitr-<time>/recovered/`, then removes the
 instance. Nothing live was touched. **Applying it** is the existing guarded step, with the API stopped:
@@ -709,8 +731,10 @@ docker compose -f docker-compose.production.yml --env-file production.env start 
 (the database that was there is kept, renamed `purlay_before_restore_<time>`). It refuses, naming why and
 leaving nothing behind: a backup with no base backup; a time without a zone; a time before the base backup
 was complete (the earliest it can name is printed; use an older backup); an archive that lacks the segment
-the base backup began in; an archive that ends, or has a segment missing, before the time (`--to latest` is
-what it does hold); a target directory that exists.
+the base backup began in, or holds a damaged one; an archive that ends, or has a segment missing, before the
+time (`--to latest` is what it does hold, and it refuses too if it replayed less than the newest segment the
+archive has: a gap is not the end); a target directory that exists. If a recovery fails, its log is
+`<into>.recovery.log`, beside the directory, which a failed run removes.
 
 **After a recovery, begin a new archive.** The recovered database is on a new timeline and the old archive
 belongs to the one before. Point `WAL_ARCHIVE_PATH` at an empty directory (or remove the volume), take a
@@ -732,8 +756,10 @@ and a recovery to a time before the erasure brings it back, to be erased again.
 **Object storage.** Point-in-time recovery is the database's. The attachments are a bucket, and what
 protects them is versioning, which the repository can only say, not do, since it calls no storage service:
 
-- The stack's own store, Garage, does **not** keep object versions; what protects its attachments is
-  `backup.sh`'s bucket copy, as of the backup, and a deleted attachment between backups cannot be recovered.
+- The stack's own store, Garage, is believed **not** to implement S3 object versioning: that is from its
+  published S3 compatibility table and was not tested here, so check the table again whenever the pinned Garage
+  version changes. If so, what protects its attachments is `backup.sh`'s bucket copy, as of the backup, and a
+  deleted attachment between backups cannot be recovered.
   Attachments are only ever added by the application, except by the retention purge and an erasure, which are
   deliberate.
 - Against any S3-compatible store that has them (S3, R2, MinIO and the like), turn **versioning on** for the

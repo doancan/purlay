@@ -157,12 +157,15 @@ the run's summary, which is where the dated record is kept.
   table's count and checksum — the 499 earlier rows there, the 300 later ones not, the earlier edit as it was.
   The instance's last replayed transaction was 1.6 s before the time (the commit before it), and recovery
   stopped there, not at the end of the archive.
-- **Measured:** `restore-pitr.sh` start to finish **5 s** (base backup 8.3 MB, four archived segments); the
-  logical restore of the same data with the bucket, after the same loss, 2 s. The newest commit was in the
-  archive **5 s** after it was made, with `archive_timeout` 10 s. No archive attempt failed.
+- **Measured:** `restore-pitr.sh` start to finish **5 s** (base backup 8.6 MB, seven archived files, copied
+  and read back whole before the replay); the logical restore of the same data with the bucket, after the
+  same loss, 2 s. The segment holding the newest commit was in the archive **8 s** after the commit, with
+  `archive_timeout` 10 s. No archive attempt failed. `--to latest` recovered the state at the end of the
+  rehearsal's writes, compared identical.
 - **Refused, and checked that it was:** a time without a zone; a time before the base backup was complete; an
-  archive whose later segments are missing (it ends before the time); an archive without the segment the
-  base backup began in; a backup taken with archiving off. Each left no container, no volume and no directory.
+  archive whose later segments are missing (it ends before the time); a segment missing from the *middle*
+  of the archive under `--to latest`; a damaged segment; an archive without the segment the base backup
+  began in; a backup taken with archiving off. Each left no container, no volume and no directory.
 
 **What it found.**
 - **A time before the base backup cannot be left to PostgreSQL.** Its own refusal ("stop point before the
@@ -170,9 +173,16 @@ the run's summary, which is where the dated record is kept.
   which a quiet database does not have, and the case is not one the rehearsal could set up reliably. So
   `restore-pitr.sh` compares the time with the moment the base backup was complete (recorded by `backup.sh`)
   itself, in the instance, once it answers, and the rehearsal holds that refusal.
-- **The archive cannot be read by the host user.** Segments are the postgres user's and `0600`, so the copy off
-  the host must run as root (the rehearsal copies in a root container and hands the files back); the document
-  says so and puts the shipping job in root's crontab.
+- **The archive cannot be read by the host user, nor by the recovering server once copied elsewhere.**
+  Segments are the postgres user's and `0600`, so the copy off the host runs as root (the rehearsal copies in a
+  root container and hands the files back to the host user, as a Linux runner would need). The recovering
+  server is uid 70, so `restore-pitr.sh` copies the archive into a volume of its own as root before it replays;
+  a reviewer found that the first version, which mounted the shipped copy as it was, would have failed on
+  Linux with a message that blamed the archive.
+- **`restore_command` cannot tell a missing segment from an unreadable one**, and PostgreSQL reads both as
+  the end of the archive: under `--to latest` that is a shorter history promoted and reported as a recovery.
+  So every segment is read back before the replay, a corrupt one stops the recovery (exit 126), and `latest`
+  is refused unless it replayed up to the newest segment the archive holds.
 - **An archive command that blocks on the network stalls the database**, which is why the archive is local and
   the copy a separate job.
 
