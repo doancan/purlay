@@ -431,8 +431,16 @@ the type refuses the pool (D-77).
   its own sockets' subscriptions, and a publish from any node reaches every node's subscribers.
   One process makes its own backplane; the tests share one between two applications, which is how
   a revocation is shown to reach the other node's sockets (D-85).
-- **Phase 3:** `RedisEventBus` — the same interface over Redis pub/sub, plus a
-  `subscriberCount` check so a node does not publish to topics nobody local is watching.
+- **The cloud (`REDIS_URL`, D-201):** `redisBackplane` (`realtime/redis-bus.ts`) — the same
+  `Backplane` over one Redis pub/sub channel. A node subscribes once and filters locally, so there is no
+  window between "subscribed" and "listening" for a frame to fall into (the hub subscribes, then replays
+  from the database: D-82); a publisher hears its own frame back like every node, so each frame is
+  delivered once per node and every node sees one order. While Redis is away a node delivers to its own
+  sockets; when it is back, a node that may have missed frames closes its sockets with
+  `CLOSE_CODES.RESTARTING` so they replay from their cursors, which is the logic that already exists
+  (D-190). Typing, who is online and the limiters that are keyed beyond one connection are shared the
+  same way and fall back to this node's own answer (`realtime/redis-presence.ts`, `redis-limiter.ts`).
+  Without `REDIS_URL` none of it is built.
 
 **Delivery is isolated per subscriber.** The message is committed before the bus fans it out, so a
 send that throws for one socket is logged with that socket's id (never the frame) and the rest still
@@ -1005,7 +1013,11 @@ reconnects and replays from its cursor, the listener stops accepting while reque
 finish, the pool closes, and the process exits — or, past a ten-second deadline, exits 1 and says
 what was still open. `apps/api/src/lifecycle.ts`. (D-72)
 
-Phase 3 introduces multiple API nodes behind a sticky-session load balancer and swaps in
-`RedisEventBus`, `SharedPresenceRegistry` and `SharedRateLimiter`. Nothing above changes: the
-three seams in §6 were placed for exactly this, and background work already runs outside the API
-process (D-30), so no job needs a distributed lock.
+The cloud runs several API nodes behind a sticky-session load balancer, with `REDIS_URL` set so that
+the bus, presence and the limiters are shared (D-201). Nothing above changes: the three seams in §6 were
+placed for exactly this, and background work already runs outside the API process (D-30), so no job
+needs a distributed lock. The balancer's configuration is #115's, not this section's: a socket lives on
+the node that accepted it, which is why the per-connection frame limiter stays in that node's process
+(D-201), and why a node that loses its Redis sends its sockets back to replay rather than leaving them
+silent. A node reports ready only after it has reached Redis once; a node that has, and loses it, serves
+on, degraded, and says so in its log.

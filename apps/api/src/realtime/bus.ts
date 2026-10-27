@@ -28,12 +28,12 @@ export interface InspectableEventBus extends EventBus {
   readonly size: () => { readonly topics: number; readonly sockets: number };
 }
 
-interface Subscriptions extends Omit<InspectableEventBus, 'publish'> {
+export interface Subscriptions extends Omit<InspectableEventBus, 'publish'> {
   readonly fanOut: (topic: Topic, frame: ServerFrame) => void;
 }
 
 /** One node's subscriptions: which of its sockets listen to which topic. */
-const subscriptionsOf = (deliver: Deliver, log: Logger): Subscriptions => {
+export const subscriptionsOf = (deliver: Deliver, log: Logger): Subscriptions => {
   const byTopic = new Map<Topic, Set<string>>();
   const bySocket = new Map<string, Set<Topic>>();
 
@@ -91,7 +91,12 @@ const subscriptionsOf = (deliver: Deliver, log: Logger): Subscriptions => {
 
 /** The shared transport nodes publish through. Phase 3's Redis adapter is this, across processes. */
 export interface Backplane {
-  readonly node: (deliver: Deliver, log: Logger) => InspectableEventBus;
+  /**
+   * `onGap` is told when frames may have been missed: a shared backplane lost its connection and has it
+   * again (`redis-bus.ts`). The in-process one never is. The caller's answer is to send its sockets back to
+   * replay from their cursors, which is what a restart does (D-190).
+   */
+  readonly node: (deliver: Deliver, log: Logger, onGap?: () => void) => InspectableEventBus;
 }
 
 export const inProcessBackplane = (): Backplane => {

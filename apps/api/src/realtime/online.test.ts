@@ -120,15 +120,15 @@ describe('who is online on this node', () => {
     const versions = w.told.map((c) => c.version);
     expect(versions).toEqual([...versions].sort((a, b) => a - b));
     expect(new Set(versions).size).toBe(versions.length);
-    expect(w.online.version()).toBeGreaterThanOrEqual(versions.at(-1) ?? 0);
+    expect(await w.online.version()).toBeGreaterThanOrEqual(versions.at(-1) ?? 0);
   });
 
   test('a snapshot moves no counter, and every change after it is larger than its version', async () => {
     const w = world();
     w.online.arrived('alice');
     w.setNow(500);
-    const read = w.online.version();
-    expect(w.online.version()).toBe(read);
+    const read = await w.online.version();
+    expect(await w.online.version()).toBe(read);
     w.online.arrived('bob');
     await w.online.settled();
     expect(w.told.at(-1)?.version).toBeGreaterThan(read);

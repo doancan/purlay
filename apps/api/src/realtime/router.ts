@@ -364,7 +364,9 @@ export const routeFrame = async (
         // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement
         // is not a request, and it takes no place in memory either.
         if (!(await isChannelMember(database, context))) return [];
-        if (dependencies.presence.startTyping(context.channelId, identity.userId, TYPING_TTL_MS)) {
+        if (
+          await dependencies.presence.startTyping(context.channelId, identity.userId, TYPING_TTL_MS)
+        ) {
           await bus.publish(
             channelTopic(context.channelId),
             frame(

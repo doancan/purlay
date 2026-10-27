@@ -14,7 +14,8 @@ import type { Clock } from '../../platform/clock';
 import type { Auth } from '../../modules/auth/better-auth';
 import { sessionFromHeaders } from '../../modules/auth/sessions';
 import {
-  inProcessRateLimiter,
+  inProcessLimiters,
+  type LimiterFactory,
   SOCKET_FRAME_BUDGET,
   type RateBudget,
   type RateLimiter,
@@ -184,6 +185,8 @@ export interface HttpLimitDependencies {
    * so a user's writes cost the same over either door; made here otherwise.
    */
   readonly writes?: RateLimiter;
+  /** Makes each limiter; absent, one bucket per key in this process (D-201). */
+  readonly limiters?: LimiterFactory;
 }
 
 /**
@@ -206,21 +209,22 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
     passports: PASSPORT_BUDGET,
     serverAdmin: SERVER_ADMIN_BUDGET,
   };
-  const auth = inProcessRateLimiter(clock, budgets.auth);
-  const writes = dependencies.writes ?? inProcessRateLimiter(clock, budgets.writes);
-  const costlyReads = inProcessRateLimiter(clock, budgets.costlyReads);
+  const limiterFor = dependencies.limiters ?? inProcessLimiters(clock);
+  const auth = limiterFor('auth', budgets.auth);
+  const writes = dependencies.writes ?? limiterFor('writes', budgets.writes);
+  const costlyReads = limiterFor('costly-reads', budgets.costlyReads);
   const setupBudget = budgets.setup ?? SETUP_BUDGET;
   const setupSecretBudget = budgets.setupSecrets ?? SETUP_SECRET_BUDGET;
   const passportBudget = budgets.passports ?? PASSPORT_BUDGET;
-  const passports = inProcessRateLimiter(clock, passportBudget);
+  const passports = limiterFor('passports', passportBudget);
   const nativeTokenBudget = budgets.nativeTokens ?? NATIVE_TOKEN_BUDGET;
-  const nativeTokens = inProcessRateLimiter(clock, nativeTokenBudget);
+  const nativeTokens = limiterFor('native-tokens', nativeTokenBudget);
   const serverAdminBudget = budgets.serverAdmin ?? SERVER_ADMIN_BUDGET;
-  const serverAdmin = inProcessRateLimiter(clock, serverAdminBudget);
+  const serverAdmin = limiterFor('server-admin', serverAdminBudget);
   const byClass = {
     auth: [auth, budgets.auth],
-    setup: [inProcessRateLimiter(clock, setupBudget), setupBudget],
-    setupSecrets: [inProcessRateLimiter(clock, setupSecretBudget), setupSecretBudget],
+    setup: [limiterFor('setup', setupBudget), setupBudget],
+    setupSecrets: [limiterFor('setup-secrets', setupSecretBudget), setupSecretBudget],
   } as const;
 
   return async (request, peer) => {

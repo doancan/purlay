@@ -13,14 +13,38 @@
  * Telling is the caller's (`announce`): reading who shares a workspace and publishing. It is awaited
  * by `settled`, so a drain and a test know when it is done; `stop` cancels every grace not yet run.
  *
- * **One node** (D-25): on two, each node knows only its own sockets, and a person online on one is
- * offline to the other — wrong, which `ARCHITECTURE.md` §6.1 does not allow for long; the reads are
- * async so the shared adapter (Phase 3, over the bus) replaces this without its callers changing.
+ * **One node, or several** (D-25, D-201): alone, each node knows only its own sockets. With a
+ * `PresenceDirectory` (`redis-presence.ts`) a person is online while any node holds a socket of theirs: the
+ * first socket on any node tells, the last on the last node tells after the grace, and a second node
+ * holding them changes nothing. Each node keeps its entries alive while it runs and they lapse by
+ * themselves when it dies, so a dead node's people are read as offline within `PRESENCE_NODE_TTL_MS`
+ * (told to nobody: a client reads the snapshot again at its next reconnect). A directory that cannot be
+ * reached never stops a socket from opening: the node answers from what it knows itself, and says so.
  */
 import { PRESENCE_GRACE_MS, type PresenceChange } from '@purlay/types';
 import type { Clock } from '../platform/clock';
 import type { Logger } from '../platform/logging';
 import { after, type Timers } from './hub';
+
+/**
+ * Who is online across nodes: the shared record behind `OnlinePresence`. Every answer is a version that
+ * only grows across the whole cluster, taken from the record's own clock. Rejects when it cannot answer.
+ */
+export interface PresenceDirectory {
+  /** This node holds a socket of theirs: the version when nobody did, null when somebody already did. */
+  readonly join: (userId: string) => Promise<number | null>;
+  /** This node holds none now: the version when nobody does, null when another node still does. */
+  readonly leave: (userId: string) => Promise<number | null>;
+  /** Which of these people are online on any node, each at the version that said so. */
+  readonly among: (userIds: readonly string[]) => Promise<readonly PresenceChange[]>;
+  /** A version every later change is larger than. */
+  readonly version: () => Promise<number>;
+}
+
+/** How long a node's claim on a person lasts without being renewed, and so how stale a dead node's people are. */
+export const PRESENCE_NODE_TTL_MS = 30_000;
+/** A node renews what it holds three times in that. */
+const DIRECTORY_RENEW_MS = PRESENCE_NODE_TTL_MS / 3;
 
 export interface OnlinePresence {
   /** The person's first socket on this node opened. */
@@ -30,7 +54,7 @@ export interface OnlinePresence {
   /** Which of these people are online now, each at the version that said so. */
   readonly onlineAmong: (userIds: readonly string[]) => Promise<readonly PresenceChange[]>;
   /** The version now: anybody not online is offline at it. */
-  readonly version: () => number;
+  readonly version: () => number | Promise<number>;
   /** Cancels every grace not yet run: the process is stopping. */
   readonly stop: () => void;
   /** Resolves when every announcement made so far is done. */
@@ -50,6 +74,8 @@ export interface OnlineOptions {
   /** Tells the people who share a workspace with `change.userId`. */
   readonly announce: (change: PresenceChange) => Promise<void>;
   readonly graceMs?: number;
+  /** The shared record, with Redis; without it, this node's own is the whole answer. */
+  readonly directory?: PresenceDirectory;
 }
 
 export const onlinePresence = ({
@@ -58,6 +84,7 @@ export const onlinePresence = ({
   log,
   announce,
   graceMs = PRESENCE_GRACE_MS,
+  directory,
 }: OnlineOptions): OnlinePresence => {
   /** Online now, with the version that said so. */
   const online = new Map<string, number>();
@@ -78,6 +105,21 @@ export const onlinePresence = ({
   const latest = new Map<string, number>();
   /** Retries waiting: cancelled when the node stops. */
   const retries = new Set<() => void>();
+  /** One person's directory calls, one after another: a join is never overtaken by the leave after it. */
+  const turns = new Map<string, Promise<void>>();
+  const inTurn = (userId: string, work: () => Promise<void>): void => {
+    const turn: Promise<void> = (turns.get(userId) ?? Promise.resolve())
+      .then(work)
+      .catch((error: unknown) => {
+        log.error('presence could not be recorded', { userId, err: error });
+      })
+      .finally(() => {
+        running.delete(turn);
+        if (turns.get(userId) === turn) turns.delete(userId);
+      });
+    turns.set(userId, turn);
+    running.add(turn);
+  };
 
   const tell = (change: PresenceChange, attempt = 0): void => {
     latest.set(change.userId, change.version);
@@ -113,6 +155,33 @@ export const onlinePresence = ({
     running.add(told);
   };
 
+  /**
+   * Keeps this node's claim on everybody it holds alive, so a node that dies stops claiming them. A person
+   * whose claim had lapsed meanwhile (this node was stalled) is online again to the rest, and is told.
+   */
+  let cancelRenewal = (): void => undefined;
+  if (directory !== undefined) {
+    const renew = (): void => {
+      if (stopped) return;
+      for (const userId of online.keys()) {
+        inTurn(userId, async () => {
+          let joined: number | null;
+          try {
+            joined = await directory.join(userId);
+          } catch (error) {
+            // The next renewal tries again; the link has said that Redis is away.
+            log.debug('presence could not be renewed', { userId, err: error });
+            return;
+          }
+          if (joined !== null && online.has(userId))
+            tell({ userId, online: true, version: joined });
+        });
+      }
+      cancelRenewal = after(timers, DIRECTORY_RENEW_MS, renew);
+    };
+    cancelRenewal = after(timers, DIRECTORY_RENEW_MS, renew);
+  }
+
   return {
     arrived: (userId): void => {
       if (stopped) return;
@@ -126,7 +195,25 @@ export const onlinePresence = ({
       if (online.has(userId)) return;
       const version = next();
       online.set(userId, version);
-      tell({ userId, online: true, version });
+      if (directory === undefined) {
+        tell({ userId, online: true, version });
+        return;
+      }
+      inTurn(userId, async () => {
+        let joined: number | null;
+        try {
+          joined = await directory.join(userId);
+        } catch (error) {
+          // They are online here whatever the record says: told, at this node's own version.
+          log.warn('presence could not reach the shared record; telling from this node alone', {
+            userId,
+            err: error,
+          });
+          joined = version;
+        }
+        if (joined !== null) tell({ userId, online: true, version: joined });
+        await Promise.resolve();
+      });
     },
 
     left: (userId): void => {
@@ -134,23 +221,59 @@ export const onlinePresence = ({
       const cancel = after(timers, graceMs, () => {
         leaving.delete(userId);
         online.delete(userId);
-        tell({ userId, online: false, version: next() });
+        if (directory === undefined) {
+          tell({ userId, online: false, version: next() });
+          return;
+        }
+        inTurn(userId, async () => {
+          let left: number | null;
+          try {
+            left = await directory.leave(userId);
+          } catch (error) {
+            // Not told: another node may still hold them, which this node cannot know. Their claim here
+            // lapses by itself within `PRESENCE_NODE_TTL_MS`, and every read excludes it from then on.
+            log.warn('presence could not reach the shared record; not telling they left', {
+              userId,
+              err: error,
+            });
+            return;
+          }
+          if (left !== null) tell({ userId, online: false, version: left });
+          await Promise.resolve();
+        });
       });
       leaving.set(userId, cancel);
     },
 
-    onlineAmong: async (userIds) =>
-      await Promise.resolve(
-        userIds.flatMap((userId) => {
-          const version = online.get(userId);
-          return version === undefined ? [] : [{ userId, online: true, version }];
-        }),
-      ),
+    onlineAmong: async (userIds): Promise<readonly PresenceChange[]> => {
+      if (directory !== undefined) {
+        try {
+          return await directory.among(userIds);
+        } catch (error) {
+          log.warn('presence could not reach the shared record; answering from this node alone', {
+            err: error,
+          });
+        }
+      }
+      return userIds.flatMap((userId) => {
+        const version = online.get(userId);
+        return version === undefined ? [] : [{ userId, online: true, version }];
+      });
+    },
 
     // Read, not taken: a snapshot moves no counter, and every change after it is larger (`next`).
-    version: (): number => {
-      read = Math.max(read, last, clock.now().getTime());
-      return read;
+    version: (): number | Promise<number> => {
+      const local = (): number => {
+        read = Math.max(read, last, clock.now().getTime());
+        return read;
+      };
+      if (directory === undefined) return local();
+      return directory.version().catch((error: unknown) => {
+        log.warn('presence could not reach the shared record; versioning from this node', {
+          err: error,
+        });
+        return local();
+      });
     },
 
     stop: (): void => {
@@ -159,6 +282,7 @@ export const onlinePresence = ({
       leaving.clear();
       for (const cancel of retries) cancel();
       retries.clear();
+      cancelRenewal();
     },
 
     settled: async (): Promise<void> => {

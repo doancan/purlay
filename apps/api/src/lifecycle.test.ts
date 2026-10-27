@@ -408,3 +408,29 @@ describe('shutting down a server whose relay the settings replaced (D-179 §4.9)
     }
   });
 });
+
+describe('what a drained process closes last (D-201)', () => {
+  test('the shared Redis connections close after the pool, and only when there are some', async () => {
+    const steps: string[] = [];
+    const held = {
+      services: runtimeServicesHolder(createLogger({ level: 'silent' })),
+      errorTracker: { flush: async (): Promise<boolean> => await Promise.resolve(true) },
+      database: {
+        destroy: async (): Promise<void> => {
+          steps.push('pool');
+          await Promise.resolve();
+        },
+      },
+    };
+    await closeAfterDrain({
+      ...held,
+      redis: {
+        close: (): void => {
+          steps.push('redis');
+        },
+      },
+    })();
+    await closeAfterDrain(held)();
+    expect(steps).toEqual(['pool', 'redis', 'pool']);
+  });
+});

@@ -8,20 +8,31 @@
  * announces on every keystroke costs the room one frame per half window, not one per key.
  *
  * **A seam because a second node changes it** (D-25): two nodes each let one announcement through
- * for a person typing on both, which is a frame too many and never a wrong answer. Online presence
- * joins this interface when it is built (`UX.md` §2 places it in Phase 2).
+ * for a person typing on both, which is a frame too many and never a wrong answer. With Redis the window
+ * is shared (`redis-presence.ts`, D-201). Who is online is `online.ts`'s, which has its own shared form.
  */
 import type { Clock } from '../platform/clock';
 
 export interface PresenceRegistry {
-  /** Records the person typing here for `ttlMs`; true when the room should be told. */
-  readonly startTyping: (channelId: string, userId: string, ttlMs: number) => boolean;
-  /** Their message arrived: the window ends, and the next keystroke is announced at once. */
+  /**
+   * Records the person typing here for `ttlMs`; true when the room should be told. Never throws. Answered
+   * at once in process and after a round trip when shared (`redis-presence.ts`), so callers await it.
+   */
+  readonly startTyping: (
+    channelId: string,
+    userId: string,
+    ttlMs: number,
+  ) => boolean | Promise<boolean>;
+  /**
+   * Their message arrived: the window ends, and the next keystroke is announced at once. Not waited for,
+   * so a send's answer never waits on it; shared, it is a best effort and the window ends by itself.
+   */
   readonly stopTyping: (channelId: string, userId: string) => void;
 }
 
 /** What a test may ask beyond the interface: how many windows are held. */
 export interface InMemoryPresenceRegistry extends PresenceRegistry {
+  readonly startTyping: (channelId: string, userId: string, ttlMs: number) => boolean;
   readonly held: () => number;
 }
 

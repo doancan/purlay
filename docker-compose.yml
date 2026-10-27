@@ -1,7 +1,9 @@
-# The local development environment: PostgreSQL and object storage, nothing else.
+# The local development environment: PostgreSQL and object storage, and Redis for the tests of the
+# cloud's shared adapters alone.
 #
-# No Redis and no broker. A self-hosted instance never needs one and never will;
-# the cloud swaps in shared adapters behind the same interfaces. (D-7, D-25)
+# `bun run db:up` starts PostgreSQL and object storage, and **no Redis**: a self-hosted instance never needs
+# one and never will, and nothing the application does without `REDIS_URL` reaches it. `bun run db:up:redis`
+# starts it, for the tests of the shared bus, limiters and presence (D-201, D-7, D-25).
 #
 # Every image is pinned. A floating tag would make "target the latest stable
 # major, and say so" (D-20) untrue the first time upstream moved, silently.
@@ -64,6 +66,22 @@ services:
       timeout: 3s
       retries: 20
       start_period: 3s
+
+  # The cloud's shared state (D-201): the bus, the limiters and presence. Nothing is kept — all of it is
+  # ephemeral by design, and a restart is what the adapters' failure modes are tested against.
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      # Loopback only, and overridable like the others.
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
 
 volumes:
   postgres-data:

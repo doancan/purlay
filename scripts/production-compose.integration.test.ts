@@ -384,6 +384,8 @@ describe('integration: the production compose file', () => {
       CLIENT_DIST: 'the image sets it (Dockerfile)',
       STORAGE_DIRECTORY: 'production keeps attachments in the bucket and refuses it (D-117)',
       DATABASE_SSL_CA_FILE: 'the database is on the stack’s private network, without TLS (D-79)',
+      REDIS_URL:
+        'the cloud’s shared state; the self-hosted stack has no broker and never will (D-201)',
     };
     const withheldFrom: Record<string, Record<string, string>> = {
       api: stack,

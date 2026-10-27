@@ -116,3 +116,17 @@ export const inProcessRateLimiter = (
     held: (): number => buckets.size,
   };
 };
+
+/**
+ * Makes the limiter for one named budget (D-201). The name is what keeps two limiters that share a key —
+ * a user's writes and a user's costly reads — from sharing a bucket when the buckets live in one Redis;
+ * in process it is not needed and is not used. Which implementation answers is chosen once, where the
+ * application is composed: nothing that limits can tell which one it was given.
+ */
+export type LimiterFactory = (name: string, budget: RateBudget) => RateLimiter;
+
+/** What one node, and every self-hosted instance, runs: a bucket per key in this process. */
+export const inProcessLimiters =
+  (clock: Clock): LimiterFactory =>
+  (_name, budget) =>
+    inProcessRateLimiter(clock, budget);

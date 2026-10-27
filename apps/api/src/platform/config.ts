@@ -144,6 +144,11 @@ export const Environment = Type.Object({
    *  unless this says the link is private (D-138 §6). */
   SMTP_ALLOW_PLAINTEXT: Type.Boolean({ default: false }),
 
+  /** Where the cloud's nodes share their bus, limiters and presence (D-201): `redis://` or `rediss://`,
+   *  with its credentials. **Unset means off, and nothing connects anywhere**: a self-hosted instance runs
+   *  every node-local implementation, which is all one node needs (D-7). A secret. */
+  REDIS_URL: Type.Optional(Type.String({ pattern: '^rediss?://[^\\s]+$' })),
+
   /** The lowest an installed macOS client may be and still be served (D-186): the wire contract it was
    *  built against, and its version in semantic-version order. Either or both; none is no limit. A
    *  client below either is answered `426 CLIENT_TOO_OLD`, with the download address if one is set.
@@ -178,6 +183,7 @@ const SECRETS: ReadonlySet<string> = new Set([
   'S3_SECRET_ACCESS_KEY',
   'VAPID_PRIVATE_KEY',
   'SMTP_URL',
+  'REDIS_URL',
 ]);
 
 /** The variables this application reads. `.env.example` is generated from it. */
@@ -315,6 +321,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     problems.push(...vapidProblems(config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY));
   }
   problems.push(...mailProblems(config));
+  problems.push(...redisProblems(config));
   problems.push(...githubAppProblems(config));
   problems.push(...oidcProblems(config));
   problems.push(...nativeClientProblems(config));
@@ -330,6 +337,17 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
 
   if (problems.length > 0) throw new ConfigurationError(problems);
   return config;
+};
+
+/** `REDIS_URL` must be an address a client can open. The reason, never the value: it holds a password. */
+const redisProblems = (config: Config): string[] => {
+  if (config.REDIS_URL === undefined) return [];
+  try {
+    const url = new URL(config.REDIS_URL);
+    return url.hostname === '' ? ['REDIS_URL: the address names no host'] : [];
+  } catch {
+    return ['REDIS_URL: not an address a client can open'];
+  }
 };
 
 /**

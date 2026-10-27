@@ -205,6 +205,8 @@ export interface HeldAfterDrain {
   readonly services: Pick<RuntimeHolder, 'sends'>;
   readonly errorTracker: { readonly flush: () => Promise<unknown> };
   readonly database: { readonly destroy: () => Promise<void> };
+  /** The shared Redis connections (D-201); absent where `REDIS_URL` is unset, and closed last. */
+  readonly redis?: { readonly close: () => void } | undefined;
 }
 
 /**
@@ -213,10 +215,11 @@ export interface HeldAfterDrain {
  * bound, then the reports of the shutdown itself, then the pool.
  */
 export const closeAfterDrain =
-  ({ push, services, errorTracker, database }: HeldAfterDrain) =>
+  ({ push, services, errorTracker, database, redis }: HeldAfterDrain) =>
   async (): Promise<void> => {
     await push?.flush();
     await services.sends.flush();
     await errorTracker.flush();
     await database.destroy();
+    redis?.close();
   };

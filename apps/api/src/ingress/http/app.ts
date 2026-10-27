@@ -61,7 +61,8 @@ import {
   type HttpBudgets,
 } from './rate-limit';
 import type { Timers } from '../../realtime/hub';
-import { inProcessRateLimiter } from '../../realtime/rate-limiter';
+import { inProcessLimiters } from '../../realtime/rate-limiter';
+import type { SharedState } from '../../realtime/shared';
 import { AppError } from '../../platform/errors';
 import {
   JSON_BODY_MAX_BYTES,
@@ -245,6 +246,11 @@ export interface Dependencies {
    */
   readonly backplane?: Backplane;
   /**
+   * The state nodes share, with `REDIS_URL` (D-201): limiters, typing and who is online. Absent, all of it
+   * is in this process, exactly as a self-hosted instance runs it.
+   */
+  readonly shared?: SharedState;
+  /**
    * The built client this node answers for (D-61). Absent in development, where Vite
    * serves it, and in a deployment that puts the API behind something else.
    */
@@ -350,26 +356,28 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   // One check at a time, reused for a second, however often the outside asks (#636).
   const askReadiness = recentReadiness(
     async () =>
-      await readiness(dependencies.database, async () => await dependencies.auth.schemaProblem()),
+      await readiness(
+        dependencies.database,
+        async () => await dependencies.auth.schemaProblem(),
+        () => dependencies.shared?.problem(),
+      ),
     dependencies.clock,
   );
   // The reason a node is not ready is written once per check, not once per probe that hears it.
   let saidNotReady: Readiness | null = null;
   // One bucket per user for writes, charged by both doors to `send()`.
-  const userWrites = inProcessRateLimiter(
-    dependencies.clock,
-    dependencies.rateBudgets?.writes ?? WRITE_BUDGET,
-  );
+  const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
+  const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
   const sockets = createSocketLifecycle({ ...dependencies, userWrites });
   // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
-  const githubCalls = inProcessRateLimiter(dependencies.clock, GITHUB_CALL_BUDGET);
+  const githubCalls = limiterFor('github-calls', GITHUB_CALL_BUDGET);
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
   // Uploads being read on this node, against `UPLOADS_AT_ONCE`.
   const uploading = { count: 0 };
   // GitHub's deliveries: every address before the signature, each feed after it (D-134 §4).
-  const knocks = inProcessRateLimiter(dependencies.clock, WEBHOOK_BUDGET);
+  const knocks = limiterFor('webhook-knocks', WEBHOOK_BUDGET);
   // Sign-in by link: the library's, decided by Purlay's rules (`modules/auth/magic-link.ts`). Read
   // per request, so building the application asks nothing of the library.
   // What a request for a link comes to is decided after its answer (D-138 §1, §6).
@@ -388,7 +396,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     outbox: dependencies.auth.signInLinks?.outbox,
     later: afterInvitationAnswers.run,
   });
-  const feedPosts = inProcessRateLimiter(dependencies.clock, WEBHOOK_FEED_BUDGET);
+  const feedPosts = limiterFor('webhook-feeds', WEBHOOK_FEED_BUDGET);
   // Who may make a workspace: the setting as it is now, each time it is asked (D-155, D-179 §6).
   const creating = {
     ...dependencies,
@@ -404,6 +412,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     auth: dependencies.auth,
     clock: dependencies.clock,
     writes: userWrites,
+    limiters: limiterFor,
     trustProxy: dependencies.config.TRUST_PROXY,
     ...(dependencies.rateBudgets === undefined ? {} : { budgets: dependencies.rateBudgets }),
   });

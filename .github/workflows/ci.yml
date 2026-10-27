@@ -234,6 +234,7 @@ jobs:
     # file stop agreeing.
     env:
       DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      REDIS_URL: redis://localhost:6379
       # The job's own database, which exists for nothing else: db:check may migrate it.
       PURLAY_ALLOW_DB_CHECK_ON: purlay
     steps:
@@ -255,6 +256,11 @@ jobs:
       # no test uses. The first test that reads attachments adds it (#53).
       - name: start the database
         run: bun run db:up:postgres
+
+      # Redis, for the shared bus, limiters and presence (D-201) — the one test file group that reads it.
+      # From docker-compose.yml, as the database is, so its image is named in one place.
+      - name: start redis
+        run: bun run db:up:redis
 
       - name: the committed types are exactly what the migrations produce
         run: bun run db:check
