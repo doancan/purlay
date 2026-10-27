@@ -187,6 +187,30 @@ as written here). Once the server has a user other than the administrator an unf
 the setup is finished, every start says `setup is closed` instead and no code is written again; only a
 server with no user at all — a fresh install — is open to setup.
 
+### Mail that arrives: SPF, DKIM and DMARC
+
+Sign-in links are the only mail Purlay sends (invitations are links, D-115), and a link that lands in spam is a
+sign-in that did not happen. Delivery is the relay's and the domain's work, not the server's, so it is set up in
+DNS and at the relay, once:
+
+1. **Send from a domain you control**, through a relay that is allowed to send for it: `MAIL_FROM` is on that
+   domain. A relay's shared test domain is for trying it out.
+2. **SPF** — a `TXT` record on the domain naming the relay (`v=spf1 include:<relay's name> -all`). One SPF record
+   per domain; merge, do not add a second.
+3. **DKIM** — the relay gives a selector and a public key; publish it as the `TXT` (or `CNAME`) record it names.
+   The relay signs; Purlay holds no key.
+4. **DMARC** — `_dmarc.<domain>` `TXT` `v=DMARC1; p=none; rua=mailto:<address you read>` first, and `p=quarantine`
+   once the reports show your own mail passing.
+5. **Check it** by signing in with an address at a large provider and reading the message's headers for
+   `spf=pass`, `dkim=pass`, `dmarc=pass`. The server's own answer when the relay refuses the sender is
+   `message-refused` (`UX.md` §11) and names this section's cause.
+
+**Bounces and complaints are not handled by the server, on purpose:** one short-lived link to the address a person
+just typed is not a list that needs suppression, and a webhook per relay would be code for every relay. A mailbox
+that does not exist shows as the person not receiving the link, who asks again (rate-limited, D-192). If
+Purlay ever sends mail to people who did not just ask for it, suppression becomes necessary and this entry is
+reopened.
+
 ### Upgrading a server from before the sign-in library (D-179 §7)
 
 Start the new version with the old environment and `MIGRATE_ON_START` (or run `bun run db:migrate`
