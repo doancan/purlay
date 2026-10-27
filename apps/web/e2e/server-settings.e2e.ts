@@ -120,7 +120,12 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
     .check();
   await expect(page.getByText('Saved. This applies from the next sign-up.')).toBeVisible();
   const methods = await page.request.get('/api/auth/methods');
-  expect(await methods.json()).toEqual({ github: true, email: false, signUp: 'open' });
+  expect(await methods.json()).toEqual({
+    github: true,
+    email: false,
+    oidc: null,
+    signUp: 'open',
+  });
 
   // Only GitHub is connected: disconnecting it is the last way in, and says so before it asks.
   await githubCard.getByRole('button', { name: 'Disconnect' }).click();

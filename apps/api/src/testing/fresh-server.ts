@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SQL } from 'bun';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from './github-stub';
+import { anOidcStub, OIDC_STUB_CREDENTIALS } from './oidc-stub';
 import { aScriptedRelay } from './smtp-relay';
 
 const DEVELOPMENT_KEY = 'ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMhISE=';
@@ -90,6 +91,13 @@ const github = aGitHubStub(
   GITHUB_STUB_CREDENTIALS,
 );
 const githubServed = github.serve(port + 2);
+// The organisation's single sign-on provider (D-200), strict as a provider is, for the spec that connects it.
+const oidc = await anOidcStub({
+  sub: 'sso-ada',
+  email: 'ada.sso@example.test',
+  name: 'Ada Lovelace',
+});
+const oidcServed = oidc.serve(port + 3);
 const relay = await aScriptedRelay();
 
 const directory = mkdtempSync(join(tmpdir(), 'purlay-fresh-'));
@@ -162,6 +170,7 @@ const manifest = {
   database: databaseUrl,
   code,
   github: { ...GITHUB_STUB_CREDENTIALS, url: githubServed.url },
+  oidc: { ...OIDC_STUB_CREDENTIALS, issuer: oidcServed.url },
   relay: { port: relay.port },
   mailbox,
 };
@@ -172,6 +181,7 @@ say(`  setup code: ${code}`);
 const stop = (): void => {
   api.kill();
   githubServed.stop();
+  oidcServed.stop();
   clearInterval(mailboxTimer);
   void relay.stop();
   rmSync(directory, { recursive: true, force: true });

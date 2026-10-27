@@ -51,6 +51,7 @@ export const aGitHubAuth = (
   return aTestAuth(database, {
     settings: {
       github: GITHUB_STUB_CREDENTIALS,
+      oidc: undefined,
       signUp: signUp ?? 'open',
     },
     fetch,
@@ -67,7 +68,7 @@ export const cookiesFrom = (response: Response): string =>
     .join('; ');
 
 /** Two `Cookie` headers as one, a later value of a name replacing an earlier one, as a browser keeps them. */
-const mergedCookies = (...headers: readonly string[]): string => {
+export const mergedCookies = (...headers: readonly string[]): string => {
   const jar = new Map<string, string>();
   for (const header of headers) {
     for (const pair of header.split(';')) {

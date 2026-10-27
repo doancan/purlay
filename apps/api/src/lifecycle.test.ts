@@ -315,6 +315,7 @@ describe('shutting down a server whose relay the settings replaced (D-179 §4.9)
   const NOTHING_SET: ServerSettings = {
     signUp: 'invite-only',
     github: undefined,
+    oidc: undefined,
     smtp: undefined,
     workspaceCreators: { kind: 'first' },
     setupCompletedAt: undefined,

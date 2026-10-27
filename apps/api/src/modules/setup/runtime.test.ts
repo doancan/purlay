@@ -17,6 +17,7 @@ const silent = createLogger({ level: 'silent' });
 const NOTHING_SET: ServerSettings = {
   signUp: 'invite-only',
   github: undefined,
+  oidc: undefined,
   smtp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,

@@ -1218,13 +1218,20 @@ export type IncidentUpdatePage = Static<typeof IncidentUpdatePage>;
 // ── Signing in (#81, D-138) ─────────────────────────────────────────────────
 
 /**
- * `GET /api/auth/methods` — how this server signs people in: GitHub when an app is connected, and email
- * when it can send a link (D-138 §6, D-179). Both false is a server whose setup is not done. Asked
+ * `GET /api/auth/methods` — how this server signs people in: GitHub when an app is connected, email
+ * when it can send a link (D-138 §6, D-179), and single sign-on when an OpenID Connect provider is
+ * connected (D-200). None of the three is a server whose setup is not done. Asked
  * before anybody is signed in, so the screen offers only what works.
  */
 export const AuthMethods = Type.Object({
   github: Type.Boolean(),
   email: Type.Boolean(),
+  /**
+   * Single sign-on by the organisation's OpenID Connect provider (D-200): `null` where none is connected,
+   * else the name the button carries — the operator's `OIDC_NAME`, or `null` for the default, which the client
+   * words in the person's language.
+   */
+  oidc: Type.Union([Type.Object({ name: Type.Union([Type.String(), Type.Null()]) }), Type.Null()]),
   /** Who may make an account: anybody, or only the holder of an invitation (R51). */
   signUp: Type.Union([Type.Literal('open'), Type.Literal('invite-only')]),
 });
@@ -1347,6 +1354,8 @@ export const MySignIn = Type.Object({
     Type.Object({ login: Type.Union([Type.String(), Type.Null()]) }),
     Type.Null(),
   ]),
+  /** Whether the account is linked to the organisation's single sign-on (D-200); only ever the caller's own. */
+  oidc: Type.Boolean(),
 });
 export type MySignIn = Static<typeof MySignIn>;
 
@@ -1450,6 +1459,21 @@ export const ServerGitHubRequest = FromClient({
 });
 export type ServerGitHubRequest = Static<typeof ServerGitHubRequest>;
 
+/** The longest name a single sign-on button carries (D-200): one short line, never a sentence. */
+export const OIDC_NAME_MAX = 40;
+
+/**
+ * `POST /api/server/oidc` — the OpenID Connect provider (D-200), its discovery and its client tried with these
+ * values and kept only if they work. `name` is the button's label; empty is the default.
+ */
+export const ServerOidcRequest = FromClient({
+  issuer: Type.String({ minLength: 1, maxLength: 512 }),
+  clientId: Type.String({ minLength: 1, maxLength: 256 }),
+  clientSecret: Type.String({ minLength: 1, maxLength: 1024 }),
+  name: Type.Optional(Type.String({ maxLength: OIDC_NAME_MAX })),
+});
+export type ServerOidcRequest = Static<typeof ServerOidcRequest>;
+
 /** `POST /api/server/smtp` — the relay, tried with a test letter to the caller, kept only if it works. */
 export const ServerSmtpRequest = FromClient({
   smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
@@ -1458,7 +1482,7 @@ export const ServerSmtpRequest = FromClient({
 });
 export type ServerSmtpRequest = Static<typeof ServerSmtpRequest>;
 
-/** `DELETE /api/server/github` and `/smtp` — the body is optional; `confirmLastChannel` is the only field. */
+/** `DELETE /api/server/github`, `/smtp` and `/oidc` — the body is optional; `confirmLastChannel` is the only field. */
 export const ServerDisconnectRequest = FromClient({
   confirmLastChannel: Type.Optional(Type.Boolean()),
 });

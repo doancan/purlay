@@ -1,6 +1,6 @@
 /**
  * The server's own settings, kept in the database (D-179 §6): who may sign up, GitHub's OAuth app, the
- * mail relay, and who may make a workspace. One row, `server_settings` (migration 0049), read whole and
+ * single sign-on provider (D-200), the mail relay, and who may make a workspace. One row, `server_settings` (migration 0049), read whole and
  * written by patch.
  *
  * - **The secrets are sealed** by the one credential cipher (`platform/crypto.ts`, D-39 §6) — the GitHub
@@ -18,12 +18,13 @@
  * and the secret sessions are signed with, which is derived from `ENCRYPTION_KEY` and never a setting.
  */
 import type { Executor } from '@purlay/db';
-import type { ServerSettingsView } from '@purlay/types';
+import { OIDC_NAME_MAX, type ServerSettingsView } from '@purlay/types';
 import type { AuthSettings } from '../auth/better-auth';
 import { workspaceCreatorsOf, type WorkspaceCreators } from '../workspaces/creators';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import { SealBroken, type CredentialCipher } from '../../platform/crypto';
+import { oidcIssuerProblem, oidcNameProblem } from '../../platform/oidc-address';
 import { smtpUrlProblem } from '../../platform/smtp-address';
 import { atomicallyOn } from '../../platform/transactions';
 
@@ -56,6 +57,7 @@ export interface ServerSettings extends AuthSettings {
 export interface SettingsPatch {
   readonly signUp?: AuthSettings['signUp'] | undefined;
   readonly github?: NonNullable<AuthSettings['github']> | null | undefined;
+  readonly oidc?: NonNullable<AuthSettings['oidc']> | null | undefined;
   readonly smtp?: SmtpSettings | null | undefined;
   readonly workspaceCreators?: WorkspaceCreators | undefined;
   /**
@@ -68,6 +70,7 @@ export interface SettingsPatch {
 /** What the environment says of the settings, already checked by the configuration (`envSeedOf`). */
 export interface SettingsSeed {
   readonly github?: NonNullable<AuthSettings['github']>;
+  readonly oidc?: NonNullable<AuthSettings['oidc']>;
   readonly smtp?: SmtpSettings;
   readonly workspaceCreators: WorkspaceCreators;
 }
@@ -78,6 +81,7 @@ export interface SettingsSeed {
  */
 const SEALED_IN = {
   githubClientSecret: 'server_settings.github_client_secret_encrypted',
+  oidcClientSecret: 'server_settings.oidc_client_secret_encrypted',
   smtpUrl: 'server_settings.smtp_url_encrypted',
 } as const;
 
@@ -85,6 +89,7 @@ const SEALED_IN = {
 const DEFAULTS: ServerSettings = {
   signUp: 'invite-only',
   github: undefined,
+  oidc: undefined,
   smtp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
@@ -123,7 +128,7 @@ const creatorsOf = (kind: string, logins: readonly string[]): WorkspaceCreators 
 };
 
 /** A setting that holds a sealed secret: what a rotated `ENCRYPTION_KEY` leaves unreadable. */
-export type SealedSetting = 'github' | 'smtp';
+export type SealedSetting = 'github' | 'smtp' | 'oidc';
 
 /** The settings as a start reads them, and which sealed secrets it could not open. */
 export interface BootSettings {
@@ -170,6 +175,21 @@ const readWith = async (
     row.github_client_id === null || githubSecret === undefined
       ? undefined
       : { clientId: row.github_client_id, clientSecret: githubSecret };
+  const oidcSecret =
+    row.oidc_issuer === null ||
+    row.oidc_client_id === null ||
+    row.oidc_client_secret_encrypted === null
+      ? undefined
+      : await open('oidc', row.oidc_client_secret_encrypted, SEALED_IN.oidcClientSecret);
+  const oidc =
+    row.oidc_issuer === null || row.oidc_client_id === null || oidcSecret === undefined
+      ? undefined
+      : {
+          issuer: row.oidc_issuer,
+          clientId: row.oidc_client_id,
+          clientSecret: oidcSecret,
+          name: row.oidc_name ?? undefined,
+        };
   const smtpUrl =
     row.smtp_url_encrypted === null || row.mail_from === null
       ? undefined
@@ -181,6 +201,7 @@ const readWith = async (
   return {
     signUp: signUpOf(row.sign_up),
     github,
+    oidc,
     smtp,
     workspaceCreators: creatorsOf(row.workspace_creators, row.workspace_creator_logins),
     setupCompletedAt: row.setup_completed_at ?? undefined,
@@ -225,6 +246,10 @@ interface Written {
   sign_up?: string;
   github_client_id?: string | null;
   github_client_secret_encrypted?: string | null;
+  oidc_issuer?: string | null;
+  oidc_client_id?: string | null;
+  oidc_client_secret_encrypted?: string | null;
+  oidc_name?: string | null;
   smtp_url_encrypted?: string | null;
   mail_from?: string | null;
   smtp_allow_plaintext?: boolean;
@@ -249,6 +274,32 @@ const columnsOf = async (cipher: CredentialCipher, patch: SettingsPatch): Promis
       patch.github.clientSecret,
       SEALED_IN.githubClientSecret,
     );
+  }
+  if (patch.oidc === null) {
+    written.oidc_issuer = null;
+    written.oidc_client_id = null;
+    written.oidc_client_secret_encrypted = null;
+    written.oidc_name = null;
+  } else if (patch.oidc !== undefined) {
+    const { issuer, clientId, clientSecret, name } = patch.oidc;
+    if (issuer === '' || clientId === '' || clientSecret === '') {
+      throw new Error(
+        'single sign-on is its issuer, its client id and its client secret, all three',
+      );
+    }
+    // As the sign-in will read it: a value it could not use would be kept, and refuse every sign-in after.
+    const problem = oidcIssuerProblem(issuer);
+    if (problem !== undefined) throw new Error(`the issuer: ${problem}`);
+    const nameProblem = name === undefined ? undefined : oidcNameProblem(name, OIDC_NAME_MAX);
+    if (nameProblem !== undefined) throw new Error(`the button's name: ${nameProblem}`);
+    written.oidc_issuer = issuer;
+    written.oidc_client_id = clientId;
+    written.oidc_client_secret_encrypted = await sealed(
+      cipher,
+      clientSecret,
+      SEALED_IN.oidcClientSecret,
+    );
+    written.oidc_name = name ?? null;
   }
   if (patch.smtp === null) {
     written.smtp_url_encrypted = null;
@@ -316,6 +367,15 @@ export const settingsView = (settings: ServerSettings): ServerSettingsView => ({
     settings.github === undefined
       ? null
       : { clientId: settings.github.clientId, clientSecret: { set: true } },
+  oidc:
+    settings.oidc === undefined
+      ? null
+      : {
+          issuer: settings.oidc.issuer,
+          clientId: settings.oidc.clientId,
+          clientSecret: { set: true },
+          name: settings.oidc.name ?? null,
+        },
   smtp:
     settings.smtp === undefined
       ? null
@@ -335,6 +395,10 @@ type Seeding = Pick<
   Config,
   | 'GITHUB_CLIENT_ID'
   | 'GITHUB_CLIENT_SECRET'
+  | 'OIDC_ISSUER'
+  | 'OIDC_CLIENT_ID'
+  | 'OIDC_CLIENT_SECRET'
+  | 'OIDC_NAME'
   | 'SMTP_URL'
   | 'MAIL_FROM'
   | 'SMTP_ALLOW_PLAINTEXT'
@@ -349,6 +413,19 @@ export const envSeedOf = (config: Seeding): SettingsSeed => ({
     ? {}
     : {
         github: { clientId: config.GITHUB_CLIENT_ID, clientSecret: config.GITHUB_CLIENT_SECRET },
+      }),
+  // All three or none (the configuration checks it): the label rides with the provider, never alone.
+  ...(config.OIDC_ISSUER === undefined ||
+  config.OIDC_CLIENT_ID === undefined ||
+  config.OIDC_CLIENT_SECRET === undefined
+    ? {}
+    : {
+        oidc: {
+          issuer: config.OIDC_ISSUER,
+          clientId: config.OIDC_CLIENT_ID,
+          clientSecret: config.OIDC_CLIENT_SECRET,
+          name: config.OIDC_NAME,
+        },
       }),
   ...(config.SMTP_URL === undefined || config.MAIL_FROM === undefined
     ? {}
@@ -371,6 +448,10 @@ export const ignoredEnvironment = (config: Seeding): string[] =>
     [
       ['GITHUB_CLIENT_ID', config.GITHUB_CLIENT_ID !== undefined],
       ['GITHUB_CLIENT_SECRET', config.GITHUB_CLIENT_SECRET !== undefined],
+      ['OIDC_ISSUER', config.OIDC_ISSUER !== undefined],
+      ['OIDC_CLIENT_ID', config.OIDC_CLIENT_ID !== undefined],
+      ['OIDC_CLIENT_SECRET', config.OIDC_CLIENT_SECRET !== undefined],
+      ['OIDC_NAME', config.OIDC_NAME !== undefined],
       ['SMTP_URL', config.SMTP_URL !== undefined],
       ['MAIL_FROM', config.MAIL_FROM !== undefined],
       // A boolean with a default: only `true` is something the operator wrote.
@@ -400,6 +481,7 @@ export const importFromEnvOnce = async (
   // Sealed before the transaction: nothing waits on a lock while a key is derived.
   const columns = await columnsOf(cipher, {
     github: seed.github ?? null,
+    oidc: seed.oidc ?? null,
     smtp: seed.smtp ?? null,
     workspaceCreators: seed.workspaceCreators,
   });

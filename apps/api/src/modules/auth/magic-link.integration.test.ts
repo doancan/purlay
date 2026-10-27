@@ -43,7 +43,7 @@ describe('integration: asking for a link, as decided', () => {
       const outbox = aRecordingOutbox();
       const links = aTestAuth(db, {
         mailer: outbox,
-        settings: { github: undefined, signUp: 'invite-only' },
+        settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
       }).signInLinks;
       if (links === undefined) throw new Error('sign-in by link is not on');
       // What is left for after the answer, held here and not run until the test says.
@@ -91,7 +91,7 @@ describe('integration: a link asked for by the native application (D-191)', () =
     const outbox = aRecordingOutbox();
     const links = aTestAuth(db, {
       mailer: outbox,
-      settings: { github: undefined, signUp: 'invite-only' },
+      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
     }).signInLinks;
     if (links === undefined) throw new Error('sign-in by link is not on');
     const later: (() => Promise<void>)[] = [];
@@ -192,6 +192,88 @@ describe('integration: spending a link, as decided', () => {
         setCookie: ['a-session-cookie'],
       });
       expect(library.asked).toEqual([proven]);
+    });
+  });
+});
+
+describe('integration: an account single sign-on is linked to is signed into by it alone (D-200 §6)', () => {
+  /** The library's own row for a provider's account, as a sign-in through it leaves it. */
+  const linkedToSso = async (db: Executor, userId: string): Promise<void> => {
+    await db
+      .insertInto('accounts')
+      .values({
+        user_id: userId,
+        provider_id: 'oidc',
+        account_id: `https://idp.example.test|sub-${userId}`,
+      })
+      .execute();
+  };
+
+  /** What asking for a link to the address sends, once what is left for after the answer has run. */
+  const posted = async (db: Executor, email: string): Promise<readonly string[]> => {
+    const outbox = aRecordingOutbox();
+    const links = aTestAuth(db, {
+      mailer: outbox,
+      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+    }).signInLinks;
+    if (links === undefined) throw new Error('sign-in by link is not on');
+    const later: (() => Promise<void>)[] = [];
+    await requestSignInLink(
+      {
+        database: db,
+        clock: fixedClock(NOW),
+        log: aRecordingLogger().log,
+        appUrl: 'https://purlay.test',
+        links,
+        later: (work) => {
+          later.push(work);
+        },
+      },
+      { email, locale: 'en' },
+      '203.0.113.9',
+    );
+    for (const work of later) await work();
+    return outbox.posted.map((message) => message.to);
+  };
+
+  test('is sent no link, while the same account without the provider is', async () => {
+    await withRollback(async (db) => {
+      const sso = await anAccount(db, 'sso@example.test', true);
+      await anAccount(db, 'plain@example.test', true);
+      await linkedToSso(db, sso);
+      expect(await posted(db, 'sso@example.test')).toEqual([]);
+      expect(await posted(db, 'plain@example.test')).toEqual(['plain@example.test']);
+    });
+  });
+
+  test('a link sent before the account was linked is refused when spent, and the library never asked', async () => {
+    await withRollback(async (db) => {
+      const library: SignInLinks & { readonly asked: string[] } = {
+        asked: [],
+        signUp: 'open',
+        outbox: aRecordingOutbox(),
+        issue: () => Promise.resolve(),
+        spend: (token): Promise<readonly string[]> => {
+          library.asked.push(token);
+          return Promise.resolve(['a-session-cookie']);
+        },
+      };
+      const token = 'c'.repeat(64);
+      const id = await anAccount(db, 'late@example.test', true);
+      await db
+        .insertInto('verifications')
+        .values({
+          identifier: `magic-link:${Buffer.from(await tokenDigest(token), 'hex').toString('base64url')}`,
+          value: JSON.stringify({ type: 'magic-link', email: 'late@example.test' }),
+          expires_at: new Date(Date.now() + 15 * 60_000),
+        })
+        .execute();
+      await linkedToSso(db, id);
+      const dependencies = { database: db, clock: fixedClock(NOW), links: library };
+      expect(await attempt(db, () => consumeSignInLink(dependencies, token, new Headers()))).toBe(
+        'SIGN_IN_LINK_NOT_FOUND',
+      );
+      expect(library.asked).toEqual([]);
     });
   });
 });

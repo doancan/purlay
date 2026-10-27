@@ -32,6 +32,8 @@ import {
   type GitHubStub,
 } from '../../testing/github-sign-in';
 import { aSignedInUser, aTestAuth, type SignedInUser } from '../../testing/signed-in';
+import { anOidcStub, type OidcPerson, type OidcStub } from '../../testing/oidc-stub';
+import { anOidcAuth, returnFromOidc, startOidcSignIn } from '../../testing/oidc-sign-in';
 import { aUniqueSlug } from '../../testing/users';
 import { normalisedMailbox } from '@purlay/types';
 
@@ -647,7 +649,9 @@ describe('integration: what the passport does not touch', () => {
   test('the setup administrator is made on an invite-only server with no passport', async () => {
     // The administrator is made by `createAdmin` through the library's internal adapter, outside any
     // request: the hook sees no route, and decides nothing.
-    const auth = aTestAuth(cloned.db, { settings: { github: undefined, signUp: 'invite-only' } });
+    const auth = aTestAuth(cloned.db, {
+      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+    });
     const context = await auth.$context;
     const user = await context.internalAdapter.createUser(
       {
@@ -678,5 +682,67 @@ describe('integration: what the passport does not touch', () => {
     }
     // The control: the log did record the requests, so an empty log cannot pass for a clean one.
     expect(written).toContain('/api/invitations/passport');
+  });
+});
+
+describe('integration: single sign-on on an invite-only server (D-200 §5)', () => {
+  const CLOSED_OIDC = `${ORIGIN}/sign-in?error=signup-closed`;
+
+  const aProviderServer = async (
+    person: OidcPerson,
+  ): Promise<{ readonly server: Server; readonly stub: OidcStub }> => {
+    const clock = aMovableClock();
+    // The provider tells time as the server does: a token is judged by the instance's own clock.
+    const stub = await anOidcStub(person, {}, undefined, { now: () => clock.now().getTime() });
+    const mail = aRecordingOutbox();
+    const logs = aRecordingLogger();
+    const app = createApp(
+      testDependencies({
+        database: cloned.db,
+        clock,
+        log: logs.log,
+        mail,
+        signUp: 'invite-only',
+        auth: anOidcAuth(cloned.db, stub, {
+          baseUrl: ORIGIN,
+          signUp: 'invite-only',
+          mailer: mail,
+          clock,
+          log: logs.log,
+        }),
+      }),
+    );
+    return { server: { app, clock, mail, logs }, stub };
+  };
+
+  const signInThrough = async (
+    server: Server,
+    stub: OidcStub,
+    cookie = '',
+  ): Promise<string | null> => {
+    const started = await startOidcSignIn(server.app, ORIGIN, stub, cookie);
+    const back = await returnFromOidc(server.app, ORIGIN, started);
+    return back.headers.get('location');
+  };
+
+  test('without a passport a newcomer lands on signup-closed, and nothing is made', async () => {
+    const person = aNewPerson();
+    const { server, stub } = await aProviderServer({ sub: 'x1', email: person.email });
+    expect(await signInThrough(server, stub)).toBe(CLOSED_OIDC);
+    expect(await accountsAt(person.email)).toBe(0);
+  });
+
+  test('with the passport’s cookie the account is made and the passport spent, and the cookie spends no second', async () => {
+    const person = aNewPerson();
+    const { server, stub } = await aProviderServer({ sub: 'x2', email: person.email });
+    const { token } = await anInvitation(server, 'pp-sso');
+    const { pair } = await aGitHubPassport(server, token);
+    expect(await signInThrough(server, stub, pair)).toBe(ORIGIN);
+    expect(await accountsAt(person.email)).toBe(1);
+
+    const other = aNewPerson();
+    const second = await aProviderServer({ sub: 'x3', email: other.email });
+    expect(await signInThrough(second.server, second.stub, pair)).toBe(CLOSED_OIDC);
+    expect(await accountsAt(other.email)).toBe(0);
   });
 });

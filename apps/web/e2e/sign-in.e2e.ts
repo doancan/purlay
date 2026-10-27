@@ -36,6 +36,7 @@ test.describe('the sign-in screen', () => {
     expect(await (await methods).json()).toEqual({
       github: true,
       email: false,
+      oidc: null,
       signUp: 'invite-only',
     });
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
@@ -54,7 +55,9 @@ test.describe('the sign-in screen', () => {
     expectNoAxe,
   }) => {
     await page.route('**/api/auth/methods', async (route) => {
-      await route.fulfill({ json: { github: false, email: false, signUp: 'invite-only' } });
+      await route.fulfill({
+        json: { github: false, email: false, oidc: null, signUp: 'invite-only' },
+      });
     });
     await page.goto('/sign-in');
     await expect(

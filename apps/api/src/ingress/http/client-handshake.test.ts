@@ -42,7 +42,7 @@ describe('GET /api/client', () => {
 
   test('carries the sign-in methods, so one call is enough to draw the sign-in screen', async () => {
     const body = (await (await server()('/api/client')).json()) as ClientInfo;
-    expect(body.auth).toEqual({ github: true, email: false, signUp: 'invite-only' });
+    expect(body.auth).toEqual({ github: true, email: false, oidc: null, signUp: 'invite-only' });
   });
 
   test('says there is no minimum where none is set', async () => {

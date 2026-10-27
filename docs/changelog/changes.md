@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Sign-in** — A server can be connected to the organisation's OpenID Connect provider (Okta, Entra ID, Keycloak and the like) in Administration → Server or by `OIDC_ISSUER`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`: people sign in with it beside GitHub and email, and it is linked to an existing account only when both the provider and that account's address are verified (D-200)
 - **Native app** — A person signs in to the macOS application in their browser and authorises it with one click; it gets a session of its own (D-191)
 - **Native app** — The server says which client versions it still serves and where to get a newer one, and refuses an older one with a clear answer (D-190)
 - **Operations** — Every release carries the contract bundle a non-browser client is generated from, with its digest (D-192)

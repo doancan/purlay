@@ -1518,7 +1518,10 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   as the additional data: a ciphertext copied into the other column does not open there. They are never
   logged, never exported (`EXCLUDED` in `modules/export/tables.ts`) and never in a response, whose view
   says only whether each is set (`settingsView` in `modules/setup/settings.ts`).
-- **Pairs are pairs**: a client id with its secret, a relay with its sender, or neither.
+- **Pairs are pairs**: a client id with its secret, a relay with its sender, or neither. The single
+  sign-on provider (D-200, added by 0059) is a triple — issuer, client id and sealed client secret — or
+  none; its optional `oidc_name` labels the sign-in button and needs a provider. The issuer is kept as
+  written, never normalised: the id_token's `iss` must equal it byte for byte.
 - **Who may make a workspace** is D-155's rule as a kind — `first`, `anyone` or `listed` — and, for
   `listed`, the GitHub logins in lower case, at least one.
 - `imported_from_env_at` is when the environment was copied in, **once**, on the first start; set, every
@@ -1544,6 +1547,11 @@ CREATE TABLE server_settings (
     imported_from_env_at      TIMESTAMPTZ,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- The single sign-on provider (D-200), added by 0059; the secret sealed as the others are.
+    oidc_issuer                  TEXT,
+    oidc_client_id               TEXT,
+    oidc_client_secret_encrypted TEXT,
+    oidc_name                    TEXT,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -1555,7 +1563,14 @@ CREATE TABLE server_settings (
     CONSTRAINT server_settings_workspace_creators
         CHECK (workspace_creators IN ('first', 'anyone', 'listed')),
     CONSTRAINT server_settings_creator_logins
-        CHECK ((workspace_creators = 'listed') = (cardinality(workspace_creator_logins) > 0))
+        CHECK ((workspace_creators = 'listed') = (cardinality(workspace_creator_logins) > 0)),
+    CONSTRAINT server_settings_oidc_triple
+        CHECK ((oidc_issuer IS NULL) = (oidc_client_id IS NULL)
+               AND (oidc_issuer IS NULL) = (oidc_client_secret_encrypted IS NULL)),
+    CONSTRAINT server_settings_oidc_not_blank
+        CHECK (oidc_issuer <> '' AND oidc_client_id <> '' AND oidc_name <> ''),
+    CONSTRAINT server_settings_oidc_name_needs_provider
+        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL)
 );
 ```
 
@@ -1923,6 +1938,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0056_native_authorizations.sql native_authorizations: the digest of a one-time code that hands a person's session to the native application, and the challenge it is bound to  (D-191)
 0057_session_device_name.sql sessions.device_name: the name the native application gave the Mac a session was made for, which a device list shows  (D-193)
 0058_message_changed_at.sql messages.changed_at, stamped by a trigger on every update: when the server last wrote a message, which a client catching up asks by  (D-194)
+0059_server_settings_oidc.sql server_settings.oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_name: the single sign-on provider, a triple or nothing  (D-200)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

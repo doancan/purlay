@@ -1,6 +1,6 @@
 /**
  * Settings → Server (UX §11, D-179 §4.8): how this server lets people in, for its administrator alone.
- * Four cards — GitHub sign-in, e-mail, who may create an account, who may create a workspace — over one
+ * Five cards — GitHub sign-in, single sign-on (D-200), e-mail, who may create an account, who may create a workspace — over one
  * query that is read again after every change and never polled. Loading, a failed read with Retry, and
  * the page being gone (the server says *not found* to anybody who is not the administrator, a demotion
  * included) are each said.
@@ -14,6 +14,7 @@ import { NotFound } from '../../shell/not-found';
 import { SettingsPage } from '../page';
 import { SERVER_SETTINGS_KEY, useServerClient } from '../server-context';
 import { EmailCard, GitHubCard } from './server-channels';
+import { OidcCard } from './server-oidc';
 import { CreatorsCard, PolicyCard } from './server-policies';
 
 export const ServerPage = (): React.JSX.Element => {
@@ -50,6 +51,7 @@ export const ServerPage = (): React.JSX.Element => {
       ) : (
         <>
           <GitHubCard view={settings.data} />
+          <OidcCard view={settings.data} />
           <EmailCard view={settings.data} />
           <PolicyCard view={settings.data} />
           <CreatorsCard view={settings.data} />

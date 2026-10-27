@@ -110,7 +110,9 @@ test.describe('an invitation', () => {
     // `unavailable`, the link made all the same. The queued answer has no relay to stand on here and
     // is the integration tests' (`invitation-mail.integration.test.ts`).
     await page.route('**/api/auth/methods', async (route) => {
-      await route.fulfill({ json: { github: true, email: true, signUp: 'invite-only' } });
+      await route.fulfill({
+        json: { github: true, email: true, oidc: null, signUp: 'invite-only' },
+      });
     });
     await signIn();
     await page.goto(`/w/${tenant.slug}`);

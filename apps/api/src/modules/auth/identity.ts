@@ -160,6 +160,17 @@ export const githubDisplayName = (profile: GitHubProfile): string =>
     DISPLAY_NAME_MAX,
   );
 
+/**
+ * The name a single sign-on account is made with (D-200): the provider's `name` claim, cleaned as GitHub's is
+ * (`cleanedName`), cut to the column; `undefined` when it holds nothing, which the user hook turns into the
+ * username. Never fails on what a provider sent.
+ */
+export const oidcDisplayName = (claim: unknown): string | undefined => {
+  if (typeof claim !== 'string') return undefined;
+  const name = fitted(cleanedName(claim), DISPLAY_NAME_MAX);
+  return name === '' ? undefined : name;
+};
+
 /** The username GitHub's login asks for, before `availableUsername` settles who already has it. */
 export const githubUsernameWanted = (profile: GitHubProfile): string =>
   livingName(shapedUsername(profile.login) ?? `user-${String(profile.id)}`);

@@ -67,7 +67,7 @@ const authOver = (database: Executor, clock: Clock = systemClock): Auth =>
     baseUrl: BASE,
     secret: deriveAuthSecret(DEVELOPMENT_ENCRYPTION_KEY),
     log: silent,
-    settings: { github: undefined, signUp: 'invite-only' },
+    settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
     githubUrls: { web: GITHUB_URL_DEFAULT, api: GITHUB_API_URL_DEFAULT },
     sessionTtlDays: 30,
     bus: nobodyListening,

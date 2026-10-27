@@ -47,6 +47,9 @@ export const tr = {
   'signIn.title': 'Purlay’e giriş yap',
   'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
+  // Tek oturum açma (D-200). `{name}` düğmenin işletmece verilen adı ya da aşağıdaki varsayılandır.
+  'signIn.oidc': '{name} ile devam et',
+  'signIn.oidc.default': 'tek oturum açma',
   'signIn.cancelled': 'GitHub’da girişi iptal ettin — hazır olduğunda GitHub ile devam et.',
   'signIn.expired':
     'Bu girişin süresi doldu ya da başka bir tarayıcıda başlatıldı — buradan yeniden başla.',
@@ -59,6 +62,10 @@ export const tr = {
   'signIn.signupClosed':
     'Bu Purlay sunucusunda hesap yalnızca davetle açılır — sunucudaki birinden davet bağlantısı iste.',
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden dene.',
+  'signIn.oidcUnavailable':
+    'Tek oturum açma hizmetine ulaşılamadı ya da bu sunucunun güvendiği bir kimlik vermedi — biraz bekleyip yeniden dene; sürerse sunucuyu yönetene haber ver.',
+  'signIn.emailUnverified':
+    'Tek oturum açma e-posta adresinin doğrulanmış olduğunu söylemedi; bu yüzden seni giriş yaptıramaz. Kuruluşunun oturum açma sistemini yönetene adresini doğrulatmasını söyle.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
   'signIn.ended': 'Oturumun sona erdi. Devam etmek için yeniden giriş yap.',
@@ -66,7 +73,7 @@ export const tr = {
   'signIn.methods.retry': 'Yeniden dene',
   'signIn.notSetUp.title': 'Bu sunucu henüz kurulmadı',
   'signIn.notSetUp.body':
-    'GitHub ile giriş de e-posta bağlantısı da henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+    'GitHub ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
   'signIn.notSetUp.action': 'Bu sunucuyu kur',
   'signIn.scope': 'Purlay GitHub’dan yalnızca adını, kullanıcı adını ve e-postanı ister.',
   'signIn.email.label': 'E-posta adresi',
@@ -1285,6 +1292,10 @@ export const tr = {
   'settings.account.github': 'GitHub',
   'settings.account.githubSignsIn': 'Bu GitHub hesabıyla giriş yapabilirsin.',
   'settings.account.githubLinked': 'Bağlı',
+  'settings.account.oidc': 'Tek oturum açma',
+  'settings.account.oidcSignsIn':
+    'Kuruluşunun oturum açma sistemi bu hesaba bağlı; e-postayla gelen bağlantı artık bu hesaba giriş yaptırmaz.',
+  'settings.account.oidcLinked': 'Bağlı',
   'settings.account.password.title': 'Parola',
   'settings.account.password.description':
     'Giriş yaptığın parolayı değiştir. Diğer oturumların kapatılır.',
@@ -1693,6 +1704,43 @@ export const tr = {
   'setup.reason.unexpected-reply.fix1': 'Bir dakika sonra yeniden dene.',
   'setup.reason.unexpected-reply.fix2':
     'Sürerse adresi kontrol et; aşağıdaki yanıt neyin cevap verdiğini söyler.',
+  'setup.reason.issuer-mismatch.what':
+    'Bu adres yanıt veriyor ama keşif belgesi başka bir yayıncı (issuer) adı bildiriyor.',
+  'setup.reason.issuer-mismatch.fix1':
+    'Yayıncıyı sağlayıcının verdiği gibi, sondaki eğik çizgisiyle ya da çizgisiz yaz.',
+  'setup.reason.issuer-mismatch.fix2':
+    'Ortak bir adres yerine kuruluşunun adını taşıyan kiracıya özel adresi kullan.',
+  'setup.reason.discovery-invalid.what':
+    'Bu, sunucunun giriş yapabileceği bir OpenID Connect sağlayıcısı değil.',
+  'setup.reason.discovery-invalid.fix1':
+    'Adreste https üzerinden bir /.well-known/openid-configuration belgesi olmalı.',
+  'setup.reason.discovery-invalid.fix2':
+    'Sağlayıcı PKCE (S256) ile yetkilendirme kodu akışını sunmalı ve belirteçleri RS256, ES256 gibi asimetrik bir algoritmayla imzalamalı.',
+  'setup.oidc.reason.secret-rejected.what':
+    'Sağlayıcı bu istemciyi tanıyor ama gizli anahtarını reddetti.',
+  'setup.oidc.reason.secret-rejected.fix1':
+    'İstemci gizli anahtarını sağlayıcının bu uygulama sayfasından yeniden kopyala.',
+  'setup.oidc.reason.secret-rejected.fix2':
+    'Anahtarın süresi dolmuş ya da değiştirilmiş olabilir: yenisini üretip buraya yapıştır.',
+  'setup.oidc.reason.client-unknown.what': 'Sağlayıcı bu istemciyi tanımıyor.',
+  'setup.oidc.reason.client-unknown.fix1': 'İstemci kimliğini sağlayıcıdan yeniden kopyala.',
+  'setup.oidc.reason.client-unknown.fix2':
+    'Uygulama silinmiş olabilir ya da kimlik başka bir sağlayıcıya ya da kiracıya ait olabilir.',
+  'setup.oidc.reason.unreachable.what': 'O adreste kimse yanıt vermedi ya da süresinde vermedi.',
+  'setup.oidc.reason.unreachable.fix1': 'Yayıncı adresini denetle.',
+  'setup.oidc.reason.unreachable.fix2':
+    'Bu sunucunun sağlayıcıya dışarıdan bağlanabildiğini denetle.',
+  'setup.oidc.reason.tls-failed.what': 'Sağlayıcıya ulaşıldı ama güvenli bağlantı kurulamadı.',
+  'setup.oidc.reason.tls-failed.fix1':
+    'Sağlayıcının sertifikasının süresi dolmuş, kendinden imzalı ya da başka bir ad için olabilir.',
+  'setup.oidc.reason.tls-failed.fix2':
+    'Bu sunucu, sisteminin güvendiği sertifika otoritelerine güvenir.',
+  'setup.oidc.reason.unexpected-reply.what':
+    'Yanıt, çalışan bir sağlayıcının vereceği türden değil.',
+  'setup.oidc.reason.unexpected-reply.fix1':
+    'Aşağıdaki yönlendirme adresinin sağlayıcıda bu istemci için kayıtlı olduğunu denetle.',
+  'setup.oidc.reason.unexpected-reply.fix2':
+    'Sürerse, aşağıdaki yanıt neyin cevap verdiğini söyler.',
   'setup.failed.network': 'Sunucuya ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
   'setup.failed.rate': {
     other: 'Bu tarayıcıdan çok fazla deneme yapıldı. {count} dakika bekleyip yeniden dene.',
@@ -1744,6 +1792,36 @@ export const tr = {
   'settings.server.github.disconnectBody':
     'İnsanlar artık GitHub ile giriş yapamaz. Açık oturumlar açık kalır.',
   'settings.server.github.disconnected': 'GitHub’ın bağlantısı kesildi.',
+  'settings.server.oidc.title': 'Tek oturum açma',
+  'settings.server.oidc.description':
+    'İnsanlar kuruluşunun OpenID Connect sağlayıcısıyla giriş yapar — Okta, Entra ID, Google Workspace, Keycloak, Authentik gibi.',
+  'settings.server.oidc.empty':
+    'Bir sağlayıcı bağlanana kadar kimse tek oturum açmayla giriş yapamaz.',
+  'settings.server.oidc.issuer': 'Yayıncı {issuer}',
+  'settings.server.oidc.clientId': 'İstemci kimliği {id}',
+  'settings.server.oidc.callback': 'Yönlendirme adresi',
+  'settings.server.oidc.callbackHint':
+    'Bunu sağlayıcıda uygulamanın yönlendirme adresi (redirect URI) olarak kaydet.',
+  'settings.server.oidc.connect': 'Tek oturum açmayı bağla',
+  'settings.server.oidc.replace': 'Sağlayıcıyı değiştir',
+  'settings.server.oidc.issuerLabel': 'Yayıncı (issuer)',
+  'settings.server.oidc.issuerHint':
+    'Sağlayıcıyı anlatan /.well-known/openid-configuration belgesinin bulunduğu adres, https üzerinden.',
+  'settings.server.oidc.clientIdLabel': 'İstemci kimliği',
+  'settings.server.oidc.clientSecretLabel': 'İstemci gizli anahtarı',
+  'settings.server.oidc.nameLabel': 'Düğme adı',
+  'settings.server.oidc.nameHint':
+    'İsteğe bağlı. Giriş düğmesinde görünür: bu adla devam et. Boşsa tek oturum açma yazar.',
+  'settings.server.oidc.hint':
+    'Kaydetmeden önce sağlayıcıya istemci sorulur. Gizli anahtar şifreli saklanır ve bir daha gösterilmez.',
+  'settings.server.oidc.verifiedNote':
+    'İnsanlar yalnızca sağlayıcı adreslerinin doğrulandığını söylediğinde ve mevcut hesabın adresi de doğrulanmışsa o hesaba bağlanır.',
+  'settings.server.oidc.save': 'Bağlantıyı dene ve kaydet',
+  'settings.server.oidc.saved': 'Kaydedildi. Tek oturum açma bundan sonra bu sağlayıcıyı kullanır.',
+  'settings.server.oidc.disconnectTitle': 'Tek oturum açma bağlantısı kesilsin mi?',
+  'settings.server.oidc.disconnectBody':
+    'İnsanlar artık sağlayıcıyla giriş yapamaz. Açık oturumlar açık kalır; sağlayıcının oluşturduğu hesaplar diğer giriş yollarıyla çalışmaya devam eder.',
+  'settings.server.oidc.disconnected': 'Tek oturum açma bağlantısı kesildi.',
   'settings.server.email.title': 'E-posta',
   'settings.server.email.description':
     'Giriş bağlantıları ve davetler bu e-posta sunucusundan gönderilir.',

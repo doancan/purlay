@@ -13,6 +13,12 @@ interface Manifest {
   readonly origin: string;
   readonly code: string;
   readonly github: { readonly clientId: string; readonly clientSecret: string };
+  /** The single sign-on provider the stand-in serves (D-200): its issuer and the client it knows. */
+  readonly oidc: {
+    readonly issuer: string;
+    readonly clientId: string;
+    readonly clientSecret: string;
+  };
   readonly relay: { readonly port: number };
   /** The file the relay writes every letter it takes to, as JSON. */
   readonly mailbox: string;

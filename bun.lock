@@ -29,6 +29,7 @@
         "@sinclair/typebox": "0.34.52",
         "better-auth": "1.7.12",
         "elysia": "1.4.30",
+        "jose": "6.2.13",
         "nodemailer": "10.1.2",
         "pino": "10.4.0",
       },

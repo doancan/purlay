@@ -38,7 +38,7 @@ const nobodyListening: EventBus = {
   forget: () => undefined,
 };
 
-const closedToGithub: AuthSettings = { github: undefined, signUp: 'open' };
+const closedToGithub: AuthSettings = { github: undefined, oidc: undefined, signUp: 'open' };
 
 const deps = (over: Partial<AuthDependencies> = {}): AuthDependencies => ({
   database,
@@ -216,7 +216,13 @@ describe('createAuth', () => {
   test('has no GitHub provider unless settings give one', async () => {
     expect((await createAuth(deps()).$context).socialProviders).toEqual([]);
     const withGithub = createAuth(
-      deps({ settings: { github: { clientId: 'id', clientSecret: 'secret' }, signUp: 'open' } }),
+      deps({
+        settings: {
+          github: { clientId: 'id', clientSecret: 'secret' },
+          oidc: undefined,
+          signUp: 'open',
+        },
+      }),
     );
     const providers = (await withGithub.$context).socialProviders;
     expect(providers.map((provider) => provider.id)).toEqual(['github']);
@@ -227,7 +233,13 @@ describe('createAuth', () => {
     expect(createAuth(deps()).github).toBe(false);
     expect(
       createAuth(
-        deps({ settings: { github: { clientId: 'id', clientSecret: 's' }, signUp: 'open' } }),
+        deps({
+          settings: {
+            github: { clientId: 'id', clientSecret: 's' },
+            oidc: undefined,
+            signUp: 'open',
+          },
+        }),
       ).github,
     ).toBe(true);
   });
@@ -250,7 +262,13 @@ describe('createAuth', () => {
 
   test('never trusts a provider to link by address alone', () => {
     const { options } = createAuth(
-      deps({ settings: { github: { clientId: 'id', clientSecret: 's' }, signUp: 'open' } }),
+      deps({
+        settings: {
+          github: { clientId: 'id', clientSecret: 's' },
+          oidc: undefined,
+          signUp: 'open',
+        },
+      }),
     );
     expect(options.account?.accountLinking).not.toHaveProperty('trustedProviders');
     expect(options.account?.accountLinking?.enabled).toBe(true);
@@ -263,14 +281,26 @@ describe('createAuth', () => {
   test('closes sign-up by password; GitHub’s own switch is never on, the hook decides who may sign up (R51)', async () => {
     expect(createAuth(deps()).options.emailAndPassword?.disableSignUp).toBe(true);
     const closed = createAuth(
-      deps({ settings: { github: { clientId: 'id', clientSecret: 's' }, signUp: 'invite-only' } }),
+      deps({
+        settings: {
+          github: { clientId: 'id', clientSecret: 's' },
+          oidc: undefined,
+          signUp: 'invite-only',
+        },
+      }),
     );
     // Off on an invite-only server too: the provider would refuse before the passport hook could let an
     // invited newcomer in (`invitation-passport.integration.test.ts` shows the hook refusing the rest).
     expect((await closed.$context).socialProviders[0]?.options?.disableSignUp).toBe(false);
     const open = (
       await createAuth(
-        deps({ settings: { github: { clientId: 'id', clientSecret: 's' }, signUp: 'open' } }),
+        deps({
+          settings: {
+            github: { clientId: 'id', clientSecret: 's' },
+            oidc: undefined,
+            signUp: 'open',
+          },
+        }),
       ).$context
     ).socialProviders[0];
     expect(open?.options?.disableSignUp).toBe(false);
@@ -335,7 +365,11 @@ describe('the GitHub address guard', () => {
       deps({
         log: recording,
         fetch: get,
-        settings: { github: { clientId: 'id', clientSecret: 's' }, signUp: 'open' },
+        settings: {
+          github: { clientId: 'id', clientSecret: 's' },
+          oidc: undefined,
+          signUp: 'open',
+        },
       }),
     );
     const provider = (await auth.$context).socialProviders[0];
@@ -423,7 +457,11 @@ describe('the GitHub address guard', () => {
           asked.push(url);
           return Promise.resolve(Response.json({ access_token: 'gho_x' }));
         },
-        settings: { github: { clientId: 'id', clientSecret: 's' }, signUp: 'open' },
+        settings: {
+          github: { clientId: 'id', clientSecret: 's' },
+          oidc: undefined,
+          signUp: 'open',
+        },
       }),
     );
     const provider = (await auth.$context).socialProviders[0];

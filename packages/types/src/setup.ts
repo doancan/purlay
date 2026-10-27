@@ -60,6 +60,10 @@ export const PROBE_REASONS = [
   'message-refused',
   /** An answer that is not the service's: a page that is not GitHub, a greeting that is not SMTP. */
   'unexpected-reply',
+  /** The provider's discovery document names another issuer than the one given (D-200 §2). */
+  'issuer-mismatch',
+  /** Reached, and what it answers is not an OpenID Connect provider this server can sign in with (D-200 §2). */
+  'discovery-invalid',
 ] as const;
 
 export type ProbeReason = (typeof PROBE_REASONS)[number];
@@ -99,6 +103,14 @@ export interface ServerSettingsView {
     readonly clientId: string;
     readonly clientSecret: { readonly set: boolean };
   } | null;
+  /** The single sign-on provider (D-200): where it is, who this server is to it, never the secret. */
+  readonly oidc: {
+    readonly issuer: string;
+    readonly clientId: string;
+    readonly clientSecret: { readonly set: boolean };
+    /** What the sign-in button says; `null` is the default, `Single sign-on`. */
+    readonly name: string | null;
+  } | null;
   readonly smtp: {
     /** That a relay is set, and where; never its user, never its password. */
     readonly address: { readonly set: true; readonly host: string };
@@ -135,7 +147,7 @@ export interface SetupState {
   /** The settings now, as a response may carry them. */
   readonly settings: ServerSettingsView;
   /** The secrets a rotated `ENCRYPTION_KEY` left unreadable: read as unset until entered again. */
-  readonly needsReentry: readonly ('github' | 'smtp')[];
+  readonly needsReentry: readonly ('github' | 'smtp' | 'oidc')[];
   /**
    * The ways for other people to sign in that are connected and were tried when saved, and serve now:
    * what the finish rule counts (D-179 §4.5).
@@ -171,11 +183,17 @@ export interface SetupVerifyAnswer {
  */
 export interface ServerSettingsAnswer {
   readonly settings: ServerSettingsView;
-  readonly needsReentry: readonly ('github' | 'smtp')[];
+  readonly needsReentry: readonly ('github' | 'smtp' | 'oidc')[];
   readonly appUrl: string;
   readonly githubCallbackUrl: string;
+  /** The callback address to register with the single sign-on provider: `APP_URL/auth/callback/oidc` (D-200). */
+  readonly oidcCallbackUrl: string;
   /** Which ways for other people to sign in serve now. */
-  readonly channels: { readonly github: boolean; readonly email: boolean };
+  readonly channels: {
+    readonly github: boolean;
+    readonly email: boolean;
+    readonly oidc: boolean;
+  };
   /** The caller's own address: where the relay's test letter goes. */
   readonly adminEmail: string;
 }
