@@ -20,6 +20,7 @@
     "budget:api": "bun --no-env-file --env-file=.env.test run scripts/budget-api.ts",
     "budget:browser": "bun --no-env-file --env-file=.env.test run apps/api/src/cli/budget-browser.ts",
     "budget:latency": "bun --no-env-file --env-file=.env.test run scripts/budget-latency.ts",
+    "measure:frames": "bun run apps/api/src/cli/frame-profiles.ts",
     "report:frames": "bun run apps/api/src/cli/frame-report.ts",
     "push:keys": "bun run apps/api/src/cli/push-keys.ts",
     "budget:web": "bun --no-env-file run scripts/budget-web.ts",

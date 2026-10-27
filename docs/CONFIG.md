@@ -318,15 +318,15 @@ configure what is not already a database constraint.
 | `UNFURL_CACHE_TTL_SECONDS` | — | `300` | Positive cache (`ARCHITECTURE.md` §8.3) |
 | `UNFURL_NEGATIVE_TTL_SECONDS` | — | `3600` | Negative cache — without it one dead link re-hits the GitHub API forever |
 
-> **HTTP limits are not configurable here either, and are provisional (O-4, D-81).** Sign-in: 30
+> **HTTP limits are not configurable here either, and the writes' budget is the socket's (D-81, D-198).** Sign-in: 30
 > requests per client address at once, then one every two seconds. Writes: 10 a second with a burst
-> of 20 per signed-in user, the socket's own budget. A refusal is `429` with `Retry-After`. The
+> of 60 per signed-in user, the socket's own budget. A refusal is `429` with `Retry-After`. The
 > numbers live in `apps/api/src/ingress/http/rate-limit.ts`. The largest JSON body is 64 KiB, the
 > socket's frame (D-80).
 >
 > The socket's limits are **not** configurable here. The frame cap is part of the wire contract —
 > `MAX_FRAME_BYTES` in `@purlay/types` — so an operator changing it would part the server from every
-> client built against it. The rate budget is one provisional number until **O-4** closes, in
+> client built against it. The rate budget is one number, decided by D-198, in
 > `apps/api/src/realtime/rate-limiter.ts` (D-66).
 >
 > Attachment size is **not** configurable here either: it is enforced by the `attachment_size_limit`

@@ -9632,4 +9632,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '{mine.length > 0 && shown.length === 0 ? (',
     tests: ['apps/web/src/features/sidebar/sidebar-preferences.test.tsx'],
   },
+  {
+    id: 'frame-burst-back-to-the-provisional-twenty',
+    why: 'the burst is what a full outbox costs on a reconnect: at twenty, a person back from a gap has thirty of their messages refused, and the rest of the fifty are not sent either',
+    file: 'apps/api/src/realtime/rate-limiter.ts',
+    find: 'export const SOCKET_FRAME_BUDGET: RateBudget = { perSecond: 10, burst: 60 };',
+    replace: 'export const SOCKET_FRAME_BUDGET: RateBudget = { perSecond: 10, burst: 20 };',
+    tests: ['apps/api/src/realtime/frame-profiles.test.ts'],
+  },
+  {
+    id: 'frame-queue-not-above-the-burst',
+    why: 'a connection that sends its whole burst at once fills the queue and is closed for being too busy, on every reconnect, while inside its budget',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: 'export const FRAME_QUEUE_MAX = 64;',
+    replace: 'export const FRAME_QUEUE_MAX = 32;',
+    tests: ['apps/api/src/realtime/frame-profiles.test.ts'],
+  },
+  {
+    id: 'typing-said-on-every-key',
+    why: 'every keystroke is a frame: a typist spends the whole sustained rate on a hint, and the burst is gone before a message is sent',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: 'if (last !== undefined && now - last.at < TYPING_TTL_MS / 2) return;',
+    replace: 'if (last !== undefined && now - last.at < 0) return;',
+    tests: ['apps/web/src/realtime/frame-profiles.test.ts'],
+  },
 ];

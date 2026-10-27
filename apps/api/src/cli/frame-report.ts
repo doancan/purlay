@@ -1,6 +1,6 @@
 /**
- * The measurement that closes O-4 (#61, `DECISIONS.md` Part D): a week of the API's log in, the
- * numbers the decision asks for out.
+ * The check on the frame budget in use (#61, D-198): a stretch of the API's log in, the numbers
+ * that decision rests on out — the synthetic measurement is `bun run measure:frames`.
  *
  *   bun run report:frames <log>...       one or more NDJSON log files, as the API writes them
  *   … | bun run report:frames            or the log on standard input
@@ -85,7 +85,7 @@ export const summarise = (lines: Iterable<string>): FrameReport => {
   };
 };
 
-/** What the report says, in the terms O-4 is closed in. */
+/** What the report says, in the terms D-198 is held to. */
 export const describe = (report: FrameReport): readonly string[] => {
   const { perSecond, burst } = SOCKET_FRAME_BUDGET;
   const refusals = report.framesRefused + report.writesRefused + report.httpRefused;
@@ -94,8 +94,8 @@ export const describe = (report: FrameReport): readonly string[] => {
     `peak frames in a second, p99: ${String(report.peakP99)}, max: ${String(report.peakMax)} — the budget is ${String(perSecond)}/s with a burst of ${String(burst)}`,
     `refused: ${String(report.framesRefused)} frames, ${String(report.writesRefused)} sends, ${String(report.httpRefused)} HTTP requests`,
     refusals === 0 && report.peakP99 <= burst
-      ? 'O-4: legitimate use met no refusal, inside the burst'
-      : 'O-4: something met the budget — read the refusals before closing it',
+      ? 'frame budget: legitimate use met no refusal, inside the burst'
+      : 'frame budget: something met it — read the refusals, and D-198 for what it reverses on',
     ...(report.unreadable === 0
       ? []
       : [`lines that were not JSON, skipped: ${String(report.unreadable)}`]),

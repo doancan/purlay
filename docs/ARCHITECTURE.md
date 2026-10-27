@@ -386,8 +386,8 @@ about none, so one added later cannot slip past (#412).
 - Per-connection token bucket, behind the `RateLimiter` seam (§6.2). Over budget, the frame is
   refused with `RATE_LIMITED` and its id; the connection stays open. In-process is the only
   implementation in Phase 0–2; the seam exists because an in-process limiter on N nodes grants
-  N times the quota (D-25). **The number is not yet decided (O-4)** — 10 frames/second with a
-  burst of 20 is what is enforced, as a provisional value, until dogfooding measures it.
+  N times the quota (D-25). **The number is decided (D-198, closing O-4)** — 10 frames/second with a
+  burst of 60, measured against what a page sends (`bun run measure:frames`).
   **The budget is also the user's:** `MESSAGE_SEND` is charged to a per-user bucket shared with HTTP's
   writes, and a user (20) and a node (2,000) may hold only so many sockets, refused at the upgrade with
   `429` / `503` (D-84, amended; provisional, O-4).
