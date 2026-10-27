@@ -29,7 +29,7 @@ const EVERY_FAILURE = SignInFailure.anyOf.map((literal) => literal.const);
 const signedOut = (mail: boolean, github = true): ReturnType<typeof anApi> =>
   anApi({
     me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-    authMethods: () => Promise.resolve({ github, email: mail, signUp: 'invite-only' }),
+    authMethods: () => Promise.resolve({ github, email: mail, oidc: null, signUp: 'invite-only' }),
   });
 
 /** The one sentence the screen says about the way here, or null when it says none. */
@@ -139,6 +139,58 @@ describe('what the screen offers is what the server has connected', () => {
     view.unmount();
   });
 
+  describe('single sign-on (D-200)', () => {
+    const withOidc = (
+      oidc: AuthMethods['oidc'],
+      over: Partial<AuthMethods> = {},
+    ): ReturnType<typeof anApi> =>
+      anApi({
+        me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
+        authMethods: () =>
+          Promise.resolve({ github: false, email: false, oidc, signUp: 'invite-only', ...over }),
+      });
+
+    for (const [locale, label] of [
+      ['en', 'Continue with single sign-on'],
+      ['tr', 'tek oturum açma ile devam et'],
+    ] as const) {
+      test(`a provider with no label of its own says single sign-on, in ${locale}, and leaves for /auth/oidc`, async () => {
+        const view = await open(withOidc({ name: null }), locale);
+        const button = view.getByRole('link', { name: label });
+        expect(button.getAttribute('href')).toBe('/auth/oidc');
+        // The server is set up: it has a way in, so it does not say it is waiting for its setup.
+        expect(view.queryByText('This server is not set up yet')).toBeNull();
+        view.unmount();
+      });
+    }
+
+    test('the operator’s label is the button’s, shown as text and never as markup', async () => {
+      const view = await open(withOidc({ name: 'Acme <b>SSO</b>' }));
+      const button = view.getByRole('link', { name: 'Continue with Acme <b>SSO</b>' });
+      expect(button.querySelector('b')).toBeNull();
+      view.unmount();
+    });
+
+    test('beside GitHub both are offered, single sign-on first; with neither, none is', async () => {
+      const view = await open(withOidc({ name: null }, { github: true }));
+      const links = [...view.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+        a.getAttribute('href'),
+      );
+      expect(links).toEqual(['/auth/oidc', '/auth/github']);
+      view.unmount();
+      const none = await open(withOidc(null));
+      expect(none.container.querySelector('a[href="/auth/oidc"]')).toBeNull();
+      none.unmount();
+    });
+
+    test('with only single sign-on and mail, the form is not alone: a rule parts it from the button', async () => {
+      const view = await open(withOidc({ name: null }, { email: true }));
+      const form = view.getByRole('form', { name: 'Sign in with a password' });
+      expect(form.className).toContain('border-t-hairline');
+      view.unmount();
+    });
+  });
+
   test('a password manager is told which field is which', async () => {
     const view = await open(signedOut(false, false));
     expect(view.getByRole('textbox', { name: 'Email address' }).getAttribute('autocomplete')).toBe(
@@ -155,7 +207,8 @@ describe('what the screen offers is what the server has connected', () => {
     test(`under policy ${policy}: ${expected}`, async () => {
       const api = anApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-        authMethods: () => Promise.resolve({ github: true, email: true, signUp: policy }),
+        authMethods: () =>
+          Promise.resolve({ github: true, email: true, oidc: null, signUp: policy }),
       });
       const view = await open(api);
       if (policy === 'open') {
@@ -172,13 +225,13 @@ describe('what the screen offers is what the server has connected', () => {
     [
       'en',
       'This server is not set up yet',
-      'Neither GitHub nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
+      'Neither GitHub, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
       'Set up this server',
     ],
     [
       'tr',
       'Bu sunucu henüz kurulmadı',
-      'GitHub ile giriş de e-posta bağlantısı da henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+      'GitHub ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
       'Bu sunucuyu kur',
     ],
   ] as const) {
@@ -213,7 +266,7 @@ describe('what the screen offers is what the server has connected', () => {
     expect(view.queryByRole('link', { name: GITHUB })).toBeNull();
     expect(view.queryByText('This server is not set up yet')).toBeNull();
     await act(async () => {
-      answer({ github: true, email: false, signUp: 'invite-only' });
+      answer({ github: true, email: false, oidc: null, signUp: 'invite-only' });
       await Promise.resolve();
     });
     await settle();
@@ -228,7 +281,7 @@ describe('what the screen offers is what the server has connected', () => {
         tries += 1;
         return tries === 1
           ? Promise.reject(new ApiError(404, 'ROUTE_NOT_FOUND', 'broke'))
-          : Promise.resolve({ github: false, email: true, signUp: 'invite-only' });
+          : Promise.resolve({ github: false, email: true, oidc: null, signUp: 'invite-only' });
       },
     });
     const again = await renderApp(<Outlet />, { path: '/sign-in', api: failing });
@@ -261,7 +314,7 @@ describe('what the screen offers is what the server has connected', () => {
         tries += 1;
         return tries === 1
           ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
-          : Promise.resolve({ github: true, email: false, signUp: 'invite-only' });
+          : Promise.resolve({ github: true, email: false, oidc: null, signUp: 'invite-only' });
       },
     });
     const view = await renderApp(<Outlet />, { path: '/sign-in', api: hiccup });

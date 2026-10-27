@@ -19,6 +19,7 @@ export const aState = (over: Partial<SetupState> = {}): SetupState => ({
   settings: {
     signUp: 'invite-only',
     github: null,
+    oidc: null,
     smtp: null,
     workspaceCreators: { kind: 'first' },
     setupCompletedAt: null,

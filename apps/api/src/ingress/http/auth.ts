@@ -33,6 +33,7 @@ import { AppError } from '../../platform/errors';
 import type { Executor } from '@purlay/db';
 import {
   AUTH_BASE_PATH,
+  OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   SIGN_IN_PATH,
   signInFailureHref,
@@ -82,12 +83,26 @@ export interface AuthResponse {
 /** The library's route that starts a social sign-in: what `/auth/github` calls, and a client may too. */
 const SOCIAL_SIGN_IN = `${AUTH_BASE_PATH}/sign-in/social`;
 
-/** What a start of a GitHub sign-in is answered where no GitHub app is connected (`API.md`). */
-const notSetUp = (): AppError =>
+/** The providers a sign-in can go through, by the name the library knows each by. */
+export type SignInProvider = 'github' | 'oidc';
+
+/** What a start of a sign-in is answered where its provider is not connected (`API.md`). */
+const notSetUp = (provider: SignInProvider): AppError =>
   new AppError({
     code: 'ROUTE_NOT_FOUND',
-    message: 'GitHub sign-in is not set up on this server.',
+    message:
+      provider === 'github'
+        ? 'GitHub sign-in is not set up on this server.'
+        : 'Single sign-on is not set up on this server.',
   });
+
+/** Whether `provider` is connected on this server's current instance. */
+const connected = (auth: Pick<Auth, 'github' | 'oidc'>, provider: SignInProvider): boolean =>
+  provider === 'github' ? auth.github : auth.oidc !== undefined;
+
+/** The provider a callback path belongs to, or nothing for any other path. */
+const providerOfCallback = (pathname: string): SignInProvider | undefined =>
+  pathname === SIGN_IN_CALLBACK ? 'github' : pathname === OIDC_CALLBACK ? 'oidc' : undefined;
 
 /**
  * `GET /auth/github` — the sign-in screen's button, a full-page navigation: the library makes the
@@ -96,18 +111,18 @@ const notSetUp = (): AppError =>
  * reason otherwise (D-121). With no GitHub app connected it is `404 ROUTE_NOT_FOUND`, the route not
  * existing yet (`API.md`).
  */
-export const startSignIn = async ({
-  auth,
-  config,
-}: Pick<AuthDependencies, 'auth' | 'config'>): Promise<AuthResponse> => {
+export const startSignIn = async (
+  { auth, config }: Pick<AuthDependencies, 'auth' | 'config'>,
+  provider: SignInProvider = 'github',
+): Promise<AuthResponse> => {
   // A server whose GitHub app is not connected yet (setup mode, D-179 §4) has no such route: the
   // library throws for a provider it does not have, and a person is never sent to GitHub with no app.
   // The sign-in screen does not offer the button then (`AuthMethods.github`), so this is a stale link
   // or a typed address: the API's own 404.
-  if (!auth.github) throw notSetUp();
+  if (!connected(auth, provider)) throw notSetUp(provider);
   const { headers, response } = await auth.api.signInSocial({
     body: {
-      provider: 'github',
+      provider,
       callbackURL: config.APP_URL,
       errorCallbackURL: `${config.APP_URL}${SIGN_IN_PATH}`,
     },
@@ -161,9 +176,10 @@ export const abandonSignIn = (
   { config, log }: Pick<AuthDependencies, 'config' | 'log'>,
   error: unknown,
   code: ErrorCode,
+  path: string = SIGN_IN_CALLBACK,
 ): AuthResponse => {
   const failure = failureFor(code);
-  if (code === 'INTERNAL') log.error('request failed', { err: error, path: SIGN_IN_CALLBACK });
+  if (code === 'INTERNAL') log.error('request failed', { err: error, path });
   return sentBack(config, failure);
 };
 
@@ -201,27 +217,60 @@ const FAILURE_FOR_LIBRARY_CODE: Readonly<
   internal_server_error: { failure: 'failed', level: 'error' },
 };
 
+/**
+ * What a single sign-on says differently from GitHub (D-200): the words are the provider's, not GitHub's. A
+ * token the provider's signature, audience, issuer, expiry or nonce checks refused (`unable_to_get_user_info`)
+ * is a sign-in that did not work, not an account with no address; an address that is absent or not verified is
+ * `email-unverified`; a code the provider did not take is the provider being unavailable. The mismatch of the
+ * callback's own `iss` with the issuer, and a callback that carries no nonce to bind a token to, are refused as
+ * the library refuses them and are the loudest lines here: they are how a mix-up is made.
+ */
+const OIDC_FAILURE_FOR_LIBRARY_CODE: typeof FAILURE_FOR_LIBRARY_CODE = {
+  invalid_code: { failure: 'oidc-unavailable', level: 'warn' },
+  unable_to_get_user_info: { failure: 'failed', level: 'warn' },
+  email_not_found: { failure: 'email-unverified', level: 'info' },
+  email_not_verified: { failure: 'email-unverified', level: 'info' },
+  issuer_mismatch: { failure: 'failed', level: 'error' },
+  issuer_missing: { failure: 'failed', level: 'error' },
+  nonce_binding_missing: { failure: 'failed', level: 'error' },
+};
+
+const LABEL: Readonly<Record<SignInProvider, string>> = {
+  github: 'a GitHub sign-in',
+  oidc: 'a single sign-on',
+};
+
 /** What the person is told for a reason the library gave, and the line the log keeps of it. */
-const failureForLibraryCode = (log: Logger, code: string): SignInFailure => {
+const failureForLibraryCode = (
+  log: Logger,
+  code: string,
+  provider: SignInProvider,
+): SignInFailure => {
   // Own keys only: `constructor` is no reason of the library's.
-  const known = Object.hasOwn(FAILURE_FOR_LIBRARY_CODE, code)
-    ? FAILURE_FOR_LIBRARY_CODE[code]
-    : undefined;
+  const own = (
+    table: typeof FAILURE_FOR_LIBRARY_CODE,
+  ): (typeof FAILURE_FOR_LIBRARY_CODE)[string] | undefined =>
+    Object.hasOwn(table, code) ? table[code] : undefined;
+  const known =
+    (provider === 'oidc' ? own(OIDC_FAILURE_FOR_LIBRARY_CODE) : undefined) ??
+    own(FAILURE_FOR_LIBRARY_CODE);
   // It arrived in a URL anybody can write; the log keeps a bounded piece of it.
   const said = { libraryError: code.slice(0, LOGGED_ERROR_LENGTH) };
   if (known === undefined) {
-    log.error('a GitHub sign-in failed for a reason nobody anticipated', said);
+    log.error(`${LABEL[provider]} failed for a reason nobody anticipated`, said);
     return 'failed';
   }
-  log[known.level]('a GitHub sign-in did not finish', { ...said, failure: known.failure });
+  log[known.level](`${LABEL[provider]} did not finish`, { ...said, failure: known.failure });
   return known.failure;
 };
 
 /** A failure answered by status, where the library answered something other than a redirect. */
-const failureForStatus = (log: Logger, status: number): SignInFailure => {
+const failureForStatus = (log: Logger, status: number, provider: SignInProvider): SignInFailure => {
   if (status === 429 || status === 503) return 'busy';
-  if (status === 502) return 'github-unavailable';
-  log.error('a GitHub sign-in failed for a reason nobody anticipated', { status });
+  if (status === 502) return provider === 'oidc' ? 'oidc-unavailable' : 'github-unavailable';
+  // The provider's own refusal to name a verified address, thrown out of its profile call (`oidc.ts`).
+  if (status === 403 && provider === 'oidc') return 'email-unverified';
+  log.error(`${LABEL[provider]} failed for a reason nobody anticipated`, { status });
   return 'failed';
 };
 
@@ -243,6 +292,7 @@ const callbackAnswer = (
   { config, log }: Pick<AuthDependencies, 'config' | 'log'>,
   request: Request,
   { response: answered, lostSignUpRace }: AuthAnswer,
+  provider: SignInProvider,
 ): Response => {
   const sentRound = readCookie(request.headers.get('cookie'), RETRY_COOKIE) !== undefined;
   // Spent by whatever this callback answers: a marker is for the one round it was set for.
@@ -254,9 +304,9 @@ const callbackAnswer = (
   // so it is sent round again — GitHub authorises without a prompt, and the library now finds the
   // account. Once: a tab that was sent round already and loses again is told it failed (R28).
   if (lostSignUpRace && !sentRound) {
-    log.info('a GitHub sign-up lost to the same account made at once; sent round again');
+    log.info(`${LABEL[provider]} sign-up lost to the same account made at once; sent round again`);
     return asResponse(
-      { setCookie: [retryCookie()], location: `${config.APP_URL}/auth/github` },
+      { setCookie: [retryCookie()], location: `${config.APP_URL}/auth/${provider}` },
       cookies,
     );
   }
@@ -272,10 +322,10 @@ const callbackAnswer = (
       headers.append('set-cookie', clearedRetryCookie());
       return new Response(answered.body, { status: answered.status, headers });
     }
-    const failure = failureForLibraryCode(log, to.searchParams.get('error') ?? '');
+    const failure = failureForLibraryCode(log, to.searchParams.get('error') ?? '', provider);
     return asResponse(sentBack(config, failure), cookies);
   }
-  return asResponse(sentBack(config, failureForStatus(log, answered.status)), cookies);
+  return asResponse(sentBack(config, failureForStatus(log, answered.status, provider)), cookies);
 };
 
 /**
@@ -384,33 +434,36 @@ export const answerAuth = async (
 ): Promise<Response> => {
   const request = carryingClientAddress(received, clientAddress);
   const url = new URL(request.url);
-  // No GitHub app yet (setup mode): the library has no provider to answer for, and what it does then is
+  const { auth, config, log } = dependencies;
+  const provider = providerOfCallback(url.pathname);
+  // No provider yet (setup mode): the library has no provider to answer for, and what it does then is
   // a 500 and an error in the log. The start of a sign-in is the route that does not exist; a callback
-  // is a browser, which is told its try is over (D-121).
-  if (!dependencies.auth.github) {
-    if (url.pathname === SOCIAL_SIGN_IN) throw notSetUp();
-    if (url.pathname === SIGN_IN_CALLBACK) {
-      dependencies.log.info('a GitHub callback arrived on a server with no GitHub app connected');
-      return asResponse(sentBack(dependencies.config, 'expired'));
-    }
+  // is a browser, which is told its try is over (D-121). A server with only one of the two connected
+  // answers the other's callback the same way, for the same reason: it has no provider by that name.
+  if (url.pathname === SOCIAL_SIGN_IN && !auth.github && auth.oidc === undefined) {
+    throw notSetUp('github');
   }
-  if (url.pathname !== SIGN_IN_CALLBACK) {
-    return libraryOrNotFound(
-      await toldIfFailed(dependencies, url, await dependencies.auth.handler(request)),
-    );
+  if (provider !== undefined && !connected(auth, provider)) {
+    log.info(`${LABEL[provider]} callback arrived on a server with that provider not connected`);
+    return asResponse(sentBack(config, 'expired'));
+  }
+  if (provider === undefined) {
+    return libraryOrNotFound(await toldIfFailed(dependencies, url, await auth.handler(request)));
   }
   const declined = url.searchParams.get('error');
   if (declined !== null) {
-    if (declined === DECLINED) return asResponse(sentBack(dependencies.config, 'cancelled'));
-    dependencies.log.warn('GitHub refused a sign-in', {
-      githubError: declined.slice(0, LOGGED_ERROR_LENGTH),
-    });
-    return asResponse(sentBack(dependencies.config, 'failed'));
+    if (declined === DECLINED) return asResponse(sentBack(config, 'cancelled'));
+    const said = declined.slice(0, LOGGED_ERROR_LENGTH);
+    if (provider === 'oidc')
+      log.warn('The single sign-on provider refused a sign-in', { oidcError: said });
+    else log.warn('GitHub refused a sign-in', { githubError: said });
+    return asResponse(sentBack(config, 'failed'));
   }
   return callbackAnswer(
     dependencies,
     request,
-    await oneAtATime(url.searchParams.get('state'), () => dependencies.auth.answer(request)),
+    await oneAtATime(url.searchParams.get('state'), () => auth.answer(request)),
+    provider,
   );
 };
 

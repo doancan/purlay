@@ -117,7 +117,12 @@ test('walks a fresh server from the code to its first workspace', async ({ brows
   const again = await returning.newPage();
   await again.goto('/sign-in');
   const methods = await again.request.get('/api/auth/methods');
-  expect(await methods.json()).toEqual({ github: true, email: true, signUp: 'invite-only' });
+  expect(await methods.json()).toEqual({
+    github: true,
+    email: true,
+    oidc: null,
+    signUp: 'invite-only',
+  });
   await expect(again.getByText('Accounts are created by invitation.')).toBeVisible();
   await again.getByLabel('Email address').fill('ayse@example.test');
   await again.getByLabel('Password', { exact: true }).fill('not the password at all 1');

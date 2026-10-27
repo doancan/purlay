@@ -31,7 +31,8 @@ const ANSWER = {
   needsReentry: [],
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
-  channels: { github: true, email: false },
+  oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  channels: { github: true, email: false, oidc: false },
   adminEmail: 'admin@example.test',
 };
 

@@ -16,6 +16,7 @@ import { LogoMark } from '../shell/notice';
 import { useEffect } from 'react';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
+import { OidcButton } from './oidc-button';
 
 export const SignUpScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -23,6 +24,7 @@ export const SignUpScreen = (): React.JSX.Element => {
   const me = useMe();
   const methods = useAuthMethods();
   const github = methods.data?.github === true;
+  const oidc = methods.data?.oidc ?? null;
   const mail = methods.data?.email === true;
   const open = methods.data?.signUp === 'open';
 
@@ -70,7 +72,7 @@ export const SignUpScreen = (): React.JSX.Element => {
             </div>
             {signIn}
           </>
-        ) : !github && !mail ? (
+        ) : !github && oidc === null && !mail ? (
           <>
             <div className="flex flex-col items-center gap-2">
               <h1 className="text-display">{t('signUp.title')}</h1>
@@ -84,13 +86,18 @@ export const SignUpScreen = (): React.JSX.Element => {
               <h1 className="text-display">{t('signUp.title')}</h1>
               <p className="text-balance text-body text-ink-muted">{t('signUp.lede')}</p>
             </div>
+            {oidc !== null && (
+              <div className="flex w-full flex-col items-center gap-3">
+                <OidcButton name={oidc.name} variant={mail || github ? 'secondary' : 'primary'} />
+              </div>
+            )}
             {github && (
               <div className="flex w-full flex-col items-center gap-3">
-                <GitHubButton variant={mail ? 'secondary' : 'primary'} />
+                <GitHubButton variant={mail || oidc !== null ? 'secondary' : 'primary'} />
                 <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
               </div>
             )}
-            <EmailSignInForm alone={!github} mail={mail} />
+            <EmailSignInForm alone={!github && oidc === null} mail={mail} />
             {signIn}
           </>
         )}

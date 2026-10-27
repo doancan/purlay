@@ -17,6 +17,7 @@ describe('the client the Server cards call through', () => {
     const given: ServerClient = {
       settings: () => Promise.reject(new Error('unused')),
       github: () => Promise.reject(new Error('unused')),
+      oidc: () => Promise.reject(new Error('unused')),
       smtp: () => Promise.reject(new Error('unused')),
       disconnect: () => Promise.reject(new Error('unused')),
       policy: () => Promise.reject(new Error('unused')),

@@ -7,6 +7,7 @@ import type { MySignIn } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import { madeByGitHub } from './magic-link';
+import { OIDC_PROVIDER_ID } from './oidc';
 
 /**
  * The ways an account signs in: its address, whether a link to it signs in — an account made by
@@ -32,10 +33,17 @@ export const mySignIn = async (executor: Executor, userId: string): Promise<MySi
     .where('provider_id', '=', 'credential')
     .where('password', 'is not', null)
     .executeTakeFirst();
+  const sso = await executor
+    .selectFrom('accounts')
+    .select('id')
+    .where('user_id', '=', userId)
+    .where('provider_id', '=', OIDC_PROVIDER_ID)
+    .executeTakeFirst();
   return {
     email: row.email,
     hasPassword: credential !== undefined,
     emailLinks: !madeByGitHub(row),
     github: row.github_id === null ? null : { login: row.github_login },
+    oidc: sso !== undefined,
   };
 };

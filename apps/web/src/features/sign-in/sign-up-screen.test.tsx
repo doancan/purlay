@@ -50,7 +50,11 @@ const visit = async (
 describe('the sign-up screen', () => {
   test('open, with GitHub and mail: both ways, no password, and a way back to sign-in', async () => {
     const asked: EmailSignInRequest[] = [];
-    const view = await visit({ github: true, email: true, signUp: 'open' }, 'en', asked);
+    const view = await visit(
+      { github: true, email: true, oidc: null, signUp: 'open' },
+      'en',
+      asked,
+    );
     expect(view.getByRole('heading', { level: 1, name: 'Create your account' })).toBeDefined();
     expect(view.getByRole('link', { name: 'Continue with GitHub' }).getAttribute('href')).toBe(
       '/auth/github',
@@ -63,18 +67,42 @@ describe('the sign-up screen', () => {
     await settle();
     expect(asked).toEqual([{ email: 'new@example.test', locale: 'en' }]);
     view.unmount();
-    const again = await visit({ github: true, email: true, signUp: 'open' });
+    const again = await visit({ github: true, email: true, oidc: null, signUp: 'open' });
     expect(again.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
   });
 
+  test('open with single sign-on: its button first, in the person’s language, and nothing says it is waiting for setup', async () => {
+    const view = await visit({ github: false, email: false, oidc: { name: null }, signUp: 'open' });
+    expect(
+      view.getByRole('link', { name: 'Continue with single sign-on' }).getAttribute('href'),
+    ).toBe('/auth/oidc');
+    expect(view.queryByText('This server has no way to make an account connected yet.')).toBeNull();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+    const tr = await visit(
+      { github: false, email: false, oidc: { name: null }, signUp: 'open' },
+      'tr',
+    );
+    expect(tr.getByRole('link', { name: 'tek oturum açma ile devam et' })).toBeDefined();
+    tr.unmount();
+    const named = await visit({
+      github: true,
+      email: true,
+      oidc: { name: 'Acme SSO' },
+      signUp: 'open',
+    });
+    expect(named.getByRole('link', { name: 'Continue with Acme SSO' })).toBeDefined();
+    expect(named.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
+  });
+
   test('open without mail: GitHub only, and no form', async () => {
-    const view = await visit({ github: true, email: false, signUp: 'open' });
+    const view = await visit({ github: true, email: false, oidc: null, signUp: 'open' });
     expect(view.queryByRole('link', { name: 'Continue with GitHub' })).not.toBeNull();
     expect(view.queryByRole('textbox')).toBeNull();
   });
 
   test('open with neither: says there is no way to sign up yet', async () => {
-    const view = await visit({ github: false, email: false, signUp: 'open' });
+    const view = await visit({ github: false, email: false, oidc: null, signUp: 'open' });
     expect(
       view.queryByText('This server has no way to make an account connected yet.'),
     ).not.toBeNull();
@@ -96,7 +124,10 @@ describe('the sign-up screen', () => {
     ],
   ] as const) {
     test(`invite-only: the notice in ${locale}, with the sign-in link and no form or button`, async () => {
-      const view = await visit({ github: true, email: true, signUp: 'invite-only' }, locale);
+      const view = await visit(
+        { github: true, email: true, oidc: null, signUp: 'invite-only' },
+        locale,
+      );
       expect(view.getByRole('heading', { level: 1, name: title })).toBeDefined();
       expect(view.queryByText(body)).not.toBeNull();
       expect(view.getByRole('link', { name: link }).getAttribute('href')).toBe('/sign-in');
@@ -118,7 +149,7 @@ describe('the sign-up screen, before the server has said what it offers', () => 
           calls += 1;
           return calls === 1
             ? Promise.reject(new ApiError(404, 'ROUTE_NOT_FOUND', 'no'))
-            : Promise.resolve({ github: true, email: false, signUp: 'open' });
+            : Promise.resolve({ github: true, email: false, oidc: null, signUp: 'open' });
         },
       }),
     });
@@ -149,7 +180,8 @@ describe('the sign-up screen, before the server has said what it offers', () => 
       path: '/sign-up',
       api: anApi({
         me: () => Promise.resolve(aSession()),
-        authMethods: () => Promise.resolve({ github: true, email: true, signUp: 'open' }),
+        authMethods: () =>
+          Promise.resolve({ github: true, email: true, oidc: null, signUp: 'open' }),
       }),
     });
     await settle();

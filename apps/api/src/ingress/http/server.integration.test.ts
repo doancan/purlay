@@ -12,7 +12,12 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
-import { SIGN_IN_CALLBACK, type MeResponse, type ServerSettingsAnswer } from '@purlay/types';
+import {
+  OIDC_CALLBACK,
+  SIGN_IN_CALLBACK,
+  type MeResponse,
+  type ServerSettingsAnswer,
+} from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { systemClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -33,6 +38,12 @@ import { testConfig, testDependencies } from '../../testing/doubles';
 import { aGitHubPerson, signInWithGitHub } from '../../testing/github-sign-in';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS, type GitHubStub } from '../../testing/github-stub';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import {
+  anOidcStub,
+  OIDC_STUB_CREDENTIALS,
+  type OidcBehaviour,
+  type OidcStub,
+} from '../../testing/oidc-stub';
 import { aScriptedRelay, type ScriptedRelay } from '../../testing/smtp-relay';
 import { aUniqueSlug } from '../../testing/users';
 import {
@@ -122,7 +133,11 @@ const aServer = async (
         // The sign-in library's own door is the stub's `fetch` at GitHub's real addresses; the probes
         // take the configuration's, which is the stub served on a port.
         githubUrls: { web: GITHUB_URL_DEFAULT, api: GITHUB_API_URL_DEFAULT },
-        fetch: github.fetch,
+        // GitHub's two addresses are the stand-in; a single sign-on provider is a server on a loopback port.
+        fetch: async (url, init) =>
+          url.startsWith(GITHUB_URL_DEFAULT) || url.startsWith(GITHUB_API_URL_DEFAULT)
+            ? await github.fetch(url, init)
+            : await fetch(url, init),
         sessionTtlDays: 30,
         bus: inProcessEventBus(() => undefined, NO_LOG),
         clock: systemClock,
@@ -265,8 +280,10 @@ const ROUTES: readonly [method: 'GET' | 'POST' | 'DELETE', path: string, body: u
     '/api/server/smtp',
     { smtpUrl: 'smtp://m:p@127.0.0.1:1', from: 'a@example.test', allowPlaintext: false },
   ],
+  ['POST', '/api/server/oidc', { issuer: 'https://idp.example.test', ...OIDC_STUB_CREDENTIALS }],
   ['DELETE', '/api/server/github', undefined],
   ['DELETE', '/api/server/smtp', undefined],
+  ['DELETE', '/api/server/oidc', undefined],
   ['POST', '/api/server/policy', { signUp: 'open' }],
   ['POST', '/api/server/creators', { workspaceCreators: { kind: 'anyone' } }],
 ];
@@ -348,6 +365,7 @@ describe('integration: Administration → Server', () => {
       settings: {
         signUp: 'invite-only',
         github: null,
+        oidc: null,
         smtp: null,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: null,
@@ -355,7 +373,8 @@ describe('integration: Administration → Server', () => {
       needsReentry: [],
       appUrl: ORIGIN,
       githubCallbackUrl: `${ORIGIN}${SIGN_IN_CALLBACK}`,
-      channels: { github: false, email: false },
+      oidcCallbackUrl: `${ORIGIN}${OIDC_CALLBACK}`,
+      channels: { github: false, email: false, oidc: false },
       adminEmail: server.admin.email,
     });
     const relay = await aRelay();
@@ -385,7 +404,7 @@ describe('integration: Administration → Server', () => {
       from: 'purlay@example.test',
       allowPlaintext: false,
     });
-    expect(connected.channels).toEqual({ github: true, email: true });
+    expect(connected.channels).toEqual({ github: true, email: true, oidc: false });
     const text = JSON.stringify(connected);
     for (const secret of [GITHUB_OK.clientSecret, RELAY_PASS, RELAY_USER]) {
       expect(text).not.toContain(secret);
@@ -534,7 +553,7 @@ describe('integration: Administration → Server', () => {
     expect(confirmed.status).toBe(204);
     const gone = await readSettings(server.db, cipher);
     expect([gone.github, gone.smtp]).toEqual([undefined, undefined]);
-    expect((await viewOf(server)).channels).toEqual({ github: false, email: false });
+    expect((await viewOf(server)).channels).toEqual({ github: false, email: false, oidc: false });
   });
 
   test('a GitHub secret the key cannot open can be disconnected, under the same last-way-in rule', async () => {
@@ -795,5 +814,252 @@ describe('integration: Administration → Server', () => {
         })
       ).status,
     ).toBe(429);
+  });
+});
+
+/** A provider served on a loopback port, as the operator would name it, and the body that connects it. */
+const aProvider = async (
+  behaviour: OidcBehaviour = {},
+): Promise<{ readonly stub: OidcStub; readonly body: Record<string, unknown> }> => {
+  const stub = await anOidcStub({ sub: 'ada', email: 'ada@example.test' }, behaviour);
+  const served = stub.serve(0);
+  stops.push(served.stop);
+  return { stub, body: { issuer: served.url, ...OIDC_STUB_CREDENTIALS, name: 'Acme SSO' } };
+};
+
+describe('integration: Administration → Server — single sign-on (D-200)', () => {
+  test('a provider that answers is tried, kept and served, the secret sealed and never shown again', async () => {
+    const server = await aServer();
+    const { stub, body } = await aProvider();
+    const as = { cookie: server.admin.cookie };
+    const tried = await call(server, 'POST', '/api/server/oidc', { ...as, body });
+    expect(tried.status).toBe(200);
+    expect(await tried.json()).toEqual({ ok: true });
+    // The client was weighed at the token endpoint with a code nobody was given, before anything was saved.
+    expect(stub.refusals).toEqual(['invalid_grant']);
+
+    const view = await viewOf(server);
+    expect(view.settings.oidc).toEqual({
+      issuer: String(body['issuer']),
+      clientId: OIDC_STUB_CREDENTIALS.clientId,
+      clientSecret: { set: true },
+      name: 'Acme SSO',
+    });
+    expect(view.channels).toEqual({ github: false, email: false, oidc: true });
+    expect(view.oidcCallbackUrl).toBe(`${ORIGIN}${OIDC_CALLBACK}`);
+    // Served from the next request: the sign-in screen is told, with the label.
+    const methods = await call(server, 'GET', '/api/auth/methods');
+    expect(((await methods.json()) as { oidc: unknown }).oidc).toEqual({ name: 'Acme SSO' });
+
+    // Sealed in the settings, bound to its column, and nowhere else.
+    const row = await server.db
+      .selectFrom('server_settings')
+      .select('oidc_client_secret_encrypted')
+      .where('id', '=', true)
+      .executeTakeFirstOrThrow();
+    expect(row.oidc_client_secret_encrypted).not.toContain(OIDC_STUB_CREDENTIALS.clientSecret);
+    expect((await readSettings(server.db, cipher)).oidc?.clientSecret).toBe(
+      OIDC_STUB_CREDENTIALS.clientSecret,
+    );
+    const everything = [JSON.stringify(view), ...server.lines].join('\n');
+    expect(everything).not.toContain(OIDC_STUB_CREDENTIALS.clientSecret);
+    // On the trail, without a value.
+    expect((await trail(server)).map((entry) => entry.action)).toEqual(['server.oidc_connected']);
+  });
+
+  test('a secret the provider refuses saves nothing, says why, and shows none of it', async () => {
+    const server = await aServer();
+    const { body } = await aProvider();
+    const refused = await call(server, 'POST', '/api/server/oidc', {
+      cookie: server.admin.cookie,
+      body: { ...body, clientSecret: BAD_SECRET },
+    });
+    expect(refused.status).toBe(200);
+    const answer = (await refused.json()) as { ok: boolean; reason: string; raw: string };
+    expect([answer.ok, answer.reason]).toEqual([false, 'secret-rejected']);
+    expect(JSON.stringify(answer)).not.toContain(BAD_SECRET);
+    expect((await readSettings(server.db, cipher)).oidc).toBeUndefined();
+    expect(await trail(server)).toEqual([]);
+    expect((await viewOf(server)).channels.oidc).toBe(false);
+    expect(server.lines.join('\n')).not.toContain(BAD_SECRET);
+  });
+
+  test.each<[string, OidcBehaviour, string]>([
+    ['names another issuer', { discovery: 'issuer-mismatch' }, 'issuer-mismatch'],
+    ['is not a provider this server can use', { discovery: 'no-pkce' }, 'discovery-invalid'],
+    ['signs with nothing this server accepts', { discovery: 'hmac-only' }, 'discovery-invalid'],
+    ['answers 503 at its discovery address', { discovery: 'refuses' }, 'discovery-invalid'],
+    ['publishes no usable keys', { jwks: 'garbage' }, 'unexpected-reply'],
+    ['has a token endpoint that is down', { token: 'refuses' }, 'unexpected-reply'],
+  ])(
+    'a provider that %s is refused with its reason, and nothing is kept',
+    async (_what, behaviour, reason) => {
+      const server = await aServer();
+      const { body } = await aProvider(behaviour);
+      const response = await call(server, 'POST', '/api/server/oidc', {
+        cookie: server.admin.cookie,
+        body,
+      });
+      expect(response.status).toBe(200);
+      expect(((await response.json()) as { reason: string }).reason).toBe(reason);
+      expect((await readSettings(server.db, cipher)).oidc).toBeUndefined();
+      expect(await trail(server)).toEqual([]);
+    },
+  );
+
+  test('a provider nothing answers for is unreachable, said at once and bounded', async () => {
+    const server = await aServer();
+    const response = await call(server, 'POST', '/api/server/oidc', {
+      cookie: server.admin.cookie,
+      body: { issuer: 'http://127.0.0.1:1', ...OIDC_STUB_CREDENTIALS },
+    });
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { reason: string }).reason).toBe('unreachable');
+    expect((await readSettings(server.db, cipher)).oidc).toBeUndefined();
+  });
+
+  test('an issuer or a label the settings could not hold is refused as input before the provider is asked', async () => {
+    const server = await aServer();
+    const { stub, body } = await aProvider();
+    const as = { cookie: server.admin.cookie };
+    for (const [bad, field] of [
+      [{ issuer: 'http://idp.example.test' }, 'issuer'],
+      [{ issuer: 'https://user:pw@idp.example.test' }, 'issuer'],
+      [{ issuer: 'https://idp.example.test/?tenant=1' }, 'issuer'],
+      [{ issuer: 'not an address' }, 'issuer'],
+      [{ name: 'Acme‮SSO' }, 'name'],
+      [{ name: ' Acme' }, 'name'],
+      [{ name: 'x'.repeat(41) }, 'name'],
+    ] as const) {
+      const response = await call(server, 'POST', '/api/server/oidc', {
+        ...as,
+        body: { ...body, ...bad },
+      });
+      expect([JSON.stringify(bad), response.status]).toEqual([JSON.stringify(bad), 400]);
+      expect(JSON.stringify(await response.json())).toContain(field);
+    }
+    // A body that is not the contract.
+    for (const bad of [
+      { ...body, clientSecret: '' },
+      { ...body, issuer: 1 },
+      { issuer: body['issuer'] },
+    ]) {
+      expect((await call(server, 'POST', '/api/server/oidc', { ...as, body: bad })).status).toBe(
+        400,
+      );
+    }
+    expect(stub.calls.urls).toEqual([]);
+    expect((await readSettings(server.db, cipher)).oidc).toBeUndefined();
+  });
+
+  test('replacing it tries the new one, and no label is the default the client words', async () => {
+    const server = await aServer();
+    const { body } = await aProvider();
+    const as = { cookie: server.admin.cookie };
+    await call(server, 'POST', '/api/server/oidc', { ...as, body });
+    const withoutName = { ...body };
+    Reflect.deleteProperty(withoutName, 'name');
+    expect(
+      (await call(server, 'POST', '/api/server/oidc', { ...as, body: withoutName })).status,
+    ).toBe(200);
+    expect((await viewOf(server)).settings.oidc?.name).toBeNull();
+    const methods = await call(server, 'GET', '/api/auth/methods');
+    expect(((await methods.json()) as { oidc: unknown }).oidc).toEqual({ name: null });
+  });
+
+  test('disconnecting the only way in asks first; said outright it goes, and nothing is left behind', async () => {
+    const server = await aServer();
+    const { body } = await aProvider();
+    const as = { cookie: server.admin.cookie };
+    await call(server, 'POST', '/api/server/oidc', { ...as, body });
+    const refused = await call(server, 'DELETE', '/api/server/oidc', as);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: { details: { reason: 'last-channel' } } });
+    expect((await readSettings(server.db, cipher)).oidc).toBeDefined();
+
+    const gone = await call(server, 'DELETE', '/api/server/oidc', {
+      ...as,
+      body: { confirmLastChannel: true },
+    });
+    expect(gone.status).toBe(204);
+    expect((await readSettings(server.db, cipher)).oidc).toBeUndefined();
+    const row = await server.db
+      .selectFrom('server_settings')
+      .select(['oidc_issuer', 'oidc_client_id', 'oidc_client_secret_encrypted', 'oidc_name'])
+      .where('id', '=', true)
+      .executeTakeFirstOrThrow();
+    expect(Object.values(row)).toEqual([null, null, null, null]);
+    expect((await viewOf(server)).channels.oidc).toBe(false);
+    // The route does not exist once it is off.
+    expect((await call(server, 'GET', '/auth/oidc')).status).toBe(404);
+    expect((await trail(server)).map((entry) => entry.action)).toEqual([
+      'server.oidc_connected',
+      'server.oidc_disconnected',
+    ]);
+    // Disconnecting what is not connected is said, and writes nothing.
+    const again = await call(server, 'DELETE', '/api/server/oidc', as);
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: { details: { reason: 'not-connected' } } });
+  });
+
+  test('with another way in serving, disconnecting needs no confirmation: single sign-on counts as one of three', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    const { body } = await aProvider();
+    const as = { cookie: server.admin.cookie };
+    await call(server, 'POST', '/api/server/smtp', { ...as, body: smtpBody(relay) });
+    await call(server, 'POST', '/api/server/oidc', { ...as, body });
+    expect((await call(server, 'DELETE', '/api/server/oidc', as)).status).toBe(204);
+    // And the other way round: the relay is now the last, and is asked about.
+    expect((await call(server, 'DELETE', '/api/server/smtp', as)).status).toBe(409);
+  });
+
+  test('two disconnects at once cannot both remove the last of two ways in', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    const { body } = await aProvider();
+    const as = { cookie: server.admin.cookie };
+    await call(server, 'POST', '/api/server/smtp', { ...as, body: smtpBody(relay) });
+    await call(server, 'POST', '/api/server/oidc', { ...as, body });
+    const [first, second] = await Promise.all([
+      call(server, 'DELETE', '/api/server/oidc', as),
+      call(server, 'DELETE', '/api/server/smtp', as),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([204, 409]);
+    const settings = await readSettings(server.db, cipher);
+    expect([settings.oidc, settings.smtp].filter((value) => value !== undefined)).toHaveLength(1);
+  });
+
+  test('a secret the key cannot open is read as unset and needs entering again', async () => {
+    const server = await aServer();
+    const { body } = await aProvider();
+    await saveSettings(
+      server.db,
+      credentialCipher('a-different-key-of-the-right-shape-0123456789abcdef'),
+      systemClock,
+      { oidc: { issuer: String(body['issuer']), ...OIDC_STUB_CREDENTIALS, name: undefined } },
+    );
+    const boot = await readSettingsToBoot(server.db, cipher);
+    expect([boot.needsReentry, boot.settings.oidc]).toEqual([['oidc'], undefined]);
+  });
+
+  test('a client is limited as every route under /api/server: the sixty-first try is 429', async () => {
+    const server = await aServer({ limits: 'real' });
+    const body = { issuer: 'http://127.0.0.1:1', ...OIDC_STUB_CREDENTIALS };
+    for (let at = 0; at < 60; at += 1) {
+      const response = await call(server, 'POST', '/api/server/oidc', {
+        cookie: server.admin.cookie,
+        client: '198.51.100.40',
+        body,
+      });
+      expect(response.status).toBe(200);
+    }
+    const over = await call(server, 'POST', '/api/server/oidc', {
+      cookie: server.admin.cookie,
+      client: '198.51.100.40',
+      body,
+    });
+    expect(over.status).toBe(429);
+    expect(Number(over.headers.get('retry-after'))).toBeGreaterThanOrEqual(1);
   });
 });

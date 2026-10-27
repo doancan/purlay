@@ -411,6 +411,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
         emailLinks: true,
         hasPassword: false,
         github: null,
+        oidc: false,
       }),
   };
 
@@ -426,6 +427,29 @@ describe('how you sign in (D-176, D-179 §5)', () => {
     view.unmount();
   });
 
+  test('an account single sign-on is linked to says so, and that a link sent to its address no longer signs in', async () => {
+    const { view, card } = await opened({
+      mySignIn: () =>
+        Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: true,
+          hasPassword: false,
+          github: null,
+          oidc: true,
+        }),
+    });
+    expect(card.getByText('Single sign-on')).toBeDefined();
+    expect(card.getByText('Linked')).toBeDefined();
+    expect(
+      card.getByText(
+        'Your organisation’s sign-in is linked to this account, and an emailed link no longer signs in to it.',
+      ),
+    ).toBeDefined();
+    expect(card.queryByRole('button')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
   test('a linked account shows the login, read only', async () => {
     const { view, card } = await opened({
       mySignIn: () =>
@@ -434,6 +458,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           emailLinks: true,
           hasPassword: false,
           github: { login: 'ada-gh' },
+          oidc: false,
         }),
     });
     expect(card.getByText('GitHub')).toBeDefined();
@@ -452,6 +477,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           emailLinks: true,
           hasPassword: false,
           github: { login: null },
+          oidc: false,
         }),
     });
     expect(card.getByText('Linked')).toBeDefined();
@@ -466,6 +492,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           emailLinks: false,
           hasPassword: false,
           github: { login: 'ada' },
+          oidc: false,
         }),
     });
     expect(card.getByText('Your GitHub account’s address. You sign in with GitHub.')).toBeDefined();
@@ -490,6 +517,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
               emailLinks: true,
               hasPassword: false,
               github: null,
+              oidc: false,
             }),
     });
     expect(await card.findByRole('button', { name: 'Retry' })).toBeDefined();
@@ -520,6 +548,7 @@ describe('change password', () => {
         emailLinks: true,
         hasPassword: true,
         github: null,
+        oidc: false,
       }),
   };
 
@@ -537,6 +566,7 @@ describe('change password', () => {
           emailLinks: true,
           hasPassword: false,
           github: null,
+          oidc: false,
         }),
     });
     expect(without.queryByRole('region', { name: 'Password' })).toBeNull();

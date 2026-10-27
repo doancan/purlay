@@ -63,6 +63,12 @@ x-environment: &environment
   # empty is neither — the server then waits in setup mode for the wizard to connect GitHub (R38).
   GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
   GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  # The organisation's OpenID Connect provider (D-200), a seed read on the first start only: all three or none,
+  # empty is none — single sign-on is then off, and nothing is sent to anybody.
+  OIDC_ISSUER: ${OIDC_ISSUER:-}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+  OIDC_NAME: ${OIDC_NAME:-}
   # Where GitHub is: github.com and its API unless set, for a GitHub Enterprise Server. Empty is unset.
   GITHUB_URL: ${GITHUB_URL:-}
   GITHUB_API_URL: ${GITHUB_API_URL:-}

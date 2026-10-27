@@ -391,7 +391,12 @@ describe('integration: the setup over HTTP, start to finish', () => {
     expect([tried.status, await tried.json()]).toEqual([200, { ok: true }]);
     expect(wizard.github.refusals).toEqual(['bad_verification_code']);
     const methods = await call(wizard, 'GET', '/api/auth/methods');
-    expect(await methods.json()).toEqual({ github: true, email: false, signUp: 'invite-only' });
+    expect(await methods.json()).toEqual({
+      github: true,
+      email: false,
+      oidc: null,
+      signUp: 'invite-only',
+    });
     const button = await call(wizard, 'GET', '/auth/github');
     expect(button.status).toBe(302);
     expect(new URL(button.headers.get('location') ?? '').searchParams.get('client_id')).toBe(
@@ -414,6 +419,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
     expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
       github: true,
       email: true,
+      oidc: null,
       signUp: 'invite-only',
     });
     let state = await stateOf(wizard, cookie);
@@ -1258,6 +1264,7 @@ describe('integration: the finish rule', () => {
     expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
       github: true,
       email: false,
+      oidc: null,
       signUp: 'invite-only',
     });
     const cookie = await claimed(wizard);
@@ -1300,6 +1307,7 @@ describe('integration: the finish rule', () => {
     expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
       github: false,
       email: true,
+      oidc: null,
       signUp: 'invite-only',
     });
     const cookie = await claimed(wizard);

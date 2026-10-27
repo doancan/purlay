@@ -19,7 +19,8 @@ const signedOut = (open: boolean, calls: { status: number }): ReturnType<typeof 
       calls.status += 1;
       return Promise.resolve({ open, appUrl: 'https://purlay.test' });
     },
-    authMethods: () => Promise.resolve({ github: false, email: false, signUp: 'invite-only' }),
+    authMethods: () =>
+      Promise.resolve({ github: false, email: false, oidc: null, signUp: 'invite-only' }),
   });
 
 /** The wizard's chunk, once `/setup` is reached, reads the real network: here there is none. */

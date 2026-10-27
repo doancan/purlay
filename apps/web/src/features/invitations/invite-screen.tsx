@@ -34,6 +34,7 @@ import { SessionGate } from '../session/session';
 import { LogoMark, Notice } from '../shell/notice';
 import { EmailSignInForm } from '../sign-in/email-sign-in-form';
 import { GitHubButton } from '../sign-in/github-button';
+import { OidcButton } from '../sign-in/oidc-button';
 import { browserInvitationPorts, forgetInvitation, pendingInvitation } from './pending';
 
 const doesNotOpen = (failure: unknown): boolean =>
@@ -238,6 +239,7 @@ const SignedOutInvitation = (): React.JSX.Element => {
   };
 
   const github = methods.data?.github === true;
+  const oidc = methods.data?.oidc ?? null;
   const mail = methods.data?.email === true;
   return (
     <Card>
@@ -252,15 +254,22 @@ const SignedOutInvitation = (): React.JSX.Element => {
         </LoadingStatus>
       ) : (
         <>
+          {oidc !== null && (
+            <OidcButton
+              name={oidc.name}
+              variant={mail || github ? 'secondary' : 'primary'}
+              before={async () => await askPassport()}
+            />
+          )}
           {(github || methods.isError) && (
             <GitHubButton
-              variant={mail ? 'secondary' : 'primary'}
+              variant={mail || oidc !== null ? 'secondary' : 'primary'}
               before={async () => await askPassport()}
             />
           )}
           {mail && (
             <EmailSignInForm
-              alone={!github}
+              alone={!github && oidc === null}
               mail
               beforeLink={async (email) => await askPassport(email)}
             />

@@ -210,7 +210,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
       locale,
       api: aSignedInApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-        authMethods: () => Promise.resolve({ ...methods, signUp: 'invite-only' }),
+        authMethods: () => Promise.resolve({ ...methods, oidc: null, signUp: 'invite-only' }),
         ...api,
       }),
     });
@@ -255,6 +255,70 @@ describe('an invitation, opened by somebody who is not signed in', () => {
       left.mockRestore();
     },
   );
+
+  describe('single sign-on (D-200)', () => {
+    const withSso = (api: Partial<Api>): Partial<Api> => ({
+      authMethods: () =>
+        Promise.resolve({
+          github: false,
+          email: false,
+          oidc: { name: 'Acme SSO' },
+          signUp: 'invite-only',
+        }),
+      ...api,
+    });
+
+    test('the passport is asked for first, and only when it is given does the page leave for /auth/oidc', async () => {
+      const order: string[] = [];
+      const left = spyOn(leave, 'to').mockImplementation((url) => {
+        order.push(`leave ${url}`);
+      });
+      const view = await asSignedOut(
+        withSso({
+          openInvitationPassport: async (input) => {
+            order.push(`passport ${JSON.stringify(input)}`);
+            await Promise.resolve();
+          },
+        }),
+      );
+      await expectNoAxeViolations(view.container);
+      await person().click(view.getByRole('link', { name: 'Continue with Acme SSO' }));
+      await settle();
+      expect(order).toEqual([`passport ${JSON.stringify({ token: TOKEN })}`, 'leave /auth/oidc']);
+      left.mockRestore();
+    });
+
+    test('a passport that is refused is said in words, and the page does not leave', async () => {
+      const left = spyOn(leave, 'to').mockImplementation(() => undefined);
+      const view = await asSignedOut(
+        withSso({
+          openInvitationPassport: () => Promise.reject(new ApiError(500, 'INTERNAL', 'broke')),
+        }),
+      );
+      await person().click(view.getByRole('link', { name: 'Continue with Acme SSO' }));
+      await settle();
+      expect(view.getByRole('alert').textContent).toContain('The invitation could not be checked.');
+      expect(left).not.toHaveBeenCalled();
+      left.mockRestore();
+    });
+
+    test('beside GitHub both are offered, and the email form is not alone', async () => {
+      const view = await asSignedOut(
+        withSso({
+          authMethods: () =>
+            Promise.resolve({
+              github: true,
+              email: true,
+              oidc: { name: null },
+              signUp: 'invite-only',
+            }),
+        }),
+      );
+      expect(view.getByRole('link', { name: 'Continue with single sign-on' })).toBeDefined();
+      expect(view.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
+      view.unmount();
+    });
+  });
 
   test('a link that does not open is the page’s "does not open" state, forgotten, and nothing else happens', async () => {
     const left = spyOn(leave, 'to').mockImplementation(() => undefined);

@@ -44,7 +44,7 @@ export const aTestAuth = (
     baseUrl: 'https://purlay.test',
     secret: TEST_AUTH_SECRET,
     log: silent,
-    settings: { github: undefined, signUp: 'invite-only' },
+    settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
     // GitHub where the configuration puts it by default; a test of another address names its own.
     githubUrls: { web: GITHUB_URL_DEFAULT, api: GITHUB_API_URL_DEFAULT },
     sessionTtlDays: 30,

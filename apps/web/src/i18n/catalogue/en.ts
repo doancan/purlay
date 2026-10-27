@@ -46,6 +46,9 @@ export const en = {
   'signIn.title': 'Sign in to Purlay',
   'signIn.lede': 'Team chat where a question stays open until somebody closes it.',
   'signIn.github': 'Continue with GitHub',
+  // Single sign-on (D-200). `{name}` is the operator's label for the button, or the default below.
+  'signIn.oidc': 'Continue with {name}',
+  'signIn.oidc.default': 'single sign-on',
   // Why a sign-in came back unfinished, one per `SignInFailure` (D-121): what happened, then what to do.
   'signIn.cancelled': 'You cancelled on GitHub — continue with GitHub whenever you are ready.',
   'signIn.expired':
@@ -59,6 +62,10 @@ export const en = {
   'signIn.signupClosed':
     'This Purlay server makes accounts by invitation only — ask someone on it for an invitation link.',
   'signIn.githubUnavailable': 'GitHub could not be reached — wait a moment and try again.',
+  'signIn.oidcUnavailable':
+    'Single sign-on could not be reached, or did not give an identity this server trusts — wait a moment and try again, and if it stays, tell whoever runs this server.',
+  'signIn.emailUnverified':
+    'Single sign-on did not say your email address is verified, so it cannot sign you in. Ask whoever runs your organisation’s sign-in to verify it.',
   'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',
   'signIn.failed': 'Sign-in did not finish — try again.',
   'signIn.ended': 'Your session ended. Sign in again to carry on.',
@@ -66,7 +73,7 @@ export const en = {
   'signIn.methods.retry': 'Try again',
   'signIn.notSetUp.title': 'This server is not set up yet',
   'signIn.notSetUp.body':
-    'Neither GitHub nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
+    'Neither GitHub, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
   'signIn.notSetUp.action': 'Set up this server',
   'signIn.scope': 'Purlay asks GitHub for your name, username and email, and nothing else.',
   'signIn.email.label': 'Email address',
@@ -1325,6 +1332,10 @@ export const en = {
   'settings.account.github': 'GitHub',
   'settings.account.githubSignsIn': 'You can sign in with this GitHub account.',
   'settings.account.githubLinked': 'Linked',
+  'settings.account.oidc': 'Single sign-on',
+  'settings.account.oidcSignsIn':
+    'Your organisation’s sign-in is linked to this account, and an emailed link no longer signs in to it.',
+  'settings.account.oidcLinked': 'Linked',
   'settings.account.password.title': 'Password',
   'settings.account.password.description':
     'Change the password you sign in with. Your other sessions are signed out.',
@@ -1734,6 +1745,42 @@ export const en = {
   'setup.reason.unexpected-reply.fix1': 'Try again in a minute.',
   'setup.reason.unexpected-reply.fix2':
     'If it stays, check the address — the reply below says what answered.',
+  'setup.reason.issuer-mismatch.what':
+    'That address answers, but its discovery document names another issuer.',
+  'setup.reason.issuer-mismatch.fix1':
+    'Use the issuer exactly as the provider gives it, with or without its trailing slash.',
+  'setup.reason.issuer-mismatch.fix2':
+    'A tenant-specific address (one that names your organisation) is the one to use, not a shared one.',
+  'setup.reason.discovery-invalid.what':
+    'That is not an OpenID Connect provider this server can sign in through.',
+  'setup.reason.discovery-invalid.fix1':
+    'The address needs a /.well-known/openid-configuration document, over https.',
+  'setup.reason.discovery-invalid.fix2':
+    'The provider must offer the authorization code flow with PKCE (S256) and sign tokens with RS256, ES256 or another asymmetric algorithm.',
+  // What the same reasons mean for a single sign-on provider rather than GitHub or a mail relay.
+  'setup.oidc.reason.secret-rejected.what':
+    'The provider knows this client and refused its secret.',
+  'setup.oidc.reason.secret-rejected.fix1':
+    'Copy the client secret from the provider’s page for this application again.',
+  'setup.oidc.reason.secret-rejected.fix2':
+    'A secret may have expired or been replaced: make a new one and paste it here.',
+  'setup.oidc.reason.client-unknown.what': 'The provider does not know this client.',
+  'setup.oidc.reason.client-unknown.fix1': 'Copy the client ID from the provider again.',
+  'setup.oidc.reason.client-unknown.fix2':
+    'The application may have been deleted, or the ID may belong to a different provider or tenant.',
+  'setup.oidc.reason.unreachable.what': 'Nothing answered at that address, or not in time.',
+  'setup.oidc.reason.unreachable.fix1': 'Check the issuer address.',
+  'setup.oidc.reason.unreachable.fix2': 'Check that this server may connect out to the provider.',
+  'setup.oidc.reason.tls-failed.what':
+    'The provider was reached, but the secure connection failed.',
+  'setup.oidc.reason.tls-failed.fix1':
+    'The provider’s certificate may be expired, self-signed or for another name.',
+  'setup.oidc.reason.tls-failed.fix2':
+    'This server trusts the certificate authorities its system does.',
+  'setup.oidc.reason.unexpected-reply.what': 'The answer was not one a working provider gives.',
+  'setup.oidc.reason.unexpected-reply.fix1':
+    'Check that the redirect address below is registered for this client at the provider.',
+  'setup.oidc.reason.unexpected-reply.fix2': 'If it stays, the reply below says what answered.',
   'setup.failed.network': 'The server could not be reached. Check the connection and try again.',
   'setup.failed.rate': {
     one: 'Too many tries from this browser. Wait {count} minute and try again.',
@@ -1787,6 +1834,36 @@ export const en = {
   'settings.server.github.disconnectBody':
     'People will no longer be able to sign in with GitHub. Sessions already open stay open.',
   'settings.server.github.disconnected': 'GitHub is disconnected.',
+  'settings.server.oidc.title': 'Single sign-on',
+  'settings.server.oidc.description':
+    'People sign in through your organisation’s OpenID Connect provider — Okta, Entra ID, Google Workspace, Keycloak, Authentik and the like.',
+  'settings.server.oidc.empty':
+    'Nobody can sign in with single sign-on until a provider is connected.',
+  'settings.server.oidc.issuer': 'Issuer {issuer}',
+  'settings.server.oidc.clientId': 'Client ID {id}',
+  'settings.server.oidc.callback': 'Redirect address',
+  'settings.server.oidc.callbackHint':
+    'Register this as the application’s redirect URI at the provider.',
+  'settings.server.oidc.connect': 'Connect single sign-on',
+  'settings.server.oidc.replace': 'Replace provider',
+  'settings.server.oidc.issuerLabel': 'Issuer',
+  'settings.server.oidc.issuerHint':
+    'The address whose /.well-known/openid-configuration describes the provider, over https.',
+  'settings.server.oidc.clientIdLabel': 'Client ID',
+  'settings.server.oidc.clientSecretLabel': 'Client secret',
+  'settings.server.oidc.nameLabel': 'Button label',
+  'settings.server.oidc.nameHint':
+    'Optional. Shown on the sign-in button: Continue with this name. Empty says single sign-on.',
+  'settings.server.oidc.hint':
+    'The provider is asked about the client before anything is saved. The secret is stored encrypted and never shown again.',
+  'settings.server.oidc.verifiedNote':
+    'People are linked to an existing account only when the provider says their address is verified and that account’s address is verified too.',
+  'settings.server.oidc.save': 'Try the connection and save',
+  'settings.server.oidc.saved': 'Saved. Single sign-on uses this provider from now on.',
+  'settings.server.oidc.disconnectTitle': 'Disconnect single sign-on?',
+  'settings.server.oidc.disconnectBody':
+    'People will no longer be able to sign in through the provider. Sessions already open stay open, and accounts it made keep working by their other ways in.',
+  'settings.server.oidc.disconnected': 'Single sign-on is disconnected.',
   'settings.server.email.title': 'E-mail',
   'settings.server.email.description':
     'Sign-in links and invitations are sent through this mail server.',

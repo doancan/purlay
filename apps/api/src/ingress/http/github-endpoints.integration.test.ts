@@ -63,7 +63,7 @@ describe('integration: GitHub’s addresses', () => {
         config: testConfig({ APP_URL: ORIGIN }),
         auth: aTestAuth(cloned.db, {
           baseUrl: ORIGIN,
-          settings: { github: GITHUB_STUB_CREDENTIALS, signUp: 'open' },
+          settings: { github: GITHUB_STUB_CREDENTIALS, oidc: undefined, signUp: 'open' },
           githubUrls: githubUrlsOf({}),
           fetch: github.fetch,
         }),
@@ -95,7 +95,7 @@ describe('integration: GitHub’s addresses', () => {
           // No `fetch`: the library's calls leave through the platform's, to the addresses configured.
           auth: aTestAuth(cloned.db, {
             baseUrl: ORIGIN,
-            settings: { github: GITHUB_STUB_CREDENTIALS, signUp: 'open' },
+            settings: { github: GITHUB_STUB_CREDENTIALS, oidc: undefined, signUp: 'open' },
             githubUrls: githubUrlsOf({ GITHUB_URL: served.url, GITHUB_API_URL: `${served.url}/` }),
           }),
         }),
@@ -152,7 +152,7 @@ describe('integration: GitHub’s addresses', () => {
           config: testConfig({ APP_URL: ORIGIN }),
           auth: aTestAuth(cloned.db, {
             baseUrl: ORIGIN,
-            settings: { github: GITHUB_STUB_CREDENTIALS, signUp: 'open' },
+            settings: { github: GITHUB_STUB_CREDENTIALS, oidc: undefined, signUp: 'open' },
             githubUrls: { web: served.url, api: served.url },
           }),
         }),
@@ -195,7 +195,7 @@ describe('integration: a GitHub that redirects, or floods (D-179 §4.4)', () => 
         config: testConfig({ APP_URL: ORIGIN }),
         auth: aTestAuth(cloned.db, {
           baseUrl: ORIGIN,
-          settings: { github: GITHUB_STUB_CREDENTIALS, signUp: 'open' },
+          settings: { github: GITHUB_STUB_CREDENTIALS, oidc: undefined, signUp: 'open' },
           fetch: fetchOf(stub),
         }),
       }),

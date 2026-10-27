@@ -1,5 +1,6 @@
 /**
- * Sign in. GitHub where the server has an app connected, the address and password always (the setup's
+ * Sign in. The organisation's single sign-on where a provider is connected (D-200), GitHub where the server
+ * has an app connected, the address and password always (the setup's
  * administrator has one, R30), and a link by email where the server can send one (D-138, D-179): the
  * screen offers what `/api/auth/methods` says works and nothing it assumes. Under it, "Create an
  * account" where sign-up is open and a plain "by invitation" where it is not (R51). A server with neither
@@ -33,6 +34,7 @@ import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
 import { LogoMark } from '../shell/notice';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
+import { OidcButton } from './oidc-button';
 
 type SentenceKey =
   | 'signIn.cancelled'
@@ -42,6 +44,8 @@ type SentenceKey =
   | 'signIn.emailTakenNoMail'
   | 'signIn.signupClosed'
   | 'signIn.githubUnavailable'
+  | 'signIn.oidcUnavailable'
+  | 'signIn.emailUnverified'
   | 'signIn.busy'
   | 'signIn.failed';
 
@@ -65,6 +69,10 @@ const sentenceFor = (failure: SignInFailure, mail: boolean): SentenceKey => {
       return 'signIn.signupClosed';
     case 'github-unavailable':
       return 'signIn.githubUnavailable';
+    case 'oidc-unavailable':
+      return 'signIn.oidcUnavailable';
+    case 'email-unverified':
+      return 'signIn.emailUnverified';
     case 'busy':
       return 'signIn.busy';
     case 'failed':
@@ -80,6 +88,7 @@ export const SignInScreen = (): React.JSX.Element => {
   // Each is offered only once the server has said it works (`EmailSignInForm` asks for itself).
   const mail = methods.data?.email === true;
   const github = methods.data?.github === true;
+  const oidc = methods.data?.oidc ?? null;
   // The native application sent the person here and is waiting for their answer (D-191): say so.
   const [forNative] = useState(
     () => pendingNativeHandoff(browserNativePorts(), window.location) !== null,
@@ -121,7 +130,7 @@ export const SignInScreen = (): React.JSX.Element => {
           </LoadingStatus>
         ) : (
           <>
-            {!methods.isError && !github && !mail && (
+            {!methods.isError && !github && oidc === null && !mail && (
               <div className="flex w-full flex-col items-center gap-3">
                 <h2 className="text-title">{t('signIn.notSetUp.title')}</h2>
                 <p className="text-balance text-body text-ink-muted">{t('signIn.notSetUp.body')}</p>
@@ -130,14 +139,23 @@ export const SignInScreen = (): React.JSX.Element => {
                 </a>
               </div>
             )}
-            {(github || methods.isError) && (
+            {(oidc !== null || github || methods.isError) && (
               <div className="flex w-full flex-col items-center gap-3">
-                <GitHubButton variant="secondary" />
-                <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
+                {oidc !== null && <OidcButton name={oidc.name} variant="secondary" />}
+                {(github || methods.isError) && (
+                  <>
+                    <GitHubButton variant="secondary" />
+                    <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
+                  </>
+                )}
               </div>
             )}
             {/* The password is always offered (R30); the link only where mail is on, which the form asks. */}
-            <EmailSignInForm alone={!github && !methods.isError && mail} withPassword mail={mail} />
+            <EmailSignInForm
+              alone={!github && oidc === null && !methods.isError && mail}
+              withPassword
+              mail={mail}
+            />
             {methods.isError && (
               <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-caption text-ink-muted">
                 {t('signIn.methods.unchecked')}

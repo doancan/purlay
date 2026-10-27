@@ -204,7 +204,7 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 
 **native macOS client in Swift, in its own repository** (D-186) · **mobile as an installable
 progressive web application** — one client, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
-bus (D-7, D-25) · **OIDC single sign-on, gated on demand** (D-31)
+bus (D-7, D-25) · **OIDC single sign-on, built** (D-31, D-200)
 
 > **Native Swift exists for macOS only** (D-186, which supersedes D-51 here). Mobile stays an
 > installable web application, Windows and Linux use the web client, and no native iOS client is
@@ -273,7 +273,7 @@ contractually requires one (D-28)
 
 > **SSO left this list on 2026-09-09.** D-25 set a multi-node capacity ceiling and D-26 added an
 > audit log; both describe an organisation that has an identity provider, so "never SSO" had
-> become an internal contradiction. It is now **OIDC, Phase 3, gated on demand** (D-31). SAML
+> become an internal contradiction. It is now **OIDC** (D-31), built by D-200 without the wait for a request. SAML
 > itself stays permanently refused — XML signature handling for the same outcome at ten times the
 > cost. A non-goal that another decision contradicts teaches readers the whole list is
 > negotiable, which is why this is stated plainly rather than quietly reworded.

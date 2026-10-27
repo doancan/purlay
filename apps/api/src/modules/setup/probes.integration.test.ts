@@ -21,10 +21,18 @@ import { aClosedPort, aScriptedRelay, type RelayScript } from '../../testing/smt
 import { aGitHubPerson } from '../../testing/github-sign-in';
 import { aFloodingServer, aRedirectingServer } from '../../testing/hostile-servers';
 import {
+  anOidcStub,
+  OIDC_STUB_CREDENTIALS,
+  type OidcBehaviour,
+  type OidcStub,
+} from '../../testing/oidc-stub';
+import {
   CandidateRefused,
   GITHUB_PROBE_CODE,
   GITHUB_PROBE_TIMEOUT_MS,
+  OIDC_PROBE_CODE,
   probeGitHub,
+  probeOidc,
   probeSmtp,
   RAW_MAX,
   rawReply,
@@ -652,6 +660,147 @@ describe('integration: every spelling of a secret (review, fix round 1)', () => 
 
   test('control and format characters are one space', () => {
     expect(rawReply('a\u0007b‮c\u0000d', [])).toBe('a b c d');
+  });
+});
+
+describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)', () => {
+  const APP = 'https://purlay.test';
+
+  /** A provider served on a loopback port, and a try of this client at it. */
+  const provider = async (
+    behaviour: OidcBehaviour = {},
+  ): Promise<{ readonly stub: OidcStub; readonly issuer: string }> => {
+    const stub = await anOidcStub({ sub: 'a', email: 'a@example.test' }, behaviour);
+    const served = stub.serve(0);
+    stops.push(served.stop);
+    return { stub, issuer: served.url };
+  };
+
+  const tryIt = async (
+    issuer: string,
+    clientSecret: string = OIDC_STUB_CREDENTIALS.clientSecret,
+    clientId: string = OIDC_STUB_CREDENTIALS.clientId,
+  ): Promise<ProbeResult> =>
+    seen(
+      await probeOidc(
+        AUTHORITY,
+        { issuer, clientId, clientSecret },
+        {
+          fetch: (url, init) => fetch(url, init),
+          appUrl: APP,
+          log: createLogger({ level: 'silent' }),
+        },
+      ),
+    );
+
+  test('a provider that answers, and takes this client, is ok — and was asked nothing it could act on', async () => {
+    const { stub, issuer } = await provider();
+    expect(await tryIt(issuer)).toEqual({ ok: true });
+    // The code was never issued: the provider could only refuse it, having weighed the client first.
+    expect(stub.refusals).toEqual(['invalid_grant']);
+    expect(stub.presentedCodes).toEqual([OIDC_PROBE_CODE]);
+  });
+
+  test('a secret the provider refuses is secret-rejected, and the reply shows none of it', async () => {
+    const { issuer } = await provider();
+    const result = failure(await tryIt(issuer, 'S3CRET-sso-wrong'));
+    expect(result.reason).toBe('secret-rejected');
+    expect(result.raw).not.toContain('S3CRET-sso-wrong');
+  });
+
+  test('a client the provider does not know is refused the same way a wrong secret is, as RFC 6749 says', async () => {
+    const { issuer } = await provider();
+    expect(failure(await tryIt(issuer, OIDC_STUB_CREDENTIALS.clientSecret, 'nobody')).reason).toBe(
+      'secret-rejected',
+    );
+  });
+
+  test.each<[string, OidcBehaviour, ProbeReason]>([
+    ['another issuer in its document', { discovery: 'issuer-mismatch' }, 'issuer-mismatch'],
+    ['no PKCE with S256', { discovery: 'no-pkce' }, 'discovery-invalid'],
+    ['a signing algorithm no one verifies', { discovery: 'hmac-only' }, 'discovery-invalid'],
+    ['a discovery document that is a 503', { discovery: 'refuses' }, 'discovery-invalid'],
+    ['keys that are not keys', { jwks: 'garbage' }, 'unexpected-reply'],
+    ['a token endpoint that is down', { token: 'refuses' }, 'unexpected-reply'],
+  ])('%s is %s', async (_what, behaviour, reason) => {
+    const { issuer } = await provider(behaviour);
+    expect(failure(await tryIt(issuer)).reason).toBe(reason);
+  });
+
+  test('a provider nothing answers for is unreachable', async () => {
+    const closed = await aClosedPort();
+    const result = failure(await tryIt(`http://127.0.0.1:${String(closed)}`));
+    expect(result.reason).toBe('unreachable');
+  });
+
+  test('a provider whose certificate is not trusted is tls-failed, and its client secret was never sent', async () => {
+    const certificate = aSelfSignedCertificate();
+    const received: string[] = [];
+    const server = Bun.serve({
+      port: 0,
+      hostname: '127.0.0.1',
+      tls: { cert: certificate.cert, key: certificate.key },
+      fetch: (request) => {
+        received.push(request.url);
+        return Response.json({});
+      },
+    });
+    stops.push(() => server.stop(true));
+    const result = failure(await tryIt(`https://127.0.0.1:${String(server.port)}`));
+    expect(result.reason).toBe('tls-failed');
+    expect(received).toEqual([]);
+  });
+
+  test('a redirect is not followed at discovery: the secret goes nowhere else, and the answer there decides nothing', async () => {
+    for (const status of [301, 302, 307, 308] as const) {
+      const redirecting = aRedirectingServer(status);
+      stops.push(redirecting.stop);
+      expect(failure(await tryIt(redirecting.url)).reason).toBe('discovery-invalid');
+      expect(redirecting.elsewhere).toEqual([]);
+    }
+  });
+
+  test('a document that never ends is read no further than 256 KB, and is not a provider', async () => {
+    const flooding = aFloodingServer(300 * 1024 * 1024);
+    stops.push(flooding.stop);
+    expect(failure(await tryIt(flooding.url)).reason).toBe('discovery-invalid');
+    await Bun.sleep(100);
+    expect(flooding.written()).toBeLessThan(8 * 1024 * 1024);
+  });
+
+  test('a token endpoint that redirects the secret elsewhere is unexpected-reply, and the secret goes nowhere', async () => {
+    const { issuer } = await provider({ token: 'redirects' });
+    expect(failure(await tryIt(issuer)).reason).toBe('unexpected-reply');
+  });
+
+  test('the reply shown is the provider’s own words, with the secret taken out of every spelling', async () => {
+    const hostile = Bun.serve({
+      port: 0,
+      hostname: '127.0.0.1',
+      fetch: (request) => {
+        const { pathname } = new URL(request.url);
+        const base = new URL(request.url).origin;
+        if (pathname === '/.well-known/openid-configuration') {
+          return Response.json({
+            issuer: base,
+            authorization_endpoint: `${base}/a`,
+            token_endpoint: `${base}/token`,
+            jwks_uri: `${base}/jwks`,
+          });
+        }
+        if (pathname === '/jwks') return Response.json({ keys: [] });
+        return Response.json(
+          { error: 'S3CRET-echoed', error_description: 'S3CRET-echoed' },
+          { status: 418 },
+        );
+      },
+    });
+    stops.push(() => hostile.stop(true));
+    const result = failure(
+      await tryIt(`http://127.0.0.1:${String(hostile.port)}`, 'S3CRET-echoed'),
+    );
+    expect(result.reason).toBe('unexpected-reply');
+    expect(result.raw).not.toContain('S3CRET-echoed');
   });
 });
 

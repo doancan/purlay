@@ -8,6 +8,8 @@ import { Value } from '@sinclair/typebox/value';
 import { unconnectedDatabase } from '@purlay/db';
 import { AuthMethods } from '@purlay/types';
 import { aRecordingOutbox, testConfig, testDependencies } from '../../testing/doubles';
+import { aTestAuth } from '../../testing/signed-in';
+import { anOidcStub } from '../../testing/oidc-stub';
 import { createApp } from './app';
 
 const ask = async (withMail: boolean, withGitHub = true): Promise<[number, unknown]> => {
@@ -29,14 +31,17 @@ const ask = async (withMail: boolean, withGitHub = true): Promise<[number, unkno
 
 describe('the ways in', () => {
   test('each of GitHub and email is on when the server has it, off when it has not — for anybody, signed in or not', async () => {
-    expect(await ask(false)).toEqual([200, { github: true, email: false, signUp: 'invite-only' }]);
+    expect(await ask(false)).toEqual([
+      200,
+      { github: true, email: false, oidc: null, signUp: 'invite-only' },
+    ]);
     const [status, body] = await ask(true);
     expect(status).toBe(200);
     expect(Value.Check(AuthMethods, body)).toBe(true);
-    expect(body).toEqual({ github: true, email: true, signUp: 'invite-only' });
+    expect(body).toEqual({ github: true, email: true, oidc: null, signUp: 'invite-only' });
     expect(await ask(true, false)).toEqual([
       200,
-      { github: false, email: true, signUp: 'invite-only' },
+      { github: false, email: true, oidc: null, signUp: 'invite-only' },
     ]);
   });
 
@@ -44,7 +49,56 @@ describe('the ways in', () => {
     const [status, body] = await ask(false, false);
     expect(status).toBe(200);
     expect(Value.Check(AuthMethods, body)).toBe(true);
-    expect(body).toEqual({ github: false, email: false, signUp: 'invite-only' });
+    expect(body).toEqual({ github: false, email: false, oidc: null, signUp: 'invite-only' });
+  });
+
+  test('single sign-on is on when a provider is connected: its label, or null for the default the client words', async () => {
+    const asked = async (name: string | undefined): Promise<unknown> => {
+      const auth = aTestAuth(unconnectedDatabase(), {
+        settings: {
+          github: undefined,
+          oidc: { issuer: 'https://idp.example.test', clientId: 'id', clientSecret: 's', name },
+          signUp: 'invite-only',
+        },
+      });
+      const app = createApp(testDependencies({ database: unconnectedDatabase(), auth }));
+      const response = await app.handle(new Request('https://purlay.test/api/auth/methods'));
+      return await response.json();
+    };
+    const named = await asked('Acme SSO');
+    expect(Value.Check(AuthMethods, named)).toBe(true);
+    expect(named).toEqual({
+      github: false,
+      email: false,
+      oidc: { name: 'Acme SSO' },
+      signUp: 'invite-only',
+    });
+    expect(await asked(undefined)).toEqual({
+      github: false,
+      email: false,
+      oidc: { name: null },
+      signUp: 'invite-only',
+    });
+  });
+
+  test('asking which ways are on connects to nobody: the provider is asked nothing until somebody presses its button', async () => {
+    const stub = await anOidcStub({ sub: 's', email: 'a@example.test' });
+    const auth = aTestAuth(unconnectedDatabase(), {
+      settings: {
+        github: undefined,
+        oidc: {
+          issuer: stub.issuer(),
+          clientId: 'purlay-client',
+          clientSecret: 'x',
+          name: undefined,
+        },
+        signUp: 'invite-only',
+      },
+      fetch: stub.fetch,
+    });
+    const app = createApp(testDependencies({ database: unconnectedDatabase(), auth }));
+    await app.handle(new Request('https://purlay.test/api/auth/methods'));
+    expect(stub.calls.urls).toEqual([]);
   });
 });
 
