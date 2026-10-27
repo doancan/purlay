@@ -836,7 +836,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .post(
       '/api/invitations/accept',
-      async ({ request, body }) => await joinByInvitation(dependencies, request, body),
+      async ({ request, body }) =>
+        await joinByInvitation({ ...dependencies, bus: sockets.bus }, request, body),
     )
     .post('/api/workspaces/:workspaceId/exports', async ({ request, params, set }) => {
       const asked = await askForExport(dependencies, request, params.workspaceId);

@@ -1483,26 +1483,32 @@ describe('attaching files (D-109, #370)', () => {
     });
   };
 
-  test('a pasted file uploads at once under its own id, and a send with no words carries it', async () => {
-    const uploads = held();
-    const { view, box, sent } = await mount({ api: aSignedInApi(uploads.api) });
-    paste(box(), [new File([new Uint8Array([1, 2, 3])], 'notes.txt')]);
-    expect(uploads.calls).toEqual([
-      { workspaceId: IDS.workspace, id: expect.any(String) as string, name: 'notes.txt' },
-    ]);
-    expect(view.getByText('Uploading…')).toBeDefined();
-    uploads.finish(0);
-    await settle();
-    act(() => {
-      fireEvent.click(view.getByRole('button', { name: 'Send' }));
-    });
-    expect(sent()).toEqual([
-      { channelId: IDS.api, content: '', attachmentIds: [uploads.calls[0]?.id] },
-    ]);
-    // The chip goes with what was sent.
-    expect(view.queryByText('notes.txt')).toBeNull();
-    await expectNoAxeViolations(view.container);
-  });
+  test.each([false, true])(
+    'an attachment-only send is enabled and clickable (touch only: %s)',
+    async (touchOnly) => {
+      const uploads = held();
+      const { view, box, sent, user } = await mount({ api: aSignedInApi(uploads.api), touchOnly });
+      expect(view.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe('true');
+      paste(box(), [new File([new Uint8Array([1, 2, 3])], 'notes.txt')]);
+      expect(uploads.calls).toEqual([
+        { workspaceId: IDS.workspace, id: expect.any(String) as string, name: 'notes.txt' },
+      ]);
+      expect(view.getByText('Uploading…')).toBeDefined();
+      uploads.finish(0);
+      await settle();
+      expect(view.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe(
+        'false',
+      );
+      await user.click(view.getByRole('button', { name: 'Send' }));
+      expect(view.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe('true');
+      expect(sent()).toEqual([
+        { channelId: IDS.api, content: '', attachmentIds: [uploads.calls[0]?.id] },
+      ]);
+      // The chip goes with what was sent.
+      expect(view.queryByText('notes.txt')).toBeNull();
+      await expectNoAxeViolations(view.container);
+    },
+  );
 
   test('an upload says how much of it is sent, as a progress bar a screen reader can read (#388)', async () => {
     const uploads = held();

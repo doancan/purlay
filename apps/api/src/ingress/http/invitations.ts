@@ -34,7 +34,13 @@ import type { MailMessage, Outbox } from '../../platform/mail';
 import { atomicallyOn } from '../../platform/transactions';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
-import type { WorkspaceDependencies } from './workspaces';
+import type { WorkspaceDependencies, MemberWriteDependencies } from './workspaces';
+import {
+  NO_LOG,
+  publication,
+  publishAfterCommit,
+  publishWorkspaceUpdated,
+} from '../../platform/events';
 
 /** What making a link needs to send it by e-mail (D-179 §5). */
 export interface InvitationMailDependencies extends WorkspaceDependencies {
@@ -121,15 +127,23 @@ export const lookAtInvitation = async (
 
 /** `POST /api/invitations/accept` — in, by the link in the body; answers the membership. */
 export const joinByInvitation = async (
-  { auth, database, clock }: WorkspaceDependencies,
+  { auth, database, clock, bus, log = NO_LOG }: MemberWriteDependencies,
   request: Request,
   body: unknown,
 ): Promise<Membership> => {
   const { userId } = await requireSession(auth, request);
   const { token } = validated(InvitationTokenRequest, body);
-  return await atomicallyOn(database)(
+  const { membership, memberIds } = await atomicallyOn(database)(
     async (transaction) => await acceptInvitation(transaction, clock, userId, token),
   );
+  await publishAfterCommit(log, [
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, memberIds, membership.workspace.id),
+      ),
+    ],
+  ]);
+  return membership;
 };
 
 /**

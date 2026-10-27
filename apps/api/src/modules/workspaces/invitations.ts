@@ -323,6 +323,13 @@ export const previewInvitation = async (
   };
 };
 
+/** The membership and the people whose cached member lists changed. */
+export interface AcceptedInvitation {
+  readonly membership: Membership;
+  /** Empty for an existing member: repeated acceptance changes nothing. */
+  readonly memberIds: readonly string[];
+}
+
 /**
  * `POST /api/invitations/accept` — in, as a member; answered with the membership as `/api/me` lists
  * it. Again is the same answer: somebody already in stays as they are, and nothing is recorded twice.
@@ -332,7 +339,7 @@ export const acceptInvitation = async (
   clock: Clock,
   userId: string,
   token: string,
-): Promise<Membership> => {
+): Promise<AcceptedInvitation> => {
   const now = clock.now();
   const { workspace, invitationId } = await opened(transaction, now, userId, token, true);
   const inserted = await transaction
@@ -354,5 +361,13 @@ export const acceptInvitation = async (
   const [membership] = await membershipsOf(transaction, clock, userId, workspace.id);
   // Inserted or already there, in this transaction: a membership that is not found is a bug.
   if (membership === undefined) throw new Error('a membership just made is missing');
-  return membership;
+  const members =
+    inserted === undefined
+      ? []
+      : await transaction
+          .selectFrom('workspace_members')
+          .select('user_id')
+          .where('workspace_id', '=', workspace.id)
+          .execute();
+  return { membership, memberIds: members.map((member) => member.user_id) };
 };

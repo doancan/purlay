@@ -58,6 +58,41 @@ test.describe('an attachment', () => {
       .toBeGreaterThan(0);
   });
 
+  test('a file with no words enables Send and is downloaded unchanged by the other person', async ({
+    page,
+    signIn,
+    room,
+    asPerson,
+  }) => {
+    const made = await room({ messages: [{ by: 'alice', text: 'send just the file' }] });
+    await signIn();
+    await page.goto(made.path);
+    await expect(page.getByRole('textbox', { name: `Message ${made.name}` })).toBeVisible();
+    const bytes = Buffer.from('Türkçe dosya içeriği: ğışöçü.\n');
+    const name = 'denetim-ğış.txt';
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles({ name, mimeType: 'text/plain', buffer: bytes });
+    const files = page.getByRole('list', { name: 'Files to send' });
+    await expect(files.getByText(name)).toBeVisible();
+    await expect(files.getByText(/Uploading/)).toHaveCount(0);
+    const send = page.getByRole('button', { name: 'Send', exact: true });
+    await expect(send).toBeEnabled();
+    await send.click();
+    await expect(files).toHaveCount(0);
+    await expect(send).toBeDisabled();
+
+    const alice = await asPerson('alice');
+    await alice.goto(made.path);
+    const download = alice.getByRole('link', { name: `Download ${name}` });
+    await expect(download).toBeVisible();
+    const href = await download.getAttribute('href');
+    if (href === null) throw new Error('the file has no download URL');
+    const response = await alice.request.get(href);
+    expect(response.ok()).toBe(true);
+    expect(await response.body()).toEqual(bytes);
+  });
+
   test('a thumbnail opens the image viewer over the window, and Esc gives the feed back (D-159)', async ({
     page,
     signIn,
