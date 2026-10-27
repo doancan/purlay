@@ -83,10 +83,14 @@ export const redisUrlForTests = (): string => {
 };
 
 /** A real link to that Redis, waited for until it is connected. */
-export const aRealLink = async (url: string = redisUrlForTests()): Promise<RedisLink> => {
+export const aRealLink = async (
+  url: string = redisUrlForTests(),
+  keepaliveMs?: number,
+): Promise<RedisLink> => {
   const link = connectRedis({
     create: () => bunRedisClient(url),
     log: createLogger({ level: 'silent' }),
+    ...(keepaliveMs === undefined ? {} : { keepaliveMs }),
   });
   const started = performance.now();
   while (!link.connected()) {

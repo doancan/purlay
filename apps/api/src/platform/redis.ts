@@ -82,6 +82,8 @@ export interface RedisOptions {
   readonly timers?: RedisTimers;
   /** 0..1, for the wait before a retry; a test passes a constant. */
   readonly jitter?: () => number;
+  /** How often a connection is asked it is alive; `KEEPALIVE_MS`, unless a test wants it quicker. */
+  readonly keepaliveMs?: number;
 }
 
 interface Slot {
@@ -105,6 +107,7 @@ export const connectRedis = ({
   log,
   timers = systemTimers,
   jitter = Math.random,
+  keepaliveMs = KEEPALIVE_MS,
 }: RedisOptions): RedisLink => {
   let closed = false;
   const channels: [channel: string, listener: (message: string) => void][] = [];
@@ -179,7 +182,7 @@ export const connectRedis = ({
             lose(error);
           },
         );
-      }, KEEPALIVE_MS);
+      }, keepaliveMs);
     };
     const opening = async (): Promise<void> => {
       await client.connect();
