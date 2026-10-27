@@ -140,12 +140,48 @@ afterwards, as are its volumes). The first phase takes about twenty seconds on t
   `backup.sh` therefore writes the dump directly, requires it to be non-empty and reads it back with
   `pg_restore --list` before it counts it.
 
+## Point-in-time recovery (2026-10-27, D-202)
+
+The same rehearsal, extended (`scripts/restore-rehearsal.sh`, after the total-loss step). One run, by hand, on
+the author's laptop (Docker Desktop, Apple silicon), PostgreSQL 18 from the stack's own image, a
+database of 8 MB (the seed above) and `WAL_ARCHIVE_TIMEOUT=10`. CI runs it weekly and writes the same lines to
+the run's summary, which is where the dated record is kept.
+
+- **What was done:** archiving switched on in the env file and the database recreated (`archive_mode` read back
+  `on`, and `off` with `archive_timeout 0` before); a backup, which now holds `base.tar.gz`, `base.label`,
+  `base.meta`; 500 rows written, edited and one deleted; the database summarised and the time noted; 300 more
+  rows, edits, a range deleted and the table dropped and recreated; the archive **copied off as root**, then
+  every volume destroyed; `restore-pitr.sh --to <the noted time>` from the backup and the copy; the result
+  applied with `restore.sh --no-bucket` into the rebuilt stack.
+- **The result:** the recovered database compared identical to the summary taken at the noted time, in every
+  table's count and checksum — the 499 earlier rows there, the 300 later ones not, the earlier edit as it was.
+  The instance's last replayed transaction was 1.6 s before the time (the commit before it), and recovery
+  stopped there, not at the end of the archive.
+- **Measured:** `restore-pitr.sh` start to finish **5 s** (base backup 8.3 MB, four archived segments); the
+  logical restore of the same data with the bucket, after the same loss, 2 s. The newest commit was in the
+  archive **5 s** after it was made, with `archive_timeout` 10 s. No archive attempt failed.
+- **Refused, and checked that it was:** a time without a zone; a time before the base backup was complete; an
+  archive whose later segments are missing (it ends before the time); an archive without the segment the
+  base backup began in; a backup taken with archiving off. Each left no container, no volume and no directory.
+
+**What it found.**
+- **A time before the base backup cannot be left to PostgreSQL.** Its own refusal ("stop point before the
+  consistent recovery point") fires only when a commit record falls inside the base backup's window to stop at,
+  which a quiet database does not have, and the case is not one the rehearsal could set up reliably. So
+  `restore-pitr.sh` compares the time with the moment the base backup was complete (recorded by `backup.sh`)
+  itself, in the instance, once it answers, and the rehearsal holds that refusal.
+- **The archive cannot be read by the host user.** Segments are the postgres user's and `0600`, so the copy off
+  the host must run as root (the rehearsal copies in a root container and hands the files back); the document
+  says so and puts the shipping job in root's crontab.
+- **An archive command that blocks on the network stalls the database**, which is why the archive is local and
+  the copy a separate job.
+
 ## What this does not show
 
-- **Scale.** 762 KB of database and 18.6 MB of objects. Restore time does not extrapolate, and a database
-  of tens of gigabytes needs `pg_restore --jobs` and a measured window; none is claimed here.
-- **Point-in-time recovery.** A logical dump restores to the moment it was taken. D-44's PITR for the
-  cloud is WAL archiving, a different mechanism, not built or rehearsed.
+- **Scale.** 762 KB of database and 18.6 MB of objects; the point-in-time run's base backup was 8.3 MB. Restore time does not extrapolate, and a database of tens of gigabytes needs
+  `pg_restore --jobs` and a measured window; none is claimed here. The hour for 10 GB in `CONFIG.md` is a target.
+- **Point-in-time recovery.** A logical dump restores to the moment it was taken. WAL archiving, the
+  mechanism D-44 asks of the cloud, was built afterwards and is recorded below (D-202).
 - **Off-host copies, encryption and a production schedule.** `backup.sh` writes a directory. It holds
   user e-mail addresses and session token hashes in the clear; moving it off the server, encrypting it
   and running it from cron are the operator's, and a cron line is the documentation, not a scheduler

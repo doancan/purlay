@@ -978,8 +978,10 @@ reads back, the target database and bucket — restores into a staging database,
 then swaps it in by renaming, keeping what was there; by default into a new database and bucket. It
 It is `0700`/`0600` and a failed backup removes its partial directory. And `scripts/compare-databases.sh` proves the
 result is the same (D-95, D-44). `scripts/restore-rehearsal.sh` does all of it from nothing —
-including after destroying every volume — weekly in CI. What it does not give: point-in-time
-recovery, off-host copies, encryption.
+including after destroying every volume — weekly in CI. **Point-in-time recovery** is opt-in (`WAL_ARCHIVE=on`): a base backup beside the dump, an archive of
+the WAL, and `scripts/restore-pitr.sh`, which recovers into a new instance to a named time and hands back a directory
+that `restore.sh` applies; rehearsed end to end in the same workflow (D-202, `CONFIG.md`). What none of it gives:
+off-host copies by itself, encryption.
 
 **The production stack.** `docker-compose.production.yml` runs the API, PostgreSQL, Garage and Caddy
 behind one origin with automatic TLS: only the proxy publishes ports, the API starts when its
