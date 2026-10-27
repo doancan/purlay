@@ -20,7 +20,7 @@ import { workspacesOf } from '../users/profile';
 /** What a workspace's presence is read from: this node's record (`realtime/online.ts`). */
 export interface OnlineReader {
   readonly onlineAmong: (userIds: readonly string[]) => Promise<readonly PresenceChange[]>;
-  readonly version: () => number;
+  readonly version: () => number | Promise<number>;
 }
 
 /** Everybody who shares a workspace with the person, once each, never the person. */
@@ -72,7 +72,7 @@ export const workspacePresence = async (
     .where('workspace_id', '=', context.workspaceId)
     .execute();
   // The version first: anybody who goes online after it is heard by a frame at a later one.
-  const version = online.version();
+  const version = await online.version();
   return {
     online: [...(await online.onlineAmong(members.map((member) => member.user_id)))],
     version,

@@ -31,6 +31,8 @@ import {
 import type { SealedSetting, ServerSettings } from './modules/setup/settings';
 import { credentialCipher } from './platform/crypto';
 import { inProcessBackplane } from './realtime/bus';
+import { bunRedisClient, connectRedis } from './platform/redis';
+import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
 import { errorTrackingFor, reportUrgently } from './platform/error-tracking';
@@ -112,7 +114,21 @@ const exports = exportQueue({ database, clock: systemClock, log, storage });
 
 // The transport this node's sockets hear on. Made here, rather than by the application, so that
 // the sign-in library publishes on it too: a session it ends closes the sockets it held (D-85).
-const backplane = inProcessBackplane();
+//
+// With `REDIS_URL` the nodes of a cloud share one (D-201); without it nothing here opens a connection
+// and the node keeps its own, as a self-hosted instance always has (D-7).
+const redisUrl = config.REDIS_URL;
+const redis =
+  redisUrl === undefined
+    ? undefined
+    : connectRedis({ create: () => bunRedisClient(redisUrl), log });
+const sharing = redis === undefined ? undefined : sharedRealtime(redis, systemClock, log);
+log.info(
+  redis === undefined
+    ? "realtime state is this node's own: no REDIS_URL"
+    : 'realtime state is shared through Redis',
+);
+const backplane = sharing?.backplane ?? inProcessBackplane();
 
 // Who every request and socket is: sessions are resolved through Better Auth, signing with a secret
 // derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
@@ -152,6 +168,7 @@ const app = createApp({
     build: servicesFor,
   },
   backplane,
+  ...(sharing === undefined ? {} : { shared: sharing.shared }),
   config,
   log,
   clock: systemClock,
@@ -177,7 +194,7 @@ installShutdown({
   drain: drainRefusingChanges(services, app.drain),
   // Pushes for writes already committed, then the mail of every relay this process served with, then
   // the reports of the shutdown itself — the error tracker still has its time — then the pool.
-  closeDatabase: closeAfterDrain({ push, services, errorTracker, database }),
+  closeDatabase: closeAfterDrain({ push, services, errorTracker, database, redis }),
   log,
   process,
   deadlineMs: 10_000,

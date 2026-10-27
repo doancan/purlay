@@ -25,10 +25,39 @@ const run = (args: readonly string[]): number =>
 
 const url = process.env['DATABASE_URL'] ?? '';
 const inCi = process.env['CI'] === 'true';
+const redisUrl = process.env['REDIS_URL'] ?? '';
 
 if (url !== '' && (await reachable(url))) {
+  // The shared adapters' tests need a Redis, which a developer who works on nothing else need not run
+  // (self-hosting has none, D-7). Left out loudly; in CI there is one, and its absence is a failure.
+  const redisHere = redisUrl !== '' && (await reachable(redisUrl));
+  if (inCi && !redisHere) {
+    console.error(
+      'test:all — REDIS_URL is not set or nothing answers there, and CI provides Redis. Refusing to report half a suite.',
+    );
+    process.exit(1);
+  }
+  if (!redisHere) {
+    console.log(
+      [
+        '',
+        '════════════════════════════════════════════════════════════════════════',
+        '  REDIS TESTS NOT RUN — REDIS_URL is not set or nothing answers there.',
+        '  The shared bus, limiters and presence are untested by this run: not the gate CI runs.',
+        '  Start one and run again:  bun run db:up:redis  (REDIS_URL in .env.test)',
+        '════════════════════════════════════════════════════════════════════════',
+        '',
+      ].join('\n'),
+    );
+  }
   console.log(`test:all — unit and integration, with coverage (${new URL(url).host})`);
-  process.exit(run([...ROOTS, '--coverage']));
+  process.exit(
+    run([
+      ...ROOTS,
+      '--coverage',
+      ...(redisHere ? [] : ['--path-ignore-patterns', '**/*.redis.integration.test.ts']),
+    ]),
+  );
 }
 
 const reason = url === '' ? 'DATABASE_URL is not set' : `nothing answers at ${new URL(url).host}`;

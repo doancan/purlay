@@ -46,9 +46,16 @@ export type Readiness =
 /** A check beyond the database's own, answering a reason when it fails and nothing when it holds. */
 export type ReadinessCheck = () => Promise<string | undefined>;
 
+/**
+ * A reason this node should not take traffic, answered at once and from what is already known: whether a
+ * shared Redis, when one is configured, has been reached since start (D-201).
+ */
+export type SharedProblem = () => string | undefined;
+
 export const readiness = async (
   database: Executor,
   signIn?: ReadinessCheck,
+  shared?: SharedProblem,
 ): Promise<Readiness> => {
   try {
     const history = await migrationHistoryProblem(database);
@@ -82,6 +89,10 @@ export const readiness = async (
     }
     const signInProblem = await signIn?.();
     if (signInProblem !== undefined) return { ready: false, reason: signInProblem };
+    // Only a Redis never reached: a node that has been up and lost it serves on, degraded, and says so in
+    // the log. Every node refusing traffic because the shared piece blinked would be the outage (D-201).
+    const sharedProblem = shared?.();
+    if (sharedProblem !== undefined) return { ready: false, reason: sharedProblem };
     return { ready: true };
   } catch (error) {
     return {

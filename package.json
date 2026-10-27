@@ -42,6 +42,7 @@
     "db:reset": "docker compose down -v && docker compose up -d --wait postgres garage && ./scripts/storage-init.sh",
     "db:up": "docker compose up -d --wait postgres garage && ./scripts/storage-init.sh",
     "db:up:postgres": "docker compose up -d --wait postgres",
+    "db:up:redis": "docker compose up -d --wait redis",
     "demo": "bun --no-env-file --env-file=.env.test run scripts/demo.ts",
     "dev": "bun run scripts/dev.ts",
     "dev:api": "bun run --cwd apps/api dev",

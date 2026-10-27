@@ -34,6 +34,7 @@ import {
 } from '../../realtime/rate-limiter';
 import { metered } from '../../realtime/frame-meter';
 import { inMemoryPresenceRegistry } from '../../realtime/presence';
+import type { SharedState } from '../../realtime/shared';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
@@ -51,6 +52,8 @@ export interface SocketDependencies {
   readonly clock: Clock;
   readonly log: Logger;
   readonly backplane?: Backplane | undefined;
+  /** The state nodes share, with `REDIS_URL` (D-201); absent, typing and presence are this node's own. */
+  readonly shared?: SharedState | undefined;
   /** The per-user write bucket, shared with HTTP's. */
   readonly userWrites: RateLimiter;
   /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
@@ -142,6 +145,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     announce: async (change) => {
       await announcePresence({ database, bus, clock, log }, change);
     },
+    ...(dependencies.shared === undefined ? {} : { directory: dependencies.shared.directory }),
   });
   const hub = createSocketHub(dependencies.auth, clock, {
     log,
@@ -157,7 +161,10 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
       bus.subscribe(userTopic(identity.userId), identity.socketId);
     },
   });
-  const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
+  // Frames a shared bus may have missed are replayed by the sockets from their cursors (D-201, D-190).
+  const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log, () => {
+    hub.closeAll(CLOSE_CODES.RESTARTING, 'resync');
+  });
   // A session removed by the database itself ends its sockets within a sweep (`liveness.ts`).
   const sweep = startLivenessSweep({
     database,
@@ -174,7 +181,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
   // Measured, so the closing line says what the budget met (O-4).
   const limiter = metered(inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET), clock);
   // This node's view of who is typing where; ephemeral, as D-7 allows.
-  const presence = inMemoryPresenceRegistry(clock);
+  const presence = dependencies.shared?.typing ?? inMemoryPresenceRegistry(clock);
   // The transaction boundary both doors share: a new transaction per write, or
   // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
   const atomically = atomicallyOn(database);

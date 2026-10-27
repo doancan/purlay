@@ -86,6 +86,7 @@ looking for the error codes to a file that does not have them.
 | The tenant boundary: what mints a `WorkspaceContext`, and what a stranger gets instead | `apps/api/src/platform/tenancy.ts` (D-21, D-54) |
 | Which endpoints are tenant-scoped, where each sits on the channel-visibility axis, and how a test crosses each one | `apps/api/src/testing/cross-tenant.ts` (D-63, D-64) |
 | The event bus seam and the topic names | `apps/api/src/platform/events.ts` (D-7) |
+| What the cloud's nodes share through Redis — the bus, the limiters, typing and who is online — and what each does while Redis is away; selected only by `REDIS_URL` | `apps/api/src/realtime/shared.ts` over `redis-bus.ts`, `redis-limiter.ts`, `redis-presence.ts` and the connection in `apps/api/src/platform/redis.ts` (D-201); held by `shared.redis.integration.test.ts` and `shared-nodes.redis.integration.test.ts`, and, for the self-hosted path, by `shared.test.ts` |
 | The transaction boundary every write path shares | `apps/api/src/platform/transactions.ts` (D-35, D-46) |
 | The local environment: images, ports, credentials | `docker-compose.yml` |
 | What the supply chain is held to: pinned Actions, the audit gate, licences | `scripts/workflow-pins.test.ts`, `scripts/audit-gate.ts`, `scripts/licenses.ts` (D-91) |
@@ -130,8 +131,8 @@ React + Vite     ──HTTP──▶  Bun + ElysiaJS  ──▶  PostgreSQL
 ```
 
 One process, one database, one bucket. **No Redis and no message broker** — a single node
-serving 30 people does not need one, and the seam to add one later is already in place.
-(`DECISIONS.md` D-7)
+serving 30 people does not need one. The cloud's several nodes share one Redis, chosen by `REDIS_URL`
+alone; unset, nothing connects anywhere. (`DECISIONS.md` D-7, D-201)
 
 ---
 

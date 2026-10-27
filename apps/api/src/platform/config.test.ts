@@ -580,6 +580,32 @@ describe('sign-in mail (D-138 §6)', () => {
   });
 });
 
+describe('the shared Redis (D-201)', () => {
+  test('is off when unset or empty, in production too: a self-hosted instance needs no broker', () => {
+    expect(loadConfig(valid).REDIS_URL).toBeUndefined();
+    expect(loadConfig({ ...valid, REDIS_URL: '' }).REDIS_URL).toBeUndefined();
+    expect(() => loadConfig(production)).not.toThrow();
+  });
+
+  test('takes redis:// and rediss:// with credentials, and nothing else', () => {
+    for (const REDIS_URL of ['redis://localhost:6379', 'rediss://u:pw@cache.example.com:6380/2']) {
+      expect(loadConfig({ ...valid, REDIS_URL }).REDIS_URL).toBe(REDIS_URL);
+    }
+    for (const REDIS_URL of ['http://cache.example.com', 'redis://', 'redis://with space']) {
+      expect(refusal({ ...valid, REDIS_URL })).toContain('REDIS_URL');
+    }
+  });
+
+  test('is a secret: a refusal names the variable and never the address, which holds a password', () => {
+    for (const REDIS_URL of ['redis://:secret-pw-r@', 'http://u:secret-pw-r@cache.example.com']) {
+      const message = refusal({ ...valid, REDIS_URL });
+      expect(message).toContain('REDIS_URL');
+      if (REDIS_URL.startsWith('http')) expect(message).toContain('(value withheld)');
+      expect(message).not.toContain('secret-pw-r');
+    }
+  });
+});
+
 describe('GitHub sign-in is a setting, not a requirement (D-179, R38)', () => {
   const without = (environment: Record<string, string>): Record<string, string> =>
     Object.fromEntries(

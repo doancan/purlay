@@ -478,7 +478,7 @@ returned by any endpoint, at any role. (D-23)
 | | Method | Path | Auth |
 |:-:|---|---|---|
 | ○ | `GET` | `/health` | none — liveness |
-| ○ | `GET` | `/health/ready` | none — `200 { status: 'ready' }` when the database answers, every migration is applied and the identifier columns are `COLLATE "C"`; otherwise `503 { status: 'not ready' }`, with the reason in the log only |
+| ○ | `GET` | `/health/ready` | none — `200 { status: 'ready' }` when the database answers, every migration is applied and the identifier columns are `COLLATE "C"` — and, where `REDIS_URL` is set, Redis has been reached since the process started (a Redis lost afterwards is degraded service, not unready: D-201); otherwise `503 { status: 'not ready' }`, with the reason in the log only |
 | ○ | `GET` | `*` | none — the built client, when `CLIENT_DIST` is set (D-61): a file of the build, or the shell for any other path outside `/api`, `/auth`, `/health` and `/ws`, or anything under them, read decoded. A missing file with an extension, anything under `/assets`, and every path the API owns are `404 ROUTE_NOT_FOUND`, never HTML. `ETag` and `304`; the shell carries the document's policy (D-102) |
 | ○ | `GET` | `/ws` | cookie — WebSocket upgrade (`ARCHITECTURE.md` §7.2) |
 
