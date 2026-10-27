@@ -43,6 +43,7 @@ have it.
 - **Messages** — A history, thread, open-questions or search request with a query it does not know, a repeated parameter or a `limit` such as `0x10` is refused instead of answered as the first page
 - **Messages** — A download's file name is encoded whole, so a name holding `'`, `(`, `)` or `*` reads back as it was
 - **Operations** — A request turned away at the edge (too large, wrong type, cross-site, client too old) is written to the log under its request id, and a sign-in library answer is logged with the status it went out with
+- **Operations** — The documented nightly backup line names `current/` and the env file, so it keeps working once `scripts/deploy.sh` has replaced a flat checkout with releases
 
 ### Security
 

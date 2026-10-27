@@ -521,6 +521,19 @@ PATH=/usr/bin:/bin
 45 1 * * * find /srv/purlay-backups -mindepth 1 -maxdepth 1 -type d -name 'purlay-*' -mtime +14 -exec rm -rf {} +
 ```
 
+**With `scripts/deploy.sh` the deployment is not one directory.** The scripts, the compose file and the
+code live under `releases/<commit>` and `current` points at the running one; the env file stays in the
+deployment root. A cron line that says `scripts/backup.sh` from the root breaks the first time a release
+replaces a flat checkout, and says so only in `backup.log` (the 2026-10-27 run found exactly that: no
+backup since the previous night). Name the paths, so the line follows `current`:
+
+```
+0 1 * * * cd /srv/purlay && COMPOSE_FILE=/srv/purlay/current/docker-compose.production.yml ENV_FILE=/srv/purlay/production.env current/scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1
+```
+
+Every deploy takes its own backup into `backups/` as well, but that one is a safeguard for a rollback,
+not the nightly: look at the newest directory's date after the first night.
+
 **The times are the host's; the stack's jobs are UTC** (`modules/jobs/schedule.ts`), and the nightly
 ones — the retention purge first, at 02:30 — must not run while a backup does, or a file can be removed
 between the database dump and the bucket copy and the backup names a file it does not hold (#637).
