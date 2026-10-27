@@ -168,8 +168,16 @@ const call = async (
     throw new OidcDiscoveryError('unreachable', 'the provider could not be reached', error);
   }
   let json: unknown;
+  let body: Awaited<ReturnType<typeof readCapped>>;
   try {
-    const body = await readCapped(response, REPLY_MAX_BYTES);
+    body = await readCapped(response, REPLY_MAX_BYTES);
+  } catch (error) {
+    // Headers came and the body did not: a stall past the deadline or a reset is the provider not answering,
+    // never a document that was answered and was wrong.
+    throw new OidcDiscoveryError('unreachable', 'the reply could not be read to its end', error);
+  }
+  try {
+    // Too long, or not JSON, is a reply that is not a provider's: `json` is nothing, and the status says the rest.
     json = 'text' in body ? (JSON.parse(body.text) as unknown) : undefined;
   } catch {
     json = undefined;
@@ -472,7 +480,10 @@ export const createOidcProvider = (
     const idToken = body['id_token'];
     if (answer.status !== 200 || typeof idToken !== 'string' || idToken === '') {
       const said = body['error'];
-      log.warn('oidc sign-in: the provider gave no id_token for the code', {
+      // A client the provider no longer accepts is the operator's to fix, and every sign-in fails until they do:
+      // loud, where a spent code is a person's retry.
+      const level = said === 'invalid_client' || said === 'unauthorized_client' ? 'error' : 'warn';
+      log[level]('oidc sign-in: the provider gave no id_token for the code', {
         status: answer.status,
         ...(typeof said === 'string' ? { oidcError: said.slice(0, 64) } : {}),
       });

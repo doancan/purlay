@@ -448,6 +448,12 @@ const oidcProblems = (config: Config): string[] => {
     const problem = oidcIssuerProblem(config.OIDC_ISSUER);
     if (problem !== undefined) problems.push(`OIDC_ISSUER: ${problem}`);
   }
+  if (config.OIDC_NAME !== undefined && given.every((value) => value === undefined)) {
+    // A label with no provider would be dropped at the first start without a word.
+    problems.push(
+      'OIDC_NAME: set with OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET, or not at all',
+    );
+  }
   if (config.OIDC_NAME !== undefined) {
     const problem = oidcNameProblem(config.OIDC_NAME, OIDC_NAME_MAX);
     if (problem !== undefined) problems.push(`OIDC_NAME: ${problem}`);
