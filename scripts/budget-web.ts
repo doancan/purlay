@@ -6,7 +6,8 @@
  * "Initial" is what the browser must download before the first screen can run: the
  * scripts `index.html` loads and the modules it preloads — nothing a route, a
  * dialog, a locale or a highlighter loads later. Measured gzipped, because that is
- * what crosses the wire and what `PRD.md` §5 budgets: 250 KB.
+ * what crosses the wire and what `PRD.md` §5 budgets: 400 KB — a backstop against an accident, not a ceiling for
+ * features (D-196).
  *
  * **A failure says what grew, not only that something did**: the chunks, largest first,
  * and — when the build kept a source map (`PURLAY_SOURCEMAP=1 bun run build:web`) — the
@@ -23,7 +24,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-export const BUDGET_BYTES = 250 * 1024;
+export const BUDGET_BYTES = 400 * 1024;
 
 export interface Chunk {
   readonly file: string;
