@@ -9,7 +9,7 @@ import type { ServerFrame } from '@purlay/types';
 import { channelTopic, type Topic } from '../platform/events';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
-import { KEEPALIVE_MS, bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
+import { bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
 import { aDroppableProxy, aRealLink, redisUrlForTests, refusedWith } from '../testing/redis';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter } from './rate-limiter';
@@ -24,8 +24,8 @@ import {
 
 const silent = createLogger({ level: 'silent' });
 const links: RedisLink[] = [];
-const node = async (url?: string): Promise<RedisLink> => {
-  const link = await aRealLink(url);
+const node = async (url?: string, keepaliveMs?: number): Promise<RedisLink> => {
+  const link = await aRealLink(url, keepaliveMs);
   links.push(link);
   return link;
 };
@@ -254,14 +254,15 @@ describe('integration: people nobody told of (D-201)', () => {
 describe('integration: a connection that is alive stays alive', () => {
   test('a link idle past its keepalive, subscribed, is still connected and still hears', async () => {
     const topic = channelTopic(unique('idle'));
-    const idle = await busNode(topic);
+    // Pinged every 200 ms, for a second and a half: seven or eight pings in a subscribed connection.
+    const idle = await busNode(topic, undefined, 200);
     const other = await busNode(topic);
-    await Bun.sleep(KEEPALIVE_MS * 2 + 1_500);
+    await Bun.sleep(1_500);
     expect(idle.link.connected()).toBe(true);
     expect(idle.gaps()).toBe(0);
     await other.publish(frame(1));
     await until(() => idle.heard.length === 1, 'a frame after the keepalives');
-  }, 20_000);
+  });
 });
 
 describe('integration: one typing window across nodes', () => {
@@ -313,6 +314,7 @@ describe('integration: one typing window across nodes', () => {
 const busNode = async (
   topic: Topic,
   url?: string,
+  keepaliveMs?: number,
 ): Promise<{
   readonly heard: ServerFrame[];
   readonly publish: (frame: ServerFrame) => Promise<void>;
@@ -320,7 +322,7 @@ const busNode = async (
   readonly gaps: () => number;
   readonly link: RedisLink;
 }> => {
-  const link = await node(url);
+  const link = await node(url, keepaliveMs);
   const heard: ServerFrame[] = [];
   let gaps = 0;
   const bus = redisBackplane(link, silent).node(
