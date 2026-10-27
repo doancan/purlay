@@ -153,6 +153,7 @@ describe('integration: spending a link, as decided', () => {
     return {
       asked,
       signUp: 'open',
+      oidc: false,
       outbox: aRecordingOutbox(),
       issue: () => Promise.resolve(),
       spend: (token): Promise<readonly string[]> => {
@@ -210,11 +211,26 @@ describe('integration: an account single sign-on is linked to is signed into by 
   };
 
   /** What asking for a link to the address sends, once what is left for after the answer has run. */
-  const posted = async (db: Executor, email: string): Promise<readonly string[]> => {
+  const posted = async (
+    db: Executor,
+    email: string,
+    connected = true,
+  ): Promise<readonly string[]> => {
     const outbox = aRecordingOutbox();
     const links = aTestAuth(db, {
       mailer: outbox,
-      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+      settings: {
+        github: undefined,
+        oidc: connected
+          ? {
+              issuer: 'https://idp.example.test',
+              clientId: 'c',
+              clientSecret: 's',
+              name: undefined,
+            }
+          : undefined,
+        signUp: 'invite-only',
+      },
     }).signInLinks;
     if (links === undefined) throw new Error('sign-in by link is not on');
     const later: (() => Promise<void>)[] = [];
@@ -246,11 +262,20 @@ describe('integration: an account single sign-on is linked to is signed into by 
     });
   });
 
+  test('once the provider is disconnected the account is signed into by a link again: nobody is shut out by a door that is gone', async () => {
+    await withRollback(async (db) => {
+      const sso = await anAccount(db, 'gone@example.test', true);
+      await linkedToSso(db, sso);
+      expect(await posted(db, 'gone@example.test', false)).toEqual(['gone@example.test']);
+    });
+  });
+
   test('a link sent before the account was linked is refused when spent, and the library never asked', async () => {
     await withRollback(async (db) => {
       const library: SignInLinks & { readonly asked: string[] } = {
         asked: [],
         signUp: 'open',
+        oidc: true,
         outbox: aRecordingOutbox(),
         issue: () => Promise.resolve(),
         spend: (token): Promise<readonly string[]> => {

@@ -197,7 +197,7 @@ describe('createAuth', () => {
       accessTokenExpiresAt: new Date(),
       refreshTokenExpiresAt: new Date(),
       scope: 'read:user',
-      providerId: 'github',
+      providerId: 'another-provider',
     };
     for (const hook of [account?.create?.before, account?.update?.before]) {
       const result = (await hook?.(given as never, null)) as { data: Record<string, unknown> };
@@ -208,7 +208,7 @@ describe('createAuth', () => {
         accessTokenExpiresAt: null,
         refreshTokenExpiresAt: null,
         scope: 'read:user',
-        providerId: 'github',
+        providerId: 'another-provider',
       });
     }
   });
