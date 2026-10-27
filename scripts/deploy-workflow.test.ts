@@ -90,8 +90,11 @@ describe('the events that can reach the server', () => {
   });
 
   test('the deploy runs on a merge to main or a person starting it, and nothing else', () => {
-    expect(events(read('deploy.yml'))).toEqual(['push', 'workflow_dispatch']);
-    expect(read('deploy.yml')).toMatch(/push:\s*\n\s+branches: \[main\]/);
+    expect(events(read('deploy.yml'))).toEqual(['workflow_run', 'workflow_dispatch']);
+    expect(read('deploy.yml')).toContain('workflows: [image]');
+    expect(read('deploy.yml')).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(read('deploy.yml')).toContain("github.event.workflow_run.event == 'push'");
+    expect(read('deploy.yml')).toContain('head_repository.full_name == github.repository');
   });
 
   test('no workflow runs on the server unless it is the deploy', () => {
@@ -104,13 +107,16 @@ describe('what the deploy is allowed', () => {
   const text = read('deploy.yml');
 
   test('every job runs on the server, and nowhere a stranger could be', () => {
-    for (const name of ['deploy', 'release']) {
+    for (const name of ['deploy']) {
       expect(job(text, name)).toMatch(/runs-on: \[self-hosted, linux, x64, purlay-server\]/);
     }
   });
 
   test('only the release job can write, and what it writes is contents', () => {
     expect(job(text, 'deploy')).not.toContain('write');
+    expect(job(text, 'deploy')).toContain('packages: read');
+    expect(job(text, 'release')).toContain('runs-on: ubuntu-latest');
+    expect(job(text, 'release')).toContain('ref: ${{ needs.deploy.outputs.commit }}');
     expect(job(text, 'release')).toMatch(/permissions:\s*\n(\s+#.*\n)*\s+contents: write/);
     expect(text).not.toMatch(/(packages|actions|id-token|pull-requests|issues): write/);
   });
@@ -120,12 +126,12 @@ describe('what the deploy is allowed', () => {
   });
 
   test('a rollback by hand deploys but never releases', () => {
-    expect(job(text, 'release')).toContain("if: github.event_name == 'push'");
+    expect(job(text, 'release')).toContain("if: github.event_name == 'workflow_run'");
     expect(job(text, 'release')).toContain('needs: deploy');
   });
 
   test('a hand-started run only runs from main: another branch brings its own copy of this file', () => {
-    expect(job(text, 'deploy')).toMatch(/\n\s+if: github\.ref == 'refs\/heads\/main'\n/);
+    expect(job(text, 'deploy')).toMatch(/github\.ref == 'refs\/heads\/main'/);
   });
 
   test('no expression is written into a shell: a value reaches it through env, quoted', () => {

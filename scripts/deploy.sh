@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Deploy the commit that is checked out to this server (D-185). Run by the `deploy` workflow on the
-# server's own runner after a merge to main; the same command is how an operator deploys by hand:
+# server's own runner after the image workflow succeeds; the same command is how an operator deploys by hand:
 #
-#   DEPLOY_ROOT=/srv/purlay scripts/deploy.sh <full commit hash>
+#   DEPLOY_ROOT=/srv/purlay IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>
 #
 # What it does, in this order — the order is the point:
 #
@@ -10,11 +10,11 @@
 #    runs is what was merged), a deployment that is running a release it can come back to, an env
 #    file with an image to replace, a Docker that answers, no deploy cut off half way. One deploy
 #    at a time.
-# 2. Exports the commit into `releases/<8 hex>`, builds the image there ONCE under a candidate name,
-#    labelled with the commit, and runs `scripts/image-smoke.sh` against that image.
-# 3. Backs up the database and the bucket (`scripts/backup.sh`) — after the build and the smoke
+# 2. Exports the deployment files into `releases/<8 hex>`, pulls the published commit image,
+#    pins its digest, checks its revision, and smoke-tests that exact digest. No server build.
+# 3. Backs up the database and the bucket (`scripts/backup.sh`) — after the pull and the smoke
 #    test, so that what a rollback loses is what was written in the seconds before the switch, not
-#    in the minutes a build takes, and no backup is made for a build that fails.
+#    in the minutes a pull takes, and no backup is made for an image that fails.
 #    **A failure up to here changes nothing**: the running site, the env file and `current` are as
 #    they were, and nothing is restored — there is nothing to restore.
 # 4. Switches: the image gets its commit name, the env file's PURLAY_IMAGE and the `current` link
@@ -31,9 +31,10 @@
 #    cancelled job, a timeout). A rollback that fails too exits 2 and names the backup that holds
 #    the data. A deploy that is killed outright (SIGKILL, power) leaves `.switching` behind, and the
 #    next deploy refuses to start until someone has looked.
-# 6. Forgets releases, images and backups beyond the ones kept.
+# 6. Forgets releases and backups beyond the ones kept; Docker image cache is operator-managed.
 #
 # Inputs, all from the environment (nothing here names a host or a path on this machine, D-73):
+#   IMAGE_REPOSITORY   required: ghcr.io/<owner>/<repo>-api (no tag)
 #   DEPLOY_ROOT        required: holds releases/, backups/, the `current` link, deploys.log
 #   ENV_FILE           the stack's env file (default $DEPLOY_ROOT/production.env)
 #   COMPOSE_OVERRIDES  extra Compose files for this server, space-separated, in order (no spaces
@@ -64,6 +65,9 @@ SHA="${1:-$CHECKED_OUT}"
 [ "$SHA" = "$CHECKED_OUT" ] || fail "$SHA is not the commit checked out ($CHECKED_OUT): deploy what is on disk, or check it out first"
 [ -z "$(git status --porcelain)" ] || fail "the working tree is not clean; deploy a merged commit"
 SHORT="${SHA:0:8}"
+IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-}"
+[[ "$IMAGE_REPOSITORY" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+$ ]] \
+  || fail "set IMAGE_REPOSITORY to ghcr.io/<owner>/<repo>-api (no tag)"
 
 [ -f "$ENV_FILE" ] || fail "$ENV_FILE does not exist (set ENV_FILE)"
 grep -q '^PURLAY_IMAGE=' "$ENV_FILE" || fail "$ENV_FILE has no PURLAY_IMAGE line to replace"
@@ -122,26 +126,25 @@ compose() {
 }
 
 RELEASE_DIR="$DEPLOY_ROOT/releases/$SHORT"
-IMAGE="purlay-api:sha-$SHORT"
-CANDIDATE="purlay-api:candidate-$SHORT"
+TAG="$IMAGE_REPOSITORY:sha-$SHA"
+IMAGE=""
 BACKUP_DIR=""
 
 # A failure before the switch: the site is as it was. Remove what was exported for it, unless it
 # is the release that is running (a deploy of the same commit again).
 before_switch() {
   echo "FAIL: $1; nothing was changed" >&2
-  docker image rm "$CANDIDATE" >/dev/null 2>&1 || true
   [ "$PREVIOUS" = "$SHORT" ] || rm -rf "$RELEASE_DIR"
   record "failed-before-switch $SHORT: $1"
   exit 1
 }
 
-# ── 2. The release, built once and tried before it is used ──────────────────
+# ── 2. The published release, pulled and tried before it is used ──────────────────
 echo "==> exporting $SHORT"
 if [ "$PREVIOUS" != "$SHORT" ]; then
   rm -rf "$RELEASE_DIR"
   mkdir -p "$RELEASE_DIR"
-  git archive "$SHA" | tar -x -C "$RELEASE_DIR" || before_switch "the commit could not be exported"
+  git archive "$SHA" docker docker-compose.production.yml scripts | tar -x -C "$RELEASE_DIR" || before_switch "the commit could not be exported"
 fi
 
 # A bind-mounted file that changed is not seen by a container that is not recreated.
@@ -151,13 +154,19 @@ if ! diff -rq "$CURRENT_LINK/docker" "$RELEASE_DIR/docker" >/dev/null 2>&1; then
   echo "docker/ differs from the running release: the services will be recreated"
 fi
 
-echo "==> building $CANDIDATE"
-docker build --label "org.opencontainers.image.revision=$SHA" -t "$CANDIDATE" "$RELEASE_DIR" \
-  || before_switch "the image did not build"
+echo "==> pulling $TAG"
+docker pull "$TAG" || before_switch "the image could not be pulled"
+# Resolve once, then use only the immutable reference for all subsequent operations.
+IMAGE="$(docker image inspect --format '{{index .RepoDigests 0}}' "$TAG")" \
+  || before_switch "the image digest could not be read"
+[[ "${IMAGE%@*}" = "$IMAGE_REPOSITORY" && "${IMAGE##*@}" =~ ^sha256:[0-9a-f]{64}$ ]] \
+  || before_switch "the registry returned an invalid image digest"
+REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE")" \
+  || before_switch "the image revision could not be read"
+[ "$REVISION" = "$SHA" ] || before_switch "the published image is not commit $SHA"
 
-echo "==> smoke-testing $CANDIDATE"
-# The checkout is the commit being deployed, so its script is the release's own.
-"$ROOT/scripts/image-smoke.sh" "$CANDIDATE" || before_switch "the smoke test failed"
+echo "==> smoke-testing $IMAGE"
+"$ROOT/scripts/image-smoke.sh" "$IMAGE" || before_switch "the smoke test failed"
 
 # ── 3. The backup ────────────────────────────────────────────────────────────
 echo "==> backing up, just before the switch"
@@ -222,15 +231,13 @@ echo "==> switching to $SHORT"
 cp -p "$ENV_FILE" "$ENV_FILE.prev" || before_switch "the env file could not be copied"
 echo "previous=$PREVIOUS new=$SHORT backup=$BACKUP_DIR" > "$MARKER"
 trap 'rollback "the deploy was told to stop"' INT TERM HUP
-if ! { docker tag "$CANDIDATE" "$IMAGE" \
-  && set_image "$IMAGE" \
+if ! { set_image "$IMAGE" \
   && ln -sfn "releases/$SHORT" "$CURRENT_LINK"; }; then
   undo_files
   rm -f "$MARKER"
   trap - INT TERM HUP
   before_switch "the files could not be switched"
 fi
-docker image rm "$CANDIDATE" >/dev/null 2>&1 || true
 
 # shellcheck disable=SC2086 # RECREATE is one flag or nothing
 compose up -d --wait --wait-timeout "$WAIT_TIMEOUT" $RECREATE || rollback "the stack did not start"
@@ -253,7 +260,6 @@ for name in $(ls -1t "$DEPLOY_ROOT/releases"); do
   { [ "$kept" -le "$KEEP" ] || [ "$name" = "$SHORT" ] || [ "$name" = "$PREVIOUS" ]; } && continue
   [[ "$name" =~ ^[0-9a-f]{8}$ ]] || continue
   rm -rf "${DEPLOY_ROOT:?}/releases/$name"
-  docker image rm "purlay-api:sha-$name" >/dev/null 2>&1 || true
 done
 kept=0
 for name in $(ls -1t "$DEPLOY_ROOT/backups" 2>/dev/null); do
