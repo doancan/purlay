@@ -13,6 +13,8 @@ import {
   FileQuery,
   type FilePage,
   PageQuery,
+  ChangesQuery,
+  type ChangePage,
   SearchQuery,
   type SearchPage,
   SendMessageRequest,
@@ -33,6 +35,7 @@ import {
   send,
   type SendDependencies,
 } from '../../modules/messages/messages';
+import { changesIn } from '../../modules/messages/changes';
 import { edit } from '../../modules/messages/edit';
 import { deleteMessage } from '../../modules/messages/delete';
 import {
@@ -68,6 +71,22 @@ export const readHistory = async (
   const context = await requireChannelById(database, userId, channelId);
   const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await messageHistory(database, context, query);
+};
+
+/**
+ * `GET /api/channels/:channelId/changes` — what happened to the channel's messages since the client last heard
+ * (D-194). Seen as the history is: whoever can read the channel, and nobody else.
+ */
+export const readChanges = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  channelId: string,
+): Promise<ChangePage> => {
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const query = validated(ChangesQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  return await changesIn(database, context, query);
 };
 
 /** `GET /api/channels/:channelId/files` — the channel's files, newest message first (D-129). */

@@ -219,6 +219,7 @@ const uploadRefusal = (
     case 'LENGTH_REQUIRED':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'ATTACHMENT_NOT_FOUND':
+    case 'SESSION_NOT_FOUND':
     case 'FORBIDDEN':
     // Membership is the send's to judge (D-156): an upload is the workspace's, before any channel.
     case 'NOT_A_CHANNEL_MEMBER':

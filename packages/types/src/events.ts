@@ -623,7 +623,7 @@ export const CLOSE_CODES = {
    * the code above, reconnect: resubscribe with the newest id held per channel,
    * and the replay fills the gap in new root messages — nothing was dropped without this close
    * (#197). Edits, deletions, reactions and replies of the time away are not replayed: the client
-   * reads what it shows again (ARCHITECTURE.md §5.4).
+   * reads them from `GET /api/channels/:id/changes` (D-194, ARCHITECTURE.md §5.4).
    */
   RESYNC: 4408,
   /**

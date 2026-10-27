@@ -220,6 +220,7 @@ export interface Mentions {
 }
 
 export interface Messages {
+  changed_at: Generated<Timestamp>;
   channel_id: string;
   content: string;
   created_at: Generated<Timestamp>;
@@ -351,6 +352,7 @@ export interface ServerSettings {
 
 export interface Sessions {
   created_at: Generated<Timestamp>;
+  device_name: string | null;
   expires_at: Timestamp;
   id: Generated<string>;
   ip_address: string | null;

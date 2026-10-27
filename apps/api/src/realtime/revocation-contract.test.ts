@@ -111,6 +111,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishSessionsEnded',
     calledFrom: 'apps/api/src/modules/auth/sign-in.ts',
   },
+  // Ending one of the caller's other sessions from the device list; the handler publishes after the write (D-193).
+  'apps/api/src/modules/auth/devices.ts#endDeviceSession': {
+    publishes: 'publishSessionsEnded',
+    calledFrom: 'apps/api/src/ingress/http/devices.ts',
+  },
   // Sign out everywhere.
   'apps/api/src/modules/auth/sessions.ts#revokeAllSessions': {
     publishes: 'publishSessionsEnded',

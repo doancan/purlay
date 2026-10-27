@@ -52,6 +52,8 @@ export interface SessionOwner {
 export interface IssueOptions {
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
+  /** What a device list calls this session: set for the native application's, never for a browser's (D-193). */
+  readonly deviceName?: string | undefined;
 }
 
 /** What the library accepts as `__Host-purlay_session`: the token, a dot, its HMAC; URI-encoded. */
@@ -85,6 +87,7 @@ export const issueSession = async (
       expires_at: expiresAt,
       ...(options.userAgent === undefined ? {} : { user_agent: options.userAgent }),
       ...(options.ipAddress === undefined ? {} : { ip_address: options.ipAddress }),
+      ...(options.deviceName === undefined ? {} : { device_name: options.deviceName }),
     })
     .returning('id')
     .executeTakeFirstOrThrow();

@@ -178,11 +178,17 @@ CREATE TABLE sessions (
 
     user_agent   TEXT,
     ip_address   INET,
+    -- What a device list names the session by (D-193): the native application's device name, null for a browser.
+    device_name  TEXT,
 
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at   TIMESTAMPTZ NOT NULL,
-    revoked_at   TIMESTAMPTZ
+    revoked_at   TIMESTAMPTZ,
+
+    -- Bounded as the request is (`NATIVE_DEVICE_NAME_PATTERN`). Added by 0057. (D-193)
+    CONSTRAINT sessions_device_name_bounded
+        CHECK (device_name IS NULL OR char_length(device_name) BETWEEN 1 AND 64)
 );
 
 CREATE INDEX idx_sessions_user    ON sessions (user_id);
@@ -191,6 +197,8 @@ CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS N
 ```
 
 `ip_address` is the client address at sign-in (the socket's peer, or the proxy-reported one under `TRUST_PROXY`; null if unknown). It is personal data: erasure nulls it with the session (D-27, D-81).
+
+`device_name` is the name the person's Mac gave itself, written when the native application's code is spent (D-191) and read only back to that person (D-193); it is bounded as the request is (`NATIVE_DEVICE_NAME_PATTERN`).
 
 `last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60)
 
@@ -603,6 +611,11 @@ CREATE TABLE messages (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at   TIMESTAMPTZ,
 
+    -- When the server last wrote the row, to the millisecond, on the database's clock: stamped by the
+    -- `messages_stamp_changed_at` trigger on every UPDATE (left alone when a statement sets it) and by
+    -- the default on insert. What a client that was away asks by; never an id's order. Added by 0058. (D-194)
+    changed_at   TIMESTAMPTZ NOT NULL DEFAULT date_trunc('milliseconds', clock_timestamp()),
+
     -- A person's message has its sender; an event has none. Added by 0032. (D-134 §6)
     CONSTRAINT messages_sender_by_type CHECK ((message_type = 'text') = (sender_id IS NOT NULL)),
     -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032.
@@ -697,7 +710,10 @@ CREATE INDEX idx_messages_unresolved
 -- The foreign keys. The indexes above are partial, and the query that enforces a foreign key
 -- filters on the column alone, so none of them can answer it. Without these, deleting 100 of
 -- 1,000,000 messages took 4.9 s and deleting a channel did not finish in 60 s. (D-89)
-CREATE INDEX idx_messages_channel     ON messages (channel_id);
+-- What a client catching up reads: one channel in the order things happened to it (D-194). Added by 0058,
+-- which dropped `idx_messages_channel (channel_id)`: this one leads with the same column, so it serves the
+-- foreign key too.
+CREATE INDEX idx_messages_changes     ON messages (channel_id, changed_at, id);
 CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
 
@@ -1905,6 +1921,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0054_server_audit_log.sql    server_audit_log: who changed which of the server's own settings, never the value  (D-26, D-179 §4.8)
 0055_backfill_existing_identities.sql accounts rows for users who have a github_id, email_verified for those who existed before 0047: an upgraded install signs in  (D-179 §7)
 0056_native_authorizations.sql native_authorizations: the digest of a one-time code that hands a person's session to the native application, and the challenge it is bound to  (D-191)
+0057_session_device_name.sql sessions.device_name: the name the native application gave the Mac a session was made for, which a device list shows  (D-193)
+0058_message_changed_at.sql messages.changed_at, stamped by a trigger on every update: when the server last wrote a message, which a client catching up asks by  (D-194)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

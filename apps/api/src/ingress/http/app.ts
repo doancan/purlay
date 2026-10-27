@@ -48,6 +48,7 @@ import {
   startSignIn,
   type AuthResponse,
 } from './auth';
+import { endMySession, readMySessions } from './devices';
 import { AUTH_BASE_PATH, SIGN_IN_CALLBACK } from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
@@ -145,6 +146,7 @@ import {
   postMessage,
   readFiles,
   readHistory,
+  readChanges,
   readAround,
   readThread,
   readThreadFollow,
@@ -701,6 +703,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .get('/api/me', async ({ request }) => await readMe(creating, request))
     .get('/api/me/sign-in', async ({ request }) => await readMySignIn(dependencies, request))
+    .get(
+      '/api/me/sessions',
+      async ({ request }) => await readMySessions({ ...dependencies, bus: sockets.bus }, request),
+    )
+    .delete('/api/me/sessions/:sessionId', async ({ request, params, set }) => {
+      await endMySession({ ...dependencies, bus: sockets.bus }, request, params.sessionId);
+      set.status = 204;
+      return null;
+    })
     .patch(
       '/api/me/profile',
       async ({ request, body }) => await updateMyProfile(sending, request, body),
@@ -1090,6 +1101,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/channels/:channelId/messages',
       async ({ request, params }) => await readHistory(dependencies, request, params.channelId),
+    )
+    .get(
+      '/api/channels/:channelId/changes',
+      async ({ request, params }) => await readChanges(dependencies, request, params.channelId),
     )
     .get(
       '/api/channels/:channelId/files',

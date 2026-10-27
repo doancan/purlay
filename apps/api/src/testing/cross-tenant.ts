@@ -302,6 +302,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: CHANNEL,
   },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'GET /api/channels/:channelId/changes': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/files': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/pins': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/incident': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
@@ -607,6 +608,10 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
   'GET /api/me/sign-in':
     'the ways the caller signs in, their own only, read only, and names no workspace (D-176, D-179 §5)',
+  'GET /api/me/sessions':
+    'the caller’s own sessions, by name and time, and names no workspace; nobody else’s is in it (D-193)',
+  'DELETE /api/me/sessions/:sessionId':
+    'ends one of the caller’s own sessions and names no workspace; somebody else’s is the answer for one that is not there (D-193)',
   'PATCH /api/me/profile':
     'sets the caller’s own profile and names no workspace; who reads it is the members list’s (D-131)',
   'GET /api/push/key': 'the server’s public push key, the same for everyone signed in (D-126)',

@@ -9221,6 +9221,9 @@ the application, but only if the operating system hands the scheme over.
 **Reverses if** a scoped, revocable credential for non-browser clients is built (a device list and per-device
 tokens): then this is replaced by it, and `native_authorizations` is dropped by a later migration.
 
+*Amended by D-193:* the device list exists, so a session this handoff made is named and ended from any other
+device; the credential is still the session.
+
 ### D-192. A client that is not the browser's own is generated from a bundle the server publishes with each release — builds on D-186, D-190
 
 **Context.** The macOS application (D-186) lives in its own repository and cannot import `@purlay/types`. What it
@@ -9268,6 +9271,97 @@ megabyte and a half, most of it the documents.
 generator wants a different shape: then the bundle is revisited, not copied.
 
 ---
+
+### D-193. A person sees where they are signed in, and ends one place — builds on D-60, D-179 §3, D-191
+
+**Context.** D-191 accepted that the native application's session could be ended only by *Sign out* on that
+device or *Sign out everywhere*, and said it reverses when a device list is built. An application that lost the
+answer to `token` leaves a session nobody can name, and a stolen Mac could be answered only by ending every other
+place too. The pieces were all there: `last_used_at` has been kept for this since D-60, and a session is ended by its
+row id (D-179 §3), never by a token.
+
+**Decision.**
+1. **`GET /api/me/sessions`** answers the caller's live sessions, the one used last first, at most
+   `DEVICE_SESSIONS_MAX` (100). Each is `{ id, kind, name, createdAt, lastUsedAt, expiresAt, current }`. `kind` is
+   `native` when the session was handed to the application by a code, `browser` for every other; `name` is the
+   device name the application sent (`null` for a browser). *Live* is judged by `SESSION_CLOCK`, the clock the
+   library judges expiry by, so a lapsed row the sweep has not removed is never listed.
+2. **`DELETE /api/me/sessions/:sessionId`** ends one of the caller's sessions: `204`, the row deleted (its push
+   subscriptions with it, 0024), its sockets told `SESSION_ENDED` once the delete is committed (D-85). A session that
+   is somebody else's, one that never was and one already ended are **one** answer, `404 SESSION_NOT_FOUND`, so the
+   endpoint cannot be used to learn whether an id exists. Ending the session the request came in on is signing out
+   of it (the cookie is not cleared; `POST /auth/logout` does that too).
+3. **`sessions.device_name`** (0057) holds the name, written when the code is spent. It is the *only* thing a
+   device list names a session by: the user agent and the address stay for an operator and are never in the answer,
+   and the token's digest is not selected at all.
+
+**Rejected.**
+- *Reading the name back out of `user_agent`* (`Purlay for macOS/1.2.3 (Name)`): a label this server wrote for
+  its operator, parsed back by a pattern that is one edit from wrong.
+- *Listing by the library's `/auth/list-sessions`*: it lists token digests and answers `403 SESSION_NOT_FRESH` for a
+  session older than a day; its `revoke-session` takes a token, which under the hashing plugin matches nothing and
+  answers `{ status: true }` (D-179 §3).
+- *Ending the current session with `409`*: a second way to sign out with a different answer for the same effect.
+- *A browser's name from its user agent*: a heuristic nobody can hold to a test. A browser's session is `browser`
+  with no name; the web shows it as "This browser" or by when it was used.
+
+**Accepted.** A session minted for an application that never saw the answer appears in the list under its device's
+name and can be ended: the orphan D-191 accepted is now visible. `lastUsedAt` is precise to the hour (D-60).
+
+**Reverses if** the list is wanted with the address or the browser: then it is a decision about personal data
+(D-81), not an addition to this one.
+
+### D-194. A client that was away asks what changed since it last heard, by the server's clock — builds on D-65, D-82, D-33
+
+**Context.** A reconnecting client is replayed the root messages above the newest id it holds (D-65). That cannot
+tell it about an edit, a deletion, a reaction taken back, a reply, a resolved thread: none makes a new id, and a
+message that arrives late sorts *below* the newest id a client holds (D-33, and D-65's "a cursor is not a watermark").
+The web client re-reads what it shows on every acknowledgement and so never notices; a second client built from the
+contract would show a deleted message for as long as it ran, and nothing in the contract said it must not.
+
+**Decision.**
+1. **`messages.changed_at`** (0058): the instant the server last wrote the row, on the database's clock, to the
+   millisecond. Stamped by a **trigger** on every `UPDATE` and by the column's default on every insert, and left
+   alone when a statement sets it itself (a backfill, a test). It is a trigger, not a column each writer sets, because
+   the writers include the ones nobody remembers — a retention job, an erasure, a repair by hand — and a client that
+   is not told of one of them is wrong without knowing it.
+2. **`GET /api/channels/:channelId/changes`**: with nothing, the watermark (`asOf`) and no data; with `since` — the
+   `asOf` the client holds — the first page of what changed after it; with `after`, the next. Each page is `data`
+   (the messages as they now stand: roots and replies, a deleted one as its tombstone), `nextCursor` and `asOf`. The
+   cursor carries the walk's watermark, so `asOf` is one value however many pages the walk took, and a walk ends at the
+   clock it began at: a change made while a client reads belongs to the next walk, which begins from that `asOf`.
+3. **A walk begins `CHANGES_OVERLAP_MS` behind `since`** (the replay's, D-65): a write stamps its row before it
+   commits, so a row stamped before a reader's watermark can be committed after the read. Rows inside the overlap are
+   told again; a client keeps messages by id and discards what it holds, as for a replay.
+4. **Who may read it** is who may read the history: the same guard, the same refusal for a channel the caller cannot
+   see. Nothing about a person's other channels is in it.
+
+**Rejected.**
+- *Replaying edits and deletions inside `SUBSCRIBE`*: a protocol change for the web as well, and a replay budget
+  (D-65) that a long absence would spend on one channel.
+- *A change-log table*: a write on every reaction, a retention rule of its own and a second statement of what
+  `messages` already says.
+- *`state_version` as the cursor*: a per-row count, not an order across rows.
+- *The id as the cursor*: the failure above, again.
+- *Pins, memberships, the channel list*: not messages. They are read again, as before (`ARCHITECTURE.md` §5.4).
+
+**Accepted.**
+- A walk from an old watermark pages through everything the channel did in the time, which is as large as the channel
+  was busy; a client away for longer than it cares to page reads the history again instead.
+- **A row that is deleted is not in the walk.** The retention purge removes message rows (D-139 §3), and a deleted
+  row has no stamp to be read by: a client that held a purged message keeps showing it until it reloads, exactly as
+  every open screen does after a purge (the job has no bus). What the purge *updates* — a root whose thread it
+  recounted, a root it made a tombstone — is told. Carrying removals would be a log of ids and a rule for how long to
+  keep it, for a workspace that has opted into a window and a message that is already outside the one it shows; it is
+  not built, and what would reverse it is below.
+- A walk begins `CHANGES_OVERLAP_MS` behind its watermark, so a write that stays uncommitted for longer than that
+  can be missed. The pool bounds a statement at 30 s and an idle transaction at 15 s (`POOL_DEFAULTS`), so a write of
+  the application is stamped and committed well inside it; a transaction held open longer by hand is followed by a
+  reload.
+
+**Reverses if** the replay learns to carry changes itself, in which case this endpoint is the catch-up for what the
+replay's budget could not carry; or if a purge that a client must see is wanted, in which case the removals are logged
+by the purge and carried on the first page of a walk.
 
 ## Part D — Open, deliberately
 

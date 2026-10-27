@@ -96,6 +96,7 @@ export const exchangeNativeToken = async (
       code,
       verifier,
       userAgent: sessionLabel(meta.clientHeader, name),
+      deviceName: name,
       ipAddress: meta.ipAddress,
       // Why, for whoever reads the log; never the code, the verifier or the person. A guess is a warning, a code that
       // simply does not exist is not one: every typo and every stale link would be.

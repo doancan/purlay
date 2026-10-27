@@ -70,6 +70,8 @@ interface Context {
   bob: SignedInUser;
   /** A second session of Alice's, so signing out has one to end that the other steps do not need. */
   aliceElsewhere: SignedInUser;
+  /** The id of a third session of Alice's, which the device list ends. */
+  aliceDeviceId: string;
   workspaceId: string;
   channelId: string;
   extraChannelId: string;
@@ -210,6 +212,11 @@ const STEPS: readonly Step[] = [
   },
   {
     id: 'listMessages',
+    spec: (c) => ({ params: { channelId: c.channelId }, query: { limit: 10 } }),
+    status: 200,
+  },
+  {
+    id: 'listChanges',
     spec: (c) => ({ params: { channelId: c.channelId }, query: { limit: 10 } }),
     status: 200,
   },
@@ -358,6 +365,12 @@ const STEPS: readonly Step[] = [
     spec: (c) => ({ json: { code: c.nativeCode, verifier, device: { name: 'A Mac' } } }),
     status: 204,
   },
+  { id: 'listMySessions', spec: () => ({}), status: 200 },
+  {
+    id: 'endMySession',
+    spec: (c) => ({ params: { sessionId: c.aliceDeviceId } }),
+    status: 204,
+  },
   { id: 'logout', as: 'aliceElsewhere', spec: () => ({}), status: 204 },
   { id: 'deleteMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 204 },
   { id: 'logoutEverywhere', as: 'bob', spec: () => ({}), status: 204 },
@@ -394,6 +407,7 @@ const world = async (): Promise<Context> => {
   const { aSession } = await import('../../testing/signed-in');
   const second = await aSession(db, clock, alice.userId);
   aliceElsewhere.cookie = `__Host-purlay_session=${second.token}`;
+  const device = await aSession(db, clock, alice.userId, 30, { deviceName: 'A test Mac' });
 
   const slug = aUniqueSlug('contract');
   const made = await app.handle(
@@ -422,6 +436,7 @@ const world = async (): Promise<Context> => {
     alice,
     bob,
     aliceElsewhere,
+    aliceDeviceId: device.sessionId,
     workspaceId,
     channelId: channel.id,
     extraChannelId: '',
