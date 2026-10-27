@@ -16,7 +16,7 @@
 # beside the digest so a reader can see what it is, and its version
 # is `packageManager`'s in package.json — scripts/environment.test.ts holds them equal.
 
-FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS dependencies
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS dependencies
 WORKDIR /app
 
 # The manifests alone first: this layer, and the install below it, are rebuilt only
@@ -38,7 +38,7 @@ RUN bun install --frozen-lockfile --production --filter @purlay/api
 # The client: the same lockfile, every manifest (the install validates them all), and
 # the sources the bundle is made of. Development dependencies are needed here and
 # nowhere after.
-FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS client
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS client
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
@@ -64,7 +64,7 @@ COPY apps/web/src ./apps/web/src
 COPY apps/web/worker ./apps/web/worker
 RUN bun run --cwd apps/web build
 
-FROM oven/bun:1.4.3-distroless@sha256:1aaa515018b0b37d95dbdebd55d1b7f37ad258a6289ba63e4bc3b9c9e3038697 AS runtime
+FROM oven/bun:1.4.4-distroless@sha256:153a951ae40106e125898103e6e990ee0f38e6aee7f561029e26cf9fbed23470 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
