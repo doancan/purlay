@@ -126,7 +126,7 @@ describe('the budgets in force', () => {
     }
     expect(await admit(request, '203.0.113.9')).toBe(retryAfterSeconds(AUTH_BUDGET));
     // The write budget is the socket's, so the two doors cost the same.
-    expect(WRITE_BUDGET).toEqual({ perSecond: 10, burst: 20 });
+    expect(WRITE_BUDGET).toEqual({ perSecond: 10, burst: 60 });
     // A page of cards and pictures is asked for at once; their own bucket holds more than a burst.
     expect(COSTLY_READ_BUDGET).toEqual({ perSecond: 10, burst: 60 });
     // Ten attempts at once, then one every ninety seconds, per client address (D-191): written out here,
