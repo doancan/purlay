@@ -2644,8 +2644,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'deploy-starts-on-the-old-image',
     why: 'the env file keeps the previous image, the stack restarts it, and nothing says it is not the new commit',
     file: 'scripts/deploy.sh',
-    find: '  && set_image "$IMAGE" \\\n',
-    replace: '',
+    find: 'if ! { set_image "$IMAGE" \\\n',
+    replace: 'if ! { true \\\n',
     tests: ['scripts/deploy.test.ts'],
   },
   {
