@@ -40,11 +40,6 @@ const MEASURES = [
     file: 'feed-scale',
     at: ['loaded-2000', 'switchBack', 'p50'],
   },
-  {
-    name: 'keystroke with 2000 messages loaded, median',
-    file: 'feed-scale',
-    at: ['loaded-2000', 'keystroke', 'p50'],
-  },
 ] as const;
 
 type Measured = Readonly<Record<string, number>>;

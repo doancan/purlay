@@ -46,6 +46,7 @@ have it.
 
 ### Fixed
 
+- **Operations** — The browser budget no longer blocks on the keystroke with 2,000 messages loaded, which the feed decision accepts and a hosted runner measures at twice its neighbour (D-199)
 - **Workspace** — A newly invited member appears in already-open member lists and can be added to a channel without reloading (D-115, D-124)
 - **Files** — A ready attachment enables Send even with no message text, including on touch-only devices (D-109)
 
