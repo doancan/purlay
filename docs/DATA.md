@@ -117,7 +117,10 @@ is rotated out (§4).
    and erase it.
 4. **Backups.** An erasure does not reach a backup already taken: `scripts/backup.sh` copies the
    database and the bucket, so erased messages and files stay in each backup until your rotation
-   removes it (the example cron is in `CONFIG.md`, "Production deployment"). A restore before then
+   removes it (the example cron is in `CONFIG.md`, "Production deployment"). With point-in-time recovery
+   on (`WAL_ARCHIVE=on`, `CONFIG.md`) the archive of the database's log holds them too, until the base
+   backups that need it are rotated out and `scripts/prune-wal.sh` has run; a bucket with versioning
+   keeps an erased file's versions until its lifecycle rule expires them. A restore before then
    brings them back, and must be followed by the same erasure again. Say how long in your own records.
 5. **A copy for the person** before erasing, or on request: an owner's export of the workspace
    (D-140), or the operator's `bun run export:workspace <slug> <directory>`, which also carries
