@@ -2992,6 +2992,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
   },
   {
+    id: 'channel-left-keeps-every-page',
+    why: 'a channel scrolled back through two thousand messages is drawn whole when it is returned to: 1.9 s against a 100 ms budget (D-199)',
+    file: 'apps/web/src/data/cache.ts',
+    find: 'held === undefined || held.pages.length <= 1',
+    replace: 'true',
+    tests: ['apps/web/src/data/cache.test.ts'],
+  },
+  {
+    id: 'feed-never-lets-go-on-leaving',
+    why: 'the feed that goes away does not trim its channel, so the older pages stay mounted-on-return (D-199)',
+    file: 'apps/web/src/features/channel/message-feed.tsx',
+    find: '      keepNewestPage(client, channelId);\n',
+    replace: '',
+    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+  },
+  {
     id: 'deleted-unanswered-root-kept-on-screen',
     why: "a deleted message nobody answered stays on everybody else's screen as an empty tombstone, unlike after a reload",
     file: 'apps/web/src/data/cache.ts',

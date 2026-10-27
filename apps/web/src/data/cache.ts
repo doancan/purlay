@@ -428,3 +428,22 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
 /** The newest message id the cache holds for a channel's feed — what a read position names. */
 export const newestMessageId = (client: QueryClient, channelId: string): string | null =>
   client.getQueryData<Pages>(keys.messages(channelId))?.pages[0]?.data[0]?.id ?? null;
+
+/**
+ * A channel that is no longer on screen keeps its newest page and lets the older ones go (O-5, D-199).
+ *
+ * A feed mounts every page it holds, so a reader who had scrolled back through two thousand messages
+ * and came back to the channel drew all of them again: 1.9 s, where the budget is 100 ms (`PRD.md` §5).
+ * What a person scrolled back through is not what they return for — a channel opens at its newest
+ * messages, or at its unread marker — so the older pages are read again, a page at a time, if they
+ * are scrolled to. The newest page stays whole: it is what the switch draws from the cache, what a
+ * read position names (`newestMessageId`), and what a message arriving meanwhile is written into.
+ * A list with one page or none is not written to, so nothing watching it wakes.
+ */
+export const keepNewestPage = (client: QueryClient, channelId: string): void => {
+  client.setQueryData<FeedPages>(keys.messages(channelId), (held) =>
+    held === undefined || held.pages.length <= 1
+      ? held
+      : { pages: held.pages.slice(0, 1), pageParams: held.pageParams.slice(0, 1) },
+  );
+};
