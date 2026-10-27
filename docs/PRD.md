@@ -285,13 +285,13 @@ entity · magic-link auth in MVP · GitHub webhook feeds in MVP · Tauri in MVP 
 
 ## 7. Open Questions
 
-Two questions are deliberately unresolved, O-4 and O-5; both are closed by measuring Phase 1 in use.
+One question is deliberately unresolved, O-4; it is closed by measuring Phase 1 under load.
 Each is recorded with its context, its candidate answers and the phase it must be decided in.
 
 > **Single source of truth:** `DECISIONS.md` Part D. Summarised here only as a pointer —
 > ~~O-1 message editing~~ (closed by D-103) · ~~O-2 invitations~~ (closed by D-115) · ~~O-3 retention & export~~ (closed by D-27) ·
 > ~~O-6 the markdown packages~~ (closed by D-101) · ~~O-7 the palette's base~~ (closed by D-98 §7) ·
-> O-4 rate limiting · O-5 list virtualization.
+> ~~O-5 list virtualization~~ (closed by D-199) · O-4 rate limiting.
 
 A task that runs into one of these has found a decision to be made, not a gap to be filled
 quietly. Stop and decide it, then record it as a numbered decision.
