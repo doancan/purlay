@@ -111,9 +111,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'auth-linking-skips-local-verification',
     why: 'a provider address links to a local account whose own address nobody confirmed, handing it over',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: 'accountLinking: { enabled: true, requireLocalEmailVerified: true }',
-    replace: 'accountLinking: { enabled: true, requireLocalEmailVerified: false }',
-    tests: ['apps/api/src/modules/auth/better-auth.test.ts'],
+    find: 'accountLinking: { enabled: true },',
+    replace: 'accountLinking: { enabled: true, requireLocalEmailVerified: false },',
+    tests: [OIDC_TESTS],
   },
   {
     id: 'session-resolves-revoked-as-live',
@@ -9774,14 +9774,6 @@ export const MUTATIONS: readonly Mutation[] = [
     file: OIDC,
     find: '          if (!unknown || attempt > 0 ||',
     replace: '          if (true || !unknown || attempt > 0 ||',
-    tests: [OIDC_TESTS],
-  },
-  {
-    id: 'oidc-linking-needs-no-verified-local-address',
-    why: 'the provider links to an account whose own address was never proven: the pre-hijack of D-138 §3',
-    file: BETTER_AUTH,
-    find: 'accountLinking: { enabled: true, requireLocalEmailVerified: true },',
-    replace: 'accountLinking: { enabled: true, requireLocalEmailVerified: false },',
     tests: [OIDC_TESTS],
   },
   {

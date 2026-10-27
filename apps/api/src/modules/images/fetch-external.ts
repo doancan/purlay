@@ -31,7 +31,7 @@ interface ResolvedAddress {
 export type Resolver = (hostname: string) => Promise<readonly ResolvedAddress[]>;
 
 export const systemResolver: Resolver = async (hostname) =>
-  await dns.promises.lookup(hostname, { all: true, verbatim: true });
+  await dns.promises.lookup(hostname, { all: true, order: 'verbatim' });
 
 class RefusedAddress extends Error {
   public constructor() {

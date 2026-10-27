@@ -1231,8 +1231,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         updatedAt: 'updated_at',
       },
       // An address a provider vouches for links to an existing account only when the local one is
-      // verified too; no provider is trusted to skip that.
-      accountLinking: { enabled: true, requireLocalEmailVerified: true },
+      // verified too; no provider is trusted to skip that. The library's own default is that gate
+      // and its option is being removed, so it is not set here.
+      accountLinking: { enabled: true },
     },
     verification: {
       modelName: 'verifications',

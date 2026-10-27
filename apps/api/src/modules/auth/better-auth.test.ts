@@ -272,10 +272,8 @@ describe('createAuth', () => {
     );
     expect(options.account?.accountLinking).not.toHaveProperty('trustedProviders');
     expect(options.account?.accountLinking?.enabled).toBe(true);
-    // Deprecated in 1.7.12 (the gate turns unconditional in the next minor), still pinned: Ruling R12.
-    const linking: { readonly requireLocalEmailVerified?: boolean } | undefined =
-      options.account?.accountLinking;
-    expect(linking?.requireLocalEmailVerified).toBe(true);
+    // The local-address gate is the library's default and its option is being removed; that it holds
+    // is shown by behaviour (the sign-in tests), and the mutations below turn it off to prove it.
   });
 
   test('closes sign-up by password; GitHub’s own switch is never on, the hook decides who may sign up (R51)', async () => {

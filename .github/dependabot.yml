@@ -20,6 +20,12 @@ updates:
         patterns: ['*']
         exclude-patterns:
           ['typescript', '@typescript/*', 'typescript-eslint', 'eslint', '@eslint/*', 'prettier']
+    # knip 6.43 stops reading this repository's entry points (it reports 508 files as unused), so the
+    # gate is held at 6.41. Remove this when a release reads the entries again; `bun run knip` passing
+    # on the bump is the proof.
+    ignore:
+      - dependency-name: knip
+        versions: ['>=6.42.0']
     commit-message:
       prefix: chore
 
