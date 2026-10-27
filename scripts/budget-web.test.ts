@@ -98,7 +98,7 @@ describe('the measurement', () => {
     const report = measure(dist);
     expect(overBudget(report)).toBeNull();
     expect(shapeProblems(dist, report)).toEqual([]);
-    expect(describeReport(report)).toContain('of 250.00 KB');
+    expect(describeReport(report)).toContain('of 400.00 KB');
   });
 });
 
@@ -109,7 +109,7 @@ describe('over the budget', () => {
       'theme-init.js': 'x',
     });
     const message = overBudget(measure(dist));
-    expect(message).toContain('over the 250.00 KB budget');
+    expect(message).toContain('over the 400.00 KB budget');
     expect(message).toContain('The largest chunk is assets/index-aaa.js');
     expect(message).toContain('PURLAY_SOURCEMAP=1');
   });
@@ -226,7 +226,7 @@ describe('the command', () => {
     });
     const result = main(dist);
     expect(result.code).toBe(1);
-    expect(result.err).toContain('over the 250.00 KB budget');
+    expect(result.err).toContain('over the 400.00 KB budget');
     expect(result.err).toContain('syntax-highlighting');
     expect(result.out).toContain('assets/index-aaa.js');
   });

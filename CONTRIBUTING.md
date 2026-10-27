@@ -224,7 +224,7 @@ What belongs here is the discipline around them:
   `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, not
   in CI, with screenshots ignored and each engine's known limits skipped by name
   (`docs/spikes/cross-browser.md`).
-  `bun run budget:web` fails above 250 KB of initial gzipped JavaScript and names what grew.
+  `bun run budget:web` fails above 400 KB of initial gzipped JavaScript and names what grew (D-196): a backstop against an accident, never a reason to cut or defer a feature.
 
 ---
 

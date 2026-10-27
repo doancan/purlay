@@ -223,7 +223,7 @@ Measured, not asserted. Every figure below is CI-enforceable. (D-17)
 | Server ACK round-trip, p95, same region | < 120 ms |
 | Fan-out to other connected clients, p95 | < 200 ms |
 | Cold load to interactive channel, warm cache | < 1.5 s |
-| Initial JS bundle, gzipped | < 250 KB — the empty shell already spends ~60 KB of it, measured (`docs/spikes/web-client.md`) |
+| Initial JS bundle, gzipped | < 400 KB — a backstop against an accident, not a ceiling for features; what a person feels is time, which the rows above budget (D-196). The empty shell already spends ~60 KB of it, measured (`docs/spikes/web-client.md`) |
 | Channel switch, 50 cached messages | < 100 ms |
 | API idle RSS, single node | < 120 MB |
 
