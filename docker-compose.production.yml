@@ -199,10 +199,26 @@ services:
       # Identifier columns declare COLLATE "C" (D-40) and readiness refuses a
       # database that disagrees; initialise it the way development does.
       POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+      # Point-in-time recovery, opt-in (D-202, docs/CONFIG.md): `on` archives every WAL segment to
+      # /wal-archive, so a restore can stop at any moment the archive covers. Off adds nothing: the
+      # server runs with the settings it always had. Changing it restarts the database.
+      WAL_ARCHIVE: ${WAL_ARCHIVE:-off}
+      # The most a crash can lose when archiving is on: a segment is closed after this many seconds
+      # of activity. The documented RPO is this number.
+      WAL_ARCHIVE_TIMEOUT: ${WAL_ARCHIVE_TIMEOUT:-60}
+    # The image's own entrypoint, behind a wrapper that adds the archiving settings when asked.
+    entrypoint: ['sh', '/usr/local/bin/purlay-postgres-start.sh']
+    command: ['postgres']
     volumes:
       # /var/lib/postgresql, not .../data: PostgreSQL 18 and the later
       # `pg_upgrade --link` (ARCHITECTURE.md §11).
       - postgres-data:/var/lib/postgresql
+      # Where archived WAL goes. A named volume by default; a host path (WAL_ARCHIVE_PATH=/srv/purlay-wal,
+      # ideally another disk or a network mount) when it must not share the database's fate. An
+      # archive on the database's own disk dies with it (docs/CONFIG.md). Unused while WAL_ARCHIVE=off.
+      - ${WAL_ARCHIVE_PATH:-wal-archive}:/wal-archive
+      - ./docker/postgres-start.sh:/usr/local/bin/purlay-postgres-start.sh:ro
+      - ./docker/wal-archive.sh:/usr/local/bin/purlay-wal-archive.sh:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U purlay -d purlay']
       interval: 5s
@@ -268,6 +284,7 @@ services:
 
 volumes:
   postgres-data:
+  wal-archive:
   garage-data:
   proxy-data:
   proxy-config:

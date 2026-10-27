@@ -75,6 +75,14 @@ compose up -d --wait api
 [ "$(docker inspect -f '{{.State.ExitCode}}' "$(compose ps -a -q storage-init)")" = 0 ] \
   || { echo "storage-init did not complete" >&2; compose logs storage-init >&2; exit 1; }
 
+# Off is the default, and a stack that never asked for archiving runs with exactly the settings
+# it had before it existed (D-202): the whole of what follows up to "point-in-time" is that stack.
+echo "== WAL archiving is off by default, and a backup then has no base backup"
+[ "$(compose exec -T postgres psql -U purlay -d postgres -Atc 'show archive_mode')" = off ] \
+  || { echo "archive_mode is not off on a stack that did not ask for archiving" >&2; exit 1; }
+[ "$(compose exec -T postgres psql -U purlay -d postgres -Atc 'show archive_timeout')" = 0 ] \
+  || { echo "archive_timeout is set on a stack that did not ask for archiving" >&2; exit 1; }
+
 echo "== data: a database and a bucket worth restoring"
 compose exec -T postgres psql -U purlay -d purlay -v ON_ERROR_STOP=1 -q <docs/spikes/backup-restore.seed.sql >/dev/null
 compose run --rm --no-deps -T \
@@ -86,6 +94,14 @@ OUT="$WORK/backups"
 BACKUP="$(scripts/backup.sh "$OUT" | tail -n 1)"
 # The bucket is in it: a backup that skipped it would still exit 0 (#677).
 [ -f "$BACKUP/bucket/manifest.json" ] || { echo "the backup has no bucket" >&2; ls -R "$BACKUP" >&2; exit 1; }
+# Archiving is off, so no base backup: the nightly dump of a self-hoster who never asked for more.
+[ ! -e "$BACKUP/base.tar.gz" ] || { echo "a base backup was taken with archiving off" >&2; exit 1; }
+scripts/check-backup.sh "$OUT" --wal
+if scripts/restore-pitr.sh "$BACKUP" --to '2026-10-27 12:00:00+00' --archive "$WORK" --into "$WORK/nopitr" >"$WORK/nopitr.out" 2>&1; then
+  echo "a point-in-time restore went ahead from a backup that has no base backup" >&2
+  exit 1
+fi
+grep -q 'has no base backup' "$WORK/nopitr.out" || { echo "refused for another reason:" >&2; cat "$WORK/nopitr.out" >&2; exit 1; }
 
 # Every message is in it, in the clear: nobody but the user who ran it may read it, whatever
 # that user's umask. Single permission bits, so the test is the same on macOS and Linux.
@@ -166,7 +182,9 @@ scripts/compare-databases.sh purlay purlay >"$WORK/before.txt"
 compose down --volumes
 compose up -d --wait postgres garage
 compose run --rm --no-deps -T storage-init
+LOGICAL_STARTED=$SECONDS
 scripts/restore.sh "$BACKUP" --database purlay --replace --bucket live
+LOGICAL_SECONDS=$((SECONDS - LOGICAL_STARTED))
 compose up -d --wait api
 scripts/compare-databases.sh purlay purlay >"$WORK/after.txt"
 diff "$WORK/before.txt" "$WORK/after.txt" || {
@@ -179,3 +197,136 @@ compose run --rm --no-deps -T --user "$(id -u):$(id -g)" \
   -v "$PWD/scripts/bucket-copy.ts:/ops/bucket-copy.ts:ro" \
   -v "$PWD/scripts/bucket-manifest.ts:/ops/bucket-manifest.ts:ro" \
   --entrypoint /usr/local/bin/bun api /ops/bucket-copy.ts verify /backup
+
+# --- point-in-time recovery (#118, D-202) -------------------------------------------------------
+# Everything above is a stack that never asked for archiving. Now it does, as an operator would: the
+# env file gains WAL_ARCHIVE=on and `up` recreates the database. Then the case the nightly dump cannot
+# answer: write some rows, note the time, write more, lose EVERYTHING — every volume, the archive on
+# the same disk with it — and recover from the base backup and the copy of the archive that was
+# shipped off the server, to the noted time. The recovered database must be exactly what the live one
+# held at that moment, by the same comparison as every restore: the earlier rows there, the later
+# ones not.
+result() {
+  echo "$*"
+  if [ -n "${REHEARSAL_RESULT_FILE:-}" ]; then echo "- $*" >>"$REHEARSAL_RESULT_FILE"; fi
+}
+pg() { compose exec -T postgres psql -U purlay -d purlay -v ON_ERROR_STOP=1 -Atq "$@"; }
+ARCHIVE_SECONDS=10
+
+echo "== point-in-time: archiving is switched on and the database restarts"
+{
+  echo "WAL_ARCHIVE=on"
+  echo "WAL_ARCHIVE_TIMEOUT=$ARCHIVE_SECONDS"
+} >>"$ENV_FILE"
+compose stop api
+compose up -d --wait postgres
+[ "$(pg -c 'show archive_mode')" = on ] || { echo "archiving did not switch on" >&2; compose logs postgres >&2; exit 1; }
+[ "$(pg -c 'show archive_timeout')" = "${ARCHIVE_SECONDS}s" ] || { echo "archive_timeout is not what the env file says" >&2; exit 1; }
+compose up -d --wait api
+
+echo "== a backup with archiving on holds a base backup, checked and checksummed"
+PITR_BACKUP="$(scripts/backup.sh "$WORK/pitr-backups" | tail -n 1)"
+for file in base.tar.gz base.label base.meta; do
+  [ -s "$PITR_BACKUP/$file" ] || { echo "the backup has no $file" >&2; ls -l "$PITR_BACKUP" >&2; exit 1; }
+done
+grep -q 'base.tar.gz' "$PITR_BACKUP/SHA256SUMS" || { echo "the base backup is not in SHA256SUMS" >&2; exit 1; }
+START_WAL="$(sed -n 's/^start_wal=//p' "$PITR_BACKUP/base.meta")"
+scripts/check-backup.sh "$WORK/pitr-backups" --wal
+
+echo "== rows, a noted time, more rows"
+pg -c "create table pitr_probe (id int primary key, batch text not null, note text not null)"
+pg -c "insert into pitr_probe select g, 'A', 'before ' || g from generate_series(1, 500) g"
+pg -c "update pitr_probe set note = 'edited before' where id % 50 = 0"
+pg -c "delete from pitr_probe where id = 7"
+scripts/compare-databases.sh --snapshot purlay >"$WORK/at-the-time.txt"
+NOTED="$(pg -c "select to_char(clock_timestamp() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS.US') || '+00'")"
+sleep 2
+pg -c "insert into pitr_probe select g, 'B', 'after ' || g from generate_series(501, 800) g"
+pg -c "update pitr_probe set note = 'edited after' where id % 50 = 0"
+pg -c "delete from pitr_probe where id between 100 and 120"
+pg -c "drop table pitr_probe"
+pg -c "create table pitr_probe (id int primary key, batch text not null, note text not null)"
+COMMITTED="$(pg -c "select clock_timestamp()")"
+
+# What the database could lose: the time between the last commit and the segment that holds it being
+# in the archive. PostgreSQL closes a segment after archive_timeout seconds of activity, so it is
+# bounded by that, which is what the documented RPO is.
+echo "== the newest commit reaches the archive within archive_timeout"
+RPO_STARTED=$SECONDS
+until [ "$(pg -c "select last_archived_time > '$COMMITTED'::timestamptz from pg_stat_archiver")" = t ]; do
+  [ $((SECONDS - RPO_STARTED)) -le $((ARCHIVE_SECONDS * 4)) ] \
+    || { echo "the newest commit was not archived within four times archive_timeout" >&2; pg -c 'select * from pg_stat_archiver' >&2; exit 1; }
+  sleep 1
+done
+RPO_SECONDS=$((SECONDS - RPO_STARTED))
+[ "$(pg -c "select failed_count from pg_stat_archiver")" = 0 ] || { echo "the archiver failed on a segment" >&2; exit 1; }
+
+echo "== the archive is shipped off the host, then everything on the host is lost"
+SHIPPED="$WORK/shipped-archive"
+mkdir "$SHIPPED"
+DB_IMAGE="$(compose config --images | grep '^postgres:' | head -n 1)"
+SOURCE="$(wal_archive_source)"
+# Read as root, as an operator's shipping job must be (the segments belong to the postgres user and
+# are 0600), and handed back to the invoking user.
+docker run --rm --user root -v "$SOURCE:/from:ro" -v "$SHIPPED:/to" --entrypoint sh "$DB_IMAGE" -c \
+  "cp -a /from/. /to/ && chown -R $(id -u):$(id -g) /to"
+SHIPPED_COUNT="$(find "$SHIPPED" -name '*.gz' | wc -l | tr -d ' ')"
+[ "$SHIPPED_COUNT" -gt 1 ] || { echo "the shipped archive holds $SHIPPED_COUNT segments" >&2; exit 1; }
+# Nothing may be left of the archive's disk.
+compose down --volumes
+[ -z "$(docker volume ls -q --filter "name=${PROJECT}_")" ] || { echo "volumes survived the loss" >&2; exit 1; }
+
+echo "== what a restore refuses: no zone, a time before the base backup, an archive that cannot reach, one that lacks its start"
+if scripts/restore-pitr.sh "$PITR_BACKUP" --to '2026-10-27 12:00:00' --archive "$SHIPPED" --into "$WORK/refused-1" >"$WORK/refused-1.out" 2>&1; then
+  echo "a time without a zone was accepted" >&2
+  exit 1
+fi
+grep -q 'not a time with a zone' "$WORK/refused-1.out" || { cat "$WORK/refused-1.out" >&2; exit 1; }
+
+if scripts/restore-pitr.sh "$PITR_BACKUP" --to '2000-01-01 00:00:00+00' --archive "$SHIPPED" --into "$WORK/refused-2" >"$WORK/refused-2.out" 2>&1; then
+  echo "a time before the base backup was complete was accepted" >&2
+  exit 1
+fi
+grep -q 'before the base backup was complete' "$WORK/refused-2.out" || { cat "$WORK/refused-2.out" >&2; exit 1; }
+[ ! -e "$WORK/refused-2" ] || { echo "a refused restore left its directory" >&2; exit 1; }
+
+# The segments after the base backup are missing: the archive ends before the noted time.
+cp -R "$SHIPPED" "$WORK/archive-cut"
+find "$WORK/archive-cut" -name '[0-9A-F]*.gz' ! -name '*.backup.gz' | while IFS= read -r segment; do
+  if [[ "$(basename "$segment" .gz)" > "$START_WAL" ]]; then rm -f "$segment"; fi
+done
+if scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$WORK/archive-cut" --into "$WORK/refused-3" >"$WORK/refused-3.out" 2>&1; then
+  echo "a recovery went ahead on an archive that does not reach the time" >&2
+  exit 1
+fi
+grep -q 'archive ends before' "$WORK/refused-3.out" || { cat "$WORK/refused-3.out" >&2; exit 1; }
+
+cp -R "$SHIPPED" "$WORK/archive-headless"
+rm -f "$WORK/archive-headless/$START_WAL.gz"
+if scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$WORK/archive-headless" --into "$WORK/refused-4" >"$WORK/refused-4.out" 2>&1; then
+  echo "a recovery went ahead on an archive without its starting segment" >&2
+  exit 1
+fi
+grep -q 'does not hold' "$WORK/refused-4.out" || { cat "$WORK/refused-4.out" >&2; exit 1; }
+[ -z "$(docker ps -a -q --filter 'name=purlay-pitr-')" ] || { echo "a refused restore left a container behind" >&2; exit 1; }
+
+echo "== recover to $NOTED, from the base backup and the shipped archive, into a new instance"
+RESTORE_STARTED=$SECONDS
+scripts/restore-pitr.sh "$PITR_BACKUP" --to "$NOTED" --archive "$SHIPPED" --expect "$WORK/at-the-time.txt" --into "$WORK/pitr" | tee "$WORK/pitr.out"
+RESTORE_SECONDS=$((SECONDS - RESTORE_STARTED))
+[ -z "$(docker ps -a -q --filter 'name=purlay-pitr-')" ] || { echo "the recovery left a container behind" >&2; exit 1; }
+[ -z "$(docker volume ls -q --filter 'name=purlay-pitr-')" ] || { echo "the recovery left a volume behind" >&2; exit 1; }
+
+echo "== applying it: the rebuilt stack takes the recovered database through the ordinary restore"
+compose up -d --wait postgres garage
+compose run --rm --no-deps -T storage-init
+scripts/restore.sh "$WORK/pitr/recovered" --database purlay --replace --no-bucket
+[ "$(pg -c "select count(*) from pitr_probe where batch = 'A'")" = 499 ] || { echo "the rows written before the time are not all there" >&2; exit 1; }
+[ "$(pg -c "select count(*) from pitr_probe where batch = 'B'")" = 0 ] || { echo "rows written after the time are there" >&2; exit 1; }
+[ "$(pg -c "select count(*) from pitr_probe where note = 'edited before'")" = 10 ] || { echo "the edit made before the time is not what it was" >&2; exit 1; }
+scripts/compare-databases.sh --against "$WORK/at-the-time.txt" purlay
+compose up -d --wait api
+
+result "restore rehearsal: logical restore of database and bucket after a total loss took ${LOGICAL_SECONDS} s"
+result "restore rehearsal: point-in-time restore to a noted time took ${RESTORE_SECONDS} s (shipped archive of ${SHIPPED_COUNT} segments, base backup of $(wc -c <"$PITR_BACKUP/base.tar.gz" | tr -d ' ') bytes)"
+result "restore rehearsal: the newest commit was in the archive ${RPO_SECONDS} s after it was made (archive_timeout ${ARCHIVE_SECONDS} s)"
