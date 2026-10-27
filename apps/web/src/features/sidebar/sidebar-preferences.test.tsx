@@ -21,6 +21,8 @@ import {
   someChannels,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
+import { Toaster } from '../../ui/toast';
+import { ContentPortsContext } from '../content/content-ports';
 import { expectFocusOn } from '../../testing/focus';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
@@ -495,5 +497,65 @@ describe('the options button', () => {
     await person().click(view.getByRole('menuitemradio', { name: 'Only unread' }));
     await settle();
     expectFocusOn(view.getByRole('button', { name: /^Sidebar options/ }));
+  });
+});
+
+describe('folding the other sections', () => {
+  test('Conversations and People fold by their headings too, each on its own', async () => {
+    const channels = [
+      aChannel(IDS.api, 'api'),
+      aChannel(GROUP, null, { type: 'direct_message', peers: [ALICE, BOB], peer: null }),
+      aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE }),
+    ];
+    const view = await open(apiWith(channels));
+    await person().click(heading(view, 'Conversations'));
+    expect(heading(view, 'Conversations').getAttribute('aria-expanded')).toBe('false');
+    expect(heading(view, 'People').getAttribute('aria-expanded')).toBe('true');
+    await person().click(heading(view, 'People'));
+    expect(heading(view, 'People').getAttribute('aria-expanded')).toBe('false');
+    // Folded, nothing in either is waiting or open: nothing is listed under them.
+    expect(
+      within(view.getByRole('region', { name: 'Conversations' })).queryAllByRole('link').length,
+    ).toBe(0);
+    expect(within(view.getByRole('region', { name: 'People' })).queryAllByRole('link').length).toBe(
+      0,
+    );
+    await person().click(heading(view, 'People'));
+    expect(heading(view, 'People').getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+describe('Copy workspace link', () => {
+  const openWithClipboard = async (copy: (text: string) => Promise<void>): Promise<View> => {
+    const view = await renderApp(
+      <ContentPortsContext.Provider value={{ highlight: () => Promise.resolve(null), copy }}>
+        <Outlet />
+        <Toaster dismissLabel="Close" />
+      </ContentPortsContext.Provider>,
+      { path: `/w/acme/c/${IDS.api}`, api: apiWith(channelsWithSomethingWaiting()) },
+    );
+    await settle();
+    return view;
+  };
+
+  test('puts the workspace’s whole address on the clipboard and says so', async () => {
+    const copied: string[] = [];
+    const view = await openWithClipboard((text) => {
+      copied.push(text);
+      return Promise.resolve();
+    });
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Copy workspace link' }));
+    await settle();
+    expect(copied).toEqual([new URL('/w/acme', window.location.origin).href]);
+    expect(view.getByText('Link copied')).toBeDefined();
+  });
+
+  test('a clipboard that refuses is said, not ignored', async () => {
+    const view = await openWithClipboard(() => Promise.reject(new Error('denied')));
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Copy workspace link' }));
+    await settle();
+    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
   });
 });
