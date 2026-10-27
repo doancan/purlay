@@ -82,6 +82,19 @@ describe('trying a channel', () => {
     expect(w.seen[0]?.init.body).toBe('{"clientId":"a","clientSecret":"b"}');
   });
 
+  test('posts the provider candidate and returns the verdict', async () => {
+    const w = world(200, JSON.stringify({ ok: true }));
+    const verdict = await createServerClient(w.fetch).oidc({
+      issuer: 'https://idp.example.test',
+      clientId: 'a',
+      clientSecret: 'b',
+      name: 'Acme SSO',
+    });
+    expect(verdict).toEqual({ ok: true });
+    expect(w.seen[0]?.path).toBe('/api/server/oidc');
+    expect(w.seen[0]?.init.method).toBe('POST');
+  });
+
   test('posts the relay candidate and returns a refused verdict as it is', async () => {
     const refused: ProbeResult = { ok: false, reason: 'auth-failed', raw: '535' };
     const w = world(200, JSON.stringify(refused));
