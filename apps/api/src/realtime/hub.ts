@@ -164,9 +164,10 @@ export interface SocketHub {
 
 /**
  * How many frames of one connection may wait behind the one being handled. Above
- * the rate limiter's burst, so a connection within its budget never meets it.
+ * the rate limiter's burst, so a connection within its budget never meets it
+ * (D-198 raised both together: a full outbox is sent in one instant).
  */
-export const FRAME_QUEUE_MAX = 32;
+export const FRAME_QUEUE_MAX = 64;
 
 /**
  * The most live frames kept for one connection while its subscription replays. A

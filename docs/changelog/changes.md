@@ -39,6 +39,7 @@ have it.
 - **Performance** — The first-load JavaScript gate is a backstop at 400 KB gzipped, no longer a ceiling a feature is cut or deferred to fit; the time budgets are unchanged (D-196)
 - **Sidebar** — The workspace's name at the head of the column has its tile and sits inset and rounded like the rows, so its hover and focus no longer touch the rail and the hairline; the jump field lines up with the rows (D-195)
 - **Sign-in** — An emailed sign-in link can carry the application's pending sign-in into the browser that opens it (D-191)
+- **Messages** — A person back from a long disconnect has every unsent message sent, up to the fifty a client keeps, where the server used to refuse all but the first eighteen: the burst a connection or a person's writes may spend at once is sixty frames, the rate still ten a second (D-198)
 
 ### Fixed
 

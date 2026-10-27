@@ -1,9 +1,9 @@
 /**
- * The frame budget, measured (O-4, #61). D-66's numbers — ten frames a second, a burst of twenty —
- * are a guess until real use confirms them; this records, per connection, how many frames it sent,
- * the most in any one second, and how many the budget refused, for the socket's closing log line.
- * A week of those lines is the measurement O-4 names: the 99th percentile of the busiest second, and
- * refusals that must be zero for legitimate use.
+ * The frame budget, watched in use (#61). The numbers were decided from a synthetic measurement
+ * (D-198, `frame-profiles.ts`); this records, per connection, how many frames it sent, the most in
+ * any one second, and how many the budget refused, for the socket's closing log line. A stretch of
+ * those lines is the check on that decision: the 99th percentile of the busiest second, and refusals
+ * that must be zero for legitimate use (`bun run report:frames`).
  *
  * Seconds are the clock's whole seconds, not a sliding window: a peak that straddles two of them is
  * counted in halves, which errs low by at most half — enough to tell ten from forty.

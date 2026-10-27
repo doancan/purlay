@@ -1,5 +1,5 @@
 /**
- * The report that closes O-4 (#61): what it reads from the API's log, and what it answers.
+ * The report that checks the frame budget in use (#61, D-198): what it reads from the API's log, and what it answers.
  */
 import { describe as group, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
@@ -41,18 +41,18 @@ group('the frame report', () => {
     });
   });
 
-  test('a week with no refusal and every peak inside the burst closes O-4; any refusal does not', () => {
+  test('a week with no refusal and every peak inside the burst holds; any refusal does not', () => {
     const quiet = describe(summarise([closed(4, 30), closed(12, 80)]));
-    expect(quiet.at(-1)).toBe('O-4: legitimate use met no refusal, inside the burst');
+    expect(quiet.at(-1)).toBe('frame budget: legitimate use met no refusal, inside the burst');
     expect(quiet[1]).toBe(
-      'peak frames in a second, p99: 12, max: 12 — the budget is 10/s with a burst of 20',
+      'peak frames in a second, p99: 12, max: 12 — the budget is 10/s with a burst of 60',
     );
     const refused = describe(summarise([closed(4, 30, 1)]));
     expect(refused.at(-1)).toBe(
-      'O-4: something met the budget — read the refusals before closing it',
+      'frame budget: something met it — read the refusals, and D-198 for what it reverses on',
     );
-    const over = describe(summarise([closed(25, 30)]));
-    expect(over.at(-1)).toContain('something met the budget');
+    const over = describe(summarise([closed(65, 30)]));
+    expect(over.at(-1)).toContain('something met it');
   });
 
   test('nothing measured says so, rather than a percentile of nothing', () => {

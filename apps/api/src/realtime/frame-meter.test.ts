@@ -1,7 +1,7 @@
 /**
  * What closes O-4 (#61): for each connection, the most frames it sent in any one second and how
  * many the budget refused — said when it closes, so a week of the log answers whether ten a second
- * with a burst of twenty is the right number for real typing and pasting.
+ * with a burst of sixty is the right number for real typing and pasting.
  */
 import { describe, expect, test } from 'bun:test';
 import { metered } from './frame-meter';
