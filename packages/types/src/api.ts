@@ -464,6 +464,24 @@ export const NotificationType = Type.Union([
 ]);
 export type NotificationType = Static<typeof NotificationType>;
 
+// The wire value is a single CSV string, not an array that needs an implicit query serializer.
+// Derive the vocabulary, bound and duplicate checks from the one owned notification enum.
+const notificationTypes = NotificationType.anyOf.map((type) => type.const);
+const notificationTypePattern = `(?:${notificationTypes.join('|')})`;
+const noRepeatedNotificationTypes = notificationTypes
+  .map((type) => `(?!.*(?:^|,)${type}(?:,[^,]+)*,${type}(?:,|$))`)
+  .join('');
+const notificationTypeListPattern = `${notificationTypePattern}(?:,${notificationTypePattern}){0,${String(notificationTypes.length - 1)}}`;
+export const NotificationTypesFilter = Type.String({
+  minLength: 1,
+  maxLength: notificationTypes.join(',').length,
+  // Absolute end: `$` alone would also accept a final newline.
+  pattern: String.raw`^${noRepeatedNotificationTypes}${notificationTypeListPattern}(?![\s\S])`,
+  description:
+    'One CSV query value containing distinct NotificationType values; case-sensitive, no whitespace or empty items. Omit to include every type.',
+});
+export type NotificationTypesFilter = Static<typeof NotificationTypesFilter>;
+
 /**
  * The reasons that make a message one that *needs* the person (D-99 §1, D-107): what the mention
  * badge counts, the tab's title adds up, a push is sent for (D-126) and an open tab in the background
@@ -518,6 +536,7 @@ export type Notification = Static<typeof Notification>;
  */
 export const NotificationQuery = FromClient({
   workspaceId: Uuid,
+  types: Type.Optional(NotificationTypesFilter),
   unreadOnly: Type.Optional(Type.Boolean()),
   before: Type.Optional(Uuid),
   limit: Type.Optional(

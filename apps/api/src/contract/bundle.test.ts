@@ -72,6 +72,24 @@ describe('the contract', () => {
     expect(page).not.toContain('"githubEvent"');
   });
 
+  test('publishes the inbox CSV filter and its validation in the existing generator vocabulary', () => {
+    expect(
+      contract.endpoints.find((endpoint) => endpoint.id === 'listNotifications')?.query,
+    ).toEqual({ $ref: 'NotificationQuery' });
+    expect(contract.schemas['NotificationQuery']).toMatchObject({
+      properties: { types: contract.schemas['NotificationTypesFilter'] },
+      required: ['workspaceId'],
+    });
+    expect(contract.schemas['NotificationTypesFilter']).toMatchObject({
+      type: 'string',
+      minLength: 1,
+    });
+    expect(JSON.stringify(contract.schemas['NotificationTypesFilter'])).toContain('\"pattern\":\"');
+    expect(vocabularyProblems(contract)).toEqual([]);
+    const serialized = JSON.stringify(buildContract());
+    expect(JSON.stringify(buildContract())).toBe(serialized);
+  });
+
   test('is closed: every reference resolves to a schema of the contract', () => {
     const names = new Set(Object.keys(contract.schemas));
     const dangling = [...refsIn(contract)].filter((name) => !names.has(name));

@@ -10,7 +10,13 @@ import {
   type Executor,
   type Transaction,
 } from '@purlay/db';
-import { messageId, THREAD_EXCERPT_MAX, type ReadNotificationsRequest } from '@purlay/types';
+import {
+  messageId,
+  THREAD_EXCERPT_MAX,
+  type ReadNotificationsRequest,
+  type NotificationType,
+  type NotificationQuery,
+} from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { visibleChannelIds } from '../../platform/channels';
@@ -60,7 +66,7 @@ const inbox = async (
   db: Executor,
   room: Room,
   userId: string,
-  extra: { unreadOnly?: boolean; before?: string; limit?: number } = {},
+  extra: Omit<NotificationQuery, 'workspaceId'> = {},
 ): Promise<{ contents: string[]; ids: string[]; nextCursor: string | null }> => {
   const context = await requireWorkspaceMembership(db, userId, room.workspaceId);
   const page = await inboxOf(db, context, await visibleChannelIds(db, context), {
@@ -402,6 +408,264 @@ describe('integration: marking read', () => {
         read(db, member(room, 'alice').userId, { workspaceId: elsewhere.workspaceId }),
       );
       expect(refusal.body.code).toBe('WORKSPACE_NOT_FOUND');
+    });
+  });
+});
+
+/** Real messages and recipient rows, varying stored reasons without changing delivery rules. */
+const typedHistory = async (
+  db: Executor,
+  room: Room,
+  types: readonly NotificationType[],
+): Promise<void> => {
+  for (const [index, type] of types.entries()) {
+    const sent = await post(
+      db,
+      room,
+      'alice',
+      `@${member(room, 'bob').username} typed-${String(index)}`,
+    );
+    await db
+      .updateTable('notifications')
+      .set({ type })
+      .where('message_id', '=', sent.message.id)
+      .where('user_id', '=', member(room, 'bob').userId)
+      .execute();
+  }
+};
+
+describe('integration: notification type filtering before pagination', () => {
+  test('older matches fill the first page; a union walks the total order with no gaps, including ties', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').userId;
+      await typedHistory(db, room, [
+        'thread_reply',
+        'mention',
+        'thread_resolved',
+        'direct_message',
+        'mention',
+        'channel_message',
+      ]);
+      const context = await requireWorkspaceMembership(db, bob, room.workspaceId);
+      const visible = await visibleChannelIds(db, context);
+      const unfiltered = await inboxOf(db, context, visible, {
+        workspaceId: room.workspaceId,
+        limit: 1,
+      });
+      expect(unfiltered.data.map((row) => row.type)).toEqual(['channel_message']);
+      const first = await inboxOf(db, context, visible, {
+        workspaceId: room.workspaceId,
+        types: 'thread_reply,thread_resolved',
+        limit: 2,
+      });
+      expect(first.data.map((row) => row.type)).toEqual(['thread_resolved', 'thread_reply']);
+      expect(first.nextCursor).toBeNull(); // Older excluded rows are not another filtered page.
+
+      const reply = first.data[1];
+      if (reply === undefined) throw new Error('missing the oldest filtered notification');
+      // Two notifications share the timestamp AND message: the final notification ID breaks the tie.
+      await db
+        .insertInto('notifications')
+        .values({
+          user_id: bob,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          message_id: reply.message.id,
+          type: 'thread_resolved',
+          created_at: NOW,
+        })
+        .execute();
+      // A difference PostgreSQL retains but JavaScript Date would round away.
+      await db
+        .updateTable('notifications')
+        .set({ created_at: sql<Date>`created_at + interval '1 microsecond'` })
+        .where('id', '=', first.data[0]?.id ?? '')
+        .execute();
+      const all = await inboxOf(db, context, visible, { workspaceId: room.workspaceId });
+      const expected = all.data
+        .filter((row) => row.type === 'thread_reply' || row.type === 'thread_resolved')
+        .map((row) => row.id);
+      const seen: string[] = [];
+      let before: string | undefined;
+      for (let page = 0; page <= expected.length; page += 1) {
+        const next = await inboxOf(db, context, visible, {
+          workspaceId: room.workspaceId,
+          types: 'thread_reply,thread_resolved',
+          limit: 1,
+          ...(before === undefined ? {} : { before }),
+        });
+        seen.push(...next.data.map((row) => row.id));
+        if (next.nextCursor === null) break;
+        expect(next.data).toHaveLength(1);
+        expect(next.nextCursor).toBe(next.data.at(-1)?.id ?? '');
+        before = next.nextCursor;
+      }
+      expect(seen).toEqual(expected);
+      expect(new Set(seen).size).toBe(seen.length);
+      expect(
+        (await inbox(db, room, bob, { types: 'mention', limit: 1 })).nextCursor,
+      ).not.toBeNull();
+    });
+  });
+
+  test('all supported reasons, unread state and an anchor of another type compose without changing the cursor rule', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').userId;
+      await typedHistory(db, room, [
+        'thread_reply',
+        'mention',
+        'direct_message',
+        'thread_resolved',
+        'channel_message',
+      ]);
+      const context = await requireWorkspaceMembership(db, bob, room.workspaceId);
+      const visible = await visibleChannelIds(db, context);
+      const all = await inboxOf(db, context, visible, { workspaceId: room.workspaceId });
+      for (const row of all.data) {
+        const query = { workspaceId: room.workspaceId, types: row.type };
+        expect((await inboxOf(db, context, visible, query)).data.map((item) => item.id)).toEqual([
+          row.id,
+        ]);
+        expect(
+          (await inboxOf(db, context, visible, { ...query, unreadOnly: false })).data.map(
+            (item) => item.id,
+          ),
+        ).toEqual([row.id]);
+        await db
+          .updateTable('notifications')
+          .set({ read_at: NOW })
+          .where('id', '=', row.id)
+          .execute();
+        expect((await inboxOf(db, context, visible, { ...query, unreadOnly: true })).data).toEqual(
+          [],
+        );
+        expect(
+          (await inboxOf(db, context, visible, { ...query, unreadOnly: false })).data,
+        ).toHaveLength(1);
+      }
+      const anchor = all.data[0];
+      if (anchor === undefined) throw new Error('missing the anchor');
+      expect(
+        (
+          await inboxOf(db, context, visible, {
+            workspaceId: room.workspaceId,
+            before: anchor.id,
+            types: 'thread_reply',
+            unreadOnly: false,
+          })
+        ).data.map((row) => row.type),
+      ).toEqual(['thread_reply']);
+      expect(
+        (
+          await inboxOf(db, context, visible, {
+            workspaceId: room.workspaceId,
+            before: anchor.id,
+            types: 'thread_reply',
+            unreadOnly: true,
+          })
+        ).data,
+      ).toEqual([]);
+    });
+  });
+
+  test('filtering never widens current channel visibility, deleted targets, recipient or workspace scope', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob', 'carol'], { type: 'private' });
+      const bob = member(room, 'bob').userId;
+      expect(
+        (
+          await refusalOf(
+            inbox(db, room, bob, {
+              types: 'mention',
+              before: '00000000-0000-4000-8000-000000000000',
+            }),
+          )
+        ).body.code,
+      ).toBe('VALIDATION_FAILED');
+      await typedHistory(db, room, ['thread_reply', 'thread_reply']);
+      expect(
+        (await inbox(db, room, member(room, 'carol').userId, { types: 'thread_reply' })).ids,
+      ).toEqual([]);
+      const first = await inbox(db, room, bob, { types: 'thread_reply' });
+      const target = await db
+        .selectFrom('notifications')
+        .select('message_id')
+        .where('id', '=', first.ids[0] ?? '')
+        .executeTakeFirstOrThrow();
+      await db
+        .updateTable('messages')
+        .set({ deleted_at: NOW })
+        .where('id', '=', target.message_id)
+        .execute();
+      expect((await inbox(db, room, bob, { types: 'thread_reply' })).ids).toHaveLength(1);
+      // A retained notification whose message was deleted remains a valid ordering anchor.
+      expect(
+        (await inbox(db, room, bob, { types: 'thread_reply', before: first.ids[0] ?? '' })).ids,
+      ).toHaveLength(1);
+      const other = await aRoom(db, ['alice']);
+      await alsoIn(db, other, bob);
+      const sent = await post(
+        db,
+        other,
+        'alice',
+        `@${member(room, 'bob').username} another workspace`,
+      );
+      await db
+        .updateTable('notifications')
+        .set({ type: 'thread_reply' })
+        .where('message_id', '=', sent.message.id)
+        .where('user_id', '=', bob)
+        .execute();
+      const foreign = await inbox(db, other, bob, { types: 'thread_reply' });
+      expect(foreign.ids).toHaveLength(1);
+      expect(
+        (
+          await refusalOf(
+            inbox(db, room, bob, { types: 'thread_reply', before: foreign.ids[0] ?? '' }),
+          )
+        ).body.code,
+      ).toBe('VALIDATION_FAILED');
+      expect(
+        (
+          await refusalOf(
+            inbox(db, room, member(room, 'carol').userId, {
+              types: 'thread_reply',
+              before: first.ids[0] ?? '',
+            }),
+          )
+        ).body.code,
+      ).toBe('VALIDATION_FAILED');
+      await db
+        .deleteFrom('channel_members')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', bob)
+        .execute();
+      expect((await inbox(db, room, bob, { types: 'thread_reply' })).ids).toEqual([]);
+    });
+  });
+
+  test('filtered pages keep a bounded query count instead of hydrating each candidate separately', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').userId;
+      await typedHistory(db, room, ['thread_reply']);
+      const context = await requireWorkspaceMembership(db, bob, room.workspaceId);
+      const visible = await visibleChannelIds(db, context);
+      const small = counting(db);
+      await inboxOf(small.db, context, visible, {
+        workspaceId: room.workspaceId,
+        types: 'thread_reply',
+      });
+      await typedHistory(db, room, ['mention', 'thread_reply', 'thread_resolved', 'thread_reply']);
+      const larger = counting(db);
+      await inboxOf(larger.db, context, visible, {
+        workspaceId: room.workspaceId,
+        types: 'thread_reply,thread_resolved',
+      });
+      expect(larger.count()).toBe(small.count());
+      expect(larger.count()).toBeGreaterThan(0);
     });
   });
 });

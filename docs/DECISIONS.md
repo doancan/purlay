@@ -4588,6 +4588,14 @@ the 403-that-confirms-existence in another form.
 `API.md` listed the two endpoints and `SCHEMA.md` §7.4 the table; nothing said what the inbox shows or
 what marking it read moves. Served by #58.
 
+**Amended 2026-10-28 (#787).** A client can ask for one or more stored notification reasons before
+pagination, independently of All/Unread; `API.md` §6 owns the wire details. One bounded CSV string
+keeps the existing single-value query convention and fits the contract generator's current JSON
+Schema vocabulary. Repeated query keys, an implicit array serializer and a new custom string format
+were rejected because each would make the wire contract depend on a second rule a client does not
+currently receive. The filter changes neither generation/preferences nor workspace-wide mark-read
+semantics; category counts remain separate. Omission includes every supported reason.
+
 **1 · One workspace, the caller's own, newest first by when they were told.** A resolution of an old
 question is told today, and belongs at the top though its message is old. At the same instant the
 message orders them (UUIDv7), then the notification's id, so the order is total and the cursor exact.
