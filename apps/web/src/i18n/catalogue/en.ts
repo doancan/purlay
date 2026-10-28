@@ -1136,6 +1136,15 @@ export const en = {
   'push.working': 'One moment…',
   'push.blocked': 'Blocked: allow them in the browser’s site settings',
   'push.failed': 'Notifications on this device were not changed.',
+  'push.test': 'Test notification',
+  'push.testTitle': 'Purlay notifications',
+  'push.testBody': 'This is a test notification from Purlay.',
+  'push.testRequested':
+    'Test notification requested. If it does not appear, check your device’s notification settings.',
+  'push.testFailed':
+    'Your browser could not show the test notification. Check the site’s permission and your device’s notification settings.',
+  'push.testBlocked':
+    'Notification permission changed. Allow Purlay in the browser’s site settings and turn notifications on again.',
   // What an open tab in the background says (D-148).
   'alerts.many': '{count} conversations need you',
   'alerts.waiting': 'Something here needs you',
@@ -1294,7 +1303,7 @@ export const en = {
   'settings.notifications.what.mention': 'Somebody mentions you with @',
   'settings.notifications.what.direct': 'Somebody writes to you directly',
   'settings.notifications.what.reply': 'Somebody replies in a thread you started or replied in',
-  'settings.notifications.what.resolved': 'A question you asked is resolved',
+  'settings.notifications.what.channel': 'Somebody writes in a channel you set to Every message',
   'settings.notifications.deepWorkHint':
     'While it is on, nothing is delivered to you — not here, not on your devices. It ends on its own.',
   'settings.notifications.deepWorkStart': 'Start Deep Work',

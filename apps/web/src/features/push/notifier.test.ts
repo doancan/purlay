@@ -133,6 +133,16 @@ describe('notices from an open page', () => {
     expect(browser.asked).toBe(0);
   });
 
+  test('permission lost while the page was open refuses delivery without calling the constructor', () => {
+    for (const permission of ['default', 'denied'] as const) {
+      const browser = aBrowser('granted');
+      const notifier = notifierOf();
+      browser.permission = permission;
+      expect(notifier.show(aNotice())).toBe(false);
+      expect(browser.shown).toEqual([]);
+    }
+  });
+
   test('shows the notice with its words, its tag, the product mark and the page language', () => {
     const browser = aBrowser('granted');
     document.documentElement.lang = 'tr';

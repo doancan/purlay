@@ -12,8 +12,10 @@
  * One project: what is asserted is a notice and an icon, which neither the theme nor the width
  * touches.
  */
-import { expect, test } from './fixtures';
-import { openNav, shellReady } from './support';
+import type { Page } from '@playwright/test';
+import type { Channel, ChannelState } from '@purlay/types';
+import { expect, test, workspaceFor } from './fixtures';
+import { navLink, openNav, shellReady } from './support';
 
 interface Recorded {
   readonly title: string;
@@ -24,11 +26,50 @@ interface Recorded {
 declare global {
   interface Window {
     /** What the page asked the browser to show, in order. */
-    shownNotices?: (Recorded & { readonly open: () => void })[];
+    shownNotices?: (Recorded & { closed: boolean; readonly open: () => void })[];
     /** The person is in another window. */
     elsewhere?: boolean;
   }
 }
+
+const recordNotices = async (page: Page, owner: string | null = null): Promise<void> => {
+  await page.addInitScript((owner: string | null) => {
+    window.shownNotices = [];
+    if (owner !== null) {
+      localStorage.setItem('purlay.person', owner);
+      localStorage.setItem('purlay.push.owner', owner);
+    }
+    let permission: NotificationPermission = owner === null ? 'default' : 'granted';
+    class Recording {
+      static get permission(): NotificationPermission {
+        return permission;
+      }
+      static requestPermission(): Promise<NotificationPermission> {
+        permission = 'granted';
+        return Promise.resolve(permission);
+      }
+      onclick: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      readonly record: NonNullable<Window['shownNotices']>[number];
+      constructor(title: string, options: NotificationOptions = {}) {
+        this.record = {
+          title,
+          body: options.body ?? '',
+          tag: options.tag ?? '',
+          closed: false,
+          open: (): void => this.onclick?.(),
+        };
+        window.shownNotices?.push(this.record);
+      }
+      close(): void {
+        this.record.closed = true;
+        this.onclose?.();
+      }
+    }
+    Object.defineProperty(window, 'Notification', { value: Recording, configurable: true });
+    Document.prototype.hasFocus = (): boolean => window.elsewhere !== true;
+  }, owner);
+};
 
 test.describe('a tab in the background', () => {
   test.skip(
@@ -42,35 +83,7 @@ test.describe('a tab in the background', () => {
     room,
     api,
   }) => {
-    await page.addInitScript(() => {
-      window.shownNotices = [];
-      let permission: NotificationPermission = 'default';
-      class Recording {
-        static get permission(): NotificationPermission {
-          return permission;
-        }
-        static requestPermission(): Promise<NotificationPermission> {
-          permission = 'granted';
-          return Promise.resolve(permission);
-        }
-        onclick: (() => void) | null = null;
-        onclose: (() => void) | null = null;
-        constructor(title: string, options: NotificationOptions = {}) {
-          window.shownNotices?.push({
-            title,
-            body: options.body ?? '',
-            tag: options.tag ?? '',
-            open: () => this.onclick?.(),
-          });
-        }
-        close(): void {
-          this.onclose?.();
-        }
-      }
-      Object.defineProperty(window, 'Notification', { value: Recording, configurable: true });
-      Document.prototype.hasFocus = (): boolean => window.elsewhere !== true;
-    });
-
+    await recordNotices(page);
     const here = await room({ members: ['dogancan', 'carol'] });
     const there = await room({ members: ['dogancan', 'carol'] });
     await signIn();
@@ -132,5 +145,129 @@ test.describe('a tab in the background', () => {
       window.shownNotices?.find((n) => n.title === title)?.open();
     }, `#${there.name}`);
     await expect(page).toHaveURL(new RegExp(`/c/${there.id}$`));
+  });
+
+  test('a read during a delayed lazy load leaves the other conversation’s notice intact', async ({
+    newcomer,
+  }) => {
+    const viewer = await newcomer('lazy-viewer');
+    const writer = await newcomer('lazy-writer');
+    const workspace = await workspaceFor(viewer, writer);
+    const channels: Channel[] = [];
+    for (const name of ['first', 'second']) {
+      const channel = await viewer.api.post<Channel>(`/api/workspaces/${workspace.id}/channels`, {
+        name,
+        type: 'public',
+      });
+      await writer.api.join(channel.id);
+      channels.push(channel);
+    }
+    const [first, second] = channels;
+    if (first === undefined || second === undefined || first.name === null || second.name === null)
+      throw new Error('two named channels required');
+    const page = await viewer.page();
+    await recordNotices(page, viewer.userId);
+    let release = (): void => undefined;
+    let requested = false;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/assets/tell-*.js', async (route) => {
+      requested = true;
+      await gate;
+      await route.continue();
+    });
+    try {
+      await page.goto(`/w/${workspace.slug}/inbox`);
+      await shellReady(page);
+      await page.evaluate(() => {
+        window.elsewhere = true;
+      });
+      await page.context().setOffline(true);
+      const message = await writer.api.say(first.id, `@${viewer.username} first`);
+      await writer.api.say(second.id, `@${viewer.username} second`);
+      await page.context().setOffline(false);
+      await expect.poll(() => requested).toBe(true);
+      await expect(await navLink(page, first.name)).toContainText('unread');
+      await expect(await navLink(page, second.name)).toContainText('unread');
+      await viewer.api.markRead(first.id, message.id);
+      await expect(await navLink(page, first.name)).not.toContainText('unread');
+      release();
+      await expect
+        .poll(() => page.evaluate(() => window.shownNotices?.map((n) => n.title)))
+        .toEqual([`#${second.name}`]);
+    } finally {
+      release();
+      await page.context().setOffline(false);
+    }
+  });
+
+  test('an unfocused open channel and thread keep their notifications until the person returns', async ({
+    newcomer,
+  }) => {
+    const viewer = await newcomer('notice-viewer');
+    const writer = await newcomer('notice-writer');
+    const workspace = await workspaceFor(viewer, writer);
+    const channel = await viewer.api.post<Channel>(`/api/workspaces/${workspace.id}/channels`, {
+      name: 'notifications',
+      type: 'public',
+    });
+    await writer.api.join(channel.id);
+    const page = await viewer.page();
+    await recordNotices(page, viewer.userId);
+    const path = `/w/${workspace.slug}/c/${channel.id}`;
+    const state = async (): Promise<ChannelState | null> =>
+      (await viewer.api.get<Channel[]>(`/api/workspaces/${workspace.id}/channels`)).find(
+        (c) => c.id === channel.id,
+      )?.state ?? null;
+    const away = async (elsewhere: boolean): Promise<void> => {
+      await page.evaluate((next) => {
+        window.elsewhere = next;
+        window.dispatchEvent(new Event(next ? 'blur' : 'focus'));
+      }, elsewhere);
+    };
+    const notices = async (): Promise<{ closed: boolean }[]> =>
+      await page.evaluate(() => (window.shownNotices ?? []).map(({ closed }) => ({ closed })));
+
+    for (const level of ['all', 'mentions', 'none'] as const) {
+      await viewer.api.put(`/api/channels/${channel.id}/notification-level`, { level });
+      await page.goto(path);
+      await shellReady(page);
+      await expect.poll(async () => (await state())?.unreadMentionCount).toBe(0);
+      await away(true);
+      const words =
+        level === 'all' ? 'An ordinary channel message' : `@${viewer.username} ${level}`;
+      await writer.api.say(channel.id, words);
+      await expect(page.getByText(words, { exact: true })).toBeVisible();
+      // A negative invariant: wait past the read debounce that used to clear this notice.
+      await page.waitForTimeout(900);
+      expect(await state()).toMatchObject({
+        unreadCount: 1,
+        unreadMentionCount: level === 'none' ? 0 : 1,
+      });
+      expect(await notices()).toEqual(level === 'none' ? [] : [{ closed: false }]);
+      await away(false);
+      await expect.poll(async () => (await state())?.unreadCount).toBe(0);
+      await expect.poll(notices).toEqual(level === 'none' ? [] : [{ closed: true }]);
+    }
+
+    await viewer.api.put(`/api/channels/${channel.id}/notification-level`, { level: 'mentions' });
+    const root = await viewer.api.say(channel.id, 'A question for the thread');
+    await writer.api.say(channel.id, 'The first answer', { parentId: root.id });
+    await page.goto(`${path}?thread=${root.id}`);
+    const thread = page.locator(`[data-thread-root="${root.id}"]`);
+    await expect(thread.getByText('The first answer', { exact: true })).toBeVisible();
+    await expect.poll(async () => (await state())?.unreadMentionCount).toBe(0);
+    await away(true);
+    await writer.api.say(channel.id, 'The answer while you are elsewhere', { parentId: root.id });
+    await expect(
+      thread.getByText('The answer while you are elsewhere', { exact: true }),
+    ).toBeVisible();
+    await page.waitForTimeout(900);
+    expect((await state())?.unreadMentionCount).toBe(1);
+    expect(await notices()).toEqual([{ closed: false }]);
+    await away(false);
+    await expect.poll(async () => (await state())?.unreadMentionCount).toBe(0);
+    await expect.poll(notices).toEqual([{ closed: true }]);
   });
 });

@@ -14,7 +14,9 @@ import type { PushSubscribeRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
+import { PERSON_KEY } from '../../data/browser-storage';
 import { expectNoAxeViolations } from '../../testing/axe';
+import { expectFocusOn } from '../../testing/focus';
 import { installDom } from '../../testing/dom';
 import { IDS, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
@@ -22,7 +24,7 @@ import { person } from '../../testing/user';
 import { StorageProvider } from '../../data/storage-provider';
 import { Toaster } from '../../ui/toast';
 import type { DeviceSubscription, PushDevice } from './device';
-import type { Notifier } from './notifier';
+import type { Notice, Notifier } from './notifier';
 import { PUSH_OWNER_KEY } from './push';
 
 installDom();
@@ -528,14 +530,33 @@ describe('one switch over the open tab and the closed one (D-148)', () => {
     notifier: Notifier,
     owner?: string,
   ): Promise<View> => {
+    let release = (): void => undefined;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const view = await renderApp(
       <>
         <Outlet />
         <Toaster dismissLabel="Close" />
       </>,
-      { path: NOTIFICATIONS, api, push: device, notifier },
+      {
+        path: NOTIFICATIONS,
+        api: {
+          ...api,
+          me: async (signal) => {
+            await ready;
+            return await api.me(signal);
+          },
+        },
+        push: device,
+        notifier,
+      },
     );
-    if (owner !== undefined) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
+    if (owner !== undefined) {
+      view.world.storage.setItem(PERSON_KEY, IDS.me);
+      view.world.storage.setItem(PUSH_OWNER_KEY, owner);
+    }
+    release();
     await settle();
     await view.findByRole('heading', { level: 1, name: 'Notifications' });
     await settle();
@@ -607,5 +628,96 @@ describe('one switch over the open tab and the closed one (D-148)', () => {
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
     expect(offered(view)).toContain('Turn on');
     view.unmount();
+  });
+
+  test('an enabled device can request a test, without asking permission again or claiming delivery', async () => {
+    const shown: Notice[] = [];
+    const page = aNotifier('granted');
+    const view = await openWith(
+      aSignedInApi(),
+      null,
+      {
+        ...page.notifier,
+        show: (notice) => {
+          shown.push(notice);
+          return true;
+        },
+      },
+      IDS.me,
+    );
+    act(() => {
+      view.getByRole('button', { name: 'Until tomorrow' }).focus();
+    });
+    const keyboard = person();
+    await keyboard.tab();
+    expectFocusOn(card(view).getByRole('button', { name: 'Test notification' }));
+    await keyboard.keyboard('{Enter}');
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({
+      title: 'Purlay notifications',
+      body: 'This is a test notification from Purlay.',
+      tag: 'purlay:test',
+    });
+    shown[0]?.onOpen();
+    expect(page.asked()).toBe(0);
+    expect(view.getByText(/^Test notification requested\./)).toBeDefined();
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
+  test('a device that is off is not offered a test', async () => {
+    const view = await openWith(aSignedInApi(), null, aNotifier('default').notifier);
+    expect(card(view).queryByRole('button', { name: 'Test notification' })).toBeNull();
+    view.unmount();
+  });
+
+  test('a browser refusing the test says so, as does an unexpected notification failure', async () => {
+    for (const throws of [false, true]) {
+      const view = await openWith(
+        aSignedInApi(),
+        null,
+        {
+          ...aNotifier('granted').notifier,
+          show: () => {
+            if (throws) throw new Error('notification service unavailable');
+            return false;
+          },
+        },
+        IDS.me,
+      );
+      await person().click(card(view).getByRole('button', { name: 'Test notification' }));
+      expect(view.getByText(/^Your browser could not show the test notification\./)).toBeDefined();
+      expect(view.queryByText(/^Test notification requested\./)).toBeNull();
+      view.unmount();
+    }
+  });
+
+  test('permission revoked while open turns the device off before a test can be shown', async () => {
+    for (const next of ['denied', 'default'] as const) {
+      let allowed: NotificationPermission = 'granted';
+      let shown = 0;
+      const view = await openWith(
+        aSignedInApi(),
+        null,
+        {
+          ...aNotifier('granted').notifier,
+          permission: () => allowed,
+          show: () => {
+            shown += 1;
+            return true;
+          },
+        },
+        IDS.me,
+      );
+      allowed = next;
+      await person().click(card(view).getByRole('button', { name: 'Test notification' }));
+      await settle();
+      expect(shown).toBe(0);
+      expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
+      expect(card(view).queryByRole('button', { name: 'Test notification' })).toBeNull();
+      if (next === 'denied') expectBlocked(view);
+      else expect(offered(view)).toContain('Turn on');
+      view.unmount();
+    }
   });
 });

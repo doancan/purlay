@@ -272,6 +272,18 @@ without them. A filesystem store for the simplest self-host (D-16) is not built 
 Storage keys are opaque and never served as public URLs — downloads are brokered by the API so
 workspace membership is actually checked (`ARCHITECTURE.md` §9).
 
+**Enabling Web Push on an existing server.** Generate the pair with `bun run push:keys` (or the
+image command in `docker/production.env.example`), put both printed values and `VAPID_SUBJECT` in
+the actual deployment env file, and recreate the API and scheduler using the same Compose files
+and env file as the deployment. Keep the private key with the other secrets and retain the pair
+across updates: changing it requires devices to subscribe again. A subject of the deployment's
+HTTPS address is sufficient. Signed in, `GET /api/push/key` must now return a non-null public key.
+Each person still turns notifications on in **Settings → Notifications** on each device; server
+keys do not grant a browser permission. **Test notification** checks that device's browser notice,
+not the server-to-push-service path. Verify closed-tab delivery separately from another account,
+with the recipient's chosen channel level and Deep Work taken into account; inspect the API's
+`push refused` or `push not taken` logs if a subscribed device hears nothing.
+
 ## Interface
 
 | Variable | Required | Default | Notes |

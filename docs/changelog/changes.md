@@ -25,6 +25,8 @@ have it.
 
 ### Added
 
+- **Notifications** — An enabled device can request a test notification, with permission and device-setting guidance if it cannot be shown (D-148)
+
 - **Native app** — The public client handshake advertises additive API capabilities, beginning with notification type filtering, without requiring a newer app or changing contract-version gates (D-186)
 
 - **Inbox** — Clients can filter notification history by one or more stored reasons before pagination, independently of All/Unread; omission keeps every type (D-106)
@@ -52,6 +54,9 @@ have it.
 - **Messages** — A person back from a long disconnect has every unsent message sent, up to the fifty a client keeps, where the server used to refuse all but the first eighteen: the burst a connection or a person's writes may spend at once is sixty frames, the rate still ten a second (D-198)
 
 ### Fixed
+
+- **Notifications** — A visible window behind another no longer marks new channel messages or thread replies read and closes their notices; returning to the conversation reads them (D-147, D-148)
+- **Notifications** — Settings correctly lists channels set to Every message among what can interrupt; resolved questions remain in the inbox (D-107, D-148)
 
 - **Operations** — The browser budget no longer blocks on the keystroke with 2,000 messages loaded, which the feed decision accepts and a hosted runner measures at twice its neighbour (D-199)
 - **Workspace** — A newly invited member appears in already-open member lists and can be added to a channel without reloading (D-115, D-124)
