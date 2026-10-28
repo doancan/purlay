@@ -903,6 +903,41 @@ export type SavedState = Static<typeof SavedState>;
  * `PUT /api/messages/:messageId/saved` — save it, or move it to a state. Without `state` a new save
  * is `in_progress` and an existing one keeps the state it has: saving again never undoes "done".
  */
+/** Durable drafts delivered by the server at the chosen time, independently of a client session. */
+export const SCHEDULED_MESSAGES_MAX = 100;
+export const SCHEDULE_AHEAD_MAX_DAYS = 365;
+export const ScheduledMessageState = Type.Union([
+  Type.Literal('pending'),
+  Type.Literal('sent'),
+  Type.Literal('failed'),
+]);
+export type ScheduledMessageState = Static<typeof ScheduledMessageState>;
+export const ScheduleMessageRequest = FromClient({
+  content: SendContent,
+  parentId: Type.Optional(Uuid),
+  attachmentIds: Type.Optional(AttachmentIds),
+  sendAt: Timestamp,
+});
+export type ScheduleMessageRequest = Static<typeof ScheduleMessageRequest>;
+export const ScheduledMessage = Type.Object({
+  id: Uuid,
+  channelId: Uuid,
+  parentId: Type.Union([Uuid, Type.Null()]),
+  content: SendContent,
+  attachments: Type.Array(Attachment),
+  sendAt: Timestamp,
+  state: ScheduledMessageState,
+  sentMessageId: Type.Union([Uuid, Type.Null()]),
+  failureCode: Type.Union([Type.String(), Type.Null()]),
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+});
+export type ScheduledMessage = Static<typeof ScheduledMessage>;
+export const ScheduledMessageList = Type.Array(ScheduledMessage, {
+  maxItems: SCHEDULED_MESSAGES_MAX,
+});
+export type ScheduledMessageList = Static<typeof ScheduledMessageList>;
+
 export const SaveMessageRequest = FromClient({ state: Type.Optional(SavedState) });
 export type SaveMessageRequest = Static<typeof SaveMessageRequest>;
 
@@ -1277,6 +1312,7 @@ export type ClientMinimum = Static<typeof ClientMinimum>;
  * an older client can ignore capability names introduced later (D-58).
  */
 export const ClientCapabilities = Type.Object({
+  scheduledMessages: Type.Optional(Type.Boolean()),
   notificationTypeFilters: Type.Optional(
     Type.Boolean({
       description: 'GET /api/notifications accepts the types CSV filter before pagination.',

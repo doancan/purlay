@@ -29,6 +29,7 @@ export type {
   ExpressionBuilder,
   RawBuilder,
   SelectQueryBuilder,
+  Selectable,
   SqlBool,
 } from 'kysely';
 export {

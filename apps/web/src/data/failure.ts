@@ -72,6 +72,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'ROUTE_NOT_FOUND':
     case 'WORKSPACE_NOT_FOUND':
     case 'CHANNEL_NOT_FOUND':
+    case 'SCHEDULED_MESSAGE_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'USER_NOT_FOUND':
@@ -114,6 +115,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':
     case 'EXPORT_IN_PROGRESS':
+    case 'SCHEDULED_MESSAGE_SENT':
+    case 'SCHEDULED_MESSAGE_LIMIT':
     case 'LAST_CHANNEL_MEMBER':
       return 'failure.refused';
     case 'VALIDATION_FAILED':

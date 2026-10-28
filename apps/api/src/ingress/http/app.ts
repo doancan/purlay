@@ -184,6 +184,7 @@ import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
+import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { starChannel } from './star';
@@ -908,6 +909,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
+    .get(
+      '/api/workspaces/:workspaceId/scheduled',
+      async ({ request, params }) => await listScheduled(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/channels/:channelId/scheduled/:scheduledId',
+      async ({ request, params, body }) =>
+        await putScheduled(dependencies, request, params.channelId, params.scheduledId, body),
+    )
+    .delete('/api/channels/:channelId/scheduled/:scheduledId', async ({ request, params, set }) => {
+      await deleteScheduled(dependencies, request, params.channelId, params.scheduledId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/workspaces/:workspaceId/saved',
       async ({ request, params }) => await listSaved(dependencies, request, params.workspaceId),

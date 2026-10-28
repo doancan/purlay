@@ -53,6 +53,9 @@ import {
   ReadNotificationsRequest,
   ReadThreadRequest,
   SaveMessageRequest,
+  ScheduleMessageRequest,
+  ScheduledMessage,
+  ScheduledMessageList,
   SavedIds,
   SavedPage,
   SavedQuery,
@@ -456,6 +459,29 @@ export const ENDPOINTS = [
     path: '/api/messages/:messageId/saved',
     auth: 'session',
     responses: { 204: null },
+  }),
+
+  read({
+    id: 'scheduleMessage',
+    method: 'PUT',
+    path: '/api/channels/:channelId/scheduled/:scheduledId',
+    auth: 'session',
+    body: ScheduleMessageRequest,
+    responses: { 200: ScheduledMessage },
+  }),
+  read({
+    id: 'cancelScheduledMessage',
+    method: 'DELETE',
+    path: '/api/channels/:channelId/scheduled/:scheduledId',
+    auth: 'session',
+    responses: { 204: null },
+  }),
+  read({
+    id: 'listScheduledMessages',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/scheduled',
+    auth: 'session',
+    responses: { 200: ScheduledMessageList },
   }),
 
   // ── What needs the person, and what they kept

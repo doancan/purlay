@@ -175,6 +175,7 @@ const linkAttachments = async (
     .where('workspace_id', '=', context.workspaceId)
     .where('uploader_id', '=', context.userId)
     .where('message_id', 'is', null)
+    .where('scheduled_message_id', 'is', null)
     .returning('size_bytes')
     .execute();
   if (linked.length !== ids.length) {

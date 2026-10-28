@@ -186,6 +186,7 @@ export const storeUpload = async (
         .where('workspace_id', '=', context.workspaceId)
         .where('uploader_id', '=', context.userId)
         .where('message_id', 'is', null)
+        .where('scheduled_message_id', 'is', null)
         .executeTakeFirstOrThrow();
       if (Number(waiting.mine) >= PENDING_UPLOADS_MAX) {
         throw new AppError({
@@ -253,6 +254,7 @@ export const discardUpload = async (
       .where('id', '=', attachmentId)
       .where('uploader_id', '=', userId)
       .where('message_id', 'is', null)
+      .where('scheduled_message_id', 'is', null)
       .returning(['storage_key', 'thumbnail_key'])
       .executeTakeFirst();
     if (gone === undefined) throw attachmentNotFound();

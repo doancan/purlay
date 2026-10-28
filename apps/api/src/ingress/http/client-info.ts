@@ -28,7 +28,7 @@ export const clientInfo = (
 ): ClientInfo => {
   const { macos } = clientPolicyOf(config);
   return {
-    capabilities: { notificationTypeFilters: true },
+    capabilities: { notificationTypeFilters: true, scheduledMessages: true },
     server: { version: SERVER_VERSION },
     contractVersion: CONTRACT_VERSION,
     appUrl: config.APP_URL,

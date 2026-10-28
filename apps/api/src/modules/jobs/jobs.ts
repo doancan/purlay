@@ -100,6 +100,7 @@ export const sweepOrphans = async (
       const gone = await transaction
         .deleteFrom('attachments')
         .where('message_id', 'is', null)
+        .where('scheduled_message_id', 'is', null)
         .where(
           'id',
           'in',
@@ -107,6 +108,7 @@ export const sweepOrphans = async (
             .selectFrom('attachments')
             .select('id')
             .where('message_id', 'is', null)
+            .where('scheduled_message_id', 'is', null)
             .where('created_at', '<', cutoff)
             .orderBy('id')
             .limit(ORPHAN_BATCH),

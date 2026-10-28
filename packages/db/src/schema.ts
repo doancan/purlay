@@ -35,6 +35,8 @@ export type NotificationType = "channel_message" | "direct_message" | "mention" 
 
 export type SavedState = "archived" | "completed" | "in_progress";
 
+export type ScheduledMessageState = "failed" | "pending" | "sent";
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserRole = "admin" | "member" | "owner";
@@ -72,6 +74,7 @@ export interface Attachments {
   kind: Generated<AttachmentKind>;
   message_id: string | null;
   mime_type: string;
+  scheduled_message_id: string | null;
   size_bytes: Int8;
   storage_key: string;
   thumbnail_key: string | null;
@@ -326,6 +329,22 @@ export interface SavedMessages {
   workspace_id: string;
 }
 
+export interface ScheduledMessages {
+  channel_id: string;
+  content: string;
+  created_at: Generated<Timestamp>;
+  failure_code: string | null;
+  id: string;
+  parent_id: string | null;
+  revision: Generated<number>;
+  send_at: Timestamp;
+  sent_message_id: string | null;
+  state: Generated<ScheduledMessageState>;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface ServerAuditLog {
   action: string;
   actor_user_id: string | null;
@@ -499,6 +518,7 @@ export interface DB {
   rate_limits: RateLimits;
   reactions: Reactions;
   saved_messages: SavedMessages;
+  scheduled_messages: ScheduledMessages;
   server_audit_log: ServerAuditLog;
   server_settings: ServerSettings;
   sessions: Sessions;

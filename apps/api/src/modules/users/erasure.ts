@@ -207,6 +207,7 @@ export const eraseAccount = async (
     .execute();
 
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
+  await executor.deleteFrom('scheduled_messages').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('saved_messages').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('thread_follows').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('notifications').where('user_id', '=', person.id).execute();

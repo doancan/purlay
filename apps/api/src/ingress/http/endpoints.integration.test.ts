@@ -254,6 +254,24 @@ const STEPS: readonly Step[] = [
     status: 200,
   },
   { id: 'listSavedIds', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
+  {
+    id: 'scheduleMessage',
+    spec: (c) => ({
+      params: { channelId: c.channelId, scheduledId: c.rootId },
+      json: { content: 'Later', sendAt: new Date(NOW.getTime() + 60000).toISOString() },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listScheduledMessages',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  {
+    id: 'cancelScheduledMessage',
+    spec: (c) => ({ params: { channelId: c.channelId, scheduledId: c.rootId } }),
+    status: 204,
+  },
   { id: 'unsaveMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
   { id: 'resolveThread', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   { id: 'reopenThread', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },

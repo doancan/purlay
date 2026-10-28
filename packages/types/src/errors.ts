@@ -63,6 +63,9 @@ export const ErrorCode = Type.Union([
    * what the caller must not be able to learn.
    */
   Type.Literal('MESSAGE_NOT_FOUND'),
+  Type.Literal('SCHEDULED_MESSAGE_NOT_FOUND'),
+  Type.Literal('SCHEDULED_MESSAGE_SENT'),
+  Type.Literal('SCHEDULED_MESSAGE_LIMIT'),
   /** An earlier version of a message that is not there, or not this message's (D-135). */
   Type.Literal('MESSAGE_VERSION_NOT_FOUND'),
   /** An incident that is not there, or not this channel's (D-137). */
@@ -227,6 +230,9 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
+  SCHEDULED_MESSAGE_NOT_FOUND: 404,
+  SCHEDULED_MESSAGE_SENT: 409,
+  SCHEDULED_MESSAGE_LIMIT: 409,
   MESSAGE_VERSION_NOT_FOUND: 404,
   INCIDENT_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,

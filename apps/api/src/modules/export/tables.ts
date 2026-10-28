@@ -149,6 +149,7 @@ export const COLUMNS: Columns = {
     pinned_at: 'export',
   },
   attachments: {
+    scheduled_message_id: 'omit',
     id: 'export',
     workspace_id: 'export',
     channel_id: 'export',
@@ -259,6 +260,7 @@ export const COLUMNS: Columns = {
 
 /** Every other table, and why it is not in an export. Exhaustive: a new table must say. */
 export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, string>> = {
+  scheduled_messages: 'private unsent messages, never workspace exports',
   accounts: 'a provider’s account and a credential’s password hash: the person’s own (D-179)',
   verifications: 'short-lived sign-in tokens, credentials of the person’s own (D-179)',
   rate_limits:

@@ -1939,6 +1939,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0057_session_device_name.sql sessions.device_name: the name the native application gave the Mac a session was made for, which a device list shows  (D-193)
 0058_message_changed_at.sql messages.changed_at, stamped by a trigger on every update: when the server last wrote a message, which a client catching up asks by  (D-194)
 0059_server_settings_oidc.sql server_settings.oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_name: the single sign-on provider, a triple or nothing  (D-200)
+0062_scheduled_messages.sql durable personal scheduled messages, attachment reservations and due-row indexes
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

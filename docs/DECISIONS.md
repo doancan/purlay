@@ -765,6 +765,11 @@ one seat over.
 
 ### D-30. Background work runs as CLI commands under an external scheduler
 
+**Amended 2026-10-28:** user-scheduled message delivery runs in each API process at 15-second intervals.
+Database row claims with `SKIP LOCKED` prevent duplicate sends across nodes, and the live process publishes
+through its normal backplane after commit. Shutdown drains the current transaction before closing the pool.
+This exception covers user-timed actions; maintenance sweeps retain their external scheduler.
+
 Three periodic jobs were promised and none had anything to run it: the orphan attachment sweeper
 (`ARCHITECTURE.md` §9), the `link_previews` expiry sweep (D-23), and the `storage_used_bytes`
 reconciliation (invariant I-7). D-27 adds a fourth, and session expiry a fifth.

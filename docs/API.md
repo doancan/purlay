@@ -434,6 +434,9 @@ repaired. Nobody else hears it.
 | ○ | `DELETE` | `/api/messages/:messageId/reactions/:emoji` | Takes back the caller's own reaction and nobody else's. Idempotent |
 | ○ | `PUT` | `/api/messages/:messageId/pin` | Pins the message for its channel. `204`, idempotent: pinned already, nothing changes and nobody is told. A member's: a visible non-member is `403 NOT_A_CHANNEL_MEMBER`; a deleted message is `404`; past `PINS_MAX` pins of messages not deleted in the channel, `409 PINS_LIMIT`. The channel hears `PINS_UPDATED` (D-130) |
 | ○ | `DELETE` | `/api/messages/:messageId/pin` | Lets the pin go, a deleted message's included. `204`, idempotent; a member's, as pinning is; the channel hears `PINS_UPDATED` when there was one |
+| ○ | `PUT` | `/api/channels/:channelId/scheduled/:scheduledId` | `ScheduleMessageRequest`: replace an owned pending or failed scheduled message; returns `ScheduledMessage`. The UUID makes retries one draft. Requires channel membership. |
+| ○ | `DELETE` | `/api/channels/:channelId/scheduled/:scheduledId` | Cancel an owned unsent message, `204`; already sent is `409 SCHEDULED_MESSAGE_SENT`. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/scheduled` | `ScheduledMessageList`: the caller’s visible pending and failed drafts, ordered by send time, bounded by `SCHEDULED_MESSAGES_MAX` (100). |
 | ○ | `PUT` | `/api/messages/:messageId/saved` | `{ state? }` (`SaveMessageRequest`): saves the message for the caller, or moves its save to `state`; without `state` a new save is `in_progress` and an existing one keeps its state. `204`, idempotent. A deleted message is `404`; past `SAVED_MAX` saves shown in the workspace, a new save is `409 SAVED_LIMIT`. The caller's devices are told `SAVED_UPDATED` (D-128) |
 | ○ | `DELETE` | `/api/messages/:messageId/saved` | Lets the caller's save go, a deleted message's included. `204`, idempotent; tells their devices `SAVED_UPDATED` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34). `?channelId=` narrows it to that channel — what a channel's header counts and its narrowed view lists; a channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as in search |
@@ -576,3 +579,19 @@ Health endpoints expose no version, no dependency detail and no counts — they 
    that decides its channel-visibility test. (D-21, D-34, D-63, D-64)
 4. The handler validates, calls exactly one service, and serializes. No business logic in
    ingress. (`ARCHITECTURE.md` §1)
+
+### Scheduled messages
+
+Advertised by `capabilities.scheduledMessages`. `sendAt` must be an absolute timestamp at least five seconds
+and at most 365 days ahead. `content`, optional root `parentId`, and optional own uploaded `attachmentIds`
+follow ordinary send validation. PUT is a full replacement; `SCHEDULED_MESSAGE_LIMIT` refuses a new draft
+when the caller has 100 pending/failed drafts in the workspace. Other owners’ IDs return
+`SCHEDULED_MESSAGE_NOT_FOUND`. Sent IDs cannot be edited or cancelled.
+
+The API claims due rows every 15 seconds with `FOR UPDATE SKIP LOCKED`. It rechecks membership and the
+reply target, creates a UUIDv7 at delivery time, and atomically writes the message and sent marker.
+Reserved uploads cannot be discarded, swept or claimed by immediate sends. A domain refusal leaves
+`state: failed` with `failureCode`, editable for retry; transient database failures leave it pending.
+Sent/failed records expire after 30 days. Lists refresh on opening and while the native manager is open.
+Delivery continues without a desktop connection and catches up after a server restart; the requested
+time is a lower bound, not a guarantee while the server is unavailable.
