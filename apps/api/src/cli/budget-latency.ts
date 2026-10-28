@@ -13,6 +13,10 @@
  * pace inside the rate budgets, and every message is timed from the frame leaving to its `ACK` on the
  * sender's socket and to its `MESSAGE_CREATED` on the other's.
  *
+ * Three independent API processes are measured sequentially, sixty messages each. The median of
+ * their p95s is compared, with every trial reported and recorded: one isolated stall cannot decide
+ * the gate, and a slowdown in two or three trials still fails. Never retry until a pass (D-49).
+ *
  * **It blocks on a regression, never on the line** (D-49): a p95 on a shared machine moves by tens of
  * percent between identical runs, and a gate people learn to re-run has stopped being a gate. So with a
  * baseline it fails when a p95 is more than `REGRESSION_FACTOR` times the recorded one *and* past the
@@ -49,6 +53,37 @@ export interface Latency {
   readonly fanOutP95Ms: number;
   readonly messages: number;
 }
+
+const LATENCY_TRIALS = 3;
+const MESSAGES_PER_TRIAL = 60;
+
+interface RepeatedLatency extends Latency {
+  readonly trials: readonly Latency[];
+}
+
+/** Every trial counts; the middle p95 is chosen independently for ACK and delivery. */
+export const summarizeTrials = (trials: readonly Latency[]): RepeatedLatency => {
+  if (
+    trials.length !== LATENCY_TRIALS ||
+    trials.some(
+      (trial) =>
+        trial.messages !== MESSAGES_PER_TRIAL ||
+        !Number.isFinite(trial.ackP95Ms) ||
+        trial.ackP95Ms <= 0 ||
+        !Number.isFinite(trial.fanOutP95Ms) ||
+        trial.fanOutP95Ms <= 0,
+    )
+  ) {
+    throw new Error('three complete, finite latency trials of sixty messages are required');
+  }
+  const middle = (values: number[]): number => values.sort((a, b) => a - b)[1] ?? Number.NaN;
+  return {
+    ackP95Ms: middle(trials.map((trial) => trial.ackP95Ms)),
+    fanOutP95Ms: middle(trials.map((trial) => trial.fanOutP95Ms)),
+    messages: MESSAGES_PER_TRIAL,
+    trials,
+  };
+};
 
 /** The value at the 95th percentile, nearest rank. */
 export const p95 = (samples: readonly number[]): number => {
@@ -295,7 +330,11 @@ export const main = async (
   const baselineFile = firstKept ? undefined : (keepFile ?? optionOf(args, '--baseline'));
   const recordFile = optionOf(args, '--record');
   const baseline = baselineFile === undefined ? null : await readLatency(baselineFile);
-  const now = await measure(60);
+  const trials: Latency[] = [];
+  for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
+    trials.push(await measure(MESSAGES_PER_TRIAL));
+  }
+  const now = summarizeTrials(trials);
   const { regressed, lines } = judge(now, baseline);
   const write = async (file: string): Promise<void> => {
     await Bun.write(file, `${JSON.stringify(now, null, 2)}\n`);
@@ -304,7 +343,14 @@ export const main = async (
   // A regression is not adopted: the next run is judged against the last one that passed.
   if (keepFile !== undefined && !regressed) await write(keepFile);
   const said = firstKept ? ['no baseline yet: this run is recorded, nothing compared'] : [];
-  return { lines: [...said, ...lines], code: regressed ? 1 : 0 };
+  const detail = trials.map(
+    (trial, index) =>
+      `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms (${String(trial.messages)} messages)`,
+  );
+  return {
+    lines: [...said, ...lines, 'verdict: median of three independent p95 measurements', ...detail],
+    code: regressed ? 1 : 0,
+  };
 };
 
 if (import.meta.main) {

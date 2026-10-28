@@ -1765,6 +1765,33 @@ is the envelope (a first version judged against the middle and still failed at 1
 fewer than three runs to see a spread in, the factor is 2. A regression is still never
 adopted, and the line itself is still held where it means something, by the tests on a developer's machine.
 
+*Amended 2026-10-28 (API latency trials):* [main run 40662081925](https://github.com/doancan/purlay/actions/runs/40662081925)
+reported ACK and fan-out p95 of 57.3 ms against a 14.8 ms baseline, after a CI-only change with no
+API or database runtime diff. Three unchanged local runs measured ACK p95 of 24.01, 23.56 and
+23.98 ms; they did **not** reproduce the hosted slowdown or prove its cause. The old log held only
+one p95 per metric, so it could not distinguish a single disturbed run from sustained slowness.
+[The next main run, 40666696134](https://github.com/doancan/purlay/actions/runs/40666696134), passed
+at 14.4 ms ACK and 14.0 ms fan-out against the same 14.8 ms baseline, with no message-path change.
+That supports run-to-run variability rather than a persistent code regression; it does not identify
+the hosted disturbance's cause.
+
+The command now always measures **three independent API processes sequentially**, each with sixty
+messages at the same pace, and compares the **median of their p95s per metric**. This is not a pooled
+percentile of 180 messages. Every trial is printed and saved alongside the summary. One isolated
+slow trial does not decide the verdict; a sustained slowdown in two or three trials still fails
+against the unchanged **1.5× factor and 20 ms floor**. Trials are neither retried until green nor
+discarded on failure: an interrupted or incomplete measurement fails the command. Existing flat
+baseline files remain readable and are compared, rather than reset. Only a passing summary replaces
+`--keep`; CI separately records the current summary and trials, even on regression, in a seven-day
+artifact. The cost is roughly sixteen more seconds per budget invocation, including the invocation
+inside the integration tests. The first comparison may still be against a legacy single-run baseline.
+
+**Rejected:** raising the factor/floor, deleting the baseline, using the minimum trial, retrying until
+a pass, or dropping cold messages: each would hide evidence or change the performance being measured.
+The repeated-trial design follows [pyperf's guidance on independent processes and multiple values](https://pyperf.readthedocs.io/en/latest/run_benchmark.html);
+the trial count and all raw p95s remain visible. A runner consistently slower than the baseline will
+still fail; investigating its environment remains necessary if that occurs.
+
 ---
 
 ### D-50. The client stays a single-page application, with a prerendered shell
