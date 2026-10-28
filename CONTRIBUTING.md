@@ -64,7 +64,8 @@ the first four drafts of this project ended up contradicting each other at the s
 
 Start the local environment with `bun run db:up` (PostgreSQL and object storage, waits for both to
 be healthy). `bun run db:up:postgres` starts the database alone — all the integration tests need,
-and what CI runs, because nothing the integration tests reach reads object storage yet.
+because nothing the integration tests reach reads object storage yet. `bun run db:up:tests` starts the
+database and Redis together, each waited on until healthy, which is what CI's test job runs.
 
 **Two environment files, and a process reads one of them.** `.env` is the development servers' (`bun run
 dev`, `dev:api`, `dev:web`, the database tools): what you would give a running Purlay. **`.env.test` is
@@ -97,6 +98,7 @@ failure of the tests that use it.
 | `bun run queue` | What is startable now, and what each blocked issue waits on |
 | `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, touches only what its issues are about (D-74), and answers each failure mode of §6.9 (D-178) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
+| `bun run db:up:tests` | Start PostgreSQL and Redis together and wait until both are healthy: every service the whole suite reads, as CI's `schema` job starts them |
 | `bun run db:up:redis` | Start Redis alone, for the tests of the cloud's shared bus, limiters and presence (D-201): put `REDIS_URL=redis://localhost:6379` in `.env.test`. Those files, `*.redis.integration.test.ts`, are the only tests that read it; without it `test:all` leaves them out behind a banner, and in CI it refuses. Nothing the application does without `REDIS_URL` reaches it |
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
@@ -514,6 +516,10 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 - **The browser jobs run when a screen can have moved.** Four jobs are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or
   `ci.yml` (`bun run ci:changes`), and on main always.
+- **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
+  no service and `schema` runs every test once, with coverage; `verify` needs both, runs whatever they
+  did, and passes only when each succeeded — a failure, a cancellation, a skip or a missing result is a
+  refusal (`bun run ci:gate`, D-203). CI only: locally `bun run verify` is the same two halves in one run.
 
 ---
 
