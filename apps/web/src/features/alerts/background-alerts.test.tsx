@@ -24,6 +24,7 @@ import {
   someChannels,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
+import { person } from '../../testing/user';
 import type { Notice, Notifier } from '../push/notifier';
 import { PUSH_OWNER_KEY } from '../push/push';
 
@@ -99,19 +100,21 @@ const open = async ({
   owner = IDS.me,
   inbox = [mention()],
   me = aSession(),
+  path = `/w/acme/c/${IDS.api}`,
 }: {
   notifier?: FakeNotifier;
   owner?: string | null;
-  inbox?: Notification[];
+  inbox?: Notification[] | Promise<Notification[]>;
   me?: MeResponse;
+  path?: string;
 } = {}): Promise<Awaited<ReturnType<typeof renderApp>>> => {
   const view = await renderApp(<Outlet />, {
-    path: `/w/acme/c/${IDS.api}`,
+    path,
     notifier: notifier.notifier,
     api: aSignedInApi({
       me: () => Promise.resolve(me),
       channels: () => Promise.resolve(withBadge({})),
-      notifications: () => Promise.resolve({ data: inbox, nextCursor: null }),
+      notifications: async () => ({ data: await inbox, nextCursor: null }),
     }),
   });
   if (owner !== null) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
@@ -190,6 +193,71 @@ describe('a tab in the background', () => {
     await rise(view, { [IDS.deploys]: 1 });
     await rise(view, { [IDS.deploys]: 0 });
     expect(fake.closed).toEqual([fake.shown[0]?.tag ?? 'none']);
+    view.unmount();
+  });
+
+  for (const change of ['focus', 'read', 'quiet', 'off', 'unmount'] as const) {
+    test(`a delayed inbox cannot show an obsolete notice after ${change}`, async () => {
+      let release: (inbox: Notification[]) => void = () => undefined;
+      const inbox = new Promise<Notification[]>((resolve) => {
+        release = resolve;
+      });
+      const fake = aNotifier();
+      const view = await open({
+        notifier: fake,
+        inbox,
+        ...(change === 'off' ? { path: '/w/acme/settings/notifications' } : {}),
+      });
+      await rise(view, { [IDS.deploys]: 1 });
+      expect(fake.shown).toEqual([]);
+      if (change === 'focus') focused = true;
+      if (change === 'read') await rise(view, { [IDS.deploys]: 0 });
+      if (change === 'quiet') {
+        const me = aSession();
+        act(() => {
+          view.world.client.setQueryData(keys.me, {
+            ...me,
+            memberships: me.memberships.map((m) => ({
+              ...m,
+              deepWorkUntil: '2026-09-09T13:00:00.000Z',
+            })),
+          });
+        });
+        await settle();
+      }
+      if (change === 'off') {
+        await person().click(view.getByRole('button', { name: 'Turn off' }));
+        await settle();
+      }
+      if (change === 'unmount') view.unmount();
+      release([mention()]);
+      await settle();
+      expect(fake.shown).toEqual([]);
+      if (change !== 'unmount') view.unmount();
+    });
+  }
+
+  test('an unrelated badge update does not discard a pending notice that is still needed', async () => {
+    let release: (inbox: Notification[]) => void = () => undefined;
+    const inbox = new Promise<Notification[]>((resolve) => {
+      release = resolve;
+    });
+    const fake = aNotifier();
+    const view = await open({ notifier: fake, inbox });
+    await rise(view, { [IDS.deploys]: 1 });
+    act(() => {
+      view.world.client.setQueryData(
+        keys.channels(IDS.workspace),
+        withBadge({ [IDS.deploys]: 1 }).map((channel) =>
+          channel.id === IDS.api ? { ...channel, name: 'api-renamed' } : channel,
+        ),
+      );
+    });
+    await settle();
+    expect(view.getByRole('link', { name: /api-renamed/ })).toBeDefined();
+    release([mention()]);
+    await settle();
+    expect(fake.shown.map((n) => n.body)).toEqual(['Alice mentioned you']);
     view.unmount();
   });
 

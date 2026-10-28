@@ -322,7 +322,10 @@ it. On a narrow window the navigation opens as the sidebar does.
 - **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
 - **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126,
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
-  where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
+  where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29, D-107).
+  While on, **Test notification** requests a notice on this device. Its outcome says the browser
+  accepted the request, not that the operating system displayed it; a refusal explains where to check
+  permission and device settings. It does not send a chat message or change the channel preferences.
 - **Keyboard shortcuts** — the reference, as a page.
 - **Sessions & account** — first *How you sign in* (D-176, amended by D-179): the address and whether a
   link sent to it signs in, and, only when GitHub is linked, a GitHub row with the login — read only,
@@ -614,7 +617,9 @@ The hardest problem in the product, and the subject of O-5, closed by D-199.
   `channel_members.last_read_message_id`. It persists while the channel is open — it does not
   vanish the instant the messages are seen, because it is the reader's place-holder, not a
   notification.
-- **Marking read** happens when the bottom is reached, or on channel exit. Never on mere render.
+- **Marking read** happens when the bottom is reached with the page visible and its window focused,
+  or on channel exit for the messages the person already reached. A blur cancels a pending read;
+  returning to focus reads what is then in view. Never on mere render or from a visible window behind another.
 - **The feed reads the feed, not the threads** (D-147). Reading the channel to the bottom reads what
   the feed shows; an answer in a thread keeps waiting — on the badge, in the tab title, in the inbox —
   until its thread is open in the panel with the page in front of the person, which reads its replies

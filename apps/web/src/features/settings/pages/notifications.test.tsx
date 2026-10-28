@@ -71,7 +71,7 @@ describe('notifications', () => {
       'Somebody mentions you with @',
       'Somebody writes to you directly',
       'Somebody replies in a thread you started or replied in',
-      'A question you asked is resolved',
+      'Somebody writes in a channel you set to Every message',
     ]);
     await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();

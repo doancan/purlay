@@ -3,7 +3,7 @@
  * does not have: they must be set up on the element asked about, report what the observer
  * reports, and let go when told.
  */
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { installDom } from '../../testing/dom';
 import { FeedPortsContext, useFeedPorts, type FeedPorts } from './feed-ports';
 import { renderApp } from '../../testing/render';
@@ -127,5 +127,69 @@ describe('the browser ports', () => {
       </FeedPortsContext.Provider>,
     );
     expect(seen).toBe(false);
+  });
+});
+
+let focused = true;
+let visibility: DocumentVisibilityState = 'visible';
+let restore: () => void = () => undefined;
+
+beforeEach(() => {
+  focused = true;
+  visibility = 'visible';
+  const originalFocus = document.hasFocus.bind(document);
+  const originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+  document.hasFocus = (): boolean => focused;
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: (): DocumentVisibilityState => visibility,
+  });
+  restore = (): void => {
+    document.hasFocus = originalFocus;
+    if (originalVisibility === undefined) Reflect.deleteProperty(document, 'visibilityState');
+    else Object.defineProperty(document, 'visibilityState', originalVisibility);
+  };
+});
+
+afterEach(() => {
+  restore();
+});
+
+describe('whether a conversation is in front of its person', () => {
+  test('a visible page counts as read only while its window has focus', async () => {
+    const ports = await defaultPorts();
+    expect(ports.pageVisible()).toBe(true);
+    focused = false;
+    expect(ports.pageVisible()).toBe(false);
+    focused = true;
+    visibility = 'hidden';
+    expect(ports.pageVisible()).toBe(false);
+    focused = false;
+    expect(ports.pageVisible()).toBe(false);
+  });
+
+  test('focus, blur and tab visibility all say when reading may start or stop', async () => {
+    const ports = await defaultPorts();
+    const heard: boolean[] = [];
+    const stop = ports.onPageVisibility(() => {
+      heard.push(ports.pageVisible());
+    });
+    try {
+      focused = false;
+      window.dispatchEvent(new Event('blur'));
+      focused = true;
+      window.dispatchEvent(new Event('focus'));
+      visibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(heard).toEqual([false, true, false, true]);
+    } finally {
+      stop();
+    }
+    window.dispatchEvent(new Event('blur'));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(heard).toEqual([false, true, false, true]);
   });
 });

@@ -6707,6 +6707,12 @@ Slack's loop is a banner, a badge and a sound.
    has notifications, it asks the browser once, and where the browser has push and the server has keys
    it also subscribes. It is on while the person who turned it on is signed in here and the browser still
    allows it; a permission taken back turns it off on the next load. The page never asks on load.
+   **Amended 2026-10-28 (#796):** while on, a device test requests a browser notice, reporting only
+   that the browser accepted it, with permission/device-settings guidance on refusal. The test checks
+   permission again; a revocation turns the switch off before any request. It creates no message,
+   requires no new endpoint, and changes no channel preference. Both the feed and an open thread
+   count as read only while the page is visible **and its window is focused**; blur/focus are observed
+   alongside visibility, so an unread notice is not cleared while the person is in another window.
 5. **A dot on the favicon, and the app's badge.** While the title counts, the tab's icon is
    `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`, bound to the
    tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count

@@ -30,14 +30,22 @@ const mount = async (
   readonly calls: string[];
   readonly advance: (ms: number) => Promise<void>;
   readonly show: (on: boolean) => Promise<void>;
+  readonly foreground: (on: boolean) => Promise<void>;
 }> => {
   const timers = fakeSchedule();
   const calls: string[] = [];
+  let foreground = true;
+  const visibility = new Set<() => void>();
   const ports: FeedPorts = {
     whenVisible: () => () => undefined,
     whenResized: () => () => undefined,
-    pageVisible: () => true,
-    onPageVisibility: () => () => undefined,
+    pageVisible: () => foreground,
+    onPageVisibility: (listener) => {
+      visibility.add(listener);
+      return (): void => {
+        visibility.delete(listener);
+      };
+    },
     schedule: timers.schedule,
     clock: { now: () => new Date(0) },
   };
@@ -71,6 +79,13 @@ const mount = async (
   };
   return {
     calls,
+    foreground: async (on): Promise<void> => {
+      await act(async () => {
+        foreground = on;
+        for (const listener of visibility) listener();
+        await flush();
+      });
+    },
     advance: async (ms): Promise<void> => {
       await act(async () => {
         timers.advance(ms);
@@ -90,6 +105,17 @@ const down = (): Promise<ReadChannelResponse> =>
   Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
 
 describe('a read position the server did not take', () => {
+  test('losing focus cancels a pending read until the person returns', async () => {
+    const m = await mount(() => Promise.resolve(read(NEWEST)));
+    await m.advance(READ_DEBOUNCE_MS - 1);
+    await m.foreground(false);
+    await m.advance(READ_DEBOUNCE_MS * 2);
+    expect(m.calls).toEqual([]);
+    await m.foreground(true);
+    await m.advance(READ_DEBOUNCE_MS);
+    expect(m.calls).toEqual([NEWEST]);
+  });
+
   test('is sent again once, after a pause, and not in a loop', async () => {
     const m = await mount((call) => (call < 2 ? down() : Promise.resolve(read(NEWEST))));
     await m.advance(READ_DEBOUNCE_MS);

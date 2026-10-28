@@ -1114,6 +1114,15 @@ export const tr = {
   'push.working': 'Bir saniye…',
   'push.blocked': 'Engellendi: tarayıcının site ayarlarından izin ver',
   'push.failed': 'Bu cihazdaki bildirimler değiştirilemedi.',
+  'push.test': 'Test bildirimi',
+  'push.testTitle': 'Purlay bildirimleri',
+  'push.testBody': 'Bu, Purlay’den gelen bir test bildirimidir.',
+  'push.testRequested':
+    'Test bildirimi istendi. Görünmüyorsa cihazının bildirim ayarlarını kontrol et.',
+  'push.testFailed':
+    'Tarayıcın test bildirimini gösteremedi. Sitenin bildirim iznini ve cihazının bildirim ayarlarını kontrol et.',
+  'push.testBlocked':
+    'Bildirim izni değişti. Tarayıcının site ayarlarından Purlay’e izin verip bildirimleri yeniden aç.',
   // Arka plandaki açık bir sekmenin söyledikleri (D-148).
   'alerts.many': '{count} konuşma seni bekliyor',
   'alerts.waiting': 'Burada seni bekleyen bir şey var',
@@ -1255,7 +1264,7 @@ export const tr = {
   'settings.notifications.what.direct': 'Biri sana doğrudan yazdığında',
   'settings.notifications.what.reply':
     'Başlattığın ya da yanıtladığın bir thread’de biri yanıt verdiğinde',
-  'settings.notifications.what.resolved': 'Sorduğun bir soru çözüldüğünde',
+  'settings.notifications.what.channel': 'Her mesaj seçtiğin bir kanala biri yazdığında',
   'settings.notifications.deepWorkHint':
     'Açıkken sana hiçbir şey iletilmez — ne burada ne cihazlarında. Süresi dolunca kendiliğinden biter.',
   'settings.notifications.deepWorkStart': 'Deep Work’ü başlat',

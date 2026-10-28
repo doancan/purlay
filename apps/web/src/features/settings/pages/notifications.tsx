@@ -3,7 +3,7 @@
  * this device, and each channel's level.
  *
  * - **What interrupts you** is said first, in words (D-12, D-29): a mention, a direct message, a reply
- *   in a thread you are part of, your question resolved. Nothing else raises a badge.
+ *   in a thread you are part of, and every message in a channel set to that level (D-107).
  * - **Deep Work** is started for a while, as from the account menu, and the server stops delivering
  *   (D-15, D-108); on, it says until when and offers its end.
  * - **This device** is the Web Push switch (D-126) where the browser and the server can send; where
@@ -34,7 +34,7 @@ const INTERRUPTS = [
   { kind: 'mention', glyph: 'mention' },
   { kind: 'direct', glyph: 'person' },
   { kind: 'reply', glyph: 'reply' },
-  { kind: 'resolved', glyph: 'resolved' },
+  { kind: 'channel', glyph: 'channel' },
 ] as const satisfies readonly { readonly kind: string; readonly glyph: GlyphName }[];
 
 const WhatInterrupts = (): React.JSX.Element => {
@@ -142,7 +142,10 @@ const DeviceCard = (): React.JSX.Element => {
         }
       >
         {status === 'on' ? (
-          <Button onClick={push.turnOff}>{t('push.turnOff')}</Button>
+          <div className="flex flex-wrap gap-2">
+            {push.test !== null && <Button onClick={push.test}>{t('push.test')}</Button>}
+            <Button onClick={push.turnOff}>{t('push.turnOff')}</Button>
+          </div>
         ) : status === 'off' ? (
           <Button variant="primary" glyph="notifications" onClick={push.turnOn}>
             {t('push.turnOn')}
