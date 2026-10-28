@@ -488,6 +488,7 @@ export const Message = Type.Object({
    * A deleted message is tombstoned rather than erased, so it still occupies its
    * place in the thread it belongs to (D-9). `content` is the tombstone.
    */
+  hiddenForMe: Type.Optional(Type.Boolean()),
   deletedAt: Type.Union([Timestamp, Type.Null()]),
   createdAt: Timestamp,
   /** The root this replies to; null for a root. Threads are two levels deep (I-1). */

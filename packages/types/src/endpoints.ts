@@ -465,6 +465,13 @@ export const ENDPOINTS = [
   }),
 
   read({
+    id: 'hideMessage',
+    method: 'PUT',
+    path: '/api/messages/:messageId/hidden',
+    auth: 'session',
+    responses: { 200: Message },
+  }),
+  read({
     id: 'setMessageReminder',
     method: 'PUT',
     path: '/api/messages/:messageId/reminder',

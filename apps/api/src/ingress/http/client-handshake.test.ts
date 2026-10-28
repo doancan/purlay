@@ -47,6 +47,7 @@ describe('GET /api/client', () => {
           notificationTypeFilters: true,
           scheduledMessages: true,
           messageReminders: true,
+          personalMessageDeletion: true,
         },
         contractVersion: CONTRACT_VERSION,
       });

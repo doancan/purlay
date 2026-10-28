@@ -16,6 +16,7 @@
  * roots at or behind it; a reply's is read in its thread or in the inbox, so an answer the person
  * has not opened keeps waiting — and keeps counting as unread — however far the feed is read.
  */
+import { notHiddenBy } from '../messages/hidden';
 import { sql, type RawBuilder, type Transaction } from '@purlay/db';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -36,6 +37,7 @@ export const waitingNotifications = (
   join messages m on m.id = n.message_id and m.deleted_at is null
   where n.user_id = ${userId} and n.channel_id = ${channelId}
     and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
+    and ${notHiddenBy(userId, sql.ref('m.id'))}
 )`;
 
 /**
@@ -51,6 +53,7 @@ const waitingRepliesBehind = (
   join messages m on m.id = n.message_id and m.deleted_at is null and m.parent_id is not null
   where n.user_id = ${userId} and n.channel_id = ${channelId}
     and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
+    and ${notHiddenBy(userId, sql.ref('m.id'))}
     and n.message_id <= ${position}
 )`;
 
@@ -70,6 +73,7 @@ const unreadMessages = (
     select count(*)::int from messages
     where channel_id = ${channelId} and id > ${position}
       and sender_id is distinct from ${userId} and deleted_at is null
+      and ${notHiddenBy(userId)}
   ) + ${waitingRepliesBehind(userId, channelId, position)}
 )`;
 

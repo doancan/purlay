@@ -124,8 +124,8 @@ describe('integration: building a page of messages', () => {
       );
       expect(five.result.data).toHaveLength(5);
       expect(fifty.result.data).toHaveLength(50);
-      // The page, the reactions, the mentions, the attachments and the people who resolved: five, always.
-      expect(five.queries).toBe(5);
+      // The page, reactions, mentions, attachments, resolvers and private deletions: six, always.
+      expect(five.queries).toBe(6);
       expect(fifty.queries).toBe(five.queries);
     });
   });

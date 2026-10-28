@@ -143,6 +143,7 @@ export const takeBack = async (
         as waited(user_id, message_id)
         on waited.user_id = counted.user_id and waited.message_id = message.id
       where counted.channel_id = ${channelId}
+        and not exists (select 1 from hidden_messages h where h.user_id = counted.user_id and h.message_id = message.id)
       group by counted.user_id
       having count(*) filter (where message.ahead or waited.user_id is not null) > 0
     ) as taken

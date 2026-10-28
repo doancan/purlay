@@ -50,6 +50,15 @@ export const deliverReminders = async ({
       }
       await tx.deleteFrom('message_reminders').where('id', '=', row.id).execute();
       if (visible) {
+        visible =
+          (await tx
+            .selectFrom('hidden_messages')
+            .select('user_id')
+            .where('user_id', '=', row.user_id)
+            .where('message_id', '=', row.message_id)
+            .executeTakeFirst()) === undefined;
+      }
+      if (visible) {
         const member = await tx
           .selectFrom('workspace_members')
           .select('deep_work_until')

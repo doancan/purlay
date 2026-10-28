@@ -32,6 +32,7 @@ export const clientInfo = (
       notificationTypeFilters: true,
       scheduledMessages: true,
       messageReminders: true,
+      personalMessageDeletion: true,
     },
     server: { version: SERVER_VERSION },
     contractVersion: CONTRACT_VERSION,

@@ -404,6 +404,7 @@ const STEPS: readonly Step[] = [
     status: 204,
   },
   { id: 'logout', as: 'aliceElsewhere', spec: () => ({}), status: 204 },
+  { id: 'hideMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 200 },
   { id: 'deleteMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 204 },
   { id: 'logoutEverywhere', as: 'bob', spec: () => ({}), status: 204 },
 ];

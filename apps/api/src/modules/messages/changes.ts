@@ -82,34 +82,37 @@ export const changesIn = async (
   }
   const asOf = cursor?.asOf ?? now;
 
+  const changedAt = sql<Date>`greatest(messages.changed_at, personal.hidden_at)`;
   let statement = executor
     .selectFrom('messages')
+    .leftJoin('hidden_messages as personal', (join) =>
+      join
+        .onRef('personal.message_id', '=', 'messages.id')
+        .on('personal.user_id', '=', context.userId),
+    )
     .leftJoin('users', 'users.id', 'messages.sender_id')
-    .select([...MESSAGE_COLUMNS, 'messages.changed_at'])
+    .select(MESSAGE_COLUMNS)
+    .select(changedAt.as('changed_at'))
     .where('messages.channel_id', '=', context.channelId)
-    .where('messages.changed_at', '<=', asOf)
-    .orderBy('messages.changed_at', 'asc')
+    .where(changedAt, '<=', asOf)
+    .orderBy(changedAt, 'asc')
     .orderBy('messages.id', 'asc')
     // One more than asked for: whether another page exists is answered by reading, not by a COUNT.
     .limit(limit + 1);
 
   if (cursor !== undefined) {
     statement = statement.where(
-      sql<boolean>`(messages.changed_at, messages.id) > (${cursor.changedAt}, ${cursor.messageId}::uuid)`,
+      sql<boolean>`(${changedAt}, messages.id) > (${cursor.changedAt}, ${cursor.messageId}::uuid)`,
     );
   } else if (since !== undefined) {
-    statement = statement.where(
-      'messages.changed_at',
-      '>',
-      new Date(since.getTime() - CHANGES_OVERLAP_MS),
-    );
+    statement = statement.where(changedAt, '>', new Date(since.getTime() - CHANGES_OVERLAP_MS));
   }
 
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   return {
-    data: await buildMessages(executor, page),
+    data: await buildMessages(executor, page, context.userId),
     nextCursor:
       rows.length > limit && last !== undefined
         ? written({ changedAt: last.changed_at, messageId: last.id, asOf })

@@ -41,7 +41,11 @@ const placed = (
   list: readonly Message[],
   message: Message,
   order: (a: Message, b: Message) => number,
-): Message[] => [...list.filter((m) => m.id !== message.id), message].sort(order);
+): Message[] => {
+  const previous = list.find((item) => item.id === message.id);
+  const next = previous?.hiddenForMe === true ? previous : message;
+  return [...list.filter((m) => m.id !== message.id), next].sort(order);
+};
 
 const mapMessages = (pages: Pages, edit: (message: Message) => Message): Pages => ({
   ...pages,
@@ -284,17 +288,21 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
     readAgain(client, keys.files(revision.channelId));
     readAgain(client, keys.pins(revision.channelId));
   } else {
-    patchPins(client, id, (m) => ({
-      ...m,
-      content: revision.content,
-      editedAt: revision.editedAt,
-      mentions: [...revision.mentions],
-    }));
+    patchPins(client, id, (m) =>
+      m.hiddenForMe === true
+        ? m
+        : {
+            ...m,
+            content: revision.content,
+            editedAt: revision.editedAt,
+            mentions: [...revision.mentions],
+          },
+    );
   }
   const deletedRoot = revision.deletedAt !== null && revision.parentId === null;
   for (const [key, data] of messageLists(client)) {
     const held = data.pages.flatMap((page) => page.data).find((m) => m.id === id);
-    if (held === undefined) continue;
+    if (held === undefined || held.hiddenForMe === true) continue;
     const leaves = deletedRoot && (held.thread?.replyCount ?? 0) === 0;
     client.setQueryData<Pages>(
       key,
@@ -446,4 +454,41 @@ export const keepNewestPage = (client: QueryClient, channelId: string): void => 
       ? held
       : { pages: held.pages.slice(0, 1), pageParams: held.pageParams.slice(0, 1) },
   );
+};
+
+/** A private deletion only changes this person's cache. */
+export const messageHidden = (client: QueryClient, messageId: string, at: string): void => {
+  for (const [key, data] of messageLists(client)) {
+    client.setQueryData<Pages>(
+      key,
+      mapMessages(data, (message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              hiddenForMe: true,
+              content: '',
+              deletedAt: message.deletedAt ?? at,
+              editedAt: null,
+              githubEvent: null,
+              attachments: [],
+              mentions: [],
+              reactions: [],
+            }
+          : message,
+      ),
+    );
+    askAgainIfOnItsWay(client, key);
+  }
+  for (const family of [
+    families.messages,
+    families.thread,
+    families.search,
+    families.saved,
+    families.notifications,
+    families.pins,
+    families.files,
+    families.unresolved,
+  ]) {
+    readAgain(client, family);
+  }
 };

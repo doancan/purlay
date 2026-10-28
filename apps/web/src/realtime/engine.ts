@@ -56,6 +56,7 @@ import {
   deepWorkChanged,
   messageCreated,
   messageRevised,
+  messageHidden,
   reactionsUpdated,
   readAgain,
   threadUpdated,
@@ -644,6 +645,9 @@ export const createEngine = (options: EngineOptions): Engine => {
         if (isNewest('reactions', frame.data.messageId, frame.version)) {
           reactionsUpdated(client, frame.data.messageId, frame.data.reactions);
         }
+        return;
+      case 'MESSAGE_HIDDEN':
+        messageHidden(client, frame.data.messageId, frame.data.hiddenAt);
         return;
       case 'MESSAGE_REVISED':
         if (isNewest('revision', frame.data.messageId, frame.version)) {

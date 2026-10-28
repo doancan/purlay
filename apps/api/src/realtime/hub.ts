@@ -235,6 +235,7 @@ export interface HubOptions {
  */
 const channelOf = (frame: ServerFrame): string | null => {
   switch (frame.event) {
+    case 'MESSAGE_HIDDEN':
     case 'MESSAGE_CREATED':
     case 'THREAD_UPDATED':
     case 'REACTIONS_UPDATED':

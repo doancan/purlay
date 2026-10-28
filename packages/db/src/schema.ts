@@ -154,6 +154,14 @@ export interface GithubRepoFeeds {
   workspace_id: string;
 }
 
+export interface HiddenMessages {
+  channel_id: string;
+  hidden_at: Generated<Timestamp>;
+  message_id: string;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface IncidentResponders {
   added_at: Timestamp;
   added_by: string | null;
@@ -511,6 +519,7 @@ export interface DB {
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
   github_repo_feeds: GithubRepoFeeds;
+  hidden_messages: HiddenMessages;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;

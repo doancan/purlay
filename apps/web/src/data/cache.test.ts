@@ -16,6 +16,7 @@ import {
   channelStarred,
   channelStateChanged,
   messageCreated,
+  messageHidden,
   messageRevised,
   keepNewestPage,
   newestMessageId,
@@ -697,5 +698,30 @@ describe('a channel out of view keeps its newest page and no more (O-5, D-199)',
     expect(
       client.getQueryData(keys.messages('00000000-0000-4000-8000-0000000000c9')),
     ).toBeUndefined();
+  });
+});
+
+describe('private deletion', () => {
+  test('a private tombstone keeps its words blank after shared edits and replay', () => {
+    const client = seeded();
+    messageHidden(client, id(2), '2026-10-28T12:00:00Z');
+    messageRevised(client, {
+      messageId: id(2),
+      channelId: CH,
+      parentId: null,
+      content: 'A later edit',
+      editedAt: '2026-10-28T12:01:00Z',
+      deletedAt: null,
+      mentions: [],
+    });
+    messageCreated(client, message(2));
+    const held = client.getQueryData<Pages>(keys.messages(CH))?.pages.flatMap((page) => page.data);
+    expect(held?.find((item) => item.id === id(2))).toMatchObject({
+      hiddenForMe: true,
+      content: '',
+      attachments: [],
+      mentions: [],
+    });
+    expect(held?.find((item) => item.id === id(3))?.content).toBe('m3');
   });
 });

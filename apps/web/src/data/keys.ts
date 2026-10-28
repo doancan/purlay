@@ -73,6 +73,9 @@ export const keys = {
 
 /** The families, for the code that addresses one of them whole. */
 export const families = {
+  search: ['search'] as const,
+  saved: ['saved'] as const,
+  files: ['files'] as const,
   channels: ['channels'] as const,
   messages: ['messages'] as const,
   thread: ['thread'] as const,

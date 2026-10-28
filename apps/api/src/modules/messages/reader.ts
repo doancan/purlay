@@ -13,6 +13,7 @@
  * when the page has a resolved thread). A feed of fifty roots is four queries, not
  * two hundred — the rule D-13 states for counters, applied to every page.
  */
+import { hideForReader } from './hidden';
 import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
 import {
@@ -172,6 +173,7 @@ const authorship = (row: MessageRow): Pick<Message, 'sender' | 'githubEvent'> =>
 export const buildMessages = async (
   executor: Executor,
   rows: readonly MessageRow[],
+  userId?: string,
 ): Promise<Message[]> => {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
@@ -182,31 +184,36 @@ export const buildMessages = async (
     attachmentSets(executor, ids),
     usersByIds(executor, [...new Set(resolvers)]),
   ]);
-  return rows.map((row) => ({
-    id: row.id,
-    channelId: row.channel_id,
-    ...authorship(row),
-    content: row.content,
-    editedAt: atOrNull(row.edited_at),
-    deletedAt: atOrNull(row.deleted_at),
-    createdAt: at(row.created_at),
-    parentId: row.parent_id,
-    // A reply has no summary of its own; a root always has one, with zero replies until it has some.
-    thread: row.parent_id === null ? summaryOf(row, people) : null,
-    reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
-    mentions: [...(mentions.get(row.id) ?? [])],
-    // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
-    attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
-  }));
+  return await hideForReader(
+    executor,
+    userId,
+    rows.map((row) => ({
+      id: row.id,
+      channelId: row.channel_id,
+      ...authorship(row),
+      content: row.content,
+      editedAt: atOrNull(row.edited_at),
+      deletedAt: atOrNull(row.deleted_at),
+      createdAt: at(row.created_at),
+      parentId: row.parent_id,
+      // A reply has no summary of its own; a root always has one, with zero replies until it has some.
+      thread: row.parent_id === null ? summaryOf(row, people) : null,
+      reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
+      mentions: [...(mentions.get(row.id) ?? [])],
+      // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
+      attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
+    })),
+  );
 };
 
 /** One message, built, so the answer to a write reads like the page it will appear on. */
 export const readBuilt = async (
   executor: Executor,
   messageId: string,
+  userId?: string,
 ): Promise<Message | undefined> => {
   const row = await readMessage(executor, messageId);
   if (row === undefined) return undefined;
-  const [message] = await buildMessages(executor, [row]);
+  const [message] = await buildMessages(executor, [row], userId);
   return message;
 };

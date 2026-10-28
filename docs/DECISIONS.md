@@ -4535,6 +4535,13 @@ below zero: a message older than the counters (0013) was never counted, and an a
 must not be refused by a check; the next read recounts exactly. The note in `0014_open_questions_index.sql` that such a thread "drops out of the
 index when the count does" is superseded here; the migration is applied and is not edited (D-45).
 
+**8 · Delete for Me** (owner request, 2026-10-28) is a separate account preference, stored in
+`hidden_messages`. It hides any visible message from that person's history, search, saves, pins,
+files and inbox, and cancels their pending reminder. Other participants keep the original content.
+Only the caller's devices receive `MESSAGE_HIDDEN`; reconnect reads preserve the private tombstone.
+A hidden root remains as an empty placeholder while it has replies. The existing deletion in §7
+is presented as **Delete for Everyone**, with the same author/owner/admin permission.
+
 **Reopened when** Phase 2's edit history lands (§2), or dogfooding shows an edit used to rewrite what
 was agreed.
 

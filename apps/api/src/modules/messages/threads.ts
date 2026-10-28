@@ -13,6 +13,7 @@
  * decisions and the second finds the thread already closed: a no-op that says so
  * with the message and publishes nothing, because nothing changed.
  */
+import { notHiddenBy } from './hidden';
 import { sql, type Executor } from '@purlay/db';
 import { PAGE_LIMIT, type Message, type MessagePage } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -63,10 +64,11 @@ export const asPage = async (
   executor: Executor,
   rows: readonly MessageRow[],
   limit: number,
+  userId?: string,
 ): Promise<MessagePage> => {
   const page = rows.slice(0, limit);
   return {
-    data: await buildMessages(executor, page),
+    data: await buildMessages(executor, page, userId),
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };
 };
@@ -100,7 +102,7 @@ export const threadReplies = async (
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
   if (query.after !== undefined) statement = statement.where('messages.id', '>', query.after);
 
-  return await asPage(executor, await statement.execute(), limit);
+  return await asPage(executor, await statement.execute(), limit, root.context.userId);
 };
 
 /**
@@ -133,12 +135,13 @@ export const unresolvedIn = async (
     .where('messages.resolved_at', 'is', null)
     .where('messages.thread_reply_count', '>', 0)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .orderBy('messages.id', forwards ? 'asc' : 'desc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
   if (query.after !== undefined) statement = statement.where('messages.id', '>', query.after);
 
-  return await asPage(executor, await statement.execute(), limit);
+  return await asPage(executor, await statement.execute(), limit, context.userId);
 };
 
 export interface ResolveDependencies {

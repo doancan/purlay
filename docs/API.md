@@ -437,6 +437,7 @@ repaired. Nobody else hears it.
 | ○ | `PUT` | `/api/channels/:channelId/scheduled/:scheduledId` | `ScheduleMessageRequest`: replace an owned pending or failed scheduled message; returns `ScheduledMessage`. The UUID makes retries one draft. Requires channel membership. |
 | ○ | `DELETE` | `/api/channels/:channelId/scheduled/:scheduledId` | Cancel an owned unsent message, `204`; already sent is `409 SCHEDULED_MESSAGE_SENT`. |
 | ○ | `GET` | `/api/workspaces/:workspaceId/scheduled` | `ScheduledMessageList`: the caller’s visible pending and failed drafts, ordered by send time, bounded by `SCHEDULED_MESSAGES_MAX` (100). |
+| ○ | `PUT` | `/api/messages/:messageId/hidden` | Delete for the caller only. Returns a `Message` with `hiddenForMe: true` and empty content. Idempotent; the shared message and other people’s data remain unchanged. |
 | ○ | `PUT` | `/api/messages/:messageId/reminder` | `SetMessageReminderRequest` (`remindAt`): create or replace the caller’s reminder; returns `MessageReminder`. |
 | ○ | `DELETE` | `/api/messages/:messageId/reminder` | Cancel only the caller’s pending reminder, `204` idempotently. |
 | ○ | `GET` | `/api/workspaces/:workspaceId/reminders` | `MessageReminderList`: at most 100 pending reminders, from visible nondeleted messages, ordered by time. |
@@ -610,3 +611,20 @@ reminder creates a fresh unread notification when next due. Missing access or de
 delivery. This notification does not inflate message unread counters. Web Push uses reminder wording;
 Deep Work suppresses the push. Native clients may also register the confirmed time with the operating
 system, allowing a local reminder after the application quits, subject to notification permissions.
+
+### Personal message deletion
+
+`capabilities.personalMessageDeletion` enables Delete for Me. It writes only a private `hidden_messages`
+record and removes the caller’s saves and pending reminders for that message, marks their notifications
+read, and corrects their unread counters. Only their user topic receives `MESSAGE_HIDDEN` with
+`workspaceId`, `channelId`, `messageId` and `hiddenAt`; their other devices refresh personal lists.
+The ordinary `DELETE /api/messages/:messageId` remains Delete for Everyone, restricted to the author
+or a workspace owner/admin. Personal deletion grants no additional moderation permission.
+
+A hidden root without replies leaves the caller’s feed; a root with replies keeps an empty personal
+tombstone so its replies remain reachable. Hidden replies are also personal tombstones. History, around,
+thread and change-replay reads project empty content, files, mentions, reactions and event data for the
+caller. Search, open topics, files, pins, saved lists and inbox omit their hidden items before pagination.
+Replay includes the caller’s private deletion timestamps, so reconnecting does not restore hidden words.
+Other readers retain the original content and attachments. This is a personal view operation, not an
+erasure of the server’s shared message or a revocation of its underlying access permission.

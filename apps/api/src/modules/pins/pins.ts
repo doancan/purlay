@@ -14,6 +14,7 @@
  *   leaves a pin nobody sees, which neither the list nor the bound counts, and an unpin lets go.
  * - **A conversation has pins too, and a reply can be one**: the list carries its thread's root.
  */
+import { notHiddenBy } from '../messages/hidden';
 import type { Executor, Transaction } from '@purlay/db';
 import { PINS_MAX, type PinList } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -73,6 +74,7 @@ export const pinMessage = async (
     .select((eb) => eb.fn.countAll<string>().as('count'))
     .where('pinned_messages.channel_id', '=', context.channelId)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .executeTakeFirstOrThrow();
   if (Number(counted.count) >= PINS_MAX) {
     throw new AppError({
@@ -130,6 +132,7 @@ export const channelPins = async (
     ])
     .where('pinned_messages.channel_id', '=', context.channelId)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .orderBy('pinned_messages.pinned_at', 'desc')
     .orderBy('pinned_messages.message_id', 'desc')
     .limit(PINS_MAX)

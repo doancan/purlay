@@ -40,6 +40,11 @@ type ChannelFrameEvent = Extract<ServerFrame, { data: { channelId: string } }>['
  */
 const everyChannelFrame = (channelId: string): ServerFrame[] => {
   const samples: Record<ChannelFrameEvent, unknown> = {
+    MESSAGE_HIDDEN: {
+      event: 'MESSAGE_HIDDEN',
+      data: { channelId, workspaceId: 'w', messageId: 'm', hiddenAt: '2026-10-28T12:00:00Z' },
+      ts: 1,
+    },
     MESSAGE_CREATED: aMessage(channelId, 'created'),
     THREAD_UPDATED: {
       event: 'THREAD_UPDATED',

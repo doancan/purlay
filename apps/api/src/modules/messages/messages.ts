@@ -16,6 +16,7 @@
  * the last id seen — no timestamp, no tie-break, because a UUIDv7 already sorts
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
+import { notHiddenBy } from './hidden';
 import { sql, type Executor } from '@purlay/db';
 import {
   isMessageIdShape,
@@ -426,6 +427,7 @@ export const messageHistory = async (
     .select(MESSAGE_COLUMNS)
     .where('messages.channel_id', '=', context.channelId)
     .where('messages.parent_id', 'is', null)
+    .where((eb) => eb.or([notHiddenBy(context.userId), eb('messages.thread_reply_count', '>', 0)]))
     // A deleted root keeps its place while it has replies, as their tombstone (D-103 §7).
     .where((eb) =>
       eb.or([eb('messages.deleted_at', 'is', null), eb('messages.thread_reply_count', '>', 0)]),
@@ -443,7 +445,7 @@ export const messageHistory = async (
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
   return {
-    data: await buildMessages(executor, page),
+    data: await buildMessages(executor, page, context.userId),
     // The cursor to pass back **in the direction you were travelling**: the last
     // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
@@ -474,7 +476,7 @@ export const messageWindow = async (
       .where('messages.id', 'in', [...new Set([rootId, visible.messageId])])
       .execute(),
   ]);
-  const built = await buildMessages(executor, rows);
+  const built = await buildMessages(executor, rows, visible.context.userId);
   const target = built.find((m) => m.id === visible.messageId);
   const root = built.find((m) => m.id === rootId);
   // `requireMessageById` found both a moment ago; a row gone between is said, never drawn as a gap.
@@ -555,6 +557,7 @@ export const missedIn = async (
       await buildMessages(
         executor,
         kept.flatMap(({ list }) => list.slice(0, perChannel)),
+        wanted[0]?.context.userId,
       )
     ).map((message) => [message.id, message]),
   );

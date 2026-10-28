@@ -1,3 +1,4 @@
+import { notHiddenBy } from '../messages/hidden';
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import {
   MESSAGE_REMINDERS_MAX,
@@ -114,6 +115,7 @@ export const reminderList = async (
     .where('message_reminders.workspace_id', '=', context.workspaceId)
     .where('message_reminders.channel_id', 'in', visible)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .orderBy('message_reminders.remind_at')
     .orderBy('message_reminders.id')
     .limit(MESSAGE_REMINDERS_MAX)

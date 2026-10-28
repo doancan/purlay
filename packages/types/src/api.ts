@@ -1328,6 +1328,7 @@ export type ClientMinimum = Static<typeof ClientMinimum>;
 export const ClientCapabilities = Type.Object({
   scheduledMessages: Type.Optional(Type.Boolean()),
   messageReminders: Type.Optional(Type.Boolean()),
+  personalMessageDeletion: Type.Optional(Type.Boolean()),
   notificationTypeFilters: Type.Optional(
     Type.Boolean({
       description: 'GET /api/notifications accepts the types CSV filter before pagination.',
