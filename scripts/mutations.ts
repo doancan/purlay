@@ -92,6 +92,30 @@ const INVITE_MAIL_TESTS = 'apps/api/src/modules/workspaces/invitation-mail.integ
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'latency-trials-choose-the-best',
+    why: 'one lucky fast trial hides a slowdown sustained in the other two independent processes',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'values.sort((a, b) => a - b)[1]',
+    replace: 'values.sort((a, b) => a - b)[0]',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-trials-accept-incomplete-messages',
+    why: 'a trial that lost messages can contribute its p95 as though all sixty had been delivered',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'trial.messages !== MESSAGES_PER_TRIAL ||',
+    replace: '',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-trials-adopt-a-regression',
+    why: "a slow run replaces the passing baseline and becomes the next run's new normal",
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'if (keepFile !== undefined && !regressed) await write(keepFile);',
+    replace: 'if (keepFile !== undefined) await write(keepFile);',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
     id: 'auth-github-takes-an-unverified-address',
     why: 'a GitHub account can add an address it does not own and sign in as whoever does',
     file: 'apps/api/src/modules/auth/better-auth.ts',

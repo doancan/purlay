@@ -279,7 +279,18 @@ jobs:
           key: budget-latency-${{ github.sha }}
           restore-keys: budget-latency-
       - name: the latency budgets hold against main's last measurement
-        run: bun run budget:latency -- --keep .budget/latency.json
+        id: latency
+        run: bun run budget:latency -- --keep .budget/latency.json --record .budget/latency-current.json
+      # The baseline is never replaced by a regression. Keep its raw trials separately,
+      # including on a failed comparison, so the next investigation has more than one p95.
+      - name: keep the current latency trials
+        if: always() && steps.latency.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-latency-${{ github.sha }}
+          path: .budget/latency-current.json
+          include-hidden-files: true
+          retention-days: 7
       - name: keep this measurement as main's baseline
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

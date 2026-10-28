@@ -5,7 +5,15 @@
 import { describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BUDGETS, REGRESSION_FACTOR, judge, main, p95, type Latency } from './budget-latency';
+import {
+  BUDGETS,
+  REGRESSION_FACTOR,
+  judge,
+  main,
+  p95,
+  summarizeTrials,
+  type Latency,
+} from './budget-latency';
 
 const run = (ack: number, fanOut: number): Latency => ({
   ackP95Ms: ack,
@@ -40,7 +48,9 @@ describe('the latency budget', () => {
     const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
     const first = await main(['--record', file], () => Promise.resolve(run(30, 30)));
     expect(first.code).toBe(0);
-    expect(await Bun.file(file).json()).toEqual(run(30, 30));
+    expect(await Bun.file(file).json()).toEqual(
+      summarizeTrials([run(30, 30), run(30, 30), run(30, 30)]),
+    );
     const worse = await main(['--baseline', file], () => Promise.resolve(run(100, 30)));
     expect(worse.code).toBe(1);
     expect(worse.lines[0]).toContain('was 30.0 ms) — REGRESSED');
@@ -51,14 +61,20 @@ describe('the latency budget', () => {
     const first = await main(['--keep', file], () => Promise.resolve(run(30, 30)));
     expect(first.code).toBe(0);
     expect(first.lines[0]).toBe('no baseline yet: this run is recorded, nothing compared');
-    expect(await Bun.file(file).json()).toEqual(run(30, 30));
+    expect(await Bun.file(file).json()).toEqual(
+      summarizeTrials([run(30, 30), run(30, 30), run(30, 30)]),
+    );
     const worse = await main(['--keep', file], () => Promise.resolve(run(100, 30)));
     expect(worse.code).toBe(1);
     // A regression is not adopted as the next run's baseline.
-    expect(await Bun.file(file).json()).toEqual(run(30, 30));
+    expect(await Bun.file(file).json()).toEqual(
+      summarizeTrials([run(30, 30), run(30, 30), run(30, 30)]),
+    );
     const steady = await main(['--keep', file], () => Promise.resolve(run(32, 31)));
     expect(steady.code).toBe(0);
-    expect(await Bun.file(file).json()).toEqual(run(32, 31));
+    expect(await Bun.file(file).json()).toEqual(
+      summarizeTrials([run(32, 31), run(32, 31), run(32, 31)]),
+    );
   });
 
   test('a baseline it cannot read, or an option with no file, is refused rather than compared with nothing', async () => {
@@ -73,5 +89,89 @@ describe('the latency budget', () => {
     expect(await refusal(['--keep', file])).toContain('is not a latency measurement');
     expect(await refusal(['--baseline', file])).toContain('is not a latency measurement');
     expect(await refusal(['--keep'])).toBe('--keep needs a value');
+  });
+});
+
+describe('independent latency trials', () => {
+  test('uses the middle p95 per metric, never the best run or a pooled percentile', () => {
+    const trials = [run(35, 90), run(100, 32), run(30, 34)];
+    expect(summarizeTrials(trials)).toEqual({
+      ackP95Ms: 35,
+      fanOutP95Ms: 34,
+      messages: 60,
+      trials,
+    });
+    expect(trials.map((trial) => trial.ackP95Ms)).toEqual([35, 100, 30]);
+  });
+
+  test('requires exactly three complete finite positive measurements', () => {
+    for (const trials of [
+      [],
+      [run(30, 30)],
+      [run(30, 30), run(30, 30)],
+      Array.from({ length: 4 }, () => run(30, 30)),
+      [run(30, 30), { ...run(30, 30), messages: 59 }, run(30, 30)],
+      ...[0, -1, Number.NaN, Number.POSITIVE_INFINITY].flatMap((value) => [
+        [run(30, 30), run(value, 30), run(30, 30)],
+        [run(30, 30), run(30, value), run(30, 30)],
+      ]),
+    ])
+      expect(() => summarizeTrials(trials)).toThrow('three complete');
+  });
+
+  test('runs all three trials even after a slow one, preserves raw results, and accepts one isolated stall', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    // Legacy single-run cache is still read and compared; it is never silently discarded.
+    await Bun.write(file, JSON.stringify(run(30, 30)));
+    const trials = [run(100, 100), run(31, 29), run(32, 30)];
+    const calls: number[] = [];
+    const result = await main(['--keep', file], (count) => {
+      calls.push(count);
+      return Promise.resolve(trials[calls.length - 1] ?? run(999, 999));
+    });
+    expect(calls).toEqual([60, 60, 60]);
+    expect(result.code).toBe(0);
+    expect(result.lines).toContain('verdict: median of three independent p95 measurements');
+    expect(result.lines.join('\n')).toContain('trial 1/3: ACK p95 100.0 ms');
+    expect(await Bun.file(file).json()).toEqual(summarizeTrials(trials));
+  });
+
+  test.each(['ack', 'fan-out'])(
+    'a sustained %s slowdown fails and cannot replace the baseline',
+    async (metric) => {
+      const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+      const record = `${file}.current`;
+      const original = JSON.stringify(run(30, 30));
+      await Bun.write(file, original);
+      const slow = metric === 'ack' ? run(100, 30) : run(30, 100);
+      const trials = [slow, run(31, 31), slow];
+      let calls = 0;
+      const result = await main(['--keep', file, '--record', record], () =>
+        Promise.resolve(trials[calls++] ?? run(999, 999)),
+      );
+      expect(calls).toBe(3);
+      expect(result.code).toBe(1);
+      expect(result.lines.join('\n')).toContain('REGRESSED');
+      expect(await Bun.file(file).text()).toBe(original);
+      expect(await Bun.file(record).json()).toEqual(summarizeTrials(trials));
+    },
+  );
+
+  test('an interrupted trial is an error, not a sample to discard or retry', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const original = JSON.stringify(run(30, 30));
+    await Bun.write(file, original);
+    let calls = 0;
+    const refusal = await main(['--keep', file], () => {
+      calls += 1;
+      if (calls === 2) return Promise.reject(new Error('socket disconnected'));
+      return Promise.resolve(run(30, 30));
+    }).then(
+      () => 'accepted',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(refusal).toBe('socket disconnected');
+    expect(calls).toBe(2);
+    expect(await Bun.file(file).text()).toBe(original);
   });
 });
