@@ -7,7 +7,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId, NotificationPage, type ServerFrame } from '@purlay/types';
+import {
+  messageId,
+  NotificationPage,
+  NotificationType,
+  ErrorResponse,
+  type ServerFrame,
+} from '@purlay/types';
 import { createApp } from './app';
 import { markNotificationsRead } from './notifications';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -100,6 +106,160 @@ describe('integration: GET /api/notifications', () => {
           ['mention', world.channelId],
         ]);
       }
+    });
+  });
+
+  test('reads a single encoded type or CSV union, including channel_message, with the existing page shape', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      for (const { const: type } of NotificationType.anyOf) {
+        await db
+          .updateTable('notifications')
+          .set({ type })
+          .where('user_id', '=', world.bobId)
+          .where('workspace_id', '=', world.workspaceId)
+          .execute();
+        for (const unreadOnly of ['true', 'false']) {
+          const response = await inbox(
+            db,
+            world,
+            `&types=${type}&unreadOnly=${unreadOnly}&limit=1`,
+          );
+          expect(response.status).toBe(200);
+          const body: unknown = await response.json();
+          expect(Value.Check(NotificationPage, body)).toBe(true);
+          if (!Value.Check(NotificationPage, body)) throw new Error('invalid page');
+          expect(body.data.map((row) => row.type)).toEqual([type]);
+          expect(body.nextCursor).toBeNull();
+        }
+      }
+      await db
+        .updateTable('notifications')
+        .set({ type: 'thread_resolved' })
+        .where('user_id', '=', world.bobId)
+        .execute();
+      const threads = await inbox(db, world, '&types=thread_reply%2Cthread_resolved');
+      expect(threads.status).toBe(200);
+      expect(((await threads.json()) as NotificationPage).data.map((row) => row.type)).toEqual([
+        'thread_resolved',
+      ]);
+      const empty = await inbox(db, world, '&types=mention');
+      expect(await empty.json()).toEqual({ data: [], nextCursor: null });
+    });
+  });
+
+  test('malformed CSV, repeated and unknown keys are refused with the query field named', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      for (const value of [
+        '',
+        'unknown',
+        'all',
+        'Mention',
+        'mention,unknown',
+        'mention,mention',
+        'mention,,thread_reply',
+        'mention,',
+        ',mention',
+        'mention, thread_reply',
+        'mention\n',
+        'mention\u0000',
+        'mention;thread_reply',
+      ]) {
+        const response = await inbox(db, world, `&types=${encodeURIComponent(value)}`);
+        expect(response.status).toBe(400);
+        const error: unknown = await response.json();
+        if (!Value.Check(ErrorResponse, error)) throw new Error('invalid error envelope');
+        expect(error.error.code).toBe('VALIDATION_FAILED');
+        if (error.error.code !== 'VALIDATION_FAILED') throw new Error('wrong refusal');
+        expect(typeof error.error.details.fields['types']).toBe('string');
+      }
+      for (const suffix of [
+        '&types=mention&types=thread_reply',
+        '&type=mention',
+        '&types[]=mention',
+        '&types=mention&limit=0x10',
+        '&types=mention&unreadOnly=1',
+      ]) {
+        const response = await inbox(db, world, suffix);
+        expect(response.status).toBe(400);
+        expect(await codeOf(response)).toBe('VALIDATION_FAILED');
+      }
+    });
+  });
+
+  test('session and workspace guards still precede type validation, and foreign cursors stay refused', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const outsider = await aSignedInUser(db, clock, 'nt-outsider');
+      const path = `/api/notifications?workspaceId=${world.workspaceId}&types=unknown`;
+      expect((await call(db, 'GET', path, undefined)).status).toBe(401);
+      const forbidden = await call(db, 'GET', path, outsider.cookie);
+      expect(forbidden.status).toBe(404);
+      expect(await codeOf(forbidden)).toBe('WORKSPACE_NOT_FOUND');
+      const first = await inbox(db, world);
+      const page = (await first.json()) as NotificationPage;
+      const before = page.data[0]?.id ?? '';
+      const otherRecipient = await call(
+        db,
+        'GET',
+        `/api/notifications?workspaceId=${world.workspaceId}&types=mention&before=${before}`,
+        world.alice,
+      );
+      expect(otherRecipient.status).toBe(400);
+      expect(await codeOf(otherRecipient)).toBe('VALIDATION_FAILED');
+      const invalid = await inbox(db, world, '&types=mention&before=not-a-uuid');
+      expect(invalid.status).toBe(400);
+    });
+  });
+
+  test('filtering a GET does not narrow workspace-wide mark-read or accept a type filter on that write', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const original = await inbox(db, world);
+      const page = (await original.json()) as NotificationPage;
+      const message = page.data[0]?.message;
+      if (message === undefined) throw new Error('missing the notification target');
+      await db
+        .insertInto('notifications')
+        .values({
+          user_id: world.bobId,
+          workspace_id: world.workspaceId,
+          channel_id: world.channelId,
+          message_id: message.id,
+          type: 'thread_reply',
+          created_at: NOW,
+        })
+        .execute();
+      expect(
+        (
+          (await (
+            await inbox(db, world, '&types=mention&unreadOnly=true')
+          ).json()) as NotificationPage
+        ).data,
+      ).toHaveLength(1);
+      const invalid = await call(db, 'PUT', '/api/notifications/read', world.bob, {
+        workspaceId: world.workspaceId,
+        types: 'mention',
+      });
+      expect(invalid.status).toBe(400);
+      expect(
+        ((await (await inbox(db, world, '&unreadOnly=true')).json()) as NotificationPage).data,
+      ).toHaveLength(2);
+      expect(
+        (
+          await call(db, 'PUT', '/api/notifications/read', world.bob, {
+            workspaceId: world.workspaceId,
+          })
+        ).status,
+      ).toBe(204);
+      expect(
+        (
+          (await (
+            await inbox(db, world, '&types=thread_reply&unreadOnly=true')
+          ).json()) as NotificationPage
+        ).data,
+      ).toEqual([]);
     });
   });
 

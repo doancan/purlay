@@ -366,10 +366,18 @@ describe('the endpoints', () => {
       `GET /api/notifications?workspaceId=${ID}&before=b`,
       `GET /api/notifications?workspaceId=${ID}`,
     ]);
+    await inbox.api.notifications(ID, {
+      types: 'thread_reply,thread_resolved',
+      unreadOnly: true,
+      limit: 2,
+    });
+    expect(inbox.calls.at(-1)?.url).toBe(
+      `/api/notifications?workspaceId=${ID}&types=thread_reply%2Cthread_resolved&limit=2&unreadOnly=true`,
+    );
     await inbox.api.readNotifications({ ids: [ID] });
     await inbox.api.readNotifications({ workspaceId: ID, before: ID });
     await inbox.api.readThread(ID, ID);
-    expect(inbox.calls.slice(2)).toEqual([
+    expect(inbox.calls.slice(3)).toEqual([
       { method: 'PUT', url: '/api/notifications/read', body: { ids: [ID] } },
       { method: 'PUT', url: '/api/notifications/read', body: { workspaceId: ID, before: ID } },
       { method: 'PUT', url: `/api/messages/${ID}/thread/read`, body: { lastReadMessageId: ID } },

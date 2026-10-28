@@ -441,7 +441,7 @@ the same answer for all of them.
 | | Method | Path | Notes |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/search` | `?q=` required, trimmed, then `SEARCH_QUERY_MIN`–`SEARCH_QUERY_MAX` characters (`SearchQuery`); `?channelId=` narrows to one channel, `404 CHANNEL_NOT_FOUND` when the caller cannot see it; `?senderId=` to what one person wrote, never beyond those channels — somebody who wrote nothing there, of another workspace or of none, is an empty page (D-166); `?before=` and `?limit=`, newest first (`SearchPage`). The words as typed, ignoring case — `%`, `_` and `\` are literal — in roots and replies, open threads and resolved ones, never a deleted message (D-10, D-105). **Restricted to channels the caller can see** (D-34) |
-| ○ | `GET` | `/api/notifications` | `?workspaceId=` required, `?unreadOnly=true\|false`, `?before=` and `?limit=` (`NotificationQuery`); `NotificationPage`, newest first by when the caller was told. The caller's own, from channels they can see now, never about a deleted message (D-106). A reply's notification carries its thread in brief — `thread: { rootId, excerpt, authorId }` (`NotificationThread`): the root's text plain on one line, at most `THREAD_EXCERPT_MAX` characters, null when the root is deleted or has no words; null for anything that is not a reply — read in the same statement as the page (D-162). A workspace they are not in is `404 WORKSPACE_NOT_FOUND`; a `before` that is not one of their notifications there is `400 VALIDATION_FAILED` |
+| ○ | `GET` | `/api/notifications` | `?workspaceId=` required, optional `?types=mention` or `?types=thread_reply,thread_resolved` (one CSV value, `NotificationTypesFilter`), `?unreadOnly=true\|false`, `?before=` and `?limit=` (`NotificationQuery`); `NotificationPage`, newest first by when the caller was told. The caller's own, from channels they can see now, never about a deleted message (D-106). A reply's notification carries its thread in brief — `thread: { rootId, excerpt, authorId }` (`NotificationThread`): the root's text plain on one line, at most `THREAD_EXCERPT_MAX` characters, null when the root is deleted or has no words; null for anything that is not a reply — read in the same statement as the page (D-162). A workspace they are not in is `404 WORKSPACE_NOT_FOUND`; a `before` that is not one of their notifications there is `400 VALIDATION_FAILED` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/saved` | `?state=` required, `?before=` and `?limit=` (`SavedQuery`); `SavedPage`, newest saved first, keyset on the save's id. The caller's own, from channels they can see now, never a deleted message (D-128) |
 | ○ | `GET` | `/api/workspaces/:workspaceId/saved/ids` | `SavedIds`: which messages the caller has saved in the workspace, with their channel and state, from channels they can see now. Not paged: bounded by `SAVED_MAX` (D-128) |
 | ○ | `PUT` | `/api/notifications/read` | `{ ids }`, or `{ workspaceId, before? }` — everything up to and including `before` (`ReadNotificationsRequest`). `204`, idempotent; ids that are not the caller's are not read and not reported. A workspace they are not in is `404 WORKSPACE_NOT_FOUND`; a `before` that is not one of their notifications there is `400 VALIDATION_FAILED`. Each channel with a notification newly read has its mention badge counted again and is told to the caller's devices as `CHANNEL_STATE` (D-106) |
@@ -454,6 +454,50 @@ the same answer for all of them.
 An upload not attached to a message within 24 hours is swept (`ARCHITECTURE.md` §9).
 
 ---
+
+### Notification type filters
+
+`GET /api/notifications` accepts one optional `types` query value: a comma-separated, case-sensitive
+list of distinct `NotificationType` values, with no whitespace or empty items. The shared
+`NotificationTypesFilter` schema defines its bound and pattern. Empty values, duplicate/unknown
+values, arrays and repeated query keys are `400 VALIDATION_FAILED`, naming the offending query
+field. A request without `types` retains the existing behavior, including `channel_message` and
+subsequently supported notification types.
+
+Examples (replace the UUIDs with the caller's workspace and notification IDs):
+
+```text
+/api/notifications?workspaceId=0199155c-6200-7b7f-8c11-2a4d3f9e1b70
+/api/notifications?workspaceId=0199155c-6200-7b7f-8c11-2a4d3f9e1b70&types=mention&unreadOnly=true
+/api/notifications?workspaceId=0199155c-6200-7b7f-8c11-2a4d3f9e1b70&types=direct_message&limit=25
+/api/notifications?workspaceId=0199155c-6200-7b7f-8c11-2a4d3f9e1b70&types=thread_reply%2Cthread_resolved&limit=25
+/api/notifications?workspaceId=0199155c-6200-7b7f-8c11-2a4d3f9e1b70&types=channel_message&unreadOnly=false
+```
+
+Mentions, DMs and Threads select the stored notification reasons `mention`, `direct_message` and
+`thread_reply,thread_resolved`, respectively. They do not reclassify a notification by the kind or
+location of its message. All omits the parameter rather than enumerating the current reasons.
+
+Recipient, workspace, current channel visibility, deleted-message, type and unread predicates all
+apply in SQL before pagination. Pages retain the descending total order `(created_at, message_id,
+notification_id)` and database timestamp precision. `nextCursor` is the last returned matching
+notification's ID only if another matching row exists; otherwise it is null. A caller's own
+notification in the same workspace can anchor the order even when its type/read state is outside
+the current filter or its target message is deleted. Another recipient's/workspace's cursor, or an
+unknown cursor, remains a validation refusal. An inaccessible workspace remains `404` before type
+validation, and a signed-out request remains `401`.
+
+When a client changes workspace, type selection or All/Unread, it starts a new page sequence and
+uses a distinct cache key; an old cursor must not be appended to that sequence. This is a live
+keyset traversal, not a snapshot of records/read state across concurrent changes.
+
+This query does not change notification generation, delivery preferences, badges or read actions.
+`PUT /api/notifications/read { workspaceId }` still marks that workspace's notifications read across
+all types; `{ ids }` reads only the supplied notifications. Neither write accepts `types`. Category
+counts are a separate feature; the mention badge's `NEEDS_YOU` reasons exclude `thread_resolved`.
+Native clients regenerate from the updated deterministic contract bundle; the parameter is a
+schema-validated string with CSV contents, so no implicit array serializer or new custom format
+is required.
 
 ## 7. Integrations
 

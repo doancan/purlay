@@ -25,6 +25,8 @@ have it.
 
 ### Added
 
+- **Inbox** — Clients can filter notification history by one or more stored reasons before pagination, independently of All/Unread; omission keeps every type (D-106)
+
 - **Operations** — A hosted deployment of several nodes shares one Redis, set with `REDIS_URL`: a message, a sign-out, who is online and who is typing reach every node, and a person's write limit is one limit across them. A Redis that goes away is degraded service, not an outage. Without `REDIS_URL` nothing changes and nothing connects (D-201)
 - **Operations** — An operator can switch on point-in-time recovery for the database (`WAL_ARCHIVE=on`, off by default) and restore it to a named moment into a new instance without touching the live one, with the archive's retention tied to the base backups, a stated RPO and RTO, and the restore rehearsed weekly (D-202)
 - **Operations** — `scripts/check-backup.sh` exits non-zero when the newest backup is older than 26 hours or the archive is failing, so a backup that stopped is noticed, and the documented cron lines are held to the layout a deploy leaves (D-202)

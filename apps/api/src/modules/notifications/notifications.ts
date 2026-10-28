@@ -24,7 +24,7 @@ import type {
   ReadThreadRequest,
 } from '@purlay/types';
 import { excerptOf } from '@purlay/markdown';
-import { NEEDS_YOU, THREAD_EXCERPT_MAX } from '@purlay/types';
+import { NEEDS_YOU, THREAD_EXCERPT_MAX, NotificationType } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireMessageById } from '../../platform/channels';
@@ -128,6 +128,13 @@ export const inboxOf = async (
     .orderBy('notifications.message_id', 'desc')
     .orderBy('notifications.id', 'desc')
     .limit(limit + 1);
+  if (query.types !== undefined) {
+    const selected = new Set(query.types.split(','));
+    const types = NotificationType.anyOf
+      .map((type) => type.const)
+      .filter((type) => selected.has(type));
+    statement = statement.where('notifications.type', 'in', types);
+  }
   if (query.unreadOnly === true) statement = statement.where('notifications.read_at', 'is', null);
   if (cursor !== undefined) {
     statement = statement.where(

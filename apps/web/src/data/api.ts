@@ -43,6 +43,7 @@ import {
   EmailSignInPreview,
   type EmailSignInRequest,
   NotificationPage,
+  type NotificationQuery,
   PushKeyResponse,
   SavedIds,
   SavedPage,
@@ -274,7 +275,9 @@ export interface Api {
   /** The caller's inbox in one workspace, newest first (D-106). */
   readonly notifications: (
     workspaceId: string,
-    page?: { readonly before?: string | undefined; readonly unreadOnly?: boolean },
+    page?: Omit<NotificationQuery, 'workspaceId' | 'before'> & {
+      readonly before?: NotificationQuery['before'];
+    },
     signal?: AbortSignal,
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
@@ -687,6 +690,8 @@ export const createApi = (http: Http): Api => {
             query: {
               workspaceId,
               before: page.before,
+              types: page.types,
+              limit: page.limit,
               // The server reads it as text; absent is everything (D-106).
               ...(page.unreadOnly === true ? { unreadOnly: 'true' } : {}),
             },
