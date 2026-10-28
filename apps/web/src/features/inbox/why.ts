@@ -19,6 +19,8 @@ export const whyOf = (
   name: string = authorOf(notification.message, t('user.erased')).displayName,
 ): string => {
   switch (notification.type) {
+    case 'reminder':
+      return t('inbox.why.reminder');
     case 'mention':
       return t('inbox.why.mention', { name });
     case 'direct_message':

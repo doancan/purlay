@@ -127,7 +127,7 @@ const devicesFor = async (
     ])
     .where('n.message_id', '=', messageId)
     .where('n.user_id', 'in', userIds)
-    .where('n.type', 'in', NEEDS_YOU)
+    .where('n.type', 'in', [...NEEDS_YOU, 'reminder'])
     .where('n.read_at', 'is', null)
     .where('n.suppressed_by_deep_work', '=', false)
     .where('m.deleted_at', 'is', null)
@@ -140,7 +140,8 @@ const devicesFor = async (
     .execute();
   const held = new Set<string>();
   const devices = rows.flatMap((row) => {
-    const reason = NEEDS_YOU.find((known) => known === row.type);
+    const reason =
+      row.type === 'reminder' ? 'reminder' : NEEDS_YOU.find((known) => known === row.type);
     if (reason === undefined) return [];
     // In front of this workspace's page: held, never sent later (D-143, D-12).
     if (attention.active(row.userId, row.workspace_id)) {

@@ -418,3 +418,16 @@ export interface EventBus {
   /** Everything this socket was listening to. Called once, when it closes. */
   readonly forget: (socketId: string) => void;
 }
+
+export const publishRemindersUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  userId: string,
+  workspaceId: string,
+): Promise<void> => {
+  await bus.publish(userTopic(userId), {
+    event: 'REMINDERS_UPDATED',
+    data: { workspaceId },
+    ts: clock.now().getTime(),
+  });
+};

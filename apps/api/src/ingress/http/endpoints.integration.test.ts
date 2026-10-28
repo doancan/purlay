@@ -255,6 +255,20 @@ const STEPS: readonly Step[] = [
   },
   { id: 'listSavedIds', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
   {
+    id: 'setMessageReminder',
+    spec: (c) => ({
+      params: { messageId: c.rootId },
+      json: { remindAt: new Date(NOW.getTime() + 60000).toISOString() },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listMessageReminders',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  { id: 'cancelMessageReminder', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
+  {
     id: 'scheduleMessage',
     spec: (c) => ({
       params: { channelId: c.channelId, scheduledId: c.rootId },

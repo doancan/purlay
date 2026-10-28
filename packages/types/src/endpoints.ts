@@ -53,6 +53,9 @@ import {
   ReadNotificationsRequest,
   ReadThreadRequest,
   SaveMessageRequest,
+  SetMessageReminderRequest,
+  MessageReminder,
+  MessageReminderList,
   ScheduleMessageRequest,
   ScheduledMessage,
   ScheduledMessageList,
@@ -461,6 +464,28 @@ export const ENDPOINTS = [
     responses: { 204: null },
   }),
 
+  read({
+    id: 'setMessageReminder',
+    method: 'PUT',
+    path: '/api/messages/:messageId/reminder',
+    auth: 'session',
+    body: SetMessageReminderRequest,
+    responses: { 200: MessageReminder },
+  }),
+  read({
+    id: 'cancelMessageReminder',
+    method: 'DELETE',
+    path: '/api/messages/:messageId/reminder',
+    auth: 'session',
+    responses: { 204: null },
+  }),
+  read({
+    id: 'listMessageReminders',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/reminders',
+    auth: 'session',
+    responses: { 200: MessageReminderList },
+  }),
   read({
     id: 'scheduleMessage',
     method: 'PUT',

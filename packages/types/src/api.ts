@@ -461,6 +461,7 @@ export const NotificationType = Type.Union([
   Type.Literal('thread_resolved'),
   /** A member at `notification_level = 'all'` is told of every message by somebody else (D-107). */
   Type.Literal('channel_message'),
+  Type.Literal('reminder'),
 ]);
 export type NotificationType = Static<typeof NotificationType>;
 
@@ -904,6 +905,19 @@ export type SavedState = Static<typeof SavedState>;
  * is `in_progress` and an existing one keeps the state it has: saving again never undoes "done".
  */
 /** Durable drafts delivered by the server at the chosen time, independently of a client session. */
+export const MESSAGE_REMINDERS_MAX = 100;
+export const SetMessageReminderRequest = FromClient({ remindAt: Timestamp });
+export type SetMessageReminderRequest = Static<typeof SetMessageReminderRequest>;
+export const MessageReminder = Type.Object({
+  id: Uuid,
+  message: Message,
+  remindAt: Timestamp,
+  createdAt: Timestamp,
+});
+export type MessageReminder = Static<typeof MessageReminder>;
+export const MessageReminderList = Type.Array(MessageReminder, { maxItems: MESSAGE_REMINDERS_MAX });
+export type MessageReminderList = Static<typeof MessageReminderList>;
+
 export const SCHEDULED_MESSAGES_MAX = 100;
 export const SCHEDULE_AHEAD_MAX_DAYS = 365;
 export const ScheduledMessageState = Type.Union([
@@ -1313,6 +1327,7 @@ export type ClientMinimum = Static<typeof ClientMinimum>;
  */
 export const ClientCapabilities = Type.Object({
   scheduledMessages: Type.Optional(Type.Boolean()),
+  messageReminders: Type.Optional(Type.Boolean()),
   notificationTypeFilters: Type.Optional(
     Type.Boolean({
       description: 'GET /api/notifications accepts the types CSV filter before pagination.',

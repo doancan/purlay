@@ -260,6 +260,7 @@ export const COLUMNS: Columns = {
 
 /** Every other table, and why it is not in an export. Exhaustive: a new table must say. */
 export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, string>> = {
+  message_reminders: 'private reminders, never workspace exports',
   scheduled_messages: 'private unsent messages, never workspace exports',
   accounts: 'a provider’s account and a credential’s password hash: the person’s own (D-179)',
   verifications: 'short-lived sign-in tokens, credentials of the person’s own (D-179)',

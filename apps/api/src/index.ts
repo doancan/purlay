@@ -8,6 +8,7 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
+import { deliverReminders } from './modules/reminders/delivery';
 import { deliverScheduled } from './modules/scheduled/delivery';
 import { timedDeliveryLoop } from './modules/scheduled/loop';
 import { exportQueue } from './modules/export/requests';
@@ -159,14 +160,22 @@ const servicesFor = (
 ): RuntimeServices => runtimeServicesFrom(settings, runtimeBase, needsReentry, services.sends);
 
 const timedDelivery = timedDeliveryLoop(
-  async () =>
-    await deliverScheduled({
+  async () => {
+    const dependencies = {
       database,
       clock: systemClock,
       bus: runtimeBase.bus,
       log,
       ...(push === undefined ? {} : { push }),
-    }),
+    };
+    const results = await Promise.allSettled([
+      deliverScheduled(dependencies),
+      deliverReminders(dependencies),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  },
   (callback, milliseconds) => {
     const timer = setTimeout(callback, milliseconds);
     return (): void => {

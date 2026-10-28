@@ -262,7 +262,7 @@ Audio / video / WebRTC · screen sharing · an app marketplace or plugin directo
 workflow or automation builder · AI summarization · end-to-end zero-knowledge encryption
 (incompatible with server-side search; self-hosting is our privacy answer) · custom emoji
 management UI · Slack import fidelity · **per-seat billing** · **open core** · message scheduling ·
-polls · reminders · status emoji · SAML · a SOC 2 / ISO certification programme until a customer
+polls · status emoji · SAML · a SOC 2 / ISO certification programme until a customer
 contractually requires one (D-28)
 
 > **Billing left this list on 2026-09-09; per-seat billing did not.** D-1 added a cloud, so

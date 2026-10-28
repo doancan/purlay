@@ -1145,6 +1145,7 @@ export const tr = {
   'inbox.thread.seen': { other: '“{excerpt}” thread’inde {count} yanıt' },
   'inbox.thread.newBare': { other: '{count} yeni yanıt' },
   'inbox.thread.seenBare': { other: '{count} yanıt' },
+  'inbox.why.reminder': 'Mesaj hatırlatıcının zamanı geldi',
   'inbox.why.channel': '{name} yazdı',
   'inbox.readAll': 'Tümünü okundu yap',
   'inbox.readFailed': 'Okundu yapılamadı.',

@@ -31,7 +31,7 @@ export type MessageType = "system_event" | "text";
 
 export type NotificationLevel = "all" | "mentions" | "none";
 
-export type NotificationType = "channel_message" | "direct_message" | "mention" | "thread_reply" | "thread_resolved";
+export type NotificationType = "channel_message" | "direct_message" | "mention" | "reminder" | "thread_reply" | "thread_resolved";
 
 export type SavedState = "archived" | "completed" | "in_progress";
 
@@ -219,6 +219,16 @@ export interface Mentions {
   id: Generated<string>;
   mentioned_user_id: string;
   message_id: string;
+  workspace_id: string;
+}
+
+export interface MessageReminders {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  message_id: string;
+  remind_at: Timestamp;
+  user_id: string;
   workspace_id: string;
 }
 
@@ -508,6 +518,7 @@ export interface DB {
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;
+  message_reminders: MessageReminders;
   message_versions: MessageVersions;
   messages: Messages;
   native_authorizations: NativeAuthorizations;

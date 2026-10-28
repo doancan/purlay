@@ -713,6 +713,8 @@ export const createEngine = (options: EngineOptions): Engine => {
         // No state in the frame (D-132): the person's channels here are read again.
         readAgain(client, keys.channels(frame.data.workspaceId));
         return;
+      case 'REMINDERS_UPDATED':
+        return;
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.
         readAgain(client, keys.saved(frame.data.workspaceId));

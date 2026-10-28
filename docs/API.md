@@ -437,6 +437,9 @@ repaired. Nobody else hears it.
 | ○ | `PUT` | `/api/channels/:channelId/scheduled/:scheduledId` | `ScheduleMessageRequest`: replace an owned pending or failed scheduled message; returns `ScheduledMessage`. The UUID makes retries one draft. Requires channel membership. |
 | ○ | `DELETE` | `/api/channels/:channelId/scheduled/:scheduledId` | Cancel an owned unsent message, `204`; already sent is `409 SCHEDULED_MESSAGE_SENT`. |
 | ○ | `GET` | `/api/workspaces/:workspaceId/scheduled` | `ScheduledMessageList`: the caller’s visible pending and failed drafts, ordered by send time, bounded by `SCHEDULED_MESSAGES_MAX` (100). |
+| ○ | `PUT` | `/api/messages/:messageId/reminder` | `SetMessageReminderRequest` (`remindAt`): create or replace the caller’s reminder; returns `MessageReminder`. |
+| ○ | `DELETE` | `/api/messages/:messageId/reminder` | Cancel only the caller’s pending reminder, `204` idempotently. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/reminders` | `MessageReminderList`: at most 100 pending reminders, from visible nondeleted messages, ordered by time. |
 | ○ | `PUT` | `/api/messages/:messageId/saved` | `{ state? }` (`SaveMessageRequest`): saves the message for the caller, or moves its save to `state`; without `state` a new save is `in_progress` and an existing one keeps its state. `204`, idempotent. A deleted message is `404`; past `SAVED_MAX` saves shown in the workspace, a new save is `409 SAVED_LIMIT`. The caller's devices are told `SAVED_UPDATED` (D-128) |
 | ○ | `DELETE` | `/api/messages/:messageId/saved` | Lets the caller's save go, a deleted message's included. `204`, idempotent; tells their devices `SAVED_UPDATED` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34). `?channelId=` narrows it to that channel — what a channel's header counts and its narrowed view lists; a channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as in search |
@@ -595,3 +598,15 @@ Reserved uploads cannot be discarded, swept or claimed by immediate sends. A dom
 Sent/failed records expire after 30 days. Lists refresh on opening and while the native manager is open.
 Delivery continues without a desktop connection and catches up after a server restart; the requested
 time is a lower bound, not a guarantee while the server is unavailable.
+
+### Message reminders
+
+Advertised by `capabilities.messageReminders`. A reminder belongs only to its user, independently of saves.
+`remindAt` accepts the same time bounds as scheduled messages. Creating at the limit returns
+`VALIDATION_FAILED` with a `reminders` field; replacing an existing reminder remains possible.
+Changes publish `REMINDERS_UPDATED` on the caller’s private user topic. The API due loop creates one
+`reminder` inbox notification and removes the pending reminder in one transaction. Re-arming a delivered
+reminder creates a fresh unread notification when next due. Missing access or deleted messages cancel
+delivery. This notification does not inflate message unread counters. Web Push uses reminder wording;
+Deep Work suppresses the push. Native clients may also register the confirmed time with the operating
+system, allowing a local reminder after the application quits, subject to notification permissions.

@@ -184,6 +184,7 @@ import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
+import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
@@ -908,6 +909,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/deep-work',
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
+    )
+    .put(
+      '/api/messages/:messageId/reminder',
+      async ({ request, params, body }) =>
+        await putReminder(sending, request, params.messageId, body),
+    )
+    .delete('/api/messages/:messageId/reminder', async ({ request, params, set }) => {
+      await deleteReminder(sending, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
+    .get(
+      '/api/workspaces/:workspaceId/reminders',
+      async ({ request, params }) => await listReminders(dependencies, request, params.workspaceId),
     )
     .get(
       '/api/workspaces/:workspaceId/scheduled',

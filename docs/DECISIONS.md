@@ -5787,7 +5787,10 @@ permanent non-goals (D-4).
 4. **Saving again keeps what was there**: its id, its time, and its state unless a state is given.
 5. **The person's own devices are told** `SAVED_UPDATED` on their `user:` topic, with nothing in it but
    the workspace; nobody else learns anything.
-6. **No reminder.** Reminders are a permanent non-goal (`PRD.md` §6); lifting that is the owner's, by
+6. **Amended 2026-10-28 at the owner’s request:** reminders are now a separate personal feature.
+   A pending reminder has its own time and cancellation, survives clients closing, and produces a
+   `reminder` inbox entry. It does not change a save’s state or invent a new unread message.
+   The former rule follows for historical context: **No reminder.** Reminders are a permanent non-goal (`PRD.md` §6); lifting that is the owner's, by
    a decision of its own.
 
 **Rejected.** *A message to one's own note-to-self conversation* (D-5's answer to a scratchpad) — it
