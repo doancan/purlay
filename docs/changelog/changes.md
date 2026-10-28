@@ -58,6 +58,8 @@ have it.
 
 ### Fixed
 
+- **Messages** — Quotes preserve lists and blank lines; code sharing keeps nested fences and pasted text intact, Enter follows the rendered code block, and Undo preserves later edits. Copy and wrap stay reachable on narrow screens (D-205)
+
 - **Notifications** — A visible window behind another no longer marks new channel messages or thread replies read and closes their notices; returning to the conversation reads them (D-147, D-148)
 - **Notifications** — Settings correctly lists channels set to Every message among what can interrupt; resolved questions remain in the inbox (D-107, D-148)
 

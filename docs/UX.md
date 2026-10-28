@@ -587,9 +587,13 @@ words from what the server answered: larger than the limit, an image past the si
 image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
 too many files waiting, no connection, the server busy, file storage unavailable, the session ended, no
 longer having access to the workspace (D-164).
-Retry is there when trying again can be answered differently; Remove always. Pasting over ~12 lines of text is inserted as a fenced block
-automatically, with an undo toast — a paste that silently becomes a code block with no way back
-is worse than no help at all.
+Retry is there when trying again can be answered differently; Remove always. Pasting over 12 lines of text is inserted as a fenced block
+on lines of its own, unless the caret is already inside code or the pasted text is already a code block (D-205).
+The fence is longer than any inside the source; indentation and trailing blank lines survive copying.
+The undo toast removes automatic formatting while keeping the pasted text and subsequent edits. If the block
+has changed or cannot be identified uniquely, Undo keeps the current draft and explains why.
+Quote formatting preserves list markers, nested quotes and blank lines; applying it again removes one outer quote.
+Enter follows the renderer's fence rules, including tildes and longer fences, in both composers and message edits.
 
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.

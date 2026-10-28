@@ -1076,6 +1076,7 @@ export const tr = {
   'composer.placeholder': 'Mesaj yaz: {channel}',
   'composer.send': 'Gönder',
   'composer.pasted': 'Yapıştırılan metin kod bloğuna dönüştü',
+  'composer.pasteChanged': 'Yapıştırılan blok değişti. Düzenlemelerin korundu.',
   'composer.tooLong': {
     other: 'Sınırı {count} karakter aşıyor.',
   },
