@@ -11,6 +11,7 @@ import {
   messageId,
   NotificationPage,
   NotificationType,
+  ClientInfo,
   ErrorResponse,
   type ServerFrame,
 } from '@purlay/types';
@@ -106,6 +107,27 @@ describe('integration: GET /api/notifications', () => {
           ['mention', world.channelId],
         ]);
       }
+    });
+  });
+
+  test('the public capability agrees with the authenticated filter, without granting access', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const publicInfo = await call(db, 'GET', '/api/client', undefined);
+      expect(publicInfo.status).toBe(200);
+      const handshake: unknown = await publicInfo.json();
+      if (!Value.Check(ClientInfo, handshake)) throw new Error('invalid handshake');
+      expect(handshake.capabilities?.notificationTypeFilters).toBe(true);
+      const signedIn = await call(db, 'GET', '/api/client', world.bob);
+      expect(await signedIn.json()).toEqual(handshake);
+      const path = `/api/notifications?workspaceId=${world.workspaceId}&types=mention`;
+      expect((await call(db, 'GET', path, undefined)).status).toBe(401);
+      const outsider = await aSignedInUser(db, clock, 'cap-outsider');
+      expect((await call(db, 'GET', path, outsider.cookie)).status).toBe(404);
+      const response = await call(db, 'GET', path, world.bob);
+      expect(response.status).toBe(200);
+      const page = (await response.json()) as NotificationPage;
+      expect(page.data.map((row) => row.type)).toEqual(['mention']);
     });
   });
 

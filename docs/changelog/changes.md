@@ -25,6 +25,8 @@ have it.
 
 ### Added
 
+- **Native app** — The public client handshake advertises additive API capabilities, beginning with notification type filtering, without requiring a newer app or changing contract-version gates (D-186)
+
 - **Inbox** — Clients can filter notification history by one or more stored reasons before pagination, independently of All/Unread; omission keeps every type (D-106)
 
 - **Operations** — A hosted deployment of several nodes shares one Redis, set with `REDIS_URL`: a message, a sign-out, who is online and who is typing reach every node, and a person's write limit is one limit across them. A Redis that goes away is degraded service, not an outage. Without `REDIS_URL` nothing changes and nothing connects (D-201)
