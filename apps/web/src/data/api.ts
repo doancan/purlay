@@ -1,3 +1,11 @@
+import {
+  SavedSearch,
+  SavedSearchPage,
+  type SaveSearchRequest,
+  type SetKnowledgeRequest,
+  type SearchQuery,
+  type UnresolvedQuery,
+} from '@purlay/types';
 /**
  * Every endpoint the client calls, typed by the contract and spelled once.
  *
@@ -264,12 +272,24 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<ThreadPage>;
+  readonly setKnowledge: (messageId: string, input: SetKnowledgeRequest) => Promise<Message>;
+  readonly savedSearches: (
+    workspaceId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<SavedSearchPage>;
+  readonly saveSearch: (
+    workspaceId: string,
+    id: string,
+    input: SaveSearchRequest,
+  ) => Promise<SavedSearch>;
+  readonly deleteSearch: (workspaceId: string, id: string) => Promise<void>;
   readonly resolve: (messageId: string) => Promise<Message>;
   readonly reopen: (messageId: string) => Promise<Message>;
   /** The open questions; with `channelId`, that channel's alone (a channel it cannot see is 404). */
   readonly unresolved: (
     workspaceId: string,
-    page?: PageQuery & { readonly channelId?: string | undefined },
+    page?: UnresolvedQuery,
     signal?: AbortSignal,
   ) => Promise<UnresolvedPage>;
   /** The caller's inbox in one workspace, newest first (D-106). */
@@ -291,12 +311,7 @@ export interface Api {
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
-    query: {
-      readonly q: string;
-      readonly channelId?: string | undefined;
-      readonly senderId?: string | undefined;
-      readonly before?: string | undefined;
-    },
+    query: Omit<SearchQuery, 'before'> & { readonly before?: string | undefined },
     signal?: AbortSignal,
   ) => Promise<SearchPage>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
@@ -669,6 +684,24 @@ export const createApi = (http: Http): Api => {
         ThreadPage,
         options({ query: { ...page } }, signal),
       ),
+    setKnowledge: (id, input) =>
+      http.request('PUT', `/api/messages/${at(id)}/knowledge`, Message, options({ body: input })),
+    savedSearches: (workspaceId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/saved-searches`,
+        SavedSearchPage,
+        options({ query: { before } }, signal),
+      ),
+    saveSearch: (workspaceId, id, input) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/saved-searches/${at(id)}`,
+        SavedSearch,
+        options({ body: input }),
+      ),
+    deleteSearch: (workspaceId, id) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/saved-searches/${at(id)}`, options()),
     resolve: (messageId) =>
       http.request('POST', `/api/messages/${at(messageId)}/resolve`, Message, options()),
     reopen: (messageId) =>

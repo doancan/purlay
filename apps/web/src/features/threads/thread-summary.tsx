@@ -59,6 +59,13 @@ export const ThreadStatus = ({
       </span>
     );
   }
+  if (summary?.knowledge?.isQuestion === true && summary.replyCount === 0)
+    return (
+      <span className={cn(PILL, 'bg-warning-subtle text-warning-text')}>
+        <Icon name="open-question" size="sm" />
+        {t('knowledge.unanswered')}
+      </span>
+    );
   const whenLast =
     summary?.lastReplyAt == null ? '' : format.time(summary.lastReplyAt, new Date(nowMinute));
   return (
@@ -138,7 +145,7 @@ const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React
   );
 
   // Nobody has replied: nothing to show, and nothing to click.
-  if (replyCount === 0) return live;
+  if (replyCount === 0 && root.thread?.knowledge?.isQuestion !== true) return live;
 
   return (
     <>

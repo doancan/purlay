@@ -15,6 +15,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type {
   Channel,
+  SetKnowledgeRequest,
   CreateChannelRequest,
   CreateWorkspaceRequest,
   MeResponse,
@@ -33,6 +34,7 @@ import {
   reactionsUpdated,
   threadUpdated,
   messageRevised,
+  readAgain,
 } from './cache';
 import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
@@ -46,6 +48,7 @@ export interface Actions {
   readonly edit: (message: Message, content: string) => Promise<void>;
   /** A tombstone at once, or gone if nobody answered it; read again if refused (D-103 §7). */
   readonly remove: (message: Message) => Promise<void>;
+  readonly setKnowledge: (message: Message, input: SetKnowledgeRequest) => Promise<void>;
   readonly resolve: (message: Message) => Promise<void>;
   readonly reopen: (message: Message) => Promise<void>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
@@ -140,6 +143,43 @@ export const createActions = (
           void client.invalidateQueries({ queryKey: keys.thread(message.parentId) });
         }
         throw error;
+      }
+    },
+    setKnowledge: async (message, input): Promise<void> => {
+      const previous = message.thread;
+      if (previous !== null)
+        threadUpdated(client, message.id, {
+          ...previous,
+          knowledge: {
+            version: input.version,
+            isQuestion: input.isQuestion,
+            assigneeId: input.assigneeId,
+            acceptedAnswer:
+              input.acceptedAnswerId === previous.knowledge?.acceptedAnswer?.id
+                ? previous.knowledge.acceptedAnswer
+                : null,
+            decisionNote: input.decisionNote,
+            decisionUrl: input.decisionUrl,
+          },
+        });
+      try {
+        const saved = await api.setKnowledge(message.id, input);
+        patchMessage(client, message.id, (current) =>
+          (current.thread?.knowledge?.version ?? 0) > (saved.thread?.knowledge?.version ?? 0)
+            ? current
+            : { ...current, thread: saved.thread },
+        );
+      } catch (error) {
+        patchMessage(client, message.id, (current) =>
+          (current.thread?.knowledge?.version ?? 0) > input.version
+            ? current
+            : { ...current, thread: previous },
+        );
+        void client.invalidateQueries({ queryKey: keys.messages(message.channelId) });
+        throw error;
+      } finally {
+        readAgain(client, ['unresolved']);
+        readAgain(client, ['search']);
       }
     },
     resolve: async (message): Promise<void> => {

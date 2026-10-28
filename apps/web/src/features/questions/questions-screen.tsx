@@ -1,3 +1,7 @@
+import type { QuestionFilters } from '@purlay/types';
+import { Select } from '../../ui/select';
+import { useSession } from '../session/session';
+import { useMembers } from '../../data/queries';
 /**
  * The open-questions view (`UX.md` §4.4): the questions your team has not finished
  * answering — every unresolved root that has at least one reply, in the channels you can
@@ -15,7 +19,7 @@
  * Loading, empty and failed are all designed (§8): a skeleton in the list's own rows, "Every
  * thread is resolved" with the resolved glyph, and a Retry with the reason.
  */
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import type { Channel, Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannels, useUnresolved, readingOrder } from '../../data/queries';
@@ -185,6 +189,14 @@ const QuestionRow = ({
   const textOf = useMessageText();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
+  const members = useMembers(workspace.id);
+  const owner = members.data?.find(
+    (member) => member.user.id === question.thread?.knowledge?.assigneeId,
+  );
+  const age = Math.max(
+    0,
+    Math.floor((now.getTime() - new Date(question.createdAt).getTime()) / 86_400_000),
+  );
   const replies = t('thread.replies', { count: question.thread?.replyCount ?? 0 });
   const last = question.thread?.lastReplyAt ?? question.createdAt;
   return (
@@ -217,6 +229,11 @@ const QuestionRow = ({
           </span>
           <span className="block truncate text-body text-ink max-narrow:line-clamp-2 max-narrow:whitespace-normal">
             {textOf(question)}
+          </span>
+          <span className="block text-caption text-ink-muted">
+            {t('questions.waiting', { days: String(age) })}
+            {' · '}
+            {owner?.user.displayName ?? t('knowledge.unassigned')}
           </span>
         </span>
       </button>
@@ -260,15 +277,39 @@ const NarrowedName = ({ channel }: { readonly channel: Channel }): React.JSX.Ele
 export const QuestionsScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { search } = useRoute();
+  const { search, navigate } = useRoute();
+  const { user } = useSession();
+  const filterId = useId();
+  const params = new URLSearchParams(search);
+  const only = params.get('show') ?? 'all';
+  const oldest = params.get('order') === 'oldest';
+  const filters: QuestionFilters = {
+    ...(only === 'unanswered' ? { unanswered: 'yes' as const } : {}),
+    ...(only === 'mine' ? { assigneeId: user.id } : {}),
+    ...(oldest ? { order: 'oldest' as const } : {}),
+  };
+  const changeFilter = (key: string, value: string): void => {
+    const next = new URLSearchParams(search);
+    if (value === '') next.delete(key);
+    else next.set(key, value);
+    navigate(`/w/${encodeURIComponent(workspace.slug)}/questions?${next.toString()}`);
+  };
   const narrowed = channelInSearch(search);
   const ports = useFeedPorts();
   // Narrowed, the server is asked for that channel's questions: filtered from the workspace's pages,
   // a quiet channel's sat behind other channels' and needed Load more to appear.
-  const query = useUnresolved(workspace.id, narrowed);
+  const query = useUnresolved(workspace.id, narrowed, filters);
   const channels = useChannels(workspace.id);
   const questions = useMemo(() => readingOrder(query.data), [query.data]);
-  const groups = useMemo(() => groupByChannel(questions), [questions]);
+  const groups = useMemo(() => {
+    const grouped = groupByChannel(questions);
+    if (!oldest) return grouped;
+    return grouped
+      .map((group) => ({ ...group, questions: [...group.questions].reverse() }))
+      .sort((left, right) =>
+        (left.questions[0]?.id ?? '').localeCompare(right.questions[0]?.id ?? ''),
+      );
+  }, [questions, oldest]);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const now = ports.clock.now();
 
@@ -301,8 +342,8 @@ export const QuestionsScreen = (): React.JSX.Element => {
         <GlyphEmptyState
           glyph="resolved"
           tone="success"
-          title={t('state.questions.empty.title')}
-          body={t('state.questions.empty.body')}
+          title={t(only === 'all' ? 'state.questions.empty.title' : 'questions.filteredEmpty')}
+          body={t(only === 'all' ? 'state.questions.empty.body' : 'questions.filteredHint')}
         />
         {narrowed !== null && (
           <div className="flex justify-center pb-6">
@@ -356,7 +397,37 @@ export const QuestionsScreen = (): React.JSX.Element => {
   return (
     <>
       <Header narrowed={narrowed} />
-      <ListColumn>{body}</ListColumn>
+      <ListColumn>
+        <div className="flex flex-wrap items-end gap-3">
+          <label htmlFor={filterId} className="flex flex-col gap-1 text-label text-ink">
+            {t('questions.filter')}
+            <Select
+              id={filterId}
+              value={only}
+              onChange={(event) => {
+                changeFilter('show', event.target.value);
+              }}
+            >
+              <option value="all">{t('questions.all')}</option>
+              <option value="unanswered">{t('knowledge.unanswered')}</option>
+              <option value="mine">{t('questions.mine')}</option>
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1 text-label text-ink">
+            {t('questions.sort')}
+            <Select
+              value={oldest ? 'oldest' : 'newest'}
+              onChange={(event) => {
+                changeFilter('order', event.target.value);
+              }}
+            >
+              <option value="newest">{t('questions.newest')}</option>
+              <option value="oldest">{t('questions.oldest')}</option>
+            </Select>
+          </label>
+        </div>
+        {body}
+      </ListColumn>
     </>
   );
 };

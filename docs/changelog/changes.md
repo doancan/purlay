@@ -26,6 +26,9 @@ have it.
 ### Added
 
 - **Notifications** — An enabled device can request a test notification, with permission and device-setting guidance if it cannot be shown (D-148)
+- **Threads** — Keep a selected answer, decision note and reference on a thread, with versioned edits that preserve drafts on conflict (D-204)
+- **Questions** — Mark a question before anybody replies, assign a channel member, and filter unanswered or assigned questions with longest-waiting order (D-204)
+- **Search** — Filter by resolution, question, date, code, files and repository, find decision notes and selected answers, and save personal searches (D-204)
 
 - **Native app** — The public client handshake advertises additive API capabilities, beginning with notification type filtering, without requiring a newer app or changing contract-version gates (D-186)
 

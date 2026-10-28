@@ -420,7 +420,29 @@ export type Reaction = Static<typeof Reaction>;
  * or both null — the database's `resolution_is_complete` — and only a root with at
  * least one reply can be resolved (I-8).
  */
+export const DECISION_NOTE_MAX = 2000;
+export const ACCEPTED_ANSWER_PREVIEW_MAX = 800;
+export const DecisionUrl = Type.String({
+  maxLength: 2048,
+  format: 'uri',
+  pattern: '^https?://[^\\s]+$',
+});
+/** Additive root metadata; absent on unchanged roots and older servers (D-204). */
+export const ThreadKnowledge = Type.Object({
+  version: Type.Integer({ minimum: 0 }),
+  isQuestion: Type.Boolean(),
+  assigneeId: Type.Union([Uuid, Type.Null()]),
+  acceptedAnswer: Type.Union([
+    Type.Object({ id: Uuid, content: Type.String({ maxLength: ACCEPTED_ANSWER_PREVIEW_MAX }) }),
+    Type.Null(),
+  ]),
+  decisionNote: Type.String({ maxLength: DECISION_NOTE_MAX }),
+  decisionUrl: Type.Union([DecisionUrl, Type.Null()]),
+});
+export type ThreadKnowledge = Static<typeof ThreadKnowledge>;
+
 export const ThreadSummary = Type.Object({
+  knowledge: Type.Optional(ThreadKnowledge),
   replyCount: Type.Integer({ minimum: 0 }),
   lastReplyAt: Type.Union([Timestamp, Type.Null()]),
   resolvedAt: Type.Union([Timestamp, Type.Null()]),

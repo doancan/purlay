@@ -1023,3 +1023,6 @@ the node that accepted it, which is why the per-connection frame limiter stays i
 (D-201), and why a node that loses its Redis sends its sockets back to replay rather than leaving them
 silent. A node reports ready only after it has reached Redis once; a node that has, and loses it, serves
 on, degraded, and says so in its log.
+
+
+**Thread knowledge (D-204).** ThreadSummary optionally includes knowledge; old rows omit it. A message page hydrates root metadata and bounded live-answer previews in one batched join. Metadata writes advance both knowledge_version (editor concurrency) and state_version (event ordering), so the existing changed_at trigger includes them in reconnect replay. THREAD_UPDATED carries the additive summary. Answer revisions update previews in held client lists; deleted roots drop decision metadata. Saved searches are database-backed personal filters; no new event, scheduler or external service is introduced.

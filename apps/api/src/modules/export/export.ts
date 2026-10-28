@@ -82,6 +82,8 @@ const PEOPLE = (scope: Scope): RawBuilder<unknown> => sql`
   union select user_id from channel_members where channel_id in (${channelsIn(scope)})
   union select sender_id from messages where id in (${messagesOf(scope)})
   union select resolved_by from messages where id in (${messagesOf(scope)})
+  union select question_assignee_id from messages where id in (${messagesOf(scope)})
+  union select decision_updated_by from messages where id in (${messagesOf(scope)})
   union select user_id from reactions where message_id in (${messagesOf(scope)})
   union select mentioned_user_id from mentions where message_id in (${messagesOf(scope)})
   union select pinned_by from pinned_messages where message_id in (${messagesOf(scope)})

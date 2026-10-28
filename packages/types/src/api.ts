@@ -20,6 +20,8 @@ import {
 } from '@sinclair/typebox';
 import {
   Channel,
+  DECISION_NOTE_MAX,
+  DecisionUrl,
   ChannelState,
   CurrentUser,
   Attachment,
@@ -333,24 +335,57 @@ export const SEARCH_QUERY_MAX = 200;
  * the channels the caller can see, or in one of them, from anybody or from one person (D-10, D-34,
  * D-105, D-166). Newest first, keyset by `before`. `%`, `_` and `\` are themselves, not patterns.
  */
-export const SearchQuery = FromClient({
-  q: Type.String({
-    minLength: SEARCH_QUERY_MIN,
-    maxLength: SEARCH_QUERY_MAX,
-    format: 'plain-text',
-  }),
+export const SearchCriteria = FromClient({
+  q: Type.Union([
+    Type.Literal(''),
+    Type.String({ minLength: SEARCH_QUERY_MIN, maxLength: SEARCH_QUERY_MAX, format: 'plain-text' }),
+  ]),
   channelId: Type.Optional(Uuid),
-  /**
-   * Only what this person wrote (D-166). A filter, not a resource: somebody who never wrote in the
-   * caller's visible channels — another workspace's, or nobody at all — is an empty page, not a 404.
-   */
   senderId: Type.Optional(Uuid),
+  status: Type.Optional(Type.Union([Type.Literal('resolved'), Type.Literal('open')])),
+  question: Type.Optional(Type.Literal('yes')),
+  kind: Type.Optional(Type.Union([Type.Literal('code'), Type.Literal('file')])),
+  since: Type.Optional(Timestamp),
+  until: Type.Optional(Timestamp),
+  repository: Type.Optional(Type.String({ maxLength: 140, pattern: GITHUB_REPOSITORY_PATTERN })),
+});
+export type SearchCriteria = Static<typeof SearchCriteria>;
+export const SearchFilters = Type.Omit(SearchCriteria, ['q', 'channelId', 'senderId']);
+export type SearchFilters = Static<typeof SearchFilters>;
+export const SearchQuery = FromClient({
+  ...SearchCriteria.properties,
   before: Type.Optional(Uuid),
   limit: Type.Optional(
     Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
   ),
 });
 export type SearchQuery = Static<typeof SearchQuery>;
+
+export const SetKnowledgeRequest = FromClient({
+  version: Type.Integer({ minimum: 0 }),
+  isQuestion: Type.Boolean(),
+  assigneeId: Type.Union([Uuid, Type.Null()]),
+  acceptedAnswerId: Type.Union([Uuid, Type.Null()]),
+  decisionNote: Type.String({ maxLength: DECISION_NOTE_MAX, format: 'plain-text' }),
+  decisionUrl: Type.Union([DecisionUrl, Type.Null()]),
+});
+export type SetKnowledgeRequest = Static<typeof SetKnowledgeRequest>;
+
+export const SAVED_SEARCH_LIMIT = 50;
+export const SaveSearchRequest = FromClient({
+  name: Type.String({ minLength: 1, maxLength: 80, format: 'plain-text' }),
+  query: SearchCriteria,
+});
+export type SaveSearchRequest = Static<typeof SaveSearchRequest>;
+export const SavedSearch = Type.Object({
+  id: Uuid,
+  name: Type.String(),
+  query: SearchCriteria,
+  createdAt: Timestamp,
+});
+export type SavedSearch = Static<typeof SavedSearch>;
+export const SavedSearchPage = Page(SavedSearch);
+export type SavedSearchPage = Static<typeof SavedSearchPage>;
 
 export const SearchPage = Page(Message);
 export type SearchPage = Static<typeof SearchPage>;
@@ -372,7 +407,15 @@ export type UnresolvedPage = Static<typeof UnresolvedPage>;
  * and its narrowed view lists. A channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as search
  * answers it: narrowing never widens the visible set (D-34).
  */
+export const QuestionFilters = FromClient({
+  unanswered: Type.Optional(Type.Literal('yes')),
+  assigneeId: Type.Optional(Uuid),
+  order: Type.Optional(Type.Union([Type.Literal('oldest'), Type.Literal('newest')])),
+});
+export type QuestionFilters = Static<typeof QuestionFilters>;
+
 export const UnresolvedQuery = FromClient({
+  ...QuestionFilters.properties,
   channelId: Type.Optional(Uuid),
   before: Type.Optional(Uuid),
   after: Type.Optional(Uuid),

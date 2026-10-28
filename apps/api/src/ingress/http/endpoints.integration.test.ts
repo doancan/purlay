@@ -255,6 +255,39 @@ const STEPS: readonly Step[] = [
   },
   { id: 'listSavedIds', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
   { id: 'unsaveMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
+  {
+    id: 'setKnowledge',
+    spec: (c) => ({
+      params: { messageId: c.rootId },
+      json: {
+        version: 0,
+        isQuestion: true,
+        assigneeId: c.alice.userId,
+        acceptedAnswerId: c.replyId,
+        decisionNote: 'Keep the deployment window.',
+        decisionUrl: 'https://github.com/acme/api/issues/1',
+      },
+    }),
+    status: 200,
+  },
+  {
+    id: 'saveSearch',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, searchId: c.rootId },
+      json: { name: 'Open questions', query: { q: '', question: 'yes', status: 'open' } },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listSavedSearches',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  {
+    id: 'deleteSavedSearch',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId, searchId: c.rootId } }),
+    status: 204,
+  },
   { id: 'resolveThread', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   { id: 'reopenThread', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   { id: 'getThreadFollow', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },

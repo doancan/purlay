@@ -151,7 +151,7 @@ const currentSummary = async (
     .executeTakeFirst();
   return root === undefined
     ? undefined
-    : { summary: await readSummary(executor, root), version: root.state_version };
+    : { summary: await readSummary(executor, root, rootId), version: root.state_version };
 };
 
 /**
@@ -323,7 +323,7 @@ export const sendMessage = async (
       .executeTakeFirstOrThrow();
     thread = {
       rootId: input.parentId,
-      summary: await readSummary(executor, summaryColumns),
+      summary: await readSummary(executor, summaryColumns, input.parentId),
       version: summaryColumns.state_version,
     };
   }

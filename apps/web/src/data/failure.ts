@@ -122,6 +122,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'THREAD_NOT_RESOLVABLE':
     case 'WORKSPACE_SLUG_TAKEN':
     case 'CHANNEL_NAME_TAKEN':
+    case 'KNOWLEDGE_CONFLICT':
+    case 'SAVED_SEARCH_NOT_FOUND':
+    case 'SAVED_SEARCH_LIMIT':
     case 'MESSAGE_ID_CONFLICT':
     case 'INCIDENT_ID_CONFLICT':
     case 'ACCOUNT_EMAIL_CONFLICT':

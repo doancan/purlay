@@ -56,13 +56,14 @@ is rotated out (§4).
 | `workspace_invitations` | Who made an invitation link | Joining a workspace by link (D-115) | For the life of the workspace, as the record of what was offered; usable until revoked or expired |
 | `channels` | Who made a channel; a direct message's two or more people (`dm_key`) | The conversation's place | For the life of the workspace |
 | `channel_members` | Who is in which channel, their read position, unread counts, notification level, star | Membership and what to show as unread (D-13) | While they are a member |
-| `messages` | What was written, and who wrote it | The conversation | Retention; tombstoned by a delete or by content erasure (D-9, D-139 §7) |
+| `messages` | What was written, who wrote it, question ownership, selected answer and decision note with its last writer (D-204) | The conversation | Retention; tombstoned by a delete or by content erasure (D-9, D-139 §7) |
 | `message_versions` | What a message said before each edit | Edit history (D-135) | With its message's words: a delete, content erasure or retention removes them; its author may remove one |
 | `attachments` | Each file's name, kind, size, and who uploaded it; the bytes in the object store | Files in the conversation (D-109) | With its message; an unsent upload after `ORPHAN_AGE_MS` (`sweep:orphans`); its bytes leave the store after the row (D-141) |
 | `mentions` | Who was mentioned in which message | Notifications and the inbox (D-12) | With its message |
 | `reactions` | Who reacted to what, with which emoji | Reactions | With its message |
 | `pinned_messages` | Who pinned a message | Pins (D-130) | With its message, or until unpinned |
 | `saved_messages` | Which messages a person saved, and their state | Save for later (D-128) | Until unsaved; on erasure; with the message |
+| `saved_searches` | A person’s named search filters | Personal searches (D-204), never cached results | Until removed; on account erasure; with the workspace |
 | `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |
 | `notifications` | What a person was told of, and whether they read it | The inbox (D-12) | With its message; on erasure |
 | `incidents` | Who declared and resolved an incident; its runbook and postmortem | Incident channels (D-137) | For the life of the channel; not touched by content erasure (D-139 §7) |

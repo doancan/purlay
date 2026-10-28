@@ -257,6 +257,9 @@ const uploadRefusal = (
     case 'INVITATION_NOT_FOUND':
     case 'LAST_CHANNEL_MEMBER':
     case 'LAST_OWNER':
+    case 'KNOWLEDGE_CONFLICT':
+    case 'SAVED_SEARCH_NOT_FOUND':
+    case 'SAVED_SEARCH_LIMIT':
     case 'MESSAGE_ID_CONFLICT':
     case 'MESSAGE_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':

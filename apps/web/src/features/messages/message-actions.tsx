@@ -1,3 +1,4 @@
+import { knowledgeInput } from '../threads/knowledge-input';
 /**
  * What can be done with a message, on the bar its row shows (`UX.md` §3, D-150): React, the slot for
  * Reply, Save, Pin and More — the same square controls, each with its tip and its key.
@@ -15,6 +16,7 @@ import { useRef, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { useCopyMessageLink } from './message-link';
 import { useActions } from '../../data/actions-provider';
+import { useChannels } from '../../data/queries';
 import { useDescribeFailure } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
@@ -117,13 +119,18 @@ const MoreMenu = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { remove } = useActions();
+  const { remove, setKnowledge } = useActions();
   const { show } = useToast();
   const { copy } = useContentPorts();
   const describe = useDescribeFailure();
   const { start } = useEditing();
   const copyLink = useCopyMessageLink();
-  const role = useWorkspaceIfAny()?.role;
+  const scope = useWorkspaceIfAny();
+  const role = scope?.role;
+  const channels = useChannels(scope?.workspace.id ?? '', scope !== null);
+  const member =
+    channels.data?.some((channel) => channel.id === message.channelId && channel.state !== null) ===
+    true;
   const moderating = !mine && (role === 'owner' || role === 'admin');
   const [asking, setAsking] = useState(false);
 
@@ -170,6 +177,25 @@ const MoreMenu = ({
         >
           {t('message.copyText')}
         </MenuItem>
+        {member && message.parentId === null && message.deletedAt === null && (
+          <MenuItem
+            glyph="open-question"
+            onSelect={() => {
+              const input = knowledgeInput(message);
+              void setKnowledge(message, {
+                ...input,
+                isQuestion: !input.isQuestion,
+                assigneeId: null,
+              }).catch((failure: unknown) => show({ message: describe(failure) }));
+            }}
+          >
+            {t(
+              message.thread?.knowledge?.isQuestion === true
+                ? 'knowledge.unmark'
+                : 'knowledge.mark',
+            )}
+          </MenuItem>
+        )}
         <SaveMenuItem message={message} />
         <PinMenuItem message={message} />
         {(mine || moderating) && <MenuSeparator />}

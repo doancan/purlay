@@ -220,16 +220,23 @@ export interface Mentions {
 }
 
 export interface Messages {
+  accepted_answer_id: string | null;
   changed_at: Generated<Timestamp>;
   channel_id: string;
   content: string;
   created_at: Generated<Timestamp>;
+  decision_note: Generated<string>;
+  decision_updated_by: string | null;
+  decision_url: string | null;
   deleted_at: Timestamp | null;
   edited_at: Timestamp | null;
   id: string;
+  is_question: Generated<boolean>;
+  knowledge_version: Generated<number>;
   message_type: Generated<MessageType>;
   metadata: Generated<Json>;
   parent_id: string | null;
+  question_assignee_id: string | null;
   resolved_at: Timestamp | null;
   resolved_by: string | null;
   sender_id: string | null;
@@ -322,6 +329,15 @@ export interface SavedMessages {
   saved_at: Generated<Timestamp>;
   state: Generated<SavedState>;
   updated_at: Generated<Timestamp>;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface SavedSearches {
+  created_at: Generated<Timestamp>;
+  id: string;
+  name: string;
+  query: Json;
   user_id: string;
   workspace_id: string;
 }
@@ -499,6 +515,7 @@ export interface DB {
   rate_limits: RateLimits;
   reactions: Reactions;
   saved_messages: SavedMessages;
+  saved_searches: SavedSearches;
   server_audit_log: ServerAuditLog;
   server_settings: ServerSettings;
   sessions: Sessions;

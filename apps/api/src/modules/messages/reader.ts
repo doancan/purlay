@@ -22,6 +22,7 @@ import {
   type ThreadSummary,
   type User,
 } from '@purlay/types';
+import { knowledgeFor } from './knowledge-reader';
 import { attachmentSets, mentionSets, reactionSets } from './sets';
 
 /** What every query that returns messages selects. Kept beside `MessageRow` so they cannot drift. */
@@ -122,11 +123,15 @@ const summaryOf = (columns: ThreadColumns, people: ReadonlyMap<string, User>): T
 export const readSummary = async (
   executor: Executor,
   columns: ThreadColumns,
-): Promise<ThreadSummary> =>
-  summaryOf(
-    columns,
-    await usersByIds(executor, columns.resolved_by === null ? [] : [columns.resolved_by]),
-  );
+  rootId: string,
+): Promise<ThreadSummary> => {
+  const [people, knowledge] = await Promise.all([
+    usersByIds(executor, columns.resolved_by === null ? [] : [columns.resolved_by]),
+    knowledgeFor(executor, [rootId]),
+  ]);
+  const extra = knowledge.get(rootId);
+  return { ...summaryOf(columns, people), ...(extra === undefined ? {} : { knowledge: extra }) };
+};
 
 /** One message's row by id, with its sender; undefined when there is none. */
 export const readMessage = async (
@@ -176,28 +181,38 @@ export const buildMessages = async (
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
   const resolvers = rows.flatMap((row) => (row.resolved_by === null ? [] : [row.resolved_by]));
-  const [reactions, mentions, attachments, people] = await Promise.all([
+  const [reactions, mentions, attachments, people, knowledge] = await Promise.all([
     reactionSets(executor, ids),
     mentionSets(executor, ids),
     attachmentSets(executor, ids),
     usersByIds(executor, [...new Set(resolvers)]),
+    knowledgeFor(
+      executor,
+      rows.filter((row) => row.parent_id === null).map((row) => row.id),
+    ),
   ]);
-  return rows.map((row) => ({
-    id: row.id,
-    channelId: row.channel_id,
-    ...authorship(row),
-    content: row.content,
-    editedAt: atOrNull(row.edited_at),
-    deletedAt: atOrNull(row.deleted_at),
-    createdAt: at(row.created_at),
-    parentId: row.parent_id,
-    // A reply has no summary of its own; a root always has one, with zero replies until it has some.
-    thread: row.parent_id === null ? summaryOf(row, people) : null,
-    reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
-    mentions: [...(mentions.get(row.id) ?? [])],
-    // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
-    attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
-  }));
+  return rows.map((row): Message => {
+    const extra = knowledge.get(row.id);
+    return {
+      id: row.id,
+      channelId: row.channel_id,
+      ...authorship(row),
+      content: row.content,
+      editedAt: atOrNull(row.edited_at),
+      deletedAt: atOrNull(row.deleted_at),
+      createdAt: at(row.created_at),
+      parentId: row.parent_id,
+      // A reply has no summary of its own; a root always has one, with zero replies until it has some.
+      thread:
+        row.parent_id === null
+          ? { ...summaryOf(row, people), ...(extra === undefined ? {} : { knowledge: extra }) }
+          : null,
+      reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
+      mentions: [...(mentions.get(row.id) ?? [])],
+      // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
+      attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
+    };
+  });
 };
 
 /** One message, built, so the answer to a write reads like the page it will appear on. */

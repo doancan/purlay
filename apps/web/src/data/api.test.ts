@@ -66,6 +66,42 @@ const harness = (body: unknown): { api: Api; calls: Call[] } => {
 };
 
 describe('the endpoints', () => {
+  test('question metadata and personal searches use the shared contract at their own routes', async () => {
+    const knowledge = {
+      version: 0,
+      isQuestion: true,
+      assigneeId: null,
+      acceptedAnswerId: null,
+      decisionNote: 'Wait',
+      decisionUrl: null,
+    };
+    const write = harness(message);
+    await write.api.setKnowledge(ID, knowledge);
+    expect(write.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/messages/${ID}/knowledge`,
+      body: knowledge,
+    });
+    const input = {
+      name: 'Questions',
+      query: { q: '', question: 'yes' as const, status: 'open' as const },
+    };
+    const saved = { ...input, id: ID, createdAt: WHEN };
+    const save = harness(saved);
+    expect(await save.api.saveSearch(ID, ID, input)).toEqual(saved);
+    expect(save.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/workspaces/${ID}/saved-searches/${ID}`,
+      body: input,
+    });
+    const list = harness({ data: [saved], nextCursor: null });
+    expect((await list.api.savedSearches(ID, ID)).data).toEqual([saved]);
+    expect(list.calls[0]?.url).toBe(`/api/workspaces/${ID}/saved-searches?before=${ID}`);
+    const remove = harness(null);
+    await remove.api.deleteSearch(ID, ID);
+    expect(remove.calls[0]?.method).toBe('DELETE');
+    expect(remove.calls[0]?.url).toBe(`/api/workspaces/${ID}/saved-searches/${ID}`);
+  });
   test('identity and workspaces', async () => {
     const me = harness({
       user: { ...user, email: 'a@example.test' },

@@ -1,3 +1,4 @@
+import { KnowledgePanel } from './knowledge-panel';
 /**
  * The thread panel (`UX.md` §4.2, D-122): one root's thread, on the right of the feed — a header
  * that names it, follows it (D-161) and closes it, the root, the replies under an "N replies" rule, and the box to
@@ -295,6 +296,15 @@ const ThreadPanelView = ({
             members={members}
             dimmed={resolved}
             tabIndex={tabbable === rootId ? 0 : -1}
+          />
+          <KnowledgePanel
+            root={root}
+            replies={replies}
+            member={
+              channels.data?.some(
+                (channel) => channel.id === channelId && channel.state !== null,
+              ) ?? false
+            }
           />
           {/* Wraps rather than widening the panel: on a narrow window the button takes a line of its own. */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-2">

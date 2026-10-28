@@ -1021,3 +1021,10 @@ web is not the only place behaviour is specified. What is decided so far:
 - **What stays in the browser.** Setting a server up, workspace administration, the audit log, retention,
   exports and the GitHub feeds: the application opens the right page.
 - **Signing in** is §11's consent: the application has no sign-in form of its own.
+
+
+**Questions, decisions and search (D-204).** More → Mark as a question adds a root to open questions immediately. The thread's Question and decision section offers a current channel member an explicit editor: question checkbox, responsible channel member, selected live reply, decision note and optional reference. Visitors read it. Saving preserves the draft on failure; a stale edit shows the latest decision above the draft and requires reviewing that version before retry. Selecting an answer does not resolve the thread. A bounded answer preview links to its original message; deletion hides the preview and a deleted root hides its decision.
+
+Open questions keeps existing unresolved threads and adds explicitly marked roots with no answers. Show switches between all, unanswered and assigned to me; order switches newest/longest waiting. Filters persist in the URL; pagination preserves the chosen order. Rows show ownership and elapsed days. No assignment notification or reminder is sent.
+
+Search keeps words, channel and author in the URL and adds explicit status, question, content, UTC date and repository controls. A filter can be used with no words. Results show selected-answer previews and decision notes with the original root. Saved searches opens a personal list with loading, retry and empty states; a named current search can be saved, revisited or removed, with pagination. Errors retain names and filters. Current visibility is always applied when running the search.

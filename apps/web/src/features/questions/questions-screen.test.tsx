@@ -4,13 +4,15 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import type { Channel, Message, MessagePage } from '@purlay/types';
+import type { Channel, Message, MessagePage, UnresolvedQuery } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
 import {
   ALICE,
+  ME,
+  NO_PROFILE,
   BOB,
   IDS,
   aChannel,
@@ -86,6 +88,63 @@ describe('grouping', () => {
 });
 
 describe('the list', () => {
+  test('unanswered and assigned filters reach the server, and oldest-first sorts across channels', async () => {
+    const asked: UnresolvedQuery[] = [];
+    const first = question(1, IDS.api, {
+      thread: {
+        ...open,
+        replyCount: 0,
+        knowledge: {
+          version: 1,
+          isQuestion: true,
+          assigneeId: ME.id,
+          acceptedAnswer: null,
+          decisionNote: '',
+          decisionUrl: null,
+        },
+      },
+    });
+    const view = await renderApp(<Outlet />, {
+      path: '/w/acme/questions',
+      api: aSignedInApi({
+        unresolved: (_id, query) => {
+          asked.push(query ?? {});
+          return Promise.resolve(
+            asPage(
+              query?.unanswered === 'yes'
+                ? []
+                : [first, question(2, IDS.incidents), question(3, IDS.api)],
+            ),
+          );
+        },
+        members: () =>
+          Promise.resolve([
+            { user: ME, role: 'member', joinedAt: first.createdAt, profile: NO_PROFILE },
+          ]),
+      }),
+    });
+    await settle();
+    const main = within(view.getByRole('main'));
+    await person().selectOptions(main.getByRole('combobox', { name: 'Show' }), 'unanswered');
+    await settle();
+    expect(asked.at(-1)?.unanswered).toBe('yes');
+    expect(main.getByText('No questions match these filters')).toBeDefined();
+    await person().selectOptions(main.getByRole('combobox', { name: 'Show' }), 'mine');
+    await settle();
+    expect(asked.at(-1)?.assigneeId).toBe(ME.id);
+    expect(main.getAllByText(new RegExp(ME.displayName)).length).toBeGreaterThan(0);
+    await person().selectOptions(main.getByRole('combobox', { name: 'Order' }), 'oldest');
+    await settle();
+    expect(asked.at(-1)?.order).toBe('oldest');
+    expect(main.getAllByRole('heading', { level: 2 })[0]?.textContent).toContain('api');
+    expect(view.world.history.stack.at(-1)).toContain('show=mine&order=oldest');
+    await person().selectOptions(main.getByRole('combobox', { name: 'Show' }), 'all');
+    await person().selectOptions(main.getByRole('combobox', { name: 'Order' }), 'newest');
+    await settle();
+    expect(asked.at(-1)?.assigneeId).toBeUndefined();
+    view.unmount();
+  });
+
   const view = async (): ReturnType<typeof visit> =>
     await visit(() =>
       Promise.resolve(

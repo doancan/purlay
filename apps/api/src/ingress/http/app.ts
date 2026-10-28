@@ -1,3 +1,4 @@
+import { putKnowledge, readSavedSearches, putSavedSearch, deleteSavedSearch } from './knowledge';
 /**
  * The HTTP surface.
  *
@@ -1149,6 +1150,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/messages/:messageId/around',
       async ({ request, params }) => await readAround(dependencies, request, params.messageId),
     )
+    .put(
+      '/api/messages/:messageId/knowledge',
+      async ({ request, params, body }) =>
+        await putKnowledge(sending, request, params.messageId, body),
+    )
     .get(
       '/api/messages/:messageId/thread',
       async ({ request, params }) => await readThread(dependencies, request, params.messageId),
@@ -1274,6 +1280,24 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    .get(
+      '/api/workspaces/:workspaceId/saved-searches',
+      async ({ request, params }) =>
+        await readSavedSearches(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/saved-searches/:searchId',
+      async ({ request, params, body }) =>
+        await putSavedSearch(sending, request, params.workspaceId, params.searchId, body),
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/saved-searches/:searchId',
+      async ({ request, params, set }) => {
+        await deleteSavedSearch(sending, request, params.workspaceId, params.searchId);
+        set.status = 204;
+        return null;
+      },
+    )
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),

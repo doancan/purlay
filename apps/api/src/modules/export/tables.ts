@@ -117,6 +117,13 @@ export const COLUMNS: Columns = {
     state_version: 'omit',
     // Bookkeeping for a client catching up (D-194), as the row's version is: not the workspace's data.
     changed_at: 'omit',
+    is_question: 'export',
+    question_assignee_id: 'export',
+    accepted_answer_id: 'export',
+    decision_note: 'export',
+    decision_url: 'export',
+    decision_updated_by: 'export',
+    knowledge_version: 'omit',
   },
   reactions: {
     id: 'export',
@@ -269,6 +276,7 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   notifications: 'each person’s inbox, their own state',
   saved_messages: 'each person’s saved items, their own state',
+  saved_searches: 'each person’s named filters, their own state',
   thread_follows: 'which threads each person follows or let go, their own state',
   link_previews: 'a cache of other sites’ pages',
   job_runs: 'the scheduler’s own record',
