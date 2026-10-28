@@ -24,6 +24,7 @@ export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
   'mentions_message_id_fkey',
   'message_versions_message_channel_fkey',
   'messages_parent_channel_fkey',
+  'messages_accepted_answer_id_fkey',
   'notifications_message_channel_fkey',
   'notifications_message_id_fkey',
   'pinned_messages_message_channel_fkey',

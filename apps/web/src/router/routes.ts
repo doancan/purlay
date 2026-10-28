@@ -1,3 +1,5 @@
+import { Value } from '@sinclair/typebox/value';
+import { SearchFilters } from '@purlay/types';
 /**
  * The routes, and the only place an address is spelled (D-98).
  *
@@ -169,11 +171,13 @@ export const searchHref = (
   words: string,
   channelId: string | null = null,
   authorId: string | null = null,
+  filters: SearchFilters = {},
 ): string => {
   const params = new URLSearchParams();
   if (words !== '') params.set(WORDS_PARAM, words);
   if (channelId !== null) params.set(CHANNEL_PARAM, channelId);
   if (authorId !== null) params.set(AUTHOR_PARAM, authorId);
+  for (const [name, value] of Object.entries(filters)) params.set(name, value);
   const query = params.toString();
   return query === '' ? href('search', { slug }) : `${href('search', { slug })}?${query}`;
 };
@@ -199,4 +203,15 @@ export const channelInSearch = (search: string): string | null => {
 export const authorInSearch = (search: string): string | null => {
   const named = new URLSearchParams(search).get(AUTHOR_PARAM);
   return named !== null && ID_SHAPE.test(named) ? named : null;
+};
+
+/** Only the declared filter vocabulary is restored; arbitrary URL input is never a query object. */
+export const searchFiltersIn = (search: string): SearchFilters => {
+  const params = new URLSearchParams(search);
+  const values: Record<string, string> = {};
+  for (const key of Object.keys(SearchFilters.properties)) {
+    const value = params.get(key);
+    if (value !== null && value !== '') values[key] = value;
+  }
+  return Value.Check(SearchFilters, values) ? values : {};
 };

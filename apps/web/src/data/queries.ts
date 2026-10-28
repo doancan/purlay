@@ -1,3 +1,4 @@
+import type { QuestionFilters, SearchFilters } from '@purlay/types';
 /**
  * What a screen reads, as hooks. Each is a query over one `Api` call, keyed by
  * `keys`, so the socket's frames (`cache.ts`) and the screens address the same
@@ -105,11 +106,12 @@ export const useMySignIn = (): UseQueryResult<MySignIn> => {
   });
 };
 
-export const useChannels = (workspaceId: string): UseQueryResult<Channel[]> => {
+export const useChannels = (workspaceId: string, enabled = true): UseQueryResult<Channel[]> => {
   const api = useApi();
   return useQuery({
     queryKey: keys.channels(workspaceId),
     queryFn: ({ signal }) => api.channels(workspaceId, signal),
+    enabled,
   });
 };
 
@@ -264,14 +266,19 @@ export const useChannelFiles = (
 export const useUnresolved = (
   workspaceId: string,
   channelId: string | null = null,
+  filters: QuestionFilters = {},
 ): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.unresolved(workspaceId, channelId),
+    queryKey: keys.unresolved(workspaceId, channelId, filters),
     queryFn: ({ pageParam, signal }) =>
       api.unresolved(
         workspaceId,
-        { before: pageParam, ...(channelId === null ? {} : { channelId }) },
+        {
+          ...filters,
+          ...(pageParam === undefined ? {} : { before: pageParam }),
+          ...(channelId === null ? {} : { channelId }),
+        },
         signal,
       ),
     initialPageParam: undefined as string | undefined,
@@ -310,14 +317,16 @@ export const useSearch = (
   words: string,
   channelId: string | null = null,
   authorId: string | null = null,
+  filters: SearchFilters = {},
 ): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.search(workspaceId, words, channelId, authorId),
+    queryKey: keys.search(workspaceId, words, channelId, authorId, filters),
     queryFn: ({ pageParam, signal }) =>
       api.search(
         workspaceId,
         {
+          ...filters,
           q: words,
           before: pageParam,
           ...(channelId === null ? {} : { channelId }),
@@ -327,7 +336,10 @@ export const useSearch = (
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled: words.length >= SEARCH_QUERY_MIN,
+    enabled:
+      words.length >= SEARCH_QUERY_MIN ||
+      (words === '' &&
+        (Object.keys(filters).length > 0 || channelId !== null || authorId !== null)),
   });
 };
 

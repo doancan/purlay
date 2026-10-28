@@ -91,7 +91,7 @@ export const pathFor = (path: string, ids: Ids): string =>
   path.replace(/:(\w+)/g, (_whole, name: string) => {
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
-    if (name === 'messageId') return ids.messageId;
+    if (name === 'messageId' || name === 'searchId') return ids.messageId;
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
@@ -376,6 +376,34 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'CHANNEL_NOT_FOUND',
     body: (now) => ({ id: messageId(now), content: 'crossing' }),
     visibility: CHANNEL,
+  },
+  'PUT /api/messages/:messageId/knowledge': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+    body: () => ({
+      version: 0,
+      isQuestion: true,
+      assigneeId: null,
+      acceptedAnswerId: null,
+      decisionNote: '',
+      decisionUrl: null,
+    }),
+  },
+  'GET /api/workspaces/:workspaceId/saved-searches': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'personal filters, never channel content' },
+  },
+  'PUT /api/workspaces/:workspaceId/saved-searches/:searchId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'stores the caller’s own filter, and validates any channel it names',
+    },
+    body: () => ({ name: 'Crossing', query: { q: 'crossing' } }),
+  },
+  'DELETE /api/workspaces/:workspaceId/saved-searches/:searchId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'removes the caller’s own filter only' },
   },
   'PUT /api/messages/:messageId/reactions/:emoji': {
     refusal: 'MESSAGE_NOT_FOUND',

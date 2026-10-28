@@ -72,6 +72,57 @@ const world = (): { client: QueryClient } => {
 const rootInCache = (client: QueryClient): Message | undefined =>
   client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0];
 
+test('a delayed question save or refusal cannot overwrite a newer decision already received', async () => {
+  for (const refuses of [false, true]) {
+    const { client } = world();
+    let answer: (message: Message) => void = () => undefined;
+    let reject: (error: Error) => void = () => undefined;
+    const actions = createActions(
+      anApi({
+        setKnowledge: () =>
+          new Promise<Message>((yes, no) => {
+            answer = yes;
+            reject = no;
+          }),
+      }),
+      client,
+    );
+    const input = {
+      version: 0,
+      isQuestion: true,
+      assigneeId: null,
+      acceptedAnswerId: null,
+      decisionNote: 'Mine',
+      decisionUrl: null,
+    };
+    const writing = actions.setKnowledge(root, input).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rootInCache(client)?.thread?.knowledge?.decisionNote).toBe('Mine');
+    const newer = {
+      ...root,
+      thread: {
+        ...summary,
+        knowledge: { ...input, version: 2, decisionNote: 'Newer', acceptedAnswer: null },
+      },
+    };
+    client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [newer], nextCursor: null }],
+    });
+    if (refuses) reject(new ApiError(409, 'KNOWLEDGE_CONFLICT', 'Changed'));
+    else
+      answer({
+        ...root,
+        thread: { ...summary, knowledge: { ...input, version: 1, acceptedAnswer: null } },
+      });
+    await writing;
+    expect(rootInCache(client)?.thread?.knowledge?.decisionNote).toBe('Newer');
+    client.clear();
+  }
+});
+
 describe('reactions', () => {
   test("the cache takes the server's whole set, for a reaction added and one taken back", async () => {
     const { client } = world();

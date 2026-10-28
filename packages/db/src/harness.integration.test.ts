@@ -228,6 +228,8 @@ describe('integration: the database the rollback harness uses directly', () => {
         await inspected.destroy();
       }
     } finally {
+      // Pool shutdown can finish before its socket closes; do not force-drop it mid-hang-up.
+      await backendsGone(name, 1_000);
       await sql`drop database if exists ${sql.id(name)} with (force)`.execute(control);
       await control.destroy();
     }

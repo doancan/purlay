@@ -90,6 +90,42 @@ const feed = (client: QueryClient): string[] =>
     p.data.map((m) => m.id),
   );
 
+test('an edited or deleted accepted answer updates its root preview everywhere', () => {
+  const client = new QueryClient();
+  const root = message(1, {
+    thread: {
+      ...empty,
+      replyCount: 1,
+      knowledge: {
+        version: 1,
+        isQuestion: true,
+        assigneeId: null,
+        acceptedAnswer: { id: id(2), content: 'Old' },
+        decisionNote: 'Reason',
+        decisionUrl: null,
+      },
+    },
+  });
+  client.setQueryData(keys.messages(CH), pages([root]));
+  const revision = {
+    messageId: id(2),
+    channelId: CH,
+    parentId: id(1),
+    content: `${'x'.repeat(799)}🙂`,
+    editedAt: '2026-10-28T12:00:00Z',
+    deletedAt: null,
+    mentions: [],
+  };
+  messageRevised(client, revision);
+  const current = (): Message | undefined =>
+    client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0];
+  expect(current()?.thread?.knowledge?.acceptedAnswer?.content).toBe('x'.repeat(799));
+  messageRevised(client, { ...revision, deletedAt: '2026-10-28T12:00:00Z', content: '' });
+  expect(current()?.thread?.knowledge?.acceptedAnswer).toBeNull();
+  expect(current()?.thread?.knowledge?.decisionNote).toBe('Reason');
+  client.clear();
+});
+
 /**
  * A feed already on the screen and being read again (the subscription's answer, a reconnect, a
  * focus): its first read is held until `release`, any later one answers `fresh`.

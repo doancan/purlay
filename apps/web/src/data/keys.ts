@@ -1,3 +1,4 @@
+import type { QuestionFilters, SearchFilters } from '@purlay/types';
 /**
  * The names of the cache's entries, spelled once.
  *
@@ -31,10 +32,16 @@ export const keys = {
   /** Whether the caller follows a root's thread (D-161): theirs alone, so not under `thread`. */
   threadFollow: (rootId: string) => ['thread-follow', rootId] as const,
   /** The workspace's open questions, or one channel's (`UX.md` §2): one prefix, so a change to a thread reaches both. */
-  unresolved: (workspaceId: string, channelId: string | null = null) =>
-    channelId === null
-      ? (['unresolved', workspaceId] as const)
-      : (['unresolved', workspaceId, channelId] as const),
+  unresolved: (
+    workspaceId: string,
+    channelId: string | null = null,
+    filters: QuestionFilters = {},
+  ) =>
+    Object.keys(filters).length > 0
+      ? (['unresolved', workspaceId, channelId, filters] as const)
+      : channelId === null
+        ? (['unresolved', workspaceId] as const)
+        : (['unresolved', workspaceId, channelId] as const),
   /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
   notifications: (workspaceId: string, filter?: 'unread') =>
     filter === undefined
@@ -42,8 +49,17 @@ export const keys = {
       : (['notifications', workspaceId, filter] as const),
   /** The inbox's newest page, read when an open tab in the background tells of one (D-148). */
   newestNotifications: (workspaceId: string) => ['notifications', workspaceId, 'newest'] as const,
-  search: (workspaceId: string, words: string, channelId: string | null, authorId: string | null) =>
-    ['search', workspaceId, words, channelId, authorId] as const,
+  search: (
+    workspaceId: string,
+    words: string,
+    channelId: string | null,
+    authorId: string | null,
+    filters: SearchFilters = {},
+  ) =>
+    Object.keys(filters).length === 0
+      ? (['search', workspaceId, words, channelId, authorId] as const)
+      : (['search', workspaceId, words, channelId, authorId, filters] as const),
+  savedSearches: (workspaceId: string) => ['saved-searches', workspaceId] as const,
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,

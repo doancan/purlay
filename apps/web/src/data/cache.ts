@@ -1,3 +1,4 @@
+import { ACCEPTED_ANSWER_PREVIEW_MAX } from '@purlay/types';
 /**
  * What the cache does when the world changes.
  *
@@ -257,6 +258,7 @@ export const threadUpdated = (
   // and which page it falls on; asking again is cheaper than reasoning about it. A view that failed
   // keeps its failure and its Retry (#540).
   readAgain(client, families.unresolved);
+  readAgain(client, ['search']);
 };
 
 /** A message's whole reaction set, replacing what was there. */
@@ -276,6 +278,30 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  if (revision.parentId !== null)
+    patchMessage(client, revision.parentId, (root) => {
+      const knowledge = root.thread?.knowledge;
+      if (root.thread === null || knowledge?.acceptedAnswer?.id !== id) return root;
+      return {
+        ...root,
+        thread: {
+          ...root.thread,
+          knowledge: {
+            ...knowledge,
+            acceptedAnswer:
+              revision.deletedAt === null
+                ? {
+                    id,
+                    content: revision.content
+                      .slice(0, ACCEPTED_ANSWER_PREVIEW_MAX)
+                      .replace(/[\uD800-\uDBFF]$/u, ''),
+                  }
+                : null,
+          },
+        },
+      };
+    });
+  readAgain(client, ['search']);
   // An edit adds a version, a delete takes them all: an open history is read again (D-135 §5).
   readAgain(client, keys.messageVersions(id));
   // A deleted message's files leave the list (D-129), and its pin the pins (D-130); whether it had
@@ -315,7 +341,21 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
                   deletedAt: revision.deletedAt,
                   mentions: [...revision.mentions],
                   // A removed event keeps nothing of what it said, as the server reads it (D-134 §6).
-                  ...(revision.deletedAt === null ? {} : { githubEvent: null }),
+                  ...(revision.deletedAt === null
+                    ? {}
+                    : {
+                        githubEvent: null,
+                        ...(m.thread === null
+                          ? {}
+                          : {
+                              thread: {
+                                replyCount: m.thread.replyCount,
+                                lastReplyAt: m.thread.lastReplyAt,
+                                resolvedAt: m.thread.resolvedAt,
+                                resolvedBy: m.thread.resolvedBy,
+                              },
+                            }),
+                      }),
                 }
               : m,
           ),

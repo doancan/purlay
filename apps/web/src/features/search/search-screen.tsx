@@ -1,3 +1,5 @@
+import { AdvancedFilters } from './search-filters';
+import { SavedSearches } from './saved-searches';
 /**
  * Search (D-105, `UX.md` §8): the words as typed, ignoring case, in every channel the person can see —
  * roots and replies, resolved threads too — newest first.
@@ -12,7 +14,7 @@
  * looked, and a Retry that keeps the words.
  */
 import { useId, useMemo, useState } from 'react';
-import { SEARCH_QUERY_MIN, type Channel, type Message } from '@purlay/types';
+import { SEARCH_QUERY_MIN, type Channel, type Message, type SearchFilters } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannels, useMembers, useSearch } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -22,6 +24,7 @@ import {
   messageHref,
   searchHref,
   wordsInSearch,
+  searchFiltersIn,
 } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
@@ -122,6 +125,18 @@ const Found = ({
             </time>
           </span>
           <Excerpt text={textOf(message)} words={words} />
+          {message.thread?.knowledge?.acceptedAnswer != null && (
+            <span className="mt-2 block text-caption text-success-text">
+              {t('knowledge.accepted')}
+              <Excerpt text={message.thread.knowledge.acceptedAnswer.content} words={words} />
+            </span>
+          )}
+          {message.thread?.knowledge?.decisionNote && (
+            <span className="mt-2 block text-caption text-ink-muted">
+              {t('knowledge.note')}
+              <Excerpt text={message.thread.knowledge.decisionNote} words={words} />
+            </span>
+          )}
         </span>
       </button>
     </li>
@@ -134,8 +149,9 @@ export const SearchScreen = (): React.JSX.Element => {
   const asked = wordsInSearch(search);
   return (
     <SearchView
-      key={asked}
+      key={search}
       asked={asked}
+      filters={searchFiltersIn(search)}
       channelId={channelInSearch(search)}
       authorId={authorInSearch(search)}
     />
@@ -172,7 +188,9 @@ const SearchView = ({
   asked,
   channelId,
   authorId,
+  filters,
 }: {
+  readonly filters: SearchFilters;
   readonly asked: string;
   readonly channelId: string | null;
   /** Who wrote it (D-166); null is anyone. */
@@ -185,7 +203,7 @@ const SearchView = ({
   const ports = useFeedPorts();
   const [draft, setDraft] = useState(asked);
   const [tooShort, setTooShort] = useState(false);
-  const query = useSearch(workspace.id, asked, channelId, authorId);
+  const query = useSearch(workspace.id, asked, channelId, authorId, filters);
   const whereId = useId();
   const fromId = useId();
   const channels = useChannels(workspace.id);
@@ -204,6 +222,7 @@ const SearchView = ({
         asked,
         next.channelId === undefined ? channelId : next.channelId,
         next.authorId === undefined ? authorId : next.authorId,
+        filters,
       ),
     );
   };
@@ -218,11 +237,13 @@ const SearchView = ({
   const narrowed = channelId === null ? undefined : byId.get(channelId);
   const found = useMemo(() => (query.data?.pages ?? []).flatMap((page) => page.data), [query.data]);
   const now = ports.clock.now();
-  const searching =
-    asked.length >= SEARCH_QUERY_MIN && query.isFetching && !query.isFetchingNextPage;
+  const active =
+    asked.length >= SEARCH_QUERY_MIN ||
+    (asked === '' && (Object.keys(filters).length > 0 || channelId !== null || authorId !== null));
+  const searching = active && query.isFetching && !query.isFetchingNextPage;
 
   let body: React.JSX.Element | null = null;
-  if (asked.length < SEARCH_QUERY_MIN) {
+  if (!active) {
     body = <p className="text-center text-body text-ink-muted">{t('search.prompt')}</p>;
   } else if (query.isError && query.data === undefined) {
     body = (
@@ -300,9 +321,13 @@ const SearchView = ({
           onSubmit={(event) => {
             event.preventDefault();
             const words = draft.trim();
-            setTooShort(words.length < SEARCH_QUERY_MIN);
-            if (words.length >= SEARCH_QUERY_MIN) {
-              navigate(searchHref(workspace.slug, words, channelId, authorId));
+            const valid =
+              words.length >= SEARCH_QUERY_MIN ||
+              (words === '' &&
+                (Object.keys(filters).length > 0 || channelId !== null || authorId !== null));
+            setTooShort(!valid);
+            if (valid) {
+              navigate(searchHref(workspace.slug, words, channelId, authorId, filters));
             }
           }}
         >
@@ -362,7 +387,25 @@ const SearchView = ({
               </span>
             </div>
           </div>
+          <AdvancedFilters
+            value={filters}
+            onChange={(next) => {
+              navigate(searchHref(workspace.slug, draft.trim(), channelId, authorId, next));
+            }}
+          />
+          <div className="flex justify-end">
+            <Button type="submit">{t('search.run')}</Button>
+          </div>
         </form>
+        <SavedSearches
+          criteria={{
+            q: asked,
+            ...filters,
+            ...(channelId === null ? {} : { channelId }),
+            ...(authorId === null ? {} : { senderId: authorId }),
+          }}
+          active={active}
+        />
         {body}
       </ListColumn>
     </>

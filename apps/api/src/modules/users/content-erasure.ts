@@ -11,7 +11,7 @@
  * messages `SKIP LOCKED` — with what each message added taken back first by the delete's own rule. A
  * process with no bus tells no socket: an open screen keeps the words until it reloads (D-139 §7).
  */
-import type { Executor, Transaction } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions } from '../attachments/deletions';
@@ -116,6 +116,33 @@ export const eraseContent = async (
   const done: ContentErased[] = [];
   for (const workspaceId of [...workspaceIds].sort()) {
     const now = clock.now();
+    // A note can be written on somebody else's root; erase that person's words without deleting the root.
+    for (;;) {
+      const cleared = await database
+        .updateTable('messages')
+        .set({
+          decision_note: '',
+          decision_url: null,
+          decision_updated_by: null,
+          knowledge_version: sql<number>`knowledge_version + 1`,
+          state_version: sql<number>`state_version + 1`,
+        })
+        .where('workspace_id', '=', workspaceId)
+        .where('decision_updated_by', '=', userId)
+        .where(
+          'id',
+          'in',
+          database
+            .selectFrom('messages')
+            .select('id')
+            .where('workspace_id', '=', workspaceId)
+            .where('decision_updated_by', '=', userId)
+            .orderBy('id')
+            .limit(ERASURE_BATCH),
+        )
+        .executeTakeFirst();
+      if (cleared.numUpdatedRows < BigInt(ERASURE_BATCH)) break;
+    }
     let messages = 0;
     let files = 0;
     let leftBehind = 0;

@@ -47,6 +47,45 @@ const items = (view: ChannelView): string[] =>
   view.getAllByRole('menuitem').map((item) => item.textContent.replace(/E$/, ''));
 
 describe('the menu (D-150)', () => {
+  test('marking and unmarking a question paints its state; a failed change is explained', async () => {
+    const marked: boolean[] = [];
+    const view = await mountChannel({
+      messages: page([mine]),
+      api: {
+        ...asMember,
+        setKnowledge: (_id, input) => {
+          marked.push(input.isQuestion);
+          if (marked.length === 3)
+            return Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'Offline'));
+          return Promise.resolve({
+            ...mine,
+            thread: {
+              replyCount: 0,
+              lastReplyAt: null,
+              resolvedAt: null,
+              resolvedBy: null,
+              knowledge: { ...input, version: input.version + 1, acceptedAnswer: null },
+            },
+          });
+        },
+      },
+    });
+    open(view);
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: 'Mark as a question' }));
+    await settle();
+    expect(view.getByText('Unanswered')).toBeDefined();
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: 'Remove question mark' }));
+    await settle();
+    expect(marked).toEqual([true, false]);
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: 'Mark as a question' }));
+    await settle();
+    expect(view.getByText(/Something went wrong on our side/)).toBeDefined();
+    view.unmountAll();
+  });
+
   test("is on every message: Copy link, Copy text, Save and Pin on anybody's, Edit and Delete on one's own", async () => {
     const view = await mountChannel({ messages: page([mine, theirs]), api: asMember });
     open(view);
@@ -54,6 +93,7 @@ describe('the menu (D-150)', () => {
     expect(items(view)).toEqual([
       'Copy link',
       'Copy text',
+      'Mark as a question',
       'Save for later',
       'Pin',
       'Edit',
@@ -62,7 +102,13 @@ describe('the menu (D-150)', () => {
     await expectNoAxeViolations(view.getByRole('menu'));
     await person().keyboard('{Escape}');
     await openMenu(view, theirs);
-    expect(items(view)).toEqual(['Copy link', 'Copy text', 'Save for later', 'Pin']);
+    expect(items(view)).toEqual([
+      'Copy link',
+      'Copy text',
+      'Mark as a question',
+      'Save for later',
+      'Pin',
+    ]);
     view.unmountAll();
   });
 

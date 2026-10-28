@@ -597,6 +597,19 @@ CREATE TABLE messages (
     -- The wedge: a thread can be closed, and stays searchable. (D-2)
     resolved_at  TIMESTAMPTZ,
     resolved_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    is_question BOOLEAN NOT NULL DEFAULT FALSE,
+    question_assignee_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    accepted_answer_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    decision_note TEXT NOT NULL DEFAULT '',
+    decision_url TEXT,
+    decision_updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    knowledge_version INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT messages_knowledge_root CHECK (parent_id IS NULL OR (NOT is_question AND question_assignee_id IS NULL AND accepted_answer_id IS NULL AND decision_note = '' AND decision_url IS NULL AND knowledge_version = 0)),
+    CONSTRAINT messages_decision_note_length CHECK (char_length(decision_note) <= 2000),
+    CONSTRAINT messages_decision_url_length CHECK (char_length(decision_url) <= 2048),
+    CONSTRAINT messages_knowledge_version CHECK (knowledge_version >= 0),
+    CONSTRAINT messages_question_assignee CHECK (question_assignee_id IS NULL OR is_question),
+    CONSTRAINT messages_answer_not_self CHECK (accepted_answer_id IS NULL OR accepted_answer_id <> id),
 
     content      TEXT NOT NULL,
     message_type message_type NOT NULL DEFAULT 'text',
@@ -716,6 +729,10 @@ CREATE INDEX idx_messages_unresolved
 CREATE INDEX idx_messages_changes     ON messages (channel_id, changed_at, id);
 CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
+CREATE INDEX idx_messages_questions ON messages (workspace_id, id) WHERE is_question AND resolved_at IS NULL AND deleted_at IS NULL;
+CREATE INDEX idx_messages_question_assignee ON messages (question_assignee_id, id) WHERE question_assignee_id IS NOT NULL;
+CREATE INDEX idx_messages_accepted_answer ON messages (accepted_answer_id) WHERE accepted_answer_id IS NOT NULL;
+CREATE INDEX idx_messages_decision_author ON messages (decision_updated_by) WHERE decision_updated_by IS NOT NULL;
 
 -- The retention purge's read: one workspace's messages older than its window, from the oldest
 -- (D-139 §1). By workspace alone, a night would walk the workspace's whole history once a batch.
@@ -1125,6 +1142,24 @@ CREATE INDEX idx_saved_messages_message   ON saved_messages (message_id, channel
 CREATE INDEX idx_saved_messages_channel   ON saved_messages (channel_id, workspace_id);
 CREATE INDEX idx_saved_messages_workspace ON saved_messages (workspace_id);
 ```
+
+**Saved searches (D-204).** At most 50 per person and workspace, serialized under the membership lock. The JSON is validated SearchCriteria, without pagination or cached results. Reads are owner-scoped; using a saved filter rechecks current channel visibility. Removed on account erasure and omitted from workspace exports.
+
+```sql
+CREATE TABLE saved_searches (
+    id            UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    query         JSONB NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT saved_searches_name CHECK (char_length(name) BETWEEN 1 AND 80),
+    CONSTRAINT saved_searches_query_object CHECK (jsonb_typeof(query) = 'object')
+);
+CREATE INDEX idx_saved_searches_owner ON saved_searches (workspace_id, user_id, id DESC);
+CREATE INDEX idx_saved_searches_user ON saved_searches (user_id);
+```
+
 
 Shown only from channels the person can see now, never a deleted message; at most `SAVED_MAX` shown
 in a workspace. A soft delete keeps the row (hidden); a retention purge cascades it. The account's
@@ -1939,6 +1974,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0057_session_device_name.sql sessions.device_name: the name the native application gave the Mac a session was made for, which a device list shows  (D-193)
 0058_message_changed_at.sql messages.changed_at, stamped by a trigger on every update: when the server last wrote a message, which a client catching up asks by  (D-194)
 0059_server_settings_oidc.sql server_settings.oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_name: the single sign-on provider, a triple or nothing  (D-200)
+0060_question_knowledge.sql questions, accepted answers, decision notes and personal saved searches (D-204)
+0061_question_indexes.sql concurrent indexes for questions, assignees, accepted answers and decision authors (D-204)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
