@@ -10006,3 +10006,11 @@ test holds.
 
 `bun run check:cla` and `check:pr` (D-145, D-74) run in `static`, which `verify` requires, so "the `verify` job" in
 those decisions still holds a merge.
+
+**Research sources (2026-10-28).** [GitHub's dependency-caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
+explains cache scoping and why cached contents must be treated as untrusted.
+[Playwright's CI guidance](https://playwright.dev/docs/ci#caching-browsers) advises against caching
+browser binaries: restoration can cost as much as downloading, and Linux system dependencies still
+need installing. [GitHub's job-dependency guidance](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs)
+explains why the final verdict needs `always()` after failed or skipped dependencies. These support
+the choices above; they do not establish a measured reduction in the whole pipeline's duration.
