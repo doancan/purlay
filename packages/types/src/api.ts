@@ -1271,7 +1271,22 @@ export const ClientMinimum = Type.Object({
 });
 export type ClientMinimum = Static<typeof ClientMinimum>;
 
+/**
+ * Additive API support, not authentication or permission. Only an explicitly true known flag
+ * confirms support; an absent object/flag or false does not. This response object stays open so
+ * an older client can ignore capability names introduced later (D-58).
+ */
+export const ClientCapabilities = Type.Object({
+  notificationTypeFilters: Type.Optional(
+    Type.Boolean({
+      description: 'GET /api/notifications accepts the types CSV filter before pagination.',
+    }),
+  ),
+});
+export type ClientCapabilities = Static<typeof ClientCapabilities>;
+
 export const ClientInfo = Type.Object({
+  capabilities: Type.Optional(ClientCapabilities),
   server: Type.Object({ version: Type.String() }),
   contractVersion: Type.Integer({ minimum: 1 }),
   appUrl: Type.String(),

@@ -8944,6 +8944,14 @@ stopping the runner; the runbook in `ARCHITECTURE.md` is unchanged.
 
 ### D-186. macOS gets a native Swift client in its own repository, drawn in Liquid Glass — supersedes D-51's "not planned"
 
+**Amended 2026-10-28 (#789).** The public client handshake carries optional additive capability
+flags; `API.md` §2 owns their names and interpretation. A known flag exactly `true` advertises API
+support, never permission; absent/unknown capabilities remain compatible with older peers. An open
+optional object was chosen over version inference: additions do not bump the wire contract (D-58),
+and a minimum-client gate would unnecessarily reject an older app for a new optional query. The
+capability describes implemented behavior, not a rollout promise. Release versions keep D-185's
+meaning, independently of these flags.
+
 **Decided (the owner, 2026-10-26), supersedes the native-client clause of D-51 and the Tauri shell of D-14.**
 D-51 chose one wrapped client and named its own reversal: "paying customers asking for it, with numbers". That
 trigger has not fired. The owner has chosen to go native anyway, for the platform's own feel and performance, and

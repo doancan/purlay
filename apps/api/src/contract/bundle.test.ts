@@ -90,6 +90,21 @@ describe('the contract', () => {
     expect(JSON.stringify(buildContract())).toBe(serialized);
   });
 
+  test('carries optional additive capabilities without a contract or bundle-layout bump', () => {
+    expect(contract.schemas['ClientInfo']).toMatchObject({
+      properties: {
+        capabilities: { properties: { notificationTypeFilters: { type: 'boolean' } } },
+      },
+    });
+    expect(JSON.stringify(contract.schemas['ClientCapabilities'])).toContain(
+      'notificationTypeFilters',
+    );
+    const schema = contract.schemas['ClientInfo'] as { required?: readonly string[] };
+    expect(schema.required ?? []).not.toContain('capabilities');
+    expect(contract.contractVersion).toBe(CONTRACT_VERSION);
+    expect(contract.format).toBe(CONTRACT_BUNDLE_FORMAT);
+  });
+
   test('is closed: every reference resolves to a schema of the contract', () => {
     const names = new Set(Object.keys(contract.schemas));
     const dangling = [...refsIn(contract)].filter((name) => !names.has(name));

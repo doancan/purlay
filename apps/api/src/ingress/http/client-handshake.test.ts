@@ -6,6 +6,7 @@
  * pass is also proof that none of this touches one.
  */
 import { describe, expect, test } from 'bun:test';
+import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { unconnectedDatabase } from '@purlay/db';
 import { CONTRACT_VERSION, ClientInfo, ErrorResponse } from '@purlay/types';
@@ -29,6 +30,49 @@ describe('GET /api/client', () => {
     const response = await server()('/api/client');
     expect(response.status).toBe(200);
     expect(Value.Check(ClientInfo, await response.json())).toBe(true);
+  });
+
+  test('advertises additive API support publicly even to a client below the configured minimum', async () => {
+    for (const init of [
+      undefined,
+      withClient('macos/0.0.1 contract/0'),
+      { headers: { cookie: 'unrelated=invalid' } },
+    ]) {
+      const response = await server({ MIN_CLIENT_MACOS_CONTRACT: 2 })('/api/client', init);
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      expect(Value.Check(ClientInfo, body)).toBe(true);
+      expect(body).toMatchObject({
+        capabilities: { notificationTypeFilters: true },
+        contractVersion: CONTRACT_VERSION,
+      });
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
+  });
+
+  test('the new schema accepts old handshakes and unknown capabilities; old response readers accept the addition', async () => {
+    const body = (await (await server()('/api/client')).json()) as ClientInfo;
+    const legacy = { ...body };
+    delete legacy.capabilities;
+    expect(Value.Check(ClientInfo, legacy)).toBe(true);
+    expect(Value.Check(Type.Omit(ClientInfo, ['capabilities']), body)).toBe(true);
+    for (const capabilities of [
+      {},
+      { notificationTypeFilters: false },
+      { futureFeature: true },
+      { futureFeature: { version: 2 } },
+    ]) {
+      expect(Value.Check(ClientInfo, { ...legacy, capabilities })).toBe(true);
+    }
+    for (const capabilities of [
+      null,
+      [],
+      'enabled',
+      { notificationTypeFilters: 'true' },
+      { notificationTypeFilters: 1 },
+    ]) {
+      expect(Value.Check(ClientInfo, { ...legacy, capabilities })).toBe(false);
+    }
   });
 
   test('says which server this is, which contract it speaks and the address it answers to', async () => {

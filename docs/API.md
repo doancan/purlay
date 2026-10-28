@@ -100,7 +100,7 @@ without disclosing it. (D-33)
 | ○ | `DELETE` | `/api/me/sessions/:sessionId` | Ends one of the caller's sessions: `204`, its sockets closed with `SESSION_ENDED { reason: 'signed-out' }`. Somebody else's, unknown and already ended are the same `404 SESSION_NOT_FOUND`; a malformed id is `400 VALIDATION_FAILED`. Ending the session the request came in on is signing out of it, without clearing the cookie (`POST /auth/logout` does) |
 | ○ | `PATCH` | `/api/me/profile` | `{ title?, timeZone?, status? }` (`UpdateProfileRequest`): each left out is kept, `null` clears it, words are trimmed, and nothing but spaces is `400`; a time zone is a named zone the runtime knows, stored as it spells it, else `400` on `timeZone`. Answers the `Profile`. A change sends `WORKSPACE_UPDATED` to everyone in each workspace the caller is in, who read the members again (D-131) |
 | ○ | `PUT` | `/api/me/locale` | `{ locale: 'en' \| 'tr' }` (`SetLocaleRequest`) — the language the server writes the caller's notifications in (D-41, D-126); `204` |
-| ○ | `GET` | `/api/client` | Public — `ClientInfo`, what a client that is not a browser asks before anybody signs in (D-186): `server.version` (the root manifest's, D-185), `contractVersion` (`CONTRACT_VERSION` in `@purlay/types`: the wire contract this server speaks, bumped when an older client would misbehave and never for an addition), `appUrl` (the canonical `APP_URL`: **the `Origin` the socket upgrade requires**, so a client learns it here and never from what a person typed), `minClient.macos` (`contractVersion`, `appVersion`, `downloadUrl`, each `null` where the operator set no limit) and `auth` (the same `AuthMethods` as below). No session, no database, never cached. Answered to a client too old to be served, since it is how that client learns to update. Charged to the client's address with the sign-in traffic. A client says its version in `X-Purlay-Client: macos/<semver> contract/<n>` on every request and on the socket upgrade |
+| ○ | `GET` | `/api/client` | Public — `ClientInfo`, what a client that is not a browser asks before anybody signs in (D-186): `server.version` (the root manifest's, D-185), `contractVersion` (`CONTRACT_VERSION` in `@purlay/types`: the wire contract this server speaks, bumped when an older client would misbehave and never for an addition), optional `capabilities` (`ClientCapabilities`: additive API support, described below), `appUrl` (the canonical `APP_URL`: **the `Origin` the socket upgrade requires**, so a client learns it here and never from what a person typed), `minClient.macos` (`contractVersion`, `appVersion`, `downloadUrl`, each `null` where the operator set no limit) and `auth` (the same `AuthMethods` as below). No session, no database, never cached. Answered to a client too old to be served, since it is how that client learns to update. Charged to the client's address with the sign-in traffic. A client says its version in `X-Purlay-Client: macos/<semver> contract/<n>` on every request and on the socket upgrade |
 | ○ | `POST` | `/api/native/authorize` | The signed-in person's browser, once they have said yes to the native application that sent them (D-191, `UX.md` §11): `NativeAuthorizeRequest` — a `challenge` (the application's verifier hashed, base64url, 43 characters) and its own `state` (base64url, 16 to 128 characters, because it is written into a URL) → `200` `NativeAuthorizeResponse`, `{ redirect }`, which is `purlay://auth?code=<64 hex>&state=<state>` — **an address of the server's own and fixed**: the request names none, and a field it does not declare, a `redirect` among them, is `400`. Needs a session, and being a `POST` is refused from any other site by the `Origin` rule (D-80). At most five codes are live for a person at once; a sixth makes the oldest room. The code is shown here and never again: the database keeps its digest |
 | ○ | `POST` | `/api/native/token` | **Public — the application has no session yet.** `NativeTokenRequest` — the `code`, the `verifier` it hashed into the challenge and has never sent, and `device.name` (1 to 64 characters, none of them a control or line-breaking one, nor a zero-width or directional one: marks, embeddings, overrides, isolates, the byte-order mark) → `204` with the session cookie, `__Host-purlay_session`, with the usual attributes and `Max-Age`, which the application keeps (a session of its own: signing out ends it, the browser's stays). **One refusal, `404 NATIVE_CODE_NOT_FOUND`, the same bytes for a code nobody made, one spent, expired or burnt, one whose person has been erased, and a wrong verifier.** A wrong verifier does not burn the code until the fifth; a spent code mints nothing and ends nothing. Charged to the client's address before the code is looked at (ten at once, then one every ninety seconds; provisional, O-4) — a `429` inside a code's two minutes means the application starts again, and the address's budget is shared by whoever shares the address — and refused from a browser page by the `Origin` rule. Each refusal is written to the log with its reason (a wrong verifier and a burnt code as warnings), never with the code, its digest, the verifier or the person. The session is labelled `Purlay for macOS/<version> (<device name>)`, the version from `X-Purlay-Client` if it is the shape, else `unknown` |
 | ○ | `GET` | `/api/auth/methods` | Public — `AuthMethods`: `{ github: boolean, email: boolean, oidc: { name: string | null } | null, signUp: 'open' | 'invite-only' }`, which of the three ways in this server has connected (`oidc` is `null` where no single sign-on provider is, else the button's label — `null` is the default the client words in the person's language, D-200) and who may make an account, so the sign-in and sign-up screens offer only what works (password sign-in is always offered: the setup's administrator has one). `github` is false until a GitHub app is connected (the settings, D-179 §6); `email` is false without a mail relay (D-138 §6). **None of the three is a server waiting for its setup**, and the screen says so |
@@ -143,6 +143,41 @@ to the log. (D-121, D-179)
 | `failed` | Anything else — another GitHub `error` value, a reason of the library's nobody anticipated, or `INTERNAL` |
 
 Every other route here, `/auth/github`, `/auth/oidc` and both logouts included, answers as §1 says.
+
+### Additive capabilities for native clients
+
+`GET /api/client` advertises optional API support separately from server releases, the wire-contract
+version and minimum-client gates. It is public, identical for authenticated and unauthenticated
+callers, database-independent and `Cache-Control: no-store`, including for a client below the
+operator's configured minimum. This server includes:
+
+```json
+{ "capabilities": { "notificationTypeFilters": true } }
+```
+
+`ClientInfo.capabilities` and its known boolean flags are optional, so an older server's handshake
+still validates. Only a known flag whose value is exactly `true` confirms support. Missing fields
+and `false` do not confirm it; unknown names are ignored, including future values whose shape an
+older client does not know. Capability objects stay open to additions; a malformed value for a
+known boolean flag is not treated as truthy support.
+
+`notificationTypeFilters: true` means the server accepts the `types` CSV filter on
+`GET /api/notifications` as defined in §6. It is always advertised by this implementation because
+that query support is available. It does not depend on a workspace role, sign-in provider or user
+preference, and does not grant access: the endpoint still requires a live session and workspace/
+channel visibility. A future capability must be advertised according to actual API availability.
+
+Clients refresh discovery for the server/connection they are using rather than permanently
+inferring support from `server.version` or `contractVersion`. With an older server that does not
+advertise the flag, a client may probe the valid read query; for this filter the fallback applies
+only to `400 VALIDATION_FAILED` explicitly naming `types`. Authentication, authorization, other
+validation errors and network/server failures remain visible. A cached probe result belongs to
+that connection session and is discarded when discovering a new connection/server.
+
+This additive field does not bump `CONTRACT_VERSION`, impose a new minimum macOS version or change
+release-version policy. Native models regenerate from the deterministic contract bundle, which
+carries both `ClientInfo` and `ClientCapabilities`; release versions remain the versions chosen for
+the releases themselves (D-185), not feature flags.
 
 ### Sign-in through Better Auth, and the setup surface (D-179)
 
