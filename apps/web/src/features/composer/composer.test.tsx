@@ -552,14 +552,14 @@ describe('what is refused before it is sent, in words', () => {
 describe('pasting', () => {
   const thirteen = Array.from({ length: 13 }, (_, i) => `line ${String(i)}`).join('\n');
 
-  test('thirteen lines become a code block, said aloud, and Undo restores exactly what was there', async () => {
+  test('thirteen lines become a code block on its own line, and Undo keeps the pasted text', async () => {
     const { view, box, user } = await mount();
     await user.type(box(), 'before ');
     await user.paste(thirteen);
-    expect(box().value).toBe(`before \`\`\`\n${thirteen}\n\`\`\``);
+    expect(box().value).toBe(`before \n\`\`\`\n${thirteen}\n\`\`\``);
     expect(view.getByText('Pasted text became a code block')).toBeDefined();
     await user.click(view.getByRole('button', { name: 'Undo' }));
-    expect(box().value).toBe('before ');
+    expect(box().value).toBe(`before ${thirteen}`);
     expectFocusOn(box());
   });
 
@@ -568,8 +568,48 @@ describe('pasting', () => {
     await user.type(box(), 'keep SELECT keep');
     box().setSelectionRange(5, 11);
     await user.paste(thirteen);
-    expect(box().value).toBe(`keep \`\`\`\n${thirteen}\n\`\`\` keep`);
-    expect(box().selectionStart).toBe(`keep \`\`\`\n${thirteen}\n\`\`\``.length);
+    expect(box().value).toBe(`keep \n\`\`\`\n${thirteen}\n\`\`\`\n keep`);
+    expect(box().selectionStart).toBe(`keep \n\`\`\`\n${thirteen}\n\`\`\`\n`.length);
+  });
+
+  test.each(['~~~ts\n', '```ts\n'])(
+    'a paste inside %j keeps the existing fence',
+    async (opening) => {
+      const { view, box, user } = await mount();
+      await user.type(box(), opening);
+      await user.paste(thirteen);
+      expect(box().value).toBe(opening + thirteen);
+      expect(view.queryByText('Pasted text became a code block')).toBeNull();
+    },
+  );
+
+  test('already fenced pasted code stays as supplied', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.paste(`\`\`\`ts\n${thirteen}\n\`\`\``);
+    expect(box().value).toBe(`\`\`\`ts\n${thirteen}\n\`\`\``);
+    expect(view.queryByText('Pasted text became a code block')).toBeNull();
+  });
+
+  test('Undo removes automatic formatting without erasing text added after the paste', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.paste(thirteen);
+    await user.type(box(), 'after');
+    await user.click(view.getByRole('button', { name: 'Undo' }));
+    expect(box().value).toBe(`${thirteen}after`);
+  });
+
+  test('Undo preserves a pasted block that has since been edited', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.paste(thirteen);
+    const edited = box().value.replace('line 0', 'my edit');
+    box().setSelectionRange(4, 10);
+    await press(user, 'my edit');
+    await user.click(view.getByRole('button', { name: 'Undo' }));
+    expect(box().value).toBe(edited);
+    expect(view.getByText('The pasted block changed. Your edits were kept.')).toBeDefined();
   });
 
   test('twelve lines are an ordinary paste, left to the browser, with no toast', async () => {

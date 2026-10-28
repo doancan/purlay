@@ -50,8 +50,8 @@ import {
   insertMarkdown,
   insertText,
   insideFence,
-  isLongPaste,
-  asCodeBlock,
+  formatPaste,
+  undoPaste,
   rowsFor,
   trimEnd,
   typedWrap,
@@ -99,6 +99,7 @@ const Inner = ({
   const { t } = useI18n();
   const engine = useEngine();
   const toast = useToast();
+  const { dismiss } = toast;
   const client = useQueryClient();
   const session = useSession();
   const key = draftKey(session.user.id, channelId, parentId);
@@ -126,6 +127,13 @@ const Inner = ({
   const composing = useComposition(field);
   const latest = useRef(text);
   latest.current = text;
+  const pasteToast = useRef<number | null>(null);
+  useEffect(
+    () => (): void => {
+      if (pasteToast.current !== null) dismiss(pasteToast.current);
+    },
+    [key, dismiss],
+  );
   // Held above the composer, per place, with a send asked for while they were still uploading: a
   // channel switch or a closed thread loses neither, and the send still goes when they land (D-171).
   const uploads = useUploads(key, () => latest.current);
@@ -281,6 +289,7 @@ const Inner = ({
     });
     uploads.clear();
     setWaiting(false);
+    if (pasteToast.current !== null) dismiss(pasteToast.current);
     setText('');
     setError(null);
     // Gone from storage now, not a debounce from now: a reload right after sending must
@@ -395,20 +404,26 @@ const Inner = ({
     }
     // A paste with no clipboard data (some automation, some old engines) is just a paste.
     const pasted = (event.clipboardData as DataTransfer | undefined)?.getData('text/plain') ?? '';
-    if (!isLongPaste(pasted)) return;
-    event.preventDefault();
     const target = event.currentTarget;
-    const before = text;
     const start = target.selectionStart;
-    const block = asCodeBlock(pasted);
-    caret.current = start + block.length;
-    change(text.slice(0, start) + block + text.slice(target.selectionEnd));
-    toast.show({
+    const result = formatPaste(text, { start, end: target.selectionEnd }, pasted);
+    if (result === null) return;
+    event.preventDefault();
+    const block = result.text.slice(start, result.selection.end);
+    caret.current = result.selection.end;
+    change(result.text);
+    if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
+    pasteToast.current = toast.show({
       message: t('composer.pasted'),
       actionLabel: t('common.undo'),
       onAction: () => {
-        caret.current = start;
-        change(before);
+        const undone = undoPaste(latest.current, block, pasted);
+        if (undone === null) {
+          toast.show({ message: t('composer.pasteChanged') });
+          return;
+        }
+        caret.current = undone.selection.end;
+        change(undone.text);
         field.current?.focus();
       },
     });

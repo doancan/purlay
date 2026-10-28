@@ -96,34 +96,45 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
   };
 
   return (
-    <figure className="my-2 flex flex-col overflow-hidden rounded-xl border-hairline border-border-subtle bg-code-bg shadow-card">
-      <figcaption className="flex h-row items-center gap-2 border-b-hairline border-border-subtle bg-surface-050 pr-1 pl-3 text-caption text-ink-muted">
-        <span className="font-mono">{language === '' ? t('message.code.plain') : language}</span>
-        <span className="font-mono text-ink-subtle">{t('message.code.lines', { count })}</span>
-        <Tooltip content={t('message.code.wrap')}>
+    <figure className="my-2 flex min-w-0 max-w-full flex-col overflow-hidden rounded-xl border-hairline border-border-subtle bg-code-bg shadow-card">
+      <figcaption className="flex min-h-row flex-wrap items-center gap-x-2 gap-y-1 border-b-hairline border-border-subtle bg-surface-050 pr-1 pl-3 text-caption text-ink-muted">
+        <div className="flex min-w-0 max-w-full items-center gap-2">
+          <span
+            className="min-w-0 truncate font-mono"
+            title={language === '' ? t('message.code.plain') : language}
+          >
+            {language === '' ? t('message.code.plain') : language}
+          </span>
+          <span className="shrink-0 font-mono text-ink-subtle">
+            {t('message.code.lines', { count })}
+          </span>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <Tooltip content={t('message.code.wrap')}>
+            <button
+              type="button"
+              aria-label={t('message.code.wrap')}
+              aria-pressed={wrapped}
+              onClick={() => {
+                setWrapped(!wrapped);
+              }}
+              className={cn(
+                'inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink',
+                wrapped ? 'bg-surface-200 text-ink' : 'text-ink-muted',
+              )}
+            >
+              <Icon name="wrap" size="sm" />
+            </button>
+          </Tooltip>
           <button
             type="button"
-            aria-label={t('message.code.wrap')}
-            aria-pressed={wrapped}
-            onClick={() => {
-              setWrapped(!wrapped);
-            }}
-            className={cn(
-              'ml-auto inline-flex size-6 items-center justify-center rounded-md transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink',
-              wrapped ? 'bg-surface-200 text-ink' : 'text-ink-muted',
-            )}
+            onClick={copy}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
           >
-            <Icon name="wrap" size="sm" />
+            <Icon name="copy" size="sm" />
+            <span>{t('message.code.copy')}</span>
           </button>
-        </Tooltip>
-        <button
-          type="button"
-          onClick={copy}
-          className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
-        >
-          <Icon name="copy" size="sm" />
-          <span>{t('message.code.copy')}</span>
-        </button>
+        </div>
       </figcaption>
       <div className="relative">
         <pre

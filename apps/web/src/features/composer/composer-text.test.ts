@@ -2,6 +2,7 @@
  * The questions the composer asks of its text, answered without a DOM.
  */
 import { describe, expect, test } from 'bun:test';
+import { parseMarkdown, readMarkdown } from '@purlay/markdown';
 import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 import {
   asCodeBlock,
@@ -12,6 +13,7 @@ import {
   insertMarkdown,
   insertText,
   insideFence,
+  undoPaste,
   isLongPaste,
   rowsFor,
   trimEnd,
@@ -33,6 +35,20 @@ describe('inside a fence', () => {
     ['not ``` at the start', false],
     ['````\nfour\n````', false],
     ['text\n```', true],
+    ['~~~ts\nconst n = 1;', true],
+    ['~~~ts\ncode\n~~~', false],
+    ['````md\n```ts\nconst n = 1;', true],
+    ['```ts\n```not-a-close', true],
+    ['```ts\nx\n~~~', true],
+    ['  ```ts\nx', true],
+    ['> ```ts\n> x', true],
+    ['> ```ts\n> x\noutside', false],
+    ['- ```ts\n  x', true],
+    ['- ```ts\n  x\n  ```', false],
+    ['```ts\nx\n```  ', false],
+    ['```ts\nx\n', true],
+    ['```not`valid\nx', false],
+    ['> '.repeat(33) + '```', false],
   ])('%j is %p', (before, expected) => {
     expect(insideFence(before)).toBe(expected);
   });
@@ -135,6 +151,12 @@ describe('a paste', () => {
   const lines = (n: number): string =>
     Array.from({ length: n }, (_, i) => `line ${String(i)}`).join('\n');
 
+  test('Undo preserves surrounding edits and refuses ambiguous or removed blocks', () => {
+    expect(undoPaste('before <block> after', '<block>', 'raw')?.text).toBe('before raw after');
+    expect(undoPaste('<block> <block>', '<block>', 'raw')).toBeNull();
+    expect(undoPaste('edited', '<block>', 'raw')).toBeNull();
+  });
+
   test('is long past twelve lines, and not at twelve', () => {
     expect(isLongPaste(lines(12))).toBe(false);
     expect(isLongPaste(lines(13))).toBe(true);
@@ -144,7 +166,16 @@ describe('a paste', () => {
 
   test('becomes a block that holds exactly what was pasted', () => {
     expect(asCodeBlock('a\nb')).toBe('```\na\nb\n```');
-    expect(asCodeBlock('a\nb\n\n')).toBe('```\na\nb\n```');
+    expect(asCodeBlock('a\nb\n\n')).toBe('```\na\nb\n\n\n```');
+  });
+
+  test('protects indented fences and preserves the copied source', () => {
+    const source = '  ```\nconst n = 1;\n  ```\n\n';
+    const block = asCodeBlock(source);
+    expect(block).toBe(`\`\`\`\`\n${source}\n\`\`\`\``);
+    expect(readMarkdown(block)).toMatchObject({
+      tree: { children: [{ type: 'code', value: source }] },
+    });
   });
 
   test('is fenced longer than any fence inside it, so it cannot close early', () => {
@@ -352,6 +383,29 @@ describe('the formatting buttons: every construct the renderer draws, as markdow
       text: '> one\n> two',
       selection: { start: 0, end: 11 },
     });
+  });
+
+  test('quoting keeps lists, nested quotes and blank lines together, and toggles only the outer quote', () => {
+    const source = '- first\n\n- second\n> nested';
+    const quoted = insertMarkdown(source, at(0, source.length), 'quote');
+    expect(quoted.text).toBe('> - first\n> \n> - second\n> > nested');
+    expect(parseMarkdown(quoted.text)?.children).toHaveLength(1);
+    expect(insertMarkdown(quoted.text, quoted.selection, 'quote').text).toBe(source);
+  });
+
+  test('a selection ending at the next line start leaves that line alone', () => {
+    expect(insertMarkdown('one\ntwo', at(0, 4), 'quote').text).toBe('> one\ntwo');
+    expect(insertMarkdown('\none', at(0, 1), 'quote').text).toBe('> \none');
+    expect(insertMarkdown('one\ntwo', at(0, 4), 'bullets').text).toBe('- one\ntwo');
+  });
+
+  test('the code button can share Markdown containing its own fences without changing the source', () => {
+    const source = '```ts\nconst n = 1;\n```';
+    const result = insertMarkdown(source, at(0, source.length), 'code');
+    expect(readMarkdown(result.text)).toEqual({
+      tree: { type: 'root', children: [{ type: 'code', lang: null, value: source }] },
+    });
+    expect(result.text.slice(result.selection.start, result.selection.end)).toBe(source);
   });
 
   test('with no selection a list marks the line the caret is on, and the caret stays after it', () => {

@@ -12,7 +12,7 @@ import { gfmAutolinkLiteral } from 'micromark-extension-gfm-autolink-literal';
 import { gfmStrikethrough } from 'micromark-extension-gfm-strikethrough';
 import { gfmTable } from 'micromark-extension-gfm-table';
 import { gfmTaskListItem } from 'micromark-extension-gfm-task-list-item';
-import type { CodeRange } from './scan';
+import { nestsTooDeep, type CodeRange } from './scan';
 
 /**
  * CommonMark constructs that are never recognised (D-101):
@@ -69,13 +69,31 @@ export const codeRangesOf = (tree: Root): CodeRange[] => {
 };
 
 /** The block structure alone: where the code is, read cheaply. */
-export const blockTreeOf = (text: string): Root =>
+export const blockTreeOf = (text: string, onFence?: (offset: number) => void): Root =>
   // Tables are block structure: without them, a line the full reading takes as a table row could be
   // a fence here (found by the agreement test). Measured linear: 26 ms at worst on 16k of rows.
   fromMarkdown(text, {
     extensions: [gfmTable(), BLOCKS_ONLY],
-    mdastExtensions: [gfmTableFromMarkdown()],
+    mdastExtensions: [
+      gfmTableFromMarkdown(),
+      { enter: { codeFencedFence: (token): void => onFence?.(token.start.offset) } },
+    ],
   });
+
+/**
+ * Whether the caret at the end is in unfinished fenced code. Observe the engine's fence tokens:
+ * one opens a block, a second closes it. This also follows indentation, containers, tilde fences
+ * and fence lengths without maintaining a second Markdown grammar in the composer (D-101).
+ */
+export const endsInOpenCode = (text: string): boolean => {
+  if ((!text.includes('```') && !text.includes('~~~')) || nestsTooDeep(text)) return false;
+  const fences: number[] = [];
+  const tree = blockTreeOf(text, (offset): void => {
+    fences.push(offset);
+  });
+  const last = codeRangesOf(tree).at(-1);
+  return last?.end === text.length && fences.filter((offset) => offset >= last.start).length === 1;
+};
 
 /** The full reading. Only ever run inside the bounds `parse.ts` checks first. */
 export const syntaxTreeOf = (text: string): Root =>
