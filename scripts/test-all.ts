@@ -18,7 +18,7 @@ import { reachable } from './database-reachable';
 const ROOTS = ['apps', 'packages', 'scripts'];
 
 const run = (args: readonly string[]): number =>
-  Bun.spawnSync(['bun', '--no-env-file', '--env-file=.env.test', 'test', ...args], {
+  Bun.spawnSync(['bun', '--no-env-file', '--env-file=.env.test', 'test', '--isolate', ...args], {
     stdout: 'inherit',
     stderr: 'inherit',
   }).exitCode;

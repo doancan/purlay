@@ -1352,6 +1352,41 @@ describe('following it (D-161)', () => {
     view.unmountAll();
   });
 
+  test('a permanent follow refusal preserves the previous choice without offering Retry', async () => {
+    const view = await mount({
+      api: {
+        threadFollow: () => Promise.resolve({ following: true }),
+        setThreadFollow: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'refused')),
+      },
+    });
+    await showThread(view);
+    await person().click(followButton(view));
+    await settle();
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
+    view.unmountAll();
+  });
+
+  test('the follow control retries an unreadable initial choice', async () => {
+    let reads = 0;
+    const view = await mount({
+      api: {
+        threadFollow: () => {
+          reads += 1;
+          return reads === 1
+            ? Promise.reject(new ApiError(403, 'FORBIDDEN', 'refused'))
+            : Promise.resolve({ following: false });
+        },
+      },
+    });
+    await showThread(view);
+    await person().click(followButton(view));
+    await settle();
+    expect(reads).toBe(2);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    view.unmountAll();
+  });
+
   test('a reply of the person’s own reads the state again: answering a thread follows it', async () => {
     let reads = 0;
     const view = await mount({

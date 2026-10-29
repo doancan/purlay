@@ -4,7 +4,7 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -63,12 +63,12 @@
     "queue": "bun run scripts/queue.ts",
     "release": "bun run scripts/release.ts",
     "schedule": "bun run apps/api/src/cli/schedule.ts",
-    "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --path-ignore-patterns '**/*.integration.test.ts'",
+    "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --path-ignore-patterns '**/*.integration.test.ts'",
     "test:all": "bun --no-env-file --env-file=.env.test run scripts/test-all.ts",
     "test:e2e": "bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
     "test:e2e:install": "bunx playwright install --with-deps chromium",
     "test:e2e:update": "bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e:update",
-    "test:integration": "bun --no-env-file --env-file=.env.test test apps packages scripts --test-name-pattern '^integration'",
+    "test:integration": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --test-name-pattern '^integration'",
     "test:storage": "bun --no-env-file --env-file=.env.test test ./apps/api/src/platform/storage.s3-check.ts",
     "tokens:check": "bun run packages/tokens/src/cli.ts --check",
     "tokens:generate": "bun run packages/tokens/src/cli.ts",
@@ -79,7 +79,7 @@
   },
   "devDependencies": {
     "@eslint/compat": "2.1.1",
-    "@types/bun": "1.4.3",
+    "@types/bun": "1.4.4",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "10.13.0",
     "eslint-plugin-compat": "7.0.2",

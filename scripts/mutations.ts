@@ -92,6 +92,14 @@ const INVITE_MAIL_TESTS = 'apps/api/src/modules/workspaces/invitation-mail.integ
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'tests-share-file-globals',
+    why: 'a suite shares browser globals and timer instrumentation across unrelated test files',
+    file: 'scripts/test-all.ts',
+    find: "'--isolate',",
+    replace: '',
+    tests: ['scripts/environment.test.ts'],
+  },
+  {
     id: 'notification-outlives-device-or-workspace',
     why: 'a delayed notice interrupts after Deep Work, turn-off or leaving the workspace',
     file: 'apps/web/src/features/alerts/background-alerts.tsx',
@@ -538,8 +546,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'image-bun-drifts-from-package-manager',
     why: 'the image runs a Bun other than the one the tests and the pipeline ran, and nothing says so',
     file: 'Dockerfile',
-    find: 'FROM oven/bun:1.4.3-distroless@',
-    replace: 'FROM oven/bun:1.4.2-distroless@',
+    find: 'FROM oven/bun:1.4.4-distroless@',
+    replace: 'FROM oven/bun:1.4.3-distroless@',
     tests: ['scripts/environment.test.ts'],
   },
   {

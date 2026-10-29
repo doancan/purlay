@@ -693,6 +693,34 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
       ),
     );
 
+  test('a malformed provider address is reported as unreachable', async () => {
+    expect(failure(await tryIt('not-an-address')).reason).toBe('unreachable');
+  });
+
+  for (const kind of ['unreachable', 'unauthorized_client'] as const) {
+    test(`a token endpoint reporting ${kind} keeps the diagnostic meaningful`, async () => {
+      const { issuer } = await provider();
+      const result = await probeOidc(
+        AUTHORITY,
+        { issuer, ...OIDC_STUB_CREDENTIALS },
+        {
+          appUrl: APP,
+          log: createLogger({ level: 'silent' }),
+          fetch: async (url, init) => {
+            if (url.endsWith('/token')) {
+              if (kind === 'unreachable') throw new Error('token endpoint unavailable');
+              return Response.json({ error: 'unauthorized_client' }, { status: 400 });
+            }
+            return await fetch(url, init);
+          },
+        },
+      );
+      expect(failure(result).reason).toBe(
+        kind === 'unreachable' ? 'unreachable' : 'client-unknown',
+      );
+    });
+  }
+
   test('a provider that answers, and takes this client, is ok — and was asked nothing it could act on', async () => {
     const { stub, issuer } = await provider();
     expect(await tryIt(issuer)).toEqual({ ok: true });

@@ -171,3 +171,18 @@ describe('the command', () => {
     });
   });
 });
+
+test('malformed JSON and missing nested measurements are refused', async () => {
+  const folder = folderWith({ 'keystroke-to-paint-chromium-dark.json': { toDocument: null } });
+  const missing = await measured(folder, 'chromium-dark').then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(missing).toBeInstanceOf(Error);
+  writeFileSync(join(folder, 'keystroke-to-paint-chromium-dark.json'), '{broken');
+  const malformed = await measured(folder, 'chromium-dark').then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(malformed).toBeInstanceOf(SyntaxError);
+});
