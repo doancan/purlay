@@ -1063,3 +1063,41 @@ describe('integration: Administration → Server — single sign-on (D-200)', ()
     expect(Number(over.headers.get('retry-after'))).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('integration: server runtime compatibility paths', () => {
+  test('integration: disconnect rejects malformed JSON before changing server settings', async () => {
+    const server = await aServer();
+    const before = await viewOf(server);
+    const response = await server.app.handle(
+      new Request(`${ORIGIN}/api/server/github`, {
+        method: 'DELETE',
+        headers: {
+          origin: ORIGIN,
+          cookie: server.admin.cookie,
+          'content-type': 'application/json',
+        },
+        body: '{broken',
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await viewOf(server)).toEqual(before);
+  });
+
+  test('integration: a Turkish administrator receives a Turkish relay test letter', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    await server.db
+      .updateTable('users')
+      .set({ locale: 'tr' })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const response = await call(server, 'POST', '/api/server/smtp', {
+      cookie: server.admin.cookie,
+      body: smtpBody(relay),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(relay.received[0]?.data).toContain('Purlay sunucundan bir deneme');
+    expect(relay.received[0]?.data).not.toContain('A test from your Purlay server');
+  });
+});

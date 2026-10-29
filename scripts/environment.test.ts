@@ -197,3 +197,14 @@ describe('the development environment', () => {
     }
   });
 });
+
+test('every suite entry point isolates file globals', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  expect(pkg.scripts['test']).toContain('test apps packages scripts --isolate ');
+  expect(pkg.scripts['test:integration']).toContain('test apps packages scripts --isolate ');
+  for (const runner of ['scripts/test-all.ts', 'scripts/mutate.ts']) {
+    expect(readFileSync(runner, 'utf8')).toMatch(/'test',\s*'--isolate'/);
+  }
+});

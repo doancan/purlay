@@ -218,6 +218,18 @@ describe('an invitation, opened by somebody who is not signed in', () => {
     return view;
   };
 
+  test('an expired passport offers a working way home', async () => {
+    const view = await asSignedOut({
+      openInvitationPassport: () =>
+        Promise.reject(new ApiError(404, 'INVITATION_NOT_FOUND', 'gone')),
+    });
+    await person().click(view.getByRole('link', { name: 'Continue with GitHub' }));
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Go home' }));
+    expect(view.world.history.stack.at(-1)).toBe('/sign-in');
+    view.unmount();
+  });
+
   test('GitHub: the passport is asked for first, and only when it is given does the page leave', async () => {
     const order: string[] = [];
     const left = spyOn(leave, 'to').mockImplementation((url) => {
@@ -238,6 +250,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
   });
 
   test.each([
+    [new ApiError(400, 'VALIDATION_FAILED', 'invalid'), 'That is not an email address.'],
     [
       new ApiError(429, 'RATE_LIMITED', 'slow'),
       'This invitation is being opened a lot right now. Try again in a while.',

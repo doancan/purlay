@@ -341,3 +341,21 @@ describe('nothing is said', () => {
     view.unmount();
   });
 });
+
+test('an inbox request that fails still offers the conversation without claiming a reason', async () => {
+  let reject: (error: Error) => void = () => undefined;
+  const inbox = new Promise<Notification[]>((_resolve, refuse) => {
+    reject = refuse;
+  });
+  const fake = aNotifier();
+  const view = await open({ notifier: fake, inbox });
+  await rise(view, { [IDS.deploys]: 1 });
+  reject(new Error('inbox unavailable'));
+  await settle();
+  expect(fake.shown[0]?.body).toBe('Something here needs you');
+  act(() => {
+    fake.shown[0]?.onOpen();
+  });
+  expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
+  view.unmount();
+});
