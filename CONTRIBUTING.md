@@ -280,6 +280,10 @@ worse than one that fails: the failure is loud, the no-op is discovered later by
 **When waiting for something, assert the positive condition.** *Nothing is pending* is trivially
 true before anything starts. Wait for *the thing I expect exists, and it has finished.*
 
+**Test files are isolated (D-220).** The standard suite and mutation commands use Bun's native
+`--isolate`, keeping browser globals and leftover timers from affecting another file. Keep the
+flag when running a multi-file diagnostic.
+
 **Green in one state is not green.** Run the full verification in the order the pipeline runs it,
 before committing. A local pass from a different working state is an opinion.
 
