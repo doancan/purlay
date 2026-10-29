@@ -1263,6 +1263,9 @@ describe('integration: two real sockets', () => {
         const second = await connect(room.alice, listening);
         await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
         await until(() => own.held().connections === 3, 'all three counted');
+        // Admission counts a socket before its async identity lookup finishes.
+        // A successful subscription proves her second socket has joined as her.
+        await subscribe(second, room.channelId);
         await first.close();
         await until(() => own.held().connections === 2, 'her first socket gone');
         expect(own.held().leaving).toBe(0);
