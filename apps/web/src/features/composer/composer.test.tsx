@@ -883,6 +883,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     'Numbered list',
     'Quote',
     'Code block',
+    'Table',
   ] as const;
 
   test('is there, in the channel and in a thread alike, each button named and reachable by Tab', async () => {

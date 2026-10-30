@@ -660,3 +660,23 @@ describe('an emoji, or any text, put where the caret is (D-181)', () => {
     });
   });
 });
+
+describe('a table from the formatting row (D-210)', () => {
+  test('is two columns and a row to fill in, on lines of its own, its first heading selected', () => {
+    const at = { start: 6, end: 6 };
+    const { text, selection } = insertMarkdown('Plan: ', at, 'table');
+    expect(text).toBe('Plan: \n| Column | Column |\n| --- | --- |\n|  |  |');
+    expect(text.slice(selection.start, selection.end)).toBe('Column');
+  });
+
+  test('a one-line selection is its first heading, its pipes escaped', () => {
+    const { text, selection } = insertMarkdown('a|b', { start: 0, end: 3 }, 'table');
+    expect(text).toBe('| a\\|b | Column |\n| --- | --- |\n|  |  |');
+    expect(text.slice(selection.start, selection.end)).toBe('a\\|b');
+  });
+
+  test('words after it move to the line below, so the table ends where it should', () => {
+    const { text } = insertMarkdown('before after', { start: 7, end: 7 }, 'table');
+    expect(text).toBe('before \n| Column | Column |\n| --- | --- |\n|  |  |\nafter');
+  });
+});

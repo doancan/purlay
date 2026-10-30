@@ -736,15 +736,16 @@ const Inner = ({
                 'code-block',
                 chord(labels.mod, labels.alt, labels.shift, 'C'),
               )}
+              {tool(9, 'table', t('composer.table'), 'table')}
             </div>
             <IconButton
               label={t('composer.preview')}
               glyph="preview"
               shortcut={chord(labels.mod, labels.shift, 'P')}
               aria-pressed={previewing}
-              tabIndex={stopAt === 9 ? 0 : -1}
+              tabIndex={stopAt === 10 ? 0 : -1}
               onFocus={() => {
-                setStopAt(9);
+                setStopAt(10);
               }}
               className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-accent-text"
               onClick={togglePreview}

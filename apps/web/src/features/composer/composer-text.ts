@@ -112,6 +112,7 @@ export type MarkdownKind =
   | 'numbers'
   | 'quote'
   | 'code'
+  | 'table'
   | 'mention';
 
 /** The text and the caret after a button or a key: one pure answer, shared by both. */
@@ -278,6 +279,14 @@ export const insertMarkdown = (
       text: `${before}${lead}${block}${trail}${after}`,
       selection: { start: at + openLength, end: at + openLength + chosen.length },
     };
+  }
+  if (kind === 'table') {
+    // A table of two columns and one row to fill in, on lines of its own (D-210); the selection, if
+    // one line, is its first heading, and the first heading is what is selected to type over.
+    const first = chosen === '' || chosen.includes('\n') ? 'Column' : chosen.replace(/\|/g, '\\|');
+    const placed = placeBlock(text, selection, `| ${first} | Column |\n| --- | --- |\n|  |  |`);
+    const start = placed.start + 2;
+    return { text: placed.text, selection: { start, end: start + first.length } };
   }
   const lead = before === '' || /\s$/.test(before) ? '' : ' ';
   const caret = at + lead.length + 1;

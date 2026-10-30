@@ -564,7 +564,8 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 
 Plain textarea, GFM, no WYSIWYG (`PRD.md` §4.1). **A formatting row above the text** has a button for every
 construct the renderer draws — bold, italic, strike, link, bulleted list, numbered list, quote, inline code,
-code block — and a preview toggle at its end; under the text sit the mention, an emoji picker and the file
+code block, table (two columns and a row to fill in, its first heading selected, D-210) — and a preview toggle
+at its end; under the text sit the mention, an emoji picker and the file
 attach. Each button only *inserts markdown* that the keys below also produce (D-110, D-181). **A thread's
 box has the same row** (D-164, D-181): in the panel's width the key hints are not drawn (a screen reader
 still reads them) and Send is the icon alone.
