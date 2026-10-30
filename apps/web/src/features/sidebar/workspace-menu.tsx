@@ -2,11 +2,11 @@
  * The workspace menu: which workspace this is, a way to another or to a new one, and — for an owner or
  * an admin — inviting people and the workspace's settings (D-110, D-124, D-146). Everything else an
  * owner or an admin does is a page of Settings, where it has room; the menu keeps the one thing done
- * from inside a conversation, inviting somebody, as a quick dialog. Two doors open it — the workspace's name at the top of the
- * sidebar, with its chevron, as the design draws it, and the tile at the top of the rail — and both
- * are this one component, so there is one list of what it holds. A person is in one workspace at a
- * time (`UX.md` §2): one tile, not a column of them. Who is signed in, and signing out, are the
- * account menu's at the sidebar's foot (D-124).
+ * from inside a conversation, inviting somebody, as a quick dialog. One door opens it: the workspace's
+ * mark and name at the top of the sidebar, with its chevron (D-206). A person is in one workspace at a
+ * time (`UX.md` §2), so a tile on the rail beside it only drew the same workspace twice, a hand's width
+ * apart; the rail is the places. Who is signed in, and signing out, are the account menu's at the
+ * sidebar's foot (D-124).
  *
  * Switching is navigation to `/w/:slug`; the workspace the address names is the source of
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
@@ -27,12 +27,7 @@ import { CreateWorkspace } from '../shell/home';
 import { useWorkspace } from '../shell/workspace';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
-interface WorkspaceMenuProps {
-  /** Which door: the rail's tile, or the name at the top of the sidebar. */
-  readonly door?: 'tile' | 'name';
-}
-
-export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.Element => {
+export const WorkspaceMenu = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const { memberships, mayCreateWorkspace } = useSession();
@@ -63,39 +58,30 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
   return (
     <>
       <Menu
-        side={door === 'tile' ? 'right' : 'bottom'}
+        side="bottom"
         trigger={
-          door === 'tile' ? (
-            <button
-              type="button"
-              className="inline-flex size-avatar-lg items-center justify-center rounded-xl bg-accent text-heading text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover max-narrow:h-touch max-narrow:w-touch"
+          // Inset and rounded as every row under it is, so the hover and the focus ring sit inside the
+          // column instead of running into the rail and the hairline.
+          <button
+            type="button"
+            className="flex h-control min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover max-narrow:h-touch"
+          >
+            {/* A picture of the workspace, as an avatar's initials are; the name beside it says it. */}
+            <span
+              aria-hidden="true"
+              className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-accent text-caption text-on-accent"
             >
-              {/* A picture of the workspace, as an avatar's initials are: the button's name is what it
-                  does, in words only a screen reader reads, so no label contradicts what is shown. */}
-              <span aria-hidden="true">{initialsOf(workspace.name)}</span>
-              <VisuallyHidden>{t('sidebar.switch')}</VisuallyHidden>
-            </button>
-          ) : (
-            // Inset and rounded as every row under it is, so the hover and the focus ring sit inside the
-            // column instead of running into the rail and the hairline; the tile is the rail's, smaller.
-            <button
-              type="button"
-              className="flex h-control min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover max-narrow:h-touch"
-            >
-              <span
-                aria-hidden="true"
-                className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-accent text-caption text-on-accent"
-              >
-                {initialsOf(workspace.name)}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-title text-nav-ink">
-                {workspace.name}
-              </span>
-              <span className="text-nav-ink-muted">
-                <Icon name="switch" />
-              </span>
-            </button>
-          )
+              {initialsOf(workspace.name)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-title text-nav-ink">
+              {workspace.name}
+            </span>
+            {/* The name is what is seen, so it is first in what is heard; then what it does. */}
+            <VisuallyHidden> {t('sidebar.switch')}</VisuallyHidden>
+            <span className="text-nav-ink-muted">
+              <Icon name="switch" />
+            </span>
+          </button>
         }
       >
         <MenuLabel>{t('sidebar.workspaces')}</MenuLabel>

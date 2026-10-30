@@ -1,8 +1,9 @@
 /**
- * The rail: the workspace and the places you go, down the window's left edge (D-110).
+ * The rail: the places you go, down the window's left edge (D-110).
  *
- * Every entry is a route or a menu that exists without the rail — it adds no destination. At its
- * foot a gear opens Settings (D-146), which the account menu and the palette also open. Its top
+ * The workspace is not on it: its mark and name head the sidebar beside it, the one door to the
+ * workspace menu (D-206). Every entry is a route or a menu that exists without the rail — it adds
+ * no destination. At its foot a gear opens Settings (D-146), which the account menu and the palette also open. Its top
  * is an empty strip the desktop shell will draw its window controls over (D-14). Below the narrow
  * breakpoint it is not in the layout: it opens with the sidebar, in the same overlay.
  */
@@ -13,7 +14,6 @@ import { InboxLink } from '../inbox/inbox-link';
 import { SavedLink } from '../saved/saved-link';
 import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
-import { WorkspaceMenu } from '../sidebar/workspace-menu';
 import { RailItemContent, railItemClasses } from './rail-item';
 import { useWorkspace } from './workspace';
 
@@ -74,10 +74,8 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
       }
     >
       <div className="h-drag w-full shrink-0" />
-      <div className="mt-4 mb-6">
-        <WorkspaceMenu />
-      </div>
-      <div className="flex flex-col items-center gap-4">
+      {/* The first place sits level with the workspace's name in the sidebar's header. */}
+      <div className="flex flex-col items-center gap-4 pt-1">
         <ChannelsLink />
         <InboxLink />
         <OpenQuestionsLink />

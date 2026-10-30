@@ -469,12 +469,12 @@ describe('the person moves to another workspace', () => {
     await person().click(heading(view, 'Channels'));
     expect(heading(view, 'Channels').getAttribute('aria-expanded')).toBe('false');
 
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'side-project' }));
     await settle();
     expect(heading(view, 'Channels').getAttribute('aria-expanded')).toBe('true');
 
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'acme-eng' }));
     await settle();
     expect(heading(view, 'Channels').getAttribute('aria-expanded')).toBe('false');
@@ -544,7 +544,7 @@ describe('Copy workspace link', () => {
       copied.push(text);
       return Promise.resolve();
     });
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'Copy workspace link' }));
     await settle();
     expect(copied).toEqual([new URL('/w/acme', window.location.origin).href]);
@@ -553,7 +553,7 @@ describe('Copy workspace link', () => {
 
   test('a clipboard that refuses is said, not ignored', async () => {
     const view = await openWithClipboard(() => Promise.reject(new Error('denied')));
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'Copy workspace link' }));
     await settle();
     expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();

@@ -79,7 +79,7 @@ const openMenu = async (
     },
   );
   await settle();
-  await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+  await person().click(view.getByRole('button', { name: /Switch workspace/ }));
   return view;
 };
 
@@ -152,7 +152,7 @@ describe('invite people', () => {
     expect(view.getByRole('textbox', { name: 'Invitation link' })).toBeDefined();
 
     await person().click(view.getByRole('button', { name: 'Close' }));
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await invite(view);
     expect(view.queryByRole('textbox', { name: 'Invitation link' })).toBeNull();
   });

@@ -99,7 +99,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 205 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 206 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
