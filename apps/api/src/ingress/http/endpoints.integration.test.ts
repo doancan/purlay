@@ -80,6 +80,7 @@ interface Context {
   attachmentId: string;
   throwawayAttachmentId: string;
   nativeCode: string;
+  bookmarkId: string;
 }
 
 const ids = new Set<string>();
@@ -228,6 +229,7 @@ const STEPS: readonly Step[] = [
     status: 200,
   },
   { id: 'listMessageVersions', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
+  { id: 'getMessage', as: 'bob', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   {
     id: 'putReaction',
     as: 'bob',
@@ -243,6 +245,28 @@ const STEPS: readonly Step[] = [
   { id: 'pinMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
   { id: 'listPins', spec: (c) => ({ params: { channelId: c.channelId } }), status: 200 },
   { id: 'unpinMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
+  {
+    id: 'addBookmark',
+    spec: (c) => ({
+      params: { channelId: c.channelId },
+      json: { url: 'https://docs.example.com/runbook', title: 'Runbook' },
+    }),
+    status: 201,
+    then: (c, body): void => {
+      c.bookmarkId = String(asRecord(body)['id']);
+    },
+  },
+  {
+    id: 'listBookmarks',
+    as: 'bob',
+    spec: (c) => ({ params: { channelId: c.channelId } }),
+    status: 200,
+  },
+  {
+    id: 'removeBookmark',
+    spec: (c) => ({ params: { channelId: c.channelId, bookmarkId: c.bookmarkId } }),
+    status: 204,
+  },
   {
     id: 'saveMessage',
     spec: (c) => ({ params: { messageId: c.rootId }, json: { state: 'in_progress' } }),
@@ -304,6 +328,11 @@ const STEPS: readonly Step[] = [
   {
     id: 'markChannelRead',
     spec: (c) => ({ params: { channelId: c.channelId }, json: { lastReadMessageId: c.rootId } }),
+    status: 200,
+  },
+  {
+    id: 'markChannelUnread',
+    spec: (c) => ({ params: { channelId: c.channelId }, json: { fromMessageId: c.rootId } }),
     status: 200,
   },
 
@@ -478,6 +507,7 @@ const world = async (): Promise<Context> => {
     attachmentId: '',
     throwawayAttachmentId: '',
     nativeCode: '',
+    bookmarkId: '',
   };
 };
 
