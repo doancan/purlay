@@ -325,6 +325,7 @@
   --duration-bar: 120ms;
   --duration-hover: 120ms;
   --duration-overlay: 150ms;
+  --duration-exit: 100ms;
   --duration-step: 200ms;
   --duration-mark: 200ms;
   --duration-nudge: 200ms;
@@ -377,6 +378,7 @@
     --duration-bar: 0ms;
     --duration-hover: 0ms;
     --duration-overlay: 0ms;
+    --duration-exit: 0ms;
     --duration-step: 0ms;
     --duration-mark: 0ms;
     --duration-nudge: 0ms;

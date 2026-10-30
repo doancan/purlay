@@ -124,6 +124,7 @@
   --transition-duration-bar: var(--duration-bar);
   --transition-duration-hover: var(--duration-hover);
   --transition-duration-overlay: var(--duration-overlay);
+  --transition-duration-exit: var(--duration-exit);
   --transition-duration-step: var(--duration-step);
   --transition-duration-mark: var(--duration-mark);
   --transition-duration-nudge: var(--duration-nudge);

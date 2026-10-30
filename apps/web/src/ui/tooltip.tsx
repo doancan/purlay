@@ -18,8 +18,9 @@ const OPEN_DELAY_MS = 400;
 /** Once one tip is open, the next one right beside it opens at once. */
 const SKIP_DELAY_MS = 300;
 
+// A tip's states are delayed-open and instant-open, then closed: it pops in whichever way it opened (D-211).
 const contentClasses =
-  'z-popover flex items-center gap-2 rounded-md border-hairline border-border-subtle bg-surface-100 px-2 py-1 text-label text-ink shadow-float';
+  'z-popover flex items-center gap-2 rounded-md border-hairline border-border-subtle bg-surface-100 px-2 py-1 text-label text-ink shadow-float animate-pop-in data-[state=closed]:animate-pop-out';
 
 export const TooltipProvider = ({
   children,

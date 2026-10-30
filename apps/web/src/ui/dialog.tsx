@@ -33,9 +33,12 @@ import { IconButton } from './icon-button';
  * dialog sits inside it, a margin from the top and the bottom, so its last button is reached by
  * scrolling rather than lost below the window. A click on it beside the dialog closes the dialog.
  */
-const overlayClasses = 'fixed inset-0 z-palette overflow-y-auto bg-scrim';
+// The backdrop fades; the dialog opens as the palette does, and both leave faster than they came (D-211).
+const overlayClasses =
+  'fixed inset-0 z-palette overflow-y-auto bg-scrim data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out';
 
-const contentClasses = 'relative mx-auto flex flex-col gap-4 bg-surface-100 text-ink outline-none';
+const contentClasses =
+  'relative mx-auto flex flex-col gap-4 bg-surface-100 text-ink outline-none data-[state=open]:animate-overlay-in data-[state=closed]:animate-pop-out';
 
 /**
  * The two widths (D-154). A dialog is 480px, a margin inside the window on a phone. A **wide** one —

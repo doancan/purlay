@@ -20,8 +20,9 @@ import { cn } from './cn';
 import { Kbd } from './kbd';
 import { VisuallyHidden } from './visually-hidden';
 
+// Grows out of the control it opened from, and leaves a little faster (D-211).
 const contentClasses =
-  'z-popover min-w-sidebar rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float';
+  'z-popover min-w-sidebar rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float data-[state=open]:animate-pop-in data-[state=closed]:animate-pop-out';
 
 const itemClasses =
   'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';

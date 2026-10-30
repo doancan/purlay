@@ -780,8 +780,10 @@ Decided here so Phase 0 does not invent one at random.
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
 - **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread folds
-  on resolve (§4.3) and the reconnect bar slides. No message entry animation — at conversational
-  speed it reads as lag. Everything is instant under reduced motion.
+  on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, the
+  inbox panel, a tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
+  fades as the dialog opens like the palette; a toast rises into its corner (D-211). No message entry
+  animation — at conversational speed it reads as lag. Everything is instant under reduced motion.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
   and an overlay. The interface is flat: regions are told apart by tone, and only what sits above
   something — an overlay, the hover controls, the composer, a card inside a message — has a shadow.

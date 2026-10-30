@@ -189,7 +189,7 @@ export const InboxPanel = ({ trigger, label }: InboxPanelProps): React.JSX.Eleme
           sideOffset={8}
           collisionPadding={8}
           aria-label={t('inbox.panel.label')}
-          className="z-popover flex w-inbox-panel flex-col overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float"
+          className="z-popover flex w-inbox-panel flex-col overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float data-[state=open]:animate-pop-in data-[state=closed]:animate-pop-out"
         >
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <h2 className="flex-1 text-title text-ink">{t('inbox.title')}</h2>
