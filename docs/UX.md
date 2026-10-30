@@ -509,6 +509,11 @@ status a column away from the message it is about.
   └─╰──────────────────────────────────────╯────┘
 ```
 
+- **Bookmarks** sit in a row under a channel's header (D-218): the links its members keep at hand, each
+  opening in a new tab. A member adds one with **Add a bookmark** — an address (a bare domain is read as
+  `https://`) and a name, the site's own if left empty — and removes one with × on its chip, with **Undo** in
+  the toast. Someone who can see the channel but is not in it reads the row and changes nothing; with
+  nothing to read, they see no row at all.
 - **Forward…** is in a message's **More** menu for a member (D-217): choose a channel or a conversation you
   are in, by name, add a note if you want, and it is sent there as your message ending in the original's
   link. **A link to a message of this workspace is drawn as a card** under the words — who, where, when and the

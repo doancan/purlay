@@ -33,6 +33,9 @@ import {
   GitHubFeedList,
   GitHubIntegration,
   PinList,
+  BookmarkList,
+  ChannelBookmark,
+  type AddBookmarkRequest,
   Incident,
   IncidentResponse,
   IncidentUpdatePage,
@@ -251,6 +254,11 @@ export interface Api {
   /** Pins a message for its channel, or lets the pin go (D-130). */
   readonly pin: (messageId: string) => Promise<void>;
   readonly unpin: (messageId: string) => Promise<void>;
+  /** A channel's bookmarks, oldest first (D-218). */
+  readonly bookmarks: (channelId: string, signal?: AbortSignal) => Promise<BookmarkList>;
+  /** A member keeps a link at hand; the same address again answers the bookmark already there. */
+  readonly addBookmark: (channelId: string, input: AddBookmarkRequest) => Promise<ChannelBookmark>;
+  readonly removeBookmark: (channelId: string, bookmarkId: string) => Promise<void>;
   /** A channel's files, newest message first; older than `before`, a file's id (D-129). */
   readonly files: (channelId: string, before?: string, signal?: AbortSignal) => Promise<FilePage>;
 
@@ -613,6 +621,22 @@ export const createApi = (http: Http): Api => {
       ),
     pin: (messageId) => http.send('PUT', `/api/messages/${at(messageId)}/pin`, options()),
     unpin: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}/pin`, options()),
+    bookmarks: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/bookmarks`,
+        BookmarkList,
+        options({}, signal),
+      ),
+    addBookmark: (channelId, input) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/bookmarks`,
+        ChannelBookmark,
+        options({ body: input }),
+      ),
+    removeBookmark: (channelId, bookmarkId) =>
+      http.send('DELETE', `/api/channels/${at(channelId)}/bookmarks/${at(bookmarkId)}`, options()),
     updateProfile: (input) =>
       http.request('PATCH', '/api/me/profile', Profile, options({ body: input })),
     files: (channelId, before, signal) =>

@@ -126,6 +126,8 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     savedIds: () => Promise.resolve([]),
     // And its channel's pins, to mark the pinned ones (D-130).
     pins: () => Promise.resolve([]),
+    // And its bookmarks, under the header (D-218).
+    bookmarks: () => Promise.resolve([]),
     // And who is online in the workspace (D-136): nobody, unless a test says.
     presence: () => Promise.resolve({ online: [], version: 0 }),
     incident: () => Promise.resolve({ incident: null }),
