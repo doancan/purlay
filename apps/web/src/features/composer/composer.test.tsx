@@ -556,6 +556,7 @@ describe('pasting', () => {
     const { view, box, user } = await mount();
     await user.type(box(), 'before ');
     await user.paste(thirteen);
+    // A fence opens a line or it is not one: after words, it starts on the next (D-210).
     expect(box().value).toBe(`before \n\`\`\`\n${thirteen}\n\`\`\``);
     expect(view.getByText('Pasted text became a code block')).toBeDefined();
     await user.click(view.getByRole('button', { name: 'Undo' }));

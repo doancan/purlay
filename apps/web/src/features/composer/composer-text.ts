@@ -67,6 +67,27 @@ export const asCodeBlock = (pasted: string): string => {
   return `${fence}\n${pasted}\n${fence}`;
 };
 
+/**
+ * A block put in place of the selection on lines of its own: a fence, a table or a list that follows
+ * words on the same line is not one — it becomes part of the paragraph (D-210). The caret lands after it.
+ */
+export const placeBlock = (
+  text: string,
+  selection: Selection,
+  block: string,
+): { readonly text: string; readonly caret: number; readonly start: number } => {
+  const before = text.slice(0, selection.start);
+  const after = text.slice(selection.end);
+  const lead = before === '' || before.endsWith('\n') ? '' : '\n';
+  const trail = after === '' || after.startsWith('\n') ? '' : '\n';
+  const start = before.length + lead.length;
+  return {
+    text: `${before}${lead}${block}${trail}${after}`,
+    caret: start + block.length + trail.length,
+    start,
+  };
+};
+
 /** Rows to show: as many as the lines, within the bounds that keep the composer a line and not a page. */
 export const rowsFor = (text: string, min = 2, max = 12): number =>
   Math.min(max, Math.max(min, text.split('\n').length));
