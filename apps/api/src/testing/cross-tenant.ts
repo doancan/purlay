@@ -449,6 +449,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ content: 'crossing' }),
     visibility: MESSAGE_BY_AUTHOR,
   },
+  'GET /api/messages/:messageId': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/messages/:messageId/around': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'PUT /api/messages/:messageId/thread/read': {

@@ -152,6 +152,7 @@ import {
   readHistory,
   readChanges,
   readAround,
+  readOne,
   readThread,
   readThreadFollow,
   putThreadFollow,
@@ -1151,6 +1152,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/messages/:messageId',
       async ({ request, params, body }) =>
         await editMessage(sending, request, params.messageId, body),
+    )
+    .get(
+      '/api/messages/:messageId',
+      async ({ request, params }) => await readOne(dependencies, request, params.messageId),
     )
     .get(
       '/api/messages/:messageId/around',

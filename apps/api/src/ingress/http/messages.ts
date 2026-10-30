@@ -26,7 +26,12 @@ import {
   type MessageWindow,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { channelNotFound, requireChannelById, requireMessageById } from '../../platform/channels';
+import {
+  channelNotFound,
+  messageNotFound,
+  requireChannelById,
+  requireMessageById,
+} from '../../platform/channels';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { visibleChannelIds } from '../../platform/channels';
 import {
@@ -36,6 +41,7 @@ import {
   type SendDependencies,
 } from '../../modules/messages/messages';
 import { changesIn } from '../../modules/messages/changes';
+import { buildMessages, readMessage } from '../../modules/messages/reader';
 import { edit } from '../../modules/messages/edit';
 import { deleteMessage } from '../../modules/messages/delete';
 import {
@@ -133,6 +139,27 @@ export const readThread = async (
   const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
   const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await threadReplies(database, root, query);
+};
+
+/**
+ * `GET /api/messages/:messageId` — one message, for a card that a link to it is drawn as (D-217): a
+ * forwarded message, or a link pasted. Found by the rule every route that names a message uses, so a
+ * message deleted, never sent, or in a channel the caller cannot see is the one `404` (D-34): a link
+ * someone else could follow shows nothing of what this reader may not see.
+ */
+export const readOne = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  messageId: string,
+): Promise<Message> => {
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const found = await requireMessageById(database, userId, messageId);
+  const row = await readMessage(database, found.messageId);
+  if (row === undefined) throw messageNotFound();
+  const [message] = await buildMessages(database, [row]);
+  if (message === undefined) throw messageNotFound();
+  return message;
 };
 
 /**

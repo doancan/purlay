@@ -353,6 +353,13 @@ export const ENDPOINTS = [
     responses: { 201: Message },
   }),
   read({
+    id: 'getMessage',
+    method: 'GET',
+    path: '/api/messages/:messageId',
+    auth: 'session',
+    responses: { 200: Message },
+  }),
+  read({
     id: 'getMessagesAround',
     method: 'GET',
     path: '/api/messages/:messageId/around',
