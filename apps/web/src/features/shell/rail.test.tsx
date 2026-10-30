@@ -71,7 +71,7 @@ describe('the rail', () => {
     const marked = (): string[] =>
       within(places(view))
         .getAllByRole('link')
-        .filter((link) => link.getAttribute('aria-current') === 'page')
+        .filter((link) => link.hasAttribute('aria-current'))
         .map((link) => link.textContent.trim().replace(/\d+$/, ''));
     expect(marked()).toEqual(['Settings']);
     await person().click(view.getByRole('link', { name: 'Preferences' }));
@@ -108,9 +108,21 @@ describe('the rail', () => {
     );
     const marked = within(places(view))
       .getAllByRole('link')
-      .filter((link) => link.getAttribute('aria-current') === 'page')
+      .filter((link) => link.hasAttribute('aria-current'))
       .map((link) => link.textContent.trim().replace(/\d+$/, ''));
     expect(marked).toEqual([current]);
+  });
+
+  test('Channels marks a section, not a page: the open channel’s row is the page', async () => {
+    const view = await open();
+    expect(
+      within(places(view)).getByRole('link', { name: 'Channels' }).getAttribute('aria-current'),
+    ).toBe('true');
+    // In the navigation; the channel's own Feed tab is a page of the channel, and says so there.
+    const pages = [places(view), view.getByRole('complementary', { name: 'Workspace' })]
+      .flatMap((region) => [...region.querySelectorAll('[aria-current="page"]')])
+      .map((link) => link.textContent.trim());
+    expect(pages).toEqual(['api']);
   });
 
   test('Channels goes to the workspace, which opens the channel you were last in', async () => {

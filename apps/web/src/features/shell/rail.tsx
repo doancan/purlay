@@ -28,7 +28,9 @@ const ChannelsLink = (): React.JSX.Element => {
       <Link
         to="workspace"
         params={{ slug: workspace.slug }}
-        {...(current ? { 'aria-current': 'page' as const } : {})}
+        // A section, not the page itself: the open channel's row, or the settings page, is the page,
+        // and two links that both say "current page" leave a screen reader unsure which.
+        {...(current ? { 'aria-current': 'true' as const } : {})}
         className={railItemClasses(current)}
       >
         <RailItemContent glyph="channels" label={t('sidebar.channels')} />
@@ -48,7 +50,9 @@ const SettingsLink = (): React.JSX.Element => {
       <Link
         to="settingsHome"
         params={{ slug: workspace.slug }}
-        {...(current ? { 'aria-current': 'page' as const } : {})}
+        // A section, not the page itself: the open channel's row, or the settings page, is the page,
+        // and two links that both say "current page" leave a screen reader unsure which.
+        {...(current ? { 'aria-current': 'true' as const } : {})}
         className={railItemClasses(current)}
       >
         <RailItemContent glyph="settings" label={t('settings.label')} />
