@@ -49,6 +49,7 @@ import {
   PresenceSnapshot,
   ReactionsResponse,
   ReadChannelRequest,
+  MarkUnreadRequest,
   ReadChannelResponse,
   ReadNotificationsRequest,
   ReadThreadRequest,
@@ -278,6 +279,14 @@ export const ENDPOINTS = [
     path: '/api/channels/:channelId/read',
     auth: 'session',
     body: ReadChannelRequest,
+    responses: { 200: ReadChannelResponse },
+  }),
+  read({
+    id: 'markChannelUnread',
+    method: 'PUT',
+    path: '/api/channels/:channelId/unread',
+    auth: 'session',
+    body: MarkUnreadRequest,
     responses: { 200: ReadChannelResponse },
   }),
   read({

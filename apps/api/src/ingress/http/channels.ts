@@ -15,6 +15,7 @@ import {
   OpenConversationRequest,
   CreateDirectMessageRequest,
   ReadChannelRequest,
+  MarkUnreadRequest,
   SetNotificationLevelRequest,
   UpdateChannelRequest,
   type Channel,
@@ -45,7 +46,7 @@ import {
 } from '../../modules/channels/channels';
 import { openConversation, openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
-import { markRead } from '../../modules/channels/read-state';
+import { markRead, markUnread } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
 import {
   archiveChannel,
@@ -161,6 +162,33 @@ export const readUpTo = async (
   const input = validated(ReadChannelRequest, body);
   const outcome = await atomicallyOn(database)(
     async (transaction) => await markRead(transaction, clock, context, input.lastReadMessageId),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(bus, clock, userId, channelId, outcome.state, outcome.version),
+      ),
+    ],
+  ]);
+  return outcome.state;
+};
+
+/**
+ * `PUT /api/channels/:channelId/unread` — "mark unread from here" (D-212). The caller's devices are
+ * told, from the row as it is, whether or not it moved, as a read tells them.
+ */
+export const unreadFrom = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<ReadChannelResponse> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(MarkUnreadRequest, body);
+  const outcome = await atomicallyOn(database)(
+    async (transaction) => await markUnread(transaction, context, input.fromMessageId),
   );
   await publishAfterCommit(log, [
     [

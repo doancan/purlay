@@ -184,3 +184,93 @@ export const markRead = async (
     },
   };
 };
+
+/** Below every UUIDv7: counting "past the position" with no position counts the whole channel. */
+const BEFORE_EVERYTHING = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * "Mark unread from here" (D-212): the read position moves back to the newest message before this
+ * one, so it and everything after it is unread again — the one way the position moves backwards, and
+ * only when the person asks. A reply marks its thread's root: the feed is what the position reads
+ * (D-147). The counters are recounted from the rows, as a read's are, in the same locked turn.
+ *
+ * Already unread from here or earlier, nothing moves and nothing is published. Notifications are not
+ * touched: what the inbox has read stays read there (D-106), so the badge counts what still waits.
+ */
+export const markUnread = async (
+  executor: Transaction,
+  context: ChannelContext,
+  messageId: string,
+): Promise<ReadOutcome> => {
+  const member = await executor
+    .selectFrom('channel_members')
+    .select(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (member === undefined) {
+    throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
+  }
+
+  const target = await executor
+    .selectFrom('messages')
+    .select(['id', 'parent_id'])
+    .where('id', '=', messageId)
+    .where('channel_id', '=', context.channelId)
+    .executeTakeFirst();
+  if (target === undefined) {
+    throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+  }
+  const from = target.parent_id ?? target.id;
+
+  const unchanged = (): ReadOutcome => ({
+    moved: false,
+    version: member.state_version,
+    state: {
+      lastReadMessageId: member.last_read_message_id,
+      unreadCount: member.unread_count,
+      unreadMentionCount: member.unread_mention_count,
+    },
+  });
+  // Already unread from here: the position is before it, or there is none.
+  if (member.last_read_message_id === null || member.last_read_message_id < from) {
+    return unchanged();
+  }
+
+  const previous = await executor
+    .selectFrom('messages')
+    .select('id')
+    .where('channel_id', '=', context.channelId)
+    .where('id', '<', from)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  const position = previous?.id ?? null;
+  const unread = unreadMessages(context.userId, context.channelId, position ?? BEFORE_EVERYTHING);
+  const updated = await executor
+    .updateTable('channel_members')
+    .set({
+      last_read_message_id: position,
+      state_version: sql<number>`state_version + 1`,
+      unread_count: unread,
+      unread_mention_count: sql<number>`least(
+        ${unread},
+        ${waitingNotifications(context.userId, context.channelId)}
+      )`,
+    })
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .returning(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
+    .executeTakeFirstOrThrow();
+
+  return {
+    moved: true,
+    version: updated.state_version,
+    state: {
+      lastReadMessageId: updated.last_read_message_id,
+      unreadCount: updated.unread_count,
+      unreadMentionCount: updated.unread_mention_count,
+    },
+  };
+};

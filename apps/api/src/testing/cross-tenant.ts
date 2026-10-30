@@ -372,6 +372,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: (_now, owner) => ({ lastReadMessageId: owner.messageId }),
     visibility: CHANNEL,
   },
+  'PUT /api/channels/:channelId/unread': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (_now, owner) => ({ fromMessageId: owner.messageId }),
+    visibility: CHANNEL,
+  },
   'POST /api/channels/:channelId/messages': {
     refusal: 'CHANNEL_NOT_FOUND',
     body: (now) => ({ id: messageId(now), content: 'crossing' }),
