@@ -1019,6 +1019,7 @@ export const tr = {
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
   'composer.bold': 'Kalın',
   'composer.codeBlock': 'Kod bloğu',
+  'composer.table': 'Tablo',
   'composer.italic': 'İtalik',
   'composer.strike': 'Üstü çizili',
   'composer.inlineCode': 'Kod',

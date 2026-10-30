@@ -1034,6 +1034,7 @@ export const en = {
   // ── Composer (UX §5) ────────────────────────────────────────────────────
   'composer.bold': 'Bold',
   'composer.codeBlock': 'Code block',
+  'composer.table': 'Table',
   'composer.italic': 'Italic',
   'composer.strike': 'Strikethrough',
   'composer.inlineCode': 'Code',
