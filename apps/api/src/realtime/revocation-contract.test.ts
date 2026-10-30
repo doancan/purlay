@@ -126,6 +126,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
   },
+  // "Mark unread from here" moves the same position back and recounts (D-212): what the person has read,
+  // not what they may see.
+  'apps/api/src/modules/channels/read-state.ts#markUnread': {
+    none: 'moves a read position back and recounts; nobody gains or loses sight of a channel (#25)',
+  },
   // Deep Work is a member's own quiet; it changes what interrupts them, not what they may see
   // (D-108, #59).
   'apps/api/src/modules/workspaces/deep-work.ts#setDeepWork': {
