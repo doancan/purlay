@@ -1402,6 +1402,7 @@ export const en = {
   'failure.savedLimit':
     'That is as many saved messages as a workspace keeps. Complete or remove some first.',
   'failure.pinsLimit': 'That is as many pins as a channel keeps. Unpin one first.',
+  'failure.bookmarksLimit': 'That is as many bookmarks as a channel keeps. Remove one first.',
   'failure.githubFeedsLimit':
     'That is as many repositories as a channel hears from. Disconnect one first.',
   'failure.githubFeedExists':

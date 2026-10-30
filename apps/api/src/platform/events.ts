@@ -124,6 +124,19 @@ export const publishPinsUpdated = async (
   });
 };
 
+/** A channel's bookmarks changed (D-218): everyone watching it reads them again. Nothing of them in it. */
+export const publishBookmarksUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  channelId: string,
+): Promise<void> => {
+  await bus.publish(channelTopic(channelId), {
+    event: 'BOOKMARKS_UPDATED',
+    data: { channelId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel's incident changed (D-137 §7): everyone watching it reads it again. Nothing of it in it. */
 export const publishIncidentUpdated = async (
   bus: EventBus,

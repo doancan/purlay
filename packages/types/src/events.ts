@@ -412,6 +412,16 @@ export const PinsUpdatedFrame = Type.Object({
 });
 
 /**
+ * A channel's bookmarks changed (D-218): one added or removed, by anyone in it. On the channel's topic;
+ * it carries no bookmark, and a client reads them again, as it does pins.
+ */
+export const BookmarksUpdatedFrame = Type.Object({
+  event: Type.Literal('BOOKMARKS_UPDATED'),
+  data: Type.Object({ channelId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A channel's incident changed (D-137 §7): declared, moved, resolved — by anyone in it. On the
  * channel's topic; it carries no incident, and a client reads it again, so two changes heard in either
  * order leave the same banner.
@@ -531,6 +541,7 @@ export const ServerFrame = Type.Union([
   SavedUpdatedFrame,
   NotificationsUpdatedFrame,
   PinsUpdatedFrame,
+  BookmarksUpdatedFrame,
   IncidentUpdatedFrame,
   MessageVersionsUpdatedFrame,
   ChannelsUpdatedFrame,

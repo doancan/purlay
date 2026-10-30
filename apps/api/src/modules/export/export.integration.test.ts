@@ -75,6 +75,16 @@ const fill = async (
     .insertInto('pinned_messages')
     .values({ ...where, message_id: id, pinned_by: author.userId })
     .execute();
+  await db
+    .insertInto('channel_bookmarks')
+    .values({
+      id: messageId(next()),
+      ...where,
+      url: 'https://docs.example.com/runbook',
+      title: 'Runbook',
+      added_by: member(room, other).userId,
+    })
+    .execute();
   // Stored as an upload is, so its key is the one production writes — not one a test made up (#84).
   const fileId = messageId(next());
   await storeUpload(

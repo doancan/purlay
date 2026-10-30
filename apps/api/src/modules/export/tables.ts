@@ -34,6 +34,7 @@ export type ExportedTable =
   | 'mentions'
   | 'message_versions'
   | 'pinned_messages'
+  | 'channel_bookmarks'
   | 'attachments'
   | 'incidents'
   | 'incident_updates'
@@ -154,6 +155,16 @@ export const COLUMNS: Columns = {
     message_id: 'export',
     pinned_by: 'export',
     pinned_at: 'export',
+  },
+  // A channel's links, the members' own content about it (D-218).
+  channel_bookmarks: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    url: 'export',
+    title: 'export',
+    added_by: 'export',
+    added_at: 'export',
   },
   attachments: {
     id: 'export',

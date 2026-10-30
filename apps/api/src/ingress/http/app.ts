@@ -195,6 +195,7 @@ import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
+import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -991,6 +992,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/pins',
       async ({ request, params }) => await listPins(dependencies, request, params.channelId),
     )
+    .get(
+      '/api/channels/:channelId/bookmarks',
+      async ({ request, params }) => await listBookmarks(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/bookmarks', async ({ request, params, body, set }) => {
+      const bookmark = await postBookmark(sending, request, params.channelId, body);
+      set.status = 201;
+      return bookmark;
+    })
+    .delete('/api/channels/:channelId/bookmarks/:bookmarkId', async ({ request, params, set }) => {
+      await deleteBookmark(sending, request, params.channelId, params.bookmarkId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/messages/:messageId/versions',
       async ({ request, params }) => await listVersions(dependencies, request, params.messageId),

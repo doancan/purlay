@@ -73,6 +73,8 @@ export interface Ids {
   readonly versionId: string;
   /** An incident declared in the channel: what changing one, and its timeline, act on. */
   readonly incidentId: string;
+  /** A bookmark of the channel: what removing one acts on (D-218). */
+  readonly bookmarkId: string;
   /** An owner's export of the workspace (D-140). */
   readonly exportId: string;
 }
@@ -98,6 +100,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'feedId') return ids.feedId;
     if (name === 'versionId') return ids.versionId;
     if (name === 'incidentId') return ids.incidentId;
+    if (name === 'bookmarkId') return ids.bookmarkId;
     if (name === 'exportId') return ids.exportId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
@@ -344,6 +347,16 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'CHANNEL_NOT_FOUND',
     body: () => ({ repository: 'acme/crossing', events: ['push'] }),
     visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/bookmarks': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'POST /api/channels/:channelId/bookmarks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ url: 'https://crossing.example/doc', title: 'Crossing' }),
+    visibility: CHANNEL,
+  },
+  'DELETE /api/channels/:channelId/bookmarks/:bookmarkId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
   },
   'DELETE /api/channels/:channelId/github-feeds/:feedId': {
     refusal: 'CHANNEL_NOT_FOUND',

@@ -40,6 +40,7 @@ export const TABLE_ORDER: readonly ExportedTable[] = [
   'mentions',
   'message_versions',
   'pinned_messages',
+  'channel_bookmarks',
   'attachments',
   'incidents',
   'incident_updates',
@@ -87,6 +88,7 @@ const PEOPLE = (scope: Scope): RawBuilder<unknown> => sql`
   union select user_id from reactions where message_id in (${messagesOf(scope)})
   union select mentioned_user_id from mentions where message_id in (${messagesOf(scope)})
   union select pinned_by from pinned_messages where message_id in (${messagesOf(scope)})
+  union select added_by from channel_bookmarks where channel_id in (${channelsIn(scope)})
   union select uploader_id from attachments where message_id in (${messagesOf(scope)})
   union select declared_by from incidents where id in (${incidentsOf(scope)})
   union select actor_id from incident_updates where incident_id in (${incidentsOf(scope)})
@@ -114,6 +116,7 @@ const BOUNDS: Readonly<
   mentions: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
   message_versions: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
   pinned_messages: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'message_id' }),
+  channel_bookmarks: (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
   // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
   attachments: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
   incidents: (s) => ({ where: sql`id in (${incidentsOf(s)})`, order: 'id' }),

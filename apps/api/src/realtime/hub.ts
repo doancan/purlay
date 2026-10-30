@@ -242,6 +242,7 @@ const channelOf = (frame: ServerFrame): string | null => {
     case 'CHANNEL_STATE':
     case 'CHANNEL_UPDATED':
     case 'PINS_UPDATED':
+    case 'BOOKMARKS_UPDATED':
     case 'INCIDENT_UPDATED':
     case 'MESSAGE_VERSIONS_UPDATED':
     case 'TYPING':

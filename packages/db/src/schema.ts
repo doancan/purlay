@@ -92,6 +92,16 @@ export interface AuditLog {
   workspace_id: string;
 }
 
+export interface ChannelBookmarks {
+  added_at: Generated<Timestamp>;
+  added_by: string | null;
+  channel_id: string;
+  id: string;
+  title: string;
+  url: string;
+  workspace_id: string;
+}
+
 export interface ChannelMembers {
   channel_id: string;
   id: Generated<string>;
@@ -493,6 +503,7 @@ export interface DB {
   admin_email_verification: AdminEmailVerification;
   attachments: Attachments;
   audit_log: AuditLog;
+  channel_bookmarks: ChannelBookmarks;
   channel_members: ChannelMembers;
   channels: Channels;
   github_deliveries: GithubDeliveries;
