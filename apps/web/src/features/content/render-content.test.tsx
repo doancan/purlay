@@ -619,6 +619,35 @@ describe('colour', () => {
     [{ content: 'b', color: 'var(--shiki-token-string)', italic: false, bold: true }],
   ];
 
+  test('numbered, each line keeps its own colour beside its number (D-210)', async () => {
+    const five = Array.from({ length: 5 }, (_, n) => [
+      {
+        content: `line${String(n)}`,
+        color: 'var(--shiki-token-keyword)',
+        italic: false,
+        bold: false,
+      },
+    ]);
+    const answered = Promise.resolve(five);
+    const view = await mount(`\`\`\`ts\n${['a', 'b', 'c', 'd', 'e'].join('\n')}\n\`\`\``, {
+      ports: plainPorts({ highlight: () => answered }),
+    });
+    await act(async () => {
+      await answered;
+    });
+    const lines = [...view.container.querySelectorAll('pre code > span')];
+    expect(lines.map((line) => line.firstElementChild?.textContent)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+    ]);
+    expect(lines[0]?.querySelector('[style]')?.getAttribute('style')).toContain(
+      '--shiki-token-keyword',
+    );
+  });
+
   test('arrives in place of the plain text without changing a character of it', async () => {
     let answer: (value: typeof tokens | null) => void = () => undefined;
     const pending = new Promise<typeof tokens | null>((resolve) => {
