@@ -35,6 +35,7 @@ import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspaceRole } from '../settings/role';
 import { useWorkspace } from '../shell/workspace';
+import { forgetChannel } from '../questions/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
@@ -478,6 +479,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
     try {
       if (what === 'leave') await leaveChannel(channel);
       else await archiveChannel(channel.id);
+      forgetChannel(workspace.id, channel.id);
       show({ message: t(what === 'leave' ? 'details.left' : 'details.archived', { name }) });
       navigate(href('workspace', { slug: workspace.slug }));
     } catch (failure) {

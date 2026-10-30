@@ -114,6 +114,15 @@ describe('the rail', () => {
       '/w/acme',
     );
   });
+
+  test('Channels takes you back to the channel you were last in, not the first in the list', async () => {
+    const view = await open(aSignedInApi(), `/w/acme/c/${IDS.deploys}`);
+    await person().click(within(places(view)).getByRole('link', { name: 'Inbox' }));
+    await settle();
+    await person().click(within(places(view)).getByRole('link', { name: 'Channels' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
+  });
 });
 
 describe('the inbox', () => {
