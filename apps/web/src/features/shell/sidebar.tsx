@@ -55,7 +55,9 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           userId={user.id}
           workspaceId={workspace.id}
         >
-          <div className="flex h-header shrink-0 items-center gap-1 px-2">
+          {/* The workspace's card (D-209) is taller than a row: room below it, so the jump field under it
+              reads as the next thing and not as part of the card. */}
+          <div className="flex shrink-0 items-center gap-1 px-2 pt-1 pb-3">
             <WorkspaceMenu />
             <SidebarOptions />
           </div>
