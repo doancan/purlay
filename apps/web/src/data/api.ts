@@ -205,6 +205,8 @@ export interface Api {
   /** The caller's own title, time zone and status line (D-131). */
   readonly updateProfile: (input: UpdateProfileRequest) => Promise<Profile>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
+  /** "Mark unread from here" (D-212): the position back to just before this message. */
+  readonly markUnread: (channelId: string, fromMessageId: string) => Promise<ReadChannelResponse>;
   /** A workspace's members online now, for a member (D-136). */
   readonly presence: (workspaceId: string, signal?: AbortSignal) => Promise<PresenceSnapshot>;
   /** What a message said before each edit, newest first (D-135). */
@@ -647,6 +649,13 @@ export const createApi = (http: Http): Api => {
         options({ body: { lastReadMessageId } }),
       ),
 
+    markUnread: (channelId, fromMessageId) =>
+      http.request(
+        'PUT',
+        `/api/channels/${at(channelId)}/unread`,
+        ReadChannelResponse,
+        options({ body: { fromMessageId } }),
+      ),
     messages: (channelId, page = {}, signal) =>
       http.request(
         'GET',

@@ -7,7 +7,8 @@ import { knowledgeInput } from '../threads/knowledge-input';
  * hang from the left). So it never covers the name over a message, the words in it, or anything of the
  * row above — it does not reach above its own row at all.
  *
- * **More is on every message.** Copy text, Save and Pin again for whoever looks there, then Edit and
+ * **More is on every message.** Copy text, Mark unread from here for a member (D-212), Save and Pin
+ * again for whoever looks there, then Edit and
  * Delete on one's own; an owner or an admin may delete anybody's (`API.md`, D-103 §7), and is told
  * that doing so is on the audit trail. **Copy link** is first: the message's own address (D-149),
  * where a screen can say where it is (`useCopyMessageLink` is null outside a workspace).
@@ -24,6 +25,7 @@ import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuItem, MenuSeparator } from '../../ui/menu';
+import { holdUnread, releaseUnread } from '../channel/use-mark-read';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { PinMenuItem, PinToggle } from '../pins/pin-toggle';
@@ -119,7 +121,8 @@ const MoreMenu = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { remove, setKnowledge } = useActions();
+  const actions = useActions();
+  const { remove, setKnowledge } = actions;
   const { show } = useToast();
   const { copy } = useContentPorts();
   const describe = useDescribeFailure();
@@ -194,6 +197,21 @@ const MoreMenu = ({
                 ? 'knowledge.unmark'
                 : 'knowledge.mark',
             )}
+          </MenuItem>
+        )}
+        {member && message.deletedAt === null && (
+          <MenuItem
+            glyph="notifications"
+            onSelect={() => {
+              // Held first, so a read already waiting for its pause cannot undo it (D-212).
+              holdUnread(actions, message.channelId);
+              actions.markUnread(message.channelId, message.id).catch((failure: unknown) => {
+                releaseUnread(actions, message.channelId);
+                show({ message: `${t('message.unreadFailed')} ${describe(failure)}` });
+              });
+            }}
+          >
+            {t('message.markUnread')}
           </MenuItem>
         )}
         <SaveMenuItem message={message} />

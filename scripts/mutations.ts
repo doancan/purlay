@@ -3446,6 +3446,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/shell/rail.test.tsx'],
   },
   {
+    id: 'unread-undone-by-arrival',
+    why: 'a channel marked unread is read again by the next message arriving at the bottom, and the mark is gone before the person looks away',
+    file: 'apps/web/src/features/channel/use-mark-read.ts',
+    find: '      if (heldOf(actions).has(channelId)) return;\n',
+    replace: '',
+    tests: ['apps/web/src/features/channel/mark-unread.test.tsx'],
+  },
+  {
+    id: 'unread-from-a-reply-reads-the-feed-wrong',
+    why: 'marking a reply unread moves the feed position to just before the reply, so the root it answers counts as read',
+    file: 'apps/api/src/modules/channels/read-state.ts',
+    find: '  const from = target.parent_id ?? target.id;\n',
+    replace: '  const from = target.id;\n',
+    tests: ['apps/api/src/ingress/http/unread.integration.test.ts'],
+  },
+  {
     id: 'inbox-read-not-painted-first',
     why: 'a notification opened or Mark all read stays unread on screen until the server answers, and on a slow network looks ignored',
     file: 'apps/web/src/features/inbox/read.ts',

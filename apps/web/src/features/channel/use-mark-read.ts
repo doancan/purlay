@@ -15,6 +15,10 @@
  * on the next load. Not in a loop: if that fails too, or the person has already left, the
  * newest id is **owed** and sent the next time the channel is opened, so what they read is
  * not forgotten for want of a second request.
+ *
+ * **Held after "mark unread"** (D-212). A channel marked unread from a message is not read again by
+ * being looked at: the person asked for it to wait. Nothing is sent — not at the bottom, not on
+ * leaving — for the rest of the visit; the next time the channel is opened it reads as it always did.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
@@ -36,6 +40,27 @@ const owedOf = (actions: Actions): Map<string, string> => {
     owedBy.set(actions, owed);
   }
   return owed;
+};
+
+/** Channels marked unread during this visit, per page (per `Actions`): not read until left. */
+const heldBy = new WeakMap<Actions, Set<string>>();
+const heldOf = (actions: Actions): Set<string> => {
+  let held = heldBy.get(actions);
+  if (held === undefined) {
+    held = new Set();
+    heldBy.set(actions, held);
+  }
+  return held;
+};
+
+/** Stops the open channel from being read by being looked at, until it is left (D-212). */
+export const holdUnread = (actions: Actions, channelId: string): void => {
+  heldOf(actions).add(channelId);
+};
+
+/** Lets it be read again: the mark did not reach the server, so there is nothing to keep. */
+export const releaseUnread = (actions: Actions, channelId: string): void => {
+  heldOf(actions).delete(channelId);
 };
 
 interface Options {
@@ -76,6 +101,7 @@ export const useMarkRead = ({
 
   const send = useCallback(
     (id: string, again = true): void => {
+      if (heldOf(actions).has(channelId)) return;
       if (sent.current !== null && id <= sent.current) return;
       const previous = sent.current;
       sent.current = id;
@@ -133,8 +159,10 @@ export const useMarkRead = ({
   leave.current = send;
   useEffect(
     () => (): void => {
+      // Left after "mark unread": it stays unread, and the next visit reads as usual.
+      if (heldOf(actions).delete(channelId)) return;
       if (member && reached.current !== null) leave.current(reached.current, false);
     },
-    [member, channelId],
+    [member, channelId, actions],
   );
 };
