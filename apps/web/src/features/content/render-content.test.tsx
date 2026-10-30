@@ -537,6 +537,24 @@ describe('a code block', () => {
     expect(view.container.querySelector('pre')?.className).toContain('max-h-code');
   });
 
+  test('from five lines on, each line has its number — not heard, not selected (D-210)', async () => {
+    const five = ['a', 'b', '', 'd', 'e'].join('\n');
+    const view = await mount(`\`\`\`\n${five}\n\`\`\``);
+    const numbers = [...view.container.querySelectorAll('pre [aria-hidden="true"]')];
+    expect(numbers.map((n) => n.textContent)).toEqual(['1', '2', '3', '4', '5']);
+    for (const n of numbers) expect(n.className).toContain('select-none');
+    // What is not a number is the code, line for line — the empty line kept.
+    const code = [...view.container.querySelectorAll('pre code > span')].map(
+      (line) => line.lastElementChild?.textContent,
+    );
+    expect(code).toEqual(['a', 'b', '', 'd', 'e']);
+    view.unmount();
+
+    const four = await mount('```\na\nb\nc\nd\n```');
+    expect(four.container.querySelectorAll('pre [aria-hidden="true"]')).toHaveLength(0);
+    expect(four.container.querySelector('pre')?.textContent).toBe('a\nb\nc\nd');
+  });
+
   test('copies exactly what was written, even when the view is clamped, and says so', async () => {
     const copied: string[] = [];
     const view = await mount(`\`\`\`ts\n${fourteen}\n\`\`\``, {
