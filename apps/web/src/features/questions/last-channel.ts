@@ -27,3 +27,17 @@ export const lastChannel = (workspaceId: string): string | null => {
     return null;
   }
 };
+
+/**
+ * Forgets the channel if it is the one remembered: one the person left or archived is not where
+ * the workspace's front door should send them back to.
+ */
+export const forgetChannel = (workspaceId: string, channelId: string): void => {
+  try {
+    if (window.localStorage.getItem(keyFor(workspaceId)) === channelId) {
+      window.localStorage.removeItem(keyFor(workspaceId));
+    }
+  } catch {
+    noteStorageFailure('last-channel-write');
+  }
+};
