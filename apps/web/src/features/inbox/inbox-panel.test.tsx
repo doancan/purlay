@@ -182,6 +182,26 @@ describe('the inbox panel', () => {
   });
 });
 
+describe('the inbox panel when the server does not answer', () => {
+  test('says so in the panel, and Retry asks again', async () => {
+    let calls = 0;
+    const view = await visit({
+      notifications: () => {
+        calls += 1;
+        return calls === 1
+          ? Promise.reject(new Error('offline'))
+          : Promise.resolve(page([told(11, 'mention')]));
+      },
+    });
+    const panel = await openPanel(view);
+    expect(within(panel).getByRole('alert')).toBeDefined();
+    await person().click(within(panel).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(within(panel).getByText('words 11')).toBeDefined();
+    view.unmount();
+  });
+});
+
 describe('reading, hardened', () => {
   test('a read is painted in every view of the inbox: pages a list loaded and the panel’s one page', async () => {
     const view = await visit({ notifications: () => Promise.resolve(page([])) });

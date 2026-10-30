@@ -309,6 +309,30 @@ describe('the sidebar', () => {
   });
 });
 
+describe('categories on the page (D-208)', () => {
+  test('choosing one asks the server for it, puts it in the address, and an empty one says which', async () => {
+    const asked: { types?: string }[] = [];
+    const view = await visit({
+      notifications: (_workspaceId, at = {}) => {
+        asked.push(at);
+        return Promise.resolve(page(at.types === undefined ? [told(1, 'mention')] : []));
+      },
+    });
+    const categories = within(view.getByRole('group', { name: 'Category' }));
+    await person().click(categories.getByRole('button', { name: 'Direct' }));
+    await settle();
+    expect(asked.at(-1)?.types).toBe('direct_message');
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/inbox?category=direct');
+    expect(view.getByText('No direct messages')).toBeDefined();
+    // Back to All is the bare address, as it always was.
+    await person().click(categories.getByRole('button', { name: 'All' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/inbox');
+    expect(view.getByText('words 1')).toBeDefined();
+    view.unmount();
+  });
+});
+
 describe('triage', () => {
   test('Unread asks the server for what waits only, and with nothing waiting says so', async () => {
     const asked: { unreadOnly?: boolean }[] = [];
