@@ -1094,6 +1094,9 @@ export const en = {
   'composer.send': 'Send',
   'composer.pasted': 'Pasted text became a code block',
   'composer.pasteChanged': 'The pasted block changed. Your edits were kept.',
+  'composer.pasted.table': 'Pasted rows became a table',
+  'composer.pasted.formatted': 'Pasted text kept its formatting',
+  'composer.pasted.asText': 'Paste as text',
   'composer.tooLong': {
     one: 'That is {count} character over the limit.',
     other: 'That is {count} characters over the limit.',

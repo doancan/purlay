@@ -1078,6 +1078,9 @@ export const tr = {
   'composer.send': 'Gönder',
   'composer.pasted': 'Yapıştırılan metin kod bloğuna dönüştü',
   'composer.pasteChanged': 'Yapıştırılan blok değişti. Düzenlemelerin korundu.',
+  'composer.pasted.table': 'Yapıştırılan satırlar tabloya dönüştü',
+  'composer.pasted.formatted': 'Yapıştırılan metnin biçimi korundu',
+  'composer.pasted.asText': 'Düz metin olarak yapıştır',
   'composer.tooLong': {
     other: 'Sınırı {count} karakter aşıyor.',
   },

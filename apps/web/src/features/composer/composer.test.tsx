@@ -620,6 +620,69 @@ describe('pasting', () => {
     expect(view.queryByText('Pasted text became a code block')).toBeNull();
   });
 
+  /** A paste as a browser makes one: the plain words, and what else the source put on the clipboard. */
+  const pasteOf = (target: HTMLElement, plain: string, html = ''): boolean =>
+    fireEvent.paste(target, {
+      clipboardData: {
+        files: [],
+        getData: (type: string) => (type === 'text/html' ? html : plain),
+      },
+    });
+
+  test('a spreadsheet’s rows become a table on lines of their own, and Paste as text undoes it (D-210)', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), 'Numbers:');
+    const rows = 'Region\tQ1\nİstanbul\t12';
+    act(() => {
+      pasteOf(box(), rows);
+    });
+    expect(box().value).toBe('Numbers:\n| Region | Q1 |\n| --- | --- |\n| İstanbul | 12 |');
+    expect(view.getByText('Pasted rows became a table')).toBeDefined();
+    await user.click(view.getByRole('button', { name: 'Paste as text' }));
+    expect(box().value).toBe(`Numbers:${rows}`);
+    expectFocusOn(box());
+  });
+
+  test('formatted text from a page keeps its emphasis and links, inline where the caret is', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), 'See ');
+    act(() => {
+      pasteOf(
+        box(),
+        'the PR now',
+        '<span>the <a href="https://example.com/pr/1">PR</a> <b>now</b></span>',
+      );
+    });
+    expect(box().value).toBe('See the [PR](https://example.com/pr/1) **now**');
+    expect(view.getByText('Pasted text kept its formatting')).toBeDefined();
+  });
+
+  test('Mod+Shift+V pastes the words as they are: no table, no formatting, no block', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    fireEvent.keyDown(box(), { key: 'V', metaKey: true, shiftKey: true });
+    expect(pasteOf(box(), 'a\tb\nc\td', '<b>a</b>')).toBe(true);
+    expect(view.queryByText('Pasted rows became a table')).toBeNull();
+    // Only that paste: the next one is read again.
+    act(() => {
+      pasteOf(box(), 'a\tb\nc\td');
+    });
+    expect(view.getByText('Pasted rows became a table')).toBeDefined();
+  });
+
+  test('a long paste of code is a block in its language, so it is coloured', async () => {
+    const { box } = await mount();
+    const code = [
+      'export interface Policy {',
+      ...Array.from({ length: 12 }, (_, n) => `  readonly a${String(n)}: number;`),
+      '}',
+    ].join('\n');
+    act(() => {
+      pasteOf(box(), code);
+    });
+    expect(box().value).toBe(`\`\`\`ts\n${code}\n\`\`\``);
+  });
+
   test('a paste with no clipboard data is left to the browser; a pasted file is uploaded (#370)', async () => {
     const { box } = await mount();
     expect(fireEvent.paste(box())).toBe(true);

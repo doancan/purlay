@@ -57,14 +57,14 @@ export const isLongPaste = (pasted: string): boolean =>
  * the paste itself contains at the start of a line, so pasting a Markdown file with its
  * own fences cannot close the block early.
  */
-export const asCodeBlock = (pasted: string): string => {
+export const asCodeBlock = (pasted: string, language: string | null = null): string => {
   let longest = 2;
   for (const line of pasted.split('\n')) {
     const run = /^ {0,3}(`+)/.exec(line)?.[1]?.length ?? 0;
     if (run > longest) longest = run;
   }
   const fence = '`'.repeat(longest + 1);
-  return `${fence}\n${pasted}\n${fence}`;
+  return `${fence}${language ?? ''}\n${pasted}\n${fence}`;
 };
 
 /**
@@ -284,23 +284,10 @@ export const insertMarkdown = (
   return { text: `${before}${lead}@${chosen}${after}`, selection: { start: caret, end: caret } };
 };
 
-/** Long, unformatted pastes become code; existing code keeps the browser's ordinary paste. */
-export const formatPaste = (
-  text: string,
-  selection: Selection,
-  pasted: string,
-): Inserted | null => {
-  if (!isLongPaste(pasted) || insideFence(text.slice(0, selection.start))) return null;
+/** Whether a paste is already one fenced block: it stays as supplied, never fenced again (D-205). */
+export const isCodeBlock = (pasted: string): boolean => {
   const tree = parseMarkdown(pasted);
-  if (tree?.children.length === 1 && tree.children[0]?.type === 'code') return null;
-  const raw = insertText(text, selection, pasted);
-  const formatted = insertMarkdown(
-    raw.text,
-    { start: selection.start, end: raw.selection.end },
-    'code',
-  );
-  const end = formatted.text.length - (text.length - selection.end);
-  return { text: formatted.text, selection: { start: end, end } };
+  return tree?.children.length === 1 && tree.children[0]?.type === 'code';
 };
 
 /** Undo only an unchanged, uniquely identifiable insertion; never restore an old draft over later edits. */
