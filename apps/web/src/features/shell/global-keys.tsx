@@ -22,7 +22,7 @@
  * `preventDefault` on the chords it takes, because the browser has meanings for them
  * (`Cmd+K` focuses the address bar in some browsers, `Alt+←` is Back).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDeferred, usePreloadDeferred } from '../../app/deferred-door';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -66,8 +66,16 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
   const slug = workspace.slug;
   const currentId = match.name === 'channel' ? match.params.channelId : null;
 
+  // What the keys read, as it is now: kept in a ref so the listener is bound once, not torn down and
+  // bound again each time the channel list changes — which is every message that arrives.
+  const latest = useRef({ channels, currentId, overlay });
+  useEffect(() => {
+    latest.current = { channels, currentId, overlay };
+  });
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      const { channels, currentId, overlay } = latest.current;
       if (event.defaultPrevented || event.isComposing) return;
       const command = event.metaKey || event.ctrlKey;
 
@@ -115,7 +123,7 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
     return (): void => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [channels, currentId, navigate, overlay, setOverlay, slug, t, user.id]);
+  }, [navigate, setOverlay, slug, t, user.id]);
 
   return (
     <>
