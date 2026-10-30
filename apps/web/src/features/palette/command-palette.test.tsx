@@ -147,6 +147,7 @@ describe('what is on offer before anything is typed', () => {
       'Open questions',
       'Inbox',
       'Saved',
+      'Drafts and sent',
       'Search',
       'Feed' + 'api',
       'api',

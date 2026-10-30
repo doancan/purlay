@@ -12,6 +12,7 @@ import { Link, useRoute } from '../../router/router-provider';
 import { Tooltip } from '../../ui/tooltip';
 import { InboxLink } from '../inbox/inbox-link';
 import { SavedLink } from '../saved/saved-link';
+import { DraftsLink } from '../drafts/drafts-link';
 import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { RailItemContent, railItemClasses } from './rail-item';
@@ -85,6 +86,7 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
         <OpenQuestionsLink />
         <SearchLink />
         <SavedLink />
+        <DraftsLink />
       </div>
       <div className="mt-auto">
         <SettingsLink />

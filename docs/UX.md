@@ -55,7 +55,8 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
   messages you kept to come back to, in three tabs, In progress, Archived and Completed — chosen
   above the list as the inbox's All and Unread are (D-158) — each moved or let go from its row
-  (D-128). Every entry is a route
+  (D-128) — and **drafts and sent** (D-215): what the person started and has not sent, on this device,
+  each opening its composer, deleted with Undo, and what they sent, newest first. Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
 - **Sidebar (264px)** — the workspace's card (D-209): its mark, its name and, under it, your role and how many
