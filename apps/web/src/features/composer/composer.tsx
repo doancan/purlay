@@ -70,6 +70,7 @@ import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { renderContent } from '../content/render-content';
 import { duringComposition, useComposition } from './composition';
 import { convertPaste } from './paste';
+import { composerKey, useComposerInbox } from './quote';
 import { EmojiPicker } from './emoji-picker';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -397,6 +398,21 @@ const Inner = ({
     // `send` reads this render's words and files; it is called when what it waits on changes.
     if (waiting && !uploading) send();
   }, [waiting, uploading]);
+
+  // A quote sent here from a message's menu (D-213): after what is written, on lines of its own,
+  // the caret under it to answer.
+  useComposerInbox(
+    composerKey(channelId, parentId ?? null),
+    (markdown) => {
+      const gap = text === '' || text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
+      const next = `${text}${gap}${markdown}`;
+      caret.current = next.length;
+      change(next);
+    },
+    () => {
+      field.current?.focus();
+    },
+  );
 
   /** Set by Mod+Shift+V, read by the paste it starts. */
   const plainNext = useRef(false);

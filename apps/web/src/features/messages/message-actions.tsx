@@ -26,6 +26,9 @@ import { Dialog } from '../../ui/dialog';
 import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuItem, MenuSeparator } from '../../ui/menu';
 import { holdUnread, releaseUnread } from '../channel/use-mark-read';
+import { composerKey, focusComposer, quoteMarkdown, sendToComposer } from '../composer/quote';
+import { authorOf } from './author';
+import { messageUrl } from './message-link';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { PinMenuItem, PinToggle } from '../pins/pin-toggle';
@@ -109,6 +112,43 @@ export const MessageActions = ({
   );
 };
 
+/**
+ * Quote reply (D-213): the part of the message the person selected, or all of it, into the composer it
+ * answers in — the thread's for a reply, the channel's for a root.
+ */
+const useQuoteReply = (): ((message: Message, selected: string | null) => boolean) => {
+  const { t } = useI18n();
+  const { show } = useToast();
+  const slug = useWorkspaceIfAny()?.workspace.slug ?? null;
+  return (message, selected) => {
+    const author = authorOf(message, t('user.erased')).displayName;
+    const link = slug === null ? null : messageUrl(window.location.origin, slug, message);
+    const sent = sendToComposer(
+      composerKey(message.channelId, message.parentId),
+      quoteMarkdown(selected ?? message.content, author, link),
+    );
+    // A reply quoted while its thread is closed has no composer to go to: say where to open it.
+    if (!sent) show({ message: t('message.quoteNowhere') });
+    return sent;
+  };
+};
+
+/**
+ * The words the person selected inside this message, or null when the selection is elsewhere. Read
+ * as the menu opens: choosing an item can move the selection before the item is told.
+ */
+const selectedIn = (messageId: string): string | null => {
+  const selection = window.getSelection();
+  if (selection === null || selection.isCollapsed) return null;
+  const inside = (node: Node | null): boolean =>
+    (node instanceof Element ? node : node?.parentElement)
+      ?.closest('[data-message-id]')
+      ?.getAttribute('data-message-id') === messageId;
+  if (!inside(selection.anchorNode) || !inside(selection.focusNode)) return null;
+  const words = selection.toString().trim();
+  return words === '' ? null : words;
+};
+
 const MoreMenu = ({
   message,
   mine,
@@ -135,6 +175,10 @@ const MoreMenu = ({
     channels.data?.some((channel) => channel.id === message.channelId && channel.state !== null) ===
     true;
   const moderating = !mine && (role === 'owner' || role === 'admin');
+  const quote = useQuoteReply();
+  // A quote puts focus in its composer; the menu must not take it back to its button as it closes.
+  const focusMoved = useRef(false);
+  const selected = useRef<string | null>(null);
   const [asking, setAsking] = useState(false);
 
   const confirm = (): void => {
@@ -150,7 +194,19 @@ const MoreMenu = ({
         align="end"
         side="top"
         boundary={boundary}
-        onOpenChange={onOpenChange}
+        onOpenChange={(open) => {
+          if (open) {
+            focusMoved.current = false;
+            selected.current = selectedIn(message.id);
+          }
+          onOpenChange(open);
+        }}
+        returnFocus={() => {
+          if (!focusMoved.current) return true;
+          // Closed now: the quote's composer takes focus instead of the button (D-213).
+          focusComposer(composerKey(message.channelId, message.parentId));
+          return false;
+        }}
         // Edit needs nothing to put focus in its editor: the bar is not drawn while a message is
         // edited, so the menu has no button to give focus back to, and the editor takes it.
         trigger={<IconButton size="bar" glyph="more" label={t('message.more')} />}
@@ -197,6 +253,16 @@ const MoreMenu = ({
                 ? 'knowledge.unmark'
                 : 'knowledge.mark',
             )}
+          </MenuItem>
+        )}
+        {member && message.deletedAt === null && (
+          <MenuItem
+            glyph="quote"
+            onSelect={() => {
+              focusMoved.current = quote(message, selected.current);
+            }}
+          >
+            {t('message.quoteReply')}
           </MenuItem>
         )}
         {member && message.deletedAt === null && (
