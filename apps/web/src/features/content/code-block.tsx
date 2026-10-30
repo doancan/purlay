@@ -10,6 +10,10 @@
  * font, so nothing shifts; a language it does not know, or a grammar that did not load,
  * simply stays as it was. The highlighter is the page's port (`content-ports.tsx`).
  *
+ * **Line numbers** from five lines on (D-210), as every code host draws them: in a column of their own,
+ * not heard (`aria-hidden`) and not selected (`select-none`), so a hand selection copies the code
+ * alone — and each beside its own line, so a wrapped line keeps its number at its first row.
+ *
  * The clamp is `max-h-code` (a token) with `overflow-hidden`, under a fade into the block's own
  * background (`ARCHITECTURE.md` §8.2): a block over twelve lines is never taller than the feed can
  * use, it shows that there is more, and the person opens it when they want all of it.
@@ -28,6 +32,42 @@ export const CLAMP_ABOVE_LINES = 12;
 
 const lineCount = (code: string): number => (code === '' ? 0 : code.split('\n').length);
 
+/** The line count from which a block numbers its lines: a short snippet is read whole without them. */
+const NUMBERED_FROM_LINES = 5;
+
+/** Each line beside its number; the line itself is the code, plain or in colour. */
+const Numbered = ({ lines }: { readonly lines: readonly React.ReactNode[] }): React.JSX.Element => (
+  <>
+    {lines.map((line, row) => (
+      // Lines have no identity beyond their position: the text never reorders.
+      <span key={row} className="flex">
+        <span
+          aria-hidden="true"
+          className="min-w-8 shrink-0 pr-3 text-right text-ink-subtle select-none"
+        >
+          {row + 1}
+        </span>
+        <span className="min-w-0 flex-1">{line}</span>
+      </span>
+    ))}
+  </>
+);
+
+/** One highlighted line's tokens: colour, and the weight or slant a theme gives some. */
+const TokenLine = ({ line }: { readonly line: readonly HighlightToken[] }): React.JSX.Element => (
+  <>
+    {line.map((token, column) => (
+      <span
+        key={column}
+        style={token.color === null ? undefined : { color: token.color }}
+        className={token.bold ? 'font-semibold' : token.italic ? 'italic' : undefined}
+      >
+        {token.content}
+      </span>
+    ))}
+  </>
+);
+
 const Tokens = ({
   lines,
 }: {
@@ -37,15 +77,7 @@ const Tokens = ({
     {lines.map((line, row) => (
       // Lines have no identity beyond their position: the text never reorders.
       <span key={row}>
-        {line.map((token, column) => (
-          <span
-            key={column}
-            style={token.color === null ? undefined : { color: token.color }}
-            className={token.bold ? 'font-semibold' : token.italic ? 'italic' : undefined}
-          >
-            {token.content}
-          </span>
-        ))}
+        <TokenLine line={line} />
         {row < lines.length - 1 ? '\n' : null}
       </span>
     ))}
@@ -148,7 +180,21 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
             clamped && 'max-h-code overflow-y-hidden',
           )}
         >
-          <code>{lines === null ? code : <Tokens lines={lines} />}</code>
+          <code>
+            {count >= NUMBERED_FROM_LINES ? (
+              <Numbered
+                lines={
+                  lines === null
+                    ? code.split('\n')
+                    : lines.map((line, row) => <TokenLine key={row} line={line} />)
+                }
+              />
+            ) : lines === null ? (
+              code
+            ) : (
+              <Tokens lines={lines} />
+            )}
+          </code>
         </pre>
         {clamped && (
           // The fade into the block's own background says there is more below the clamp.
