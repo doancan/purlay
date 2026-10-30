@@ -50,7 +50,7 @@ import {
   insertMarkdown,
   insertText,
   insideFence,
-  formatPaste,
+  placeBlock,
   undoPaste,
   rowsFor,
   trimEnd,
@@ -69,6 +69,7 @@ import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { renderContent } from '../content/render-content';
 import { duringComposition, useComposition } from './composition';
+import { convertPaste } from './paste';
 import { EmojiPicker } from './emoji-picker';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -300,6 +301,9 @@ const Inner = ({
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    // The platform's "paste as plain text": the paste that follows is taken as it is (D-210).
+    plainNext.current =
+      (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'v';
     if (
       event.key === 'ArrowUp' &&
       parentId === undefined &&
@@ -394,6 +398,8 @@ const Inner = ({
     if (waiting && !uploading) send();
   }, [waiting, uploading]);
 
+  /** Set by Mod+Shift+V, read by the paste it starts. */
+  const plainNext = useRef(false);
   const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
     // A pasted image or file is uploaded, not written into the box.
     const files = Array.from((event.clipboardData as DataTransfer | undefined)?.files ?? []);
@@ -403,19 +409,39 @@ const Inner = ({
       return;
     }
     // A paste with no clipboard data (some automation, some old engines) is just a paste.
-    const pasted = (event.clipboardData as DataTransfer | undefined)?.getData('text/plain') ?? '';
+    const data = event.clipboardData as DataTransfer | undefined;
+    const pasted = data?.getData('text/plain') ?? '';
     const target = event.currentTarget;
-    const start = target.selectionStart;
-    const result = formatPaste(text, { start, end: target.selectionEnd }, pasted);
-    if (result === null) return;
+    const selection = { start: target.selectionStart, end: target.selectionEnd };
+    // Mod+Shift+V asked for the words as they are (D-210), and inside code the words are what is
+    // written: nothing is turned into anything (D-205).
+    const plain = plainNext.current || insideFence(text.slice(0, selection.start));
+    plainNext.current = false;
+    const converted = plain ? null : convertPaste(pasted, data?.getData('text/html') ?? '');
+    if (converted === null) return;
     event.preventDefault();
-    const block = result.text.slice(start, result.selection.end);
-    caret.current = result.selection.end;
-    change(result.text);
+    const placed = converted.block
+      ? placeBlock(text, selection, converted.markdown)
+      : {
+          text: text.slice(0, selection.start) + converted.markdown + text.slice(selection.end),
+          caret: selection.start + converted.markdown.length,
+        };
+    // What was put in, with the line breaks that set it apart: Undo finds it and puts the words back.
+    const block = placed.text.slice(selection.start, placed.caret);
+    caret.current = placed.caret;
+    change(placed.text);
     if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
+    // A table or formatting is a guess about what was meant: the words as they were are one step away.
+    // Later edits are kept either way; a block that has itself been edited is left as it is (D-205).
     pasteToast.current = toast.show({
-      message: t('composer.pasted'),
-      actionLabel: t('common.undo'),
+      message: t(
+        converted.kind === 'code'
+          ? 'composer.pasted'
+          : converted.kind === 'table'
+            ? 'composer.pasted.table'
+            : 'composer.pasted.formatted',
+      ),
+      actionLabel: t(converted.kind === 'code' ? 'common.undo' : 'composer.pasted.asText'),
       onAction: () => {
         const undone = undoPaste(latest.current, block, pasted);
         if (undone === null) {

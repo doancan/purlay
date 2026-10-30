@@ -607,6 +607,13 @@ The undo toast removes automatic formatting while keeping the pasted text and su
 has changed or cannot be identified uniquely, Undo keeps the current draft and explains why.
 Quote formatting preserves list markers, nested quotes and blank lines; applying it again removes one outer quote.
 Enter follows the renderer's fence rules, including tildes and longer fences, in both composers and message edits.
+**What a paste becomes** (D-210): a spreadsheet's rows or a CSV become a table;
+formatted text from a document, a page or a mail keeps its emphasis, links, lists, headings, quotes, code and
+tables as markdown (an editor's coloured code is plain words); a long paste of code is a block named in its
+language. A table or formatting says so with **Paste as text** one step away, a block of code with Undo, and
+either keeps later edits as above; inside code a paste is always the words as they are, and
+`Cmd/Ctrl+Shift+V` pastes the words as they are anywhere. A block always starts on a line of its own — after
+words on the same line a fence is not one.
 
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
