@@ -506,6 +506,11 @@ status a column away from the message it is about.
   └─╰──────────────────────────────────────╯────┘
 ```
 
+- **Quote reply** is in a message's **More** menu for a member (D-213): the part of the message the person
+  selected, or all of it, goes into the composer it answers in — a reply's thread, a root's channel — as a
+  markdown quote with its author's name (never an `@`, so quoting does not notify) and a link back, after
+  what was already written, the caret under it, focused. A message over a thousand characters is quoted
+  to its start.
 - **Mark unread from here** is in a message's **More** menu for a member (D-212): the channel's read
   position moves back to just before it (a reply marks its thread's root), the sidebar and the badge show
   it at once, and the channel the person is looking at is not read again by being looked at — not at the

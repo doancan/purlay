@@ -821,6 +821,8 @@ export const tr = {
   'message.linkCopied': 'Bağlantı kopyalandı',
   'message.actions': 'Mesaj işlemleri',
   'message.copyText': 'Metni kopyala',
+  'message.quoteReply': 'Alıntıyla yanıtla',
+  'message.quoteNowhere': 'Alıntılamak için thread’ini aç.',
   'message.markUnread': 'Buradan itibaren okunmamış yap',
   'message.unreadFailed': 'Okunmamış yapılamadı.',
   'message.mention': 'Senden bahsedildi',
