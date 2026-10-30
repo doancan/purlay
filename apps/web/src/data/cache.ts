@@ -454,6 +454,7 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
     client.removeQueries({ queryKey: keys.channelMembers(id) });
     client.removeQueries({ queryKey: keys.files(id) });
     client.removeQueries({ queryKey: keys.pins(id) });
+    client.removeQueries({ queryKey: keys.bookmarks(id) });
   }
   // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
   client.removeQueries({

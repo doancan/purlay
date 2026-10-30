@@ -601,6 +601,7 @@ export const createEngine = (options: EngineOptions): Engine => {
             // A file sent, or its message deleted, in the gap is in no frame either (D-129).
             readAgain(client, keys.files(channelId));
             readAgain(client, keys.pins(channelId));
+            readAgain(client, keys.bookmarks(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(client, families.thread);
@@ -701,6 +702,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'PINS_UPDATED':
         // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
         readAgain(client, keys.pins(frame.data.channelId));
+        return;
+      case 'BOOKMARKS_UPDATED':
+        // As pins (D-218): no state in the frame, the channel's bookmarks are read again.
+        readAgain(client, keys.bookmarks(frame.data.channelId));
         return;
       case 'INCIDENT_UPDATED':
         incidentChanged(client, frame.data.channelId);

@@ -48,6 +48,7 @@ import { ThreadPanel } from '../threads/thread';
 import { FilesPanel } from './files-panel';
 import { PinsPanel } from '../pins/pins-panel';
 import { IncidentBanner } from '../incidents/incident-banner';
+import { BookmarkBar } from '../bookmarks/bookmark-bar';
 import { ProfilePanel } from '../profile/profile-panel';
 import { PinIntentsProvider } from '../pins/use-pin';
 import { SidePanelProvider, useSidePanel } from './side-panel';
@@ -146,6 +147,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
             <div className="relative flex min-h-0 flex-1">
               <ConversationColumn>
                 <ChannelHeader channel={channel} />
+                <BookmarkBar channel={channel} />
                 {!conversation && <IncidentBanner channel={channel} />}
                 {linked !== null && linked === missing && (
                   <p
