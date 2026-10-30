@@ -17,9 +17,17 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Icon } from '../../components/icon';
-import { initialsOf } from '../../ui/avatar';
+import { Avatar, initialsOf } from '../../ui/avatar';
 import { Dialog } from '../../ui/dialog';
-import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
+import {
+  Menu,
+  MenuItem,
+  MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+} from '../../ui/menu';
+import { useMembers } from '../../data/queries';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { useSession } from '../session/session';
@@ -54,48 +62,83 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   // Inviting and the workspace's settings are an owner's and an admin's (D-115, D-146); a member is
   // not offered what would be refused.
   const mayInvite = role === 'owner' || role === 'admin';
+  // The People list reads the same query, so this is the cache's answer, not another request.
+  const members = useMembers(workspace.id).data;
+  const standing = [
+    ...(role === undefined ? [] : [t(`members.role.${role}`)]),
+    ...(members === undefined ? [] : [t('sidebar.workspace.members', { count: members.length })]),
+  ].join(' · ');
 
   return (
     <>
       <Menu
         side="bottom"
         trigger={
-          // Inset and rounded as every row under it is, so the hover and the focus ring sit inside the
-          // column instead of running into the rail and the hairline.
+          // A card (D-209): framed and lifted off the column, the workspace's mark, its name, and who
+          // you are in it — so the one door to the workspace says which, at a glance, and looks like one.
+          // Hover tints the fill in the accent's family and open frames it in the accent: the edge's
+          // grammar (D-188) — hover changes the fill, never the line.
           <button
             type="button"
-            className="flex h-control min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover max-narrow:h-touch"
+            className="group flex min-w-0 flex-1 items-center gap-2 rounded-xl border-hairline border-nav-border bg-nav-surface p-1 pr-2 text-left shadow-card transition-colors duration-hover ease-standard hover:bg-nav-selected data-[state=open]:border-accent data-[state=open]:bg-nav-selected max-narrow:min-h-touch"
           >
             {/* A picture of the workspace, as an avatar's initials are; the name beside it says it. */}
             <span
               aria-hidden="true"
-              className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-accent text-caption text-on-accent"
+              className="inline-flex size-avatar shrink-0 items-center justify-center rounded-lg bg-accent text-caption font-semibold text-on-accent"
             >
               {initialsOf(workspace.name)}
             </span>
-            <span className="min-w-0 flex-1 truncate text-title text-nav-ink">
-              {workspace.name}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-label font-semibold text-nav-ink">
+                {workspace.name}
+              </span>
+              {/* Seen, not heard: the button's name is the workspace and what it does, kept short. */}
+              <span aria-hidden="true" className="truncate text-caption text-nav-ink-muted">
+                {standing}
+              </span>
             </span>
             {/* The name is what is seen, so it is first in what is heard; then what it does. */}
             <VisuallyHidden> {t('sidebar.switch')}</VisuallyHidden>
-            <span className="text-nav-ink-muted">
+            <span className="text-nav-ink-muted transition-colors duration-hover ease-standard group-hover:text-accent-text">
               <Icon name="switch" />
             </span>
           </button>
         }
       >
         <MenuLabel>{t('sidebar.workspaces')}</MenuLabel>
-        {memberships.map((membership) => (
-          <MenuItem
-            key={membership.workspace.id}
-            {...(membership.workspace.id === workspace.id ? { glyph: 'confirm' as const } : {})}
-            onSelect={() => {
-              navigate(href('workspace', { slug: membership.workspace.slug }));
-            }}
-          >
-            {membership.workspace.name}
-          </MenuItem>
-        ))}
+        {/* One of several, so a radio: a screen reader says which one is this, not only the eye. */}
+        <MenuRadioGroup
+          value={workspace.id}
+          onValueChange={(id) => {
+            const next = memberships.find((membership) => membership.workspace.id === id);
+            if (next !== undefined) navigate(href('workspace', { slug: next.workspace.slug }));
+          }}
+        >
+          {memberships.map(({ workspace: each }) => (
+            <MenuRadioItem
+              key={each.id}
+              value={each.id}
+              leading={{
+                textValue: each.name,
+                // This one in the accent, as its card is; the others each in their own tint.
+                node:
+                  each.id === workspace.id ? (
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-accent text-caption font-semibold text-on-accent"
+                    >
+                      {initialsOf(each.name)}
+                    </span>
+                  ) : (
+                    <Avatar size="sm" name={each.name} username={each.slug} />
+                  ),
+              }}
+            >
+              {each.name}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
         {/* Offered only where the server would accept it (D-155). */}
         {mayCreateWorkspace && (
           <MenuItem

@@ -188,6 +188,7 @@ export const tr = {
   // ── Çalışma alanı ve kenar çubuğu ───────────────────────────────────────
   'sidebar.label': 'Çalışma alanı',
   'sidebar.switch': 'Çalışma alanını değiştir',
+  'sidebar.workspace.members': { other: '{count} üye' },
   'sidebar.questions': 'Açık sorular',
   'sidebar.starred': 'Yıldızlı',
   'sidebar.options': 'Kenar çubuğu seçenekleri',

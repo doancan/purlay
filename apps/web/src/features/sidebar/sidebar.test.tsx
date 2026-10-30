@@ -615,6 +615,15 @@ describe('the people section', () => {
   });
 });
 
+/** The workspaces in the menu (D-209): radios, by name, and which is the one the person is in. */
+const workspacesIn = (view: View): [string, string | null][] =>
+  view
+    .getAllByRole('menuitemradio')
+    .map((item) => [
+      item.querySelector('.flex-1')?.textContent ?? '',
+      item.getAttribute('aria-checked'),
+    ]);
+
 describe('the workspace menu', () => {
   const two = (): ReturnType<typeof aSession> => ({
     ...aSession(),
@@ -637,12 +646,14 @@ describe('the workspace menu', () => {
   test('names the workspace, lists the others, and marks the one you are in', async () => {
     const view = await open(aSignedInApi({ me: () => Promise.resolve(two()) }));
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
+    expect(workspacesIn(view)).toEqual([
+      ['acme-eng', 'true'],
+      ['side-project', 'false'],
+    ]);
     const items = view.getAllByRole('menuitem').map((i) => i.textContent);
     // The owner of acme-eng is also offered invitation links (D-115) and the workspace's settings,
     // a page of Settings (D-146); everything else an owner does is there.
     expect(items).toEqual([
-      'acme-eng',
-      'side-project',
       'Create workspace…',
       'Invite people…',
       en['sidebar.workspace.copyLink'],
@@ -662,8 +673,8 @@ describe('the workspace menu', () => {
       }),
     );
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
+    expect(workspacesIn(view)).toEqual([['acme-eng', 'true']]);
     expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
-      'acme-eng',
       'Create workspace…',
       // Anyone may pass the workspace's address on: it opens only for somebody who is already in.
       en['sidebar.workspace.copyLink'],
@@ -727,9 +738,11 @@ describe('the workspace menu', () => {
     const sidebar = within(view.getByRole('complementary'));
     const door = sidebar.getByRole('button', { name: 'acme-eng Switch workspace' });
     expect(door.getAttribute('aria-haspopup')).toBe('menu');
+    // A card (D-209): who the person is in it, seen under the name and kept out of what is heard.
+    expect(door.textContent).toContain('Owner');
     await person().click(door);
+    expect(workspacesIn(view)).toEqual([['acme-eng', 'true']]);
     expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
-      'acme-eng',
       'Create workspace…',
       'Invite people…',
       en['sidebar.workspace.copyLink'],
@@ -818,7 +831,7 @@ describe('the workspace menu', () => {
       }),
     );
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
-    await person().click(view.getByRole('menuitem', { name: 'side-project' }));
+    await person().click(view.getByRole('menuitemradio', { name: 'side-project' }));
     expect(here(view)).toBe('/w/side');
   });
 });

@@ -470,12 +470,12 @@ describe('the person moves to another workspace', () => {
     expect(heading(view, 'Channels').getAttribute('aria-expanded')).toBe('false');
 
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
-    await person().click(view.getByRole('menuitem', { name: 'side-project' }));
+    await person().click(view.getByRole('menuitemradio', { name: 'side-project' }));
     await settle();
     expect(heading(view, 'Channels').getAttribute('aria-expanded')).toBe('true');
 
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
-    await person().click(view.getByRole('menuitem', { name: 'acme-eng' }));
+    await person().click(view.getByRole('menuitemradio', { name: 'acme-eng' }));
     await settle();
     expect(heading(view, 'Channels').getAttribute('aria-expanded')).toBe('false');
     const keys = Object.keys(view.world.storage.data).filter((key) =>

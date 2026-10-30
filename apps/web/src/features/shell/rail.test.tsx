@@ -93,8 +93,10 @@ describe('the rail', () => {
     expect(door.querySelector('[aria-hidden="true"]')?.textContent).toBe('AE');
     expect(door.textContent).toContain('acme-eng');
     await person().click(door);
+    expect(view.getByRole('menuitemradio', { name: 'acme-eng' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
     const items = view.getAllByRole('menuitem').map((item) => item.textContent);
-    expect(items).toContain('acme-eng');
     // Signing out is the person's, in the account menu, not the workspace's (D-124).
     expect(items).not.toContain('Sign out');
   });
@@ -281,8 +283,8 @@ describe('the keyboard', () => {
       'Saved',
       'Settings',
       // The mark's two letters come first in its text and are hidden from a screen reader, which hears
-      // the name and then what the button does.
-      'AEacme-eng Switch workspace',
+      // the name and then what the button does; the card's line under the name is seen, not heard.
+      expect.stringMatching(/^AEacme-eng.* Switch workspace$/) as unknown as string,
       // Beside the name, before the jump field: the person's own arrangement of the column (D-195).
       'Sidebar options',
       expect.stringMatching(/^Jump to…/) as unknown as string,
