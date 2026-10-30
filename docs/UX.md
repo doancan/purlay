@@ -506,6 +506,11 @@ status a column away from the message it is about.
   └─╰──────────────────────────────────────╯────┘
 ```
 
+- **Mark unread from here** is in a message's **More** menu for a member (D-212): the channel's read
+  position moves back to just before it (a reply marks its thread's root), the sidebar and the badge show
+  it at once, and the channel the person is looking at is not read again by being looked at — not at the
+  bottom, not when a new message arrives, not on leaving — until it is opened again. Refused, a toast
+  says so and the channel reads as before.
 - **One thread at a time.** Opening another replaces it. A channel opened again opens with no
   thread, unless its address names one (`?thread=`, from the open questions and the inbox), which
   opens even when its root is older than the feed's first page — or a reply's link does (§6).

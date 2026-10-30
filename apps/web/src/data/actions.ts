@@ -52,6 +52,8 @@ export interface Actions {
   readonly resolve: (message: Message) => Promise<void>;
   readonly reopen: (message: Message) => Promise<void>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
+  /** "Mark unread from here" (D-212); the badge and the sidebar follow the server's answer. */
+  readonly markUnread: (channelId: string, fromMessageId: string) => Promise<void>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   /** A new name or topic; the list shows what the server kept (D-123). */
@@ -190,6 +192,9 @@ export const createActions = (
     },
     markRead: async (channelId, lastReadMessageId): Promise<void> => {
       channelStateChanged(client, channelId, await api.markRead(channelId, lastReadMessageId));
+    },
+    markUnread: async (channelId, fromMessageId): Promise<void> => {
+      channelStateChanged(client, channelId, await api.markUnread(channelId, fromMessageId));
     },
     createChannel: async (workspaceId, input): Promise<Channel> => {
       const channel = await api.createChannel(workspaceId, input);

@@ -830,6 +830,8 @@ export const en = {
   'message.linkCopied': 'Link copied',
   'message.actions': 'Message actions',
   'message.copyText': 'Copy text',
+  'message.markUnread': 'Mark unread from here',
+  'message.unreadFailed': 'It could not be marked unread.',
   'message.mention': 'You were mentioned',
   'message.newMarker': 'New',
   'message.newMessages': {
