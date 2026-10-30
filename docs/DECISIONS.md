@@ -10219,7 +10219,9 @@ already draws, put where the caret is.
 - **What a paste becomes** (`composer/paste.ts`, pure). Rows a spreadsheet copied (tabs) or a CSV (commas,
   or semicolons where the comma is the decimal mark; quoted cells per RFC 4180) become a GFM table — same
   width on every row, at least two columns and a header and a row, at most 200 rows, and comma cells short,
-  so prose with commas stays prose. Formatted text (`text/html`) keeps its emphasis, links (web and mail
+  so prose with commas stays prose. A comma or semicolon that ends or starts a line is punctuation, not a
+  column (no header cell is blank), and words recognisably code are never a table — a paste of statements
+  ending in `;` became a two-column table before this was said. Formatted text (`text/html`) keeps its emphasis, links (web and mail
   only), lists, headings (three levels, D-101), quotes, code and tables; an image is its alt text; Google
   Docs' all-wrapping `<b style="font-weight:normal">` is not bold; an editor's coloured code has nothing to
   keep and stays plain. The HTML is parsed into a document that is read, never shown, and a paste over

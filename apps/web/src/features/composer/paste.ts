@@ -91,8 +91,16 @@ const rowsOf = (delimited: string): string[][] | null => {
     ) {
       continue;
     }
-    // Prose with commas is not a table: comma-separated text needs short cells, as data has.
-    if (delimiter !== '\t' && rows.some((row) => row.some((cell) => cell.length > 80))) continue;
+    // Prose with commas is not a table: comma-separated text needs short cells, as data has. And a
+    // comma or a semicolon that ends or starts a line is punctuation — a statement's, a list's — not a
+    // column: a header names every column. (A spreadsheet's corner cell may be blank; a tab is a column.)
+    if (
+      delimiter !== '\t' &&
+      (rows.some((row) => row.some((cell) => cell.length > 80)) ||
+        rows[0]?.some((cell) => cell.trim() === ''))
+    ) {
+      continue;
+    }
     return rows;
   }
   return null;
@@ -401,11 +409,14 @@ const BLOCK_START = /^(#{1,3} |> |- |\d+\. |\| |```)/;
 
 /**
  * What a paste becomes, or `null` for the words as they were. Rows first — a spreadsheet's copy
- * carries its rows as HTML too, and a table is what was meant — then formatted text, then a long
- * paste as a block of code in its language, unless it already is one fenced block (D-205).
+ * carries its rows as HTML too, and a table is what was meant — unless the words are recognisably
+ * code; then formatted text, then a long paste as a block of code in its language, unless it already
+ * is one fenced block (D-205).
  */
 export const convertPaste = (plain: string, html: string): ConvertedPaste | null => {
-  const table = tableFromDelimited(plain);
+  // Code with a comma or a semicolon on every line is still code, never a table.
+  const language = languageOf(plain);
+  const table = language === null ? tableFromDelimited(plain) : null;
   if (table !== null) return { kind: 'table', markdown: table, block: true };
   const formatted = html === '' ? null : markdownFromHtml(html);
   if (formatted !== null && formatted !== plain.trim()) {
@@ -416,7 +427,7 @@ export const convertPaste = (plain: string, html: string): ConvertedPaste | null
     };
   }
   if (isLongPaste(plain) && !isCodeBlock(plain)) {
-    return { kind: 'code', markdown: asCodeBlock(plain, languageOf(plain)), block: true };
+    return { kind: 'code', markdown: asCodeBlock(plain, language), block: true };
   }
   return null;
 };

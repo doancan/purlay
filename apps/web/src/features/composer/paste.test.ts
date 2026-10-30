@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { installDom } from '../../testing/dom';
-import { languageOf, markdownFromHtml, tableFromDelimited } from './paste';
+import { convertPaste, languageOf, markdownFromHtml, tableFromDelimited } from './paste';
 
 installDom();
 
@@ -52,6 +52,9 @@ describe('a table from rows', () => {
       'prose with commas',
       'We shipped it, finally, after a long week of reviews and retries.\nThanks, everyone, for the patience you showed through all of it, really.',
     ],
+    // A delimiter that ends or starts a line is punctuation, not a column: no header is blank.
+    ['statements ended by semicolons', 'x = 1;\ny = 2;\nz = 3;'],
+    ['rows ended by commas', '[1, 2],\n[3, 4],\n[5, 6],'],
   ])('%s is not a table', (_, pasted) => {
     expect(tableFromDelimited(pasted)).toBeNull();
   });
@@ -59,6 +62,22 @@ describe('a table from rows', () => {
   test('more rows than a message should carry are left as they were pasted', () => {
     const rows = Array.from({ length: 300 }, (_, n) => `${String(n)}\tx`).join('\n');
     expect(tableFromDelimited(`id\tv\n${rows}`)).toBeNull();
+  });
+});
+
+describe('what a paste becomes', () => {
+  test('code is a block in its language, even when every line has one comma or ends in a semicolon', () => {
+    const code = Array.from({ length: 13 }, (_, n) => `const x${String(n)} = call(a, "ğüş");`).join('\n');
+    expect(convertPaste(code, '')).toEqual({
+      kind: 'code',
+      markdown: `\`\`\`js\n${code}\n\`\`\``,
+      block: true,
+    });
+  });
+
+  test('a paste that already is one fenced block is kept as supplied (D-205)', () => {
+    const lines = Array.from({ length: 13 }, (_, n) => `line ${String(n)}`).join('\n');
+    expect(convertPaste(`\`\`\`\n${lines}\n\`\`\``, '')).toBeNull();
   });
 });
 
