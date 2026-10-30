@@ -78,6 +78,82 @@
 }
 
 /*
+ * What opens from a control — a menu, a submenu, a popover, a tip — grows out of where it was opened
+ * from, and leaves a little faster than it came (D-211). The origin is the one Radix computes for the
+ * side it opened on, so a menu under a button grows down from the button and a panel beside the rail
+ * grows out of the rail. Lengths are tokens: 0ms under reduced motion. A closing animation is waited
+ * for by Radix before the element goes, so it is never cut off.
+ */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@utility animate-pop-in {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(
+      --radix-popover-content-transform-origin,
+      var(--radix-tooltip-content-transform-origin, center)
+    )
+  );
+  animation: pop-in var(--duration-overlay) var(--easing-standard);
+}
+
+@utility animate-pop-out {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(
+      --radix-popover-content-transform-origin,
+      var(--radix-tooltip-content-transform-origin, center)
+    )
+  );
+  animation: pop-out var(--duration-exit) var(--easing-standard) forwards;
+}
+
+/* A dialog's backdrop fades in and out; the dialog itself opens as the palette does (overlay-in). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in var(--duration-overlay) var(--easing-standard);
+}
+
+@utility animate-fade-out {
+  animation: fade-out var(--duration-exit) var(--easing-standard) forwards;
+}
+
+/* A toast rises into its corner: it arrives where the eye is not, so it moves, a little, to be seen. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+}
+
+@utility animate-rise-in {
+  animation: rise-in var(--duration-overlay) var(--easing-standard);
+}
+
+/*
  * The setup wizard's three movements (UX §11): a step enters from the right, a finished step's mark
  * settles, a refused field nudges once. Lengths are tokens (0ms under reduced motion); none loops.
  */

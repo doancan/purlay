@@ -147,6 +147,7 @@ export const durationTokens = [
   'duration-bar',
   'duration-hover',
   'duration-overlay',
+  'duration-exit',
   'duration-step',
   'duration-mark',
   'duration-nudge',
