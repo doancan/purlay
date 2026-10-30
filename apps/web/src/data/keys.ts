@@ -53,6 +53,12 @@ export const keys = {
         : (['notifications', workspaceId, filter] as const);
     return category === undefined ? base : ([...base, category] as const);
   },
+  /**
+   * A channel's new messages past a read position (D-216), keyed by the position and the count: read
+   * elsewhere or added to, it is asked again.
+   */
+  unreads: (channelId: string, position: string | null, count: number) =>
+    ['unreads', channelId, position ?? 'start', count] as const,
   /** What one person sent in a workspace, newest first (D-215): search narrowed to them. */
   sent: (workspaceId: string, userId: string) => ['sent', workspaceId, userId] as const,
   /** An attachment's words, read to preview it (D-210): a file never changes, so it is read once. */
