@@ -136,6 +136,7 @@ import {
   openDirectMessageWith,
   readChannel,
   readUpTo,
+  unreadFrom,
   setLevel,
   addChannelMember,
   archive,
@@ -1088,6 +1089,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/read',
       async ({ request, params, body }) =>
         await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
+    )
+    .put(
+      '/api/channels/:channelId/unread',
+      async ({ request, params, body }) =>
+        await unreadFrom({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
     .put('/api/channels/:channelId/star', async ({ request, params, set }) => {
       await starChannel(sending, request, params.channelId, true);

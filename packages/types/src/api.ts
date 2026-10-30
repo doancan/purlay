@@ -436,6 +436,15 @@ export const ReadChannelResponse = ChannelState;
 export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
 
 /**
+ * `PUT /api/channels/:channelId/unread` — "mark unread from here" (D-212): the read position moves
+ * back to just before this message, so it and everything after it is unread again. The one way the
+ * position moves backwards; a reply marks its thread's root. Already unread from here or earlier, it
+ * changes nothing. The answer is the new state, as a read's is.
+ */
+export const MarkUnreadRequest = FromClient({ fromMessageId: Uuid });
+export type MarkUnreadRequest = Static<typeof MarkUnreadRequest>;
+
+/**
  * `PUT /api/messages/:messageId/thread/read` — the newest reply the person has seen in the thread
  * of this root. A reply is read here, not by the channel's read position (D-147): the caller's
  * notifications for this thread's replies up to and including it are read. Nothing is stored but
