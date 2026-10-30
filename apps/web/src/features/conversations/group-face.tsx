@@ -24,7 +24,7 @@ export type FaceSurface = 'nav' | 'current' | 'surface' | 'selected';
 /** The cut-out's colour: the surface's own, following a sidebar row's hover. */
 const EDGE = {
   nav: 'border-hairline border-nav-surface group-hover:border-nav-hover',
-  current: 'border-hairline border-accent',
+  current: 'border-hairline border-nav-selected',
   surface: 'border-hairline border-surface-100',
   selected: 'border-hairline border-accent-subtle',
 } as const satisfies Record<FaceSurface, string>;

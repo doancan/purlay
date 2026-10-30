@@ -52,7 +52,7 @@ const SURFACES = ['surface-000', 'surface-050', 'surface-100', 'surface-200'] as
  * neutral in the light theme, the dark navy in the dark — and every shared control inside it speaks the
  * inks of the theme it is in, so each pair is computed in both themes like any other.
  */
-const NAV = ['nav-rail', 'nav-surface', 'nav-hover'] as const;
+const NAV = ['nav-rail', 'nav-surface', 'nav-hover', 'nav-selected'] as const;
 const inNav = (pairs: readonly Pair[]): readonly Pair[] => pairs;
 const AVATARS = ['avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6'] as const;
 const READING = [...SURFACES, 'accent-subtle', 'code-bg'] as const;
@@ -147,6 +147,7 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   'nav-rail': 'a background; it is the `background` of the pairs above',
   'nav-surface': 'a background; it is the `background` of the pairs above',
   'nav-hover': 'a background; it is the `background` of the pairs above',
+  'nav-selected': 'a background; it is the `background` of the pairs above',
   'nav-border': 'decorative: a divider inside navigation that carries no meaning',
   danger:
     'a fill; its legibility is `on-status` on it, and it never carries meaning without a label',

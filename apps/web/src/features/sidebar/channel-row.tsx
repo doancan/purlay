@@ -28,7 +28,9 @@ const incidentClasses =
 const toneClasses = {
   quiet: 'text-nav-ink-muted hover:bg-nav-hover',
   unread: 'text-nav-ink font-semibold hover:bg-nav-hover',
-  current: 'bg-accent text-on-accent font-medium',
+  // Where you are, in the navigation's one selected tone (D-207): the accent's family, quieter than
+  // its fill, so the column's loudest mark is a mention's badge, not the row you already know you are in.
+  current: 'bg-nav-selected text-nav-ink font-semibold [&>svg]:text-accent-text',
 } as const;
 
 /** What a row looks like, from what is true of it: where you are beats what is unread. */

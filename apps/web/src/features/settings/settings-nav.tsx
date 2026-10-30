@@ -44,7 +44,7 @@ const Group = ({
                 className={cn(
                   rowClasses,
                   here
-                    ? 'bg-accent font-medium text-on-accent'
+                    ? 'bg-nav-selected font-semibold text-nav-ink [&>svg]:text-accent-text'
                     : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
                 )}
               >

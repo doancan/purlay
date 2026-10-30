@@ -15,7 +15,7 @@ export const railItemClasses = (current: boolean): string =>
   cn(
     'relative inline-flex size-rail-item shrink-0 items-center justify-center rounded-lg transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:w-touch',
     current
-      ? 'bg-nav-hover text-nav-ink'
+      ? 'bg-nav-selected text-accent-text'
       : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
   );
 
