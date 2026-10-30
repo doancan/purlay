@@ -25,7 +25,7 @@ import {
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { groupByChannel } from './questions-screen';
-import { lastChannel, rememberChannel } from './last-channel';
+import { forgetChannel, lastChannel, rememberChannel } from './last-channel';
 
 installDom();
 
@@ -424,6 +424,17 @@ describe('the last channel', () => {
       rememberChannel('w-one', 'c-two');
     }).not.toThrow();
     expect(lastChannel('w-one')).toBeNull();
+    expect(() => {
+      forgetChannel('w-one', 'c-one');
+    }).not.toThrow();
     if (original !== undefined) Object.defineProperty(window, 'localStorage', original);
+  });
+
+  test('is forgotten when it is the one left, and only then (D-208)', () => {
+    rememberChannel('w-one', 'c-one');
+    forgetChannel('w-one', 'c-other');
+    expect(lastChannel('w-one')).toBe('c-one');
+    forgetChannel('w-one', 'c-one');
+    expect(lastChannel('w-one')).toBeNull();
   });
 });
