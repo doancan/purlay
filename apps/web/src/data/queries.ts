@@ -327,6 +327,33 @@ export const useNotifications = (
   });
 };
 
+/** How many the inbox panel asks for (D-208): enough to triage, few enough to take in at a glance. */
+export const PANEL_LIMIT = 10;
+
+/**
+ * The inbox panel's one page of a view (D-208). One page and never more: when a frame says the inbox
+ * changed, this is read again in one request of ten rows, not every page a scrolled list has loaded.
+ * Asked only while the panel is open; closed, a frame marks it stale and opening reads it again.
+ */
+export const useNotificationsPanel = (
+  workspaceId: string,
+  view: NotificationView,
+  enabled: boolean,
+): UseQueryResult<NotificationPage> => {
+  const api = useApi();
+  const { types } = view;
+  return useQuery({
+    queryKey: keys.notificationsPanel(workspaceId, view.key),
+    queryFn: ({ signal }) =>
+      api.notifications(
+        workspaceId,
+        { limit: PANEL_LIMIT, ...(types === undefined ? {} : { types }) },
+        signal,
+      ),
+    enabled,
+  });
+};
+
 /**
  * One search, newest first, a page at a time (D-105). Asked only for words the server would take:
  * below the minimum the screen says so instead.

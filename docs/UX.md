@@ -201,6 +201,14 @@ your thread* when the person started it, *replied in a thread you're in* when th
 in “…”*, the newest replier's avatar, who replied (*Alice, Bob and 1 other*), the newest one's time and
 words, unread while any of them is. Opening it, or its **Mark read**, reads every reply it gathers.
 
+**The inbox panel** (D-208). On a wide window the rail's Inbox opens a panel beside it rather than the
+page: the inbox's title and **Mark all read**, the four categories, the newest ten of the one chosen in
+rows a line shorter than the page's — the message in one line, **Mark read** as an icon — and **See all**
+at its foot, which opens the page on the same category. Opening a row reads it, closes the panel and goes
+to the message; the panel remembers its category while closed. It carries no count of its own (D-110).
+In a category, **Mark all read** reads the rows shown — "up to the newest" is the whole inbox's, and would
+read what the other categories hold. Below the narrow breakpoint the rail's Inbox is the link to the page.
+
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
 - **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link

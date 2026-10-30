@@ -98,6 +98,8 @@
   --container-dialog-lg: var(--size-dialog-lg);
   --container-palette: var(--size-palette);
   --height-palette-list: var(--size-palette-list);
+  --container-inbox-panel: var(--size-inbox-panel);
+  --height-inbox-panel-list: var(--size-inbox-panel-list);
   --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
   --height-row: var(--size-row);

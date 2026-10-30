@@ -302,7 +302,8 @@ describe('the states', () => {
 describe('the sidebar', () => {
   test('has Inbox, current on the inbox', async () => {
     const view = await visit({ notifications: () => Promise.resolve(page([])) });
-    const link = view.getByRole('link', { name: 'Inbox' });
+    // On a wide window it is the button that opens the inbox's panel (D-208).
+    const link = view.getByRole('button', { name: 'Inbox' });
     expect(link.getAttribute('aria-current')).toBe('page');
     view.unmount();
   });

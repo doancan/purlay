@@ -53,6 +53,9 @@ export const keys = {
         : (['notifications', workspaceId, filter] as const);
     return category === undefined ? base : ([...base, category] as const);
   },
+  /** The inbox panel's one page of a category (D-208): under the inbox's prefix, as every view is. */
+  notificationsPanel: (workspaceId: string, category: string) =>
+    ['notifications', workspaceId, 'panel', category] as const,
   /** The inbox's newest page, read when an open tab in the background tells of one (D-148). */
   newestNotifications: (workspaceId: string) => ['notifications', workspaceId, 'newest'] as const,
   search: (
