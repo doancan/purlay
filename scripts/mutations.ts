@@ -3449,9 +3449,20 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'inbox-read-not-painted-first',
     why: 'a notification opened or Mark all read stays unread on screen until the server answers, and on a slow network looks ignored',
     file: 'apps/web/src/features/inbox/read.ts',
-    find: '    markLocally(client, workspace.id, marked, clock.now().toISOString());\n',
+    find: '    void client.cancelQueries({ queryKey: prefix });\n    markLocally(client, workspace.id, marked, at);\n',
+    replace: '    void client.cancelQueries({ queryKey: prefix });\n',
+    tests: [
+      'apps/web/src/features/inbox/inbox-screen.test.tsx',
+      'apps/web/src/features/inbox/inbox-panel.test.tsx',
+    ],
+  },
+  {
+    id: 'inbox-read-painted-back',
+    why: 'an inbox read again a moment before the person read a row lands on top of the paint, and the row is unread again under the pointer',
+    file: 'apps/web/src/features/inbox/read.ts',
+    find: '    void client.cancelQueries({ queryKey: prefix });\n',
     replace: '',
-    tests: ['apps/web/src/features/inbox/inbox-screen.test.tsx'],
+    tests: ['apps/web/src/features/inbox/inbox-panel.test.tsx'],
   },
   {
     id: 'inbox-reads-what-is-already-read',
@@ -3460,6 +3471,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '      if (ids.length === 0) return;\n',
     replace: '',
     tests: ['apps/web/src/features/inbox/inbox-screen.test.tsx'],
+    equivalent:
+      'the ids are sent in chunks of the page limit, and no ids is no chunks, so nothing is asked either way; the guard only spares a paint and a cancel, and opening a row leaves the view, whose fetch is cancelled with it',
   },
   {
     id: 'search-asked-below-the-minimum',
