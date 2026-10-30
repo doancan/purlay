@@ -40,6 +40,7 @@ export const colorTokens = [
   'avatar-5',
   'avatar-6',
   'focus-ring',
+  'composer-edge',
   'danger',
   'warning',
   'success',

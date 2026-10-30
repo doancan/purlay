@@ -124,6 +124,7 @@
   --avatar-5: #3a1c2f;
   --avatar-6: #302b17;
   --focus-ring: var(--accent-text);
+  --composer-edge: #6577a0;
   --danger: #f87171;
   --warning: #f59e0b;
   --success: #22c55e;
@@ -179,6 +180,7 @@
   --avatar-5: #f3e3ee;
   --avatar-6: #eeeadb;
   --focus-ring: #2563eb;
+  --composer-edge: #2563eb;
   --danger: #ef4444;
   --warning: #d97706;
   --success: #16a34a;
@@ -234,6 +236,7 @@
   --avatar-5: #512a4c;
   --avatar-6: #3d3a24;
   --focus-ring: var(--accent-text);
+  --composer-edge: #7378bd;
   --danger: #f87171;
   --warning: #f59e0b;
   --success: #22c55e;
