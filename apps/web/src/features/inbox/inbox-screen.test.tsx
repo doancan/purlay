@@ -324,7 +324,9 @@ describe('triage', () => {
     expect(unread.getAttribute('aria-pressed')).toBe('true');
     expect(asked.some((at) => at.unreadOnly === true)).toBe(true);
     expect(view.getByText('All caught up')).toBeDefined();
-    await person().click(view.getByRole('button', { name: 'All' }));
+    // The read filter's All, not the category's (D-208): each control is its own named group.
+    const show = within(view.getByRole('group', { name: 'Show' }));
+    await person().click(show.getByRole('button', { name: 'All' }));
     await settle();
     expect(view.getByText('words 1')).toBeDefined();
     view.unmount();

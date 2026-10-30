@@ -185,8 +185,10 @@ back; what it covers is hidden from a screen reader and from Tab until it closes
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
 
-**The inbox** (D-106, D-153, D-162). What the person was told in this workspace, newest first, in one
-full-width column like the feed — the shape the open questions, search and saved share (D-158): **All** or **Unread** above it — Unread is asked of the server, so what waits is
+**The inbox** (D-106, D-153, D-162, D-208). What the person was told in this workspace, newest first, in one
+full-width column like the feed — the shape the open questions, search and saved share (D-158): a
+**category** — **All**, **Mentions**, **Direct**, **Threads** (replies and resolutions) — in the address
+(`?category=`), and **All** or **Unread** beside it, both asked of the server, so what waits is
 found however old — then **Today** and **Earlier**, each a card of rows. A row says who, why and where,
 with the message under it in two lines at most; unread is a dot at its edge and the line in full ink,
 read is muted. Opening a row takes the person to the message and reads it; **Mark read**, beside the

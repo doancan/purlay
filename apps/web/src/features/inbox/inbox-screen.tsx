@@ -15,9 +15,10 @@
  * device (`CHANNEL_STATE`), so nothing here touches a channel's numbers.
  */
 import { useMemo, useState } from 'react';
-import { Icon } from '../../components/icon';
+import { Icon, type GlyphName } from '../../components/icon';
 import { useChannels, useNotifications } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
+import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
@@ -28,6 +29,13 @@ import { NavToggle } from '../shell/nav';
 import { ListCard, ListColumn, ListFilter } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { useSession } from '../session/session';
+import {
+  INBOX_CATEGORIES,
+  categoryIn,
+  inboxSearch,
+  typesOf,
+  type InboxCategory,
+} from './categories';
 import { groupInbox, type InboxRow } from './group';
 import { InboxRowItem } from './inbox-row';
 import { useInboxReads } from './read';
@@ -50,15 +58,35 @@ const Section = ({
   <ListCard heading={<h2 className="text-label text-ink-muted">{title}</h2>}>{children}</ListCard>
 );
 
+/** What each category is drawn with when it is empty: the glyph its rows carry. */
+const CATEGORY_GLYPH = {
+  mentions: 'mention',
+  direct: 'person',
+  threads: 'reply',
+} as const satisfies Record<Exclude<InboxCategory, 'all'>, GlyphName>;
+
 export const InboxScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { navigate } = useRoute();
+  const { navigate, search } = useRoute();
   const ports = useFeedPorts();
   const { user: me } = useSession();
   const reads = useInboxReads();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const query = useNotifications(workspace.id, filter === 'unread');
+  // The address is the category's source of truth (D-208): the panel's See all lands on it, a
+  // reload keeps it, and Back goes to the one before.
+  const category = categoryIn(search);
+  const types = typesOf(category);
+  const query = useNotifications(
+    workspace.id,
+    filter === 'unread',
+    types === undefined ? undefined : { key: category, types },
+  );
+  const showCategory = (next: InboxCategory): void => {
+    const query = inboxSearch(next);
+    const path = href('inbox', { slug: workspace.slug });
+    navigate(query === undefined ? path : `${path}?${query}`, { replace: true });
+  };
   const channels = useChannels(workspace.id);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const all = useMemo(() => (query.data?.pages ?? []).flatMap((page) => page.data), [query.data]);
@@ -109,12 +137,20 @@ export const InboxScreen = (): React.JSX.Element => {
           title={t('inbox.unreadEmpty.title')}
           body={t('inbox.unreadEmpty.body')}
         />
-      ) : (
+      ) : category === 'all' ? (
         <GlyphEmptyState
           glyph="notifications"
           tone="success"
           title={t('state.inbox.empty.title')}
           body={t('state.inbox.empty.body')}
+        />
+      ) : (
+        // A category with nothing in it says which, and that the rest is a choice away.
+        <GlyphEmptyState
+          glyph={CATEGORY_GLYPH[category]}
+          tone="success"
+          title={t(`inbox.category.empty.${category}`)}
+          body={t('inbox.category.empty.body')}
         />
       );
   } else {
@@ -174,7 +210,10 @@ export const InboxScreen = (): React.JSX.Element => {
             variant="ghost"
             glyph="confirm"
             onClick={() => {
-              reads.readAll(newest.id, new Set(all.map((n) => n.id)));
+              // "Up to the newest" is the whole inbox's; in a category it would also read what the
+              // other categories hold, unseen. There, what is read is what is shown.
+              if (category === 'all') reads.readAll(newest.id, new Set(all.map((n) => n.id)));
+              else reads.readIds(all.filter((n) => n.readAt === null).map((n) => n.id));
             }}
           >
             {t('inbox.readAll')}
@@ -182,15 +221,26 @@ export const InboxScreen = (): React.JSX.Element => {
         )}
       </header>
       <ListColumn>
-        <ListFilter
-          label={t('inbox.show')}
-          value={filter}
-          choices={(['all', 'unread'] as const).map((choice) => ({
-            value: choice,
-            label: t(`inbox.filter.${choice}`),
-          }))}
-          onChange={setFilter}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <ListFilter
+            label={t('inbox.category.label')}
+            value={category}
+            choices={INBOX_CATEGORIES.map((choice) => ({
+              value: choice,
+              label: t(`inbox.category.${choice}`),
+            }))}
+            onChange={showCategory}
+          />
+          <ListFilter
+            label={t('inbox.show')}
+            value={filter}
+            choices={(['all', 'unread'] as const).map((choice) => ({
+              value: choice,
+              label: t(`inbox.filter.${choice}`),
+            }))}
+            onChange={setFilter}
+          />
+        </div>
         {body}
       </ListColumn>
     </>

@@ -42,11 +42,17 @@ export const keys = {
       : channelId === null
         ? (['unresolved', workspaceId] as const)
         : (['unresolved', workspaceId, channelId] as const),
-  /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
-  notifications: (workspaceId: string, filter?: 'unread') =>
-    filter === undefined
-      ? (['notifications', workspaceId] as const)
-      : (['notifications', workspaceId, filter] as const),
+  /**
+   * A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, and a category (D-208)
+   * one more segment — all under the same prefix, so one frame reads every view again.
+   */
+  notifications: (workspaceId: string, filter?: 'unread', category?: string) => {
+    const base =
+      filter === undefined
+        ? (['notifications', workspaceId] as const)
+        : (['notifications', workspaceId, filter] as const);
+    return category === undefined ? base : ([...base, category] as const);
+  },
   /** The inbox's newest page, read when an open tab in the background tells of one (D-148). */
   newestNotifications: (workspaceId: string) => ['notifications', workspaceId, 'newest'] as const,
   search: (

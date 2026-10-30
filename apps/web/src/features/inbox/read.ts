@@ -1,6 +1,10 @@
 /**
  * Reading in the inbox (D-106): painted at once, then asked, and on a refusal read again from the
  * server and said why. One module, so every view of the inbox reads the same way.
+ *
+ * **Every view, both shapes.** The inbox is cached as many views under one prefix — All, Unread, each
+ * category — some as pages a list scrolled through, and one page at a time. A row read in one is read
+ * in all, so the paint walks the prefix and knows both shapes.
  */
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,28 +17,33 @@ import { useToast } from '../../ui/toast';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useWorkspace } from '../shell/workspace';
 
-/** Marks these read in the cache, before the server is asked (CONTRIBUTING §1.9). */
+type Cached = NotificationPage | InfiniteData<NotificationPage>;
+
+const readIn = (
+  page: NotificationPage,
+  read: (notification: Notification) => boolean,
+  at: string,
+): NotificationPage => ({
+  ...page,
+  data: page.data.map((n) => (n.readAt === null && read(n) ? { ...n, readAt: at } : n)),
+});
+
+/**
+ * Marks these read in every cached view of the workspace's inbox. A row read stays in the Unread
+ * view, muted, until the person looks again, so nothing jumps out from under the pointer.
+ */
 export const markLocally = (
   client: QueryClient,
   workspaceId: string,
   read: (notification: Notification) => boolean,
   at: string,
 ): void => {
-  // Both views of the inbox: everything, and what is unread — a row read stays in the unread view,
-  // muted, until the person looks again, so nothing jumps out from under the pointer.
-  for (const key of [keys.notifications(workspaceId), keys.notifications(workspaceId, 'unread')]) {
-    client.setQueryData<InfiniteData<NotificationPage>>(key, (data) =>
-      data === undefined
-        ? data
-        : {
-            ...data,
-            pages: data.pages.map((page) => ({
-              ...page,
-              data: page.data.map((n) => (n.readAt === null && read(n) ? { ...n, readAt: at } : n)),
-            })),
-          },
-    );
-  }
+  client.setQueriesData<Cached>({ queryKey: keys.notifications(workspaceId) }, (data) => {
+    if (data === undefined) return data;
+    return 'pages' in data
+      ? { ...data, pages: data.pages.map((page) => readIn(page, read, at)) }
+      : readIn(data, read, at);
+  });
 };
 
 export interface InboxReads {
