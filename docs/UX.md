@@ -69,9 +69,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   starts the conversation of exactly them (D-127) —
   each drawn with the faces of its first two people, the second overlapping the first, and "+N"
   for the rest, in the height of any row (D-167) —
-  then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
-  you are; Deep Work for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is
-  on, until when, the minutes left and its end; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  then the people, and your own row at the foot — your avatar with your online dot, the name over the
+  handle, and the up-and-down chevron — which opens the **account menu** (D-124, D-146, D-207): who
+  you are, as a card; **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
+  tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
   and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
