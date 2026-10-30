@@ -160,7 +160,11 @@ export const PeopleList = (): React.JSX.Element | null => {
                 <>
                   {user.displayName}
                   {user.id === me.id ? (
-                    <span className="font-normal"> {t('sidebar.you')}</span>
+                    // A tag beside the name, not a second word of it: smaller and quieter, as Slack's is.
+                    <span className="font-normal text-caption text-nav-ink-muted">
+                      {' '}
+                      {t('sidebar.you')}
+                    </span>
                   ) : null}
                   <OnlineWords userId={user.id} meId={me.id} />
                 </>
