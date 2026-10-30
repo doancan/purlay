@@ -71,6 +71,8 @@ import { renderContent } from '../content/render-content';
 import { duringComposition, useComposition } from './composition';
 import { convertPaste } from './paste';
 import { composerKey, useComposerInbox } from './quote';
+import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
+import { useSlashRunner } from './slash-run';
 import { EmojiPicker } from './emoji-picker';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -153,6 +155,9 @@ const Inner = ({
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);
   const listId = useId();
+  const runSlash = useSlashRunner(channelId);
+  const [commandActive, setCommandActive] = useState(0);
+  const [commandsDismissed, setCommandsDismissed] = useState(false);
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
@@ -241,6 +246,22 @@ const Inner = ({
     if (mentionStart !== null) refreshCandidates();
   }, [mentionStart, refreshCandidates]);
   const current = Math.min(active, suggestions.length - 1);
+  // The commands, while a `/` and letters are all that is written before the caret (D-214).
+  const slash = focused ? slashQuery(text, caretAt) : null;
+  const commands = slash !== null && !commandsDismissed ? commandsFor(slash) : [];
+  const commandsOpen = commands.length > 0;
+  const currentCommand = Math.min(commandActive, commands.length - 1);
+  useEffect(() => {
+    if (slash === null) setCommandsDismissed(false);
+  }, [slash]);
+  /** A command chosen from the list: written out with a space after it, for its words. */
+  const completeCommand = (name: SlashName): void => {
+    const written = `/${name} `;
+    const next = written + text.slice(caretAt);
+    inserted.current = { start: written.length, end: written.length };
+    setCaretAt(written.length);
+    change(next);
+  };
   const optionId = (index: number): string => `${listId}-option-${String(index)}`;
 
   /** Somebody chosen from the list: their handle replaces what was typed after the `@`. */
@@ -252,8 +273,40 @@ const Inner = ({
     change(next.text);
   };
 
-  const send = (): void => {
-    const content = trimEnd(text);
+  /** A command and its words, run through what it stands for; its answer said where it belongs. */
+  const runCommand = (name: SlashName, args: string): void => {
+    setError(null);
+    void runSlash(name, args).then((outcome) => {
+      if (outcome.kind === 'send') {
+        send(outcome.content);
+        return;
+      }
+      if (outcome.kind === 'refused') {
+        setError(outcome.reason);
+        return;
+      }
+      setText('');
+      writeDraft(ports.storage, key, '');
+      if (outcome.said !== '') toast.show({ message: outcome.said });
+    });
+  };
+
+  /** Sends what is written — or, from a command, the words it wrote (`/me`, `/shrug`). */
+  const send = (written?: string): void => {
+    const typed = written ?? trimEnd(text);
+    // A line that starts with `/` asks for a command (D-214) — unless files go with it, when it is words.
+    const line = written === undefined && uploads.items.length === 0 ? parseSlash(typed) : null;
+    if (line?.kind === 'unknown') {
+      setError(
+        t('slash.unknown', { name: line.name, all: SLASH_COMMANDS.map((c) => `/${c}`).join(' ') }),
+      );
+      return;
+    }
+    if (line?.kind === 'command') {
+      runCommand(line.name, line.args);
+      return;
+    }
+    const content = line?.kind === 'escaped' ? line.text : typed;
     if (content === '' && uploads.items.length === 0) return;
     // A file that did not upload is the person's to retry or remove: nothing goes without it.
     if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large')) {
@@ -327,6 +380,29 @@ const Inner = ({
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
     // by the flag the composition events keep.
     if (duringComposition(event, composing)) return;
+    if (commandsOpen) {
+      const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setCommandActive((currentCommand + step + commands.length) % commands.length);
+        return;
+      }
+      // Tab completes; Enter completes too, unless the command is already whole and takes no words.
+      const whole = slash !== null && commands[currentCommand] === slash;
+      if ((event.key === 'Tab' || (event.key === 'Enter' && !whole)) && plain) {
+        event.preventDefault();
+        const chosen = commands[currentCommand];
+        if (chosen !== undefined) completeCommand(chosen);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setCommandsDismissed(true);
+        return;
+      }
+    }
     if (open && mention !== null) {
       const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -575,7 +651,9 @@ const Inner = ({
   const sendButton = (
     <button
       type="button"
-      onClick={send}
+      onClick={() => {
+        send();
+      }}
       aria-disabled={empty && uploads.items.length === 0}
       aria-label={t('composer.send')}
       className={cn(
@@ -644,6 +722,51 @@ const Inner = ({
                   {t('common.retry')}
                 </button>
               )}
+            </div>
+          )}
+          {commandsOpen && (
+            <div className="absolute bottom-full left-0 z-popover mb-2 w-full max-w-dialog overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
+              <div
+                id={`${listId}-commands`}
+                role="listbox"
+                aria-label={t('slash.listLabel')}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                className="max-h-palette-list overflow-y-auto p-1"
+              >
+                {commands.map((name, index) => (
+                  <div
+                    key={name}
+                    id={`${listId}-command-${name}`}
+                    role="option"
+                    aria-selected={index === currentCommand}
+                    onClick={() => {
+                      completeCommand(name);
+                    }}
+                    onPointerMove={() => {
+                      if (index !== currentCommand) setCommandActive(index);
+                    }}
+                    className={cn(
+                      'flex cursor-pointer items-baseline gap-3 rounded-md px-3 py-2',
+                      index === currentCommand && 'bg-accent-subtle',
+                    )}
+                  >
+                    <span className="shrink-0 font-mono text-label text-ink">/{name}</span>
+                    <span className="min-w-0 truncate text-label text-ink-muted">
+                      {t(`slash.${name}.about`)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-4 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted">
+                <span>
+                  <Kbd>Tab</Kbd> {t('slash.hint.complete')}
+                </span>
+                <span>
+                  <Kbd>//</Kbd> {t('slash.hint.literal')}
+                </span>
+              </div>
             </div>
           )}
           {open && (
@@ -778,8 +901,14 @@ const Inner = ({
               aria-describedby={hintsId}
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-controls={open ? listId : undefined}
-              aria-activedescendant={open ? optionId(current) : undefined}
+              aria-controls={commandsOpen ? `${listId}-commands` : open ? listId : undefined}
+              aria-activedescendant={
+                commandsOpen
+                  ? `${listId}-command-${commands[currentCommand] ?? ''}`
+                  : open
+                    ? optionId(current)
+                    : undefined
+              }
               placeholder={t('composer.placeholder', { channel: channelName })}
               hidden={previewing}
               className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"

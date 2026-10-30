@@ -2121,3 +2121,89 @@ describe('the preview (D-181)', () => {
     expect(sent().map((frame) => frame.content)).toEqual(['ready']);
   });
 });
+
+describe('slash commands (D-214)', () => {
+  test('/me sends the words in italics; /shrug with its arm; neither leaves the command behind', async () => {
+    const { box, sent, user } = await mount();
+    await user.type(box(), '/me waves{Enter}');
+    await user.type(box(), '/shrug oh well{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['_waves_', 'oh well ¯\\\\\\_(ツ)\\_/¯']);
+    expect(box().value).toBe('');
+  });
+
+  test('an unknown command is not sent, and says which there are', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.type(box(), '/deploy now{Enter}');
+    expect(sent()).toEqual([]);
+    expect(view.getByText(/There is no \/deploy\./)).toBeDefined();
+    expect(box().value).toBe('/deploy now');
+  });
+
+  test('// at the start sends a slash as words', async () => {
+    const { box, sent, user } = await mount();
+    await user.type(box(), '//deploy now{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['/deploy now']);
+  });
+
+  test('/topic sets the topic through the channel’s edit, and says so', async () => {
+    const asked: unknown[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        updateChannel: (_id, input) => {
+          asked.push(input);
+          return Promise.resolve({ ...aChannel(IDS.api, 'api'), topic: 'Deploys' });
+        },
+      }),
+    });
+    await user.type(box(), '/topic Deploys{Enter}');
+    await settle();
+    expect(asked).toEqual([{ topic: 'Deploys' }]);
+    expect(view.getByText('Topic set')).toBeDefined();
+    expect(box().value).toBe('');
+  });
+
+  test('/mute sets the level to nothing, as the header’s menu does', async () => {
+    const levels: string[] = [];
+    const { box, user } = await mount({
+      api: aSignedInApi({
+        setNotificationLevel: (_id, level) => {
+          levels.push(level);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/mute{Enter}');
+    await settle();
+    expect(levels).toEqual(['none']);
+  });
+
+  test('/invite names somebody the workspace does not have, and nothing is asked', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/invite @nobody{Enter}');
+    await settle();
+    expect(view.getByText('Nobody in this workspace is @nobody.')).toBeDefined();
+    expect(box().value).toBe('/invite @nobody');
+  });
+
+  test('the list follows what is typed; arrows move, Tab completes', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/s');
+    const list = view.getByRole('listbox', { name: 'Commands' });
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((option) => option.querySelector('.font-mono')?.textContent),
+    ).toEqual(['/shrug', '/star', '/search']);
+    await user.keyboard('{ArrowDown}{Tab}');
+    expect(box().value).toBe('/star ');
+  });
+
+  test('Esc closes the list and leaves what was typed', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/t');
+    expect(view.getByRole('listbox', { name: 'Commands' })).toBeDefined();
+    await user.keyboard('{Escape}');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    expect(box().value).toBe('/t');
+  });
+});

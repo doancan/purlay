@@ -26,13 +26,13 @@ import { useToast } from '../../ui/toast';
 const lines = new WeakMap<QueryClient, Map<string, Promise<void>>>();
 
 /** Star or let go of a channel, painted at once and put back when refused; null for a non-member. */
-export const useStar = (channel: Channel): ((starred: boolean) => void) | null => {
+export const useStar = (channel: Channel | undefined): ((starred: boolean) => void) | null => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
   const { show } = useToast();
   const describe = useDescribeFailure();
-  if (channel.state === null) return null;
+  if (channel === undefined || channel.state === null) return null;
   const starredNow = (): boolean | undefined =>
     client
       .getQueriesData<Channel[]>({ queryKey: families.channels })
