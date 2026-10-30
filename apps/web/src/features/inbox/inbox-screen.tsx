@@ -15,220 +15,29 @@
  * device (`CHANNEL_STATE`), so nothing here touches a channel's numbers.
  */
 import { useMemo, useState } from 'react';
-import type { InfiniteData, QueryClient } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
-import type { Channel, Notification, NotificationPage } from '@purlay/types';
-import { Icon, type GlyphName } from '../../components/icon';
-import { useApi } from '../../data/api-provider';
-import { useDescribeFailure } from '../../data/failure';
-import { keys } from '../../data/keys';
+import { Icon } from '../../components/icon';
 import { useChannels, useNotifications } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useRoute } from '../../router/router-provider';
-import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
-import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../ui/states';
-import { useToast } from '../../ui/toast';
-import { VisuallyHidden } from '../../ui/visually-hidden';
-import { HeaderTile, useChannelTitle } from '../channel/channel-header';
+import { HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
-import {
-  ListCard,
-  ListColumn,
-  ListFilter,
-  listButtonClasses,
-  listRowClasses,
-} from '../../ui/list-column';
+import { ListCard, ListColumn, ListFilter } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
-import { authorOf } from '../messages/author';
-import { useMessageText } from '../content/github-event';
-import type { Translate } from '../../i18n/types';
 import { useSession } from '../session/session';
-import { groupInbox, repliersOf, type InboxRow } from './group';
-import { targetOf, whyOf } from './why';
-
-const glyphOf = (type: Notification['type']): GlyphName => {
-  switch (type) {
-    case 'mention':
-      return 'notifications';
-    case 'direct_message':
-      return 'person';
-    case 'thread_reply':
-      return 'reply';
-    case 'thread_resolved':
-      return 'resolved';
-    case 'channel_message':
-      return 'channel';
-  }
-};
-
-/** Marks these read in the cache, before the server is asked (CONTRIBUTING §1.9). */
-const markLocally = (
-  client: QueryClient,
-  workspaceId: string,
-  read: (notification: Notification) => boolean,
-  at: string,
-): void => {
-  // Both views of the inbox: everything, and what is unread — a row read stays in the unread view,
-  // muted, until the person looks again, so nothing jumps out from under the pointer.
-  for (const key of [keys.notifications(workspaceId), keys.notifications(workspaceId, 'unread')]) {
-    client.setQueryData<InfiniteData<NotificationPage>>(key, (data) =>
-      data === undefined
-        ? data
-        : {
-            ...data,
-            pages: data.pages.map((page) => ({
-              ...page,
-              data: page.data.map((n) => (n.readAt === null && read(n) ? { ...n, readAt: at } : n)),
-            })),
-          },
-    );
-  }
-};
+import { groupInbox, type InboxRow } from './group';
+import { InboxRowItem } from './inbox-row';
+import { useInboxReads } from './read';
+import { targetOf } from './why';
 
 /** Whether two instants fall on the same day where the person is. */
 const sameDay = (a: Date, b: Date): boolean =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
-
-/** Where it happened keeps up to a third of the line, so a narrow window cuts the reason first. */
-const PLACE = 'max-w-1/3 shrink-0 truncate';
-
-const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
-  <span className={PLACE}>{useChannelTitle(channel)}</span>
-);
-
-/** The thread a reply row names (D-162): by its root's first line, and how many when gathered. */
-const threadLineOf = (t: Translate, row: InboxRow, unread: boolean): string | null => {
-  const { thread, type } = row.newest;
-  if (type !== 'thread_reply' || thread === null) return null;
-  const count = row.members.length;
-  const { excerpt } = thread;
-  if (count === 1) return excerpt === null ? null : t('inbox.thread.in', { excerpt });
-  if (excerpt === null)
-    return t(unread ? 'inbox.thread.newBare' : 'inbox.thread.seenBare', { count });
-  return t(unread ? 'inbox.thread.new' : 'inbox.thread.seen', { count, excerpt });
-};
-
-const Row = ({
-  row,
-  channel,
-  me,
-  now,
-  onOpen,
-  onRead,
-}: {
-  readonly row: InboxRow;
-  readonly channel: Channel | undefined;
-  readonly me: string;
-  readonly now: Date;
-  readonly onOpen: (row: InboxRow) => void;
-  readonly onRead: (row: InboxRow) => void;
-}): React.JSX.Element => {
-  const { t, format } = useI18n();
-  const textOf = useMessageText();
-  const notification = row.newest;
-  const { message } = notification;
-  const unread = row.members.some((n) => n.readAt === null);
-  const gathered = row.members.length > 1;
-  const author = authorOf(message, t('user.erased'));
-  const repliers = repliersOf(row.members, t('user.erased'));
-  const names = format.list([
-    ...repliers.shown,
-    ...(repliers.more > 0 ? [t('inbox.others', { count: repliers.more })] : []),
-  ]);
-  const threadLine = threadLineOf(t, row, unread);
-  const withOne =
-    channel?.type === 'direct_message' && channel.peer !== null && channel.peers.length < 2;
-  return (
-    <li className={cn('group relative', listRowClasses)}>
-      <button
-        type="button"
-        onClick={() => {
-          onOpen(row);
-        }}
-        className={listButtonClasses()}
-      >
-        {/* Unread is a dot at the row's edge as well as full ink, never colour alone (#58). */}
-        <span
-          aria-hidden="true"
-          className={cn(
-            'absolute top-5 left-2 size-dot rounded-pill',
-            unread ? 'bg-accent' : 'bg-transparent',
-          )}
-        />
-        <Avatar name={author.displayName} username={author.username} />
-        <span className="min-w-0 flex-1">
-          {/* One line at any width: the reason gives way before the channel, the time never breaks (#679). */}
-          <span className="flex items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
-            <Icon name={glyphOf(notification.type)} size="sm" />
-            <span className={cn('min-w-0 truncate', unread && 'font-semibold text-ink')}>
-              {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
-              {whyOf(t, notification, channel, me, names)}
-            </span>
-            {/* A conversation with one other person is that person, already named (#631). */}
-            {!withOne && (
-              <>
-                <span aria-hidden="true">·</span>
-                {channel === undefined ? (
-                  <span className={PLACE}>{t('questions.unnamed')}</span>
-                ) : (
-                  <ChannelName channel={channel} />
-                )}
-              </>
-            )}
-            <time
-              dateTime={notification.createdAt}
-              className="ml-auto shrink-0 font-mono text-caption"
-            >
-              {format.time(notification.createdAt, now)}
-            </time>
-          </span>
-          {/* Which thread: gathered, it is the row's headline; alone, a quiet line above the reply. */}
-          {threadLine !== null && (
-            <span
-              className={cn(
-                'mt-1 block truncate',
-                gathered ? 'text-body font-medium' : 'text-label text-ink-muted',
-                gathered && (unread ? 'text-ink' : 'text-ink-muted'),
-              )}
-            >
-              {threadLine}
-            </span>
-          )}
-          {/* Unread is said as the sidebar says it: in full ink, and read is muted (#58). */}
-          <span
-            className={cn(
-              'mt-1 text-body',
-              gathered ? 'line-clamp-1' : 'line-clamp-2',
-              unread && !gathered ? 'text-ink' : 'text-ink-muted',
-            )}
-          >
-            {textOf(message)}
-          </span>
-        </span>
-      </button>
-      {unread && (
-        // Read without opening: beside the row, not inside its button, so each is its own control.
-        <span className="absolute top-2 right-2 opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:hidden">
-          <Button
-            variant="secondary"
-            glyph="confirm"
-            onClick={() => {
-              onRead(row);
-            }}
-          >
-            {t('inbox.markRead')}
-          </Button>
-        </span>
-      )}
-    </li>
-  );
-};
 
 /** One day's notifications, in a card: Today, or Earlier. */
 const Section = ({
@@ -245,12 +54,9 @@ export const InboxScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
-  const api = useApi();
-  const client = useQueryClient();
-  const { show } = useToast();
-  const describe = useDescribeFailure();
   const ports = useFeedPorts();
   const { user: me } = useSession();
+  const reads = useInboxReads();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const query = useNotifications(workspace.id, filter === 'unread');
   const channels = useChannels(workspace.id);
@@ -258,24 +64,9 @@ export const InboxScreen = (): React.JSX.Element => {
   const all = useMemo(() => (query.data?.pages ?? []).flatMap((page) => page.data), [query.data]);
   const now = ports.clock.now();
 
-  /** Paints, asks, and on a refusal asks for the list again and says why. */
-  const read = (marked: (n: Notification) => boolean, ask: () => Promise<void>): void => {
-    markLocally(client, workspace.id, marked, ports.clock.now().toISOString());
-    ask().catch((failure: unknown) => {
-      void client.invalidateQueries({ queryKey: keys.notifications(workspace.id) });
-      show({ message: `${t('inbox.readFailed')} ${describe(failure)}` });
-    });
-  };
-
   /** Reads what waits of a row — every reply it gathers (D-162) — and nothing when none does. */
   const readRow = (row: InboxRow): void => {
-    const ids = row.members.filter((n) => n.readAt === null).map((n) => n.id);
-    if (ids.length === 0) return;
-    const waiting = new Set(ids);
-    read(
-      (n) => waiting.has(n.id),
-      () => api.readNotifications({ ids }),
-    );
+    reads.readIds(row.members.filter((n) => n.readAt === null).map((n) => n.id));
   };
 
   const open = (row: InboxRow): void => {
@@ -332,7 +123,7 @@ export const InboxScreen = (): React.JSX.Element => {
     const earlier = grouped.filter((row) => !sameDay(new Date(row.newest.createdAt), now));
     const rows = (list: readonly InboxRow[]): React.JSX.Element[] =>
       list.map((row) => (
-        <Row
+        <InboxRowItem
           key={row.key}
           row={row}
           channel={byId.get(row.newest.channelId)}
@@ -383,12 +174,7 @@ export const InboxScreen = (): React.JSX.Element => {
             variant="ghost"
             glyph="confirm"
             onClick={() => {
-              const before = newest.id;
-              const shown = new Set(all.map((n) => n.id));
-              read(
-                (n) => shown.has(n.id),
-                () => api.readNotifications({ workspaceId: workspace.id, before }),
-              );
+              reads.readAll(newest.id, new Set(all.map((n) => n.id)));
             }}
           >
             {t('inbox.readAll')}
