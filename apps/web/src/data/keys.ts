@@ -53,6 +53,8 @@ export const keys = {
         : (['notifications', workspaceId, filter] as const);
     return category === undefined ? base : ([...base, category] as const);
   },
+  /** An attachment's words, read to preview it (D-210): a file never changes, so it is read once. */
+  attachmentText: (attachmentId: string) => ['attachment-text', attachmentId] as const,
   /** The inbox panel's one page of a category (D-208): under the inbox's prefix, as every view is. */
   notificationsPanel: (workspaceId: string, category: string) =>
     ['notifications', workspaceId, 'panel', category] as const,

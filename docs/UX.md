@@ -396,7 +396,10 @@ page of the same name.
   link to the original, drawn through the API's proxy so the picture's host never sees who is reading
   (#110). One the proxy cannot show draws nothing; the link stays a link.
 - **A file sent with the message is under the words** (D-109 §6): an image as its thumbnail, in a box
-  shaped like it and kept before it loads; any other file as its name, its size and a download. An
+  shaped like it and kept before it loads; any other file as its name, its size and a download — and a
+  text file up to 512 kB (a CSV, Markdown, code by its extension) **Preview** beside it, read only when asked
+  and kept: a CSV's first fifty rows as a table and how many more, Markdown formatted, code coloured in its
+  language, in a box that scrolls, through the same renderer as a message (D-210). An
   image opens the **image viewer** (D-159): the picture over the whole window on the navigation's dark
   tone, fitted to it and never enlarged, with its name, who shared it, its size and when, **Download**,
   **Open original** in a new tab, and Close. Esc — whatever is focused —, the close button or a click

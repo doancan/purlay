@@ -45,6 +45,8 @@ export interface Http {
   readonly library: (path: string, body: unknown) => Promise<void>;
   /** For an endpoint whose answer is not read (a sign-out). */
   readonly send: (method: Method, path: string, options?: RequestOptions) => Promise<void>;
+  /** A GET whose answer is text, not JSON: a file's words, read to be shown (D-210). */
+  readonly text: (path: string, options?: RequestOptions) => Promise<string>;
   /**
    * A file's bytes, posted, with its progress told as it goes (#388) — `fetch` reports nothing of a
    * request body until the answer, so an upload takes the transport that does. Its answer and its
@@ -267,6 +269,8 @@ export const createHttp = (
     send: async (method: Method, path: string, options: RequestOptions = {}): Promise<void> => {
       await call(method, path, options);
     },
+    text: async (path: string, options: RequestOptions = {}): Promise<string> =>
+      (await call('GET', path, options)).text,
     upload: async <S extends TSchema>(
       path: string,
       schema: S,

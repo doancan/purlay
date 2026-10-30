@@ -12,6 +12,7 @@ const unexpected = (name: string) => (): never => {
 
 export const anApi = (overrides: Partial<Api> = {}): Api => ({
   me: unexpected('me'),
+  attachmentText: unexpected('attachmentText'),
   workspaces: unexpected('workspaces'),
   createWorkspace: unexpected('createWorkspace'),
   // The sign-in card asks on every visit, so a test of anything that lands there need not say so:
