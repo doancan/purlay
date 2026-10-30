@@ -111,6 +111,8 @@ export const sizeTokens = [
   'size-dialog-lg',
   'size-palette',
   'size-palette-list',
+  'size-inbox-panel',
+  'size-inbox-panel-list',
   'size-toast',
   'size-focus-offset',
   'size-icon-sm',

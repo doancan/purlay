@@ -1268,6 +1268,8 @@ export const en = {
   'inbox.category.empty.direct': 'No direct messages',
   'inbox.category.empty.threads': 'Nothing in your threads',
   'inbox.category.empty.body': 'Everything else you were told is under All.',
+  'inbox.panel.label': 'Inbox',
+  'inbox.panel.seeAll': 'See all',
   'state.inbox.loading': 'Loading your inbox',
   'state.inbox.error.title': "Couldn't load your inbox",
   'state.inbox.error.body': 'The server did not answer. Try again.',

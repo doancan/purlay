@@ -52,10 +52,14 @@ describe('the rail', () => {
     const view = await open();
     const rail = within(places(view));
     // The workspace is drawn once, at the head of the sidebar; the rail is the places.
-    expect(rail.queryAllByRole('button')).toEqual([]);
+    expect(rail.queryByRole('button', { name: /Switch workspace/ })).toBeNull();
     expect(
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
-    ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search', 'Saved', 'Settings']);
+    ).toEqual(['Channels', 'Open questions', 'Search', 'Saved', 'Settings']);
+    // The inbox opens its panel (D-208): a button, between Channels and Open questions.
+    expect(rail.getAllByRole('button').map((button) => button.textContent.trim())).toEqual([
+      'Inbox',
+    ]);
     // A link to a page, not a menu of its own.
     expect(rail.queryByRole('button', { name: 'Settings' })).toBeNull();
   });
@@ -106,10 +110,10 @@ describe('the rail', () => {
       aSignedInApi({ saved: () => Promise.resolve({ data: [], nextCursor: null }) }),
       path,
     );
-    const marked = within(places(view))
-      .getAllByRole('link')
-      .filter((link) => link.hasAttribute('aria-current'))
-      .map((link) => link.textContent.trim().replace(/\d+$/, ''));
+    // Links and the inbox's button alike: whichever says where the person is.
+    const marked = [...places(view).querySelectorAll('[aria-current]')].map((link) =>
+      link.textContent.trim().replace(/\d+$/, ''),
+    );
     expect(marked).toEqual([current]);
   });
 
@@ -134,7 +138,7 @@ describe('the rail', () => {
 
   test('Channels takes you back to the channel you were last in, not the first in the list', async () => {
     const view = await open(aSignedInApi(), `/w/acme/c/${IDS.deploys}`);
-    await person().click(within(places(view)).getByRole('link', { name: 'Inbox' }));
+    await person().click(within(places(view)).getByRole('link', { name: 'Saved' }));
     await settle();
     await person().click(within(places(view)).getByRole('link', { name: 'Channels' }));
     await settle();
@@ -152,7 +156,7 @@ describe('the inbox', () => {
         channels: () => Promise.resolve([{ ...first, state: waiting }, ...rest]),
       }),
     );
-    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent).toContain(
+    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent).toContain(
       'unread',
     );
   });
@@ -173,7 +177,7 @@ describe('the inbox', () => {
       }),
     );
     // The same channels, out of Deep Work, carry the dot: the test above.
-    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
+    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent.trim()).toBe(
       'Inbox',
     );
   });
@@ -189,7 +193,7 @@ describe('the inbox', () => {
           ]),
       }),
     );
-    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
+    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent.trim()).toBe(
       'Inbox',
     );
   });

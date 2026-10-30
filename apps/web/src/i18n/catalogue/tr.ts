@@ -1231,6 +1231,8 @@ export const tr = {
   'inbox.category.empty.direct': 'Doğrudan mesaj yok',
   'inbox.category.empty.threads': 'Thread’lerinde yeni bir şey yok',
   'inbox.category.empty.body': 'Sana söylenen diğer her şey Tümü altında.',
+  'inbox.panel.label': 'Gelen kutusu',
+  'inbox.panel.seeAll': 'Tümünü gör',
   'state.inbox.loading': 'Gelen kutun yükleniyor',
   'state.inbox.error.title': 'Gelen kutun yüklenemedi',
   'state.inbox.error.body': 'Sunucu yanıt vermedi. Yeniden dene.',
