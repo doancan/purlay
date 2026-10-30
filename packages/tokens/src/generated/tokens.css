@@ -95,20 +95,20 @@
 :root,
 [data-theme='dark'] {
   color-scheme: dark;
-  --surface-000: #050506;
-  --surface-050: #161618;
-  --surface-100: #0e0e10;
-  --surface-200: #1c1c1f;
-  --code-bg: #0a0a0b;
-  --border-subtle: #252528;
+  --surface-000: #0e0e10;
+  --surface-050: #222225;
+  --surface-100: #1a1a1d;
+  --surface-200: #29292d;
+  --code-bg: #131315;
+  --border-subtle: #2e2e33;
   --border-strong: #797981;
   --ink: #f5f5f7;
   --ink-muted: #a9a9b1;
   --ink-subtle: #9696a0;
-  --nav-rail: #000000;
-  --nav-surface: #0d0d0f;
-  --nav-hover: #1c1c20;
-  --nav-border: #27272b;
+  --nav-rail: #131315;
+  --nav-surface: #171719;
+  --nav-hover: #26262a;
+  --nav-border: #2a2a2e;
   --nav-ink: #f5f5f7;
   --nav-ink-muted: #a5a5ad;
   --accent: #2563eb;
