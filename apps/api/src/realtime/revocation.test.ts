@@ -66,6 +66,7 @@ const everyChannelFrame = (channelId: string): ServerFrame[] => {
       ts: 1,
     },
     PINS_UPDATED: { event: 'PINS_UPDATED', data: { channelId }, ts: 1 },
+    BOOKMARKS_UPDATED: { event: 'BOOKMARKS_UPDATED', data: { channelId }, ts: 1 },
     INCIDENT_UPDATED: { event: 'INCIDENT_UPDATED', data: { channelId }, ts: 1 },
     MESSAGE_VERSIONS_UPDATED: {
       event: 'MESSAGE_VERSIONS_UPDATED',

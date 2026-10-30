@@ -1233,6 +1233,40 @@ CREATE INDEX idx_thread_follows_workspace ON thread_follows (workspace_id);
 A soft delete keeps the row: a deleted root keeps its thread (D-103 §7), and so who follows it. A
 retention purge cascades it; the account's erasure deletes them, as it does a person's saves.
 
+### 7.8. `channel_bookmarks`
+
+A channel's bookmarks (D-218): links its members keep at hand — a document, a dashboard, a repository —
+shown under the channel's header. Read by whoever can see the channel, as its pins are; added and removed
+by its members.
+
+```sql
+CREATE TABLE channel_bookmarks (
+    id            UUID PRIMARY KEY,
+    channel_id    UUID NOT NULL,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- An http or https address; the service parses it as a browser would (`javascript:` is never kept).
+    url           TEXT NOT NULL CHECK (char_length(url) BETWEEN 1 AND 2048),
+    title         TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 80),
+    -- The bookmark is the channel's: it outlives the account of the person who added it.
+    added_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- The channel in this workspace. (I-4)
+    CONSTRAINT channel_bookmarks_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE,
+    -- The same address again is the same bookmark; the key also lists a channel's bookmarks.
+    CONSTRAINT channel_bookmarks_channel_url_key UNIQUE (channel_id, url)
+);
+
+CREATE INDEX idx_channel_bookmarks_workspace ON channel_bookmarks (workspace_id);
+CREATE INDEX idx_channel_bookmarks_added_by  ON channel_bookmarks (added_by);
+```
+
+At most `BOOKMARKS_MAX` a channel, counted under the channel's row lock, so two members adding the last
+one at once cannot both get in. Added twice, the first stays and nothing changes. The workspace export
+carries them (D-140).
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -1976,6 +2010,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0059_server_settings_oidc.sql server_settings.oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_name: the single sign-on provider, a triple or nothing  (D-200)
 0060_question_knowledge.sql questions, accepted answers, decision notes and personal saved searches (D-204)
 0061_question_indexes.sql concurrent indexes for questions, assignees, accepted answers and decision authors (D-204)
+0062_channel_bookmarks.sql channel_bookmarks: links a channel's members keep at hand, under its header  (D-218)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

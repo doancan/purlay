@@ -1036,6 +1036,38 @@ export type PinnedMessage = Static<typeof PinnedMessage>;
 export const PinList = Type.Array(PinnedMessage, { maxItems: PINS_MAX });
 export type PinList = Static<typeof PinList>;
 
+// ── A channel's bookmarks (D-218) ───────────────────────────────────────────
+
+/** How many links a channel keeps at hand: a row of them under its header, not a directory. */
+export const BOOKMARKS_MAX = 20;
+/** The longest bookmark's name: what fits in a chip. */
+export const BOOKMARK_TITLE_MAX = 80;
+
+/** A web address a bookmark may hold: `http:` or `https:`, bounded; the server parses it as a URL too. */
+export const BookmarkUrl = Type.String({ pattern: '^https?://[^\\s]+$', maxLength: 2048 });
+
+/** A link kept at hand for a channel's members, with who added it — null once they are gone. */
+export const ChannelBookmark = Type.Object({
+  id: Uuid,
+  channelId: Uuid,
+  url: BookmarkUrl,
+  title: Type.String({ minLength: 1, maxLength: BOOKMARK_TITLE_MAX }),
+  addedBy: Type.Union([User, Type.Null()]),
+  addedAt: Timestamp,
+});
+export type ChannelBookmark = Static<typeof ChannelBookmark>;
+
+/** `GET /api/channels/:channelId/bookmarks` — oldest first, as they were added; bounded, not paged. */
+export const BookmarkList = Type.Array(ChannelBookmark, { maxItems: BOOKMARKS_MAX });
+export type BookmarkList = Static<typeof BookmarkList>;
+
+/** `POST /api/channels/:channelId/bookmarks` — a member's; the same address again is the same bookmark. */
+export const AddBookmarkRequest = FromClient({
+  url: BookmarkUrl,
+  title: Type.String({ minLength: 1, maxLength: BOOKMARK_TITLE_MAX }),
+});
+export type AddBookmarkRequest = Static<typeof AddBookmarkRequest>;
+
 // ── Profiles (#488, D-131) ──────────────────────────────────────────────────
 
 /**

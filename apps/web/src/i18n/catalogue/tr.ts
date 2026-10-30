@@ -1360,6 +1360,7 @@ export const tr = {
     'Bir çalışma alanında saklanabilecek kayıtlı mesaj sınırına ulaştın. Önce bazılarını tamamla ya da kaldır.',
   'failure.pinsLimit':
     'Bir kanalda sabitlenebilecek mesaj sınırına ulaşıldı. Önce birinin sabitlemesini kaldır.',
+  'failure.bookmarksLimit': 'Bir kanal bu kadar yer imi tutabilir. Önce birini kaldır.',
   'failure.githubFeedsLimit':
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
   'failure.githubFeedExists':

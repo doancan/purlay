@@ -63,6 +63,8 @@ export const ErrorCode = Type.Union([
    * what the caller must not be able to learn.
    */
   Type.Literal('MESSAGE_NOT_FOUND'),
+  /** A bookmark that is not there, or in a channel the caller cannot see (D-218, D-34). */
+  Type.Literal('BOOKMARK_NOT_FOUND'),
   /** An earlier version of a message that is not there, or not this message's (D-135). */
   Type.Literal('MESSAGE_VERSION_NOT_FOUND'),
   /** An incident that is not there, or not this channel's (D-137). */
@@ -121,6 +123,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('SAVED_LIMIT'),
   /** The channel already has as many pins as it may (D-130). */
   Type.Literal('PINS_LIMIT'),
+  /** The channel already keeps as many bookmarks as it may (D-218). */
+  Type.Literal('BOOKMARKS_LIMIT'),
   /** The channel already hears from as many repositories as it may (D-134). */
   Type.Literal('GITHUB_FEEDS_LIMIT'),
   /**
@@ -230,6 +234,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
+  BOOKMARK_NOT_FOUND: 404,
   MESSAGE_VERSION_NOT_FOUND: 404,
   INCIDENT_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,
@@ -255,6 +260,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   TOO_MANY_PENDING_UPLOADS: 409,
   SAVED_LIMIT: 409,
   PINS_LIMIT: 409,
+  BOOKMARKS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
   GITHUB_FEED_EXISTS: 409,
   INCIDENT_OPEN: 409,

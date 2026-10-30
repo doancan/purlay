@@ -62,6 +62,7 @@ is rotated out (§4).
 | `mentions` | Who was mentioned in which message | Notifications and the inbox (D-12) | With its message |
 | `reactions` | Who reacted to what, with which emoji | Reactions | With its message |
 | `pinned_messages` | Who pinned a message | Pins (D-130) | With its message, or until unpinned |
+| `channel_bookmarks` | A link a channel keeps at hand, its name, and who added it | Bookmarks (D-218) | Until removed; with the channel; who added it is cleared on their erasure |
 | `saved_messages` | Which messages a person saved, and their state | Save for later (D-128) | Until unsaved; on erasure; with the message |
 | `saved_searches` | A person’s named search filters | Personal searches (D-204), never cached results | Until removed; on account erasure; with the workspace |
 | `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |

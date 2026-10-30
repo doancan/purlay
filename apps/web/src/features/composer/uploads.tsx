@@ -265,6 +265,8 @@ const uploadRefusal = (
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'NATIVE_CODE_NOT_FOUND':
     case 'PINS_LIMIT':
+    case 'BOOKMARKS_LIMIT':
+    case 'BOOKMARK_NOT_FOUND':
     case 'PUSH_UNAVAILABLE':
     case 'REAUTHENTICATION_REQUIRED':
     case 'ROUTE_NOT_FOUND':

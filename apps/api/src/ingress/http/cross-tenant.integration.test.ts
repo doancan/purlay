@@ -153,6 +153,13 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       })
     ).status,
   ).toBe(200);
+  // A bookmark to remove (D-218).
+  const bookmark = await call(db, 'POST', `/api/channels/${channelId}/bookmarks`, cookie, {
+    url: 'https://example.test/runbook',
+    title: 'Runbook',
+  });
+  expect(bookmark.status).toBe(201);
+  const { id: bookmarkId } = (await bookmark.json()) as { id: string };
   // A ready export, its archive in the store: the one download its owner may make.
   const exportId = messageId(new Date(NOW.getTime() + 7));
   const { user_id: ownerId } = await db
@@ -187,6 +194,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     feedId: connected.id,
     versionId: version.id,
     incidentId,
+    bookmarkId,
     exportId,
   };
 };
@@ -202,6 +210,7 @@ const NEVER_EXISTED: Ids = {
   feedId: '00000000-0000-4000-8000-000000000000',
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
+  bookmarkId: '00000000-0000-4000-8000-000000000000',
   exportId: '00000000-0000-4000-8000-000000000000',
 };
 
@@ -216,6 +225,7 @@ const NOT_A_UUID: Ids = {
   feedId: 'not-a-uuid',
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',
+  bookmarkId: 'not-a-uuid',
   exportId: 'not-a-uuid',
 };
 

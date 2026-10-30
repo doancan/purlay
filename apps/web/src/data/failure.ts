@@ -34,6 +34,7 @@ export type FailureKey =
   | 'failure.refused'
   | 'failure.savedLimit'
   | 'failure.pinsLimit'
+  | 'failure.bookmarksLimit'
   | 'failure.githubFeedsLimit'
   | 'failure.githubFeedExists'
   | 'failure.incidentOpen'
@@ -73,6 +74,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'WORKSPACE_NOT_FOUND':
     case 'CHANNEL_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
+    case 'BOOKMARK_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
@@ -98,6 +100,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.savedLimit';
     case 'PINS_LIMIT':
       return 'failure.pinsLimit';
+    case 'BOOKMARKS_LIMIT':
+      return 'failure.bookmarksLimit';
     case 'GITHUB_FEEDS_LIMIT':
       return 'failure.githubFeedsLimit';
     case 'GITHUB_FEED_EXISTS':

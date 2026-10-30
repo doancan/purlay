@@ -124,6 +124,21 @@ const aFeed = async (db: Executor, workspaceId: string, channelId: string): Prom
   return id;
 };
 
+const aBookmark = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
+  const id = crypto.randomUUID();
+  await db
+    .insertInto('channel_bookmarks')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      url: 'https://example.test/visible',
+      title: 'Visible',
+    })
+    .execute();
+  return id;
+};
+
 interface World {
   readonly owner: string;
   readonly outsider: string;
@@ -136,6 +151,8 @@ interface World {
   readonly feed: string;
   /** A resolved incident in the visible channel: the control for changing one, and its timeline. */
   readonly incident: string;
+  /** A bookmark of the visible channel: the control for removing one (D-218). */
+  readonly bookmark: string;
   /** An earlier version of the outsider's own visible message: the control for removing one. */
   readonly version: string;
   /** Each one hidden from the outsider for a different reason. */
@@ -288,6 +305,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     visible,
     feed: await aFeed(db, workspaceId, visible),
     incident: await anIncident(db, workspaceId, visible),
+    bookmark: await aBookmark(db, workspaceId, visible),
     version: await aVersion(db, workspaceId, visible, threads.ownVisible),
     hidden,
     threads,
@@ -335,6 +353,7 @@ describe('integration: channel visibility', () => {
               feedId: world.feed,
               versionId: NEVER_EXISTED,
               incidentId: world.incident,
+              bookmarkId: world.bookmark,
               exportId: NEVER_EXISTED,
             });
 
@@ -379,6 +398,7 @@ describe('integration: channel visibility', () => {
               // The outsider's own visible message's: the control of removing a version.
               versionId: world.version,
               incidentId: NEVER_EXISTED,
+              bookmarkId: NEVER_EXISTED,
               exportId: NEVER_EXISTED,
             });
 
@@ -442,6 +462,7 @@ describe('integration: channel visibility', () => {
                 feedId: NEVER_EXISTED,
                 versionId: NEVER_EXISTED,
                 incidentId: NEVER_EXISTED,
+                bookmarkId: NEVER_EXISTED,
                 exportId: NEVER_EXISTED,
               }),
               cookie,
