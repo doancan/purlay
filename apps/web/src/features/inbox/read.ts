@@ -1,14 +1,20 @@
 /**
- * Reading in the inbox (D-106): painted at once, then asked, and on a refusal read again from the
- * server and said why. One module, so every view of the inbox reads the same way.
+ * Reading in the inbox, wherever it is shown — the page and the panel (D-106, D-208): painted at
+ * once, then asked, and on a refusal read again from the server and said why.
  *
  * **Every view, both shapes.** The inbox is cached as many views under one prefix — All, Unread, each
- * category — some as pages a list scrolled through, and one page at a time. A row read in one is read
- * in all, so the paint walks the prefix and knows both shapes.
+ * category, the panel's one page — some as pages a list scrolled through, the panel's as one page. A
+ * row read in one is read in all, so the paint walks the prefix and knows both shapes.
+ *
+ * **Never painted back.** A frame can have asked for the inbox again a moment before the person read
+ * a row; that answer, left to land, would paint the row unread again under the pointer. So what is
+ * in flight is cancelled before the paint, and the paint is laid again once the server has answered
+ * — anything read again in between landed on the server's old state, and the row is read now.
  */
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Notification, NotificationPage } from '@purlay/types';
+import { PAGE_LIMIT } from '@purlay/types';
 import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
@@ -62,22 +68,37 @@ export const useInboxReads = (): InboxReads => {
   const describe = useDescribeFailure();
   const { clock } = useFeedPorts();
 
-  /** Paints, asks, and on a refusal asks for the list again and says why. */
   const read = (marked: (n: Notification) => boolean, ask: () => Promise<void>): void => {
-    markLocally(client, workspace.id, marked, clock.now().toISOString());
-    ask().catch((failure: unknown) => {
-      void client.invalidateQueries({ queryKey: keys.notifications(workspace.id) });
-      show({ message: `${t('inbox.readFailed')} ${describe(failure)}` });
-    });
+    const prefix = keys.notifications(workspace.id);
+    const at = clock.now().toISOString();
+    // Synchronously, before the paint: an answer already on its way must not land on top of it.
+    void client.cancelQueries({ queryKey: prefix });
+    markLocally(client, workspace.id, marked, at);
+    ask().then(
+      () => {
+        markLocally(client, workspace.id, marked, at);
+      },
+      (failure: unknown) => {
+        void client.invalidateQueries({ queryKey: prefix });
+        show({ message: `${t('inbox.readFailed')} ${describe(failure)}` });
+      },
+    );
   };
 
   return {
     readIds: (ids): void => {
       if (ids.length === 0) return;
       const waiting = new Set(ids);
+      // The server takes at most a page of ids at once; a thread gathering more is read in several.
+      const chunks: string[][] = [];
+      for (let at = 0; at < ids.length; at += PAGE_LIMIT.max) {
+        chunks.push(ids.slice(at, at + PAGE_LIMIT.max));
+      }
       read(
         (n) => waiting.has(n.id),
-        () => api.readNotifications({ ids: [...ids] }),
+        async () => {
+          await Promise.all(chunks.map((chunk) => api.readNotifications({ ids: chunk })));
+        },
       );
     },
     readAll: (before, shown): void => {

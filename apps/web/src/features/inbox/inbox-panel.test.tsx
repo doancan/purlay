@@ -203,4 +203,54 @@ describe('reading, hardened', () => {
     expect(panel?.data.map((n) => n.readAt)).toEqual([at]);
     view.unmount();
   });
+
+  test('an answer already on its way when the person reads does not paint the row unread again', async () => {
+    const held: { answer?: (page: NotificationPage) => void } = {};
+    let calls = 0;
+    const view = await visit({
+      notifications: () => {
+        calls += 1;
+        // The first answer at once; the second — a frame's read-again — is held until after the read.
+        if (calls === 1) return Promise.resolve(page([told(8, 'mention')]));
+        return new Promise((resolve) => {
+          held.answer = resolve;
+        });
+      },
+      readNotifications: () => Promise.resolve(),
+    });
+    const panel = await openPanel(view);
+    const { client } = view.world;
+    // A frame says the inbox changed: the panel's page is asked again, and the answer waits.
+    void client.invalidateQueries({ queryKey: keys.notifications(IDS.workspace) });
+    await settle();
+    await person().click(within(panel).getByRole('button', { name: 'Mark read' }));
+    await settle();
+    // The stale answer lands now, still saying unread.
+    held.answer?.(page([told(8, 'mention')]));
+    await settle();
+    const cached = client.getQueryData<NotificationPage>(
+      keys.notificationsPanel(IDS.workspace, 'all'),
+    );
+    expect(cached?.data[0]?.readAt).not.toBeNull();
+    view.unmount();
+  });
+
+  test('a thread gathering more replies than the server takes at once is read in several requests', async () => {
+    const reads: ReadNotificationsRequest[] = [];
+    const many = Array.from({ length: 130 }, (_, n) => told(100 + n, 'mention'));
+    const view = await visit(
+      {
+        notifications: () => Promise.resolve(page(many)),
+        readNotifications: (input) => {
+          reads.push(input);
+          return Promise.resolve();
+        },
+      },
+      '/w/acme/inbox?category=mentions',
+    );
+    await person().click(view.getByRole('button', { name: 'Mark all read' }));
+    await settle();
+    expect(reads.map((r) => ('ids' in r ? r.ids.length : 0))).toEqual([100, 30]);
+    view.unmount();
+  });
 });
