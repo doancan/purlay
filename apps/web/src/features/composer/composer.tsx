@@ -575,7 +575,9 @@ const Inner = ({
           className={cn(
             'relative flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
             // Drawn inward, over the card's own edge: outside it, the gap reads as a second border.
-            focused && 'outline-focus outline-focus-ring -outline-offset-focus',
+            // Its own edge, not the focus ring's: in the dark themes the ring's bright blue, held
+            // for as long as somebody types, is the brightest thing on the screen (D-207).
+            focused && 'outline-focus outline-composer-edge -outline-offset-focus',
           )}
         >
           {unknown !== null && (
