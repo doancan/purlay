@@ -48,6 +48,7 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-palette-list': '--height-palette-list',
   'size-inbox-panel': '--container-inbox-panel',
   'size-inbox-panel-list': '--height-inbox-panel-list',
+  'size-attachment-preview': '--height-attachment-preview',
   'size-toast': '--container-toast',
   'size-avatar': '--size-avatar',
   'size-avatar-sm': '--size-avatar-sm',

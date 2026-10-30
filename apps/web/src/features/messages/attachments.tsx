@@ -7,7 +7,9 @@
  *   on it, stepping through the message's pictures (D-159). It is still a link to the image, so a
  *   click with ⌘ or Ctrl, or the middle button, opens it in a tab as before.
  * - **A file** is its name and size, and a download. The API serves it as one whatever it claims to
- *   be (#111), so here it is only a link.
+ *   be (#111), so here it is a link — and, when it is text by its name and small (`attachment-preview.ts`),
+ *   **Preview** beside it reads it in place, on request: a CSV as a table, Markdown formatted, code
+ *   coloured, all through the renderer, so a file's words are never HTML (D-210).
  * - A thumbnail that does not load says so in its own box, with Retry (`UX.md` §8).
  * - Each is a card inside the message: a hairline and a one-pixel shadow (D-110 §2); a size is
  *   machine text, so it is mono (§1).
@@ -15,10 +17,18 @@
  * The bytes are the API's (`/api/attachments/:id`), read with the session like everything else:
  * never a public URL.
  */
-import { useState } from 'react';
+import { useId, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { Attachment } from '@purlay/types';
 import { Icon } from '../../components/icon';
+import { useApi } from '../../data/api-provider';
+import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
+import { IconButton } from '../../ui/icon-button';
+import { LoadingStatus, Skeleton } from '../../ui/skeleton';
+import { ErrorState } from '../../ui/states';
+import { renderContent } from '../content/render-content';
+import { previewMarkdown, previewOf, type PreviewKind } from './attachment-preview';
 import { isPlainClick, useImageViewer, type ViewedImage } from './image-viewer-door';
 
 const at = (attachment: Attachment): string => `/api/attachments/${attachment.id}`;
@@ -95,20 +105,101 @@ const ImageAttachment = ({
   );
 };
 
+/** A file read in place: asked for once, kept, and drawn by the renderer in a box that scrolls. */
+const FilePreview = ({
+  id,
+  attachment,
+  preview,
+}: {
+  readonly id: string;
+  readonly attachment: Attachment;
+  readonly preview: PreviewKind;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const api = useApi();
+  const text = useQuery({
+    queryKey: keys.attachmentText(attachment.id),
+    queryFn: ({ signal }) => api.attachmentText(attachment.id, signal),
+    // An attachment never changes: once read, it is the same words until the page goes.
+    staleTime: Infinity,
+  });
+  const drawn = useMemo(
+    () => (text.data === undefined ? null : previewMarkdown(preview, text.data)),
+    [preview, text.data],
+  );
+  return (
+    <section
+      id={id}
+      aria-label={t('attachment.preview.label', { name: attachment.fileName })}
+      className="max-h-attachment-preview overflow-auto rounded-xl border-hairline border-border-subtle bg-surface-100 px-4 py-3 shadow-card scrollbar-thin"
+    >
+      {text.isPending ? (
+        <LoadingStatus label={t('attachment.preview.loading')} className="flex flex-col gap-2">
+          <Skeleton />
+          <Skeleton className="w-members" />
+        </LoadingStatus>
+      ) : drawn === null ? (
+        <ErrorState
+          title={t('attachment.preview.failed')}
+          body={t('attachment.preview.failedBody')}
+          retryLabel={t('common.retry')}
+          onRetry={() => {
+            void text.refetch();
+          }}
+        />
+      ) : (
+        <>
+          {renderContent(drawn.markdown)}
+          {drawn.more !== null && (
+            <p className="mt-2 text-caption text-ink-muted">
+              {'rows' in drawn.more
+                ? t('attachment.preview.rows', { count: drawn.more.rows })
+                : t('attachment.preview.cut')}
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+};
+
 const FileAttachment = ({ attachment }: { readonly attachment: Attachment }): React.JSX.Element => {
   const { t, format } = useI18n();
   const size = format.bytes(attachment.sizeBytes);
-  return (
+  const preview = previewOf(attachment.fileName, attachment.sizeBytes);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const card = (
     <a
       href={at(attachment)}
       download={attachment.fileName}
       aria-label={t('attachment.download', { name: attachment.fileName, size })}
-      className="flex items-center gap-2 rounded-xl border-hairline border-border-subtle bg-surface-100 px-3 py-2 text-label text-ink shadow-card"
+      className="flex min-w-0 items-center gap-2 rounded-xl border-hairline border-border-subtle bg-surface-100 px-3 py-2 text-label text-ink shadow-card"
     >
       <Icon name="file" size="sm" />
       <span className="min-w-0 truncate">{attachment.fileName}</span>
       <span className="font-mono text-caption text-ink-muted">{size}</span>
     </a>
+  );
+  if (preview === null) return card;
+  const name = attachment.fileName;
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <div className="flex items-center gap-1">
+        {card}
+        <IconButton
+          glyph="preview"
+          label={t(open ? 'attachment.preview.hide' : 'attachment.preview.show', { name })}
+          aria-expanded={open}
+          aria-controls={panelId}
+          className={open ? 'bg-surface-200 text-ink' : undefined}
+          onClick={() => {
+            setOpen(!open);
+          }}
+        />
+      </div>
+      {open && <FilePreview id={panelId} attachment={attachment} preview={preview} />}
+    </div>
   );
 };
 

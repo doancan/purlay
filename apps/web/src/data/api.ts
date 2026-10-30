@@ -302,6 +302,8 @@ export interface Api {
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
+  /** An attachment's bytes as text, read with the session, to be previewed (D-210). */
+  readonly attachmentText: (attachmentId: string, signal?: AbortSignal) => Promise<string>;
   /** Reads a thread up to and including a reply: its notifications for the caller (D-147). */
   readonly readThread: (rootId: string, lastReadMessageId: string) => Promise<void>;
   /** Whether the caller is told of new replies in this root's thread (D-161). */
@@ -732,6 +734,8 @@ export const createApi = (http: Http): Api => {
           signal,
         ),
       ),
+    attachmentText: (attachmentId, signal) =>
+      http.text(`/api/attachments/${at(attachmentId)}`, options({}, signal)),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),
     readThread: (rootId, lastReadMessageId) =>

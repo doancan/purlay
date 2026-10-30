@@ -468,3 +468,25 @@ describe('a route of the sign-in library', () => {
     expect(failure instanceof LibraryFailure && failure.code).toBe('NETWORK');
   });
 });
+
+describe('text (D-210)', () => {
+  test('is a same-origin GET whose answer is read as text, Unicode and all', async () => {
+    const { client, seen } = http(() => new Response('Bölge,Adet\nİstanbul,12', { status: 200 }));
+    expect(await client.text('/api/attachments/a')).toBe('Bölge,Adet\nİstanbul,12');
+    expect(seen[0]?.url).toBe('/api/attachments/a');
+    expect(seen[0]?.init.method).toBe('GET');
+    expect(seen[0]?.init.credentials).toBe('same-origin');
+  });
+
+  test('a refusal is the API’s error, as for any request', async () => {
+    const { client } = http(() => answer(404, { error: { code: 'NOT_FOUND', message: 'gone' } }));
+    let caught: unknown;
+    try {
+      await client.text('/api/attachments/a');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(404);
+  });
+});

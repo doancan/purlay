@@ -113,6 +113,7 @@ export const sizeTokens = [
   'size-palette-list',
   'size-inbox-panel',
   'size-inbox-panel-list',
+  'size-attachment-preview',
   'size-toast',
   'size-focus-offset',
   'size-icon-sm',

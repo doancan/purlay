@@ -113,6 +113,20 @@ export const tableFromDelimited = (pasted: string): string | null => {
 };
 
 /**
+ * The first rows of a delimited file as a table, and how many rows were left out — for a preview,
+ * which shows the top of a file of any length (D-210). `null` when it is not a table.
+ */
+export const tablePreview = (
+  delimited: string,
+  bodyRows: number,
+): { readonly markdown: string; readonly more: number } | null => {
+  const rows = rowsOf(delimited);
+  if (rows === null) return null;
+  const shown = rows.slice(0, bodyRows + 1);
+  return { markdown: tableOf(shown), more: rows.length - shown.length };
+};
+
+/**
  * The language a pasted block is in, by what only that language looks like, or `null` when it is
  * not clear — an unnamed block is drawn plain, which is better than coloured wrong. Every name is one
  * the highlighter has a grammar for (`highlight.ts`).
