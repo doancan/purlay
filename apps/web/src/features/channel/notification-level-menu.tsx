@@ -25,15 +25,17 @@ const levelOf = (value: string): NotificationLevel | undefined =>
  * Choosing a level, for the header's menu and the channel's details alike: painted at once, put back
  * and said in a toast when the server refuses.
  */
-export const useChooseLevel = (channel: Channel): ((level: NotificationLevel) => void) => {
+export const useChooseLevel = (
+  channel: Channel | undefined,
+): ((level: NotificationLevel) => void) => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
   const { show } = useToast();
   const describe = useDescribeFailure();
-  const current = channel.notificationLevel;
+  const current = channel?.notificationLevel ?? null;
   return (level) => {
-    if (current === null || level === current) return;
+    if (channel === undefined || current === null || level === current) return;
     channelLevelChanged(client, channel.id, level);
     api.setNotificationLevel(channel.id, level).catch((failure: unknown) => {
       channelLevelChanged(client, channel.id, current);

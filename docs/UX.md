@@ -629,6 +629,15 @@ either keeps later edits as above; inside code a paste is always the words as th
 `Cmd/Ctrl+Shift+V` pastes the words as they are anywhere. A block always starts on a line of its own — after
 words on the same line a fence is not one.
 
+**Slash commands** (D-214). A `/` at the very start opens a list of commands, narrowed as letters are
+typed; arrows move, Tab (or Enter, until the command is whole) writes it out with a space for its words, Esc
+closes the list. Each is a door to what the product already does, painted, refused and put back as its
+button is: `/me` (the words in italics), `/shrug`, `/topic` (nothing after it clears it), `/mute`,
+`/unmute`, `/star`, `/unstar`, `/invite @name`, `/leave`, `/deepwork 30m|1h|2h|tomorrow|off`, `/search`.
+What is done is said in a toast; what is refused, under the box, with the words kept. An unknown `/word` is
+not sent and the line says which commands there are; `//` at the start sends a slash as words; with files
+attached, a line is words.
+
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
 
