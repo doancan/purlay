@@ -259,6 +259,8 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<MessagePage>;
+  /** One message, for the card a link to it is drawn as (D-217); 404 when it is not the caller's to see. */
+  readonly message: (messageId: string, signal?: AbortSignal) => Promise<Message>;
   /** The feed around one message, for a link to it (D-149). */
   readonly messageWindow: (messageId: string, signal?: AbortSignal) => Promise<MessageWindow>;
   readonly send: (channelId: string, input: SendMessageRequest) => Promise<Message>;
@@ -663,6 +665,8 @@ export const createApi = (http: Http): Api => {
         MessagePage,
         options({ query: { ...page } }, signal),
       ),
+    message: (messageId, signal) =>
+      http.request('GET', `/api/messages/${at(messageId)}`, Message, options({}, signal)),
     messageWindow: (messageId, signal) =>
       http.request(
         'GET',

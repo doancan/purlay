@@ -59,6 +59,8 @@ export const keys = {
    */
   unreads: (channelId: string, position: string | null, count: number) =>
     ['unreads', channelId, position ?? 'start', count] as const,
+  /** One message, read for the card a link to it is drawn as (D-217). */
+  message: (messageId: string) => ['message', messageId] as const,
   /** What one person sent in a workspace, newest first (D-215): search narrowed to them. */
   sent: (workspaceId: string, userId: string) => ['sent', workspaceId, userId] as const,
   /** An attachment's words, read to preview it (D-210): a file never changes, so it is read once. */
