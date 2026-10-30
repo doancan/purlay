@@ -438,7 +438,8 @@ page of the same name.
   the message has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
-- **Reactions** sit below the content, above the thread affordance. A chip's tooltip says who:
+- **Reactions** sit below the content, above the thread affordance, as soft pills (D-209): no frame,
+  the accent's tint under the pointer, yours in it and heavier. A chip's tooltip says who:
   "You, Alice and Bob reacted with 👍"; past three, two names and how many others (D-150).
 - **Edited** and **Pinned** share one line under the words, apart from each other.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,

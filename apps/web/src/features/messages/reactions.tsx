@@ -26,6 +26,7 @@ import type { MessageKey } from '../../i18n/types';
 import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuTile, MenuTiles } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
+import { cn } from '../../ui/cn';
 import { Tooltip } from '../../ui/tooltip';
 import { useWorkspaceIfAny } from '../shell/workspace';
 
@@ -117,11 +118,14 @@ const Chip = ({
           count: reaction.userIds.length,
         })}
         onClick={onToggle}
-        className={
+        // A soft pill, as Slack's, Discord's and Linear's are (D-209): no frame at rest, the accent's
+        // tint under the pointer — what a click would make it — and yours in it, and in the heavier weight.
+        className={cn(
+          'inline-flex h-6 items-center gap-1 rounded-pill px-2 text-caption font-medium transition-colors duration-hover ease-standard',
           mine
-            ? 'inline-flex h-6 items-center gap-1 rounded-sm border-hairline border-accent-text bg-accent-subtle px-2 text-caption font-medium text-accent-text'
-            : 'inline-flex h-6 items-center gap-1 rounded-sm border-hairline border-border-subtle bg-surface-050 px-2 text-caption font-medium text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink'
-        }
+            ? 'bg-accent-subtle font-semibold text-accent-text'
+            : 'bg-surface-200 text-ink-muted hover:bg-accent-subtle hover:text-accent-text',
+        )}
       >
         <span aria-hidden="true">{reaction.emoji}</span>
         <span aria-hidden="true" className="font-mono">
