@@ -509,6 +509,11 @@ status a column away from the message it is about.
   └─╰──────────────────────────────────────╯────┘
 ```
 
+- **Forward…** is in a message's **More** menu for a member (D-217): choose a channel or a conversation you
+  are in, by name, add a note if you want, and it is sent there as your message ending in the original's
+  link. **A link to a message of this workspace is drawn as a card** under the words — who, where, when and the
+  start of it — for whoever may see the original, and as *This message is not available to you* for whoever
+  may not: forwarding a private message shares a link, never its words.
 - **Quote reply** is in a message's **More** menu for a member (D-213): the part of the message the person
   selected, or all of it, goes into the composer it answers in — a reply's thread, a root's channel — as a
   markdown quote with its author's name (never an `@`, so quoting does not notify) and a link back, after

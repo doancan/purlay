@@ -9,7 +9,7 @@ import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { BOB, ME, aMessage, aSession } from '../../testing/fixtures';
+import { BOB, IDS, ME, aMessage, aSession } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { expectFocusOn } from '../../testing/focus';
 
@@ -94,6 +94,7 @@ describe('the menu (D-150)', () => {
       'Copy link',
       'Copy text',
       'Mark as a question',
+      'Forward…',
       'Quote reply',
       'Mark unread from here',
       'Save for later',
@@ -108,6 +109,7 @@ describe('the menu (D-150)', () => {
       'Copy link',
       'Copy text',
       'Mark as a question',
+      'Forward…',
       'Quote reply',
       'Mark unread from here',
       'Save for later',
@@ -499,6 +501,34 @@ describe('deleting', () => {
     await person().click(within(rowOf(view, mine)).getByRole('button', { name: 'Daha fazla' }));
     await person().click(view.getByRole('menuitem', { name: /Sil/ }));
     expect(view.getByRole('dialog', { name: 'Bu mesaj silinsin mi?' })).toBeDefined();
+    view.unmountAll();
+  });
+});
+
+describe('forwarding (D-217)', () => {
+  test('sends the link on to the channel chosen, after the note, and says so', async () => {
+    const view = await mountChannel({ messages: page([theirs]), api: asMember });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const dialog = within(view.getByRole('dialog', { name: 'Forward message' }));
+    const send = dialog.getByRole('button', { name: 'Forward' });
+    expect(send.hasAttribute('disabled')).toBe(true);
+    await person().type(
+      dialog.getByRole('searchbox', { name: 'Find a channel or a person' }),
+      'dep',
+    );
+    await person().click(dialog.getByRole('radio', { name: /deploys/ }));
+    await person().type(dialog.getByRole('textbox', { name: 'Add a note (optional)' }), 'FYI');
+    await person().click(send);
+    const frames = view.world.sockets
+      .sent('MESSAGE_SEND')
+      .map((frame) => frame.payload as { channelId: string; content: string });
+    expect(frames.at(-1)?.channelId).toBe(IDS.deploys);
+    expect(frames.at(-1)?.content).toBe(
+      `FYI\n\n${window.location.origin}/w/acme/c/${IDS.api}?message=${theirs.id}`,
+    );
+    expect(view.getByText('Forwarded')).toBeDefined();
     view.unmountAll();
   });
 });

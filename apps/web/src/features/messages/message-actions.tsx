@@ -29,6 +29,7 @@ import { holdUnread, releaseUnread } from '../channel/use-mark-read';
 import { composerKey, focusComposer, quoteMarkdown, sendToComposer } from '../composer/quote';
 import { authorOf } from './author';
 import { messageUrl } from './message-link';
+import { ForwardDialog } from './forward-dialog';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { PinMenuItem, PinToggle } from '../pins/pin-toggle';
@@ -180,6 +181,7 @@ const MoreMenu = ({
   const focusMoved = useRef(false);
   const selected = useRef<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [forwarding, setForwarding] = useState(false);
 
   const confirm = (): void => {
     setAsking(false);
@@ -257,6 +259,16 @@ const MoreMenu = ({
         )}
         {member && message.deletedAt === null && (
           <MenuItem
+            glyph="reply"
+            onSelect={() => {
+              setForwarding(true);
+            }}
+          >
+            {t('message.forward')}
+          </MenuItem>
+        )}
+        {member && message.deletedAt === null && (
+          <MenuItem
             glyph="quote"
             onSelect={() => {
               focusMoved.current = quote(message, selected.current);
@@ -306,6 +318,7 @@ const MoreMenu = ({
           </MenuItem>
         )}
       </Menu>
+      {member && <ForwardDialog message={message} open={forwarding} onOpenChange={setForwarding} />}
       <Dialog
         open={asking}
         onOpenChange={setAsking}
