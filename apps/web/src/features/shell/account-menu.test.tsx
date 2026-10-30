@@ -4,7 +4,7 @@
  * erasing the account are the Sessions & account page's (`settings/pages/account.test.tsx`).
  */
 import { describe, expect, test } from 'bun:test';
-import { act } from '@testing-library/react';
+import { act, within } from '@testing-library/react';
 import type { MeResponse, SetDeepWorkRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
@@ -56,6 +56,12 @@ const menu = async (view: View): Promise<void> => {
   await person().click(view.getByRole('button', { name: /^Account: Dogancan @/ }));
 };
 
+/** Deep Work's whiles are a submenu (D-207): the item that opens it, then the whiles. */
+const whiles = async (view: View): Promise<void> => {
+  await menu(view);
+  await person().click(view.getByRole('menuitem', { name: 'Deep Work' }));
+};
+
 const here = (view: View): string => view.world.history.stack.at(-1) ?? '';
 
 describe('the account menu', () => {
@@ -63,10 +69,7 @@ describe('the account menu', () => {
     const view = await open();
     await menu(view);
     expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'For 30 minutes',
-      'For 1 hour',
-      'For 2 hours',
-      'Until tomorrow',
+      'Deep Work',
       expect.stringMatching(/^Settings/) as unknown as string,
       expect.stringMatching(/^Keyboard shortcuts/) as unknown as string,
       'Sign out',
@@ -74,6 +77,26 @@ describe('the account menu', () => {
     // The theme and the language are Preferences'; signing out everywhere and erasing, Sessions & account's.
     expect(view.queryAllByRole('menuitemradio')).toEqual([]);
     await expectNoAxeViolations(view.getByRole('menu'));
+    // Deep Work's four whiles are one item that opens them, not four that outnumber the rest.
+    await person().click(view.getByRole('menuitem', { name: 'Deep Work' }));
+    const submenu = view.getAllByRole('menu').at(-1);
+    if (submenu === undefined) throw new Error('no submenu');
+    expect(
+      within(submenu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['For 30 minutes', 'For 1 hour', 'For 2 hours', 'Until tomorrow']);
+    view.unmount();
+  });
+
+  test('opens with who you are, and its door says you are online and that a menu opens (D-207)', async () => {
+    const view = await open();
+    const door = view.getByRole('button', { name: /^Account: Dogancan @/ });
+    expect(door.getAttribute('aria-haspopup')).toBe('menu');
+    await menu(view);
+    const card = within(view.getByRole('menu'));
+    expect(card.getByText('Dogancan')).toBeDefined();
+    expect(card.getByText(/^@/)).toBeDefined();
     view.unmount();
   });
 
@@ -102,7 +125,7 @@ describe('the account menu', () => {
           return new Promise(() => undefined);
         },
       });
-      await menu(view);
+      await whiles(view);
       await person().click(view.getByRole('menuitem', { name: label }));
       expect(asked).toEqual([{ active: true, until: after(minutes) }]);
       await settle();
@@ -119,7 +142,7 @@ describe('the account menu', () => {
         return new Promise(() => undefined);
       },
     });
-    await menu(view);
+    await whiles(view);
     await person().click(view.getByRole('menuitem', { name: 'Until tomorrow' }));
     expect(asked).toEqual([
       { active: true, until: deepWorkEnd('tomorrow', new Date(NOON)).toISOString() },
@@ -141,6 +164,8 @@ describe('the account menu', () => {
     await menu(view);
     expect(view.getByText(/^Deep Work until .*, 42 minutes left$/)).toBeDefined();
     expect(view.queryByRole('menuitem', { name: 'For 1 hour' })).toBeNull();
+    // On, its end is one step away: in the menu itself, not inside the submenu.
+    expect(view.queryByRole('menuitem', { name: 'Deep Work' })).toBeNull();
     await person().click(view.getByRole('menuitem', { name: 'End Deep Work' }));
     await settle();
     expect(asked).toEqual([{ active: false }]);

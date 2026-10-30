@@ -177,6 +177,38 @@ export const MenuItem = ({
   </RadixMenu.Item>
 );
 
+interface MenuSubProps {
+  readonly glyph?: GlyphName;
+  /** What the item that opens it says; a chevron after it says there is more. */
+  readonly label: string;
+  readonly children: React.ReactNode;
+}
+
+/**
+ * A menu inside a menu: a group of choices that would crowd the menu it opens from, as a
+ * submenu does in every desktop app. ArrowRight or Enter opens it and ArrowLeft closes it,
+ * which is Radix's; the item stays highlighted while its submenu is open, so the eye can
+ * follow where it came from.
+ */
+export const MenuSub = ({ glyph, label, children }: MenuSubProps): React.JSX.Element => (
+  <RadixMenu.Sub>
+    <RadixMenu.SubTrigger
+      className={cn(itemClasses, toneClasses.default, 'data-[state=open]:bg-surface-200')}
+    >
+      {glyph === undefined ? null : <Icon name={glyph} />}
+      <span className="flex-1">{label}</span>
+      <span className="text-ink-subtle">
+        <Icon name="next" />
+      </span>
+    </RadixMenu.SubTrigger>
+    <RadixMenu.Portal>
+      <RadixMenu.SubContent className={contentClasses} sideOffset={4} collisionPadding={8}>
+        {children}
+      </RadixMenu.SubContent>
+    </RadixMenu.Portal>
+  </RadixMenu.Sub>
+);
+
 export const MenuLabel = ({
   children,
 }: {
