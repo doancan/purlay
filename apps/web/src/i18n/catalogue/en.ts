@@ -190,6 +190,7 @@ export const en = {
   // ── Workspace and sidebar ───────────────────────────────────────────────
   'sidebar.label': 'Workspace',
   'sidebar.switch': 'Switch workspace',
+  'sidebar.workspace.members': { one: '{count} member', other: '{count} members' },
   'sidebar.questions': 'Open questions',
   'sidebar.starred': 'Starred',
   'sidebar.options': 'Sidebar options',

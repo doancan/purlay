@@ -58,8 +58,9 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (264px)** — the workspace's mark and name with a chevron, inset and rounded as the rows are, the one
-  door to the **workspace menu** (the workspaces to switch to, **Create workspace…**, and for an owner or an admin
+- **Sidebar (264px)** — the workspace's card (D-209): its mark, its name and, under it, your role and how many
+  are in it, framed, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
+  radios with their marks, the current one checked, **Create workspace…**, and for an owner or an admin
   **Invite people…** and **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
