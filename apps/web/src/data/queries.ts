@@ -26,6 +26,7 @@ import type {
   MessagePage,
   FilePage,
   NotificationPage,
+  NotificationTypesFilter,
   WorkspaceMember,
   ChannelMember,
   ThreadFollow,
@@ -287,20 +288,38 @@ export const useUnresolved = (
   });
 };
 
+/**
+ * A view of the inbox (D-208): a name for the cache, and the `types` the server is asked for — none
+ * for every type. The data layer knows no categories; the inbox names them.
+ */
+export interface NotificationView {
+  readonly key: string;
+  readonly types?: NotificationTypesFilter;
+}
+
 /** The caller's inbox in one workspace, newest first, a page at a time (D-106). */
 export const useNotifications = (
   workspaceId: string,
   unreadOnly = false,
+  view?: NotificationView,
 ): UseInfiniteQueryResult<InfiniteData<NotificationPage>> => {
   const api = useApi();
+  const types = view?.types;
   return useInfiniteQuery({
-    queryKey: unreadOnly
-      ? keys.notifications(workspaceId, 'unread')
-      : keys.notifications(workspaceId),
+    // Every type keeps the inbox's first key, so what already reads or writes it still does.
+    queryKey: keys.notifications(
+      workspaceId,
+      unreadOnly ? 'unread' : undefined,
+      types === undefined ? undefined : view?.key,
+    ),
     queryFn: ({ pageParam, signal }) =>
       api.notifications(
         workspaceId,
-        unreadOnly ? { before: pageParam, unreadOnly } : { before: pageParam },
+        {
+          before: pageParam,
+          ...(unreadOnly ? { unreadOnly } : {}),
+          ...(types === undefined ? {} : { types }),
+        },
         signal,
       ),
     initialPageParam: undefined as string | undefined,
