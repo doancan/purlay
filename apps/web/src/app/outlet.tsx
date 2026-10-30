@@ -34,6 +34,7 @@ import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { SavedScreen } from '../features/saved/saved-screen';
 import { DraftsScreen } from '../features/drafts/drafts-screen';
+import { UnreadsScreen } from '../features/unreads/unreads-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
@@ -146,6 +147,12 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <DraftsScreen />
+        </Shell>
+      );
+    case 'unreads':
+      return (
+        <Shell slug={match.params.slug}>
+          <UnreadsScreen />
         </Shell>
       );
     case 'welcome':

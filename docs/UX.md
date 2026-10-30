@@ -63,7 +63,9 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   are in it, framed, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
   radios with their marks, the current one checked, **Create workspace…**, and for an owner or an admin
   **Invite people…** and **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
-  field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
+  field (the palette's door, `⌘K`), **All unreads** while a channel waits (D-216: each unread, unmuted channel's
+  new messages oldest first, a page each, Mark read reading what was shown, replies said to wait in their
+  threads), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
   (D-132) — the channels, by name so that a new message never moves a row (D-160), under a heading that carries **Browse channels** and **New channel**, always
 shown in the section's quiet tone with a tooltip each, never revealed only under a pointer — the **conversations** — groups of up to ten

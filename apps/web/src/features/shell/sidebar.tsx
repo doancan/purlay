@@ -13,6 +13,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { ChannelList } from '../sidebar/channel-list';
 import { StarredList } from '../sidebar/starred-list';
+import { UnreadsRow } from '../unreads/unreads-row';
 import { ConversationList } from '../sidebar/conversation-list';
 import { JumpField } from '../sidebar/jump-field';
 import { PeopleList } from '../sidebar/people-list';
@@ -66,6 +67,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
             <div className="pt-1 pb-3">
+              <UnreadsRow />
               <StarredList />
               <ChannelList />
             </div>
