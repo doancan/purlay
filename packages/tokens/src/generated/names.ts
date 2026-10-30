@@ -24,6 +24,7 @@ export const colorTokens = [
   'nav-rail',
   'nav-surface',
   'nav-hover',
+  'nav-selected',
   'nav-border',
   'nav-ink',
   'nav-ink-muted',

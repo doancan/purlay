@@ -21,6 +21,7 @@
   --color-nav-rail: var(--nav-rail);
   --color-nav-surface: var(--nav-surface);
   --color-nav-hover: var(--nav-hover);
+  --color-nav-selected: var(--nav-selected);
   --color-nav-border: var(--nav-border);
   --color-nav-ink: var(--nav-ink);
   --color-nav-ink-muted: var(--nav-ink-muted);

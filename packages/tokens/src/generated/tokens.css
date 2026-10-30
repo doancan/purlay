@@ -108,6 +108,7 @@
   --nav-rail: #131315;
   --nav-surface: #171719;
   --nav-hover: #26262a;
+  --nav-selected: #1c2742;
   --nav-border: #2a2a2e;
   --nav-ink: #f5f5f7;
   --nav-ink-muted: #a5a5ad;
@@ -162,6 +163,7 @@
   --nav-rail: #e9ecf5;
   --nav-surface: #f3f5fa;
   --nav-hover: #dfe3f1;
+  --nav-selected: #dce6fc;
   --nav-border: #d6dbeb;
   --nav-ink: #1b1c2e;
   --nav-ink-muted: #555977;
@@ -216,6 +218,7 @@
   --nav-rail: #16162b;
   --nav-surface: #22223f;
   --nav-hover: #2e2e52;
+  --nav-selected: #242e5e;
   --nav-border: #34345a;
   --nav-ink: #f4f4f8;
   --nav-ink-muted: #a9a9c6;
