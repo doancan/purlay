@@ -636,7 +636,7 @@ describe('the workspace menu', () => {
 
   test('names the workspace, lists the others, and marks the one you are in', async () => {
     const view = await open(aSignedInApi({ me: () => Promise.resolve(two()) }));
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     const items = view.getAllByRole('menuitem').map((i) => i.textContent);
     // The owner of acme-eng is also offered invitation links (D-115) and the workspace's settings,
     // a page of Settings (D-146); everything else an owner does is there.
@@ -661,7 +661,7 @@ describe('the workspace menu', () => {
           }),
       }),
     );
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
       'acme-eng',
       'Create workspace…',
@@ -673,7 +673,7 @@ describe('the workspace menu', () => {
   test('Workspace settings opens the General page, with a way Back', async () => {
     const view = await open();
     const before = view.world.history.stack.length;
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: en['workspace.settings.entry'] }));
     expect(await view.findByRole('heading', { level: 1, name: 'General' })).toBeDefined();
     expect(here(view)).toBe('/w/acme/settings/general');
@@ -682,7 +682,7 @@ describe('the workspace menu', () => {
 
   test('each place in it has a glyph of its own, so it is found without reading every label (#642)', async () => {
     const view = await open();
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     const places = view
       .getAllByRole('menuitem')
       .filter((item) => item.textContent !== 'acme-eng')
@@ -707,7 +707,7 @@ describe('the workspace menu', () => {
     const view = await open(
       aSignedInApi({ me: () => Promise.resolve({ ...aSession(), mayCreateWorkspace: false }) }),
     );
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     const items = view.getAllByRole('menuitem').map((i) => i.textContent);
     expect(items).toContain('Invite people…');
     expect(items).not.toContain('Create workspace…');
@@ -715,17 +715,17 @@ describe('the workspace menu', () => {
 
   test('Create workspace… is put away by its Cancel, and nothing is made', async () => {
     const view = await open();
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
     const dialog = await view.findByRole('dialog');
     await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(view.queryByRole('dialog')).toBeNull();
   });
 
-  test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
+  test('the workspace’s name at the top of the sidebar opens the workspace menu (D-206)', async () => {
     const view = await open();
     const sidebar = within(view.getByRole('complementary'));
-    const door = sidebar.getByRole('button', { name: 'acme-eng' });
+    const door = sidebar.getByRole('button', { name: 'acme-eng Switch workspace' });
     expect(door.getAttribute('aria-haspopup')).toBe('menu');
     await person().click(door);
     expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
@@ -779,7 +779,9 @@ describe('the workspace menu', () => {
     );
     const before = view.world.history.stack.length;
     await person().click(
-      within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' }),
+      within(view.getByRole('complementary')).getByRole('button', {
+        name: 'acme-eng Switch workspace',
+      }),
     );
     await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
     const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
@@ -795,7 +797,9 @@ describe('the workspace menu', () => {
 
   test('a dialog the menu opened gives focus back to the name that opened the menu, when it is closed', async () => {
     const view = await open();
-    const door = within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' });
+    const door = within(view.getByRole('complementary')).getByRole('button', {
+      name: 'acme-eng Switch workspace',
+    });
     await person().click(door);
     await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
     const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
@@ -813,7 +817,7 @@ describe('the workspace menu', () => {
         channels: () => Promise.resolve([]),
       }),
     );
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'side-project' }));
     expect(here(view)).toBe('/w/side');
   });

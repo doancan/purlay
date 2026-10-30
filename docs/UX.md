@@ -38,9 +38,9 @@ for no benefit at this size; what the person arranges about the sidebar is what 
 ```
  ┌────┬──────────────────┬────────────────────────────────────────────────┬─────────┐
  │    │                  │ # api  Backend API…     (Feed)(Questions 3) ⍟ │         │
- │ AE │ Acme Engineering │────────────────────────────────────────────────│ members │
+ │ ▢  │ AE Acme Eng…   ⌄ │────────────────────────────────────────────────│ members │
  │    │ ⌕ Search… ⌘K     │ Today ──────────────────────────────           │ (opt.)  │
- │ ▢  │ Channels         │ (SC) Sarah Chen  09:14                         │         │
+ │    │ Channels         │ (SC) Sarah Chen  09:14                         │         │
  │ ✉• │  # api           │      Here's the updated session hook…          │  200px  │
  │ ?3 │  # deploys    2  │      ┌ ts · 14 lines ──────────── Copy ┐       │         │
  │ ⌕  │ People           │      └─────────────────────────────────┘       │         │
@@ -49,7 +49,7 @@ for no benefit at this size; what the person arranges about the sidebar is what 
  └────┴──────────────────┴────────────────────────────────────────────────┴─────────┘
 ```
 
-- **Rail (56px)** — the workspace tile, a second door to the workspace menu; then channels, the
+- **Rail (56px)** — not the workspace, which heads the sidebar beside it (D-206); channels, the
   inbox (a dot while anything needs you — the same fact as the mention badges, D-106, so in Deep Work
   it is not drawn, as they are not, D-15), open
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
@@ -58,8 +58,8 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (264px)** — the workspace's tile and name with a chevron, inset and rounded as the rows are, which
-  opens the **workspace menu** (the workspaces to switch to, **Create workspace…**, and for an owner or an admin
+- **Sidebar (264px)** — the workspace's mark and name with a chevron, inset and rounded as the rows are, the one
+  door to the **workspace menu** (the workspaces to switch to, **Create workspace…**, and for an owner or an admin
   **Invite people…** and **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header

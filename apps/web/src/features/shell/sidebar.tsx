@@ -56,7 +56,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           workspaceId={workspace.id}
         >
           <div className="flex h-header shrink-0 items-center gap-1 px-2">
-            <WorkspaceMenu door="name" />
+            <WorkspaceMenu />
             <SidebarOptions />
           </div>
           <div className="px-2 pb-3">
