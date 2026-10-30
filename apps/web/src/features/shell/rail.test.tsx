@@ -48,14 +48,14 @@ const root = (n: number): Message =>
   });
 
 describe('the rail', () => {
-  test('holds the five places, each named, and Settings at its foot (D-146) — not the workspace (D-206)', async () => {
+  test('holds the six places, each named, and Settings at its foot (D-146) — not the workspace (D-206)', async () => {
     const view = await open();
     const rail = within(places(view));
     // The workspace is drawn once, at the head of the sidebar; the rail is the places.
     expect(rail.queryByRole('button', { name: /Switch workspace/ })).toBeNull();
     expect(
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
-    ).toEqual(['Channels', 'Open questions', 'Search', 'Saved', 'Settings']);
+    ).toEqual(['Channels', 'Open questions', 'Search', 'Saved', 'Drafts and sent', 'Settings']);
     // The inbox opens its panel (D-208): a button, between Channels and Open questions.
     expect(rail.getAllByRole('button').map((button) => button.textContent.trim())).toEqual([
       'Inbox',
@@ -107,6 +107,7 @@ describe('the rail', () => {
     ['/w/acme/questions', 'Open questions'],
     ['/w/acme/search', 'Search'],
     ['/w/acme/saved', 'Saved'],
+    ['/w/acme/drafts', 'Drafts and sent'],
   ])('on %s, %s is the current page and nothing else is', async (path, current) => {
     const view = await open(
       aSignedInApi({ saved: () => Promise.resolve({ data: [], nextCursor: null }) }),
@@ -263,13 +264,13 @@ describe('the open questions', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab runs the five places and Settings, then the sidebar from the workspace’s name', async () => {
+  test('Tab runs the six places and Settings, then the sidebar from the workspace’s name', async () => {
     const view = await open();
     act(() => {
       within(places(view)).getByRole('link', { name: 'Channels' }).focus();
     });
     const names: string[] = [];
-    for (let step = 0; step < 8; step++) {
+    for (let step = 0; step < 9; step++) {
       await person().tab();
       const active = document.activeElement;
       names.push(
@@ -281,6 +282,7 @@ describe('the keyboard', () => {
       'Open questions',
       'Search',
       'Saved',
+      'Drafts and sent',
       'Settings',
       // The mark's two letters come first in its text and are hidden from a screen reader, which hears
       // the name and then what the button does; the card's line under the name is seen, not heard.

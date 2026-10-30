@@ -33,6 +33,7 @@ import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { SavedScreen } from '../features/saved/saved-screen';
+import { DraftsScreen } from '../features/drafts/drafts-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
@@ -139,6 +140,12 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <SavedScreen />
+        </Shell>
+      );
+    case 'drafts':
+      return (
+        <Shell slug={match.params.slug}>
+          <DraftsScreen />
         </Shell>
       );
     case 'welcome':

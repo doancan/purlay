@@ -65,6 +65,10 @@ const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
     removeItem: (key): void => {
       items.delete(key);
     },
+    key: (index): string | null => [...items.keys()][index] ?? null,
+    get length(): number {
+      return items.size;
+    },
   };
 };
 
@@ -783,6 +787,10 @@ describe('drafts', () => {
         throw new Error('full');
       },
       removeItem: () => {
+        throw new Error('blocked');
+      },
+      length: 0,
+      key: () => {
         throw new Error('blocked');
       },
     };

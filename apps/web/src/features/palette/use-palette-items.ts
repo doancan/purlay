@@ -58,6 +58,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     for (const view of [
       { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
       { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
+      { id: 'drafts', label: t('drafts.title'), glyph: 'edit', to: href('drafts', { slug }) },
       { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
     ] as const) {
       items.push({

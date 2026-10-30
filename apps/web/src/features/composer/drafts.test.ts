@@ -2,7 +2,7 @@
  * Where unsent text is kept, and that no storage failure reaches the person.
  */
 import { describe, expect, test } from 'bun:test';
-import { draftKey, readDraft, writeDraft, type DraftStorage } from './drafts';
+import { draftKey, listDrafts, readDraft, writeDraft, type DraftStorage } from './drafts';
 
 const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
   const items = new Map<string, string>();
@@ -15,6 +15,10 @@ const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
     removeItem: (key): void => {
       items.delete(key);
     },
+    key: (index): string | null => [...items.keys()][index] ?? null,
+    get length(): number {
+      return items.size;
+    },
   };
 };
 
@@ -26,6 +30,10 @@ const broken: DraftStorage = {
     throw new Error('full');
   },
   removeItem: () => {
+    throw new Error('blocked');
+  },
+  length: 0,
+  key: () => {
     throw new Error('blocked');
   },
 };
@@ -60,5 +68,30 @@ describe('remembering', () => {
     expect(readDraft(broken, 'k')).toBe('');
     writeDraft(broken, 'k', 'text');
     writeDraft(broken, 'k', '');
+  });
+});
+
+describe('listing drafts (D-215)', () => {
+  test('lists this person’s drafts — a channel’s and a thread’s — and nobody else’s or empty ones', () => {
+    const storage = memory();
+    writeDraft(storage, draftKey('me', 'c1', undefined), 'half a thought');
+    writeDraft(storage, draftKey('me', 'c2', 'root9'), 'a reply');
+    writeDraft(storage, draftKey('someone-else', 'c1', undefined), 'not mine');
+    storage.setItem(draftKey('me', 'c3', undefined), '   ');
+    storage.setItem('purlay.theme', 'dark');
+    expect(listDrafts(storage, 'me')).toEqual([
+      {
+        key: draftKey('me', 'c1', undefined),
+        channelId: 'c1',
+        parentId: null,
+        text: 'half a thought',
+      },
+      { key: draftKey('me', 'c2', 'root9'), channelId: 'c2', parentId: 'root9', text: 'a reply' },
+    ]);
+  });
+
+  test('a storage that refuses, or none, is no drafts, never an error', () => {
+    expect(listDrafts(broken, 'me')).toEqual([]);
+    expect(listDrafts(null, 'me')).toEqual([]);
   });
 });
