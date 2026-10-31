@@ -821,7 +821,8 @@ The rules are D-109's; this is the path through the code.
    reconciled by `reconcile:storage`.
 
 Downloads are always brokered by the API so membership is actually checked; storage keys are
-never public URLs.
+never public URLs. A copy the browser kept is checked too: `private, no-cache` with a tag, so every use
+asks first, and the answer is `304` only after the same guard (D-231 §3).
 
 ---
 

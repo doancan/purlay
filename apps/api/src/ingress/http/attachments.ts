@@ -6,8 +6,12 @@
  * the upload claimed. Everything else is a file to save: `attachment`, as
  * `application/octet-stream` — the stored type is never echoed, so an HTML or SVG upload cannot be
  * rendered as the document it pretends to be. Either way `nosniff`, a sandboxing policy that loads
- * nothing, and `same-origin` for who may embed it. The bytes behind an id never change and the
- * cache is the person's own, so it is cached as long as a browser will.
+ * nothing, and `same-origin` for who may embed it.
+ *
+ * Kept by the person's browser, and asked about every time it is used (D-231 §3): `private, no-cache`
+ * with a tag, so a copy is shown only once the server has said, again, that this session may read it — a
+ * member removed from the channel is refused it like anybody else. The bytes behind an id never change,
+ * so the tag is the id and its variant, and a copy still allowed is a `304` without a read of the store.
  */
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
@@ -22,6 +26,7 @@ import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
 import type { Atomically } from '../../platform/transactions';
 import { discardUpload } from '../../modules/attachments/uploads';
+import { isUnchanged } from './client';
 import { requireSession } from './session';
 
 export interface AttachmentRouteDependencies {
@@ -61,33 +66,51 @@ const downloadHeaders = (attachment: ReadableAttachment): Record<string, string>
     'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'none'; frame-ancestors 'none'; sandbox",
     'cross-origin-resource-policy': 'same-origin',
-    'cache-control': 'private, max-age=31536000, immutable',
   };
 };
+
+/** The browser's own copy, never shown without asking first (D-231 §3). */
+const CACHING = 'private, no-cache';
+
+/** An attachment's bytes, or a `304` that the browser's copy is still the one, and still theirs. */
+export type Download =
+  | {
+      readonly status: 200;
+      readonly body: ReadableStream<Uint8Array>;
+      readonly headers: Record<string, string>;
+    }
+  | { readonly status: 304; readonly headers: Record<string, string> };
 
 export const downloadAttachment = async (
   dependencies: AttachmentRouteDependencies,
   request: Request,
   attachmentId: string,
   variant: Variant,
-): Promise<{
-  readonly body: ReadableStream<Uint8Array>;
-  readonly headers: Record<string, string>;
-}> => {
+): Promise<Download> => {
   const { database, storage } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const attachment = await requireAttachmentById(database, userId, attachmentId);
   const key = variant === 'original' ? attachment.storageKey : attachment.thumbnailKey;
   // A file has no thumbnail: there is nothing at that address, for anyone.
   if (key === null) throw attachmentNotFound();
+  const validator = { 'cache-control': CACHING, etag: `"${attachment.id}-${variant}"` };
+  // Asked only now that the reader is allowed it: their copy is the one, and nothing is read or sent.
+  if (isUnchanged(request.headers.get('if-none-match'), validator.etag)) {
+    return { status: 304, headers: validator };
+  }
   const stored = await storage.get(key);
   if (stored === null) {
     // A row whose object is gone is our failure, not the reader's: loud, never "not found".
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
   return {
+    status: 200,
     body: stored.body,
-    headers: { ...downloadHeaders(attachment), 'content-length': String(stored.size) },
+    headers: {
+      ...downloadHeaders(attachment),
+      ...validator,
+      'content-length': String(stored.size),
+    },
   };
 };
 
