@@ -250,3 +250,88 @@ describe('general', () => {
     view.unmount();
   });
 });
+
+describe('archived channels (D-232)', () => {
+  const OLD = {
+    id: '00000000-0000-4000-8000-0000000000a1',
+    name: 'old-launch',
+    type: 'public' as const,
+    archivedAt: '2026-10-30T08:00:00.000Z',
+  };
+  const SECRET = {
+    id: '00000000-0000-4000-8000-0000000000a2',
+    name: 'secret',
+    type: 'private' as const,
+    archivedAt: '2026-10-29T08:00:00.000Z',
+  };
+  const card = (view: View): Scope =>
+    within(main(view).getByRole('region', { name: 'Archived channels' }));
+
+  test('each is listed with when it was archived, a private one said so, and the card passes axe', async () => {
+    const view = await openPage({ archivedChannels: () => Promise.resolve([OLD, SECRET]) });
+    const rows = card(view)
+      .getAllByRole('listitem')
+      .map((row) => row.textContent);
+    expect(rows[0]).toMatch(/^#old-launch, archived .*Restore$/);
+    expect(rows[1]).toMatch(/^#secret \(private\), archived .*Restore$/);
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
+  test('restored, it leaves the list and is said; the list and the channels are read again', async () => {
+    let archived = [OLD];
+    const restored: string[] = [];
+    const view = await openPage({
+      archivedChannels: () => Promise.resolve(archived),
+      restoreChannel: (channelId) => {
+        restored.push(channelId);
+        archived = [];
+        return Promise.resolve();
+      },
+    });
+    await person().click(card(view).getByRole('button', { name: 'Restore' }));
+    await settle();
+    expect(restored).toEqual([OLD.id]);
+    expect(view.getByText('#old-launch is back.')).toBeDefined();
+    expect(card(view).getByText('No channel is archived.')).toBeDefined();
+    view.unmount();
+  });
+
+  test('a name taken since is said with what to do, and the channel stays listed', async () => {
+    const view = await openPage({
+      archivedChannels: () => Promise.resolve([OLD]),
+      restoreChannel: () =>
+        Promise.reject(new ApiError(409, 'CHANNEL_NAME_TAKEN', 'A channel with that name exists.')),
+    });
+    await person().click(card(view).getByRole('button', { name: 'Restore' }));
+    await settle();
+    expect(
+      view.getByText(
+        'Another channel is called #old-launch now. Rename that one, then restore this.',
+      ),
+    ).toBeDefined();
+    expect(card(view).getAllByRole('listitem')).toHaveLength(1);
+    view.unmount();
+  });
+
+  test('none is said plainly; a list that fails to load offers a retry that reads it again', async () => {
+    const empty = await openPage({ archivedChannels: () => Promise.resolve([]) });
+    expect(card(empty).getByText('No channel is archived.')).toBeDefined();
+    empty.unmount();
+
+    let asks = 0;
+    const failing = await openPage({
+      archivedChannels: () => {
+        asks += 1;
+        return asks === 1
+          ? Promise.reject(new ApiError(500, 'INTERNAL', 'no'))
+          : Promise.resolve([OLD]);
+      },
+    });
+    expect(card(failing).getByText('Archived channels could not be loaded.')).toBeDefined();
+    await person().click(card(failing).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(card(failing).getAllByRole('listitem')).toHaveLength(1);
+    failing.unmount();
+  });
+});

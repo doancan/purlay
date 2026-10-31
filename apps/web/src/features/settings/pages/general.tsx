@@ -1,6 +1,6 @@
 /**
- * General (D-124, D-146), an owner's or an admin's: the workspace's name, its address, and the way to
- * another workspace.
+ * General (D-124, D-146), an owner's or an admin's: the workspace's name, its address, its archived
+ * channels (D-232), and the way to another workspace.
  *
  * The address — the slug in every link already pasted — is shown, copied in one press, and does not
  * change with the name, so the page says so rather than leaving somebody to find out. Saved, the name
@@ -23,6 +23,7 @@ import { useSession } from '../../session/session';
 import { CreateWorkspace } from '../../shell/home';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
+import { ArchivedChannelsCard } from './archived-channels';
 
 export const GeneralPage = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -132,6 +133,7 @@ export const GeneralPage = (): React.JSX.Element => {
           </SettingsRow>
         </SettingsCard>
       </form>
+      <ArchivedChannelsCard />
       {/* Offered only to whom the server lets make one (D-155): never a form that would be refused. */}
       {mayCreateWorkspace && (
         <SettingsCard title={t('settings.general.another')}>
