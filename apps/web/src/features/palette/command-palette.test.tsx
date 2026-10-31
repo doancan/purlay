@@ -261,6 +261,14 @@ describe('typing', () => {
     expect(here()).toBe('/w/acme/search?q=zzz');
   });
 
+  test('the search row reads operators as the search field does (D-224)', async () => {
+    const { input, here } = await mount();
+    await person().type(input(), 'in:#api from:@bob deploy');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe(`/w/acme/search?q=deploy&in=${IDS.api}&from=${IDS.bob}`);
+  });
+
   test('announces how many results there are, once something is typed', async () => {
     const { view, input } = await mount();
     expect(view.getAllByRole('status').every((node) => node.textContent === '')).toBe(true);
