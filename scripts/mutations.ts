@@ -3549,17 +3549,18 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'search-words-sent-untrimmed',
     why: 'spaces around the words go into the address, and a search for " deploy" is a different search from "deploy"',
-    file: 'apps/web/src/features/search/search-screen.tsx',
-    find: '            const words = draft.trim();\n',
-    replace: '            const words = draft;\n',
+    file: 'apps/web/src/features/search/operators.ts',
+    find: '      at += space.length;\n      continue;\n',
+    replace:
+      "      at += space.length;\n      parts.push({ kind: 'words', text: space });\n      continue;\n",
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {
     id: 'search-author-dropped-by-where',
     why: 'choosing where to look forgets who was chosen, and the list quietly widens to everybody',
     file: 'apps/web/src/features/search/search-screen.tsx',
-    find: '        next.authorId === undefined ? authorId : next.authorId,\n',
-    replace: '        next.authorId ?? null,\n',
+    find: '    show(operators.lift(draft, { ...current, ...next }));\n',
+    replace: '    show(operators.lift(draft, { ...current, authorId: null, ...next }));\n',
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {
