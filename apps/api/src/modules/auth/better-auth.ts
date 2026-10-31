@@ -1196,6 +1196,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         // Read so the session seam can refuse a soft-deleted account (D-139 §5, ARCHITECTURE.md); never
         // written by the library, and never taken from a client.
         deletedAt: { type: 'date', required: false, input: false, fieldName: 'deleted_at' },
+        // Read so neither a sign-in nor the seam lets a suspended account in (D-233); written by the
+        // server's administrator alone (`modules/users/suspension.ts`), never by the library or a client.
+        suspendedAt: { type: 'date', required: false, input: false, fieldName: 'suspended_at' },
       },
     },
     session: {
@@ -1434,14 +1437,19 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             // Through the library's adapter of the moment, so a sign-up that makes the account and its
             // session in one transaction reads the account it has not committed yet.
             const adapter = await getCurrentAdapter((await instance.$context).adapter);
-            const owner = await adapter.findOne<{ deletedAt?: Date | null }>({
+            const owner = await adapter.findOne<{
+              deletedAt?: Date | null;
+              suspendedAt?: Date | null;
+            }>({
               model: 'user',
               where: [{ field: 'id', value: session.userId }],
-              select: ['deletedAt'],
+              select: ['deletedAt', 'suspendedAt'],
             });
-            // No account, or one erased: refused (returning false aborts the create).
+            // No account, one erased, or one suspended (D-233): refused (returning false aborts the
+            // create), by every way in the library has — GitHub, a password, a link, single sign-on.
             if (owner === null) return false;
             if (owner.deletedAt !== null && owner.deletedAt !== undefined) return false;
+            if (owner.suspendedAt !== null && owner.suspendedAt !== undefined) return false;
             // A GitHub sign-in: the columns that are ours, written before its session exists.
             const profile = signInRounds.getStore()?.profile;
             if (profile !== undefined) {

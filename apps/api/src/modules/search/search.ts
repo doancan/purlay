@@ -25,7 +25,7 @@ import { MESSAGE_COLUMNS } from '../messages/reader';
 import { asPage, limitOf } from '../messages/threads';
 
 /** `%`, `_` and `\` are what a person typed, not a pattern: escaped for `ILIKE`'s default escape. */
-const literalPattern = (words: string): string =>
+export const literalPattern = (words: string): string =>
   `%${words.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 
 /** Filters can stand alone, but an unbounded empty search is never implicit. */

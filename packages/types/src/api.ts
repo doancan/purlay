@@ -1755,6 +1755,33 @@ export const ServerCreatorsRequest = FromClient({
 });
 export type ServerCreatorsRequest = Static<typeof ServerCreatorsRequest>;
 
+/** How many accounts `GET /api/server/accounts` answers, and the longest search it takes (D-233). */
+export const SERVER_ACCOUNTS_MAX = 50;
+export const SERVER_ACCOUNT_SEARCH_MAX = 100;
+
+/** `GET /api/server/accounts?q=` — the words to find accounts by: name, username or address. */
+export const ServerAccountsQuery = FromClient({
+  q: Type.Optional(Type.String({ maxLength: SERVER_ACCOUNT_SEARCH_MAX })),
+});
+export type ServerAccountsQuery = Static<typeof ServerAccountsQuery>;
+
+/**
+ * An account as the server's administrator manages it (D-233): who it is, whether it administers the
+ * server, and whether it is suspended. Never a credential.
+ */
+export const ServerAccount = Type.Object({
+  id: Uuid,
+  username: Type.String(),
+  displayName: Type.String(),
+  email: Type.Union([Type.String(), Type.Null()]),
+  isServerAdmin: Type.Boolean(),
+  suspendedAt: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+});
+export type ServerAccount = Static<typeof ServerAccount>;
+
+export const ServerAccountList = Type.Array(ServerAccount);
+export type ServerAccountList = Static<typeof ServerAccountList>;
+
 /** `POST /setup/verify` — the token the administrator's link carried in its fragment. */
 export const SetupVerifyRequest = FromClient({
   token: Type.String({ pattern: '^[0-9a-f]{64}$', maxLength: 64 }),

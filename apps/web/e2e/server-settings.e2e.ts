@@ -135,10 +135,20 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(githubCard.getByText(`Client ID ${github.clientId}`)).toBeVisible();
 
+  // Accounts (D-233): the administrator is listed, said to administer the server, with no button —
+  // nobody suspends the administration; a search that matches nobody says so.
+  const accounts = page.getByRole('region', { name: 'Accounts' });
+  const adminRow = accounts.getByRole('listitem').filter({ hasText: 'Administers this server' });
+  await expect(adminRow).toHaveCount(1);
+  await expect(adminRow.getByRole('button')).toHaveCount(0);
+  await accounts.getByLabel('Find by name, username or address').fill('nobody-by-this-name');
+  await expect(accounts.getByText('No account matches.')).toBeVisible();
+
   // Anybody else is told the route does not exist.
   const stranger = await browser.newContext({ baseURL: origin });
   const refused = await stranger.request.get('/api/server/settings');
   expect(refused.status()).toBe(404);
+  expect((await stranger.request.get('/api/server/accounts')).status()).toBe(404);
   await stranger.close();
   await context.close();
 });
