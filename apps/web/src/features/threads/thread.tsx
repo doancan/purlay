@@ -48,6 +48,7 @@ import { MessageRow } from '../messages/message-row';
 import { LANDED_MS } from '../messages/message-link';
 import { handleRowKeys } from '../messages/row-keys';
 import { useSession } from '../session/session';
+import { isMacPlatform, keyLabels } from '../shortcuts/platform';
 import { useWorkspace } from '../shell/workspace';
 import { FollowToggle } from './follow-toggle';
 import { useOpenThread, useThreads } from './thread-context';
@@ -90,6 +91,12 @@ const ThreadPanelView = ({
   // found where the feed read it.
   const feed = useMessages(channelId, around);
   const headingId = useId();
+  // Resolve's key as this keyboard prints it: ⌘⇧R on a Mac, Ctrl+Shift+R everywhere else.
+  const resolveKey = useMemo(() => {
+    const mac = isMacPlatform(navigator);
+    const { mod, shift } = keyLabels(mac);
+    return [mod, shift, 'R'].join(mac ? '' : '+');
+  }, []);
 
   const panel = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -318,7 +325,7 @@ const ThreadPanelView = ({
                 }}
               >
                 {t(resolved ? 'thread.reopen' : 'thread.resolve')}
-                <Kbd>⌘⇧R</Kbd>
+                <Kbd>{resolveKey}</Kbd>
               </Button>
             )}
           </div>
