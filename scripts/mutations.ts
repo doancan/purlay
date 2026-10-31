@@ -1116,6 +1116,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/channel-retention.integration.test.ts'],
   },
   {
+    id: 'channel-retention-offered-to-an-admin',
+    why: 'an admin is offered a channel’s retention, which the server refuses them (D-225)',
+    file: 'apps/web/src/features/channel/channel-details.tsx',
+    find: "              {role === 'owner' && channel.type !== 'direct_message' && (\n",
+    replace: "              {role !== 'member' && channel.type !== 'direct_message' && (\n",
+    tests: ['apps/web/src/features/channel/channel-retention.test.tsx'],
+  },
+  {
+    id: 'channel-retention-keeping-less-unsaid',
+    why: 'a choice that deletes a channel’s history the next night is saved without a word or a red button (D-225)',
+    file: 'apps/web/src/features/channel/channel-retention.tsx',
+    find: '    const shortenTo = keepsLess(nextKept, effectiveDays) ? nextKept : null;\n',
+    replace: '    const shortenTo = null;\n',
+    tests: ['apps/web/src/features/channel/channel-retention.test.tsx'],
+  },
+  {
     id: 'retention-counts-channels-no-longer',
     why: 'a channel whose floor is the workspace’s own window is counted as keeping longer (D-225)',
     file: 'apps/api/src/modules/workspaces/retention.ts',
