@@ -10901,4 +10901,48 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'if (segments.includes(NOT_THE_REPOSITORYS)) return null;',
     tests: ['packages/markdown/src/code-references.test.ts'],
   },
+  {
+    id: 'channel-restore-by-a-member',
+    why: 'a member brings back a channel an admin archived (D-232)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "  onlyAdmins(context.role, 'Only an owner or an admin restores a channel.');\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
+  },
+  {
+    id: 'channel-restore-private-to-an-outsider',
+    why: 'an admin outside a private channel learns it existed and brings it back (D-232)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "  if (row.type === 'private' && !memberIds.includes(userId)) throw channelNotFound();\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
+  },
+  {
+    id: 'channel-restore-over-a-taken-name',
+    why: 'two live channels share a name, or the unique index answers a 500 (D-232)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "  if (taken !== undefined) {\n    throw new AppError({\n      code: 'CHANNEL_NAME_TAKEN',\n      message: 'A channel with that name exists now.",
+    replace:
+      "  if (false) {\n    throw new AppError({\n      code: 'CHANNEL_NAME_TAKEN',\n      message: 'A channel with that name exists now.",
+    tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
+  },
+  {
+    id: 'archived-list-shows-private-to-outsiders',
+    why: 'an admin outside a private channel reads its name once it is archived (D-104, D-232)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "        eb('channel.type', '=', 'public'),\n",
+    replace: "        eb('channel.type', '!=', 'direct_message'),\n",
+    tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
+  },
+  {
+    id: 'channel-restore-tells-a-stranger',
+    why: 'a stranger who names an archived channel of another workspace is told the workspace, not the channel (D-232)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "      throw error instanceof AppError && error.body.code === 'WORKSPACE_NOT_FOUND'\n",
+    replace: "      throw error instanceof AppError && error.body.code === 'NO_SUCH_CODE'\n",
+    tests: [
+      'apps/api/src/ingress/http/channel-settings.integration.test.ts',
+      'apps/api/src/ingress/http/cross-tenant.integration.test.ts',
+    ],
+  },
 ];

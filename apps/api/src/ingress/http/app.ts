@@ -132,6 +132,7 @@ import {
 import {
   createWorkspaceChannel,
   joinPublicChannel,
+  listArchived,
   listChannels,
   openConversationWith,
   openDirectMessageWith,
@@ -146,6 +147,7 @@ import {
   updateChannelRetentionSetting,
   leave,
   removeFromChannel,
+  restore,
   listChannelMembers,
 } from './channels';
 import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
@@ -1103,6 +1105,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/channels',
       async ({ request, params }) => await listChannels(dependencies, request, params.workspaceId),
     )
+    .get(
+      '/api/workspaces/:workspaceId/archived-channels',
+      async ({ request, params }) => await listArchived(dependencies, request, params.workspaceId),
+    )
     .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
       set.status = 201;
       return await createWorkspaceChannel(
@@ -1156,6 +1162,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .delete('/api/channels/:channelId', async ({ request, params, set }) => {
       await archive(sending, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/channels/:channelId/restore', async ({ request, params, set }) => {
+      await restore(sending, request, params.channelId);
       set.status = 204;
       return null;
     })

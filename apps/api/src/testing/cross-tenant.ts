@@ -174,6 +174,12 @@ export interface CrossTenantCase {
    * may not do (leave, I-2), so the control still proves the request succeeds.
    */
   readonly secondOwner?: true;
+  /**
+   * It acts on an archived channel alone — bringing one back (D-232) — so the channel the crossing names
+   * is archived first, and the control succeeds on it. On the visibility axis the archived public channel
+   * is the visible one; the private one and the direct message, archived too, stay hidden.
+   */
+  readonly archived?: true;
   readonly visibility: Visibility;
 }
 
@@ -276,6 +282,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide' },
   },
+  'GET /api/workspaces/:workspaceId/archived-channels': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'lists archived channels, which no live visibility reaches; a private one is listed only to its members, crossed in channel-settings.integration.test.ts (D-232)',
+    },
+  },
   'POST /api/workspaces/:workspaceId/channels': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ name: 'crossing' }),
@@ -289,6 +303,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'DELETE /api/channels/:channelId': {
     refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/restore': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    archived: true,
     visibility: { kind: 'channel', admin: true },
   },
   'POST /api/channels/:channelId/leave': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },

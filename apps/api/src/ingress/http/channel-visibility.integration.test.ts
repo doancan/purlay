@@ -339,6 +339,19 @@ describe('integration: channel visibility', () => {
               .where('user_id', '=', world.ids.userId)
               .execute();
           }
+          // An endpoint for archived channels (D-232): the visible public one and the hidden ones are
+          // archived, and the public one already archived is the outsider's to act on, not hidden.
+          const hidden: Readonly<Record<string, string>> =
+            crossing.archived === true
+              ? { private: world.hidden.private, 'direct message': world.hidden['direct message'] }
+              : world.hidden;
+          if (crossing.archived === true) {
+            await db
+              .updateTable('channels')
+              .set({ deleted_at: NOW })
+              .where('id', 'in', [world.visible, ...Object.values(hidden)])
+              .execute();
+          }
           const body = crossing.body?.(NOW, world.ids);
           const at = (channelId: string): string =>
             pathFor(path, {
@@ -362,7 +375,7 @@ describe('integration: channel visibility', () => {
           const refusal: unknown = await absent.json();
           expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
-          for (const [why, channelId] of Object.entries(world.hidden)) {
+          for (const [why, channelId] of Object.entries(hidden)) {
             const response = await call(db, method, at(channelId), world.outsider, body);
             expect({ why, status: response.status, body: await response.json() }).toEqual({
               why,

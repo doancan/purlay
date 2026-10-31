@@ -110,6 +110,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   removeChannelMember: unexpected('removeChannelMember'),
   updateChannel: unexpected('updateChannel'),
   archiveChannel: unexpected('archiveChannel'),
+  archivedChannels: unexpected('archivedChannels'),
+  restoreChannel: unexpected('restoreChannel'),
   leaveChannel: unexpected('leaveChannel'),
   channelMembers: unexpected('channelMembers'),
   setNotificationLevel: unexpected('setNotificationLevel'),

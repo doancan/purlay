@@ -632,6 +632,23 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('archived channels are read for the workspace and restored by the channel (D-232)', async () => {
+    const archived = {
+      id: ID,
+      name: 'old-launch',
+      type: 'public',
+      archivedAt: '2026-10-30T08:00:00.000Z',
+    };
+    const listed = harness([archived]);
+    expect(await listed.api.archivedChannels(ID)).toEqual([archived] as never);
+    const restored = harness(null);
+    await restored.api.restoreChannel(ID);
+    expect([...listed.calls, ...restored.calls]).toMatchObject([
+      { method: 'GET', url: `/api/workspaces/${ID}/archived-channels` },
+      { method: 'POST', url: `/api/channels/${ID}/restore` },
+    ]);
+  });
+
   test('bringing somebody into a channel names them, and reads no answer', async () => {
     const added = harness(null);
     await added.api.addChannelMember(ID, ID);

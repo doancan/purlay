@@ -245,6 +245,17 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/storage`, as),
   'archive a channel': async (world, as) =>
     await call(world, 'DELETE', `/api/channels/${world.channelId}`, as),
+  'see the archived channels': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/archived-channels`, as),
+  // Archived by the database, not the route: the set-up writes no row of the trail (D-232).
+  'bring an archived channel back': async (world, as) => {
+    await world.db
+      .updateTable('channels')
+      .set({ deleted_at: NOW })
+      .where('id', '=', world.channelId)
+      .execute();
+    return await call(world, 'POST', `/api/channels/${world.channelId}/restore`, as);
+  },
   'delete somebody else’s message': async (world, as) =>
     await call(world, 'DELETE', `/api/messages/${world.messageId}`, as),
 };

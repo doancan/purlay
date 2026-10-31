@@ -372,6 +372,24 @@ export type MessageWindow = Static<typeof MessageWindow>;
 export const ChannelList = Type.Array(Channel);
 export type ChannelList = Static<typeof ChannelList>;
 
+/** How many archived channels the list answers, the most recently archived first (D-232). */
+export const ARCHIVED_CHANNELS_MAX = 200;
+
+/**
+ * An archived channel an owner or an admin may bring back (D-232): its name, whether it is private, and
+ * when it was archived. Nothing of what is in it.
+ */
+export const ArchivedChannel = Type.Object({
+  id: Uuid,
+  name: Type.String(),
+  type: Type.Union([Type.Literal('public'), Type.Literal('private')]),
+  archivedAt: Type.String({ format: 'date-time' }),
+});
+export type ArchivedChannel = Static<typeof ArchivedChannel>;
+
+export const ArchivedChannelList = Type.Array(ArchivedChannel);
+export type ArchivedChannelList = Static<typeof ArchivedChannelList>;
+
 /** The shortest search that a trigram index can answer; shorter would read every visible message. */
 export const SEARCH_QUERY_MIN = 3;
 export const SEARCH_QUERY_MAX = 200;
@@ -719,6 +737,7 @@ export const AUDIT_ACTIONS = [
   'channel.created',
   'channel.renamed',
   'channel.archived',
+  'channel.restored',
   'channel.member_added',
   'channel.member_removed',
   'integration.token_set',
