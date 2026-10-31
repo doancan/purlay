@@ -97,6 +97,11 @@ is rotated out (§4).
    notifications, files and their bytes. A thread whose replies are younger keeps an empty row for its
    root until its last reply goes (D-139 §1). The bytes of a file the store refuses to delete wait for
    `sweep:deletions`, hourly, until it accepts (D-141).
+   **A channel may keep longer, never shorter** (D-225): an owner sets, in the channel's details, a
+   window longer than the workspace's or forever; the purge keeps the longer of the two, and the
+   workspace's own card says how many channels keep longer. A request to delete everything past the
+   workspace's window therefore means setting those channels back to *As long as the workspace* first
+   (`channel.retention_changed` on the trail).
 3. **How to see it was done:** the workspace's audit log has one `retention.purged` line per run, with
    what was removed. `jobs:status` (`CONFIG.md`, "Production deployment") says when the purge last
    succeeded and fails loudly when it is overdue; a run that left files behind fails too.
