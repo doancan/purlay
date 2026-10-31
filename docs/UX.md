@@ -404,6 +404,14 @@ page of the same name.
   GitHub has them — never their avatar, which is another host's image (#110). Up to five, in the order
   written. A link with no card — no token, nothing there, GitHub silent — stays a link, with nothing
   drawn and nothing said.
+- **A code reference is a link into the channel's repository** (D-223) when the channel has exactly one
+  GitHub feed: a path with a source extension — `src/retry.ts:14`, `apps/api/src/x.ts#L10-L20`, the
+  compiler's `src/x.ts(14,5)` — opens the file at that line on the default branch, a bare file name in
+  inline code (`` `retry.test.ts` ``) searches the repository for it, and a commit's SHA (7–40 hex, a
+  letter and a digit) opens the commit. In prose and inline code only, never in a fenced block, which is
+  code to read and copy. Drawn as any link is — underlined, so not by colour alone, opening in a new tab
+  and saying so to a screen reader, a stop for the keyboard. No feed, or several, and nothing is linked
+  that the words did not link.
 - **A link to a picture is the picture, under the words** — up to three, in the order written, each a
   link to the original, drawn through the API's proxy so the picture's host never sees who is reading
   (#110). One the proxy cannot show draws nothing; the link stays a link.

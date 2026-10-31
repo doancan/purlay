@@ -373,7 +373,7 @@ carries.
 
 | | Method | Path | Role |
 |:-:|---|---|---|
-| ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see, each a `Channel` as the caller sees it; every one carries `memberCount`, its members whose account is not erased, joined or not, read in the list's one statement (D-167) |
+| ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see, each a `Channel` as the caller sees it; every one carries `memberCount`, its members whose account is not erased, joined or not, read in the list's one statement (D-167), and `codeRepository`, its one GitHub feed's repository or null with none or several, which its messages' code references link into (D-223) |
 | ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member — `{ name, topic?, type? }`; `type` is `public` (the default) or `private`, seen by its members only (D-104). The maker's other devices are told with `CHANNEL_ADDED` (#540) |
 | ○ | `POST` | `/api/workspaces/:workspaceId/conversations` | member — `{ userIds }` (`OpenConversationRequest`): the people besides the caller, one to nine, or the caller alone for a note to self; returns the existing conversation of that set or creates it, `201`/`200` (I-5, D-127). Somebody not a person of the workspace is `404 USER_NOT_FOUND`; the caller among others, a person twice, or more than `CONVERSATION_PEOPLE_MAX` people is `400` |
 | ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
