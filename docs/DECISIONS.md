@@ -10459,9 +10459,6 @@ link previews, not here).
 **Cost of reversing.** Migration 0062 (drop the table), the module and its three routes, one frame, the
 bar and its strings.
 
-
----
-
 ### D-219. Dependabot opens no pull requests; updates are the owner's — amends D-20, D-86, D-91
 
 **Decided (the owner, 2026-10-31).** Dependabot opened pull requests on a schedule of its own and showed
