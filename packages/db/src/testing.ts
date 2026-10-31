@@ -284,6 +284,14 @@ export const prepareTemplateForRun = async (
 };
 
 /**
+ * The time a hook that clones gets: a clone is about a tenth of a second, but it waits its turn on the
+ * template's lock behind the other worker's clones, and on a loaded runner that queue passed the five
+ * seconds a hook has by default (main, 2026-10-31). What the hook waits for is the database, not the code
+ * under test, so the bound is the queue's, not a test's (D-228).
+ */
+export const CLONE_HOOK_MS = 30_000;
+
+/**
  * A database of this test file's own, cloned from a migrated template (D-46).
  *
  * For what one rolled-back transaction cannot do: commit on purpose, or let two

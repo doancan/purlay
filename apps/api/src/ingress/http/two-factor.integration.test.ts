@@ -9,7 +9,13 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { hashPassword } from 'better-auth/crypto';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import {
   TWO_FACTOR_CHALLENGE_MINUTES,
   TWO_FACTOR_FAILURES_BEFORE_LOCK,
@@ -41,7 +47,7 @@ let db: Executor;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

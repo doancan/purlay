@@ -10,7 +10,12 @@
  * The database is a clone of its own and writes commit (D-46).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { messageId, ServerFrame } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
@@ -34,7 +39,7 @@ beforeAll(async () => {
     testDependencies({ database: db, clock, config: testConfig({ APP_URL: origin }) }),
   );
   server = `http://localhost:${String(app.listen(0))}`;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);

@@ -11,7 +11,12 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import {
   CLOSE_CODES,
   ErrorResponse,
@@ -38,7 +43,7 @@ beforeAll(async () => {
     testDependencies({ database: db, clock, config: testConfig({ APP_URL: origin }) }),
   );
   port = app.listen(0);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);

@@ -10,7 +10,7 @@
  * moment of each publish — which sees a row only if it is committed (D-46).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
@@ -22,7 +22,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

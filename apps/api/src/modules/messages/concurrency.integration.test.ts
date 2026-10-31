@@ -15,6 +15,7 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
@@ -39,7 +40,7 @@ const nextId = (): string => messageId(new Date(NOW.getTime() + (tick += 1) * 10
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();

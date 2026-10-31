@@ -11,7 +11,13 @@
  * `fetch`; the relays are scripted ones on this machine.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, withRollback, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  withRollback,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { createApp } from './app';
 import { systemClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -46,7 +52,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

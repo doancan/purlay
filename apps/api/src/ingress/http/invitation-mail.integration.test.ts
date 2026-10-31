@@ -6,7 +6,7 @@
  * On a database of its own, with real connections: a failed transaction must be seen to end.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { INVITATION_EMAILS_PER_REQUEST, type CreatedInvitation } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { outbox, type MailMessage, type Outbox } from '../../platform/mail';
@@ -18,7 +18,7 @@ import { createApp } from './app';
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
 });

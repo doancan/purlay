@@ -18,6 +18,7 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { messageId, ReactionsResponse } from '@purlay/types';
 import { REACTION_KINDS_MAX } from '../../modules/reactions/reactions';
@@ -288,7 +289,7 @@ describe('integration: two people adding a new kind at the limit', () => {
       create function hold_window() returns trigger language plpgsql as
       $$ begin perform pg_sleep(0.3); return new; end $$
     `.execute(cloned.db);
-  });
+  }, CLONE_HOOK_MS);
 
   afterAll(async () => {
     await cloned.drop();

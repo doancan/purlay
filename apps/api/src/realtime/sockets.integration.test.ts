@@ -17,7 +17,12 @@
  * exactly what it missed.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
   CLOSE_CODES,
@@ -82,7 +87,7 @@ beforeAll(async () => {
   });
   app = createApp(dependencies);
   server = `http://localhost:${String(app.listen(0))}`;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);

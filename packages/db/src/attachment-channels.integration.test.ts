@@ -19,6 +19,7 @@ import {
   closeIntegrationDatabase,
   withRollback,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
 } from './testing';
 
 // A database of its own (D-228): migration 0027's statements lock whole tables, and on the shared database a
@@ -26,7 +27,7 @@ import {
 let own: ClonedDatabase;
 beforeAll(async () => {
   own = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 const inOwnDatabase = async (body: Parameters<typeof withRollback>[0]): Promise<void> => {
   await withRollback(body, own.db);
 };

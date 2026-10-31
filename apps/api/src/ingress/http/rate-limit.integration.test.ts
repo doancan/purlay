@@ -8,6 +8,7 @@ import {
   closeIntegrationDatabase,
   withRollback,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { SIGN_IN_CALLBACK, messageId } from '@purlay/types';
 import { createApp } from './app';
@@ -189,7 +190,7 @@ describe('integration: the address a session records', () => {
   let cloned: ClonedDatabase;
   beforeAll(async () => {
     cloned = await cloneIntegrationDatabase();
-  });
+  }, CLONE_HOOK_MS);
   afterAll(async () => {
     await cloned.drop();
   });

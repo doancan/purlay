@@ -11,7 +11,7 @@
  * On a clone of its own: the library's sign-up is a transaction of its own (`github-sign-in.ts`).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { createApp } from './app';
 import { DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from '../../platform/config';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -33,7 +33,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

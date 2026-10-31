@@ -18,6 +18,7 @@ import {
   sql,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { credentialCipher } from '../../platform/crypto';
@@ -40,7 +41,7 @@ const quiet: EventBus = {
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();

@@ -5,7 +5,12 @@
  * answered, nothing on the page that is theirs.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from './rate-limit';
@@ -47,7 +52,7 @@ beforeAll(async () => {
     }),
   );
   port = app.listen(0);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);

@@ -11,6 +11,7 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import type { UserRole } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -25,7 +26,7 @@ const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();

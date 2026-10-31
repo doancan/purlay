@@ -8,6 +8,7 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
@@ -26,7 +27,7 @@ const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();

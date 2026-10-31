@@ -10,7 +10,13 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { hashPassword } from 'better-auth/crypto';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { createApp, type HttpApplication } from './app';
 import { JSON_BODY_MAX_BYTES } from './edge';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -35,7 +41,7 @@ let db: Executor;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
