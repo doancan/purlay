@@ -204,7 +204,7 @@ const DOCUMENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  // TODO(#110): 'self' alone once avatars are served through the image proxy.
+  // TODO(#850): 'self' alone once avatars are served from our own origin.
   "img-src 'self' https://avatars.githubusercontent.com",
   "font-src 'self'",
   "connect-src 'self'",
