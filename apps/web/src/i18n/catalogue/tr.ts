@@ -60,7 +60,7 @@ export const tr = {
   'search.repository': 'GitHub deposu',
   'search.since': 'Başlangıç tarihi',
   'search.until': 'Bu tarihten önce',
-  'search.dateHint': 'UTC tarihleri; bitiş tarihi dahil değildir.',
+  'search.dateHint': 'Günler senin saat dilimine göre; bitiş tarihi dahil değildir.',
   'search.saved': 'Kaydedilmiş aramalar',
   'search.saveName': 'Aramanın adı',
   'search.save': 'Bu aramayı kaydet',
@@ -69,6 +69,25 @@ export const tr = {
   'search.removeNamed': '{name} aramasını kaldır',
   'search.remove': 'Kaldır',
   'search.run': 'Ara',
+  'search.tooLong': 'En fazla {max} karakter yaz.',
+  'search.rangeError': 'Bitiş tarihi başlangıç tarihinden sonra olmalı.',
+  'search.operators.title': 'Arama işleçleri',
+  'search.operators.intro':
+    'Bunları kelimelerinle birlikte yaz. Enter onları yukarıdaki filtrelere çevirir ve gerisini arar.',
+  'search.operators.in': 'Bir kanalda ya da biriyle doğrudan mesajda',
+  'search.operators.from': 'Birinin yazdıkları; kendi yazdıkların için from:me',
+  'search.operators.has': 'Kod içeren ya da dosya eki olan',
+  'search.operators.is': 'Açık ya da çözülmüş konular, ya da işaretli sorular',
+  'search.operators.repo': 'Bir GitHub deposundan söz eden',
+  'search.operators.dates':
+    'Bir günde, o günden önce ya da sonra: senin saat dilimindeki tam günler',
+  'search.operators.quote': 'Filtreye benzese de bu kelimeler, yazıldığı gibi',
+  'search.operators.unread.channel':
+    'Görebildiğin hiçbir kanalın adı “{value}” değil; bu yüzden “{token}” kelime olarak arandı.',
+  'search.operators.unread.person':
+    'Burada kullanıcı adı “{value}” olan kimse yok; bu yüzden “{token}” kelime olarak arandı.',
+  'search.operators.unread.value':
+    '“{token}” aramanın anladığı bir filtre değil; bu yüzden kelime olarak arandı.',
 
   // ── Ortak ───────────────────────────────────────────────────────────────
   'common.close': 'Kapat',

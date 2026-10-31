@@ -4,7 +4,13 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import { SEARCH_QUERY_MIN, type Message, type MessagePage } from '@purlay/types';
+import {
+  SEARCH_QUERY_MAX,
+  SEARCH_QUERY_MIN,
+  type Message,
+  type MessagePage,
+  type SavedSearch,
+} from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
@@ -20,6 +26,7 @@ import {
   aSignedInApi,
   messageIdAt,
   someChannels,
+  WHEN,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
@@ -470,6 +477,208 @@ describe('narrowed to who wrote it (D-166)', () => {
     await person().click(within(view.container).getByRole('button', { name: 'Kimden Alice' }));
     expect(view.getByRole('menuitemradio', { name: 'Herkes' })).toBeDefined();
     expect(view.getByRole('menuitemradio', { name: /Dogancan sen/ })).toBeDefined();
+    view.unmount();
+  });
+});
+
+/** What the screen asked the server, as the client's `search` takes it. */
+type Asked = Parameters<Api['search']>[1];
+
+describe('operators typed with the words (D-224)', () => {
+  const where = (view: Awaited<ReturnType<typeof visit>>): HTMLSelectElement =>
+    within(view.container).getByRole<HTMLSelectElement>('combobox', { name: 'Where' });
+  const notice = (view: Awaited<ReturnType<typeof visit>>): HTMLElement => {
+    const said = view
+      .getAllByRole('status')
+      .find((node) => node.textContent.includes('was searched for as words'));
+    if (said === undefined) throw new Error('Nothing is said about the operators');
+    return said;
+  };
+  const recording = (asked: Asked[]): Partial<Api> => ({
+    search: (_workspace, query): Promise<MessagePage> => {
+      asked.push(query);
+      return Promise.resolve(page([]));
+    },
+  });
+
+  test('Enter reads them into the filters the controls show, and the address keeps the rest of the words', async () => {
+    const asked: Asked[] = [];
+    const view = await visit(recording(asked));
+    await person().type(field(view), 'in:#api FROM:@alice has:code deploy "is:open"{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?q=deploy+is%3Aopen&in=${IDS.api}&from=${IDS.alice}&kind=code`,
+    );
+    expect(
+      asked.map(({ q, channelId, senderId, kind }) => ({ q, channelId, senderId, kind })),
+    ).toEqual([{ q: 'deploy is:open', channelId: IDS.api, senderId: IDS.alice, kind: 'code' }]);
+    // The field keeps what was searched for as words, quoted where it would read as a filter.
+    expect(field(view).value).toBe('deploy "is:open"');
+    expect(where(view).value).toBe(IDS.api);
+    expect(within(view.container).getByRole('button', { name: 'From Alice' })).toBeDefined();
+    expect(within(view.container).getByLabelText<HTMLSelectElement>('Content').value).toBe('code');
+    await person().type(field(view), '{Enter}');
+    await settle();
+    // Asked again, it is the same search: the quoted words did not become a filter.
+    expect(asked.at(-1)?.q).toBe('deploy is:open');
+    expect(asked.at(-1)?.status).toBeUndefined();
+    view.unmount();
+  });
+
+  test('a name nobody has is searched for as words and said under the field, as is a value no filter takes', async () => {
+    const asked: Asked[] = [];
+    const view = await visit(recording(asked));
+    await person().type(field(view), 'in:#nowhere from:@nobody is:closed deploy{Enter}');
+    await settle();
+    expect(asked.map((query) => query.q)).toEqual(['in:#nowhere from:@nobody is:closed deploy']);
+    const said = notice(view);
+    expect(said.textContent).toContain(
+      'No channel you can see is called “#nowhere”, so “in:#nowhere” was searched for as words.',
+    );
+    expect(said.textContent).toContain(
+      'Nobody here has the username “@nobody”, so “from:@nobody” was searched for as words.',
+    );
+    expect(said.textContent).toContain(
+      '“is:closed” is not a filter search understands, so it was searched for as words.',
+    );
+    // Left bare in the field, to be corrected: corrected, it is read.
+    expect(field(view).value).toBe('in:#nowhere from:@nobody is:closed deploy');
+    await expectNoAxeViolations(view.container);
+    await person().clear(field(view));
+    await person().type(field(view), 'in:#deploys deploy{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=deploy&in=${IDS.deploys}`);
+    expect(view.queryByText(/was searched for as words/)).toBeNull();
+    view.unmount();
+  });
+
+  test('said again from the address alone, after a reload', async () => {
+    const view = await visit(recording([]), {
+      path: `/w/acme/search?q=${encodeURIComponent('in:#nowhere deploy')}`,
+    });
+    expect(notice(view).textContent).toContain('“in:#nowhere” was searched for as words');
+    view.unmount();
+  });
+
+  test('changing a control keeps the words typed, reads their operators, and what was typed wins', async () => {
+    const view = await visit(recording([]), { path: '/w/acme/search?q=deploy' });
+    await person().clear(field(view));
+    await person().type(field(view), 'noon is:open');
+    await person().selectOptions(where(view), IDS.deploys);
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?q=noon&in=${IDS.deploys}&status=open`,
+    );
+    expect(field(view).value).toBe('noon');
+    await person().clear(field(view));
+    await person().type(field(view), 'noon in:#api');
+    await person().selectOptions(within(view.container).getByLabelText('Questions'), 'yes');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?q=noon&in=${IDS.api}&status=open&question=yes`,
+    );
+    await person().clear(field(view));
+    await person().type(field(view), 'noon in:#incidents');
+    await person().selectOptions(where(view), IDS.deploys);
+    await settle();
+    expect(where(view).value).toBe(IDS.incidents);
+    view.unmount();
+  });
+
+  test('Back returns to the search before the operators were read', async () => {
+    const view = await visit(recording([]), { path: '/w/acme/search?q=deploy' });
+    await person().type(field(view), ' has:file{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/search?q=deploy&kind=file');
+    act(() => {
+      view.world.history.back();
+    });
+    await settle();
+    expect(field(view).value).toBe('deploy');
+    expect(within(view.container).getByLabelText<HTMLSelectElement>('Content').value).toBe('');
+    view.unmount();
+  });
+
+  test('a day is the viewer’s whole day, and the date fields show it', async () => {
+    const asked: Asked[] = [];
+    const view = await visit(recording(asked));
+    await person().type(field(view), 'on:2026-10-31{Enter}');
+    await settle();
+    expect(asked.map(({ q, since, until }) => ({ q, since, until }))).toEqual([
+      { q: '', since: '2026-10-31T00:00:00.000Z', until: '2026-11-01T00:00:00.000Z' },
+    ]);
+    expect(within(view.container).getByLabelText<HTMLInputElement>('From date').value).toBe(
+      '2026-10-31',
+    );
+    expect(within(view.container).getByLabelText<HTMLInputElement>('Before date').value).toBe(
+      '2026-11-01',
+    );
+    view.unmount();
+  });
+
+  test('a range that ends before it starts, too many words, or too few beside a filter is said in the field and not asked', async () => {
+    const view = await visit({});
+    await person().type(field(view), 'deploy after:2026-10-05 before:2026-10-01{Enter}');
+    expect(view.getByText('The end date must come after the start date.')).toBeDefined();
+    expect(field(view).getAttribute('aria-invalid')).toBe('true');
+    await person().clear(field(view));
+    await person().click(field(view));
+    await person().paste(`${'a'.repeat(SEARCH_QUERY_MAX)} has:code b`);
+    await person().keyboard('{Enter}');
+    expect(view.getByText(`Use at most ${String(SEARCH_QUERY_MAX)} characters.`)).toBeDefined();
+    await person().clear(field(view));
+    await person().type(field(view), 'in:#api ab{Enter}');
+    expect(view.getByText(`Type at least ${String(SEARCH_QUERY_MIN)} characters.`)).toBeDefined();
+    expect(view.world.history.stack).toEqual(['/w/acme/search']);
+    view.unmount();
+  });
+
+  test('what can be typed is a disclosure under the field, in both languages', async () => {
+    const view = await visit({});
+    const help = view.getByText('Search operators');
+    expect(help.closest('details')?.open).toBe(false);
+    await person().click(help);
+    expect(help.closest('details')?.open).toBe(true);
+    expect(view.getByText('in:#channel')).toBeDefined();
+    expect(view.getByText('"exact words"')).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+    const turkish = await visit({}, { locale: 'tr' });
+    expect(turkish.getByText('Arama işleçleri')).toBeDefined();
+    turkish.unmount();
+  });
+
+  test('a saved search keeps the filters the operators set, not the line typed, and comes back to them', async () => {
+    const saved: SavedSearch[] = [];
+    const view = await visit({
+      ...recording([]),
+      savedSearches: () => Promise.resolve({ data: [...saved], nextCursor: null }),
+      saveSearch: (_workspace, id, input) => {
+        const result = { ...input, id, createdAt: WHEN };
+        saved.push(result);
+        return Promise.resolve(result);
+      },
+    });
+    await person().type(field(view), 'in:#api is:resolved rollback{Enter}');
+    await settle();
+    const searched = view.world.history.stack.at(-1);
+    await person().click(view.getByRole('button', { name: 'Saved searches' }));
+    await settle();
+    await person().type(view.getByLabelText('Search name'), 'Rollbacks');
+    await person().click(view.getByRole('button', { name: 'Save this search' }));
+    await settle();
+    expect(saved.map((each) => each.query)).toEqual([
+      { q: 'rollback', status: 'resolved', channelId: IDS.api },
+    ]);
+    await person().clear(field(view));
+    await person().type(field(view), 'other{Enter}');
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Saved searches' }));
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Rollbacks' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(searched);
+    expect(field(view).value).toBe('rollback');
     view.unmount();
   });
 });

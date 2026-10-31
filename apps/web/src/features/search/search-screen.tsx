@@ -1,5 +1,8 @@
 import { AdvancedFilters } from './search-filters';
+import { OperatorHelp } from './operator-help';
+import { searchProblem, type SearchProblem, type SearchState, type Unread } from './operators';
 import { SavedSearches } from './saved-searches';
+import { problemText, useSearchOperators } from './use-operators';
 /**
  * Search (D-105, `UX.md` §8): the words as typed, ignoring case, in every channel the person can see —
  * roots and replies, resolved threads too — newest first.
@@ -7,6 +10,12 @@ import { SavedSearches } from './saved-searches';
  * The words live in the address (`?q=`), and so do where (`?in=`) and from whom (`?from=`, D-166), so
  * Back, a reload and a link come back to the same results, and pressing Enter is what searches: a
  * search is a question asked once, not a list redrawn under every keystroke. Fewer characters than the server takes are said in the field and never sent.
+ *
+ * Operators typed with the words (`in:#api from:@alice has:code`, D-224) are read on Enter — and on
+ * any change of the controls, which searches with what the field holds — into the same filters the
+ * controls set: the address keeps the filters and the rest of the words, and what was typed wins over
+ * a control changed with it. One that cannot be read stays in the words and is said under the field.
+ *
  * Arriving here focuses the page, as every navigation does (`ui/main.tsx`); the field is its first
  * stop, one Tab away.
  *
@@ -184,6 +193,12 @@ const hintFor = (
     : t('search.hintInFrom', { person: author, channel: placeName(narrowed) });
 };
 
+const UNREAD = {
+  channel: 'search.operators.unread.channel',
+  person: 'search.operators.unread.person',
+  value: 'search.operators.unread.value',
+} as const satisfies Record<Unread, string>;
+
 const SearchView = ({
   asked,
   channelId,
@@ -201,8 +216,9 @@ const SearchView = ({
   const { user: me } = useSession();
   const { navigate } = useRoute();
   const ports = useFeedPorts();
-  const [draft, setDraft] = useState(asked);
-  const [tooShort, setTooShort] = useState(false);
+  const operators = useSearchOperators();
+  const [draft, setDraft] = useState(() => operators.typed(asked));
+  const [problem, setProblem] = useState<SearchProblem | null>(null);
   const query = useSearch(workspace.id, asked, channelId, authorId, filters);
   const whereId = useId();
   const fromId = useId();
@@ -215,17 +231,17 @@ const SearchView = ({
       ? null
       : (members.data?.find((m) => m.user.id === authorId)?.user.displayName ??
         t('search.someone'));
-  const go = (next: { channelId?: string | null; authorId?: string | null }): void => {
+  const current: SearchState = { words: asked, channelId, authorId, filters };
+  const show = (state: SearchState): void => {
     navigate(
-      searchHref(
-        workspace.slug,
-        asked,
-        next.channelId === undefined ? channelId : next.channelId,
-        next.authorId === undefined ? authorId : next.authorId,
-        filters,
-      ),
+      searchHref(workspace.slug, state.words, state.channelId, state.authorId, state.filters),
     );
   };
+  // A control searches with what the field holds, its operators read over the control's choice.
+  const go = (next: Partial<SearchState>): void => {
+    show(operators.lift(draft, { ...current, ...next }));
+  };
+  const unread = useMemo(() => operators.unread(asked), [operators, asked]);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const places = useMemo(
     () =>
@@ -320,15 +336,10 @@ const SearchView = ({
           className="flex flex-col gap-3 rounded-xl border-hairline border-border-subtle bg-surface-100 px-5 py-4 shadow-card max-narrow:px-4"
           onSubmit={(event) => {
             event.preventDefault();
-            const words = draft.trim();
-            const valid =
-              words.length >= SEARCH_QUERY_MIN ||
-              (words === '' &&
-                (Object.keys(filters).length > 0 || channelId !== null || authorId !== null));
-            setTooShort(!valid);
-            if (valid) {
-              navigate(searchHref(workspace.slug, words, channelId, authorId, filters));
-            }
+            const asking = operators.lift(draft, current);
+            const refused = searchProblem(asking);
+            setProblem(refused);
+            if (refused === null) show(asking);
           }}
         >
           <TextField
@@ -337,8 +348,8 @@ const SearchView = ({
             value={draft}
             autoComplete="off"
             aria-busy={searching}
-            {...(tooShort
-              ? { error: t('search.tooShort', { min: String(SEARCH_QUERY_MIN) }) }
+            {...(problem !== null
+              ? { error: problemText(t, problem) }
               : {
                   hint: searching ? t('search.searching') : hintFor(t, narrowed, author),
                 })}
@@ -346,6 +357,19 @@ const SearchView = ({
               setDraft(event.target.value);
             }}
           />
+          {unread.length > 0 && (
+            <div role="status" className="flex flex-col gap-1">
+              {unread.map((each, index) => (
+                <p
+                  key={`${String(index)}:${each.token}`}
+                  className="flex items-start gap-1 text-caption text-warning-text"
+                >
+                  <Icon name="warning" size="sm" />
+                  {t(UNREAD[each.why], { token: each.token, value: each.value })}
+                </p>
+              ))}
+            </div>
+          )}
           {/* One line on a wide window; on a phone each label sits over its control, full width. */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 max-narrow:flex-col max-narrow:items-stretch">
             <div className="flex min-w-0 flex-1 items-center gap-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:gap-1">
@@ -390,9 +414,10 @@ const SearchView = ({
           <AdvancedFilters
             value={filters}
             onChange={(next) => {
-              navigate(searchHref(workspace.slug, draft.trim(), channelId, authorId, next));
+              go({ filters: next });
             }}
           />
+          <OperatorHelp />
           <div className="flex justify-end">
             <Button type="submit">{t('search.run')}</Button>
           </div>
