@@ -65,6 +65,7 @@ have it.
 
 ### Fixed
 
+- **Setup** — The administrator's name follows the rule every name does: a right-to-left name with its direction mark is taken, a line separator is not, and the field stops at the 128 characters the server keeps (D-179)
 - **Messages** — Quotes preserve lists and blank lines; code sharing keeps nested fences and pasted text intact, Enter follows the rendered code block, and Undo preserves later edits. Copy and wrap stay reachable on narrow screens (D-205)
 
 - **Notifications** — A visible window behind another no longer marks new channel messages or thread replies read and closes their notices; returning to the conversation reads them (D-147, D-148)
