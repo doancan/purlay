@@ -7,4 +7,5 @@ export * from './mentions';
 export * from './prose';
 export * from './plain';
 export * from './corpus';
+export * from './code-references';
 export { endsInOpenCode } from './engine';
