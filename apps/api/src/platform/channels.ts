@@ -177,17 +177,6 @@ export const requireChannelMember = async (
   }
 };
 
-/** For a caller that already holds a workspace context — the nested route shape. */
-export const requireChannelVisibility = async (
-  executor: Executor,
-  context: WorkspaceContext,
-  channelId: string,
-): Promise<ChannelContext> => {
-  const [channel] = await allOrNothing(executor, context.userId, [channelId], context.workspaceId);
-  if (channel === undefined) throw channelNotFound();
-  return channel;
-};
-
 /**
  * For a route that names a channel and nothing else (`/api/channels/:channelId`).
  * The workspace is derived from the resource, and membership of it is part of the
