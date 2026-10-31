@@ -8,7 +8,7 @@
  * The file runs here statement by statement inside the test's transaction; the migrator runs it whole.
  * Each refusal is tried behind a savepoint, since a refused statement aborts the transaction around it.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'kysely';
@@ -16,9 +16,25 @@ import pg from 'pg';
 import type { Executor } from './client';
 import { MIGRATIONS_DIRECTORY } from './migrator';
 import { splitStatements } from './statements';
-import { closeIntegrationDatabase, withRollback } from './testing';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  withRollback,
+  type ClonedDatabase,
+} from './testing';
+
+// A database of its own (D-228): migration 0063's statements lock whole tables, and on the shared database a
+// rollback holding them deadlocks with every other file running beside it.
+let own: ClonedDatabase;
+beforeAll(async () => {
+  own = await cloneIntegrationDatabase();
+});
+const inOwnDatabase = async (body: Parameters<typeof withRollback>[0]): Promise<void> => {
+  await withRollback(body, own.db);
+};
 
 afterAll(async () => {
+  await own.drop();
   await closeIntegrationDatabase();
 });
 
@@ -92,7 +108,7 @@ const outcome = async (db: Executor, write: () => Promise<unknown>): Promise<str
 
 describe('integration: migration 0063 on the rows already there', () => {
   test('every channel already there follows its workspace, and the check holds', async () => {
-    await withRollback(async (db) => {
+    await inOwnDatabase(async (db) => {
       const world = await before0063(db);
 
       await migrate(db);
@@ -108,7 +124,7 @@ describe('integration: migration 0063 on the rows already there', () => {
   });
 
   test('run again, it changes nothing and refuses nothing', async () => {
-    await withRollback(async (db) => {
+    await inOwnDatabase(async (db) => {
       const world = await before0063(db);
       await migrate(db);
       await db
@@ -128,7 +144,7 @@ describe('integration: migration 0063 on the rows already there', () => {
   });
 
   test('the check refuses a floor under 30, a floor beside forever, and either on a direct message', async () => {
-    await withRollback(async (db) => {
+    await inOwnDatabase(async (db) => {
       const world = await before0063(db);
       await migrate(db);
       const set = async (

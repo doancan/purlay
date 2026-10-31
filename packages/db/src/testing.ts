@@ -69,12 +69,13 @@ export const integrationDatabase = (): Kysely<DB> => {
  *
  * The body receives a `Transaction`, which is what a service would receive as
  * its executor — so a service that reaches for a database handle of its own
- * cannot be tested this way, which is the point (D-46).
+ * cannot be tested this way, which is the point (D-46). On the shared database by default; a file whose body
+ * takes locks a whole table's worth of other files would wait on — a migration's DDL — passes a clone (D-228).
  */
 export const withRollback = async (
   body: (executor: Transaction<DB>) => Promise<void>,
+  db: Kysely<DB> = integrationDatabase(),
 ): Promise<void> => {
-  const db = integrationDatabase();
   try {
     await db.transaction().execute(async (trx) => {
       await body(trx);
