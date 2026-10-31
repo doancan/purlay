@@ -640,6 +640,7 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 | Take somebody out of a channel they can see — an owner only an owner's (D-172) | ✅ | ✅ | — |
 | Take another member (role `member`) out of a private channel they are in (D-172) | ✅ | ✅ | ✅ |
 | See the workspace's storage and quota (D-173) | ✅ | — | — |
+| Let a channel they can see keep its history longer than the workspace (D-225) | ✅ | — | — |
 | Delete any message | ✅ | ✅ | — |
 | Edit / delete own message | ✅ | ✅ | ✅ |
 | Resolve a thread | ✅ | ✅ | ✅ |
@@ -876,7 +877,7 @@ layering rule. (D-46)
 | Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |
 | Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) | Lint and `scripts/`; the rest is #130 |
 | Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) | With the audit log (#69) |
-| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); what a purged message added is taken back, its files' bytes once under two runs at once, and a reply racing it is `404` (D-139 §2); erasure never removes a message (I-11) | `modules/retention/purge*.integration.test.ts`, `ingress/http/retention-race*`, `modules/users/*erasure.integration.test.ts`, `ingress/http/erasure-race*` |
+| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window — its channel's, the longer of the workspace's and the channel's own (I-10, D-225); what a purged message added is taken back, its files' bytes once under two runs at once, and a reply racing it is `404` (D-139 §2); a channel's setting changed mid-run is the rule from the next batch, and a batch that fails writes nothing; erasure never removes a message (I-11) | `modules/retention/purge*.integration.test.ts`, `ingress/http/retention-race*`, `ingress/http/channel-retention*`, `modules/users/*erasure.integration.test.ts`, `ingress/http/erasure-race*` |
 | Export | An export holds exactly its workspace's rows — not one id of another's — every person they name and nobody else, a former member without their address, no secret, and one consistent snapshot; every table and column of the catalogue is decided on (D-140) | `modules/export/*.integration.test.ts`, `ingress/http/exports.integration.test.ts` (an owner's: once, the channels they can see, no address) |
 | **Accessibility** | **`axe` clean on every component and every screen. A violation is fixed, never waived (D-52)** | Before the first screen (#139) |
 | **Keyboard path** | **Every action reachable by mouse is reached by key, per screen (`UX.md` §7)** | With the screens (#139) |

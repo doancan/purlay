@@ -286,7 +286,13 @@ dialog opens with focus on itself, never on the name, so a key pressed on openin
 dialog opens with a field's text selected. **About**: the **name and topic**, editable by a member of
 the channel with **Save** (somebody who has not joined reads them and is told to join); the
 **notification level** as three choices, the current one said in words (the header's menu, painted
-first and put back on a refusal); and at the foot a **Danger zone** in the danger tone — **Leave
+first and put back on a refusal); for an owner only, **History** (D-225): the workspace's window and
+what this channel keeps, each in a sentence ("The workspace keeps history for 30 days. This channel keeps
+its messages and files for 1 year."), and *Keep this channel's history* — *As long as the workspace*,
+the windows longer than the workspace's, and *Forever*; never a shorter one. A choice that keeps less
+than now says, before it is saved, what the next night deletes, and its button says it again in red; a
+refusal because the workspace now keeps longer is said in those words, and the setting is read again;
+and at the foot a **Danger zone** in the danger tone — **Leave
 channel** for a member and **Archive channel** for an owner or an admin, each row saying what it costs.
 Each of the two asks in place first; done, the person is taken to the workspace and told in a toast.
 The last member of a private channel is told to bring somebody in first or ask an admin to archive it.
@@ -371,7 +377,8 @@ it. On a narrow window the navigation opens as the sidebar does.
 - **Data & retention** — the workspace's **storage**: a meter with what is used and the quota in words
   ("1.2 GB of 5 GB") and what is left, in the warning tone from nine tenths and the danger tone, with a
   sentence, once full; the quota is the server operator's to set and the card says so, with nothing to
-  change it (D-173) — then how long history is kept, and exports.
+  change it (D-173) — then how long history is kept, with how many channels keep theirs longer, when
+  any do (D-225), and exports.
 
 The sections below say what each does; where they say a dialog from the workspace menu, it is now the
 page of the same name.
@@ -785,6 +792,7 @@ missing specified behaviour and does not merge.
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 | Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
+| Channel details: History (owner) | — (always a setting: the workspace's window until changed) | Skeleton row | Retry |
 | Edit history | "No earlier versions: they were not kept, or were removed." | Skeleton row | Retry; older versions that fail to come are said below the ones shown |
 
 **A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
