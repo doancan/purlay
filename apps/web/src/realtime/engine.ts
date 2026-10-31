@@ -101,7 +101,7 @@ export interface PendingMessage {
   readonly attachments: readonly Attachment[];
 }
 
-export interface RealtimeState {
+interface RealtimeState {
   readonly status: ConnectionStatus;
   /**
    * The connection has been open at least once on this page. Kept here, where the status changes,
@@ -144,7 +144,7 @@ export interface RealtimeState {
   readonly lost: { readonly count: number; readonly seq: number } | null;
 }
 
-export interface Outgoing {
+interface Outgoing {
   readonly channelId: string;
   readonly content: string;
   readonly parentId?: string | undefined;
