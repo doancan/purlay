@@ -192,6 +192,22 @@ export const en = {
   'signIn.password.unreachable':
     'Purlay could not be reached. Check your connection and try again.',
   'signIn.password.failed': 'Signing in did not finish. Try again in a moment.',
+  'signIn.code.form': 'Two-step verification',
+  'signIn.code.appHint': 'Enter the {digits}-digit code from your authenticator app.',
+  'signIn.code.backupHint': 'Enter one of the backup codes you saved. Each one works once.',
+  'signIn.code.appLabel': 'Code',
+  'signIn.code.backupLabel': 'Backup code',
+  'signIn.code.submit': 'Verify',
+  'signIn.code.useBackup': 'Use a backup code instead',
+  'signIn.code.useApp': 'Use the code from your app',
+  'signIn.code.restart': 'Start over',
+  'signIn.code.wrong': 'That code is not right. Try again.',
+  'signIn.code.expired':
+    'Enter your password again: that took too long, or too many codes were wrong.',
+  'signIn.code.locked': {
+    one: 'Too many wrong codes. Try again in {count} minute.',
+    other: 'Too many wrong codes. Try again in {count} minutes.',
+  },
   'signIn.createAccount.prompt': 'No account yet?',
   'signIn.createAccount.action': 'Create an account',
   'signIn.byInvitation': 'Accounts are created by invitation.',
@@ -1643,6 +1659,47 @@ export const en = {
   'settings.account.password.othersStay':
     'Your password changed, but your other sessions could not be signed out. Use "Sign out everywhere".',
   'settings.account.password.failed': 'The password was not changed. Try again in a moment.',
+  'settings.account.twoFactor.title': 'Two-step verification',
+  'settings.account.twoFactor.description':
+    'After your password, signing in asks for a code from an authenticator app on your phone.',
+  'settings.account.twoFactor.otherWays':
+    'It protects your password. Signing in with GitHub, single sign-on or an emailed link relies on that provider’s own security.',
+  'settings.account.twoFactor.status': 'Status',
+  'settings.account.twoFactor.on': 'On',
+  'settings.account.twoFactor.off': 'Off',
+  'settings.account.twoFactor.start': 'Turn on…',
+  'settings.account.twoFactor.stop': 'Turn off…',
+  'settings.account.twoFactor.newCodes': 'New backup codes…',
+  'settings.account.twoFactor.password': 'Your password',
+  'settings.account.twoFactor.startHint': 'Confirm it is you with your password.',
+  'settings.account.twoFactor.stopHint':
+    'Confirm with your password. Your password alone will sign you in again.',
+  'settings.account.twoFactor.newCodesHint':
+    'Confirm with your password. Your old backup codes stop working.',
+  'settings.account.twoFactor.continue': 'Continue',
+  'settings.account.twoFactor.scan':
+    'Scan this QR code with your authenticator app, or enter the key by hand. Then enter the code the app shows.',
+  'settings.account.twoFactor.qr': 'QR code for your authenticator app',
+  'settings.account.twoFactor.key': 'Key',
+  'settings.account.twoFactor.link': 'Open in an authenticator app on this device',
+  'settings.account.twoFactor.code': 'Code from the app',
+  'settings.account.twoFactor.confirm': 'Turn on',
+  'settings.account.twoFactor.codesTitle': 'Backup codes',
+  'settings.account.twoFactor.codesHint':
+    'If you lose your phone, each code signs you in once. They are shown only now: copy them somewhere safe.',
+  'settings.account.twoFactor.copyCodes': 'Copy codes',
+  'settings.account.twoFactor.done': 'Done',
+  'settings.account.twoFactor.onNow': 'Two-step verification is on.',
+  'settings.account.twoFactor.offNow': 'Two-step verification is off.',
+  'settings.account.twoFactor.wrongPassword': 'That is not your password.',
+  'settings.account.twoFactor.wrongCode': 'That code is not right. Check the app and try again.',
+  'settings.account.twoFactor.tooMany': {
+    one: 'Too many attempts. Try again in {count} minute.',
+    other: 'Too many attempts. Try again in {count} minutes.',
+  },
+  'settings.account.twoFactor.unreachable':
+    'Purlay could not be reached. Check your connection and try again.',
+  'settings.account.twoFactor.failed': 'That did not finish. Try again in a moment.',
   'settings.account.sessions': 'Sessions',
   'settings.account.here': 'This device',
   'settings.account.hereHint': 'Sign out of Purlay in this browser only.',

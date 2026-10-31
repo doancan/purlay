@@ -53,6 +53,8 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-avatar': '--size-avatar',
   'size-avatar-sm': '--size-avatar-sm',
   'size-avatar-lg': '--size-avatar-lg',
+  // The QR code of two-step verification is a square (D-236).
+  'size-qr': '--size-qr',
   'size-dot': '--size-dot',
   'size-icon-sm': '--size-icon-sm',
   'size-icon-md': '--size-icon-md',

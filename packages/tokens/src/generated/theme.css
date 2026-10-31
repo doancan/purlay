@@ -249,6 +249,11 @@
   height: var(--size-dot);
 }
 
+@utility size-qr {
+  width: var(--size-qr);
+  height: var(--size-qr);
+}
+
 @utility size-icon-sm {
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);

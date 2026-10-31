@@ -460,6 +460,30 @@ describe('a route of the sign-in library', () => {
     expect((await refused(answer(500, { nothing: true }))).code).toBe('MALFORMED');
   });
 
+  test('an answer that is read is held to its schema; a refusal is still the library’s (D-236)', async () => {
+    const schema = Type.Object({ backupCodes: Type.Array(Type.String()) });
+    const { client, seen } = http(() => answer(200, { backupCodes: ['aaaaa-bbbbb'] }));
+    expect(
+      await client.libraryRequest('/auth/two-factor/generate-backup-codes', schema, {
+        password: 'x',
+      }),
+    ).toEqual({ backupCodes: ['aaaaa-bbbbb'] });
+    expect(seen[0]?.url).toBe('/auth/two-factor/generate-backup-codes');
+    expect(seen[0]?.init.body).toBe('{"password":"x"}');
+
+    const odd = http(() => answer(200, { backupCodes: 'all of them' }));
+    const malformed = await odd.client
+      .libraryRequest('/auth/two-factor/generate-backup-codes', schema, {})
+      .catch((caught: unknown) => caught);
+    expect(malformed instanceof ApiError && malformed.code).toBe('MALFORMED');
+
+    const wrong = http(() => answer(400, { code: 'INVALID_PASSWORD', message: 'no' }));
+    const refusal = await wrong.client
+      .libraryRequest('/auth/two-factor/enable', schema, {})
+      .catch((caught: unknown) => caught);
+    expect(refusal instanceof LibraryFailure && refusal.code).toBe('INVALID_PASSWORD');
+  });
+
   test('no answer at all is NETWORK', async () => {
     const client = createHttp(() => Promise.reject(new Error('offline')));
     const failure = await client

@@ -1,6 +1,8 @@
 /**
  * Sessions & account (D-146): how the person signs in, leaving, and ending the account.
  *
+ * *Two-step verification* (D-236) sits under the password it guards, for an account that has one.
+ *
  * *How you sign in* (D-176, D-179 §5) names the address and the GitHub account linked to it, and only
  * names them: GitHub is linked by signing in with it on an address that is verified, so there is
  * nothing here to press.
@@ -34,6 +36,7 @@ import { useSignOut } from '../../shell/sign-out';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
 import { ChangePasswordCard } from './change-password-card';
 import { DevicesCard } from './devices-card';
+import { TwoFactorCard } from './two-factor-card';
 
 const SignInCard = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -103,11 +106,17 @@ const SignInCard = (): React.JSX.Element => {
   );
 };
 
-/** Only an account that has a password has one to change; the card is not drawn for the others. */
+/**
+ * Only an account that has a password has one to change, or to guard with a second step (D-236); neither card
+ * is drawn for the others, whose provider guards their way in.
+ */
 const PasswordSection = (): React.JSX.Element | null => {
   const signIn = useMySignIn();
   return signIn.data?.hasPassword === true ? (
-    <ChangePasswordCard email={signIn.data.email} />
+    <>
+      <ChangePasswordCard email={signIn.data.email} />
+      <TwoFactorCard email={signIn.data.email} enabled={signIn.data.twoFactor} />
+    </>
   ) : null;
 };
 

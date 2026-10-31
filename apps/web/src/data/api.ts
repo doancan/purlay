@@ -58,6 +58,9 @@ import {
   type NativeAuthorizeRequest,
   MySignIn,
   DeviceSessionList,
+  PasswordSignInAnswer,
+  TwoFactorEnrolment,
+  BackupCodes,
   EmailSignInPreview,
   type EmailSignInRequest,
   NotificationPage,
@@ -360,7 +363,24 @@ export interface Api {
   /** Asks for a sign-in link; `202` whatever the address (D-138 §1). */
   readonly requestEmailSignIn: (input: EmailSignInRequest) => Promise<void>;
   /** Password sign-in, the library's route; a refusal is a `LibraryFailure`. The session cookie is set. */
-  readonly signInWithPassword: (input: { email: string; password: string }) => Promise<void>;
+  /**
+   * The library's password sign-in: `signed-in` with the session cookie set, or `second-step` when the account
+   * asks for a code too (D-236) — no session yet, only the challenge's cookie. A refusal is a `LibraryFailure`.
+   */
+  readonly signInWithPassword: (input: {
+    email: string;
+    password: string;
+  }) => Promise<'signed-in' | 'second-step'>;
+  /** The second step of a password sign-in: a code from the app, or a backup code; sets the session (D-236). */
+  readonly verifySignInCode: (input: { code: string; kind: 'app' | 'backup' }) => Promise<void>;
+  /** Starts turning two-step verification on: the password, then the key and the backup codes (D-236). */
+  readonly startTwoFactor: (password: string) => Promise<TwoFactorEnrolment>;
+  /** Turns it on with the first right code from the app; the session stays the same (D-236). */
+  readonly confirmTwoFactor: (code: string) => Promise<void>;
+  /** Turns it off, with the password (D-236). */
+  readonly stopTwoFactor: (password: string) => Promise<void>;
+  /** New backup codes, with the password; the old ones are spent (D-236). */
+  readonly newBackupCodes: (password: string) => Promise<BackupCodes>;
   /** Change the caller's password, ending every other session; a refusal is a `LibraryFailure`. */
   readonly changePassword: (input: {
     currentPassword: string;
@@ -871,7 +891,22 @@ export const createApi = (http: Http): Api => {
         options({ body: input }),
       ),
     requestEmailSignIn: (input) => http.send('POST', '/auth/email', options({ body: input })),
-    signInWithPassword: (input) => http.library('/auth/sign-in/email', input),
+    signInWithPassword: async (input) =>
+      (await http.libraryRequest('/auth/sign-in/email', PasswordSignInAnswer, input))
+        .twoFactorRedirect === true
+        ? 'second-step'
+        : 'signed-in',
+    verifySignInCode: ({ code, kind }) =>
+      http.library(
+        kind === 'app' ? '/auth/two-factor/verify-totp' : '/auth/two-factor/verify-backup-code',
+        { code },
+      ),
+    startTwoFactor: (password) =>
+      http.libraryRequest('/auth/two-factor/enable', TwoFactorEnrolment, { password }),
+    confirmTwoFactor: (code) => http.library('/auth/two-factor/verify-totp', { code }),
+    stopTwoFactor: (password) => http.library('/auth/two-factor/disable', { password }),
+    newBackupCodes: (password) =>
+      http.libraryRequest('/auth/two-factor/generate-backup-codes', BackupCodes, { password }),
     changePassword: (input) =>
       http.library('/auth/change-password', { ...input, revokeOtherSessions: true }),
     openInvitationPassport: (input) =>

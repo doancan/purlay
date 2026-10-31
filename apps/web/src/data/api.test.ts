@@ -841,7 +841,9 @@ describe('the endpoints', () => {
 
   test('passwords and the invitation passport (R30, R51)', async () => {
     const signedIn = harness({ token: 'unread' });
-    await signedIn.api.signInWithPassword({ email: 'a@example.test', password: 'pw' });
+    expect(await signedIn.api.signInWithPassword({ email: 'a@example.test', password: 'pw' })).toBe(
+      'signed-in',
+    );
     expect(signedIn.calls[0]).toEqual({
       method: 'POST',
       url: '/auth/sign-in/email',
@@ -865,6 +867,51 @@ describe('the endpoints', () => {
       ['/api/invitations/passport', { token }],
       ['/api/invitations/passport', { token, email: 'a@example.test' }],
     ]);
+  });
+
+  test('two-step verification (D-236): the library’s routes, and what each answer means', async () => {
+    const asked = harness({ twoFactorRedirect: true, twoFactorMethods: ['totp'] });
+    expect(await asked.api.signInWithPassword({ email: 'a@example.test', password: 'pw' })).toBe(
+      'second-step',
+    );
+
+    const verified = harness({ token: 'unread' });
+    await verified.api.verifySignInCode({ code: '123456', kind: 'app' });
+    await verified.api.verifySignInCode({ code: 'abcde-12345', kind: 'backup' });
+    expect(verified.calls.map((call) => [call.url, call.body])).toEqual([
+      ['/auth/two-factor/verify-totp', { code: '123456' }],
+      ['/auth/two-factor/verify-backup-code', { code: 'abcde-12345' }],
+    ]);
+
+    const enrolment = { totpURI: 'otpauth://totp/x?secret=AAAA', backupCodes: ['a-b'] };
+    const started = harness(enrolment);
+    expect(await started.api.startTwoFactor('pw')).toEqual(enrolment);
+    expect(started.calls[0]).toEqual({
+      method: 'POST',
+      url: '/auth/two-factor/enable',
+      body: { password: 'pw' },
+    });
+
+    const confirmed = harness({ token: 'unread' });
+    await confirmed.api.confirmTwoFactor('123456');
+    expect(confirmed.calls[0]).toMatchObject({
+      url: '/auth/two-factor/verify-totp',
+      body: { code: '123456' },
+    });
+
+    const stopped = harness({ status: true });
+    await stopped.api.stopTwoFactor('pw');
+    expect(stopped.calls[0]).toMatchObject({
+      url: '/auth/two-factor/disable',
+      body: { password: 'pw' },
+    });
+
+    const renewed = harness({ status: true, backupCodes: ['c-d'] });
+    expect((await renewed.api.newBackupCodes('pw')).backupCodes).toEqual(['c-d']);
+    expect(renewed.calls[0]).toMatchObject({
+      url: '/auth/two-factor/generate-backup-codes',
+      body: { password: 'pw' },
+    });
   });
 
   test('how long a workspace keeps its history (D-139 §4): read, and set', async () => {
