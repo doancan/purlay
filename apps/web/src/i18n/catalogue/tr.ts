@@ -704,6 +704,9 @@ export const tr = {
   'profile.zoneInvalid': 'Bu bildiğimiz bir saat dilimi değil.',
   'profile.wordsInvalid': 'Bu, yazıldığı gibi gösterilemez.',
   'profile.saveFailed': 'Profilin kaydedilmedi.',
+  'profile.nameLabel': 'Ad',
+  'profile.nameHint': 'Çalışma alanlarındaki herkese bu adla görünürsün.',
+  'profile.saveName': 'Adı kaydet',
   'profile.saved': 'Kaydedildi.',
   'profile.save': 'Kaydet',
   'profile.loading': 'Profil yükleniyor',
@@ -1502,6 +1505,8 @@ export const tr = {
   'settings.profile.description': 'Birlikte çalıştığın kişiler seni nasıl görür.',
   'settings.profile.identity': 'Kimlik',
   'settings.profile.identityHint': 'Adın ve fotoğrafın GitHub’dan gelir; orada değişir.',
+  'settings.profile.identityHintOwn':
+    'Adını sen belirlersin; GitHub ile giriş yapana kadar fotoğrafın adından çizilir.',
   'settings.profile.who': 'Oturum açan',
   'settings.profile.about': 'Hakkında',
   'settings.profile.aboutHint': 'Profilinde ve kişi seçilen her yerde görünür.',

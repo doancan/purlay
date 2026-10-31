@@ -53,6 +53,7 @@ export const aSession = (): MeResponse => ({
   memberships: [{ workspace: WORKSPACE, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
   mayCreateWorkspace: true,
   isServerAdmin: false,
+  nameFromGitHub: false,
 });
 
 export const aChannel = (

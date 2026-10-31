@@ -706,6 +706,9 @@ export const en = {
   'profile.zoneInvalid': 'That is not a time zone we know.',
   'profile.wordsInvalid': 'That cannot be shown as written.',
   'profile.saveFailed': 'Your profile was not saved.',
+  'profile.nameLabel': 'Name',
+  'profile.nameHint': 'How you are shown to everyone in your workspaces.',
+  'profile.saveName': 'Save name',
   'profile.saved': 'Saved.',
   'profile.save': 'Save',
   'profile.loading': 'Loading the profile',
@@ -1544,6 +1547,8 @@ export const en = {
   'settings.profile.description': 'How the people you work with see you.',
   'settings.profile.identity': 'Identity',
   'settings.profile.identityHint': 'Your name and picture come from GitHub and change there.',
+  'settings.profile.identityHintOwn':
+    'Your name is yours to set; your picture is drawn from it until you sign in with GitHub.',
   'settings.profile.who': 'Signed in as',
   'settings.profile.about': 'About you',
   'settings.profile.aboutHint': 'Shown on your profile and wherever people are picked.',
