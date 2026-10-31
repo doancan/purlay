@@ -35,6 +35,7 @@ import { bunRedisClient, connectRedis } from './platform/redis';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
+import { sendAuditLinesTo } from './modules/audit/lines';
 import { errorTrackingFor, reportUrgently } from './platform/error-tracking';
 import {
   closeAfterDrain,
@@ -57,6 +58,8 @@ const plainLog = createLogger({ level: config.LOG_LEVEL });
 // to start, here, rather than failing quietly at the first error. Everything logged
 // at `error` below is also reported, cleaned the way the log is.
 const { tracker: errorTracker, log } = errorTrackingFor(config, plainLog, systemClock);
+// Every entry this process writes to the trail is also a line of its log, ids only (D-222).
+sendAuditLinesTo(log);
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.

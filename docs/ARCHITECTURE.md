@@ -838,6 +838,9 @@ digest, and a mail's recipient and words — a relay's error is logged by its co
 in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
 written. A value interpolated into a message's text cannot be found that way, so a message is a
 constant and variables go in fields.
+Every entry written to either audit trail is also a line, `audit entry recorded`, carrying ids and fixed
+words only — the action, who acted, the workspace, the target, the ids in its metadata, when — never a name
+(D-222); the row stays the record (D-26).
 
 **Metrics** (D-221). `GET /metrics` is Prometheus's text format, off unless `METRICS_TOKEN` is set and a
 `404` like any unknown path to whoever does not hold it. One registry per process (`platform/metrics.ts`),

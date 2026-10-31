@@ -8594,9 +8594,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'server-trail-rewritten',
     why: 'the server’s trail is written with a delete first: it is no longer append-only',
     file: 'apps/api/src/modules/audit/server-audit.ts',
-    find: "  const now = clock.now();\n  await executor\n    .insertInto('server_audit_log')",
+    find: "  const id = messageId(now);\n  await executor\n    .insertInto('server_audit_log')",
     replace:
-      "  const now = clock.now();\n  await executor.deleteFrom('server_audit_log').where('actor_user_id', '=', entry.actorUserId).execute();\n  await executor\n    .insertInto('server_audit_log')",
+      "  const id = messageId(now);\n  await executor.deleteFrom('server_audit_log').where('actor_user_id', '=', entry.actorUserId).execute();\n  await executor\n    .insertInto('server_audit_log')",
     tests: ['apps/api/src/modules/audit/append-only.test.ts'],
   },
   {
