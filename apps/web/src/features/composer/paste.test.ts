@@ -3,6 +3,7 @@
  * Google Doc, an editor's coloured code — and what must stay as it was pasted.
  */
 import { describe, expect, test } from 'bun:test';
+import { parseMarkdown } from '@purlay/markdown';
 import { installDom } from '../../testing/dom';
 import { convertPaste, languageOf, markdownFromHtml, tableFromDelimited } from './paste';
 
@@ -67,7 +68,9 @@ describe('a table from rows', () => {
 
 describe('what a paste becomes', () => {
   test('code is a block in its language, even when every line has one comma or ends in a semicolon', () => {
-    const code = Array.from({ length: 13 }, (_, n) => `const x${String(n)} = call(a, "ğüş");`).join('\n');
+    const code = Array.from({ length: 13 }, (_, n) => `const x${String(n)} = call(a, "ğüş");`).join(
+      '\n',
+    );
     expect(convertPaste(code, '')).toEqual({
       kind: 'code',
       markdown: `\`\`\`js\n${code}\n\`\`\``,
@@ -138,6 +141,17 @@ describe('formatted text as markdown', () => {
     const html =
       '<table><tr><th>Name</th><th>Role</th></tr><tr><td>Alice</td><td>Owner</td></tr></table>';
     expect(markdownFromHtml(html)).toBe('| Name | Role |\n| --- | --- |\n| Alice | Owner |');
+  });
+
+  test('a backslash before a pipe in a cell’s code does not split the cell', () => {
+    const html =
+      '<table><tr><th>Shell</th><th>Note</th></tr><tr><td><code>a\\|b</code></td><td>C:\\dir|x</td></tr></table>';
+    const markdown = markdownFromHtml(html) ?? '';
+    expect(markdown).toBe('| Shell | Note |\n| --- | --- |\n| `a\\|b` | C:\\\\dir\\|x |');
+    const table = parseMarkdown(markdown)?.children[0];
+    expect(table?.type === 'table' ? table.children.map((row) => row.children.length) : []).toEqual(
+      [2, 2],
+    );
   });
 
   test('an editor’s coloured code has nothing to keep: the plain words are the paste', () => {

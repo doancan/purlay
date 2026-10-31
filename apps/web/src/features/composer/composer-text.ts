@@ -68,6 +68,13 @@ export const asCodeBlock = (pasted: string, language: string | null = null): str
 };
 
 /**
+ * Markdown made one table cell: a pipe not yet escaped is, and an escape already there (`\|`, `\\`,
+ * `\*`) is kept whole, so a backslash before a pipe never ends the cell early.
+ */
+export const asTableCell = (markdown: string): string =>
+  markdown.replace(/\\[\s\S]|\|/g, (token) => (token === '|' ? '\\|' : token));
+
+/**
  * A block put in place of the selection on lines of its own: a fence, a table or a list that follows
  * words on the same line is not one — it becomes part of the paragraph (D-210). The caret lands after it.
  */
@@ -283,7 +290,7 @@ export const insertMarkdown = (
   if (kind === 'table') {
     // A table of two columns and one row to fill in, on lines of its own (D-210); the selection, if
     // one line, is its first heading, and the first heading is what is selected to type over.
-    const first = chosen === '' || chosen.includes('\n') ? 'Column' : chosen.replace(/\|/g, '\\|');
+    const first = chosen === '' || chosen.includes('\n') ? 'Column' : asTableCell(chosen);
     const placed = placeBlock(text, selection, `| ${first} | Column |\n| --- | --- |\n|  |  |`);
     const start = placed.start + 2;
     return { text: placed.text, selection: { start, end: start + first.length } };

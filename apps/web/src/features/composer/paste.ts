@@ -10,7 +10,7 @@
  * - **Code**: a long paste becomes a fenced block (`asCodeBlock`); here, the language it is in, so it
  *   is coloured, and a diff is drawn as one (D-133).
  */
-import { asCodeBlock, isCodeBlock, isLongPaste } from './composer-text';
+import { asCodeBlock, asTableCell, isCodeBlock, isLongPaste } from './composer-text';
 
 /** At most this much HTML is read: a paste of a whole page is taken as its plain words instead. */
 const HTML_MAX = 200_000;
@@ -302,7 +302,7 @@ const table = (element: Element): string | null => {
   const rows = Array.from(element.querySelectorAll('tr')).map((row) =>
     Array.from(row.children)
       .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
-      .map((cell) => inline(cell).replace(/\\\n/g, ' ').replace(/\|/g, '\\|').trim()),
+      .map((cell) => asTableCell(inline(cell).replace(/\\\n/g, ' ')).trim()),
   );
   const width = Math.max(0, ...rows.map((row) => row.length));
   if (rows.length < TABLE_MIN_ROWS || width < TABLE_MIN_COLUMNS) return null;
