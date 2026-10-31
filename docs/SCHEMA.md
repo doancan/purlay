@@ -261,8 +261,9 @@ Deleting a user deletes its `accounts`. No row of `verifications` is keyed by a 
 their id; the workspace's is `…:workspace:` and its id), which an erasure deletes. Both are short-lived: a sign-in link's `identifier` is `magic-link:` and its token's digest, and its
 `value` the address as JSON, which is how erasure finds it; a reset's `value` is the user's id. The
 library's `rate_limits` rows are a client address and a path; Purlay's own sign-in-link counters are
-`purlay:sign-in-link:address:` or `…:client:` and a digest, with `last_request` the moment the hour
-closes (D-179 §3), and an erasure deletes its address's. The wrong passwords counted against a client are
+`purlay:sign-in-link:client:<digest>`, `purlay:sign-in-link:address:<digest>` and, per client,
+`purlay:sign-in-link:address:<digest>:client:<digest>` (D-231 §2), with `last_request` the moment the hour
+closes (D-179 §3), and an erasure deletes every one under its address's prefix. The wrong passwords counted against a client are
 `purlay:password:address:<digest>:client:<digest>` and `purlay:password:client:<digest>`, the client being its network (an IPv4 address or an IPv6 /64), their window
 fifteen minutes (D-179 §4); an erasure deletes every one under its address's prefix. A password lives
 only in `accounts.password`, on the row whose `provider_id` is `credential` and whose `account_id` is the

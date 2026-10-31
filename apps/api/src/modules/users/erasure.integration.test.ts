@@ -193,11 +193,17 @@ describe('integration: erasing an account', () => {
         '203.0.113.7',
       );
       await after.settled();
+      // Two counters: the address's, and the address's from that client (D-231 §2).
       const counter = await addressCounterKey(adaEmail);
       const counters = async (): Promise<number> =>
-        (await db.selectFrom('rate_limits').select('key').where('key', '=', counter).execute())
-          .length;
-      expect(await counters()).toBe(1);
+        (
+          await db
+            .selectFrom('rate_limits')
+            .select('key')
+            .where('key', 'like', `${counter}%`)
+            .execute()
+        ).length;
+      expect(await counters()).toBe(2);
       // And how many invitation letters she sent today, kept under her id; bob's is the control.
       for (const person of [ada, member(room, 'bob')]) {
         await sql`insert into rate_limits (key, count, last_request)

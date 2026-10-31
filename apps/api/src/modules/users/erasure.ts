@@ -90,10 +90,10 @@ export const eraseAccount = async (
     where value = ${person.id}
        or case when pg_input_is_valid(value, 'jsonb')
                then lower((value::jsonb) ->> 'email') end = ${person.email}`.execute(executor);
-  // And how many links the address was sent this hour, kept by its digest.
+  // And how many links the address was sent this hour, from whichever clients: kept under its digest.
   await executor
     .deleteFrom('rate_limits')
-    .where('key', '=', await addressCounterKey(person.email))
+    .where('key', 'like', `${await addressCounterKey(person.email)}%`)
     .execute();
   // And the passports an invitation made for the address (D-179 §5), kept by its digest: read here, before
   // the tombstone replaces the address, or nothing could find them.
