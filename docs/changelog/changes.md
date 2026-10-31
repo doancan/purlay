@@ -26,6 +26,7 @@ have it.
 ### Added
 
 - **Mobile** — Purlay installs as an application from the browser; on an iPhone, added to the Home Screen it can receive notifications, and the notifications page says how (D-230)
+- **Administration** — The server's administrator can suspend somebody's account from Server → Accounts: they are signed out on every device and cannot sign in, and their messages and name stay; lifting it lets them back in as they were (D-233)
 - **Administration** — The audit log can be narrowed by person, action and days (in the reader's own time zone, kept in the page's address) and downloaded as CSV or NDJSON; a download is itself on the log, and every entry is also an ids-only line of the server's log (D-222)
 - **Messages** — A file path with a line (`src/retry.ts:14`) or a commit's SHA in a message opens on GitHub, in the repository of the channel's one GitHub feed (D-223)
 - **Channels** — An owner can let a channel keep its history longer than the workspace does, or forever, never shorter; the purge keeps the longer window, and Data & retention says how many channels keep longer (D-225)
