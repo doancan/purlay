@@ -23,3 +23,4 @@ export * from './export';
 export * from './mailbox';
 export * from './setup';
 export * from './password';
+export * from './quiet-hours';

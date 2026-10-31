@@ -437,6 +437,9 @@ export interface Users {
   is_server_admin: Generated<boolean>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;
+  quiet_days: number | null;
+  quiet_from: number | null;
+  quiet_to: number | null;
   status_text: string | null;
   suspended_at: Timestamp | null;
   time_zone: string | null;

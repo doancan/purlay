@@ -274,6 +274,10 @@ export const COLUMNS: Columns = {
     is_server_admin: 'omit',
     // The server's administrator's decision about the account (D-233): the server's, not the workspace's.
     suspended_at: 'omit',
+    // A person's own setting about when they are interrupted (D-234), as Deep Work is.
+    quiet_from: 'omit',
+    quiet_to: 'omit',
+    quiet_days: 'omit',
     locale: 'omit',
     last_seen_at: 'omit',
     updated_at: 'omit',
