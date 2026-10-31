@@ -3,7 +3,7 @@
  * channel switch, each as the middle of its run, as the browser tests measured them (`apps/web/e2e/performance.e2e.ts` writes each
  * to `test-results/performance/<measure>-<project>.json`).
  *
- *   bun run budget:browser -- --project <name> [--from <folder>] [--keep <file>]
+ *   bun run budget:browser -- --project <name> [--from <folder>] [--keep <file>] [--remeasure]
  *
  * **It blocks on a regression, never on the line**, by the same rule as `budget:latency`: on a hosted
  * runner the channel switch measured 120–170 ms where a laptop measures 33 ms, and moves by tens of
@@ -11,8 +11,13 @@
  * tests assert it on a developer's machine. Here a number fails when it jumped past the slowest of main's last few runs (`historyOf`), and
  * a number main measured that this run did not is a failure too: a measurement that quietly stopped
  * is not a pass. A run that measured nothing at all is refused.
+ *
+ * **A regression must happen twice** (D-227): with `--remeasure`, a run that regressed is measured again,
+ * alone — the measuring tests by themselves, on one worker — and fails only if that regresses too. A real
+ * slowdown shows again on the next measurement; a runner's bad minute does not. Measuring again that
+ * fails, or that measures nothing, is a failure, never a pass.
  */
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { jumped, optionOf, REGRESSION_FACTOR } from './budget-latency';
 
@@ -130,20 +135,60 @@ export const judge = (
   return { regressed, lines };
 };
 
-/** The command: read, judge against `--keep` if it exists, and keep the run only if it passed. */
+/**
+ * The measuring tests again, alone, for one project (D-227): only the files that write a measurement
+ * (`PURLAY_E2E_PERFORMANCE=only`, `playwright.config.ts`) on one worker, so nothing else competes for
+ * the machine while they measure. Answers the exit code.
+ */
+const measureAlone = async (project: string): Promise<number> =>
+  await Bun.spawn(['bun', '--no-env-file', 'run', 'test:e2e', '--', '--workers=1'], {
+    env: { ...process.env, PURLAY_E2E_PROJECT: project, PURLAY_E2E_PERFORMANCE: 'only' },
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).exited;
+
+/** Removes what the project measured, so what is read after measuring again is never the first run's. */
+const forget = async (folder: string, project: string): Promise<void> => {
+  for (const file of new Set(MEASURES.map((measure) => measure.file))) {
+    await rm(join(folder, `${file}-${project}.json`), { force: true });
+  }
+};
+
+/**
+ * The command: read, judge against `--keep` if it exists — with `--remeasure`, measure a regression again
+ * and judge that — and keep the run judged last only if it passed.
+ */
 export const main = async (
   args: readonly string[],
+  remeasure: (project: string) => Promise<number> = measureAlone,
 ): Promise<{ readonly lines: readonly string[]; readonly code: number }> => {
   const project = optionOf(args, '--project');
   if (project === undefined) return { lines: ['budget:browser needs --project <name>'], code: 1 };
-  const now = await measured(optionOf(args, '--from') ?? FROM, project);
+  const folder = optionOf(args, '--from') ?? FROM;
+  let now = await measured(folder, project);
   if (Object.keys(now).length === 0) {
     return { lines: [`budget:browser — nothing was measured for ${project}`], code: 1 };
   }
   const keepFile = optionOf(args, '--keep');
   const kept = keepFile === undefined ? undefined : await readJson(keepFile);
   const history = kept === undefined ? null : historyOf(kept);
-  const { regressed, lines } = judge(now, history);
+  let { regressed, lines } = judge(now, history);
+  if (regressed && args.includes('--remeasure')) {
+    await forget(folder, project);
+    const exit = await remeasure(project);
+    if (exit !== 0) {
+      const failed = `first measurement regressed; measuring again failed (exit ${String(exit)})`;
+      return { lines: [...lines, failed], code: 1 };
+    }
+    now = await measured(folder, project);
+    if (Object.keys(now).length === 0) {
+      const empty = `first measurement regressed; nothing was measured again for ${project}`;
+      return { lines: [...lines, empty], code: 1 };
+    }
+    const again = judge(now, history);
+    regressed = again.regressed;
+    lines = [...lines, 'first measurement regressed; measured again alone:', ...again.lines];
+  }
   // A regression is not adopted: the next run is judged against the runs that passed.
   if (keepFile !== undefined && !regressed) {
     const next = [...(history ?? []), now].slice(-HISTORY_LENGTH);
