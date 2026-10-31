@@ -10852,3 +10852,43 @@ the bound: a slowdown real enough to repeat still fails.
 **Cost of reversing.** The switch in `playwright.config.ts`, the second test step and `--remeasure` in `ci.yml`,
 the re-measure in both commands, and their tests and mutations. Reversed, the measurements share the runner again
 and a noisy run blocks a merge until somebody re-runs it.
+
+### D-228. The whole suite runs two files at a time — amends D-220
+
+**Decided (the owner, 2026-10-31).** `schema` was the pipeline's long pole: 742 s of a 12½-minute run on
+2026-10-31, 686 s of it the one run of every test, file after file. D-220 kept the files sequential because Bun had
+no parallel runner yet; Bun 1.4.4 has one, `--parallel=N`, which runs files in worker processes and implies
+`--isolate`, so D-220's guarantee holds: each file has globals of its own.
+
+- **`bun run test:all` passes `--isolate --parallel=2`** (`WORKERS` in `scripts/test-all.ts`). Measured on the same
+  tree, coverage included: 256–269 s on six runs, two of them from no template at all as CI starts, against
+  about 475 s sequential, every test passing; on CI `schema` took 460 s against 742.
+- **Two, not one a core.** Four workers ran the suite in 148–155 s, but four files cloning the integration template
+  at once wait on each other in PostgreSQL past the five seconds a hook is given, and the harness's own cost test
+  failed with them. Two leave the database and Redis room on a four-core runner and failed nothing.
+- **The coverage floor still holds.** Bun judges `bunfig.toml`'s per-file floor on the merged report: a run that
+  passes every test but leaves a file under the floor still exits 1, checked in both modes before this change.
+- **What running side by side exposed was fixed where it was, not waited out** (D-48: no floor, budget or rule
+  moved):
+  - a sidebar menu test read the menu one turn after the right click; Radix opens it a little later under load,
+    so the first look in each case now waits for it;
+  - the Redis bus tests published before every node's SUBSCRIBE had reached Redis, and Redis keeps nothing for a
+    subscriber not there yet: nodes now trade probes in rounds until each hears every other;
+  - the bus order walk and the reconnection walk, whose own waits allow ten seconds and whose reconnection doubles
+    a 250 ms backoff, had the five seconds every test is given; they have thirty, with the reason beside them;
+  - every worker runs the preload, so on a fresh database two built the integration template at once and one
+    failed on a duplicate name, and a clone could start while another process was connected to the template:
+    building and cloning now hold an advisory lock on the template's name (`testing.ts`, tested by building one
+    new template twice at once);
+  - four files that clone a database a test drop up to forty-six in one `afterAll`, which fitted a hook's five
+    seconds only alone (#797): they have sixty, as migrate-on-start's cleanup already had;
+  - Playwright reads the `JEST_WORKER_ID` each worker is given as being inside Jest and lists nothing, so the
+    listing test leaves the worker's marks out of what Playwright inherits.
+- `environment.test.ts` holds both flags and the number.
+
+**Considered and rejected.** *One worker a core*: above. *Sharding `schema` over several runners* (`--shard`): the
+per-file floor needs the merged report, and merging coverage across jobs is machinery this does not need while one
+runner's cores are idle. *Running the integration files apart from the unit files*: the same merge problem.
+
+**Cost of reversing.** Drop `--parallel=…` and `WORKERS` from `scripts/test-all.ts` and their test; the test fixes
+stay, being right either way.
