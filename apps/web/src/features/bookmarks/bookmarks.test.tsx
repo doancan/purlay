@@ -171,8 +171,12 @@ describe('a channel’s bookmarks', () => {
     await settle();
     await addThrough(view, 'https://x.example');
     const dialog = within(view.getByRole('dialog', { name: 'Add a bookmark' }));
-    expect(dialog.queryByRole('alert')).toBeNull();
-    expect(dialog.getByText('Use a web address, like https://docs.example.com.')).toBeDefined();
+    // The address's own alert, tied to it, not the form's "was not added".
+    const alert = dialog.getByRole('alert');
+    expect(alert.textContent).toBe('Use a web address, like https://docs.example.com.');
+    const address = dialog.getByRole<HTMLInputElement>('textbox', { name: 'Address' });
+    expect(address.getAttribute('aria-invalid')).toBe('true');
+    expect(address.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
     view.unmountAll();
   });
 
