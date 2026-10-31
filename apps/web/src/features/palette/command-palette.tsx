@@ -34,6 +34,7 @@ import { Kbd, keyHintsClasses } from '../../ui/kbd';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { searchHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
+import { useSearchOperators } from '../search/use-operators';
 import { useWorkspace } from '../shell/workspace';
 import { GROUPS, rank, type PaletteGroup, type PaletteItem, type Shown } from './rank';
 import { usePaletteItems } from './use-palette-items';
@@ -99,8 +100,10 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
 
   const { navigate } = useRoute();
   const { workspace } = useWorkspace();
+  const operators = useSearchOperators();
   // Whatever was typed can always be searched for in the messages: the last row, never the only
-  // way to find a channel, but the way to find what somebody said (`PRD.md` §4.6).
+  // way to find a channel, but the way to find what somebody said (`PRD.md` §4.6) — its operators
+  // read as the search field reads them (D-224).
   const matched = useMemo(() => rank(items, query), [items, query]);
   const shown = useMemo((): readonly Shown[] => {
     const words = query.trim();
@@ -112,11 +115,20 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
       glyph: 'search',
       recency: '',
       run: () => {
-        navigate(searchHref(workspace.slug, words));
+        const asking = operators.lift(words);
+        navigate(
+          searchHref(
+            workspace.slug,
+            asking.words,
+            asking.channelId,
+            asking.authorId,
+            asking.filters,
+          ),
+        );
       },
     };
     return [...matched, { item: searching, positions: [] }];
-  }, [matched, query, t, navigate, workspace.slug]);
+  }, [matched, query, t, navigate, workspace.slug, operators]);
   const current = shown[selected];
   const optionId = (index: number): string => `${base}-option-${String(index)}`;
 
