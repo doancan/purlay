@@ -50,6 +50,7 @@ const channel: Channel = {
   name: 'api',
   topic: null,
   incident: null,
+  codeRepository: null,
   type: 'public',
   lastMessageAt: null,
   state,

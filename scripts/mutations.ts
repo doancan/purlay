@@ -10610,4 +10610,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'if (inCi && !redisHere && url === "never") {',
     tests: ['scripts/test-all.integration.test.ts'],
   },
+  {
+    id: 'code-references-guess-among-several-repositories',
+    why: 'a channel with two feeds links its code references into whichever repository sorts first (D-223)',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: 'select case when count(*) = 1 then',
+    replace: 'select case when count(*) >= 1 then',
+    tests: ['apps/api/src/modules/channels/channels.integration.test.ts'],
+  },
+  {
+    id: 'code-references-cut-from-an-absolute-path',
+    why: 'the tail of an absolute path, a URL or a domain is linked as if it were the repository’s own file (D-223)',
+    file: 'packages/markdown/src/code-references.ts',
+    find: String.raw`(?<![\p{L}\p{N}\p{Cf}_.@#/\\:~$%+\-])`,
+    replace: String.raw`(?<![\p{L}\p{N}\p{Cf}_.@#\\:~$%+\-])`,
+    tests: ['packages/markdown/src/code-references.test.ts'],
+  },
+  {
+    id: 'code-references-take-a-host-for-a-directory',
+    why: 'a reference whose first directory is a host is linked under the channel’s repository (D-223)',
+    file: 'packages/markdown/src/code-references.ts',
+    find: "if (first.lastIndexOf('.') > 0 || segments.includes(NOT_THE_REPOSITORYS)) return null;",
+    replace: 'if (segments.includes(NOT_THE_REPOSITORYS)) return null;',
+    tests: ['packages/markdown/src/code-references.test.ts'],
+  },
 ];
