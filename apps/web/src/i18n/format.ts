@@ -77,10 +77,15 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
   const year = new Intl.DateTimeFormat('en-CA', { year: 'numeric', ...zone });
   const numbers = new Intl.NumberFormat(locale);
   const names = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
-  const inUnit = (unit: 'byte' | 'kilobyte' | 'megabyte' | 'gigabyte'): Intl.NumberFormat =>
-    new Intl.NumberFormat(locale, { style: 'unit', unit, maximumFractionDigits: 1 });
+  const inUnit = (
+    unit: 'byte' | 'kilobyte' | 'megabyte' | 'gigabyte',
+    unitDisplay: 'short' | 'long' = 'short',
+  ): Intl.NumberFormat =>
+    new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay, maximumFractionDigits: 1 });
+  // Bytes in words: the short unit is "byte" whatever the count ("0 byte"); the long one is the
+  // language's plural ("0 bytes", "1 byte"; "0 bayt"). The larger units keep their symbols.
   const [inBytes, inKilobytes, inMegabytes, inGigabytes] = [
-    inUnit('byte'),
+    inUnit('byte', 'long'),
     inUnit('kilobyte'),
     inUnit('megabyte'),
     inUnit('gigabyte'),
