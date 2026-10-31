@@ -66,6 +66,8 @@ const blockedOn = async (db: Executor, statement: RegExp): Promise<void> => {
 };
 
 const clones: (() => Promise<void>)[] = [];
+// Every test's database, dropped after its connections have closed: up to 19 of them, which fitted the
+// five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   await Promise.all(
     clones.map(async (drop) => {
@@ -73,7 +75,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, 60_000);
 
 const APP_URL = 'https://chat.example.com';
 

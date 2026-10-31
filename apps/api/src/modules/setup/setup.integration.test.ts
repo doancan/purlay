@@ -35,6 +35,8 @@ import {
 } from './setup';
 
 const clones: (() => Promise<void>)[] = [];
+// Every test's database, dropped after its connections have closed: up to 38 of them, which fitted the
+// five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   await Promise.all(
     clones.map(async (drop) => {
@@ -42,7 +44,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, 60_000);
 
 /** A database of the test's own, cloned from the migrated template: no user, no settings, no code. */
 const aServer = async (): Promise<Executor> => {

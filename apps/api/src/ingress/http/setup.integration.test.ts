@@ -51,6 +51,8 @@ const RELAY_PASS = 'relay-pass-7311';
 
 const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
+// Every wizard's database, dropped after its connections have closed (`dropDatabases`): one a test, forty-six
+// of them, which fitted the five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   for (const stop of stops) await stop();
   await Promise.all(
@@ -59,7 +61,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, 60_000);
 
 /** A clock the test moves, from the wall clock: the setup code's hour is read from it. */
 const movable = (): Clock & { advance: (ms: number) => void } => {
