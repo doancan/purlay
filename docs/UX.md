@@ -663,7 +663,8 @@ words on the same line a fence is not one.
 typed; arrows move, Tab (or Enter, until the command is whole) writes it out with a space for its words, Esc
 closes the list. Each is a door to what the product already does, painted, refused and put back as its
 button is: `/me` (the words in italics), `/shrug`, `/topic` (nothing after it clears it), `/mute`,
-`/unmute`, `/star`, `/unstar`, `/invite @name`, `/leave`, `/deepwork 30m|1h|2h|tomorrow|off`, `/search`.
+`/unmute`, `/star`, `/unstar`, `/invite @name`, `/leave`, `/deepwork 30m|1h|2h|tomorrow|off`, `/search` (with
+the search field's operators, D-224).
 What is done is said in a toast; what is refused, under the box, with the words kept. An unknown `/word` is
 not sent and the line says which commands there are; `//` at the start sends a slash as words; with files
 attached, a line is words.
@@ -1106,4 +1107,6 @@ web is not the only place behaviour is specified. What is decided so far:
 
 Open questions keeps existing unresolved threads and adds explicitly marked roots with no answers. Show switches between all, unanswered and assigned to me; order switches newest/longest waiting. Filters persist in the URL; pagination preserves the chosen order. Rows show ownership and elapsed days. No assignment notification or reminder is sent.
 
-Search keeps words, channel and author in the URL and adds explicit status, question, content, UTC date and repository controls. A filter can be used with no words. Results show selected-answer previews and decision notes with the original root. Saved searches opens a personal list with loading, retry and empty states; a named current search can be saved, revisited or removed, with pagination. Errors retain names and filters. Current visibility is always applied when running the search.
+Search keeps words, channel and author in the URL and adds explicit status, question, content, date (whole days in the viewer's time zone, D-224) and repository controls. A filter can be used with no words. Results show selected-answer previews and decision notes with the original root. Saved searches opens a personal list with loading, retry and empty states; a named current search can be saved, revisited or removed, with pagination. Errors retain names and filters. Current visibility is always applied when running the search.
+
+**Search operators (D-224).** The field takes filters typed with the words: `in:#channel` or `in:@person`, `from:@person` or `from:me`, `has:code`, `has:file`, `is:open`, `is:resolved`, `is:question`, `repo:owner/name`, and `on:`, `before:` or `after:` a `YYYY-MM-DD` day in the viewer's time zone (`after:` starts the next day). Keys ignore case; anything not a known key is words, and `"exact words"` keeps what looks like a filter as words. On Enter — and on any change of a control, which searches with what the field holds — the operators become the controls' own filters and the address keeps those and the remaining words; the field then shows those words, quoting one that would read as a filter. What is typed wins over a control changed with it, and the last of a kind wins. An operator that names nobody, or has a value no filter takes, stays in the words, is searched for as words and is said under the field in a polite status — never silently dropped, never blocking. Too few characters, too many, or an end before the start are said in the field. A *Search operators* disclosure under the field lists them. `/search` and the palette's *Search messages for* read the same operators.
