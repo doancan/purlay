@@ -1,7 +1,7 @@
 /**
  * What a slash command does (D-214): each through what the product already does — the channel's
  * topic through its edit, the level and the star through the hooks the header uses, Deep Work through
- * its controls, search through its address — so a command paints, is refused and is put back exactly
+ * its controls, search through its address and its operators (D-224) — so a command paints, is refused and is put back exactly
  * as the button it stands for.
  */
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,11 +12,13 @@ import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useChannels, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { href } from '../../router/routes';
+import { href, searchHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { useChooseLevel } from '../channel/notification-level-menu';
 import { useStar } from '../channel/star-toggle';
 import { forgetChannel } from '../questions/last-channel';
+import { searchProblem } from '../search/operators';
+import { problemText, useSearchOperators } from '../search/use-operators';
 import { useDeepWorkControls } from '../shell/deep-work';
 import { useWorkspace } from '../shell/workspace';
 import { deepWorkOf, inviteeOf, meMessage, shrugMessage, type SlashName } from './slash';
@@ -44,6 +46,7 @@ export const useSlashRunner = (
   const chooseLevel = useChooseLevel(channel);
   const star = useStar(channel);
   const deepWork = useDeepWorkControls();
+  const operators = useSearchOperators();
   const refused = (reason: string): SlashOutcome => ({ kind: 'refused', reason });
   const failed = (failure: unknown): SlashOutcome => refused(describe(failure));
 
@@ -107,10 +110,24 @@ export const useSlashRunner = (
           said: t(choice === 'off' ? 'slash.deepwork.ended' : 'slash.deepwork.started'),
         };
       }
-      case 'search':
+      case 'search': {
         if (args === '') return refused(t('slash.search.usage'));
-        navigate(`${href('search', { slug: workspace.slug })}?q=${encodeURIComponent(args)}`);
+        // Operators are read here, as the search field reads them (D-224), so the address carries
+        // filters and the words left; one that cannot be read is said on the search screen.
+        const asking = operators.lift(args);
+        const problem = searchProblem(asking);
+        if (problem !== null) return refused(problemText(t, problem));
+        navigate(
+          searchHref(
+            workspace.slug,
+            asking.words,
+            asking.channelId,
+            asking.authorId,
+            asking.filters,
+          ),
+        );
         return { kind: 'done', said: '' };
+      }
     }
   };
 };
