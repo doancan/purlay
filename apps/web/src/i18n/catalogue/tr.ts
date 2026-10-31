@@ -1522,6 +1522,21 @@ export const tr = {
   'settings.notifications.what.reply':
     'Başlattığın ya da yanıtladığın bir thread’de biri yanıt verdiğinde',
   'settings.notifications.what.channel': 'Her mesaj seçtiğin bir kanala biri yazdığında',
+  'quietHours.title': 'Sessiz saatler',
+  'quietHours.description':
+    'Her hafta seni hiçbir şeyin bölmediği saatler: gelenler saklanır ve sayılır, ama saatler bitene kadar hiçbir şey açılmaz ya da çalmaz — kendiliğinden Deep Work.',
+  'quietHours.needsZone': 'Sessiz saatler senin saatine göre okunur. Önce saat dilimini ayarla.',
+  'quietHours.setZone': 'Saat dilimini Profil’de ayarla',
+  'quietHours.on': 'Sessiz saatler',
+  'quietHours.zone': 'Saatler {timeZone} saat dilimine göre.',
+  'quietHours.between': 'Saatler',
+  'quietHours.from': 'Başlangıç',
+  'quietHours.to': 'bitiş',
+  'quietHours.overnight': 'Gece yarısını geçer, ertesi sabaha kadar sürer.',
+  'quietHours.days': 'Başladığı günler',
+  'quietHours.save': 'Kaydet',
+  'quietHours.saved': 'Kaydedildi.',
+  'quietHours.failed': 'Sessiz saatler kaydedilmedi.',
   'settings.notifications.deepWorkHint':
     'Açıkken sana hiçbir şey iletilmez — ne burada ne cihazlarında. Süresi dolunca kendiliğinden biter.',
   'settings.notifications.deepWorkStart': 'Deep Work’ü başlat',
