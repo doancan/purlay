@@ -36,6 +36,9 @@ test('a question is tracked before its first reply, keeps its decision, and is f
   await panel.getByLabel('Decision note', { exact: true }).fill(`Avoid retry storms ${made.name}`);
   await panel.getByLabel('Related link').fill('https://github.com/acme/api/pull/42');
   await panel.getByRole('button', { name: 'Save decision' }).click();
+  // The saved note is drawn as soon as the cache has it, while the form still shows it until the
+  // request returns; the form closing is the save being done.
+  await expect(panel.getByRole('button', { name: 'Edit decision' })).toBeVisible();
   await expect(panel.getByText('Accepted answer', { exact: true })).toBeVisible();
   await expect(panel.getByText(`Avoid retry storms ${made.name}`, { exact: true })).toBeVisible();
   await expectNoAxe();
