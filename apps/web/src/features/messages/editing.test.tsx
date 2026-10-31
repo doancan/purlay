@@ -378,6 +378,23 @@ describe('editing', () => {
       }
     });
 
+    test('on a phone the keys are not offered: no key to press them on, and what the edit keeps still said', async () => {
+      const spy = spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
+        matches: query === '(pointer: coarse) and (hover: none)',
+        addEventListener: (): void => undefined,
+        removeEventListener: (): void => undefined,
+      })) as unknown as typeof window.matchMedia);
+      try {
+        const { view } = await startEditing(mine, []);
+        expect(view.queryByText(/Shift\+Enter for a new line/)).toBeNull();
+        expect(view.queryByText(/to save/)).toBeNull();
+        expect(view.getByText(/stays in its history/)).toBeDefined();
+        view.unmountAll();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     test('the hint names the key that saves: Enter, and Ctrl+Enter inside a fence', async () => {
       const asked: string[] = [];
       const { box, view } = await startEditing(code, asked);

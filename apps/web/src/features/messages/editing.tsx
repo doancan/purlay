@@ -115,12 +115,13 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
     wanted.current = null;
   }, [draft]);
 
-  // The key that saves: Enter, except where Enter is a new line — inside an open fence, or on a phone.
+  // The key that saves: Enter, except inside an open fence, where Enter is a new line. On a device
+  // that is only touch no key is offered at all: there is no keyboard to press it on.
   const labels = keyLabels(isMacPlatform(typeof navigator === 'undefined' ? {} : navigator));
-  const saveKey =
-    touchOnly() || insideFence(draft.slice(0, caretAt))
-      ? `${labels.mod}${labels.mod === 'Ctrl' ? '+' : ''}${labels.enter}`
-      : 'Enter';
+  const keysOffered = !touchOnly();
+  const saveKey = insideFence(draft.slice(0, caretAt))
+    ? `${labels.mod}${labels.mod === 'Ctrl' ? '+' : ''}${labels.enter}`
+    : 'Enter';
 
   const save = (): void => {
     const content = draft;
@@ -189,7 +190,7 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
       />
       <div className="flex items-center justify-between gap-2 text-caption text-ink-muted">
         <span className="flex flex-col">
-          <span>{t('message.editHint', { save: saveKey })}</span>
+          {keysOffered && <span>{t('message.editHint', { save: saveKey })}</span>}
           <span>{t('message.editHistoryHint')}</span>
         </span>
         <span className="flex gap-2">

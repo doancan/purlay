@@ -311,7 +311,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
         {announcement}
       </VisuallyHidden>
 
-      <div className={keyHintsClasses}>
+      <div className={cn(keyHintsClasses, 'touch-only:hidden')}>
         <span>
           <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('palette.hint.move')}
         </span>
