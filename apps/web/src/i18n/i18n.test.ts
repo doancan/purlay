@@ -224,7 +224,12 @@ describe('numbers', () => {
   test('a size in bytes, kilobytes, megabytes or gigabytes, in each language’s way', () => {
     const en = createFormatters('en');
     const tr = createFormatters('tr');
-    expect(en.bytes(512)).toBe('512 byte');
+    // A count of bytes is a plural in English: nothing is "0 bytes", one is "1 byte" (Turkish has one form).
+    expect(en.bytes(0)).toBe('0 bytes');
+    expect(en.bytes(1)).toBe('1 byte');
+    expect(en.bytes(512)).toBe('512 bytes');
+    expect(tr.bytes(0)).toBe('0 bayt');
+    expect(tr.bytes(512)).toBe('512 bayt');
     expect(en.bytes(1536)).toBe('1.5 kB');
     expect(en.bytes(3 * 1024 * 1024)).toBe('3 MB');
     expect(tr.bytes(1536)).toBe('1,5 kB');
