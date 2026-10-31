@@ -70,13 +70,11 @@ export const ChannelRetentionSection = ({
     queryFn: async ({ signal }) => await api.channelRetention(channel.id, signal),
   });
 
-  /** A window in the words a person uses: forever, so many years, or so many days. */
-  const named = (days: number | null): string =>
-    days === null
-      ? t('retention.forever')
-      : days % 365 === 0
-        ? t('settings.data.years', { count: days / 365 })
-        : t('retention.days', { days: String(days) });
+  /** A window in the words a person uses: so many years, or so many days. Forever has sentences of its own. */
+  const named = (days: number): string =>
+    days % 365 === 0
+      ? t('settings.data.years', { count: days / 365 })
+      : t('retention.days', { days: String(days) });
 
   const save = async (event: React.SyntheticEvent, next: ChannelRetentionFloor): Promise<void> => {
     event.preventDefault();
