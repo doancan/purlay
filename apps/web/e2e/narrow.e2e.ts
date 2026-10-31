@@ -450,6 +450,46 @@ test.describe('at a phone width', () => {
   });
 });
 
+/**
+ * A phone in the hand: a finger, no pointer that hovers, no keyboard — `(pointer: coarse) and
+ * (hover: none)`, the line `isTouchOnly` draws. A key is not offered where there is none to press.
+ */
+test.describe('on a device that is only touch', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('the thread’s Resolve names no key', async ({ page, signIn, world }) => {
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    await page
+      .getByRole('button', { name: /^Open · \d+ repl/ })
+      .first()
+      .click();
+    const panel = page.getByRole('complementary', { name: /^Thread · / });
+    const resolve = panel.getByRole('button', { name: /^(Resolve|Reopen)/ });
+    await expect(resolve).toBeVisible();
+    expect((await resolve.innerText()).trim()).toMatch(/^(Resolve|Reopen)$/);
+  });
+
+  test('the command list says how to write a slash, and not which key completes', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    const box = page.getByRole('textbox', { name: /^Message/ });
+    await box.click();
+    await box.pressSequentially('/');
+    const list = page.getByRole('listbox', { name: 'Commands' });
+    await expect(list).toBeVisible();
+    const hints = list.locator('xpath=following-sibling::*[1]');
+    // A hint whose key is hidden is a word with nothing to say: "complete", alone.
+    expect((await hints.innerText()).replace(/\s+/g, ' ').trim()).toBe(
+      '// at the start sends a slash as words',
+    );
+  });
+});
+
 test.describe('crossing the line', () => {
   test('the sidebar is in the layout when wide and an overlay when narrow, with no leftover', async ({
     page,

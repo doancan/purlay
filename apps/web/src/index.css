@@ -17,6 +17,13 @@
 @import '@purlay/tokens/theme.css';
 @import 'tailwindcss/utilities.css' layer(utilities);
 
+/*
+ * A device that is only touch: its pointer is a finger and nothing on it hovers — a phone, a tablet
+ * with nothing attached. The same line `isTouchOnly` draws for the composer's Enter (D-188), so a key
+ * is not offered where Enter has stopped sending; `composer-ports.test.tsx` holds the two to one query.
+ */
+@custom-variant touch-only (@media (pointer: coarse) and (hover: none));
+
 @layer base {
   html {
     background-color: var(--surface-100);

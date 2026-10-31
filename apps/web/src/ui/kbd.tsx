@@ -6,16 +6,18 @@
  * everywhere: the mono face, a hairline edge, the muted ink. One component, so
  * "⌘K" never ends up styled three ways.
  *
- * A pointer that is a finger has no keyboard to press it on, so there it is not shown at all.
+ * A device that is only touch has no keyboard to press it on, so there it is not shown at all
+ * (`touch-only:`, the composer's own line for it, D-188).
  */
 import { cn } from './cn';
 
 const kbdClasses =
-  'inline-flex items-center rounded-sm border-hairline px-1 font-mono text-caption pointer-coarse:hidden';
+  'inline-flex items-center rounded-sm border-hairline px-1 font-mono text-caption touch-only:hidden';
 
 /**
  * The row of key hints under a list (the commands, the `@` people, the palette). It wraps: side by
- * side where they fit, each hint a line of its own where they do not — never two narrow columns.
+ * side where they fit, each hint a line of its own where they do not — never two narrow columns. A row
+ * of nothing but keys adds `touch-only:hidden`, or a finger is left the words without their keys.
  */
 export const keyHintsClasses =
   'flex flex-wrap gap-x-4 gap-y-1 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted';

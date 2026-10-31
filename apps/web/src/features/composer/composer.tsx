@@ -632,11 +632,12 @@ const Inner = ({
     focused && !compact ? (
       // Each hint whole. Not drawn on a narrow window: a phone's keyboard has no Shift+Enter, and drawn
       // there they took a row of their own, so focusing the composer made it taller and moved what was
-      // above it — a pill moved between a press and its release, and the click missed (#654). They are
-      // still the field's description, which a screen reader reads.
+      // above it — a pill moved between a press and its release, and the click missed (#654). Nor where
+      // there is no keyboard to press them on. They are still the field's description, which a screen
+      // reader reads.
       <span
         id={hintsId}
-        className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden"
+        className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden touch-only:hidden"
       >
         {hints}
       </span>
@@ -766,11 +767,12 @@ const Inner = ({
                 ))}
               </div>
               <div className={keyHintsClasses}>
-                <span>
+                <span className="touch-only:hidden">
                   <Kbd>Tab</Kbd> {t('slash.hint.complete')}
                 </span>
+                {/* What is typed, not a key: a finger writes it too, so it is shown everywhere. */}
                 <span>
-                  <Kbd>//</Kbd> {t('slash.hint.literal')}
+                  <code className="font-mono text-ink">//</code> {t('slash.hint.literal')}
                 </span>
               </div>
             </div>
@@ -814,7 +816,7 @@ const Inner = ({
                   </div>
                 ))}
               </div>
-              <div className={keyHintsClasses}>
+              <div className={cn(keyHintsClasses, 'touch-only:hidden')}>
                 <span>
                   <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('mention.hint.move')}
                 </span>
@@ -978,12 +980,12 @@ const Inner = ({
                 }}
               />
               {/* Between the buttons and the hints, and only where the hints are drawn: unfocused, in a
-                  thread, or on a phone it divided the buttons from nothing. */}
+                  thread, on a phone or where there is no keyboard it divided the buttons from nothing. */}
               {focused && !compact && (
                 <span
                   aria-hidden="true"
                   data-hints-divider=""
-                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden"
+                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden touch-only:hidden"
                 />
               )}
             </span>

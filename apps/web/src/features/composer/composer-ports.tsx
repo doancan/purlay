@@ -18,11 +18,16 @@ export interface ComposerPorts {
   readonly touchOnly?: () => boolean;
 }
 
-/** A phone, or a tablet with nothing attached: the primary pointer is coarse and cannot hover. */
+/**
+ * A phone, or a tablet with nothing attached: the primary pointer is coarse and cannot hover. The
+ * stylesheet's `touch-only:` variant is this query, so a key is hidden where Enter stops sending.
+ */
+export const TOUCH_ONLY_QUERY = '(pointer: coarse) and (hover: none)';
+
 export const isTouchOnly = (): boolean =>
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
-  window.matchMedia('(pointer: coarse) and (hover: none)').matches;
+  window.matchMedia(TOUCH_ONLY_QUERY).matches;
 
 export const ComposerPortsContext = createContext<ComposerPorts | null>(null);
 
