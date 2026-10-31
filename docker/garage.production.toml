@@ -23,6 +23,8 @@ rpc_public_addr = "127.0.0.1:3901"
 [s3_api]
 s3_region = "us-east-1"
 api_bind_addr = "0.0.0.0:3900"
+# No `public_endpoint` (Garage v2.5 recommends one): it is for objects served at a public URL, and
+# none is — the port is published nowhere and every download goes through the API (D-16).
 
 [admin]
 api_bind_addr = "0.0.0.0:3903"

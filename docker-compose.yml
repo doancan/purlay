@@ -53,7 +53,7 @@ services:
   # opaque keys and never served as public URLs — downloads are brokered by the
   # API so membership is actually checked (D-16, ARCHITECTURE.md §9).
   garage:
-    image: dxflrs/garage:v2.1.0
+    image: dxflrs/garage:v2.5.0
     restart: unless-stopped
     ports:
       - '127.0.0.1:${STORAGE_PORT:-9000}:3900' # S3 API
