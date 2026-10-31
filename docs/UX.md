@@ -347,7 +347,8 @@ a sentence on the left and its control on the right (stacked below 900px). The p
 applies when it is made; a form of words has **Save** in its card, enabled once something changed, its outcome said beside
 it. On a narrow window the navigation opens as the sidebar does.
 
-- **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away.
+- **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away; and
+  the **Name**, with its own Save, where it is the person's — an account GitHub made shows GitHub's (D-235).
 - **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
 - **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126,
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
@@ -355,6 +356,9 @@ it. On a narrow window the navigation opens as the sidebar does.
   While on, **Test notification** requests a notice on this device. Its outcome says the browser
   accepted the request, not that the operating system displayed it; a refusal explains where to check
   permission and device settings. It does not send a chat message or change the channel preferences.
+  Then **Quiet hours** (D-234): off, or a start and an end — one earlier than the start runs past midnight, and
+  says so — and the days a window starts on, named in the reader's language, read on the clock of the profile's
+  time zone, which the card names; with no time zone on the profile it says so and leads to Profile.
 - **Keyboard shortcuts** — the reference, as a page.
 - **Sessions & account** — first *How you sign in* (D-176, amended by D-179): the address and whether a
   link sent to it signs in, and, only when GitHub is linked, a GitHub row with the login — read only,
@@ -372,7 +376,9 @@ it. On a narrow window the navigation opens as the sidebar does.
   says why when refused; one already ended elsewhere stays gone, unsaid.
   Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
   to make somebody else an owner first) and *Erase my account…*, each asking first.
-- **General** — the workspace's name, its address (which stays), and *Create workspace…*.
+- **General** — the workspace's name, its address (which stays), the **archived channels** (D-232) — each with
+  when it was archived, a private one only to its members, and **Restore**; a name taken since says to rename the
+  other first — and *Create workspace…*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
@@ -793,6 +799,9 @@ missing specified behaviour and does not merge.
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
 | How you sign in (Sessions & account) | n/a — always an address, and whether a link to it signs in; the GitHub row is there only when GitHub is linked, and is not offered otherwise | Skeleton in the card | Retry in the card (D-176, D-179) |
 | Where you are signed in (Sessions & account) | "You are not signed in anywhere else." under this device's row | Skeleton in the card | Retry in the card; a sign-out refused puts the row back and says why in a toast (D-193) |
+| Archived channels (General) | "No channel is archived." | Skeleton in the card | Retry in the card; a restore refused because the name is taken says to rename the other channel first (D-232) |
+| Quiet hours (Notifications) | Off, with the profile's zone named; without a zone, a link to Profile | Skeleton in the card | A save refused or failed is said beside Save, and what was set stays (D-234) |
+| Accounts (Settings → Server) | "No account matches." | Skeleton rows | Retry in the card; a change refused is said in the card (D-233) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
@@ -940,7 +949,7 @@ and says that GitHub's page *"The redirect_uri MUST match the registered callbac
 afterwards. It is **the server administrator's alone** — `isServerAdmin` on `GET /api/me`, never a
 workspace role: an owner of a workspace is not offered it, and its address is *not found* for everybody
 else, as the server answers `404` to the same people. It has its own heading in the navigation, *Server*,
-under the account's and the workspace's, and is in the palette. Five cards, in this order, over one query
+under the account's and the workspace's, and is in the palette. Six cards, in this order, over one query
 that is read again after every change and never polled:
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
@@ -969,6 +978,11 @@ that is read again after every change and never polled:
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
+- **Accounts** (D-233) — a search by name, username or address over the server's accounts, each row with its
+  name, `@handle` and address, *Administers this server* where it does, and *Suspended* with its date where it
+  is. **Suspend** asks once more on the row, in words that say the person is signed out on every device and
+  cannot sign in until it is lifted; **Lift suspension** asks nothing. An administrator's row, the caller's
+  own among them, has no button.
 
 **Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
 remain — the page knows from which of GitHub, single sign-on and the mail server serve — it says so **before** the button
