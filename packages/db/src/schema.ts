@@ -122,7 +122,9 @@ export interface Channels {
   dm_key: string | null;
   id: Generated<string>;
   last_message_at: Timestamp | null;
+  min_retention_days: number | null;
   name: string | null;
+  retain_forever: Generated<boolean>;
   state_version: Generated<number>;
   topic: string | null;
   type: Generated<ChannelType>;

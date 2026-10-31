@@ -82,6 +82,9 @@ export const COLUMNS: Columns = {
     updated_at: 'export',
     deleted_at: 'export',
     last_message_at: 'export',
+    // How long the channel keeps its history, as the workspace's window goes (D-225).
+    min_retention_days: 'export',
+    retain_forever: 'export',
     // The realtime layer's ordering, not the record.
     state_version: 'omit',
   },
