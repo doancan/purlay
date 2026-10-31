@@ -38,6 +38,7 @@ import { useWorkspace } from '../shell/workspace';
 import { forgetChannel } from '../questions/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
+import { ChannelRetentionSection } from './channel-retention';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
 import { useLeaveRefusal } from './leave';
@@ -669,6 +670,10 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
             <>
               <NameAndTopic channel={channel} />
               <Notifications channel={channel} />
+              {/* How long it keeps its history is an owner's, as the workspace's is (D-225). */}
+              {role === 'owner' && channel.type !== 'direct_message' && (
+                <ChannelRetentionSection channel={channel} />
+              )}
               <Farewell channel={channel} />
             </>
           )}
