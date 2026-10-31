@@ -58,9 +58,12 @@ export const slashQuery = (text: string, caret: number): string | null => {
 export const commandsFor = (query: string): readonly SlashName[] =>
   SLASH_COMMANDS.filter((command) => command.startsWith(query));
 
-/** `/me waves`: the words as an action, in italics, as every chat writes it. */
+/**
+ * `/me waves`: the words as an action, in italics, as every chat writes it. A backslash is escaped
+ * with the underscores, or one at the end would escape the closing marker.
+ */
 export const meMessage = (args: string): string | null =>
-  args === '' ? null : `_${args.replace(/_/g, '\\_')}_`;
+  args === '' ? null : `_${args.replace(/[\\_]/g, '\\$&')}_`;
 
 /** `/shrug words`: the words, then the shrug, its backslash kept so the arm is not an escape. */
 export const shrugMessage = (args: string): string =>
