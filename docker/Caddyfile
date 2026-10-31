@@ -11,6 +11,12 @@
 	# Compression is the proxy's: the API sends files and JSON as they are.
 	encode zstd gzip
 
+	# The API's /metrics is for a scraper on the stack's own network (D-221): from the internet it is
+	# not there, whether or not METRICS_TOKEN is set — the token is the API's guard, this is the second.
+	# A path under it too, which the API's router would take for the same one.
+	@metrics path /metrics /metrics/*
+	respond @metrics 404
+
 	reverse_proxy api:3001 {
 		# Only a ready node receives traffic (readiness answers 503 while it drains
 		# or while migrations are pending).
