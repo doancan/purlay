@@ -148,10 +148,9 @@ browser, not a second codebase. (`DECISIONS.md` D-51, D-186)
 
 ## Current status
 
-**Phase 1 — MVP.** Phase 0, the walking skeleton, is behind it.
-
-Exit criterion: S-1 (`PRD.md` §3, D-197) — every Phase 1 capability works end to end in a browser, `bun run verify`
-passes and the deployed build is the newest commit.
+Each phase is the milestone of the same number on the issue board, and its exit criterion is in
+`PRD.md` §3–§4 (S-1 is D-197). Which phase is current is not written here either: this section once said
+"Phase 1" after Phase 2's milestone had closed.
 
 How much of it is done is deliberately not written here: a progress line is stale the moment a
 pull request merges, and a document that says "not started" about a repository with code in it

@@ -11,9 +11,9 @@ it** for a flat price per workspace. Both are the same code — there is no paid
 held back from self-hosters, and there never will be. **Adding a teammate never costs more**, on
 either one.
 
-> **Status: pre-alpha, and not usable yet.** Work is in Phase 0; how far along it is lives on the
-> issue board, not here — see [Project status](#project-status). This README describes what is
-> being built, not what runs today.
+> **Status: pre-release.** v0.1.0 is the one published release, and the team runs the newest commit on
+> its own server. Which phase is where lives on the issue board, not here — see
+> [Project status](#project-status).
 
 ---
 
