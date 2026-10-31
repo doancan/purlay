@@ -39,7 +39,7 @@ export interface Room {
 type Json = Readonly<Record<string, unknown>>;
 
 /** Wall-clock time without `Date.now()`: the e2e tests, like the client, take their clock from one place. */
-const wallClock = (): Date => new Date(performance.timeOrigin + performance.now());
+export const wallClock = (): Date => new Date(performance.timeOrigin + performance.now());
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
