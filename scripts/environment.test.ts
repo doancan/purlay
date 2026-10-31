@@ -208,3 +208,9 @@ test('every suite entry point isolates file globals', () => {
     expect(readFileSync(runner, 'utf8')).toMatch(/'test',\s*'--isolate'/);
   }
 });
+
+test('the whole suite runs two files at a time, each with globals of its own (D-228)', () => {
+  const runner = readFileSync('scripts/test-all.ts', 'utf8');
+  expect(runner).toMatch(/'test',\s*'--isolate',\s*`--parallel=\$\{String\(WORKERS\)\}`/);
+  expect(runner).toMatch(/^const WORKERS = 2;$/m);
+});

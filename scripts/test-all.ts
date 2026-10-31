@@ -17,11 +17,26 @@ import { reachable } from './database-reachable';
 
 const ROOTS = ['apps', 'packages', 'scripts'];
 
+/**
+ * Two files at a time (D-228): each still has globals of its own (`--isolate`), every integration test its
+ * own transaction or clone, and the coverage floor is judged on the merged report. Not one a core: four
+ * files cloning the integration template at once wait on each other past the five seconds a hook is given.
+ */
+const WORKERS = 2;
+
 const run = (args: readonly string[]): number =>
-  Bun.spawnSync(['bun', '--no-env-file', '--env-file=.env.test', 'test', '--isolate', ...args], {
-    stdout: 'inherit',
-    stderr: 'inherit',
-  }).exitCode;
+  Bun.spawnSync(
+    [
+      'bun',
+      '--no-env-file',
+      '--env-file=.env.test',
+      'test',
+      '--isolate',
+      `--parallel=${String(WORKERS)}`,
+      ...args,
+    ],
+    { stdout: 'inherit', stderr: 'inherit' },
+  ).exitCode;
 
 const url = process.env['DATABASE_URL'] ?? '';
 const inCi = process.env['CI'] === 'true';
