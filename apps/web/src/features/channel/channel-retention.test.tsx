@@ -112,7 +112,10 @@ describe('how long a channel keeps its history, as an owner sees it', () => {
       ['1825', '5 years'],
       ['forever', 'Forever'],
     ]);
-    expect(within(section).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    expect(within(section).getByRole('button', { name: 'Save history setting' })).toHaveProperty(
+      'disabled',
+      true,
+    );
     view.unmountAll();
   });
 
@@ -139,14 +142,17 @@ describe('how long a channel keeps its history, as an owner sees it', () => {
     const section = sectionOf(await openDetails(view));
     await person().selectOptions(selectOf(section), 'Forever');
     expect(within(section).queryByRole('note')).toBeNull();
-    const save = within(section).getByRole('button', { name: 'Save' });
+    const save = within(section).getByRole('button', { name: 'Save history setting' });
     save.focus();
     await person().keyboard('{Enter}');
     await settle();
     expect(asked).toEqual([[IDS.api, 'forever']]);
     expect(view.getByText('Saved.')).toBeDefined();
     expect(section.textContent).toContain('This channel keeps everything.');
-    expect(within(section).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    expect(within(section).getByRole('button', { name: 'Save history setting' })).toHaveProperty(
+      'disabled',
+      true,
+    );
     view.unmountAll();
   });
 
@@ -190,7 +196,7 @@ describe('how long a channel keeps its history, as an owner sees it', () => {
     });
     const section = sectionOf(await openDetails(view));
     await person().selectOptions(selectOf(section), '1 year');
-    await person().click(within(section).getByRole('button', { name: 'Save' }));
+    await person().click(within(section).getByRole('button', { name: 'Save history setting' }));
     await settle();
     expect(within(section).getByRole('alert').textContent).toBe(
       'The workspace now keeps history at least that long. Choose a longer window, or forever.',
@@ -219,7 +225,7 @@ describe('how long a channel keeps its history, as an owner sees it', () => {
       'Süresiz',
     ]);
     await person().selectOptions(select, 'Süresiz');
-    await person().click(within(section).getByRole('button', { name: 'Kaydet' }));
+    await person().click(within(section).getByRole('button', { name: 'Geçmiş ayarını kaydet' }));
     await settle();
     expect(within(section).getByRole('alert').textContent).toContain('Ayar kaydedilmedi.');
     expect(select.value).toBe('forever');

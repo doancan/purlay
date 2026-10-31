@@ -31,7 +31,7 @@ test('a rename shows in another person’s sidebar and header; leaving takes it 
   await dialog.getByLabel('Name').fill(`Room Yeni ${made.name.slice('room-'.length)}`);
   const renamed = `room-yeni-${made.name.slice('room-'.length)}`;
   await expect(dialog.getByLabel('Name')).toHaveValue(renamed);
-  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog.getByText('Saved.')).toBeVisible();
   await expect(page.getByRole('dialog', { name: `Details of #${renamed}` })).toBeVisible();
   // The one who made the room for the test, the viewer and Alice.
