@@ -44,8 +44,11 @@ export const UNREADS_PAGE = 20;
 const Line = ({
   message,
   names,
+  repository,
 }: {
   readonly message: Message;
+  /** The channel's repository, for its code references (D-223). */
+  readonly repository: string | null;
   /** Members by id, as usernames: who the message mentions, highlighted as the feed does. */
   readonly names: ReadonlyMap<string, string>;
 }): React.JSX.Element => {
@@ -69,7 +72,11 @@ const Line = ({
             {format.time(message.createdAt, clock.now())}
           </time>
         </div>
-        {renderContent(message.content, { mentioned, me: me.username.toLowerCase() })}
+        {renderContent(message.content, {
+          mentioned,
+          me: me.username.toLowerCase(),
+          repository,
+        })}
       </div>
     </li>
   );
@@ -161,7 +168,12 @@ const ChannelUnreads = ({
       ) : (
         <>
           {shown.map((message) => (
-            <Line key={message.id} message={message} names={names} />
+            <Line
+              key={message.id}
+              message={message}
+              names={names}
+              repository={channel.codeRepository}
+            />
           ))}
           {shown.length === 0 && (
             // What waits is replies, read in their threads (D-147), not new messages in the feed.

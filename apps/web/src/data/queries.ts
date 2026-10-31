@@ -116,6 +116,24 @@ export const useChannels = (workspaceId: string, enabled = true): UseQueryResult
   });
 };
 
+/**
+ * The repository a channel's code references link into (`Channel.codeRepository`, D-223), from the
+ * channel list the workspace already reads: null outside a workspace, until the list is read, and for a
+ * channel with none. Selected, so a row re-renders when this changes and not when the list's other
+ * fields do — every new message moves a channel's `lastMessageAt`.
+ */
+export const useCodeRepository = (workspaceId: string | null, channelId: string): string | null => {
+  const api = useApi();
+  const read = useQuery({
+    queryKey: keys.channels(workspaceId ?? ''),
+    queryFn: ({ signal }) => api.channels(workspaceId ?? '', signal),
+    enabled: workspaceId !== null,
+    select: (channels: Channel[]) =>
+      channels.find((channel) => channel.id === channelId)?.codeRepository ?? null,
+  });
+  return read.data ?? null;
+};
+
 export const useMembers = (workspaceId: string): UseQueryResult<WorkspaceMember[]> => {
   const api = useApi();
   return useQuery({

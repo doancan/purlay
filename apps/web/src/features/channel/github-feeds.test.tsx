@@ -11,7 +11,7 @@ import { expectNoAxeViolations } from '../../testing/axe';
 import { expectFocusOn } from '../../testing/focus';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { IDS, aSession } from '../../testing/fixtures';
+import { IDS, aChannel, aMessage, aSession } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 
 installDom();
@@ -181,9 +181,17 @@ describe('a channel’s repositories, as an owner sees them', () => {
   test('disconnecting asks first; Cancel gives focus back; Disconnect removes it', async () => {
     const removed: [string, string][] = [];
     let listed = 0;
+    let channelsRead = 0;
     const view = await mountChannel({
-      messages: page([]),
+      messages: page([aMessage(1, { content: 'see src/a.ts:1' })]),
       api: {
+        // The channel's one feed is the repository its code references link into (D-223), until it goes.
+        channels: () => {
+          channelsRead += 1;
+          return Promise.resolve([
+            aChannel(IDS.api, 'api', { codeRepository: channelsRead === 1 ? 'acme/api' : null }),
+          ]);
+        },
         githubFeeds: () => {
           listed += 1;
           return Promise.resolve(listed === 1 ? [aFeed()] : []);
@@ -194,6 +202,9 @@ describe('a channel’s repositories, as an owner sees them', () => {
         },
       },
     });
+    expect(view.container.querySelector('a[data-code-reference]')?.getAttribute('href')).toBe(
+      'https://github.com/acme/api/blob/HEAD/src/a.ts#L1',
+    );
     const feeds = feedsOf(await openDetails(view));
     const ask = within(feeds).getByRole('button', { name: 'Disconnect acme/api' });
     await person().click(ask);
@@ -213,6 +224,8 @@ describe('a channel’s repositories, as an owner sees them', () => {
     await settle();
     expect(removed).toEqual([[IDS.api, FEED_ID]]);
     expect(within(feeds).getByText(/No repository is connected/)).toBeDefined();
+    // The channel is read again, and its code references link nowhere now.
+    expect(view.container.querySelector('a[data-code-reference]')).toBeNull();
     view.unmountAll();
   });
 });

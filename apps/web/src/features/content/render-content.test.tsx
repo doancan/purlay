@@ -45,7 +45,14 @@ const mount = async (
     mentioned,
     locale,
     engine,
-  }: { ports?: ContentPorts; mentioned?: string[]; locale?: 'en' | 'tr'; engine?: Engine } = {},
+    repository,
+  }: {
+    ports?: ContentPorts;
+    mentioned?: string[];
+    locale?: 'en' | 'tr';
+    engine?: Engine;
+    repository?: string | null | undefined;
+  } = {},
 ): ReturnType<typeof renderApp> =>
   await renderApp(
     <ContentPortsContext.Provider value={ports}>
@@ -54,6 +61,7 @@ const mount = async (
       {renderContent(content, {
         ...(mentioned === undefined ? {} : { mentioned: new Set(mentioned) }),
         ...(engine === undefined ? {} : { engine }),
+        ...(repository === undefined ? {} : { repository }),
       })}
     </ContentPortsContext.Provider>,
     locale === undefined ? {} : { locale },
@@ -480,6 +488,77 @@ describe('mentions', () => {
   test("the shape is the server's: after a letter outside ASCII it is part of a word", async () => {
     const view = await mount('é@alice', { mentioned: ['alice'] });
     expect(body(view).querySelectorAll('[data-mention]')).toHaveLength(0);
+  });
+});
+
+describe('code references (D-223)', () => {
+  const hrefs = (view: { container: HTMLElement }): string[] =>
+    [...body(view).querySelectorAll<HTMLAnchorElement>('a[data-code-reference]')].map(
+      (link) => link.href,
+    );
+
+  test('with the channel’s repository, a path and a commit are links into it; the words are unchanged', async () => {
+    const view = await mount('broke in **src/a.ts:3**, by abc1234', { repository: 'acme/api' });
+    expect(hrefs(view)).toEqual([
+      'https://github.com/acme/api/blob/HEAD/src/a.ts#L3',
+      'https://github.com/acme/api/commit/abc1234',
+    ]);
+    expect(body(view).querySelector('strong a')?.textContent).toContain('src/a.ts:3');
+  });
+
+  test.each([
+    ['no repository given', undefined],
+    ['a channel with none, or several', null],
+    ['a repository that is not GitHub’s shape', 'javascript:alert(1)//x'],
+  ])('%s links nothing', async (_, repository) => {
+    const view = await mount('src/a.ts:3 `b.ts` abc1234', { repository });
+    expect(body(view).querySelector('a')).toBeNull();
+    expect(body(view).textContent).toBe('src/a.ts:3 b.ts abc1234');
+  });
+
+  test('a link’s label is not linked again: one link, the one the words wrote', async () => {
+    const view = await mount(
+      '[src/a.ts:3](https://example.com/x) and https://example.com/abc1234',
+      {
+        repository: 'acme/api',
+      },
+    );
+    const links = [...body(view).querySelectorAll('a')];
+    expect(links.map((link) => link.href)).toEqual([
+      'https://example.com/x',
+      'https://example.com/abc1234',
+    ]);
+    expect(body(view).querySelector('a a')).toBeNull();
+  });
+
+  test('beside a mention, in a heading, a quote, a list and a table, each is drawn once, in order', async () => {
+    const view = await mount(
+      '# src/a.ts\n\n> @alice look at src/b.ts:1 and abc1234\n\n- c/d.py\n\n| x |\n|---|\n| e/f.go |',
+      { repository: 'acme/api', mentioned: ['alice'] },
+    );
+    expect(hrefs(view).map((href) => href.replace('https://github.com/acme/api/', ''))).toEqual([
+      'blob/HEAD/src/a.ts',
+      'blob/HEAD/src/b.ts#L1',
+      'commit/abc1234',
+      'blob/HEAD/c/d.py',
+      'blob/HEAD/e/f.go',
+    ]);
+    expect(body(view).querySelectorAll('[data-mention]')).toHaveLength(1);
+    expect(body(view).querySelector('blockquote')?.textContent).toContain(
+      '@alice look at src/b.ts:1',
+    );
+  });
+
+  test('inside a fenced block nothing is linked: it is code to read and copy', async () => {
+    const view = await mount('```\nsrc/a.ts:3 abc1234\n```', { repository: 'acme/api' });
+    expect(body(view).querySelector('pre a')).toBeNull();
+  });
+
+  test('a path is encoded, segment by segment, and stays on github.com under the repository', async () => {
+    const view = await mount('src/şema/a+b.ts:2', { repository: 'acme/api' });
+    expect(hrefs(view)).toEqual([
+      'https://github.com/acme/api/blob/HEAD/src/%C5%9Fema/a%2Bb.ts#L2',
+    ]);
   });
 });
 
