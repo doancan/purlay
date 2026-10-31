@@ -12,8 +12,9 @@
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
+  AuditExportQuery,
+  AuditQuery,
   CreateWorkspaceRequest,
-  OlderPageQuery,
   SetGitHubTokenRequest,
   type GitHubIntegration,
   SetDeepWorkRequest,
@@ -47,6 +48,7 @@ import {
 } from '../../modules/workspaces/creators';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
+import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import { readStorage } from '../../modules/attachments/quota';
 import {
@@ -267,7 +269,7 @@ export const leaveWorkspaceMembership = async (
   ]);
 };
 
-/** `GET /api/workspaces/:workspaceId/audit` — the trail, newest first (D-26, #70). */
+/** `GET /api/workspaces/:workspaceId/audit` — the trail, newest first, narrowed (D-26, #70, D-222). */
 export const readAuditTrail = async (
   dependencies: WorkspaceDependencies,
   request: Request,
@@ -276,8 +278,36 @@ export const readAuditTrail = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  const query = validated(AuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await auditTrail(database, context, query);
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/audit/export` — the narrowed trail as a CSV or NDJSON file, streamed
+ * (D-222). An attachment the browser saves, never a page it renders.
+ */
+export const exportAuditTrail = async (
+  dependencies: WorkspaceDependencies & { readonly log: Logger },
+  request: Request,
+  workspaceId: string,
+): Promise<{
+  readonly body: ReadableStream<Uint8Array>;
+  readonly headers: Record<string, string>;
+}> => {
+  const { database, clock, log } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const query = validated(AuditExportQuery, queryOf(new URL(request.url)));
+  const download = await exportTrail(database, clock, log, context, query);
+  return {
+    body: download.body,
+    headers: {
+      'content-type': download.contentType,
+      'content-disposition': `attachment; filename="${download.filename}"`,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  };
 };
 
 /** `GET /api/workspaces/:workspaceId/retention` — how long the history is kept; an owner's (D-139 §4). */

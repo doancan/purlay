@@ -56,6 +56,10 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },
   },
+  'download the audit trail': {
+    endpoint: 'GET /api/workspaces/:workspaceId/audit/export',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'see whether the GitHub token is set': {
     endpoint: 'GET /api/workspaces/:workspaceId/integrations/github',
     allowed: { owner: true, admin: true, member: false },

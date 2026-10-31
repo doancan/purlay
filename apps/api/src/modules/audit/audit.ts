@@ -12,9 +12,12 @@ import type { Executor } from '@purlay/db';
 import {
   PAGE_LIMIT,
   messageId,
+  messageIdFloor,
   type AuditAction,
+  type AuditEntry as AuditEntryShape,
+  type AuditFilter,
   type AuditPage,
-  type OlderPageQuery,
+  type AuditQuery,
 } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
@@ -39,7 +42,8 @@ export const recordAudit = async (
   entry: AuditEntry,
 ): Promise<void> => {
   const now = clock.now();
-  // Application-generated, as a message's: the trail is read newest first by keyset (D-8).
+  // Application-generated, as a message's: the trail is read newest first by keyset (D-8), and a
+  // window of time is a range of these (`trailPage`).
   const id = messageId(now);
   await executor
     .insertInto('audit_log')
@@ -70,22 +74,78 @@ export const recordAudit = async (
 };
 
 /**
- * `GET /api/workspaces/:workspaceId/audit` (#70): the workspace's trail, newest first, a page at a
- * time by keyset on the id. An owner's and an admin's to read, as managing members is (§7.4); a
- * member is refused for what they are, after their membership has made the workspace exist for them.
+ * Who reads the trail, and so who downloads it (D-222): an owner or an admin, as managing members is
+ * (§7.4). A member is refused for what they are, after their membership has made the workspace exist
+ * for them.
  */
-export const auditTrail = async (
-  executor: Executor,
-  context: WorkspaceContext,
-  query: OlderPageQuery,
-): Promise<AuditPage> => {
+export const requireTrailReader = (context: WorkspaceContext): void => {
   if (context.role === 'member') {
     throw new AppError({
       code: 'FORBIDDEN',
       message: 'Only an owner or an admin reads the trail.',
     });
   }
-  const limit = query.limit ?? PAGE_LIMIT.default;
+};
+
+/** A field of the filter refused, by name (`API.md` §1). */
+const refused = (field: string, says: string): AppError =>
+  new AppError({
+    code: 'VALIDATION_FAILED',
+    message: 'The request did not match the contract.',
+    details: { fields: { [field]: says } },
+  });
+
+/**
+ * An instant the contract's pattern let through, read. The pattern takes `02-31` and `24:00`, which
+ * `Date.parse` quietly rolls into the next month or day; a moment whose written clock is not the one it
+ * reads back as is refused, never moved.
+ */
+const instant = (field: string, value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const at = Date.parse(value);
+  const [y, mo, d, h, mi, s] = (/^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)/.exec(value) ?? [])
+    .slice(1)
+    .map(Number);
+  const written =
+    y === undefined ? Number.NaN : Date.UTC(y, (mo ?? 1) - 1, d ?? 1, h ?? 0, mi ?? 0, s ?? 0);
+  if (
+    Number.isNaN(at) ||
+    Number.isNaN(written) ||
+    new Date(written).toISOString().slice(0, 19) !== value.slice(0, 19)
+  ) {
+    throw refused(field, 'is not a real moment');
+  }
+  return at;
+};
+
+/**
+ * The filter, checked before anything is read: each instant a real one, and the window not empty or
+ * backwards (`from` inclusive, `to` exclusive). Its own step so that a download is refused before it
+ * is recorded, never after (D-222).
+ */
+export const checkedFilter = (filter: AuditFilter): AuditFilter => {
+  const from = instant('from', filter.from);
+  const to = instant('to', filter.to);
+  if (from !== undefined && to !== undefined && from >= to) {
+    throw refused('to', 'must be after from');
+  }
+  return filter;
+};
+
+/**
+ * One page of the trail's rows in this workspace that the filter keeps, newest first by keyset on the
+ * id (D-8), with who acted. **The window is a range of ids**: an entry's id is made from the instant it
+ * is written, the instant that is its `created_at` (`recordAudit`), so `from` and `to` become the lowest
+ * ids of their instants and the read stays on the workspace's index however long the trail is.
+ */
+export const trailPage = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  filter: AuditFilter,
+  page: { readonly before?: string; readonly limit: number },
+): Promise<AuditEntryShape[]> => {
+  const from = instant('from', filter.from);
+  const to = instant('to', filter.to);
   let statement = executor
     .selectFrom('audit_log')
     .leftJoin('users', 'users.id', 'audit_log.actor_user_id')
@@ -103,28 +163,55 @@ export const auditTrail = async (
     ])
     .where('audit_log.workspace_id', '=', context.workspaceId)
     .orderBy('audit_log.id', 'desc')
-    .limit(limit + 1);
-  if (query.before !== undefined) statement = statement.where('audit_log.id', '<', query.before);
+    .limit(page.limit);
+  if (filter.actorId !== undefined) {
+    statement = statement.where('audit_log.actor_user_id', '=', filter.actorId);
+  }
+  if (filter.action !== undefined) {
+    statement = statement.where('audit_log.action', '=', filter.action);
+  }
+  if (from !== undefined) statement = statement.where('audit_log.id', '>=', messageIdFloor(from));
+  if (to !== undefined) statement = statement.where('audit_log.id', '<', messageIdFloor(to));
+  if (page.before !== undefined) statement = statement.where('audit_log.id', '<', page.before);
   const rows = await statement.execute();
+  return rows.map((row) => ({
+    id: row.id,
+    actor:
+      row.actor_id === null || row.username === null || row.display_name === null
+        ? null
+        : {
+            id: row.actor_id,
+            username: row.username,
+            displayName: row.display_name,
+            avatarUrl: row.avatar_url,
+          },
+    action: row.action,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    metadata: asMetadata(row.metadata),
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/audit` (#70): the workspace's trail, newest first, a page at a
+ * time by keyset on the id — narrowed by who, what and when on the server (D-222), never by a client
+ * over the pages it happens to hold.
+ */
+export const auditTrail = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  query: AuditQuery,
+): Promise<AuditPage> => {
+  requireTrailReader(context);
+  const { before, limit = PAGE_LIMIT.default, ...filter } = query;
+  const rows = await trailPage(executor, context, checkedFilter(filter), {
+    ...(before === undefined ? {} : { before }),
+    limit: limit + 1,
+  });
   const page = rows.slice(0, limit);
   return {
-    data: page.map((row) => ({
-      id: row.id,
-      actor:
-        row.actor_id === null || row.username === null || row.display_name === null
-          ? null
-          : {
-              id: row.actor_id,
-              username: row.username,
-              displayName: row.display_name,
-              avatarUrl: row.avatar_url,
-            },
-      action: row.action,
-      targetType: row.target_type,
-      targetId: row.target_id,
-      metadata: asMetadata(row.metadata),
-      createdAt: new Date(row.created_at).toISOString(),
-    })),
+    data: page,
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };
 };

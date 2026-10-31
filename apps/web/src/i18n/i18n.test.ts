@@ -181,6 +181,40 @@ describe('timestamps', () => {
   });
 });
 
+/** A day picked on a page, as the instant it begins where the reader is (D-222). */
+describe('the start of a day', () => {
+  test('is midnight in the zone, said as a UTC instant', () => {
+    expect(createFormatters('en', 'UTC').dayStart('2026-10-01').toISOString()).toBe(
+      '2026-10-01T00:00:00.000Z',
+    );
+    expect(createFormatters('tr', 'Europe/Istanbul').dayStart('2026-10-01').toISOString()).toBe(
+      '2026-09-30T21:00:00.000Z',
+    );
+    expect(createFormatters('en', 'Asia/Kolkata').dayStart('2026-01-01').toISOString()).toBe(
+      '2025-12-31T18:30:00.000Z',
+    );
+  });
+
+  test('takes the offset in force that day, on either side of a change of the clocks', () => {
+    const newYork = createFormatters('en', 'America/New_York');
+    // Summer time ends at 02:00 on 1 November 2026: the day before and the day itself start at -4,
+    // the day after at -5.
+    expect(newYork.dayStart('2026-10-31').toISOString()).toBe('2026-10-31T04:00:00.000Z');
+    expect(newYork.dayStart('2026-11-01').toISOString()).toBe('2026-11-01T04:00:00.000Z');
+    expect(newYork.dayStart('2026-11-02').toISOString()).toBe('2026-11-02T05:00:00.000Z');
+    // And begins at 02:00 on 8 March 2026: midnight that day is still at -5.
+    expect(newYork.dayStart('2026-03-08').toISOString()).toBe('2026-03-08T05:00:00.000Z');
+    expect(newYork.dayStart('2026-03-09').toISOString()).toBe('2026-03-09T04:00:00.000Z');
+  });
+
+  test('ahead of UTC, where the change is late at night', () => {
+    // Australia/Sydney: summer time begins at 02:00 on 4 October 2026 (+10 → +11).
+    const sydney = createFormatters('en', 'Australia/Sydney');
+    expect(sydney.dayStart('2026-10-04').toISOString()).toBe('2026-10-03T14:00:00.000Z');
+    expect(sydney.dayStart('2026-10-05').toISOString()).toBe('2026-10-04T13:00:00.000Z');
+  });
+});
+
 describe('day dividers', () => {
   const now = new Date('2026-10-10T14:40:00Z');
   const f = createFormatters('en', 'UTC');

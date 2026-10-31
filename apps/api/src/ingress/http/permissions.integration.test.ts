@@ -158,6 +158,8 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
   },
   'read the audit trail': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit`, as),
+  'download the audit trail': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit/export?format=csv`, as),
   'see whether the GitHub token is set': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/integrations/github`, as),
   'set the GitHub token': async (world, as) =>
@@ -273,7 +275,8 @@ describe('integration: every role-gated action, as every role', () => {
 /**
  * D-26, I-9 as a mechanism (#69): every role-gated action that changes something writes exactly one
  * row of the workspace's trail — taken from the same table, so an administrative endpoint added
- * there is held to it without anybody remembering. A read writes none.
+ * there is held to it without anybody remembering. A read writes none — but a download of the trail
+ * itself, which is on it as `audit.exported` (D-222).
  */
 describe('integration: every administrative write is on the trail, once', () => {
   const rows = async (db: Executor, workspaceId: string): Promise<number> =>
@@ -292,8 +295,11 @@ describe('integration: every administrative write is on the trail, once', () => 
     'disconnect a repository from a channel': 1,
   };
 
+  /** Reads that are themselves administrative acts: taking the trail away is on it (D-222). */
+  const RECORDED_READS: ReadonlySet<string> = new Set(['download the audit trail']);
+
   for (const [name, entry] of Object.entries(PERMISSIONS)) {
-    const reads = entry.endpoint.startsWith('GET ');
+    const reads = entry.endpoint.startsWith('GET ') && !RECORDED_READS.has(name);
     test(`${name}: ${reads ? 'no row' : 'one row'}`, async () => {
       await withRollback(async (db) => {
         const world = await aWorld(db);

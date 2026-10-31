@@ -466,7 +466,7 @@ describe('the endpoints', () => {
     ]);
   });
 
-  test('the audit trail is read newest first, older pages by the cursor (D-26)', async () => {
+  test('the audit trail is read newest first, older pages by the cursor, narrowed by its filter (D-26, D-222)', async () => {
     const entry = {
       id: ID,
       actor: user,
@@ -477,11 +477,21 @@ describe('the endpoints', () => {
       createdAt: WHEN,
     };
     const read = harness({ data: [entry], nextCursor: null });
-    expect(await read.api.audit(ID)).toEqual({ data: [entry], nextCursor: null });
-    await read.api.audit(ID, ID);
+    expect(await read.api.audit(ID, {})).toEqual({ data: [entry], nextCursor: null });
+    await read.api.audit(ID, {}, ID);
+    await read.api.audit(
+      ID,
+      { actorId: ID, action: 'member.removed', from: '2026-10-01T00:00:00.000Z' },
+      ID,
+    );
     expect(read.calls).toEqual([
       { method: 'GET', url: `/api/workspaces/${ID}/audit`, body: undefined },
       { method: 'GET', url: `/api/workspaces/${ID}/audit?before=${ID}`, body: undefined },
+      {
+        method: 'GET',
+        url: `/api/workspaces/${ID}/audit?actorId=${ID}&action=member.removed&from=2026-10-01T00%3A00%3A00.000Z&before=${ID}`,
+        body: undefined,
+      },
     ]);
   });
 

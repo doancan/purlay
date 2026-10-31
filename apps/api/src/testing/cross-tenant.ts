@@ -537,10 +537,22 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'GET /api/workspaces/:workspaceId/audit': {
     refusal: 'WORKSPACE_NOT_FOUND',
+    // Narrowed to one of its people (D-222): across the boundary the filter changes nothing.
+    alsoWith: { 'one of its people as the actor': 'actorId=:userId' },
     visibility: {
       kind: 'none',
       reason:
         'returns who did what and never anything written; a channel appears only as the id an admin created it under',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/audit/export': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    query: 'format=csv',
+    alsoWith: { 'one of its people as the actor': 'actorId=:userId' },
+    visibility: {
+      kind: 'none',
+      reason:
+        'the trail as a file (D-222): who did what by id and name, never anything written; a channel only as an id',
     },
   },
   'PATCH /api/workspaces/:workspaceId/members/:userId': {
