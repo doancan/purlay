@@ -221,6 +221,38 @@ describe('integration: the production compose file', () => {
     return [object, ...Object.values(object).flatMap(objectsIn)];
   };
 
+  /**
+   * Defence in depth (D-221): the API answers `/metrics` only to its token, and the proxy does not pass
+   * it at all, so a token that leaked is still no use from the internet. Measured against Caddy itself
+   * when this was written — `/METRICS`, `/%6Detrics` and `//metrics` were refused as well.
+   */
+  test('the proxy answers /metrics and anything under it 404 itself, before the API is asked', () => {
+    const routes = objectsIn(adaptedProxy()).filter((route) => Array.isArray(route['match']));
+    const refusing = routes.find((route) =>
+      objectsIn(route['match']).some(
+        (match) =>
+          Array.isArray(match['path']) &&
+          (match['path'] as unknown[]).includes('/metrics') &&
+          (match['path'] as unknown[]).includes('/metrics/*'),
+      ),
+    );
+    expect(refusing).toBeDefined();
+    const handlers = objectsIn(refusing?.['handle']);
+    expect(handlers.map((handler) => handler['handler'])).toEqual(['static_response']);
+    expect(handlers[0]?.['status_code']).toBe(404);
+    // Matched before the route that proxies: Caddy runs the first route whose matcher holds.
+    const order = objectsIn(adaptedProxy())
+      .filter((route) => Array.isArray(route['handle']))
+      .flatMap((route) =>
+        objectsIn(route['handle']).flatMap((handler) =>
+          handler['handler'] === 'static_response' || handler['handler'] === 'reverse_proxy'
+            ? [handler['handler']]
+            : [],
+        ),
+      );
+    expect(order.indexOf('static_response')).toBeLessThan(order.indexOf('reverse_proxy'));
+  });
+
   test('a request that arrives while the API restarts waits for it, rather than failing 502 (#636)', () => {
     const proxies = objectsIn(adaptedProxy()).filter(
       (handler) => handler['handler'] === 'reverse_proxy',
