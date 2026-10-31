@@ -369,6 +369,12 @@ it. On a narrow window the navigation opens as the sidebar does.
   the new one is typed (the same `passwordProblem` the server runs, §11), and **Change password**. A
   success says *Your other sessions were signed out.* and keeps this one — the page stays on Settings, the session is the same row; if signing the others out failed after the password changed, it says so and points to *Sign out everywhere*; a wrong current password is one
   sentence, a refused new one is named by rule, and a wait is told in minutes.
+  Then **Two-step verification** (D-236), for an account with a password only — other ways in say their
+  provider keeps them: off, *Turn on* asks for the password, then shows the key as a QR code, as text and as
+  an `otpauth://` link, and is on only after a right code from the app; the ten backup codes are shown once,
+  with **Copy**. On, *New backup codes* and *Turn off* each ask for the password. At sign-in, after a right
+  password, the form asks for the app's code, or a backup code instead; a wrong code is one sentence, a spent
+  or expired step says to start over, and a lock says for how long.
   Next, *Where you are signed in* (D-193): each live session, the one used last first — a Mac by the name it
   sent (*Purlay for Mac* without one), any browser as *Web browser*, each with when it was signed in and, but
   for this one, when it was last active. This one is marked *This device* and has no button; every other has
