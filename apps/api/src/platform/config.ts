@@ -149,6 +149,13 @@ export const Environment = Type.Object({
    *  every node-local implementation, which is all one node needs (D-7). A secret. */
   REDIS_URL: Type.Optional(Type.String({ pattern: '^rediss?://[^\\s]+$' })),
 
+  /** The bearer token Prometheus scrapes `/metrics` with (D-221). **Unset means off**: the page is
+   *  then no page, a `404` like any path nothing serves. At least 32 characters of a token's alphabet,
+   *  as `openssl rand -hex 32` writes one, so it cannot be guessed at a scrape's pace. A secret. */
+  METRICS_TOKEN: Type.Optional(
+    Type.String({ minLength: 32, maxLength: 512, pattern: '^[A-Za-z0-9._~+/-]+=*$' }),
+  ),
+
   /** The lowest an installed macOS client may be and still be served (D-186): the wire contract it was
    *  built against, and its version in semantic-version order. Either or both; none is no limit. A
    *  client below either is answered `426 CLIENT_TOO_OLD`, with the download address if one is set.
@@ -184,6 +191,7 @@ const SECRETS: ReadonlySet<string> = new Set([
   'VAPID_PRIVATE_KEY',
   'SMTP_URL',
   'REDIS_URL',
+  'METRICS_TOKEN',
 ]);
 
 /** The variables this application reads. `.env.example` is generated from it. */

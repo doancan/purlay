@@ -394,6 +394,7 @@ describe('integration: the production compose file', () => {
         PORT: 'it serves nothing',
         TRUST_PROXY: 'no request reaches it',
         MIGRATE_ON_START: 'the API migrates; the scheduler starts after it is ready',
+        METRICS_TOKEN: 'it serves no page; the API’s /metrics is the one scraped (D-221)',
       },
     };
     for (const [service, withheld] of Object.entries(withheldFrom)) {

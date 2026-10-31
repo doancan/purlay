@@ -118,6 +118,9 @@ services:
       TRUST_PROXY: 'true'
       # One node, or several: one takes the lock and migrates, the rest wait (D-93).
       MIGRATE_ON_START: 'true'
+      # The bearer token a scraper on this network reads /metrics with (D-221); empty is off. The proxy
+      # never passes /metrics from outside (docker/Caddyfile), so a Prometheus scrapes api:3001.
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

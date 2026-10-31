@@ -22,6 +22,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Only `http`/`https`; must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
 | `ERROR_TRACKING_DSN` | — | — | A Sentry-compatible DSN (Sentry, GlitchTip). **Unset means off, and nothing leaves the process.** When set, whatever is logged at `error` is also reported, cleaned exactly as the log is (D-96). A report gives up after five seconds, is never redirected, and carries no absolute path of the machine. Must be `https://` in production; a malformed value refuses to start. **No telemetry is ever collected from a self-hosted deployment** (D-44): there is no default |
+| `METRICS_TOKEN` | — | — | **Secret.** The bearer token a Prometheus scrapes `GET /metrics` with (D-221, `API.md` §8). **Unset means off**: `/metrics` is then the `404` of any path nothing serves, and so it is to a request without this token or with another — nobody who does not hold it can tell the page exists. 32 to 512 characters of a token's alphabet (`A–Z a–z 0–9 . _ ~ + / -`, then any `=`): `openssl rand -hex 32`. Compared in constant time. Nothing is pushed anywhere: a scraper the operator runs asks, and the page carries no name, address, id or word anybody wrote. See *Metrics for Prometheus* below |
 | `TRUST_PROXY` | — | `false` | Set `true` behind **exactly one** reverse proxy that sets `X-Forwarded-For`; the last entry is then the client (D-81). Without it the socket's peer address is the client and the header is ignored, because anyone can write it. It keys the sign-in rate limit and fills `sessions.ip_address`. Wrong either way hurts: `false` behind a proxy puts every user in one bucket; `true` with none lets a caller choose its own address |
 
 ## Database
@@ -427,7 +428,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
 `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), all optional. `docker compose`
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), and to the API alone `METRICS_TOKEN` (metrics, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack
 fails on any variable the API reads that is neither passed nor named there with the reason it is
@@ -528,6 +529,47 @@ It exits non-zero when a job is overdue or has failed since it last succeeded, a
 container as `unhealthy` in `docker ps` and to anything that watches container health. Unhealthy is a
 signal, not a restart — the jobs are tried again on their own schedule. A job that fails is also logged
 at `error`, and so reported to `ERROR_TRACKING_DSN` like the API's errors.
+
+**Metrics for Prometheus** (D-221). Off until `METRICS_TOKEN` is set in `production.env`; the stack passes it
+to the API alone. The page is the API process's own — the time it has run and its memory, the sockets open on
+it, each HTTP request by method, the route as registered (`/api/channels/:channelId`, never the path as sent),
+status class and duration, what was refused for the rate at each door, pushes and letters that did not
+reach their service — and the scheduled jobs' record as `jobs:status` reads it: when each last succeeded
+and how often it has failed since. The proxy never passes `/metrics` from the internet (`docker/Caddyfile`
+answers it `404` itself), so the scraper sits on the stack's network and asks `api:3001`, in a Compose file
+the server keeps beside its env file (`COMPOSE_OVERRIDES`, as for a proxy of your own):
+
+```yaml
+services:
+  prometheus:
+    image: prom/prometheus@sha256:…               # pinned by digest, as the stack pins its own
+    command: ['--config.file=/etc/prometheus/prometheus.yml']
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./metrics-token:/etc/prometheus/metrics-token:ro   # the token alone, mode 0600
+      - prometheus:/prometheus
+volumes:
+  prometheus:
+```
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: purlay
+    scrape_interval: 15s
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics-token
+    static_configs:
+      - targets: ['api:3001']
+```
+
+A scraper elsewhere reaches the API on the private address published as under *Behind a proxy of your own*,
+never through the public origin. A scrape refused for its token is the same `404` as one with the feature
+off, and the API's log says `a request for metrics was refused` at `info`. A database that cannot be read
+leaves the rest of the page and says `purlay_jobs_status_readable 0` — alert on it, and on
+`time() - purlay_job_last_success_timestamp_seconds > 172800`, the age past which `jobs:status` calls a job
+overdue. With several API nodes each is its own target; Prometheus adds them up.
 
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
 never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run
