@@ -92,6 +92,7 @@ import {
   listWorkspaceMembers,
   readGitHubIntegration,
   readAuditTrail,
+  exportAuditTrail,
   removeWorkspaceMember,
   leaveWorkspaceMembership,
   updateMemberRole,
@@ -946,6 +947,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await readAuditTrail(dependencies, request, params.workspaceId),
     )
+    .get('/api/workspaces/:workspaceId/audit/export', async ({ request, params }) => {
+      const { body, headers } = await exportAuditTrail(dependencies, request, params.workspaceId);
+      // A Response of our own, as an export's download is: a bare stream Elysia would wrap, and a
+      // browser that goes away would cancel the wrapper, not the pages being read.
+      return new Response(body, { headers });
+    })
     .patch(
       '/api/workspaces/:workspaceId/members/:userId',
       async ({ request, params, body }) =>

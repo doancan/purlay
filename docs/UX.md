@@ -270,6 +270,14 @@ owner is said as such.
 **The audit log** (D-26). **Audit log…** in the same menu, an owner's or an admin's, reads the trail
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
 Admin* — and when. An action newer than the client is said by its name, never dropped.
+Above it, a card narrows it (D-222): **Person** (Anyone, or one of the workspace's people, as search's
+picker), **Action** (Any action, or one in words), **From** and **To** — days in the reader's own zone,
+both included, the last one refused on its field when it comes before the first, and nothing asked
+until it is put right. Each choice is the page's address, so Back undoes it and a reload or a shared
+link keeps it; **Clear filters** appears once something narrows. Narrowed to nothing it says *No entry
+matches these filters*, not that nothing has happened. The card's foot downloads what the filter keeps —
+all of it, not only what is shown — as **CSV** or **NDJSON**, links the browser saves; the download is on
+the log itself. Two by two on a wide window; one under another, full width, on a narrow one.
 
 **Channel details** (D-123, D-154). Clicking a channel's name in its header opens a wide dialog
 (`size-dialog-lg`; on a narrow window a sheet that fills the screen) with three tabs, **About** chosen on
@@ -358,7 +366,8 @@ it. On a narrow window the navigation opens as the sidebar does.
   the rules of *Members* below hold unchanged.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
 - **Integrations** — the GitHub connection, as below.
-- **Audit log** — the trail as a table, newest first, a page at a time.
+- **Audit log** — the trail as a table, newest first, a page at a time, narrowed by person, action and days,
+  and downloaded as CSV or NDJSON (D-222).
 - **Data & retention** — the workspace's **storage**: a meter with what is used and the quota in words
   ("1.2 GB of 5 GB") and what is left, in the warning tone from nine tenths and the danger tone, with a
   sentence, once full; the quota is the server operator's to set and the card says so, with nothing to

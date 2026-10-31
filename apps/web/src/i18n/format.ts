@@ -29,6 +29,11 @@ export interface Formatters {
   readonly list: (items: readonly string[]) => string;
   /** A size: bytes, then kilobytes, megabytes and gigabytes of 1024, one decimal at most. */
   readonly bytes: (value: number) => string;
+  /**
+   * The instant a calendar day (`YYYY-MM-DD`) begins in the zone these formatters write in: what a day
+   * picked on a page means to the server, which compares instants (D-222).
+   */
+  readonly dayStart: (isoDay: string) => Date;
 }
 
 interface DayWords {
@@ -75,6 +80,29 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
     ...zone,
   });
   const year = new Intl.DateTimeFormat('en-CA', { year: 'numeric', ...zone });
+  const wall = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+    ...zone,
+  });
+  /** What the zone's clock reads at an instant, as if that reading were UTC. */
+  const wallAt = (instant: number): number => {
+    const part = (type: Intl.DateTimeFormatPartTypes): number =>
+      Number(wall.formatToParts(instant).find((piece) => piece.type === type)?.value ?? 0);
+    return Date.UTC(
+      part('year'),
+      part('month') - 1,
+      part('day'),
+      part('hour'),
+      part('minute'),
+      part('second'),
+    );
+  };
   const numbers = new Intl.NumberFormat(locale);
   const names = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
   const inUnit = (
@@ -127,5 +155,13 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
           : value < 1024 * 1024 * 1024
             ? inMegabytes.format(value / (1024 * 1024))
             : inGigabytes.format(value / (1024 * 1024 * 1024)),
+    dayStart: (isoDay): Date => {
+      const [y = 0, m = 1, d = 1] = isoDay.split('-').map(Number);
+      const midnight = Date.UTC(y, m - 1, d);
+      // The zone's offset at UTC midnight, then again at the guess it gives: the two differ only on a
+      // day the clocks change, and the second is the one in force when that day begins.
+      const guess = midnight - (wallAt(midnight) - midnight);
+      return new Date(midnight - (wallAt(guess) - guess));
+    },
   };
 };

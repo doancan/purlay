@@ -1,4 +1,4 @@
-import type { QuestionFilters, SearchFilters } from '@purlay/types';
+import type { AuditFilter, QuestionFilters, SearchFilters } from '@purlay/types';
 /**
  * The names of the cache's entries, spelled once.
  *
@@ -90,7 +90,8 @@ export const keys = {
   presence: (workspaceId: string, epoch: number) => ['presence', workspaceId, epoch] as const,
   /** What one message said before each edit (D-135). */
   messageVersions: (messageId: string) => ['message-versions', messageId] as const,
-  audit: (workspaceId: string) => ['audit', workspaceId] as const,
+  /** The trail as narrowed (D-222); every filter of a workspace under the one prefix. */
+  audit: (workspaceId: string, filter: AuditFilter) => ['audit', workspaceId, filter] as const,
   /** How long a workspace keeps its history, an owner's to read (D-139 §4). */
   retention: (workspaceId: string) => ['retention', workspaceId] as const,
   storage: (workspaceId: string) => ['storage', workspaceId] as const,

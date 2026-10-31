@@ -688,8 +688,11 @@ export const AUDIT_ACTIONS = [
   'workspace.exported',
   'retention.purged',
   'storage.quota_changed',
+  'audit.exported',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+/** One of the recorded actions, by name: what a filter on the trail names (D-222). */
+export const AuditActionName = Type.Union(AUDIT_ACTIONS.map((action) => Type.Literal(action)));
 
 /**
  * One administrative action: who, what, to whom, and for a change from what to what. Never anything
@@ -707,6 +710,64 @@ export const AuditEntry = Type.Object({
 export type AuditEntry = Static<typeof AuditEntry>;
 export const AuditPage = Page(AuditEntry);
 export type AuditPage = Static<typeof AuditPage>;
+
+/**
+ * What narrows the trail (D-222): who acted, which action, and when — `from` inclusive, `to` exclusive,
+ * each an instant (ISO 8601 with its zone). A day the reader picked in their own zone is turned into
+ * instants by the client; the server compares instants and nothing else.
+ */
+const AuditFilterProperties = {
+  actorId: Type.Optional(Uuid),
+  action: Type.Optional(AuditActionName),
+  from: Type.Optional(Timestamp),
+  to: Type.Optional(Timestamp),
+};
+export const AuditFilter = FromClient(AuditFilterProperties);
+export type AuditFilter = Static<typeof AuditFilter>;
+
+/** `GET /api/workspaces/:workspaceId/audit` — a page of the trail, narrowed (D-26, D-222). */
+export const AuditQuery = FromClient({
+  ...AuditFilterProperties,
+  before: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type AuditQuery = Static<typeof AuditQuery>;
+
+/** The files the trail is downloaded as (D-222): a spreadsheet's, and one JSON object a line. */
+export const AUDIT_EXPORT_FORMATS = ['csv', 'ndjson'] as const;
+export type AuditExportFormat = (typeof AUDIT_EXPORT_FORMATS)[number];
+
+/** `GET /api/workspaces/:workspaceId/audit/export` — the whole of the narrowed trail, as a file (D-222). */
+export const AuditExportQuery = FromClient({
+  ...AuditFilterProperties,
+  format: Type.Union(AUDIT_EXPORT_FORMATS.map((format) => Type.Literal(format))),
+});
+export type AuditExportQuery = Static<typeof AuditExportQuery>;
+
+/**
+ * One entry of a downloaded trail, newest first: a line of the NDJSON file, and — in this order, as its
+ * header names them — a row of the CSV, whose `metadata` cell is this object as JSON. Who acted is said
+ * by id and by name, since the file is read away from the people list that names them on the page; the
+ * actor's fields are null once nobody did it or they were erased (D-27).
+ */
+export const AuditExportLine = Type.Object({
+  id: Uuid,
+  createdAt: Timestamp,
+  action: Type.String({ minLength: 1, maxLength: 64 }),
+  actorId: Type.Union([Uuid, Type.Null()]),
+  actorUsername: Type.Union([Type.String(), Type.Null()]),
+  actorDisplayName: Type.Union([Type.String(), Type.Null()]),
+  targetType: Type.String({ minLength: 1, maxLength: 32 }),
+  targetId: Type.Union([Uuid, Type.Null()]),
+  metadata: Type.Record(Type.String(), Type.String()),
+});
+export type AuditExportLine = Static<typeof AuditExportLine>;
+/** The CSV's columns, in order: the line's own keys, so the two files cannot say different things. */
+export const AUDIT_EXPORT_COLUMNS = Object.keys(
+  AuditExportLine.properties,
+) as readonly (keyof AuditExportLine)[];
 
 /** The longest external image address the proxy reads (#110); a longer one is not a picture's. */
 export const EXTERNAL_IMAGE_URL_MAX = 2048;

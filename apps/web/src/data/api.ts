@@ -19,6 +19,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import {
   Attachment,
   AuditPage,
+  type AuditFilter,
   ChannelList,
   ChannelMemberList,
   Channel,
@@ -162,9 +163,10 @@ export interface Api {
   readonly removeMember: (workspaceId: string, userId: string) => Promise<void>;
   /** The caller leaves the workspace and its channels (D-152). */
   readonly leaveWorkspace: (workspaceId: string) => Promise<void>;
-  /** An owner's or an admin's: the administrative trail, newest first (D-26). */
+  /** An owner's or an admin's: the administrative trail, newest first, narrowed (D-26, D-222). */
   readonly audit: (
     workspaceId: string,
+    filter: AuditFilter,
     before?: string,
     signal?: AbortSignal,
   ) => Promise<AuditPage>;
@@ -478,12 +480,12 @@ export const createApi = (http: Http): Api => {
         WorkspaceMember,
         options({ body: { role } }),
       ),
-    audit: (workspaceId, before, signal) =>
+    audit: (workspaceId, filter, before, signal) =>
       http.request(
         'GET',
         `/api/workspaces/${at(workspaceId)}/audit`,
         AuditPage,
-        options(before === undefined ? {} : { query: { before } }, signal),
+        options({ query: { ...filter, ...(before === undefined ? {} : { before }) } }, signal),
       ),
     removeMember: (workspaceId, userId) =>
       http.send('DELETE', `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`, options()),
