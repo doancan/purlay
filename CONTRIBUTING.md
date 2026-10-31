@@ -521,9 +521,11 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   request they run only when it touches the client, the API, a package, the dependencies or
   `ci.yml` (`bun run ci:changes`), and on main always.
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
-  no service and `schema` runs every test once, with coverage; `verify` needs both, runs whatever they
-  did, and passes only when each succeeded — a failure, a cancellation, a skip or a missing result is a
-  refusal (`bun run ci:gate`, D-203). CI only: locally `bun run verify` is the same two halves in one run.
+  no service and `schema` runs every test once, with coverage; `verify` needs both and the browser jobs,
+  runs whatever they did, and passes only when each succeeded — a failure, a cancellation, a skip or a
+  missing result is a refusal (`bun run ci:gate`, D-203). The browser jobs may skip only where `changes`
+  succeeded and said the change touches nothing they see (D-226). CI only: locally `bun run verify` is
+  the same checks and tests in one run, and the browser suite is `bun run test:e2e`.
 
 ---
 
