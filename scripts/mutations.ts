@@ -821,9 +821,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'erasure-locks-the-person-before-the-sessions',
     why: 'an erasure holds the person and waits on a session a send holds, while the send waits on the person: a deadlock',
     file: 'apps/api/src/modules/users/erasure.ts',
-    find: "    .where('key', '=', await addressCounterKey(person.email))\n    .execute();\n",
+    find: "    .where('key', 'like', `${await addressCounterKey(person.email)}%`)\n    .execute();\n",
     replace:
-      "    .where('key', '=', await addressCounterKey(person.email))\n    .execute();\n  await executor.selectFrom('users').select('id').where('id', '=', person.id).forUpdate().execute();\n",
+      "    .where('key', 'like', `${await addressCounterKey(person.email)}%`)\n    .execute();\n  await executor.selectFrom('users').select('id').where('id', '=', person.id).forUpdate().execute();\n",
     tests: ['apps/api/src/ingress/http/erasure-race.integration.test.ts'],
   },
   {
@@ -1305,12 +1305,37 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sign-in-mail-unlimited',
     why: 'anybody can flood an address with sign-in mail',
     file: 'apps/api/src/modules/auth/magic-link.ts',
-    find: '    SIGN_IN_LINKS_PER_HOUR\n  ) {\n',
-    replace: '    SIGN_IN_LINKS_PER_HOUR * 100\n  ) {\n',
+    find: '      .count > SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT\n',
+    replace: '      .count > SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT * 100\n',
     tests: [
       'apps/api/src/ingress/http/magic-link.integration.test.ts',
       'apps/api/src/ingress/http/magic-link-race.integration.test.ts',
     ],
+  },
+  {
+    id: 'sign-in-mail-from-many-clients-unlimited',
+    why: 'many networks, five links each, flood one mailbox past its ceiling',
+    file: 'apps/api/src/modules/auth/magic-link.ts',
+    find: 'count > SIGN_IN_LINKS_PER_ADDRESS) {\n',
+    replace: 'count > SIGN_IN_LINKS_PER_ADDRESS * 100) {\n',
+    tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
+  },
+  {
+    id: 'sign-in-link-count-is-the-address-alone',
+    why: 'six requests for somebody’s address from anywhere keep its owner out of signing in by email for the hour',
+    file: 'apps/api/src/modules/auth/magic-link.ts',
+    find: '`${addressKey}:client:${await tokenDigest(client)}`',
+    replace: '`${addressKey}:client:anyone`',
+    tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
+  },
+  {
+    id: 'sign-in-ceiling-counted-before-the-client',
+    why: 'one client’s refused requests spend the address’s ceiling, and keep its owner out for the hour',
+    file: 'apps/api/src/modules/auth/magic-link.ts',
+    find: '  const addressKey = await addressCounterKey(email);\n',
+    replace:
+      '  const addressKey = await addressCounterKey(email);\n  await counted(database, addressKey, now, HOUR_MS);\n',
+    tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
   },
   {
     id: 'sign-in-mail-per-client-unlimited',
@@ -1486,10 +1511,10 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'erasure-keeps-the-link-count',
-    why: 'an erased address keeps a count of the links it was sent, under its digest',
+    why: 'an erased address keeps the counts of the links it was sent from each client, under its digest',
     file: 'apps/api/src/modules/users/erasure.ts',
-    find: "    .where('key', '=', await addressCounterKey(person.email))\n",
-    replace: "    .where('key', '=', 'none')\n",
+    find: "    .where('key', 'like', `${await addressCounterKey(person.email)}%`)\n",
+    replace: "    .where('key', '=', await addressCounterKey(person.email))\n",
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {
