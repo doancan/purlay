@@ -26,7 +26,7 @@ const ownersOnly = (): AppError =>
   });
 
 /** What the purge keeps: the longer of the two windows, `null` — everything — the longest of all. */
-export const effectiveDays = (
+const effectiveDays = (
   workspaceDays: number | null,
   keepsAtLeast: ChannelRetentionFloor,
 ): number | null => {
