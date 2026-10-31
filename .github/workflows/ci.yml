@@ -182,14 +182,25 @@ jobs:
       - name: install the browser
         run: bun run test:e2e:install
 
+      # Everything but the files that write a measurement: those run next, alone (D-227).
       - name: the browser tests
         run: bun run test:e2e
         env:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
+          PURLAY_E2E_PERFORMANCE: skip
+
+      # The measuring tests by themselves, on one worker: inside the parallel run another test competed
+      # for the runner while they measured, and the same code's cold load read anywhere from 86 to 178 ms.
+      - name: the browser measurements, alone
+        run: bun run test:e2e -- --workers=1
+        env:
+          PURLAY_E2E_PROJECT: ${{ matrix.project }}
+          PURLAY_E2E_PERFORMANCE: only
 
       # Cold load, keystroke to paint and the channel switch (D-49), as the tests above measured
-      # them: blocking on a regression against the middle of main's last runs of this project, never on the line,
-      # which a hosted runner sits far above. Kept and shared as the latency budgets are (#73).
+      # them: blocking on a regression against the slowest of main's last runs of this project, never on the line,
+      # which a hosted runner sits far above. A regression is measured again, alone, and fails only if it
+      # repeats (`--remeasure`, D-227). Kept and shared as the latency budgets are (#73).
       - name: the last browser measurement on main
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -197,7 +208,7 @@ jobs:
           key: budget-browser-${{ matrix.project }}-${{ github.sha }}
           restore-keys: budget-browser-${{ matrix.project }}-
       - name: the browser budgets hold against main's last measurement
-        run: bun run budget:browser -- --project ${{ matrix.project }} --keep .budget/browser-${{ matrix.project }}.json
+        run: bun run budget:browser -- --project ${{ matrix.project }} --keep .budget/browser-${{ matrix.project }}.json --remeasure
       - name: keep this measurement as main's baseline
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
