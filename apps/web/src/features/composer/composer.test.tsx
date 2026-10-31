@@ -2460,8 +2460,52 @@ describe('slash commands (D-214)', () => {
     await user.type(box(), '/search çay & deploy{Enter}');
     await settle();
     expect(view.world.history.stack.at(-1)).toBe(
-      `/w/acme/search?q=${encodeURIComponent('çay & deploy')}`,
+      `/w/acme/search?${new URLSearchParams({ q: 'çay & deploy' }).toString()}`,
     );
     expect(box().value).toBe('');
+  });
+
+  test('/search reads its operators into the search’s filters, as the search field does (D-224)', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search in:#deploys from:@bob has:file is:open "is:open" çay{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?${new URLSearchParams({
+        q: 'is:open çay',
+        in: IDS.deploys,
+        from: IDS.bob,
+        kind: 'file',
+        status: 'open',
+      }).toString()}`,
+    );
+    expect(box().value).toBe('');
+  });
+
+  test('/search with a name nobody has still goes, the operator left in the words to be said there', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search in:#nowhere deploy{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?${new URLSearchParams({ q: 'in:#nowhere deploy' }).toString()}`,
+    );
+  });
+
+  test('/search that the search would refuse is refused under the box, the words kept', async () => {
+    const backwards = await mount();
+    await backwards.user.type(
+      backwards.box(),
+      '/search deploy after:2026-10-05 before:2026-10-01{Enter}',
+    );
+    await settle();
+    expect(backwards.view.getByText('The end date must come after the start date.')).toBeDefined();
+    expect(backwards.view.world.history.stack).toEqual(['/']);
+    expect(backwards.box().value).toBe('/search deploy after:2026-10-05 before:2026-10-01');
+    backwards.view.unmount();
+
+    const short = await mount();
+    await short.user.type(short.box(), '/search in:#api ab{Enter}');
+    await settle();
+    expect(short.view.getByText('Type at least 3 characters.')).toBeDefined();
+    expect(short.view.world.history.stack).toEqual(['/']);
   });
 });
