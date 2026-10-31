@@ -47,7 +47,7 @@ export interface SocketHandlers {
   readonly closed: (code: number) => void;
 }
 
-export interface Socket {
+interface Socket {
   readonly send: (text: string) => void;
   readonly close: () => void;
 }
