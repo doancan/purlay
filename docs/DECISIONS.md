@@ -10493,6 +10493,10 @@ The `dependabot/` branch prefix and the bot's exemptions in `check-pull-request.
 `contributor-agreement.ts` stay while a pull request it opened is still open (#785), so that one can still
 be finished; they go with the last of them.
 
+**Amended 2026-10-31.** #785, the last, merged; the prefix and both exemptions are gone, and a pull request
+from the bot would now fail `check:pr`, `check:cla` and `check:branch` like anybody's without an issue,
+a signature or a named branch.
+
 **Considered and rejected.** Keeping the actions and Docker ecosystems monthly (still a bot's pull
 requests, which is what was asked against); keeping security-fix pull requests only (the same). Rewriting
 history to take the bot out of the contributors list (its eight commits are on main, and a force push to
