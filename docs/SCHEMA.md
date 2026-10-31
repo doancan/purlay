@@ -452,12 +452,29 @@ CREATE TABLE channels (
     -- Archived (D-123): hidden from everyone, its messages and memberships kept, its name free.
     deleted_at   TIMESTAMPTZ,
 
+    -- How long the channel keeps its history when that is longer than its workspace does (D-225).
+    -- `min_retention_days`: at least this many whole days, whatever the workspace's window; NULL is no
+    -- floor of its own. `retain_forever`: everything. NULL and false — every channel until an owner
+    -- says otherwise — is the workspace's window. The purge keeps the longer of the two (I-10). (0063)
+    min_retention_days INTEGER,
+    retain_forever     BOOLEAN NOT NULL DEFAULT FALSE,
+
     CONSTRAINT named_unless_dm CHECK (
         (type = 'direct_message' AND name IS NULL)
         OR (type <> 'direct_message' AND name IS NOT NULL)
     ),
     CONSTRAINT dm_key_iff_dm CHECK (
         (type = 'direct_message') = (dm_key IS NOT NULL)
+    ),
+
+    -- The workspace's own floor (`retention_days_sane`); a number of days or forever, never both; and
+    -- none of it on a direct message, which nobody configures (D-225). "Never shorter than the
+    -- workspace" compares two rows and is not a CHECK: the service refuses it, and the purge takes the
+    -- longer window whatever is stored (I-10).
+    CONSTRAINT channels_retention_sane CHECK (
+        (min_retention_days IS NULL OR min_retention_days >= 30)
+        AND NOT (retain_forever AND min_retention_days IS NOT NULL)
+        AND (type <> 'direct_message' OR (min_retention_days IS NULL AND NOT retain_forever))
     ),
 
     -- Two lower-case member ids, the first not above the second byte-wise, joined with ':'.
@@ -497,6 +514,12 @@ CREATE INDEX idx_channels_created_by ON channels (created_by) WHERE created_by I
 `last_message_at` is only ever moved forward, and only by a send that is newer than the value it holds; a
 send that is not the newest writes nothing. It is the one column of this table that changes on the hot
 path, which is why it is in no index. (D-88)
+
+`min_retention_days` and `retain_forever` are an owner's, set through `PUT /api/channels/:channelId/retention`
+(D-225), and only ever lengthen what the channel keeps: a floor shorter than the workspace's window is refused
+when it is set, and a workspace window lengthened past it later simply wins — the purge keeps the longer of the
+two, read on every batch. An archived channel keeps its setting, and the purge still applies it: archiving
+hides a channel, it does not change how long its history is kept (D-123).
 
 ### 5.2. `channel_members`
 
@@ -1915,7 +1938,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
-| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
+| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window — its channel's window, which is the longer of the workspace's and the channel's own (`channels.retain_forever`, `channels.min_retention_days`), computed on every batch and never taken from a stored number (D-225). Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, no `github_login` and no `github_connected_at`, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5, D-176) | `modules/users/erasure.ts` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
@@ -2011,6 +2034,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0060_question_knowledge.sql questions, accepted answers, decision notes and personal saved searches (D-204)
 0061_question_indexes.sql concurrent indexes for questions, assignees, accepted answers and decision authors (D-204)
 0062_channel_bookmarks.sql channel_bookmarks: links a channel's members keep at hand, under its header  (D-218)
+0063_channel_retention.sql channels.min_retention_days, channels.retain_forever: a channel keeps its history longer than its workspace, never shorter  (D-225)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
