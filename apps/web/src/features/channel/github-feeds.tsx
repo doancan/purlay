@@ -214,6 +214,8 @@ export const GitHubFeeds = ({ channel }: { readonly channel: Channel }): React.J
   });
   const reread = async (): Promise<void> => {
     await client.invalidateQueries({ queryKey: keys.githubFeeds(channel.id) });
+    // The channel's code references link into its one feed's repository (D-223): it may have changed.
+    await client.invalidateQueries({ queryKey: keys.channels(channel.workspaceId) });
   };
 
   const connect = async (event: React.SyntheticEvent): Promise<void> => {

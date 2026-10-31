@@ -68,6 +68,8 @@ import { draftKey, readDraft, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { renderContent } from '../content/render-content';
+import { useCodeRepository } from '../../data/queries';
+import { useWorkspaceIfAny } from '../shell/workspace';
 import { duringComposition, useComposition } from './composition';
 import { convertPaste } from './paste';
 import { composerKey, useComposerInbox } from './quote';
@@ -107,6 +109,8 @@ const Inner = ({
   const client = useQueryClient();
   const session = useSession();
   const key = draftKey(session.user.id, channelId, parentId);
+  // The preview links code references as the sent message will (D-223).
+  const repository = useCodeRepository(useWorkspaceIfAny()?.workspace.id ?? null, channelId);
   const editing = useEditing();
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
@@ -938,7 +942,7 @@ const Inner = ({
                 {empty ? (
                   <p className="text-body text-ink-muted">{t('composer.previewEmpty')}</p>
                 ) : (
-                  renderContent(text)
+                  renderContent(text, { repository })
                 )}
               </div>
             )}

@@ -129,6 +129,27 @@ describe('the screen', () => {
     expect(marked[1]?.hasAttribute('data-mention-me')).toBe(false);
   });
 
+  test('a code reference links into the channel’s repository, as in the feed (D-223)', async () => {
+    const view = await visit(
+      [
+        aChannel(IDS.api, 'api', {
+          state: state(messageIdAt(1), 1),
+          codeRepository: 'acme/api',
+        }),
+      ],
+      {
+        messages: () =>
+          Promise.resolve({
+            data: [aMessage(2, { content: 'see src/a.ts:4' })],
+            nextCursor: null,
+          }),
+      },
+    );
+    expect(view.container.querySelector('a[data-code-reference]')?.getAttribute('href')).toBe(
+      'https://github.com/acme/api/blob/HEAD/src/a.ts#L4',
+    );
+  });
+
   test('a channel whose new messages could not be loaded says so, and Retry asks again', async () => {
     let answers = 0;
     const view = await visit([aChannel(IDS.api, 'api', { state: state(messageIdAt(1), 1) })], {

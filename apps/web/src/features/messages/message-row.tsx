@@ -26,6 +26,7 @@ import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
 import { failureKey, UNREACHED, type FailureCode } from '../../data/failure';
+import { useCodeRepository } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Delivery } from '../../realtime/engine';
 import { cn } from '../../ui/cn';
@@ -44,6 +45,7 @@ import { PinnedMark } from '../pins/pin-toggle';
 import { useActiveRow } from './active-row';
 import { MessageActions } from './message-actions';
 import { useRowStops } from './row-stops';
+import { useWorkspaceIfAny } from '../shell/workspace';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -105,6 +107,11 @@ const MessageRowView = ({
   children,
 }: MessageRowProps): React.JSX.Element => {
   const { t, format } = useI18n();
+  // Where its code references link (D-223): the channel's one feed repository, or none.
+  const repository = useCodeRepository(
+    useWorkspaceIfAny()?.workspace.id ?? null,
+    message.channelId,
+  );
   const mentionsMe = message.mentions.includes(meId);
   const mentioned = new Set(
     message.mentions.flatMap((id) => {
@@ -210,7 +217,11 @@ const MessageRowView = ({
           ) : event !== null ? (
             <GitHubEventCard event={event} />
           ) : (
-            renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
+            renderContent(message.content, {
+              mentioned,
+              me: members.get(meId)?.toLowerCase(),
+              repository,
+            })
           )}
           {/* What is known about the message — edited, pinned — on one line under its words, apart. */}
           <div className="mt-1 flex items-center gap-3 empty:hidden">
