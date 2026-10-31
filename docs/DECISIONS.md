@@ -10896,3 +10896,30 @@ runner's cores are idle. *Running the integration files apart from the unit file
 
 **Cost of reversing.** Drop `--parallel=…` and `WORKERS` from `scripts/test-all.ts` and their test; the test fixes
 stay, being right either way.
+
+### D-229. A commit deploys only after its own `ci` and `image` runs have both succeeded — amends D-185; closes #798
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** `deploy` started on a successful `image`
+run alone, and `image` does not wait for `ci`. On 2026-10-28 commit `8283c4a6` was live at 09:12 while its `ci`
+failed at 09:19: the server ran a commit the gate later refused. Merging is not the proof either; branch protection
+judges the pull request's head, and a rebased merge is a new commit that the push's own `ci` run judges.
+
+- **`deploy` listens to both workflows.** A new `gate` job asks GitHub for the commit's push run on `main` of
+  `ci.yml` and `image.yml`, newest first. Both completed and successful: the server job runs. One still running: the
+  gate succeeds with nothing to do, and that run's own completion starts the workflow again. Anything else — failed,
+  cancelled, timed out, or no run at all — fails the gate and the server is not touched.
+- **The gate runs on GitHub's runner, not the server's.** Reading runs needs `actions: read` and nothing the server
+  holds; the server's runner is reached only through `needs: gate`.
+- **A hand-started deploy is judged the same way and cannot wait.** A rollback names a commit that was a push's tip
+  and passed; a commit inside a rebased merge has no runs of its own and is refused, because it was never tested.
+
+**Considered and rejected.** Making `image` depend on `ci` (`image` must run on pull requests as a required check of
+its own, D-87, and chaining would lengthen every merge's road to the server by the image build). A `workflow_run` on
+`ci` alone (the image could still be building, and its digest is what the server pulls). Polling in the deploy job
+until both finish (it would hold the server's runner for minutes, and a wait loop is a timeout to tune).
+
+**Cost of the choice.** When both finish within the same few seconds, both completions find the other done and the
+commit deploys twice; `concurrency: deploy` runs them one after the other and a second deploy of the running commit
+is a backup and a restart, which `deploy.sh` already handles. **Cost of reversing.** Set `workflows: [image]` back
+and remove the `gate` job.
+

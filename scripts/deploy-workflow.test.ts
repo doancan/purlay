@@ -91,7 +91,7 @@ describe('the events that can reach the server', () => {
 
   test('the deploy runs on a merge to main or a person starting it, and nothing else', () => {
     expect(events(read('deploy.yml'))).toEqual(['workflow_run', 'workflow_dispatch']);
-    expect(read('deploy.yml')).toContain('workflows: [image]');
+    expect(read('deploy.yml')).toContain('workflows: [ci, image]');
     expect(read('deploy.yml')).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(read('deploy.yml')).toContain("github.event.workflow_run.event == 'push'");
     expect(read('deploy.yml')).toContain('head_repository.full_name == github.repository');
@@ -131,7 +131,113 @@ describe('what the deploy is allowed', () => {
   });
 
   test('a hand-started run only runs from main: another branch brings its own copy of this file', () => {
-    expect(job(text, 'deploy')).toMatch(/github\.ref == 'refs\/heads\/main'/);
+    expect(job(text, 'gate')).toMatch(/github\.ref == 'refs\/heads\/main'/);
+  });
+
+  test('the server is reached only through the gate, and the gate itself runs off the server', () => {
+    expect(job(text, 'deploy')).toContain('needs: gate');
+    expect(job(text, 'deploy')).toContain("if: needs.gate.outputs.ready == 'true'");
+    expect(job(text, 'gate')).toContain('runs-on: ubuntu-latest');
+    expect(job(text, 'gate')).toContain('actions: read');
+  });
+
+  describe('the gate: the commit passed ci and published its image (#798)', () => {
+    const script = stepRun(text, 'the commit passed ci and published its image');
+    const good = 'b'.repeat(40);
+    /** What the gate does when `ci` and `image` report these `status conclusion` lines. */
+    const gate = (
+      ci: string,
+      image: string,
+      byHand = false,
+      commit = good,
+    ): { readonly code: number; readonly ready: string; readonly asked: string } => {
+      const dir = mkdtempSync(join(tmpdir(), 'gate-'));
+      try {
+        writeFileSync(
+          join(dir, 'gh'),
+          `#!/usr/bin/env bash\necho "$*" >> "$ASKED"\ncase "$*" in *ci.yml*) echo "$CI" ;; *image.yml*) echo "$IMAGE" ;; esac\n`,
+        );
+        chmodSync(join(dir, 'gh'), 0o755);
+        writeFileSync(join(dir, 'step.sh'), `set -euo pipefail\n${script}\n`);
+        writeFileSync(join(dir, 'output'), '');
+        writeFileSync(join(dir, 'asked'), '');
+        const code = Bun.spawnSync(['bash', join(dir, 'step.sh')], {
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: {
+            PATH: `${dir}:${process.env['PATH'] ?? ''}`,
+            CI: ci,
+            IMAGE: image,
+            COMMIT: commit,
+            BY_HAND: String(byHand),
+            GH_TOKEN: 'x',
+            REPOSITORY: 'acme/purlay',
+            GITHUB_OUTPUT: join(dir, 'output'),
+            ASKED: join(dir, 'asked'),
+          },
+        }).exitCode;
+        return {
+          code,
+          ready: readFileSync(join(dir, 'output'), 'utf8').trim(),
+          asked: readFileSync(join(dir, 'asked'), 'utf8'),
+        };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    test('both succeeded: it deploys', () => {
+      expect(gate('completed success', 'completed success')).toMatchObject({
+        code: 0,
+        ready: 'ready=true',
+      });
+    });
+
+    test("it asks about this commit's push runs on main, of both workflows", () => {
+      const { asked } = gate('completed success', 'completed success');
+      for (const workflow of ['ci.yml', 'image.yml']) {
+        expect(asked).toContain(
+          `repos/acme/purlay/actions/workflows/${workflow}/runs?head_sha=${good}&event=push&branch=main`,
+        );
+      }
+    });
+
+    test.each([
+      ['in_progress ', 'completed success'],
+      ['completed success', 'queued '],
+      ['waiting ', 'in_progress '],
+    ])('one still running (ci %p, image %p): it waits, and does not fail', (ci, image) => {
+      expect(gate(ci, image)).toMatchObject({ code: 0, ready: 'ready=false' });
+    });
+
+    test.each([
+      ['completed failure', 'completed success'],
+      ['completed success', 'completed cancelled'],
+      ['completed timed_out', 'completed success'],
+      ['null null', 'completed success'],
+      ['completed success', 'null null'],
+    ])('one that did not succeed or never ran (ci %p, image %p) refuses', (ci, image) => {
+      expect(gate(ci, image)).toMatchObject({ code: 1, ready: '' });
+    });
+
+    test('a failure refuses even while the other is still running', () => {
+      expect(gate('completed failure', 'in_progress ').code).toBe(1);
+      expect(gate('in_progress ', 'completed failure').code).toBe(1);
+    });
+
+    test('a hand-started deploy cannot wait, so a run still going refuses it', () => {
+      expect(gate('in_progress ', 'completed success', true)).toMatchObject({ code: 1, ready: '' });
+      expect(gate('completed success', 'completed success', true).code).toBe(0);
+    });
+
+    test.each(['main', `${good}; echo`, 'b'.repeat(39)])(
+      'refuses %p before it asks GitHub anything',
+      (commit) => {
+        const { code, asked } = gate('completed success', 'completed success', false, commit);
+        expect(code).toBe(1);
+        expect(asked).toBe('');
+      },
+    );
   });
 
   test('no expression is written into a shell: a value reaches it through env, quoted', () => {
