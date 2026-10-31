@@ -6,11 +6,20 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
+/**
+ * What `bun test --parallel` puts in a worker's environment (D-228). Playwright reads `JEST_WORKER_ID` as being
+ * imported by Jest and loads no test, so a listing started from a worker would be empty.
+ */
+const WORKER_MARKS = new Set(['JEST_WORKER_ID', 'BUN_TEST_WORKER_ID']);
+
 /** The test files Playwright would run for one project with this `PURLAY_E2E_PERFORMANCE`. */
 const listed = (mode: string): { readonly files: readonly string[]; readonly output: string } => {
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !WORKER_MARKS.has(name)),
+  );
   const result = Bun.spawnSync(['bun', 'x', 'playwright', 'test', '--list'], {
     cwd: 'apps/web',
-    env: { ...process.env, PURLAY_E2E_PROJECT: 'chromium-light', PURLAY_E2E_PERFORMANCE: mode },
+    env: { ...inherited, PURLAY_E2E_PROJECT: 'chromium-light', PURLAY_E2E_PERFORMANCE: mode },
   });
   const output = `${result.stdout.toString()}${result.stderr.toString()}`;
   const files = [...output.matchAll(/› (\S+\.e2e\.ts):/g)].map((match) => match[1] ?? '');
