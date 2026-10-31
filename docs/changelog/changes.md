@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Mobile** — Purlay installs as an application from the browser; on an iPhone, added to the Home Screen it can receive notifications, and the notifications page says how (D-230)
 - **Administration** — The audit log can be narrowed by person, action and days (in the reader's own time zone, kept in the page's address) and downloaded as CSV or NDJSON; a download is itself on the log, and every entry is also an ids-only line of the server's log (D-222)
 - **Messages** — A file path with a line (`src/retry.ts:14`) or a commit's SHA in a message opens on GitHub, in the repository of the channel's one GitHub feed (D-223)
 - **Channels** — An owner can let a channel keep its history longer than the workspace does, or forever, never shorter; the purge keeps the longer window, and Data & retention says how many channels keep longer (D-225)
@@ -52,6 +53,7 @@ have it.
 
 ### Changed
 
+- **Operations** — A merge reaches the server only after that commit's own checks and its image have both succeeded; a deploy started by hand is held to the same (D-229)
 - **Search** — The date filters are whole days in the viewer's time zone, as the date operators are, rather than UTC days (D-224)
 - **Dependencies** — The toolchain and runtime libraries move to their newest patch releases; the three deprecations they flagged are removed (`dns` lookup order, the build's `rolldownOptions`, the account-linking option the library now makes unconditional); `knip` is held at 6.41 until it reads the entry points again
 - **Operations** — The object store is Garage v2.5.0, with its fixes for a reflected XSS on error pages and a panic on a malformed URL; a node cannot go back to an older version once upgraded, so take a backup before the first deploy that runs it (D-219)
