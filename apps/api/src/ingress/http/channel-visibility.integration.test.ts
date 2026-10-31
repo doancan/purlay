@@ -330,11 +330,11 @@ describe('integration: channel visibility', () => {
       test(`${key} answers 404 to a workspace member who cannot see the channel`, async () => {
         await withRollback(async (db) => {
           const world = await aWorld(db);
-          if (visibility.admin === true) {
+          if (visibility.admin === true || visibility.owner === true) {
             // What they are is not the question here; what they can see is.
             await db
               .updateTable('workspace_members')
-              .set({ role: 'admin' })
+              .set({ role: visibility.owner === true ? 'owner' : 'admin' })
               .where('workspace_id', '=', world.workspaceId)
               .where('user_id', '=', world.ids.userId)
               .execute();

@@ -64,7 +64,7 @@ const render = async (
           memberships: session.memberships.map((m) => ({ ...m, role })),
         }),
       // The page's other card: how long history is kept.
-      retention: () => Promise.resolve({ retentionDays: null }),
+      retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
       ...api,
     }),
   });

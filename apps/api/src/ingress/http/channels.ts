@@ -16,9 +16,11 @@ import {
   CreateDirectMessageRequest,
   ReadChannelRequest,
   MarkUnreadRequest,
+  SetChannelRetentionRequest,
   SetNotificationLevelRequest,
   UpdateChannelRequest,
   type Channel,
+  type ChannelRetention,
   type ChannelMemberList,
   type ReadChannelResponse,
 } from '@purlay/types';
@@ -48,6 +50,7 @@ import { openConversation, openDirectMessage } from '../../modules/channels/dire
 import { addMember } from '../../modules/channels/members';
 import { markRead, markUnread } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
+import { readChannelRetention, setChannelRetention } from '../../modules/channels/retention';
 import {
   archiveChannel,
   channelMembers,
@@ -416,4 +419,39 @@ export const listChannelMembers = async (
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return [...(await channelMembers(database, context))];
+};
+
+/**
+ * `GET /api/channels/:channelId/retention` — how long the channel keeps its history beside its
+ * workspace's window, and what is kept: an owner's (D-225).
+ */
+export const readChannelRetentionSetting = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  channelId: string,
+): Promise<ChannelRetention> => {
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  return await readChannelRetention(database, context);
+};
+
+/**
+ * `PUT /api/channels/:channelId/retention` — an owner lets the channel keep its history longer than
+ * the workspace does, or follow it again (D-225). Nothing is told to any socket: only an owner reads it,
+ * as the workspace's window (D-139 §4).
+ */
+export const updateChannelRetentionSetting = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<ChannelRetention> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const { keepsAtLeast } = validated(SetChannelRetentionRequest, body);
+  return await atomicallyOn(database)(
+    async (transaction) => await setChannelRetention(transaction, clock, context, keepsAtLeast),
+  );
 };

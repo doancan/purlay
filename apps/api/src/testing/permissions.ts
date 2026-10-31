@@ -40,6 +40,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PUT /api/workspaces/:workspaceId/retention',
     allowed: { owner: true, admin: false, member: false },
   },
+  'read how long a channel keeps its history': {
+    endpoint: 'GET /api/channels/:channelId/retention',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'let a channel keep its history longer': {
+    endpoint: 'PUT /api/channels/:channelId/retention',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'export the workspace': {
     endpoint: 'POST /api/workspaces/:workspaceId/exports',
     allowed: { owner: true, admin: false, member: false },

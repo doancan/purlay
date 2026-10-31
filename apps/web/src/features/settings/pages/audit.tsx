@@ -93,6 +93,9 @@ export const AuditPage = (): React.JSX.Element => {
   /** A window on the trail: `forever`, or its days — in the reader's words (D-41). */
   const kept = (word: string | undefined): string =>
     word === 'forever' ? t('retention.forever') : t('retention.days', { days: word ?? '' });
+  /** A channel's setting on the trail: the workspace's window, `forever`, or its days (D-225). */
+  const channelKept = (word: string | undefined): string =>
+    word === 'workspace' ? t('audit.workspaceWindow') : kept(word);
   const role = (word: string | undefined): string => {
     switch (roleOf(word)) {
       case 'member':
@@ -202,6 +205,20 @@ export const AuditPage = (): React.JSX.Element => {
           from: kept(entry.metadata['from']),
           to: kept(entry.metadata['to']),
         });
+      // Named only to a viewer who can see the channel, as a feed's is (#691, D-225).
+      case 'channel.retention_changed': {
+        const name = channels.data?.find((c) => c.id === entry.targetId)?.name;
+        const from = channelKept(entry.metadata['from']);
+        const to = channelKept(entry.metadata['to']);
+        return name == null
+          ? t('audit.action.channel.retention_changed', { actor, from, to })
+          : t('audit.action.channel.retention_changed_in', {
+              actor,
+              from,
+              to,
+              channel: `#${name}`,
+            });
+      }
       // The person is gone, so the sentence names nobody (D-139 §5).
       case 'account.erased':
         return t('audit.action.account.erased');

@@ -142,6 +142,8 @@ import {
   addChannelMember,
   archive,
   changeChannel,
+  readChannelRetentionSetting,
+  updateChannelRetentionSetting,
   leave,
   removeFromChannel,
   listChannelMembers,
@@ -1141,6 +1143,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId',
       async ({ request, params, body }) =>
         await changeChannel(sending, request, params.channelId, body),
+    )
+    .get(
+      '/api/channels/:channelId/retention',
+      async ({ request, params }) =>
+        await readChannelRetentionSetting(dependencies, request, params.channelId),
+    )
+    .put(
+      '/api/channels/:channelId/retention',
+      async ({ request, params, body }) =>
+        await updateChannelRetentionSetting(dependencies, request, params.channelId, body),
     )
     .delete('/api/channels/:channelId', async ({ request, params, set }) => {
       await archive(sending, request, params.channelId);

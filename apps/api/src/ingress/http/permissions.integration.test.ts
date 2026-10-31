@@ -126,6 +126,12 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/retention`, as, {
       retentionDays: 90,
     }),
+  'read how long a channel keeps its history': async (world, as) =>
+    await call(world, 'GET', `/api/channels/${world.channelId}/retention`, as),
+  'let a channel keep its history longer': async (world, as) =>
+    await call(world, 'PUT', `/api/channels/${world.channelId}/retention`, as, {
+      keepsAtLeast: 'forever',
+    }),
   'export the workspace': async (world, as) =>
     await call(world, 'POST', `/api/workspaces/${world.workspaceId}/exports`, as),
   'read the workspace’s exports': async (world, as) =>
