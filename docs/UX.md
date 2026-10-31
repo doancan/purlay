@@ -365,6 +365,11 @@ it. On a narrow window the navigation opens as the sidebar does.
   the new one is typed (the same `passwordProblem` the server runs, §11), and **Change password**. A
   success says *Your other sessions were signed out.* and keeps this one — the page stays on Settings, the session is the same row; if signing the others out failed after the password changed, it says so and points to *Sign out everywhere*; a wrong current password is one
   sentence, a refused new one is named by rule, and a wait is told in minutes.
+  Next, *Where you are signed in* (D-193): each live session, the one used last first — a Mac by the name it
+  sent (*Purlay for Mac* without one), any browser as *Web browser*, each with when it was signed in and, but
+  for this one, when it was last active. This one is marked *This device* and has no button; every other has
+  **Sign out**, which asks nothing, takes the row off at once and says it was signed out, or puts it back and
+  says why when refused; one already ended elsewhere stays gone, unsaid.
   Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
   to make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), and *Create workspace…*.
@@ -787,6 +792,7 @@ missing specified behaviour and does not merge.
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
 | How you sign in (Sessions & account) | n/a — always an address, and whether a link to it signs in; the GitHub row is there only when GitHub is linked, and is not offered otherwise | Skeleton in the card | Retry in the card (D-176, D-179) |
+| Where you are signed in (Sessions & account) | "You are not signed in anywhere else." under this device's row | Skeleton in the card | Retry in the card; a sign-out refused puts the row back and says why in a toast (D-193) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |

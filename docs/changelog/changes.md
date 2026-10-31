@@ -46,7 +46,7 @@ have it.
 - **Native app** — A person signs in to the macOS application in their browser and authorises it with one click; it gets a session of its own (D-191)
 - **Native app** — The server says which client versions it still serves and where to get a newer one, and refuses an older one with a clear answer (D-190)
 - **Operations** — Every release carries the contract bundle a non-browser client is generated from, with its digest (D-192)
-- **Sign-in** — A person sees where they are signed in, by device name and when it was last used, and ends one place without ending the rest (D-193)
+- **Sign-in** — A person sees where they are signed in, under Sessions & account, by device name and when it was last used, and signs one place out without ending the rest (D-193)
 - **Messages** — A client that was away asks what happened to a channel's messages since it last heard — edits, deletions, reactions taken back, replies, and messages that arrived late — and is answered by the messages themselves (D-194)
 - **Sidebar** — A person folds each section by its heading (what is unread, what mentions them and the open row stay listed), and arranges the column from one menu: only what is unread, channels by name or by recent activity, Conversations and People switched off, muted channels left out, and a reset; the choices are kept per person and workspace (D-195)
 - **Operations** — An operator can scrape `/metrics` with Prometheus by setting `METRICS_TOKEN` (off by default): requests by route and status, latency, open sockets, rate refusals, push and mail failures and the scheduled jobs, with no personal data (D-221)

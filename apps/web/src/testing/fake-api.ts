@@ -125,6 +125,22 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
       github: { login: 'ada' },
       oidc: false,
     }),
+  // The device list is on the same page as the sign-in card: this browser alone, unless a test says.
+  mySessions: () =>
+    Promise.resolve({
+      data: [
+        {
+          id: '0199a000-0000-7000-8000-00000000c0de',
+          kind: 'browser',
+          name: null,
+          createdAt: '2026-09-09T08:00:00.000Z',
+          lastUsedAt: '2026-09-09T08:00:00.000Z',
+          expiresAt: '2026-10-09T08:00:00.000Z',
+          current: true,
+        },
+      ],
+    }),
+  endMySession: unexpected('endMySession'),
   signOut: unexpected('signOut'),
   renameWorkspace: unexpected('renameWorkspace'),
   signOutEverywhere: unexpected('signOutEverywhere'),
