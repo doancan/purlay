@@ -16,35 +16,43 @@ import type { Catalogue, Locale, Message, MessageKey, Translate } from './types'
 
 const PLACEHOLDER = /\{(\w+)\}/g;
 
+/**
+ * A locale's number format and plural rules, made once per `createTranslate`: building them is most of
+ * what a call cost (about 21 µs against 0.6 µs), and a feed row with a count calls on every render.
+ */
+interface Formatters {
+  readonly numbers: Intl.NumberFormat;
+  readonly plurals: Intl.PluralRules;
+}
+
 const fill = (
   template: string,
-  locale: Locale,
+  { numbers }: Formatters,
   params: Readonly<Record<string, unknown>>,
 ): string =>
   template.replace(PLACEHOLDER, (whole, name: string) => {
     const value = params[name];
-    if (typeof value === 'number') return new Intl.NumberFormat(locale).format(value);
+    if (typeof value === 'number') return numbers.format(value);
     return typeof value === 'string' ? value : whole;
   });
 
-const choose = (message: Message, locale: Locale, count: unknown): string => {
+const choose = (message: Message, { plurals }: Formatters, count: unknown): string => {
   if (typeof message === 'string') return message;
-  const category = typeof count === 'number' ? new Intl.PluralRules(locale).select(count) : 'other';
+  const category = typeof count === 'number' ? plurals.select(count) : 'other';
   return (category === 'other' ? undefined : message[category]) ?? message.other;
 };
 
-const lookup = (
-  locale: Locale,
-  catalogue: Catalogue,
-  key: MessageKey,
-  params: Readonly<Record<string, unknown>>,
-): string => fill(choose(catalogue[key], locale, params['count']), locale, params);
-
 export const createTranslate = (locale: Locale, catalogue: Catalogue): Translate => {
+  const formatters: Formatters = {
+    numbers: new Intl.NumberFormat(locale),
+    plurals: new Intl.PluralRules(locale),
+  };
   // The public type is the precise one (`TranslateArgs`); this is the loose
   // function that satisfies it, and `i18n.test.ts` exercises every shape of call
   // through the precise type.
-  const translate = (key: MessageKey, params?: Readonly<Record<string, unknown>>): string =>
-    lookup(locale, catalogue, key, params ?? {});
+  const translate = (key: MessageKey, params?: Readonly<Record<string, unknown>>): string => {
+    const values = params ?? {};
+    return fill(choose(catalogue[key], formatters, values['count']), formatters, values);
+  };
   return translate;
 };
