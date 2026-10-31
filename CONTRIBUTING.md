@@ -492,8 +492,8 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   commit type below, so a branch and its commits do not use two vocabularies for one idea.
   Checked by `bun run check:branch`, which runs in `verify` and in the pipeline.
   `dependabot/` is the one other prefix: the bot names its own branches and cannot be told
-  otherwise, and its commits carry `chore` (`.github/dependabot.yml`). Without it no update the
-  bot opens could ever merge, and the trigger D-20 relies on it to watch would never land.
+  otherwise, and its commits carry `chore`. It opens no new ones (D-219); the prefix stays while
+  one it opened is still open, so that one can still merge.
 - **Commits:** Conventional Commits — `feat(messages): add keyset pagination`
 - **No AI attribution in commit messages.** No assistant name, no tool name, no
   `Co-Authored-By` trailer for one. A commit records what changed, not what typed it.
