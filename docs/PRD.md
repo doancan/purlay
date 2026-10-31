@@ -245,7 +245,7 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 ### Phase 3 — Polish
 
 **native macOS client in Swift, in its own repository** (D-186) · **mobile as an installable
-progressive web application** — one client, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
+progressive web application** — one client, not a second codebase (D-51), installable since D-230 · multi-node scale-out via a Redis-backed event
 bus (D-7, D-25) · **OIDC single sign-on, built** (D-31, D-200)
 
 > **Native Swift exists for macOS only** (D-186, which supersedes D-51 here). Mobile stays an
