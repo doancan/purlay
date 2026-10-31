@@ -25,6 +25,7 @@ import { NEEDS_YOU, type PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
+import type { Counter, PushFailure } from '../../platform/metrics';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
 import { encryptPush, freshParts } from './encrypt';
@@ -71,6 +72,8 @@ export interface PushSenderDependencies {
    * what they are looking at already says it.
    */
   readonly attention: Attention;
+  /** Where a push that did not reach its service is counted, by why (D-221); absent, it is not. */
+  readonly failures?: Counter<'reason'>;
 }
 
 interface Device {
@@ -172,6 +175,9 @@ export const createPushSender = async (
   dependencies: PushSenderDependencies,
 ): Promise<PushSender> => {
   const { database, clock, log, keys, post } = dependencies;
+  const failed = (reason: PushFailure, by = 1): void => {
+    dependencies.failures?.inc({ reason }, by);
+  };
   // Imported once, here, so a key that cannot sign stops the start rather than the first push.
   const signing = await vapidSigningKey(keys);
   const waiting: Device[] = [];
@@ -218,6 +224,7 @@ export const createPushSender = async (
       await forget(device);
       return;
     }
+    failed('not_taken');
     log.warn('push not taken', said);
   };
 
@@ -262,6 +269,7 @@ export const createPushSender = async (
     }
     if (status !== null && OUR_REQUEST_REFUSED.has(status)) {
       // The keys, the token or the body: this server's to fix, not the browser's to pay for.
+      failed('refused');
       log.error('push refused: this server’s request', { host: url.hostname, status });
       return;
     }
@@ -281,6 +289,7 @@ export const createPushSender = async (
       const task = deliver(device)
         .catch((error: unknown) => {
           // A device's failure is that device's; the rest still go. Said with nothing of the person.
+          failed('error');
           log.error('push delivery failed', { err: error });
         })
         .finally(() => {
@@ -301,6 +310,7 @@ export const createPushSender = async (
         .then((devices) => {
           const room = QUEUE_MAX - waiting.length;
           if (devices.length > room) {
+            failed('dropped', devices.length - Math.max(room, 0));
             log.warn('push dropped: too many waiting', {
               messageId,
               dropped: devices.length - Math.max(room, 0),
@@ -310,6 +320,7 @@ export const createPushSender = async (
           pump();
         })
         .catch((error: unknown) => {
+          failed('error');
           log.error('push delivery failed', { messageId, stage: 'finding devices', err: error });
         })
         .finally(() => {
