@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Administration** — The audit log can be narrowed by person, action and days (in the reader's own time zone, kept in the page's address) and downloaded as CSV or NDJSON; a download is itself on the log, and every entry is also an ids-only line of the server's log (D-222)
 - **Notifications** — An enabled device can request a test notification, with permission and device-setting guidance if it cannot be shown (D-148)
 - **Threads** — Keep a selected answer, decision note and reference on a thread, with versioned edits that preserve drafts on conflict (D-204)
 - **Questions** — Mark a question before anybody replies, assign a channel member, and filter unanswered or assigned questions with longest-waiting order (D-204)
