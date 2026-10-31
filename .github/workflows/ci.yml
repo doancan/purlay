@@ -155,12 +155,14 @@ jobs:
   browser:
     needs: changes
     if: needs.changes.outputs.browser == 'true'
-    # One job per project (playwright.config.ts): each has a runner to itself, so the suite fits its
-    # time and a latency is measured on a page that is not sharing two cores with three others.
+    # One job per project and part (playwright.config.ts): each has a runner to itself, so the suite fits
+    # its time, and the measurements are taken on a machine nothing else is using (D-227) — beside the
+    # suite rather than after it, so measuring alone adds no time to the run.
     strategy:
       fail-fast: false
       matrix:
         project: [chromium-dark, chromium-light, chromium-dark-narrow, chromium-light-narrow]
+        part: [suite, measurements]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -182,8 +184,9 @@ jobs:
       - name: install the browser
         run: bun run test:e2e:install
 
-      # Everything but the files that write a measurement: those run next, alone (D-227).
+      # Everything but the files that write a measurement: those run in the other part, alone (D-227).
       - name: the browser tests
+        if: matrix.part == 'suite'
         run: bun run test:e2e
         env:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
@@ -192,6 +195,7 @@ jobs:
       # The measuring tests by themselves, on one worker: inside the parallel run another test competed
       # for the runner while they measured, and the same code's cold load read anywhere from 86 to 178 ms.
       - name: the browser measurements, alone
+        if: matrix.part == 'measurements'
         run: bun run test:e2e -- --workers=1
         env:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
@@ -202,15 +206,17 @@ jobs:
       # which a hosted runner sits far above. A regression is measured again, alone, and fails only if it
       # repeats (`--remeasure`, D-227). Kept and shared as the latency budgets are (#73).
       - name: the last browser measurement on main
+        if: matrix.part == 'measurements'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .budget/browser-${{ matrix.project }}.json
           key: budget-browser-${{ matrix.project }}-${{ github.sha }}
           restore-keys: budget-browser-${{ matrix.project }}-
       - name: the browser budgets hold against main's last measurement
+        if: matrix.part == 'measurements'
         run: bun run budget:browser -- --project ${{ matrix.project }} --keep .budget/browser-${{ matrix.project }}.json --remeasure
       - name: keep this measurement as main's baseline
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: matrix.part == 'measurements' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .budget/browser-${{ matrix.project }}.json
@@ -222,7 +228,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-${{ matrix.project }}
+          name: playwright-report-${{ matrix.project }}-${{ matrix.part }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
