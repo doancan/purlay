@@ -4,6 +4,7 @@
  * — one line per stage, a tick, a cross, or a hollow circle for what was never reached — read from the
  * reason, since each reason is where the try stopped.
  */
+import { EMAIL_MAX } from '@purlay/types';
 import type { ProbeResult } from '@purlay/types';
 import { useState } from 'react';
 import { Icon } from '../../../components/icon';
@@ -347,7 +348,7 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
           value={from}
           autoComplete="off"
           spellCheck={false}
-          maxLength={254}
+          maxLength={EMAIL_MAX}
           invalid={field === 'from'}
           {...(fromRefused ? { error: t('setup.email.fromInvalid') } : {})}
           onChange={(event) => {

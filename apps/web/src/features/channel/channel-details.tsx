@@ -13,7 +13,13 @@
  * first, in place, as removing a member does.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import type { Channel, ChannelMember, UpdateChannelRequest, UserRole } from '@purlay/types';
+import {
+  CHANNEL_NAME_MAX,
+  type Channel,
+  type ChannelMember,
+  type UpdateChannelRequest,
+  type UserRole,
+} from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { fold } from '../composer/mention-suggest';
 import { useActions } from '../../data/actions-provider';
@@ -39,7 +45,7 @@ import { forgetChannel } from '../questions/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
 import { ChannelRetentionSection } from './channel-retention';
-import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
+import { CHANNEL_NAME, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
 import { useLeaveRefusal } from './leave';
 import { LEVELS, useChooseLevel } from './notification-level-menu';

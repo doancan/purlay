@@ -108,6 +108,9 @@ export const erasedPerson = (id: string): User => ({
   avatarUrl: null,
 });
 
+/** The longest display name, as `users.display_name` holds it (`SCHEMA.md` §users). */
+export const DISPLAY_NAME_MAX = 128;
+
 /** How long a profile's title and status line may be (D-131). */
 export const PROFILE_TITLE_MAX = 80;
 export const PROFILE_STATUS_MAX = 100;

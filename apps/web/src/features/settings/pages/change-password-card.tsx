@@ -14,7 +14,11 @@ import type { PlainKey } from '../../../i18n/types';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
-import { PASSWORD_PROBLEMS, PasswordRules } from '../../password/password-rules';
+import {
+  PASSWORD_FIELD_MAX,
+  PASSWORD_PROBLEMS,
+  PasswordRules,
+} from '../../password/password-rules';
 import { useSession } from '../../session/session';
 import { SettingsCard } from '../page';
 
@@ -142,7 +146,7 @@ export const ChangePasswordCard = ({ email }: { readonly email: string }): React
           value={current}
           autoComplete="current-password"
           spellCheck={false}
-          maxLength={256}
+          maxLength={PASSWORD_FIELD_MAX}
           {...words('current')}
           onChange={(event) => {
             setCurrent(event.target.value);
@@ -155,7 +159,7 @@ export const ChangePasswordCard = ({ email }: { readonly email: string }): React
           value={next}
           autoComplete="new-password"
           spellCheck={false}
-          maxLength={256}
+          maxLength={PASSWORD_FIELD_MAX}
           {...words('next')}
           onChange={(event) => {
             setNext(event.target.value);

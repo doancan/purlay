@@ -12,7 +12,7 @@
  * the address can use one. An invitation this tab holds rides in the link (§4), because the mail opens in
  * another tab, which has none; the invitation page's `beforeLink` asks for its passport first.
  */
-import { SIGN_IN_LINK_TTL_MINUTES } from '@purlay/types';
+import { EMAIL_MAX, SIGN_IN_LINK_TTL_MINUTES } from '@purlay/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '../../data/api-provider';
@@ -25,6 +25,7 @@ import { cn } from '../../ui/cn';
 import { TextField } from '../../ui/text-field';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
 import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
+import { PASSWORD_FIELD_MAX } from '../password/password-rules';
 
 interface Failure {
   readonly field: 'email' | 'form';
@@ -181,7 +182,7 @@ export const EmailSignInForm = ({
         type="email"
         value={email}
         required
-        maxLength={254}
+        maxLength={EMAIL_MAX}
         autoComplete={withPassword ? 'username' : 'email'}
         spellCheck={false}
         {...(failure?.field === 'email' ? { error: failure.message } : {})}
@@ -195,7 +196,7 @@ export const EmailSignInForm = ({
           type="password"
           value={password}
           required
-          maxLength={256}
+          maxLength={PASSWORD_FIELD_MAX}
           autoComplete="current-password"
           spellCheck={false}
           // The sentence below is about the pair, not about this field alone.

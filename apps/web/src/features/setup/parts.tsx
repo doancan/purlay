@@ -2,6 +2,7 @@
  * The pieces every step is made of: its heading, the three-part failure, a value to copy, a note.
  * Layout and semantics only; the sentences are the step's.
  */
+import { SMTP_URL_MAX } from '@purlay/types';
 import type { ProbeResult } from '@purlay/types';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
@@ -228,7 +229,7 @@ export const MailServerField = ({
           value={value}
           autoComplete="off"
           spellCheck={false}
-          maxLength={2048}
+          maxLength={SMTP_URL_MAX}
           className="font-mono"
           invalid={invalid}
           {...(error === undefined ? {} : { error })}

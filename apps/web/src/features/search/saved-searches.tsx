@@ -1,7 +1,7 @@
 import { useFeedPorts } from '../channel/feed-ports';
 import { useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { messageId, type SearchCriteria } from '@purlay/types';
+import { messageId, SAVED_SEARCH_NAME_MAX, type SearchCriteria } from '@purlay/types';
 import { useApi } from '../../data/api-provider';
 import { keys } from '../../data/keys';
 import { useDescribeFailure } from '../../data/failure';
@@ -81,7 +81,7 @@ export const SavedSearches = ({
                 <TextField
                   disabled={busy}
                   label={t('search.saveName')}
-                  maxLength={80}
+                  maxLength={SAVED_SEARCH_NAME_MAX}
                   required
                   value={name}
                   onChange={(event) => {

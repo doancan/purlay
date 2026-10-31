@@ -70,7 +70,7 @@ const isMessageContent = (value: string): boolean => !INFLATES_IN_JSON.test(valu
  * left open reorders the text around it. The directional *marks* (U+200E/200F)
  * stay: a right-to-left name in a left-to-right sidebar legitimately needs one.
  */
-const FORBIDDEN_IN_NAME =
+export const FORBIDDEN_IN_NAME =
   /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 /** Free text that may span lines (a topic): what PostgreSQL stores, nothing more. */
