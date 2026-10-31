@@ -31,6 +31,7 @@ have it.
 - **Threads** — Keep a selected answer, decision note and reference on a thread, with versioned edits that preserve drafts on conflict (D-204)
 - **Questions** — Mark a question before anybody replies, assign a channel member, and filter unanswered or assigned questions with longest-waiting order (D-204)
 - **Search** — Filter by resolution, question, date, code, files and repository, find decision notes and selected answers, and save personal searches (D-204)
+- **Search** — Type operators with the words — `in:#channel`, `from:@person`, `has:code`, `is:open`, `repo:owner/name`, `on:`/`before:`/`after:` a day, `"exact words"` — in the search field, `/search` and the palette; they set the same filters as the controls, and one that names nobody is said and searched for as words (D-224)
 
 - **Native app** — The public client handshake advertises additive API capabilities, beginning with notification type filtering, without requiring a newer app or changing contract-version gates (D-186)
 
@@ -50,6 +51,7 @@ have it.
 
 ### Changed
 
+- **Search** — The date filters are whole days in the viewer's time zone, as the date operators are, rather than UTC days (D-224)
 - **Dependencies** — The toolchain and runtime libraries move to their newest patch releases; the three deprecations they flagged are removed (`dns` lookup order, the build's `rolldownOptions`, the account-linking option the library now makes unconditional); `knip` is held at 6.41 until it reads the entry points again
 - **Operations** — The object store is Garage v2.5.0, with its fixes for a reflected XSS on error pages and a panic on a malformed URL; a node cannot go back to an older version once upgraded, so take a backup before the first deploy that runs it (D-219)
 - **Operations** — `CONFIG.md` says how to set up SPF, DKIM and DMARC for the sign-in mail, and why bounces are not handled by the server
