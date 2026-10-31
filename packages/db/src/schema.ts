@@ -133,6 +133,7 @@ export interface Channels {
 }
 
 export interface GithubDeliveries {
+  body_digest: string | null;
   delivery_id: string;
   feed_id: string;
   received_at: Generated<Timestamp>;

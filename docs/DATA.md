@@ -73,7 +73,7 @@ is rotated out (§4).
 | `audit_log` | Who did what in a workspace, from which session | The workspace's trail of who changed what (D-116) | For the life of the workspace; kept, under the anonymised person, after erasure (D-139 §5) |
 | `github_integrations` | Who connected GitHub; the sealed token | A workspace's GitHub access (D-23) | Until disconnected |
 | `github_repo_feeds` | Who connected a feed; its repository | Repository feeds (D-134) | Until removed |
-| `github_deliveries` | None: a delivery's id | Telling a repeated webhook from a new one (D-134 §5) | `GITHUB_DELIVERIES_KEPT_DAYS` (`sweep:github-deliveries`) |
+| `github_deliveries` | None: a delivery's id and its body's digest (D-231) | Telling a repeated webhook from a new one (D-134 §5) | `GITHUB_DELIVERIES_KEPT_DAYS` (`sweep:github-deliveries`) |
 | `link_previews` | A GitHub item's title and state, and its author's login and avatar address, per workspace | Unfurls (D-23) | Until each expires (`sweep:link-previews`) |
 | `workspace_exports` | Who asked for an export; the archive in the object store | An owner's export (D-140) | The archive until it is downloaded or `EXPORT_KEPT_HOURS` pass (`sweep:exports`); the row as the record that it was made |
 | `object_deletions` | None: storage keys waiting to be deleted | Files whose rows are gone, until the store lets them go (D-141) | Until the store deletes the object |

@@ -1715,8 +1715,19 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'webhook-redelivery-posts-again',
     why: 'the same delivery twice at once is a constraint’s 500 or a second message, not a duplicate',
     file: 'apps/api/src/modules/integrations/webhook.ts',
-    find: "      .onConflict((conflict) => conflict.columns(['feed_id', 'delivery_id']).doNothing())\n",
+    find: '      .onConflict((conflict) => conflict.doNothing())\n',
     replace: '',
+    tests: [
+      'apps/api/src/modules/integrations/webhook.integration.test.ts',
+      'apps/api/src/modules/integrations/webhook.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'webhook-replayed-body-posts-again',
+    why: 'anybody who saw one signed delivery sends its body again under an id made up, and it posts again',
+    file: 'apps/api/src/modules/integrations/webhook.ts',
+    find: '        body_digest: bodyDigest,\n',
+    replace: '        body_digest: null,\n',
     tests: [
       'apps/api/src/modules/integrations/webhook.integration.test.ts',
       'apps/api/src/modules/integrations/webhook.concurrency.integration.test.ts',

@@ -4,15 +4,16 @@
  * Nobody is signed in: the feed's secret is the only credential. The feed is found by the id in the
  * address; the signature over the bytes as sent is checked in constant time before a byte of them is
  * believed; only then is the feed's own bucket charged — so a stranger who knows an address spends
- * nothing of it — and the body read. A delivery is posted once: its id is recorded in the transaction
- * that posts it, and the same id again posts nothing. The message is nobody's and is counted unread
+ * nothing of it — and the body read. A delivery is posted once: its id and its body's digest are
+ * recorded in the transaction that posts it, and the same id again — or the same signed body under an id
+ * made up, since the id is not signed (D-231 §1) — posts nothing. The message is nobody's and is counted unread
  * for everybody (D-134 §6–7); it arrives by the path a person's does (`publishArrival`).
  *
  * What fails after the signature held is said where the feed was set up — the reason and its time —
  * and answered so GitHub shows the delivery failed. Every delivery is one line of the log: feed,
  * delivery, event and outcome, never the body.
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
 import {
@@ -265,11 +266,18 @@ export const receiveDelivery = async (
     return outcome;
   }
 
+  const bodyDigest = createHash('sha256').update(delivery.body).digest('hex');
   const posted = await atomicallyOn(database)(async (transaction) => {
+    // Either key taken is the same delivery: its id again, or its body under another id.
     const recorded = await transaction
       .insertInto('github_deliveries')
-      .values({ feed_id: feed.id, delivery_id: delivery.deliveryId ?? '', received_at: now })
-      .onConflict((conflict) => conflict.columns(['feed_id', 'delivery_id']).doNothing())
+      .values({
+        feed_id: feed.id,
+        delivery_id: delivery.deliveryId ?? '',
+        body_digest: bodyDigest,
+        received_at: now,
+      })
+      .onConflict((conflict) => conflict.doNothing())
       .returning('delivery_id')
       .executeTakeFirst();
     if (recorded === undefined) return null;

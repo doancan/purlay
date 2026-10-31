@@ -4,6 +4,9 @@
  * `500`. The delivery's id is recorded in the transaction that posts it, so the second waits on the
  * first's row and then finds it.
  *
+ * And one signed body under two delivery ids at once — a replay racing what it copies (D-231 §1): one
+ * message, the other a duplicate.
+ *
  * Deterministic: the first is held open, after its write and before its commit, until the second is
  * seen waiting on a lock.
  */
@@ -23,7 +26,7 @@ import type { EventBus } from '../../platform/events';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { createFeed } from './feeds';
-import { receiveDelivery } from './webhook';
+import { receiveDelivery, type Delivery } from './webhook';
 
 const clock = fixedClock(new Date('2026-10-14T12:00:00.000Z'));
 const cipher = credentialCipher(Buffer.alloc(32, 4).toString('base64'));
@@ -85,7 +88,7 @@ describe('integration: one delivery twice at once', () => {
       deliveryId: 'the-same-one',
       body: raw,
     };
-    const run = async (database: Executor): Promise<string> =>
+    const run = async (database: Executor, sent: Delivery = delivery): Promise<string> =>
       await receiveDelivery(
         {
           database,
@@ -95,7 +98,7 @@ describe('integration: one delivery twice at once', () => {
           log: aRecordingLogger().log,
           mayDeliver: () => Promise.resolve(true),
         },
-        delivery,
+        sent,
       ).then(
         (outcome) => outcome,
         (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
@@ -153,11 +156,25 @@ describe('integration: one delivery twice at once', () => {
       ),
     ]);
     expect([...outcomes].sort()).toEqual(['duplicate', 'posted']);
+
+    // And one signed body under two ids at once — the second a replay with an id made up (D-231 §1).
+    const replayed = new TextEncoder().encode(
+      new TextDecoder().decode(raw).replace('"Once"', '"Replayed"'),
+    );
+    const signed = {
+      ...delivery,
+      signature: `sha256=${createHmac('sha256', made.secret).update(replayed).digest('hex')}`,
+      body: replayed,
+    };
+    const replays = await Promise.all(
+      ['genuine', 'made-up'].map(async (deliveryId) => await run(db, { ...signed, deliveryId })),
+    );
+    expect([...replays].sort()).toEqual(['duplicate', 'posted']);
     const events = await db
       .selectFrom('messages')
       .select('id')
       .where('channel_id', '=', room.channelId)
       .execute();
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
   });
 });
