@@ -126,6 +126,16 @@ describe('integration: the inbox', () => {
     });
   });
 
+  test('told at the server’s clock: a mention is as old as the message it is about', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      await mentions(db, room, ['now']);
+      const [told] = (await pageOf(db, room, member(room, 'bob').userId)).data;
+      expect(told?.message.createdAt).toBe(NOW.toISOString());
+      expect(told?.createdAt).toBe(NOW.toISOString());
+    });
+  });
+
   test('only what is unread, when asked', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

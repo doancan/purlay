@@ -239,6 +239,27 @@ describe('integration: resolving', () => {
     });
   });
 
+  test('the author is told when it was closed, not when the question was asked', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const { root } = await aThread(db, room, 1);
+      const closedAt = at(600);
+      await setResolved(
+        { atomically: atomicallyOn(db), clock: fixedClock(closedAt), bus: recordingBus().bus },
+        idOf(room, 'bob'),
+        root,
+        true,
+      );
+      const told = await db
+        .selectFrom('notifications')
+        .select('created_at')
+        .where('user_id', '=', idOf(room, 'alice'))
+        .where('type', '=', 'thread_resolved')
+        .executeTakeFirstOrThrow();
+      expect(new Date(told.created_at).toISOString()).toBe(closedAt.toISOString());
+    });
+  });
+
   test('closing your own thread tells nobody', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
