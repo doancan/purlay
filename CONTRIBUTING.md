@@ -518,10 +518,11 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 - **Releasing and deploying** are D-185, not this section: a merge to `main` deploys to the server by itself,
   and `bun run release -- <patch|minor|major>` opens the pull request whose merge is a release. There is no
   `develop` branch.
-- **The browser jobs run when a screen can have moved.** Four jobs are most of a run; on a pull
+- **The browser jobs run when a screen can have moved.** Eight jobs are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or
-  `ci.yml` (`bun run ci:changes`), and on main always. Each runs the suite without the measuring
-  tests, then those alone on one worker, and measures a budget regression again before it fails (D-227).
+  `ci.yml` (`bun run ci:changes`), and on main always. Each project is two of them side by side: the
+  suite without the measuring tests, and those alone on one worker on a runner of their own, which
+  measures a budget regression again before it fails (D-227).
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
   no service and `schema` runs every test once, with coverage; `verify` needs both and the browser jobs,
   runs whatever they did, and passes only when each succeeded — a failure, a cancellation, a skip or a

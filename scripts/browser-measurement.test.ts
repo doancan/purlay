@@ -55,32 +55,54 @@ describe('PURLAY_E2E_PERFORMANCE', () => {
 
 interface Step {
   readonly name?: string;
+  readonly if?: string;
   readonly run?: string;
+  readonly uses?: string;
   readonly env?: Record<string, string>;
 }
 const workflow = Bun.YAML.parse(readFileSync('.github/workflows/ci.yml', 'utf8')) as {
-  jobs: Record<string, { steps: Step[] }>;
+  jobs: Record<
+    string,
+    { steps: Step[]; strategy?: { matrix?: Record<string, readonly string[]> } }
+  >;
 };
 
 describe('the browser job', () => {
-  const steps = workflow.jobs['browser']?.steps ?? [];
+  const job = workflow.jobs['browser'];
+  const steps = job?.steps ?? [];
   const at = (found: (step: Step) => boolean): number => steps.findIndex(found);
   const suite = at((step) => step.run === 'bun run test:e2e');
   const alone = at((step) => step.run === 'bun run test:e2e -- --workers=1');
   const budget = at((step) => step.run?.startsWith('bun run budget:browser') === true);
+  // The baseline read, the judgement and the baseline kept: what only the measuring part may do.
+  const budgetSteps = steps.filter((step) =>
+    [
+      'the last browser measurement on main',
+      "the browser budgets hold against main's last measurement",
+      "keep this measurement as main's baseline",
+    ].includes(step.name ?? ''),
+  );
 
-  test('runs the suite without the measurements, then the measurements alone on one worker', () => {
+  test('is two parts a project, side by side: the suite, and the measurements on a runner of their own', () => {
+    expect(job?.strategy?.matrix?.['part']).toEqual(['suite', 'measurements']);
+  });
+
+  test('runs the suite without the measurements, and the measurements alone on one worker', () => {
     expect(suite).toBeGreaterThan(-1);
+    expect(steps[suite]?.if).toBe("matrix.part == 'suite'");
     expect(steps[suite]?.env?.['PURLAY_E2E_PERFORMANCE']).toBe('skip');
-    expect(alone).toBeGreaterThan(suite);
+    expect(alone).toBeGreaterThan(-1);
+    expect(steps[alone]?.if).toBe("matrix.part == 'measurements'");
     expect(steps[alone]?.env?.['PURLAY_E2E_PERFORMANCE']).toBe('only');
     expect(steps[alone]?.env?.['PURLAY_E2E_PROJECT']).toBe(
       steps[suite]?.env?.['PURLAY_E2E_PROJECT'],
     );
   });
 
-  test('judges what was measured alone, and measures a regression again', () => {
+  test('judges what was measured alone, only where it was measured, and measures a regression again', () => {
     expect(budget).toBeGreaterThan(alone);
     expect(steps[budget]?.run).toContain('--remeasure');
+    expect(budgetSteps.length).toBe(3);
+    for (const step of budgetSteps) expect(step.if).toStartWith("matrix.part == 'measurements'");
   });
 });

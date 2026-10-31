@@ -10820,7 +10820,8 @@ client's search. Two causes, two fixes:
   write what `budget:browser` judges — ran inside the fully parallel suite, so another test's worker competed for
   the runner's two cores while they measured. `PURLAY_E2E_PERFORMANCE` (`playwright.config.ts`) now takes `skip`
   (every other file) or `only` (those two); unset, everything runs as before, and any other value refuses to run.
-  Each browser job runs the suite with `skip`, then the measurements with `only` on one worker, then the budget.
+  Each project is two jobs side by side (`matrix.part`): the suite with `skip`, and on a runner of its own the
+  measurements with `only` on one worker, then the budget. Only the measuring part reads, judges and keeps it.
 - **A regression must happen twice.** A real slowdown shows again on an immediate re-measurement; a runner's bad
   minute does not. `budget:browser -- --remeasure` (CI passes it) measures a regression again — the measuring
   tests alone, one worker — and fails only if that regresses too; measuring again that exits non-zero or measures
@@ -10833,17 +10834,18 @@ client's search. Two causes, two fixes:
   history and the lines the tests hold on a developer's machine are unchanged. A regression that repeats fails as
   before; nothing is adopted that did not pass. This is not D-49's "retry until a pass": there is one more
   measurement, never a loop, and both are printed.
-- **The cost is minutes, serially.** The measurements no longer overlap the suite: alone, on one worker, a wide
-  project's took 3.6 minutes on a laptop (the two-thousand-message channel is 3.1 of them; the narrow projects do
-  not run it), and a regression spends that again. The browser job's 20-minute ceiling stays: a job that ran 6.5
-  minutes on main has room for both.
+- **The cost is runner minutes, not the run's length.** The measurements run beside the suite on a runner of their
+  own: alone, on one worker, a wide project's took 3.6 minutes on a laptop (the two-thousand-message channel is 3.1
+  of them; the narrow projects do not run it), under the suite's own length, and the suite no longer carries them.
+  Four more runners a run, and a regression spends its part's minutes again; the 20-minute ceiling has room for both.
 
 **Considered and rejected.** *Widening the factor* — it would let a real 2× slowdown through to stop noise that a
 quieter measurement removes at its source. *More samples per run only* — the cold load is already a median of five
 and the latency a median of three processes; a bad minute on the runner moves every sample in it together, and
 more of them cost every run, where measuring again costs only a run that regressed. *Dropping the gate, or taking
 the browser jobs back out of `verify`* — D-49 and D-226: a budget nobody enforces is a hope. *Measuring every run
-twice* — it doubles the minutes of every run to settle the few that regressed. *Measuring again until a pass* — D-49's
+twice* — it doubles the minutes of every run to settle the few that regressed. *Measuring after the suite, in the same job* — quiet,
+but it lengthened every wide project's job by the measurements' minutes. *Measuring again until a pass* — D-49's
 re-run habit, automated: with enough tries noise passes anything. One more measurement, after a regression only, is
 the bound: a slowdown real enough to repeat still fails.
 
