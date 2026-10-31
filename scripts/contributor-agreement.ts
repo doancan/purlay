@@ -2,16 +2,13 @@
  * Whether a pull request may be merged under the contributor licence agreement (#122, D-145).
  *
  * The maintainers — the owners `CODEOWNERS` names for the whole repository, who hold the copyright
- * `NOTICE` names — and Dependabot need no signature. Anybody else has signed: their GitHub login is in
+ * `NOTICE` names — need no signature. Anybody else has signed: their GitHub login is in
  * `.github/cla-signatures.json`, which they add to themselves, in their first pull request or one of its
  * own. Nobody signs for anybody else: an entry the pull request adds must be its author's own.
  */
 
 /** The agreement's version a signature is for: a later version is signed again. */
 export const CLA_VERSION = '1.0';
-
-/** Bots whose changes are dependency versions, with no work of authorship in them. */
-const BOTS: ReadonlySet<string> = new Set(['app/dependabot']);
 
 export interface Signature {
   readonly github: string;
@@ -64,7 +61,7 @@ export const maintainersIn = (codeowners: string): readonly string[] => {
 };
 
 export type Verdict =
-  | { readonly allowed: true; readonly why: 'maintainer' | 'bot' | 'signed' }
+  | { readonly allowed: true; readonly why: 'maintainer' | 'signed' }
   | { readonly allowed: false; readonly why: string };
 
 export const claVerdict = (input: {
@@ -93,7 +90,6 @@ export const claVerdict = (input: {
   if (input.maintainers.some((login) => login.toLowerCase() === author)) {
     return { allowed: true, why: 'maintainer' };
   }
-  if (BOTS.has(author)) return { allowed: true, why: 'bot' };
   const own = input.after.find((signature) => signature.github.toLowerCase() === author);
   if (own === undefined) {
     return {

@@ -497,10 +497,8 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 
 - **Branches:** `feat/`, `fix/`, `chore/`, `refactor/`, `docs/` — the same words as the
   commit type below, so a branch and its commits do not use two vocabularies for one idea.
-  Checked by `bun run check:branch`, which runs in `verify` and in the pipeline.
-  `dependabot/` is the one other prefix: the bot names its own branches and cannot be told
-  otherwise, and its commits carry `chore`. It opens no new ones (D-219); the prefix stays while
-  one it opened is still open, so that one can still merge.
+  Checked by `bun run check:branch`, which runs in `verify` and in the pipeline. There is no
+  other prefix: no bot opens pull requests here (D-219).
 - **Commits:** Conventional Commits — `feat(messages): add keyset pagination`
 - **No AI attribution in commit messages.** No assistant name, no tool name, no
   `Co-Authored-By` trailer for one. A commit records what changed, not what typed it.

@@ -8,8 +8,7 @@
  * convention:
  *
  * 1. **It names its task.** The body says `Closes #n` — or `Part of #n` for a
- *    task that takes several pull requests. Dependabot names none, and is the one
- *    author excused: its changes are the manifests, which every task may touch.
+ *    task that takes several pull requests. No author is excused (D-219).
  * 2. **It fits the budget.** At most `PRODUCTION_LINE_BUDGET` changed lines of
  *    production code. Tests, documents and generated files are not counted —
  *    counting tests would charge a change for being well tested. Over budget
@@ -124,14 +123,11 @@ export const unansweredFailureModes = (body: string): string[] => {
 const touchesTheProduct = (file: ChangedFile): boolean =>
   /^(apps|packages)\//.test(file.path) && !unmetered(file.path);
 
-const DEPENDABOT = new Set(['dependabot[bot]', 'app/dependabot']);
-
 /** Every rule the pull request breaks, in words a person can act on; empty when it passes. */
 export const judge = (
   pull: PullRequest,
   issueLabels: ReadonlyMap<number, readonly string[]>,
 ): string[] => {
-  if (DEPENDABOT.has(pull.author)) return [];
   const problems: string[] = [];
 
   const issues = linkedIssues(pull.body);
