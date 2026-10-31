@@ -69,6 +69,8 @@ const BAD_SECRET = 'not-the-secret-4417';
 
 const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
+// Every test's database, dropped after its connections have closed: up to 31 of them, which fitted the
+// five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   for (const stop of stops) await stop();
   await Promise.all(
@@ -77,7 +79,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, 60_000);
 
 /** Every line the server writes, raw, as the operator's terminal would show it. */
 const recording = (): { log: Logger; lines: string[] } => {
