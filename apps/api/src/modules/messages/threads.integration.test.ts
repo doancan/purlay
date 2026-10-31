@@ -9,6 +9,7 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -372,7 +373,7 @@ describe('integration: two people resolving at once', () => {
   let cloned: ClonedDatabase;
   beforeAll(async () => {
     cloned = await cloneIntegrationDatabase();
-  });
+  }, CLONE_HOOK_MS);
   afterAll(async () => {
     await cloned.drop();
   });

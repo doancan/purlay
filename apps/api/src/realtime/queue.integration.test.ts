@@ -6,7 +6,7 @@
  * hoping the machine is slow enough. (A flood of pings did not fill it on CI.)
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { aSignedInUser } from '../testing/signed-in';
@@ -40,7 +40,7 @@ beforeAll(async () => {
     }),
   );
   server = `http://localhost:${String(app.listen(0))}`;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);

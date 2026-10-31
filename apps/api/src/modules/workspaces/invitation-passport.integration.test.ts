@@ -6,7 +6,7 @@
  * On a cloned database, because the last two are races between real connections (D-46, D-77).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock, HOUR_MS } from '../../platform/clock';
 import { atomicallyOn } from '../../platform/transactions';
@@ -25,7 +25,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

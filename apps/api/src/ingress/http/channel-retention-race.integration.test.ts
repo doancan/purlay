@@ -13,7 +13,7 @@
  * left to scheduling.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { DAY_MS, fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -45,7 +45,7 @@ beforeAll(async () => {
     create function refuse_marked() returns trigger language plpgsql as
     $$ begin if old.content = 'refused' then raise exception 'the disk said no'; end if; return old; end $$
   `.execute(cloned.db);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

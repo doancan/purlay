@@ -13,7 +13,7 @@
  * pass the check before either commits.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { createApp } from './app';
 import { aSignedInUser } from '../../testing/signed-in';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -28,7 +28,7 @@ beforeAll(async () => {
     create function hold_window() returns trigger language plpgsql as
     $$ begin perform pg_sleep(0.3); return new; end $$
   `.execute(cloned.db);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

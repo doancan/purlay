@@ -13,7 +13,7 @@
  * Triggers that sleep or wait on a lock hold the window open, so the outcome is not left to scheduling.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { DAY_MS, fixedClock } from '../../platform/clock';
 import { aRecordingLogger, NOW, testDependencies } from '../../testing/doubles';
@@ -42,7 +42,7 @@ beforeAll(async () => {
     create function hold_delete() returns trigger language plpgsql as
     $$ begin perform pg_sleep(0.3); return old; end $$
   `.execute(cloned.db);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

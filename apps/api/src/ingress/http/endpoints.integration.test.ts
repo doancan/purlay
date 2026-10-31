@@ -15,7 +15,12 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import type { TSchema } from '@sinclair/typebox';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { ENDPOINTS, messageId, type EndpointSpec } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { fixedClock } from '../../platform/clock';
@@ -43,7 +48,7 @@ beforeAll(async () => {
       config: testConfig({ APP_URL: origin }),
     }),
   );
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

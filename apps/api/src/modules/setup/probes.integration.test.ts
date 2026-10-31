@@ -10,6 +10,7 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { systemClock } from '../../platform/clock';
 import { createLogger } from '../../platform/logging';
@@ -61,7 +62,7 @@ beforeAll(async () => {
   if (code === undefined) throw new Error('no setup code was written');
   const { claimToken } = await claimSetup(cloned.db, code, 'probe-tests', systemClock);
   AUTHORITY = await requireSetupClaim(cloned.db, claimToken, systemClock);
-});
+}, CLONE_HOOK_MS);
 
 /** Every reason some test below met, checked whole at the end: none is in the set for nothing. */
 const met = new Set<ProbeReason>();

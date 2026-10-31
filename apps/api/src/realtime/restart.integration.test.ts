@@ -8,7 +8,12 @@
  * must be in history, and in the replay a reconnecting client asks for.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, createDatabase, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  createDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { CLOSE_CODES, messageId, type ServerFrame } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
 import { aSignedInUser } from '../testing/signed-in';
@@ -23,7 +28,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

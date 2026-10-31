@@ -13,6 +13,7 @@ import {
   sql,
   type ClonedDatabase,
   type Transaction,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { INCIDENT_RESPONDERS_MAX, messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
@@ -28,7 +29,7 @@ const clock = fixedClock(NOW);
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();

@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId, type WorkspaceExport } from '@purlay/types';
 import { HOUR_MS, fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -37,7 +37,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

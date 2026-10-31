@@ -9,7 +9,12 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createConnection } from 'node:net';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import { CLOSE_CODES } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { testConfig, testDependencies } from '../testing/doubles';
@@ -41,7 +46,7 @@ beforeAll(async () => {
   );
   port = app.listen(0);
   cookie = (await aSignedInUser(db, clock, 'native')).cookie;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);

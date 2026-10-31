@@ -6,7 +6,7 @@
  * cleared at shutdown.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { CLOSE_CODES, ServerFrame as ServerFrameSchema, type ServerFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { createApp, type HttpApplication } from '../ingress/http/app';
@@ -75,7 +75,7 @@ beforeAll(async () => {
     }),
   );
   port = node.listen(0);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await node.stop(true);

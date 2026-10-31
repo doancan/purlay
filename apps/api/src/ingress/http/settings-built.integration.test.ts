@@ -8,7 +8,7 @@
  * this machine that records what it is told.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { createApp } from './app';
 import { systemClock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
@@ -32,7 +32,7 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

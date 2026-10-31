@@ -9,7 +9,7 @@
  * - Two new addresses wanting one name at once both sign in, under two names (D-138 §5).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { aRecordingLogger, aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
 import { installShutdown } from '../../lifecycle';
@@ -28,7 +28,7 @@ beforeAll(async () => {
     create function hold_long() returns trigger language plpgsql as
     $$ begin perform pg_sleep(1); return new; end $$
   `.execute(cloned.db);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

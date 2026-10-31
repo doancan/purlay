@@ -13,6 +13,7 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
 } from '@purlay/db';
 import { createApp } from './app';
 import {
@@ -40,7 +41,7 @@ import { aUserRow } from '../../testing/users';
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

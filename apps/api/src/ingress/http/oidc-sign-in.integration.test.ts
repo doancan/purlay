@@ -10,7 +10,13 @@
  * it. The sessions, cookies and state are the library's, as GitHub's are: what is tested is that they fit.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+} from '@purlay/db';
 import type { SignInFailure } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { SESSION_COOKIE, STATE_COOKIE } from '../../platform/cookies';
@@ -60,7 +66,7 @@ let db: Executor;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

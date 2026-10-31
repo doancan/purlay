@@ -14,7 +14,7 @@
  * trigger is what stops the write and that the same request commits without it.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { createApp } from './app';
 import { aSignedInUser } from '../../testing/signed-in';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -36,7 +36,7 @@ beforeAll(async () => {
     create function refuse_insert() returns trigger language plpgsql as
     $$ begin raise exception 'refused by the test: %', tg_table_name; end $$
   `.execute(cloned.db);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();

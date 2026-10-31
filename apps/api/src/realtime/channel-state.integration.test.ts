@@ -8,7 +8,7 @@
  * their own topic and must not be audible to the room.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { ServerFrame as ServerFrameSchema } from '@purlay/types';
@@ -35,7 +35,7 @@ beforeAll(async () => {
   nodeA = createApp(testDependencies({ database: cloned.db, clock, config, backplane }));
   nodeB = createApp(testDependencies({ database: cloned.db, clock, config, backplane }));
   portB = nodeB.listen(0);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await nodeB.stop(true);
