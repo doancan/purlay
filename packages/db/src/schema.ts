@@ -423,6 +423,16 @@ export interface ThreadFollows {
   workspace_id: string;
 }
 
+export interface TwoFactors {
+  backup_codes: string;
+  failed_verification_count: Generated<number>;
+  id: Generated<string>;
+  locked_until: Timestamp | null;
+  secret: string;
+  user_id: string;
+  verified: Generated<boolean>;
+}
+
 export interface Users {
   avatar_url: string | null;
   created_at: Generated<Timestamp>;
@@ -444,6 +454,7 @@ export interface Users {
   suspended_at: Timestamp | null;
   time_zone: string | null;
   title: string | null;
+  two_factor_enabled: Generated<boolean>;
   updated_at: Generated<Timestamp>;
   username: string;
 }
@@ -540,6 +551,7 @@ export interface DB {
   sessions: Sessions;
   setup_state: SetupState;
   thread_follows: ThreadFollows;
+  two_factors: TwoFactors;
   users: Users;
   verifications: Verifications;
   workspace_exports: WorkspaceExports;
