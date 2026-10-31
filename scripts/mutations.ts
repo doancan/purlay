@@ -11020,4 +11020,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  const quiet = useDeepWork().until !== null;\n',
     tests: ['apps/web/src/features/alerts/background-alerts.test.tsx'],
   },
+  {
+    id: 'github-name-overwritten-by-hand',
+    why: 'a name GitHub writes back at every sign-in is changed, and silently lost at the next (D-235)',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '  if (name !== undefined && name !== before.display_name && isNameGitHubs(before)) {\n',
+    replace: '  if (false) {\n',
+    tests: ['apps/api/src/ingress/http/profile.integration.test.ts'],
+  },
 ];

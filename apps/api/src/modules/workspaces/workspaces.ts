@@ -33,7 +33,7 @@ import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import { createChannel } from '../channels/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
-import { asProfile, PROFILE_COLUMNS } from '../users/profile';
+import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
@@ -179,6 +179,8 @@ export const meOf = async (
       'time_zone',
       'status_text',
       'is_server_admin',
+      'github_id',
+      'github_connected_at',
     ])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
@@ -196,6 +198,7 @@ export const meOf = async (
     memberships: [...(await membershipsOf(executor, clock, userId))],
     mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
     isServerAdmin: user.is_server_admin,
+    nameFromGitHub: isNameGitHubs(user),
   };
 };
 
