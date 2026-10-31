@@ -102,9 +102,9 @@ failure of the tests that use it.
 | `bun run db:up:redis` | Start Redis alone, for the tests of the cloud's shared bus, limiters and presence (D-201): put `REDIS_URL=redis://localhost:6379` in `.env.test`. Those files, `*.redis.integration.test.ts`, are the only tests that read it; without it `test:all` leaves them out behind a banner, and in CI it refuses. Nothing the application does without `REDIS_URL` reaches it |
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
-| `bun run budget:browser -- --project <name>` | Cold load, keystroke to paint and the channel switch as the browser tests measured them for one project, each as its run's median (`PRD.md` §5, D-49), judged as `budget:latency` judges: `-- --keep <file>` fails on a jump past the file's numbers or on a number it has that this run did not measure, and keeps only a run that passed. A run that measured nothing is refused. Runs in CI's browser jobs, after the tests; on a developer's machine the tests hold the lines themselves |
+| `bun run budget:browser -- --project <name>` | Cold load, keystroke to paint and the channel switch as the browser tests measured them for one project, each as its run's median (`PRD.md` §5, D-49), judged as `budget:latency` judges: `-- --keep <file>` fails on a jump past the file's numbers or on a number it has that this run did not measure, and keeps only a run that passed. A run that measured nothing is refused. `-- --remeasure` measures a regression again, the measuring tests alone on one worker, and fails only if it repeats; measuring again that fails is a failure (D-227). Runs in CI's browser jobs, after the measurements; on a developer's machine the tests hold the lines themselves |
 | `bun run ci:changes` | Whether a pull request can move what the browser tests see — the client, the API, a package, the dependencies or `ci.yml` — and so whether CI runs its four browser jobs; on main they always run. CI only |
-| `bun run budget:latency` | The median of three independent API processes' ACK and fan-out p95 measurements, sixty messages each on two real sockets (`PRD.md` §5, D-49); all three trials reported. `-- --record <file>` keeps the summary and raw trials even on regression; `-- --baseline <file>` compares; `-- --keep <file>` compares and replaces the baseline only on success. CI retains the current trials as a seven-day artifact. Legacy single-run baselines remain comparable. Runs in `verify` and in CI's database job |
+| `bun run budget:latency` | The median of three independent API processes' ACK and fan-out p95 measurements, sixty messages each on two real sockets (`PRD.md` §5, D-49); all three trials reported. `-- --record <file>` keeps the summary and raw trials even on regression; `-- --baseline <file>` compares; `-- --keep <file>` compares and replaces the baseline only on success. A regression is measured again, three more trials, once, and fails only if it repeats; `--record` keeps the run judged last (D-227). CI retains the current trials as a seven-day artifact. Legacy single-run baselines remain comparable. Runs in `verify` and in CI's database job |
 | `bun run measure:frames` | The synthetic measurement that closed O-4 (D-198): what a page sends — typing, sending, a paste, switching channels, a resubscription, a full outbox — through the limiter the server runs, as the peak frames a second, the burst, and what was refused |
 | `bun run report:frames <log>…` | The check on that decision in use: over a stretch of the API's log (files, or standard input), each socket's peak frames in a second as the p99 and the maximum, beside the budget, and every refusal — frames, sends, HTTP `429` — which for legitimate use must be none (#61) |
 | `bun run push:keys` | A Web Push key pair for `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (`docs/CONFIG.md`, D-126) |
@@ -227,7 +227,8 @@ What belongs here is the discipline around them:
   screenshots, which you then look at before committing (they depend on the machine's fonts).
   `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, not
   in CI, with screenshots ignored and each engine's known limits skipped by name
-  (`docs/spikes/cross-browser.md`).
+  (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
+  a measurement (`performance.e2e.ts`, `feed-scale.e2e.ts`), and `only` runs those alone, as CI does (D-227).
   `bun run budget:web` fails above 400 KB of initial gzipped JavaScript and names what grew (D-196): a backstop against an accident, never a reason to cut or defer a feature.
 
 ---
@@ -519,7 +520,8 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   `develop` branch.
 - **The browser jobs run when a screen can have moved.** Four jobs are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or
-  `ci.yml` (`bun run ci:changes`), and on main always.
+  `ci.yml` (`bun run ci:changes`), and on main always. Each runs the suite without the measuring
+  tests, then those alone on one worker, and measures a budget regression again before it fails (D-227).
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
   no service and `schema` runs every test once, with coverage; `verify` needs both and the browser jobs,
   runs whatever they did, and passes only when each succeeded — a failure, a cancellation, a skip or a
