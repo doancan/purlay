@@ -748,6 +748,10 @@ stored representation. (D-36)
   pure parser (`parse-diff.ts`) into files, hunks and numbered lines, unified or split by the
   reader's choice, unified alone on a narrow window; counted, copied raw and clamped as a code block
   is. No highlighting inside it: the colour is the change.
+- A code reference in prose or inline code — a path with a source extension and an optional line, or a
+  commit's SHA — is linked into the channel's repository (`Channel.codeRepository`, its one GitHub feed's)
+  as it is drawn, by `codeLinksIn` in `@purlay/markdown` (D-223). Nothing is stored or fetched: the
+  address is built from the checked repository and the encoded path, and a fenced block is never linked.
 - A message nobody wrote — a repository's event (D-134 §6) — skips this pipeline: it is not parsed,
   so nothing in a title names anybody, and it is drawn from its `githubEvent`
   (`content/github-event.tsx`) as a sentence in the reader's language, every link built from the
