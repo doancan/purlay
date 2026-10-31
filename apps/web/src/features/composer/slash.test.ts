@@ -50,6 +50,10 @@ describe('what a command writes', () => {
     expect(meMessage('')).toBeNull();
   });
 
+  test('/me ending in a backslash still ends its italics', () => {
+    expect(meMessage('looks at C:\\')).toBe('_looks at C:\\\\_');
+  });
+
   test('/shrug keeps its arm: the backslash and underscores are not markdown', () => {
     expect(shrugMessage('')).toBe('¯\\\\\\_(ツ)\\_/¯');
     expect(shrugMessage('oh well')).toBe('oh well ¯\\\\\\_(ツ)\\_/¯');
