@@ -488,6 +488,7 @@ export const en = {
   'channelRetention.keeps': 'This channel keeps its messages and files for {kept}.',
   'channelRetention.keepsEverything': 'This channel keeps everything.',
   'channelRetention.label': 'Keep this channel’s history',
+  'channelRetention.save': 'Save history setting',
   'channelRetention.followsWorkspace': 'As long as the workspace',
   'channelRetention.warning':
     'The next night, messages and files in this channel older than {kept} will be deleted for good. This cannot be undone, and the audit trail will say you chose it.',

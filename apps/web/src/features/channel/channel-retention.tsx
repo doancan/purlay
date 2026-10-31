@@ -199,7 +199,7 @@ export const ChannelRetentionSection = ({
             disabled={next === keepsAtLeast}
           >
             {shortenTo === null
-              ? t('retention.save')
+              ? t('channelRetention.save')
               : t('channelRetention.shorten', { kept: named(shortenTo) })}
           </Button>
         </div>

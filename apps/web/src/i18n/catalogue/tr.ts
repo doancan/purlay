@@ -486,6 +486,7 @@ export const tr = {
   'channelRetention.keeps': 'Bu kanal mesajlarını ve dosyalarını {kept} saklıyor.',
   'channelRetention.keepsEverything': 'Bu kanal her şeyi saklıyor.',
   'channelRetention.label': 'Bu kanalın geçmişini sakla',
+  'channelRetention.save': 'Geçmiş ayarını kaydet',
   'channelRetention.followsWorkspace': 'Çalışma alanı kadar',
   'channelRetention.warning':
     'Bir sonraki gece, bu kanalda {kept} süresinden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterecek.',
