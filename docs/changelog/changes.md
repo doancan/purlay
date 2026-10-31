@@ -48,6 +48,7 @@ have it.
 ### Changed
 
 - **Dependencies** — The toolchain and runtime libraries move to their newest patch releases; the three deprecations they flagged are removed (`dns` lookup order, the build's `rolldownOptions`, the account-linking option the library now makes unconditional); `knip` is held at 6.41 until it reads the entry points again
+- **Operations** — The object store is Garage v2.5.0, with its fixes for a reflected XSS on error pages and a panic on a malformed URL; a node cannot go back to an older version once upgraded, so take a backup before the first deploy that runs it (D-219)
 - **Operations** — `CONFIG.md` says how to set up SPF, DKIM and DMARC for the sign-in mail, and why bounces are not handled by the server
 - **Performance** — Going back to a channel after reading far back through its history opens it as fast as any other: a channel that is left keeps its newest messages and reads the older ones again as they are scrolled to, instead of drawing them all at once (2.1 s for 2,000 messages before); the feed is not virtualized (D-199)
 - **Process** — Phase 1 ends on what is built and verified end to end, not on a team staying off another product for thirty days; the cloud no longer waits on that count (D-197)
