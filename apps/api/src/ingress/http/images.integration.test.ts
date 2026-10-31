@@ -155,7 +155,10 @@ describe('integration: an external image through the API', () => {
           )
           .then((response) => response.status);
       const held = Array.from({ length: 4 + FETCHES_WAITING }, (_, n) => ask(n));
-      for (let turn = 0; turn < 20 && releases.length < 4; turn += 1) await Bun.sleep(5);
+      // Until the four fetches have started, not for a hundred milliseconds: that was enough on an idle
+      // machine and not beside another test file (D-228).
+      const waitingSince = Date.now();
+      while (releases.length < 4 && Date.now() - waitingSince < 5_000) await Bun.sleep(5);
       expect(releases).toHaveLength(4);
       expect(await ask(999)).toBe(404);
       // Each held fetch let go, and each waiter after it, until every one has answered.
