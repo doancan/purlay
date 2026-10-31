@@ -2,6 +2,12 @@
  * `purge:retention` (D-27 §1, D-139 §1–§3): in each workspace that keeps its history for a number of
  * days, the messages older than that go — hard-deleted, as D-27 says, one by one.
  *
+ * - **Each message by its own channel's window**, which is the longer of the workspace's and the
+ *   channel's (D-225): a channel that keeps everything loses nothing, and one with a floor of its own
+ *   keeps what is inside it. Computed in the batch's own read from the rows as they are, never from a
+ *   stored "effective" number, so a workspace window lengthened past a channel's floor wins, and a
+ *   setting changed while a night runs is the rule from the next batch on. A workspace that keeps
+ *   everything is not read at all: nothing is longer than forever.
  * - **Replies first.** A reply older than the window is deleted, and its thread's summary — how many
  *   replies, when the last — is counted again from what remains.
  * - **Then the top-level messages.** One older than the window with no reply left is deleted; one that
@@ -23,7 +29,15 @@
  *   not delete fails the run too: its row is gone, so nobody else would ever try again.
  * - A job has no bus: an open screen keeps a purged message until it reloads (D-139 §3).
  */
-import { sql, type Executor, type Transaction } from '@purlay/db';
+import {
+  sql,
+  type DB,
+  type Executor,
+  type Expression,
+  type ExpressionBuilder,
+  type SqlBool,
+  type Transaction,
+} from '@purlay/db';
 import { DAY_MS } from '../../platform/clock';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
@@ -64,6 +78,30 @@ const NOTHING: Batch = {
   last: true,
 };
 
+/** The tables a candidate read names: a message as `message`, beside its channel. */
+type PurgeTables = DB & { readonly message: DB['messages'] };
+
+/**
+ * The message's channel keeps it no longer (D-225): not a channel that keeps everything, and older than
+ * the channel's own floor where it has one. Beside `created_at < cutoff` — the workspace's window — this
+ * is the longer of the two. Whole days of 86,400 seconds, as `DAY_MS` counts the workspace's: a day of
+ * the calendar would move with the session's time zone across a clock change.
+ */
+const pastChannelWindow =
+  (now: Date) =>
+  (eb: ExpressionBuilder<PurgeTables, 'channels' | 'message'>): Expression<SqlBool> =>
+    eb.and([
+      eb('channels.retain_forever', '=', false),
+      eb.or([
+        eb('channels.min_retention_days', 'is', null),
+        eb(
+          'message.created_at',
+          '<',
+          sql<Date>`${now}::timestamptz - channels.min_retention_days * interval '86400 seconds'`,
+        ),
+      ]),
+    ]);
+
 /** One batch of replies older than the window: deleted, and their threads summed again. */
 const purgeReplies = async (
   transaction: Transaction,
@@ -72,12 +110,14 @@ const purgeReplies = async (
   cutoff: Date,
 ): Promise<Batch> => {
   const candidates = await transaction
-    .selectFrom('messages')
-    .select(['id', 'channel_id', 'parent_id'])
-    .where('workspace_id', '=', workspaceId)
-    .where('parent_id', 'is not', null)
-    .where('created_at', '<', cutoff)
-    .orderBy('created_at')
+    .selectFrom('messages as message')
+    .innerJoin('channels', 'channels.id', 'message.channel_id')
+    .select(['message.id', 'message.channel_id', 'message.parent_id'])
+    .where('message.workspace_id', '=', workspaceId)
+    .where('message.parent_id', 'is not', null)
+    .where('message.created_at', '<', cutoff)
+    .where(pastChannelWindow(now))
+    .orderBy('message.created_at')
     .limit(PURGE_BATCH)
     .execute();
   if (candidates.length === 0) return NOTHING;
@@ -163,31 +203,33 @@ const purgeRoots = async (
   cutoff: Date,
 ): Promise<Batch> => {
   const candidates = await transaction
-    .selectFrom('messages as root')
-    .select(['root.id', 'root.channel_id'])
-    .where('root.workspace_id', '=', workspaceId)
-    .where('root.parent_id', 'is', null)
-    .where('root.created_at', '<', cutoff)
+    .selectFrom('messages as message')
+    .innerJoin('channels', 'channels.id', 'message.channel_id')
+    .select(['message.id', 'message.channel_id'])
+    .where('message.workspace_id', '=', workspaceId)
+    .where('message.parent_id', 'is', null)
+    .where('message.created_at', '<', cutoff)
+    .where(pastChannelWindow(now))
     .where((eb) =>
       eb.or([
-        eb('root.deleted_at', 'is', null),
+        eb('message.deleted_at', 'is', null),
         eb.not(
           eb.exists(
             eb
               .selectFrom('messages as reply')
               .select('reply.id')
-              .whereRef('reply.parent_id', '=', 'root.id'),
+              .whereRef('reply.parent_id', '=', 'message.id'),
           ),
         ),
         eb.exists(
           eb
             .selectFrom('attachments')
             .select('attachments.id')
-            .whereRef('attachments.message_id', '=', 'root.id'),
+            .whereRef('attachments.message_id', '=', 'message.id'),
         ),
       ]),
     )
-    .orderBy('root.created_at')
+    .orderBy('message.created_at')
     .limit(PURGE_BATCH)
     .execute();
   if (candidates.length === 0) return NOTHING;
