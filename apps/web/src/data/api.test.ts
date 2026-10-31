@@ -865,6 +865,107 @@ describe('the endpoints', () => {
     });
   });
 
+  test('a channel’s bookmarks: listed, one added with its address and title in the body, one let go by id (D-218)', async () => {
+    const bookmark = {
+      id: ID,
+      channelId: ID,
+      url: 'https://example.test/runbook',
+      title: 'Runbook',
+      addedBy: user,
+      addedAt: WHEN,
+    };
+    const list = harness([bookmark]);
+    expect(await list.api.bookmarks(ID)).toEqual([bookmark]);
+    expect(list.calls[0]).toMatchObject({ method: 'GET', url: `/api/channels/${ID}/bookmarks` });
+
+    const add = harness(bookmark);
+    const input = { url: 'https://example.test/runbook', title: 'Runbook' };
+    expect(await add.api.addBookmark(ID, input)).toEqual(bookmark);
+    expect(add.calls[0]).toEqual({
+      method: 'POST',
+      url: `/api/channels/${ID}/bookmarks`,
+      body: input,
+    });
+
+    const remove = harness(null);
+    await remove.api.removeBookmark(ID, ID);
+    expect(remove.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/channels/${ID}/bookmarks/${ID}`,
+    });
+  });
+
+  test('a bookmark list that breaks the contract is refused, not shown', async () => {
+    const broken = harness([{ id: ID, channelId: ID, url: 'not a link', title: '' }]);
+    const failure = await broken.api.bookmarks(ID).catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(ApiError);
+  });
+
+  test('marking unread names the message it is unread from, and reads the new position (D-212)', async () => {
+    const unread = harness({ ...state, lastReadMessageId: ID, unreadCount: 3 });
+    expect((await unread.api.markUnread(ID, 'm2')).unreadCount).toBe(3);
+    expect(unread.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/channels/${ID}/unread`,
+      body: { fromMessageId: 'm2' },
+    });
+  });
+
+  test('one message, and the window of messages around it, are read by its id', async () => {
+    const one = harness(message);
+    expect((await one.api.message(ID)).content).toBe('hi');
+    expect(one.calls[0]).toMatchObject({ method: 'GET', url: `/api/messages/${ID}` });
+
+    const around = harness({
+      target: message,
+      data: [message],
+      olderCursor: null,
+      newerCursor: ID,
+    });
+    const window = await around.api.messageWindow(ID);
+    expect(window.target.id).toBe(ID);
+    expect(window.newerCursor).toBe(ID);
+    expect(around.calls[0]).toMatchObject({ method: 'GET', url: `/api/messages/${ID}/around` });
+  });
+
+  test('who is online in a workspace is read with the version everyone else is offline at (D-136)', async () => {
+    const snapshot = { online: [{ userId: ID, online: true, version: 4 }], version: 4 };
+    const presence = harness(snapshot);
+    expect(await presence.api.presence(ID)).toEqual(snapshot);
+    expect(presence.calls[0]).toMatchObject({
+      method: 'GET',
+      url: `/api/workspaces/${ID}/presence`,
+    });
+  });
+
+  test('leaving a workspace removes the caller’s own membership and reads no answer', async () => {
+    const leave = harness(null);
+    await leave.api.leaveWorkspace(ID);
+    expect(leave.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/workspaces/${ID}/membership`,
+    });
+  });
+
+  test('a text attachment is read as its words, not as JSON', async () => {
+    const calls: string[] = [];
+    const fetchFn = ((url: string) => {
+      calls.push(url);
+      return Promise.resolve(new Response('line one\nsatır iki', { status: 200 }));
+    }) as unknown as typeof fetch;
+    expect(await createApi(createHttp(fetchFn)).attachmentText(ID)).toBe('line one\nsatır iki');
+    expect(calls).toEqual([`/api/attachments/${ID}`]);
+  });
+
+  test('whether the server is still waiting to be set up, and where it lives', async () => {
+    const status = harness({ open: true, appUrl: 'https://purlay.example.test' });
+    expect(await status.api.setupStatus()).toEqual({
+      open: true,
+      appUrl: 'https://purlay.example.test',
+    });
+    expect(status.calls[0]).toMatchObject({ method: 'GET', url: '/setup/status' });
+  });
+
   test('an abandoned read carries the signal', async () => {
     let signal: AbortSignal | undefined;
     const fetchFn = ((_url: string, init: RequestInit) => {
