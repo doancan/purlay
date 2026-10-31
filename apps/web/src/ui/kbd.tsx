@@ -13,6 +13,13 @@ import { cn } from './cn';
 const kbdClasses =
   'inline-flex items-center rounded-sm border-hairline px-1 font-mono text-caption pointer-coarse:hidden';
 
+/**
+ * The row of key hints under a list (the commands, the `@` people, the palette). It wraps: side by
+ * side where they fit, each hint a line of its own where they do not — never two narrow columns.
+ */
+export const keyHintsClasses =
+  'flex flex-wrap gap-x-4 gap-y-1 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted';
+
 /** On the conversation's ground, or on the navigation's tone (D-118). */
 const toneClasses = {
   page: 'border-border-subtle bg-surface-050 text-ink-subtle',

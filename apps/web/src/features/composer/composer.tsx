@@ -39,7 +39,7 @@ import { lastOwnMessage, useEditing } from '../messages/editing';
 import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
 import { IconButton } from '../../ui/icon-button';
-import { Kbd } from '../../ui/kbd';
+import { Kbd, keyHintsClasses } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import {
@@ -765,7 +765,7 @@ const Inner = ({
                   </div>
                 ))}
               </div>
-              <div className="flex gap-4 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted">
+              <div className={keyHintsClasses}>
                 <span>
                   <Kbd>Tab</Kbd> {t('slash.hint.complete')}
                 </span>
@@ -814,7 +814,7 @@ const Inner = ({
                   </div>
                 ))}
               </div>
-              <div className="flex gap-4 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted">
+              <div className={keyHintsClasses}>
                 <span>
                   <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('mention.hint.move')}
                 </span>
