@@ -41,7 +41,7 @@ const open = async (api: Partial<Api>, locale: 'en' | 'tr' = 'en'): Promise<View
           memberships: session.memberships.map((m) => ({ ...m, role: 'owner' as const })),
         }),
       exports: () => Promise.resolve([]),
-      retention: () => Promise.resolve({ retentionDays: null }),
+      retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
       ...api,
     }),
   });

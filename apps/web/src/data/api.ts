@@ -46,6 +46,8 @@ import {
   InvitationPage,
   InvitationPreview,
   RetentionSetting,
+  ChannelRetention,
+  type ChannelRetentionFloor,
   StorageUsage,
   WorkspaceExport,
   AuthMethods,
@@ -367,6 +369,12 @@ export interface Api {
     workspaceId: string,
     retentionDays: number | null,
   ) => Promise<RetentionSetting>;
+  /** How long a channel keeps its history beside its workspace's window; an owner's (D-225). */
+  readonly channelRetention: (channelId: string, signal?: AbortSignal) => Promise<ChannelRetention>;
+  readonly setChannelRetention: (
+    channelId: string,
+    keepsAtLeast: ChannelRetentionFloor,
+  ) => Promise<ChannelRetention>;
   /** An owner's exports of the workspace, newest first; and asking for one, made in the background (D-140). */
   readonly exports: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceExport[]>;
   readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
@@ -870,6 +878,20 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/retention`,
         RetentionSetting,
         options({ body: { retentionDays } }),
+      ),
+    channelRetention: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/retention`,
+        ChannelRetention,
+        options({}, signal),
+      ),
+    setChannelRetention: (channelId, keepsAtLeast) =>
+      http.request(
+        'PUT',
+        `/api/channels/${at(channelId)}/retention`,
+        ChannelRetention,
+        options({ body: { keepsAtLeast } }),
       ),
     exports: (workspaceId, signal) =>
       http.request(

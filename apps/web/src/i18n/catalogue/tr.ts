@@ -409,6 +409,7 @@ export const tr = {
   'audit.kind.channel.archived': 'Kanal arşivlendi',
   'audit.kind.channel.member_added': 'Kanala eklendi',
   'audit.kind.channel.member_removed': 'Kanaldan çıkarıldı',
+  'audit.kind.channel.retention_changed': 'Kanalın saklama süresi değişti',
   'audit.kind.integration.token_set': 'GitHub tokenı ayarlandı',
   'audit.kind.integration.token_removed': 'GitHub tokenı kaldırıldı',
   'audit.kind.integration.feed_created': 'Depo bağlandı',
@@ -451,6 +452,11 @@ export const tr = {
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
   'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
   'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
+  'audit.workspaceWindow': 'çalışma alanının süresi',
+  'audit.action.channel.retention_changed':
+    '{actor} bir kanalın geçmişini saklama süresini {from} yerine {to} yaptı',
+  'audit.action.channel.retention_changed_in':
+    '{actor}, {channel} kanalının geçmişini saklama süresini {from} yerine {to} yaptı',
   'audit.action.account.erased': 'Bir üye hesabını sildi',
   'audit.action.content.erased':
     'Bir üyenin yazdıkları istek üzerine silindi: {messages} mesaj, {files} dosya',
@@ -470,6 +476,22 @@ export const tr = {
     'Her gece {days} günden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterir.',
   'retention.failed': 'Ayar kaydedilmedi.',
   'retention.saved': 'Kaydedildi.',
+  'retention.channelsLonger': {
+    other:
+      '{count} kanal geçmişini bundan daha uzun saklıyor. Ne kadar sakladığı her kanalın ayrıntılarında yazar.',
+  },
+  'channelRetention.title': 'Geçmiş',
+  'channelRetention.workspace': 'Çalışma alanı geçmişi {kept} saklıyor.',
+  'channelRetention.workspaceForever': 'Çalışma alanı her şeyi saklıyor.',
+  'channelRetention.keeps': 'Bu kanal mesajlarını ve dosyalarını {kept} saklıyor.',
+  'channelRetention.keepsEverything': 'Bu kanal her şeyi saklıyor.',
+  'channelRetention.label': 'Bu kanalın geçmişini sakla',
+  'channelRetention.followsWorkspace': 'Çalışma alanı kadar',
+  'channelRetention.warning':
+    'Bir sonraki gece, bu kanalda {kept} süresinden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterecek.',
+  'channelRetention.shorten': 'Yalnızca {kept} sakla',
+  'channelRetention.tooShort':
+    'Çalışma alanı geçmişi artık en az bu kadar saklıyor. Daha uzun bir süre ya da süresiz seç.',
   'storage.description':
     'Buraya gönderilen dosyalar ve gönderilmeyi bekleyenler çalışma alanının kotasından düşer. Kotayı sunucunun yöneticisi belirler.',
   'storage.label': 'Kullanılan depolama',

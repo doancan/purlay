@@ -119,6 +119,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'LAST_OWNER':
     case 'EXPORT_IN_PROGRESS':
     case 'LAST_CHANNEL_MEMBER':
+    // Said in words of its own by the channel's retention form (D-225); anywhere else, refused.
+    case 'RETENTION_TOO_SHORT':
       return 'failure.refused';
     case 'VALIDATION_FAILED':
     case 'INVALID_MESSAGE_ID':

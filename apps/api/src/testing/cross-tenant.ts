@@ -123,9 +123,9 @@ type Visibility =
   /**
    * `admin`: only an owner or an admin may use the endpoint, so the caller crossing the axis is made
    * an admin of the workspace first — the refusal is then for what they cannot see, never for what
-   * they are, and the control succeeds.
+   * they are, and the control succeeds. `owner`: the same, for an endpoint only an owner may use.
    */
-  | { readonly kind: 'channel'; readonly admin?: true }
+  | { readonly kind: 'channel'; readonly admin?: true; readonly owner?: true }
   /**
    * `author`: only the message's author may use the endpoint, so the control is a message the
    * caller wrote, and the hidden ones include messages they wrote in channels they cannot see.
@@ -241,7 +241,8 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: {
       kind: 'none',
-      reason: 'the workspace’s own setting; no channel is named or listed',
+      reason:
+        'the workspace’s own setting and a count of its channels that keep longer (D-225); no channel is named or listed',
     },
   },
   'GET /api/workspaces/:workspaceId/storage': {
@@ -347,6 +348,15 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'CHANNEL_NOT_FOUND',
     body: () => ({ repository: 'acme/crossing', events: ['push'] }),
     visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/retention': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', owner: true },
+  },
+  'PUT /api/channels/:channelId/retention': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ keepsAtLeast: 'forever' }),
+    visibility: { kind: 'channel', owner: true },
   },
   'GET /api/channels/:channelId/bookmarks': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/bookmarks': {

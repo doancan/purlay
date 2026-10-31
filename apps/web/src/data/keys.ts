@@ -94,6 +94,8 @@ export const keys = {
   audit: (workspaceId: string, filter: AuditFilter) => ['audit', workspaceId, filter] as const,
   /** How long a workspace keeps its history, an owner's to read (D-139 §4). */
   retention: (workspaceId: string) => ['retention', workspaceId] as const,
+  /** How long a channel keeps its history beside its workspace's, an owner's to read (D-225). */
+  channelRetention: (channelId: string) => ['channel-retention', channelId] as const,
   storage: (workspaceId: string) => ['storage', workspaceId] as const,
   /** An owner's own exports of a workspace (D-140). */
   exports: (workspaceId: string) => ['exports', workspaceId] as const,

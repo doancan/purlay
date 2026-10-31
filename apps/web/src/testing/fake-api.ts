@@ -35,6 +35,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   exports: unexpected('exports'),
   requestExport: unexpected('requestExport'),
   setRetention: unexpected('setRetention'),
+  channelRetention: unexpected('channelRetention'),
+  setChannelRetention: unexpected('setChannelRetention'),
   previewInvitation: unexpected('previewInvitation'),
   acceptInvitation: unexpected('acceptInvitation'),
   createInvitation: unexpected('createInvitation'),

@@ -830,15 +830,32 @@ describe('the endpoints', () => {
   });
 
   test('how long a workspace keeps its history (D-139 §4): read, and set', async () => {
-    const read = harness({ retentionDays: null });
-    expect(await read.api.retention(ID)).toEqual({ retentionDays: null });
+    const read = harness({ retentionDays: null, channelsKeptLonger: 0 });
+    expect(await read.api.retention(ID)).toEqual({ retentionDays: null, channelsKeptLonger: 0 });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/retention` });
-    const set = harness({ retentionDays: 90 });
-    expect(await set.api.setRetention(ID, 90)).toEqual({ retentionDays: 90 });
+    const set = harness({ retentionDays: 90, channelsKeptLonger: 0 });
+    expect(await set.api.setRetention(ID, 90)).toEqual({
+      retentionDays: 90,
+      channelsKeptLonger: 0,
+    });
     expect(set.calls[0]).toEqual({
       method: 'PUT',
       url: `/api/workspaces/${ID}/retention`,
       body: { retentionDays: 90 },
+    });
+  });
+
+  test('how long a channel keeps its history (D-225): read, and set', async () => {
+    const answer = { keepsAtLeast: 'forever', workspaceDays: 30, effectiveDays: null } as const;
+    const read = harness(answer);
+    expect(await read.api.channelRetention(ID)).toEqual(answer);
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: `/api/channels/${ID}/retention` });
+    const set = harness(answer);
+    expect(await set.api.setChannelRetention(ID, 'forever')).toEqual(answer);
+    expect(set.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/channels/${ID}/retention`,
+      body: { keepsAtLeast: 'forever' },
     });
   });
 

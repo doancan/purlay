@@ -146,10 +146,45 @@ const RetentionDays = Type.Union([
  * `GET` and `PUT /api/workspaces/:workspaceId/retention` — an owner's to read and to set (D-139 §4).
  * Its own route: the `Workspace` shape is shown to people not yet in it, in an invitation's preview.
  */
-export const RetentionSetting = Type.Object({ retentionDays: RetentionDays });
+export const RetentionSetting = Type.Object({
+  retentionDays: RetentionDays,
+  /**
+   * How many channels keep their history longer than the workspace's window — forever, or a floor
+   * past it — archived and private ones included (D-225). A count, never which: the owner may not see
+   * them all (D-34), and each channel's own setting says how long.
+   */
+  channelsKeptLonger: Type.Integer({ minimum: 0 }),
+});
 export type RetentionSetting = Static<typeof RetentionSetting>;
 export const SetRetentionRequest = FromClient({ retentionDays: RetentionDays });
 export type SetRetentionRequest = Static<typeof SetRetentionRequest>;
+
+/**
+ * What a channel keeps beyond its workspace (D-225): `null` is the workspace's window, `'forever'` is
+ * everything, a number is at least that many whole days. Only ever longer: a number shorter than the
+ * workspace keeps now is refused (`409 RETENTION_TOO_SHORT`), and a workspace window lengthened past it
+ * later wins — what is kept is the longer of the two (`effectiveDays`).
+ */
+export const ChannelRetentionFloor = Type.Union([
+  Type.Null(),
+  Type.Literal('forever'),
+  Type.Integer({ minimum: RETENTION_DAYS_MIN, maximum: RETENTION_DAYS_MAX }),
+]);
+export type ChannelRetentionFloor = Static<typeof ChannelRetentionFloor>;
+
+/**
+ * `GET` and `PUT /api/channels/:channelId/retention` — an owner's, as the workspace's is (D-139 §4,
+ * D-225): the channel's own floor, the workspace's window beside it, and what the purge keeps — the
+ * longer of the two, `null` for everything.
+ */
+export const ChannelRetention = Type.Object({
+  keepsAtLeast: ChannelRetentionFloor,
+  workspaceDays: RetentionDays,
+  effectiveDays: RetentionDays,
+});
+export type ChannelRetention = Static<typeof ChannelRetention>;
+export const SetChannelRetentionRequest = FromClient({ keepsAtLeast: ChannelRetentionFloor });
+export type SetChannelRetentionRequest = Static<typeof SetChannelRetentionRequest>;
 
 /**
  * `GET /api/workspaces/:workspaceId/storage` — how much of its quota the workspace's files take, an
@@ -682,6 +717,7 @@ export const AUDIT_ACTIONS = [
   'message.removed_by_moderator',
   'workspace.renamed',
   'retention.changed',
+  'channel.retention_changed',
   'account.erased',
   'content.erased',
   'workspace.export_requested',

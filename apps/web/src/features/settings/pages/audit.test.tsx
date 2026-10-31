@@ -167,6 +167,30 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('a channel’s window changed is said in the reader’s words, the channel named only to a viewer who can see it (D-225)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'channel.retention_changed',
+              // A channel this viewer cannot see — private and not theirs — stays unnamed.
+              targetId: entryId(99),
+              metadata: { from: '400', to: 'workspace' },
+            }),
+            anEntry(1, {
+              action: 'channel.retention_changed',
+              metadata: { from: 'workspace', to: 'forever' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} changed how long a channel keeps its history from 400 days to the workspace’s window`,
+      `${ME.displayName} changed how long #api keeps its history from the workspace’s window to forever`,
+    ]);
+  });
+
   test('an account erased is said without naming the person who is gone (D-139 §5)', async () => {
     const view = await openPage({
       audit: () =>

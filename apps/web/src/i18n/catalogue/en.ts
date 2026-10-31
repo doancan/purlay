@@ -415,6 +415,7 @@ export const en = {
   'audit.kind.channel.archived': 'Channel archived',
   'audit.kind.channel.member_added': 'Added to a channel',
   'audit.kind.channel.member_removed': 'Removed from a channel',
+  'audit.kind.channel.retention_changed': 'Channel history window changed',
   'audit.kind.integration.token_set': 'GitHub token set',
   'audit.kind.integration.token_removed': 'GitHub token removed',
   'audit.kind.integration.feed_created': 'Repository connected',
@@ -453,6 +454,11 @@ export const en = {
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
   'audit.action.workspace.renamed': '{actor} renamed the workspace from {from} to {to}',
   'audit.action.retention.changed': '{actor} changed how long history is kept from {from} to {to}',
+  'audit.workspaceWindow': 'the workspace’s window',
+  'audit.action.channel.retention_changed':
+    '{actor} changed how long a channel keeps its history from {from} to {to}',
+  'audit.action.channel.retention_changed_in':
+    '{actor} changed how long {channel} keeps its history from {from} to {to}',
   'audit.action.account.erased': 'A member erased their account',
   'audit.action.content.erased':
     'A member’s writing was erased on request: {messages} messages, {files} files',
@@ -472,6 +478,22 @@ export const en = {
     'Every night, messages and files older than {days} days will be deleted for good. This cannot be undone, and the audit trail will say you chose it.',
   'retention.failed': 'The setting was not saved.',
   'retention.saved': 'Saved.',
+  'retention.channelsLonger': {
+    one: 'One channel keeps its history longer than this. Its details say how long.',
+    other: '{count} channels keep their history longer than this. Each one’s details say how long.',
+  },
+  'channelRetention.title': 'History',
+  'channelRetention.workspace': 'The workspace keeps history for {kept}.',
+  'channelRetention.workspaceForever': 'The workspace keeps everything.',
+  'channelRetention.keeps': 'This channel keeps its messages and files for {kept}.',
+  'channelRetention.keepsEverything': 'This channel keeps everything.',
+  'channelRetention.label': 'Keep this channel’s history',
+  'channelRetention.followsWorkspace': 'As long as the workspace',
+  'channelRetention.warning':
+    'The next night, messages and files in this channel older than {kept} will be deleted for good. This cannot be undone, and the audit trail will say you chose it.',
+  'channelRetention.shorten': 'Keep only {kept}',
+  'channelRetention.tooShort':
+    'The workspace now keeps history at least that long. Choose a longer window, or forever.',
   'storage.description':
     'Files sent here, and files waiting to be sent, count against the workspace’s quota. The server’s operator sets the quota.',
   'storage.label': 'Storage used',

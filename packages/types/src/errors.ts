@@ -159,6 +159,11 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('LAST_CHANNEL_MEMBER'),
   /**
+   * A channel's floor shorter than the workspace keeps its history now: a channel keeps longer, never
+   * shorter (D-225). Forever, or a floor at least the workspace's window, is accepted.
+   */
+  Type.Literal('RETENTION_TOO_SHORT'),
+  /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
    */
@@ -281,6 +286,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,
   LAST_CHANNEL_MEMBER: 409,
+  RETENTION_TOO_SHORT: 409,
   RATE_LIMITED: 429,
   SETUP_UNAVAILABLE: 404,
   SETUP_LOCKED: 429,
