@@ -19,6 +19,7 @@ import {
   type TUnion,
 } from '@sinclair/typebox';
 import {
+  DISPLAY_NAME_MAX,
   Channel,
   DECISION_NOTE_MAX,
   DecisionUrl,
@@ -101,6 +102,12 @@ export const MeResponse = Type.Object({
    * client draws Settings → Server only for them. Read only; what it opens is the server's to refuse.
    */
   isServerAdmin: Type.Boolean(),
+  /**
+   * Whether the caller's name is GitHub's (D-235): an account GitHub made takes its name from GitHub at
+   * every sign-in, so the profile shows it and does not offer to change it. Every other account's name
+   * is its own to set (`displayName`, `PATCH /api/me/profile`).
+   */
+  nameFromGitHub: Type.Boolean(),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -1205,6 +1212,10 @@ export type AddBookmarkRequest = Static<typeof AddBookmarkRequest>;
  * zone must be one the server's runtime knows.
  */
 export const UpdateProfileRequest = FromClient({
+  /** The name shown for the person; refused for an account whose name is GitHub's (D-235). */
+  displayName: Type.Optional(
+    Type.String({ minLength: 1, maxLength: DISPLAY_NAME_MAX, format: 'name' }),
+  ),
   title: Type.Optional(
     Type.Union([
       Type.String({ minLength: 1, maxLength: PROFILE_TITLE_MAX, format: 'name' }),
