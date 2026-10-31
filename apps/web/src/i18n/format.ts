@@ -29,11 +29,13 @@ export interface Formatters {
   readonly list: (items: readonly string[]) => string;
   /** A size: bytes, then kilobytes, megabytes and gigabytes of 1024, one decimal at most. */
   readonly bytes: (value: number) => string;
+  /** The calendar day an instant falls on here, as `YYYY-MM-DD` — what a date field holds. */
+  readonly isoDay: (value: Date | string) => string;
   /**
-   * The instant a calendar day (`YYYY-MM-DD`) begins in the zone these formatters write in: what a day
-   * picked on a page means to the server, which compares instants (D-222).
+   * The instant a calendar day (`YYYY-MM-DD`) begins here, as the API's UTC timestamp: the first
+   * moment whose day is that one, so a midnight a clock change skips begins at the hour after it.
    */
-  readonly dayStart: (isoDay: string) => Date;
+  readonly dayStart: (isoDay: string) => string;
 }
 
 interface DayWords {
@@ -90,19 +92,6 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
     hourCycle: 'h23',
     ...zone,
   });
-  /** What the zone's clock reads at an instant, as if that reading were UTC. */
-  const wallAt = (instant: number): number => {
-    const part = (type: Intl.DateTimeFormatPartTypes): number =>
-      Number(wall.formatToParts(instant).find((piece) => piece.type === type)?.value ?? 0);
-    return Date.UTC(
-      part('year'),
-      part('month') - 1,
-      part('day'),
-      part('hour'),
-      part('minute'),
-      part('second'),
-    );
-  };
   const numbers = new Intl.NumberFormat(locale);
   const names = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
   const inUnit = (
@@ -127,6 +116,36 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
   };
   const sameDay = (a: Date, b: Date): boolean => calendarDay.format(a) === calendarDay.format(b);
   const sameYear = (a: Date, b: Date): boolean => year.format(a) === year.format(b);
+
+  // `Date.UTC` reads a year under 100 as 19xx; a date field holds `0002` while a year is typed.
+  const utc = (y: number, m: number, d: number, h = 0, min = 0, sec = 0): number =>
+    new Date(Date.UTC(2000, 0, 1, h, min, sec)).setUTCFullYear(y, m - 1, d);
+  // The wall clock here at an instant, as numbers: year, month, day, hour, minute, second.
+  const wallAt = (at: number): readonly number[] => {
+    const parts = wall.formatToParts(at);
+    return (['year', 'month', 'day', 'hour', 'minute', 'second'] as const).map((type) =>
+      Number(parts.find((each) => each.type === type)?.value),
+    );
+  };
+  const isoDay = (at: number): string => {
+    const [y = 0, m = 1, d = 1] = wallAt(at);
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  // How far the clock here is ahead of UTC at an instant: the wall time read back as if it were UTC.
+  const offsetAt = (at: number): number => {
+    const [y = 0, m = 1, d = 1, h = 0, min = 0, sec = 0] = wallAt(at);
+    return utc(y, m, d, h, min, sec) - (at - (at % 1000));
+  };
+  const dayStart = (day: string): string => {
+    const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
+    const asUtc = utc(y, m, d);
+    // The offset at UTC midnight is a guess; the offset at the guess is right unless a clock change
+    // falls between them. Of the two, the earliest moment that is already on that day here.
+    const guess = asUtc - offsetAt(asUtc);
+    const candidates = [guess, asUtc - offsetAt(guess)].sort((a, b) => a - b);
+    const start = candidates.find((at) => isoDay(at) === day) ?? guess;
+    return new Date(start).toISOString();
+  };
 
   return {
     time: (value, now): string => {
@@ -155,13 +174,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
           : value < 1024 * 1024 * 1024
             ? inMegabytes.format(value / (1024 * 1024))
             : inGigabytes.format(value / (1024 * 1024 * 1024)),
-    dayStart: (isoDay): Date => {
-      const [y = 0, m = 1, d = 1] = isoDay.split('-').map(Number);
-      const midnight = Date.UTC(y, m - 1, d);
-      // The zone's offset at UTC midnight, then again at the guess it gives: the two differ only on a
-      // day the clocks change, and the second is the one in force when that day begins.
-      const guess = midnight - (wallAt(midnight) - midnight);
-      return new Date(midnight - (wallAt(guess) - guess));
-    },
+    isoDay: (value) => isoDay(asDate(value).getTime()),
+    dayStart,
   };
 };
