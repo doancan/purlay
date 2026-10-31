@@ -10,6 +10,7 @@ import type { AuditFilter, QuestionFilters, SearchFilters } from '@purlay/types'
  */
 export const keys = {
   me: ['me'] as const,
+  quietHours: ['me', 'quiet-hours'] as const,
   /** The ways the caller signs in, and the GitHub account connected (D-176). */
   mySignIn: ['my-sign-in'] as const,
   /** Where the caller is signed in (D-193). */

@@ -19,6 +19,8 @@ import { Type, type Static } from '@sinclair/typebox';
 import {
   ArchivedChannelList,
   Attachment,
+  QuietHoursSetting,
+  type SetQuietHoursRequest,
   AuditPage,
   type AuditFilter,
   ChannelList,
@@ -404,6 +406,9 @@ export interface Api {
   readonly unsubscribePush: (endpoint: string) => Promise<void>;
   /** The language the server writes this person's notifications in. */
   readonly setLocale: (locale: PushLocale) => Promise<void>;
+  /** The caller's quiet hours and the profile's time zone they are read in (D-234). */
+  readonly quietHours: (signal?: AbortSignal) => Promise<QuietHoursSetting>;
+  readonly setQuietHours: (input: SetQuietHoursRequest) => Promise<QuietHoursSetting>;
 }
 
 export const createApi = (http: Http): Api => {
@@ -943,5 +948,9 @@ export const createApi = (http: Http): Api => {
     unsubscribePush: (endpoint) =>
       http.send('POST', '/api/push/subscriptions/remove', options({ body: { endpoint } })),
     setLocale: (locale) => http.send('PUT', '/api/me/locale', options({ body: { locale } })),
+    quietHours: (signal) =>
+      http.request('GET', '/api/me/quiet-hours', QuietHoursSetting, options({}, signal)),
+    setQuietHours: (input) =>
+      http.request('PUT', '/api/me/quiet-hours', QuietHoursSetting, options({ body: input })),
   };
 };

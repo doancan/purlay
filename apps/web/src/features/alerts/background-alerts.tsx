@@ -20,6 +20,7 @@ import { useRoute } from '../../router/router-provider';
 import { useNotices } from '../push/push';
 import { useSession } from '../session/session';
 import { useDeepWork } from '../shell/deep-work';
+import { useQuietHoursNow } from '../shell/quiet-hours';
 import { waitingCount } from '../shell/tab-title';
 import { useWorkspace } from '../shell/workspace';
 import { paintIcons } from './icon-badge';
@@ -27,7 +28,9 @@ import { badgeOf, isAway, planOf, risen, settled, tagOf, waitingOf, type Waiting
 
 export const BackgroundAlerts = (): null => {
   const notices = useNotices();
-  const quiet = useDeepWork().until !== null;
+  // Deep Work started by hand, or the person's quiet hours (D-234): the page is quiet in either.
+  const quietHours = useQuietHoursNow();
+  const quiet = useDeepWork().until !== null || quietHours;
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const channels = useChannels(workspace.id).data;

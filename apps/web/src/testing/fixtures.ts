@@ -132,6 +132,8 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     // And who is online in the workspace (D-136): nobody, unless a test says.
     presence: () => Promise.resolve({ online: [], version: 0 }),
     incident: () => Promise.resolve({ incident: null }),
+    // And whether this is the person's quiet hours (D-234): none, unless a test says.
+    quietHours: () => Promise.resolve({ quietHours: null, timeZone: null }),
     ...overrides,
   });
 

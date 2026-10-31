@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
-import type { Channel, MeResponse, Notification } from '@purlay/types';
+import type { Channel, MeResponse, Notification, QuietHours } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { keys } from '../../data/keys';
 import { settle } from '../../testing/channel-harness';
@@ -101,12 +101,14 @@ const open = async ({
   inbox = [mention()],
   me = aSession(),
   path = `/w/acme/c/${IDS.api}`,
+  quietHours = null,
 }: {
   notifier?: FakeNotifier;
   owner?: string | null;
   inbox?: Notification[] | Promise<Notification[]>;
   me?: MeResponse;
   path?: string;
+  quietHours?: QuietHours | null;
 } = {}): Promise<Awaited<ReturnType<typeof renderApp>>> => {
   const view = await renderApp(<Outlet />, {
     path,
@@ -115,6 +117,7 @@ const open = async ({
       me: () => Promise.resolve(me),
       channels: () => Promise.resolve(withBadge({})),
       notifications: async () => ({ data: await inbox, nextCursor: null }),
+      quietHours: () => Promise.resolve({ quietHours, timeZone: 'UTC' }),
     }),
   });
   if (owner !== null) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
@@ -274,6 +277,17 @@ describe('a tab in the background', () => {
     view.unmount();
   });
 
+  test('outside the person’s quiet hours, as ever (D-234)', async () => {
+    const fake = aNotifier();
+    const view = await open({
+      notifier: fake,
+      quietHours: { from: 20 * 60, to: 7 * 60, days: [0, 1, 2, 3, 4, 5, 6] },
+    });
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(fake.shown).toHaveLength(1);
+    view.unmount();
+  });
+
   test('a notice whose reason could not be read still says where', async () => {
     const fake = aNotifier();
     const view = await open({ notifier: fake, inbox: [] });
@@ -301,6 +315,17 @@ describe('nothing is said', () => {
     };
     const fake = aNotifier();
     const view = await open({ notifier: fake, me: quiet });
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(fake.shown).toEqual([]);
+    view.unmount();
+  });
+
+  // The test's clock reads Wednesday 2026-09-09, 12:00 UTC: a window around it, on a profile in UTC.
+  const around = (): QuietHours => ({ from: 11 * 60, to: 13 * 60, days: [3] });
+
+  test('in the person’s quiet hours (D-234)', async () => {
+    const fake = aNotifier();
+    const view = await open({ notifier: fake, quietHours: around() });
     await rise(view, { [IDS.deploys]: 1 });
     expect(fake.shown).toEqual([]);
     view.unmount();

@@ -4,6 +4,7 @@
  *
  * - **What interrupts you** is said first, in words (D-12, D-29): a mention, a direct message, a reply
  *   in a thread you are part of, and every message in a channel set to that level (D-107).
+ * - **Quiet hours** are Deep Work every week, by themselves, on the profile's clock (D-234).
  * - **Deep Work** is started for a while, as from the account menu, and the server stops delivering
  *   (D-15, D-108); on, it says until when and offers its end.
  * - **This device** is the Web Push switch (D-126) where the browser and the server can send; where
@@ -29,6 +30,7 @@ import { usePushControls } from '../../push/push';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../../shell/deep-work';
 import { useWorkspace } from '../../shell/workspace';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import { QuietHoursCard } from './quiet-hours-card';
 
 const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
 const INTERRUPTS = [
@@ -257,6 +259,7 @@ export const NotificationsPage = (): React.JSX.Element => {
       <WhatInterrupts />
       <DeepWorkCard />
       <DeviceCard />
+      <QuietHoursCard />
       <ChannelLevels />
     </SettingsPage>
   );
