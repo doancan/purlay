@@ -75,6 +75,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   name: 'api',
   topic: null,
   incident: null,
+  codeRepository: null,
   type: 'public',
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },

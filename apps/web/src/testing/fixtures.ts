@@ -65,6 +65,7 @@ export const aChannel = (
   name,
   topic: null,
   incident: null,
+  codeRepository: null,
   type: 'public',
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },

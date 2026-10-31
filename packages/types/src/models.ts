@@ -194,6 +194,14 @@ export const ChannelIncident = Type.Object({
 });
 export type ChannelIncident = Static<typeof ChannelIncident>;
 
+/**
+ * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
+ * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
+ * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
+ */
+export const GITHUB_REPOSITORY_PATTERN =
+  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
+
 export const Channel = Type.Object({
   id: Uuid,
   workspaceId: Uuid,
@@ -232,6 +240,12 @@ export const Channel = Type.Object({
   memberCount: Type.Integer({ minimum: 0 }),
   /** Its open incident (D-137); null when none is open, and always for a direct message. */
   incident: Type.Union([ChannelIncident, Type.Null()]),
+  /**
+   * The repository a code reference in its messages links to (D-223): its GitHub feed's, when it has
+   * exactly one; null with none or several, which would be a guess, and always for a direct message.
+   * Told to whoever can see the channel — who reads that feed's events in it already.
+   */
+  codeRepository: Type.Union([Type.String({ pattern: GITHUB_REPOSITORY_PATTERN }), Type.Null()]),
 });
 export type Channel = Static<typeof Channel>;
 
@@ -282,14 +296,6 @@ export const GitHubLink = Type.String({
   pattern:
     '^https://github\\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/(?!\\.\\.?/)([A-Za-z0-9._-]{1,100})/(pull|issues)/([0-9]{1,10})$',
 });
-
-/**
- * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
- * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
- * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
- */
-export const GITHUB_REPOSITORY_PATTERN =
-  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
 
 /** How long a title, a release's name or a commit's first line is kept; longer is cut, with `…`. */
 export const GITHUB_EVENT_TEXT_MAX = 256;

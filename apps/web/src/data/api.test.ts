@@ -25,6 +25,7 @@ const channel = {
   notificationLevel: 'mentions',
   starred: false,
   incident: null,
+  codeRepository: null,
   peer: null,
   peers: [],
   memberCount: 1,
