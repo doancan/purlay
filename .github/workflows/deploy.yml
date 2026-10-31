@@ -1,10 +1,12 @@
-# Deploy only a tested, published image from this repository's main branch.
-# No source build on the production server. See docs/DEPLOY.md for first installation.
+# Deploy only a tested, published image from this repository's main branch: a commit whose `ci` run
+# and `image` run both succeeded (#798). No source build on the production server. See docs/DEPLOY.md
+# for first installation.
 name: deploy
 
 on:
+  # Either may finish last; the one that does deploys, and the other finds its partner still running.
   workflow_run:
-    workflows: [image]
+    workflows: [ci, image]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -24,7 +26,8 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  # On GitHub's runner, not the server's: asking GitHub about runs needs nothing the server holds.
+  gate:
     # A hand-started run lets the person pick the branch the workflow file is read from; only main's
     # copy of it, and only main's tip or a commit on main, may run on the server.
     if: >-
@@ -33,6 +36,47 @@ jobs:
        (github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # To read the commit's ci and image runs.
+      actions: read
+    outputs:
+      ready: ${{ steps.verdict.outputs.ready }}
+    steps:
+      # The commit's push run of each workflow, newest first: both completed and successful deploys;
+      # either still running waits for its own completion to start this again; anything else refuses.
+      # A hand-started run cannot wait, so a run still going refuses it too. A commit inside a rebased
+      # merge has no runs of its own (CI runs on the pushed tip), and is refused: it was never tested.
+      - name: the commit passed ci and published its image
+        id: verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ inputs.commit || github.event.workflow_run.head_sha || github.sha }}
+          BY_HAND: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "give a full 40-digit commit hash" >&2; exit 1; }
+          ready=true
+          for workflow in ci.yml image.yml; do
+            run="$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?head_sha=$COMMIT&event=push&branch=main&per_page=1" \
+              --jq '.workflow_runs[0] | "\(.status) \(.conclusion)"')"
+            case "$run" in
+              "completed success") echo "$workflow: succeeded" ;;
+              queued* | in_progress* | waiting* | pending* | requested*)
+                [ "$BY_HAND" != true ] || { echo "$workflow is still running for $COMMIT; start the deploy when it has finished" >&2; exit 1; }
+                echo "$workflow is still running; its completion deploys"
+                ready=false
+                ;;
+              *) echo "$workflow did not succeed for $COMMIT (${run:-no run}); nothing is deployed" >&2; exit 1 ;;
+            esac
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
     runs-on: [self-hosted, linux, x64, purlay-server]
     timeout-minutes: 30
     permissions:

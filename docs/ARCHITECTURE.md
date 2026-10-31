@@ -938,7 +938,7 @@ the same way, through the same `errorTrackingFor` (#635).
 First installation and runner configuration are in [DEPLOY.md](DEPLOY.md).
 
 **Deploying is a script now** (D-185): on the team's server, a merge to `main` does steps 1 and 2 below by
-itself after the image workflow succeeds, pulls the published image by digest and tries it before the switch,
+itself once the commit's `ci` and image workflows have both succeeded (D-229), pulls the published image by digest and tries it before the switch,
 and checks in the end that the API and the scheduler run the published commit (`scripts/deploy.sh`, started by the `deploy` workflow on the server's runner). When
 that is not so, it goes back by steps 5 and 6. By hand, on any server with the same layout:
 `DEPLOY_ROOT=… IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>` from a checkout of that commit. The deployment directory
