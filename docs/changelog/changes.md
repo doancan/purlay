@@ -67,6 +67,7 @@ have it.
 - **Messages** — A draft that comes back starting with `/` no longer opens the command list by itself, and a list closed with Esc stays closed (D-214)
 - **Messages** — The key hints under the command list, the `@` list and the palette wrap as whole hints on a narrow window instead of two broken columns (D-214)
 - **Messages** — On a device that is only touch no keyboard hint is shown — key labels, the hint rows they leave words in, and the editor's save keys — by the same test that makes Enter a new line there (D-188)
+- **Threads** — Resolve names its shortcut as the keyboard prints it — Ctrl+Shift+R off a Mac, where it showed ⌘⇧R (D-122)
 - **Workspace** — A size under a kilobyte reads as English counts it — “0 bytes”, “1 byte” — in storage, files and exports (D-41)
 
 - **Operations** — The browser budget no longer blocks on the keystroke with 2,000 messages loaded, which the feed decision accepts and a hosted runner measures at twice its neighbour (D-199)

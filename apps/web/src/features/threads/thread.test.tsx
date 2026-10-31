@@ -165,6 +165,14 @@ describe('a root and its thread, closed', () => {
 });
 
 describe('opening it, in the panel', () => {
+  test('Resolve names its key as this keyboard prints it: Ctrl+Shift+R off a Mac, never ⌘', async () => {
+    const view = await mount();
+    await showThread(view);
+    const resolve = within(sectionOf(view)).getByRole('button', { name: /Resolve/ });
+    expect(resolve.querySelector('kbd')?.textContent).toBe('Ctrl+Shift+R');
+    view.unmountAll();
+  });
+
   test('shows the root, the replies under a count, Resolve, Close and the box to answer in, beside the feed', async () => {
     const view = await mount();
     await showThread(view);
