@@ -675,6 +675,13 @@ describe('a table from the formatting row (D-210)', () => {
     expect(text.slice(selection.start, selection.end)).toBe('a\\|b');
   });
 
+  test('a pipe the selection already escaped stays escaped, and the heading stays one cell', () => {
+    const { text } = insertMarkdown('a\\|b', { start: 0, end: 4 }, 'table');
+    expect(text).toBe('| a\\|b | Column |\n| --- | --- |\n|  |  |');
+    const table = parseMarkdown(text)?.children[0];
+    expect(table?.type === 'table' ? table.children[0]?.children.length : null).toBe(2);
+  });
+
   test('words after it move to the line below, so the table ends where it should', () => {
     const { text } = insertMarkdown('before after', { start: 7, end: 7 }, 'table');
     expect(text).toBe('before \n| Column | Column |\n| --- | --- |\n|  |  |\nafter');
