@@ -15,6 +15,7 @@ import { SettingsPage } from '../page';
 import { SERVER_SETTINGS_KEY, useServerClient } from '../server-context';
 import { EmailCard, GitHubCard } from './server-channels';
 import { OidcCard } from './server-oidc';
+import { AccountsCard } from './server-accounts';
 import { CreatorsCard, PolicyCard } from './server-policies';
 
 export const ServerPage = (): React.JSX.Element => {
@@ -55,6 +56,7 @@ export const ServerPage = (): React.JSX.Element => {
           <EmailCard view={settings.data} />
           <PolicyCard view={settings.data} />
           <CreatorsCard view={settings.data} />
+          <AccountsCard />
         </>
       )}
     </SettingsPage>

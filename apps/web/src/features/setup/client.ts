@@ -183,7 +183,7 @@ const failureOf = (status: number, text: string, retryAfter: string | null): Set
 
 /** One call as every client here makes it: JSON in and out, same-origin cookies, a failure as a `SetupFailure`. */
 export type JsonCall = (
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
   signal?: AbortSignal,
@@ -191,7 +191,7 @@ export type JsonCall = (
 
 export const jsonCaller = (fetchFn: SetupFetch): JsonCall => {
   return async (
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     body?: unknown,
     signal?: AbortSignal,
