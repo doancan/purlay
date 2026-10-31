@@ -14,8 +14,8 @@
 # A variable that is missing stops `docker compose` with its name, not the API at
 # 3am (`${VAR:?}`).
 #
-# Every image is pinned by digest, the tag kept beside it so a reader (and
-# Dependabot) can see what it is. Only the proxy publishes a port; the database,
+# Every image is pinned by digest, the tag kept beside it so a reader can see
+# what it is. Only the proxy publishes a port; the database,
 # the object store and the API are reachable from the stack's own network alone.
 #
 # This is a different Compose project from the development one (`docker-compose.yml`,

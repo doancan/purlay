@@ -12,8 +12,8 @@
 # the final stage — no React toolchain, no source.
 #
 # Both bases are pinned by digest. A tag is a pointer its owner can move
-# (D-86); Dependabot's docker ecosystem proposes the next digest. The tag is kept
-# beside the digest so a reader (and the bot) can see what it is, and its version
+# (D-86); the owner moves it (D-219). The tag is kept
+# beside the digest so a reader can see what it is, and its version
 # is `packageManager`'s in package.json — scripts/environment.test.ts holds them equal.
 
 FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS dependencies
