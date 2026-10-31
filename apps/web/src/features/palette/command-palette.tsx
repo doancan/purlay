@@ -30,7 +30,7 @@ import { Avatar } from '../../ui/avatar';
 import { GroupFace } from '../conversations/group-face';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
-import { Kbd } from '../../ui/kbd';
+import { Kbd, keyHintsClasses } from '../../ui/kbd';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { searchHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
@@ -311,7 +311,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
         {announcement}
       </VisuallyHidden>
 
-      <div className="flex gap-4 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted">
+      <div className={keyHintsClasses}>
         <span>
           <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('palette.hint.move')}
         </span>
