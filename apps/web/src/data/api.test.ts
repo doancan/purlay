@@ -763,6 +763,7 @@ describe('the endpoints', () => {
       hasPassword: false,
       github: null,
       oidc: false,
+      twoFactor: false,
     });
     expect(await read.api.mySignIn()).toEqual({
       email: 'a@example.test',
@@ -770,6 +771,7 @@ describe('the endpoints', () => {
       hasPassword: false,
       github: null,
       oidc: false,
+      twoFactor: false,
     });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
   });

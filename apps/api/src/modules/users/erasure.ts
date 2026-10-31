@@ -200,6 +200,7 @@ export const eraseAccount = async (
       // server authority, which must not outlive the person (D-139 §5, D-179).
       email_verified: false,
       is_server_admin: false,
+      two_factor_enabled: false,
       deleted_at: now,
       updated_at: now,
     })
@@ -214,6 +215,8 @@ export const eraseAccount = async (
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
   // left behind, the pair would also hand a returning GitHub sign-in the erased account (D-38, D-179).
   await executor.deleteFrom('accounts').where('user_id', '=', person.id).execute();
+  // And the second step's sealed key and backup codes (D-236): a credential, with the password it guarded.
+  await executor.deleteFrom('two_factors').where('user_id', '=', person.id).execute();
   // A link that would verify the address they had as the setup's administrator (D-179 §4.3): the row
   // outlives a soft deletion, which its key's cascade does not see.
   await executor.deleteFrom('admin_email_verification').where('user_id', '=', person.id).execute();

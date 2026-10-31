@@ -39,6 +39,7 @@ describe('integration: how the caller signs in', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        twoFactor: false,
       });
     });
   });
@@ -73,6 +74,7 @@ describe('integration: how the caller signs in', () => {
         hasPassword: false,
         github: { login: 'made-with-github' },
         oidc: false,
+        twoFactor: false,
       });
     });
   });
@@ -95,6 +97,7 @@ describe('integration: how the caller signs in', () => {
         hasPassword: false,
         github: { login: 'linked-login' },
         oidc: false,
+        twoFactor: false,
       });
     });
   });

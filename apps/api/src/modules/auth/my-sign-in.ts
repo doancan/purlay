@@ -16,7 +16,7 @@ import { OIDC_PROVIDER_ID } from './oidc';
 export const mySignIn = async (executor: Executor, userId: string): Promise<MySignIn> => {
   const row = await executor
     .selectFrom('users')
-    .select(['email', 'github_id', 'github_login', 'github_connected_at'])
+    .select(['email', 'github_id', 'github_login', 'github_connected_at', 'two_factor_enabled'])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
@@ -45,5 +45,6 @@ export const mySignIn = async (executor: Executor, userId: string): Promise<MySi
     emailLinks: !madeByGitHub(row),
     github: row.github_id === null ? null : { login: row.github_login },
     oidc: sso !== undefined,
+    twoFactor: row.two_factor_enabled,
   };
 };

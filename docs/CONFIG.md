@@ -154,7 +154,7 @@ as in `printf '%s\n' "$NEW" | bun run …`. It is **never read from an argument 
 environment**, which the shell, the process table and the logs keep: a second argument is refused without
 being repeated. The password policy applies. It prints `Password changed for <email>` and nothing else of
 it, and **ends every session of that account** in the same transaction, so a session that was stolen dies
-with the old password. An administrator who came in only through GitHub is given a password by it. It leaves a row on the
+with the old password. **It also turns two-step verification off** for that account, and says so in a second line (D-236): it is the way back in for an administrator whose authenticator app and backup codes are both lost, who turns it on again with the new password. An administrator who came in only through GitHub is given a password by it. It leaves a row on the
 server's own trail (`server.admin_password_reset`). A connection the account holds open in a browser is
 ended by the server within about half a minute — the command has no way to tell it, so the server asks
 the database every thirty seconds which sessions still exist — and the same is true of a session removed

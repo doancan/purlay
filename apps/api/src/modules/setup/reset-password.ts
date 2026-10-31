@@ -12,6 +12,8 @@
  *   session somebody stole dies with it. Nothing is published: this is another process, with no bus.
  *   A socket the account holds open is ended by the server's liveness sweep (`realtime/liveness.ts`)
  *   within about half a minute, as for any session removed by the database itself.
+ * - **Two-step verification is turned off with it** (D-236): the break-glass is for an account whose way in is
+ *   lost, an authenticator app as much as a password; the person turns it on again with the new password.
  * - **It leaves a row** on the server's trail (`server.admin_password_reset`, the account itself as the
  *   actor, no session, never a value), in the same transaction.
  * - **Nothing secret is returned**: not the password, not its hash.
@@ -24,7 +26,13 @@ import { recordServerAudit } from '../audit/server-audit';
 import { atomicallyOn } from '../../platform/transactions';
 
 export type ResetOutcome =
-  | { readonly ok: true; readonly email: string; readonly sessionsEnded: number }
+  | {
+      readonly ok: true;
+      readonly email: string;
+      readonly sessionsEnded: number;
+      /** Whether two-step verification was on, and is now off. */
+      readonly twoFactorOff: boolean;
+    }
   /** No account with that address is the server's administrator — or there is no such account: one answer. */
   | { readonly ok: false; readonly reason: 'not-an-administrator' }
   | { readonly ok: false; readonly reason: 'invalid-email' }
@@ -70,10 +78,20 @@ export const resetAdministratorPassword = async (
       .where('user_id', '=', administrator.id)
       .returning('id')
       .execute();
+    const secondStep = await transaction
+      .deleteFrom('two_factors')
+      .where('user_id', '=', administrator.id)
+      .returning('id')
+      .execute();
+    await transaction
+      .updateTable('users')
+      .set({ two_factor_enabled: false })
+      .where('id', '=', administrator.id)
+      .execute();
     await recordServerAudit(transaction, clock, {
       actorUserId: administrator.id,
       action: 'server.admin_password_reset',
     });
-    return { ok: true, email, sessionsEnded: ended.length };
+    return { ok: true, email, sessionsEnded: ended.length, twoFactorOff: secondStep.length > 0 };
   });
 };

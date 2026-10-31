@@ -274,6 +274,8 @@ export const COLUMNS: Columns = {
     is_server_admin: 'omit',
     // The server's administrator's decision about the account (D-233): the server's, not the workspace's.
     suspended_at: 'omit',
+    // Whether a password sign-in asks for a second step (D-236): a credential's neighbour, the person's own.
+    two_factor_enabled: 'omit',
     // A person's own setting about when they are interrupted (D-234), as Deep Work is.
     quiet_from: 'omit',
     quiet_to: 'omit',
@@ -288,6 +290,8 @@ export const COLUMNS: Columns = {
 export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, string>> = {
   accounts: 'a provider’s account and a credential’s password hash: the person’s own (D-179)',
   verifications: 'short-lived sign-in tokens, credentials of the person’s own (D-179)',
+  two_factors:
+    'an authenticator app’s sealed key and the backup codes: a second credential, the person’s own (D-236)',
   rate_limits:
     'sign-in and invitation-mail counters by client address, address digest or id, nobody’s record (D-179)',
   sessions: 'a credential, the person’s own',

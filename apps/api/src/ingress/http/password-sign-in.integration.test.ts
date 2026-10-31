@@ -589,6 +589,12 @@ describe('integration: every route of the library that takes a password is close
     '/verify-password': 'closed',
     '/delete-user': 'closed',
     '/request-password-reset': 'closed',
+    // Two-step verification (D-236): each weighs the session holder's password, counted as a change's is.
+    '/two-factor/enable': 'counted',
+    '/two-factor/disable': 'counted',
+    '/two-factor/generate-backup-codes': 'counted',
+    // The key is never read back.
+    '/two-factor/get-totp-uri': 'closed',
     // The library's API alone, no route; nothing of ours calls it (`better-auth.test.ts`).
     'api:setPassword': 'no-route',
   };

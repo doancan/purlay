@@ -6,7 +6,8 @@
  * The new password is read from the terminal, typed with nothing shown and asked twice, or — when
  * standard input is not a terminal — from its first line. **Never from an argument or from the
  * environment**: both are kept by the shell, the process table and the logs. A second argument is
- * refused without being repeated. Prints `Password changed for <email>` and nothing else of it. Works on
+ * refused without being repeated. Prints `Password changed for <email>` and nothing else of it — and, where
+ * two-step verification was on, that it is off now (D-236). Works on
  * the database `DATABASE_URL` names, the real one included — it is what the command is for.
  */
 import { createDatabase } from '@purlay/db';
@@ -110,6 +111,7 @@ try {
     );
   } else if (outcome.ok) {
     process.stdout.write(`Password changed for ${outcome.email}\n`);
+    if (outcome.twoFactorOff) process.stdout.write('Two-step verification is off for it now.\n');
   } else if (outcome.reason === 'weak-password') {
     fail(`That password is not accepted (${outcome.problem}). Nothing was changed.`);
   } else {

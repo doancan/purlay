@@ -125,6 +125,11 @@ CREATE TABLE users (
     quiet_to   SMALLINT,
     quiet_days SMALLINT,
 
+    -- Whether a password sign-in asks for a code from an authenticator app too (D-236): set by the sign-in
+    -- library once a first code was right, cleared when it is turned off, by the server's reset and by erasure.
+    -- Its key is in `two_factors`. (0067)
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
     email         TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -288,6 +293,41 @@ closes (D-179 §3), and an erasure deletes every one under its address's prefix.
 fifteen minutes (D-179 §4); an erasure deletes every one under its address's prefix. A password lives
 only in `accounts.password`, on the row whose `provider_id` is `credential` and whose `account_id` is the
 user's own id, as the library's scrypt (`<salt hex>:<key hex>`) — never the password itself.
+
+### 3.2.2. `two_factors`
+
+Two-step verification for an account with a password (D-236, 0067): the sign-in library's two-factor plugin
+keeps a row here per person who began to turn it on, under Purlay's names (`createAuth`).
+
+- **Sealed, never as shown.** `secret` is the authenticator app's key and `backup_codes` the unused backup
+  codes as JSON, each encrypted by the library under the server's derived secret (`deriveAuthSecret`). A copy of
+  the table signs nobody in.
+- **On only once a code was right.** `verified` is FALSE from the moment the key is made until the first right
+  code from the app, which also sets `users.two_factor_enabled`; a row that is not verified asks nothing of a
+  sign-in, and beginning again replaces its key.
+- **The lockout is the library's.** `failed_verification_count` counts wrong codes in a row at sign-in, across
+  challenges and kinds of code; at ten, `locked_until` is fifteen minutes on, and a right code resets both.
+- **One row a person** (`two_factors_user_key`), `ON DELETE CASCADE`; turning it off deletes the row, and so do
+  erasure and the server's `admin:reset-password`.
+
+The challenge a right password opens is a row of `verifications` (`2fa-` and a random id, its `value` the user's
+id, with a `2fa-attempts-` row beside it counting that challenge's codes), for ten minutes. Instance-wide; never
+exported.
+
+```sql
+CREATE TABLE two_factors (
+    id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    secret                     TEXT NOT NULL,
+    backup_codes               TEXT NOT NULL,
+    verified                   BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_verification_count  INTEGER NOT NULL DEFAULT 0,
+    locked_until               TIMESTAMPTZ,
+
+    CONSTRAINT two_factors_user_key UNIQUE (user_id),
+    CONSTRAINT two_factors_failures_counted CHECK (failed_verification_count >= 0)
+);
+```
 
 ### 3.3. `push_subscriptions` and `users.locale`
 
@@ -2071,6 +2111,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0064_github_delivery_bodies.sql github_deliveries.body_digest, unique per feed: a signed body sent again under a new delivery id posts nothing  (D-231 §1)
 0065_account_suspension.sql users.suspended_at, server_audit_log.target_user_id: the server's administrator suspends an account and lifts it  (D-233)
 0066_quiet_hours.sql users.quiet_from, users.quiet_to, users.quiet_days: a person's quiet hours, every week, on their profile's clock  (D-234)
+0067_two_factor.sql users.two_factor_enabled, two_factors: two-step verification for an account with a password, its key and backup codes sealed  (D-236)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

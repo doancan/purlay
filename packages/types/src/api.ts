@@ -1614,6 +1614,8 @@ export const MySignIn = Type.Object({
   ]),
   /** Whether the account is linked to the organisation's single sign-on (D-200); only ever the caller's own. */
   oidc: Type.Boolean(),
+  /** Whether a password sign-in asks for a code from an authenticator app too (D-236). */
+  twoFactor: Type.Boolean(),
 });
 export type MySignIn = Static<typeof MySignIn>;
 

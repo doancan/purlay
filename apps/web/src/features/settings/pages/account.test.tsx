@@ -412,6 +412,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        twoFactor: false,
       }),
   };
 
@@ -436,6 +437,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: null,
           oidc: true,
+          twoFactor: false,
         }),
     });
     expect(card.getByText('Single sign-on')).toBeDefined();
@@ -459,6 +461,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: 'ada-gh' },
           oidc: false,
+          twoFactor: false,
         }),
     });
     expect(card.getByText('GitHub')).toBeDefined();
@@ -478,6 +481,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: null },
           oidc: false,
+          twoFactor: false,
         }),
     });
     expect(card.getByText('Linked')).toBeDefined();
@@ -493,6 +497,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: 'ada' },
           oidc: false,
+          twoFactor: false,
         }),
     });
     expect(card.getByText('Your GitHub account’s address. You sign in with GitHub.')).toBeDefined();
@@ -518,6 +523,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
               hasPassword: false,
               github: null,
               oidc: false,
+              twoFactor: false,
             }),
     });
     expect(await card.findByRole('button', { name: 'Retry' })).toBeDefined();
@@ -549,6 +555,7 @@ describe('change password', () => {
         hasPassword: true,
         github: null,
         oidc: false,
+        twoFactor: false,
       }),
   };
 
@@ -567,6 +574,7 @@ describe('change password', () => {
           hasPassword: false,
           github: null,
           oidc: false,
+          twoFactor: false,
         }),
     });
     expect(without.queryByRole('region', { name: 'Password' })).toBeNull();

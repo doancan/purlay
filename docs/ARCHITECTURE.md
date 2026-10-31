@@ -840,7 +840,7 @@ it, however deep the call, without any signature taking it (D-47, D-71). A reque
 when its response has gone; a failure the client is told nothing about is written with its cause.
 Never logged: session tokens, `access_token_encrypted`, a feed's `secret_encrypted` and a delivery's signature (D-134), the server settings' GitHub client secret and relay address, read or sealed (D-179 §6), message content, email addresses, a device's
 push endpoint and keys (D-126), a profile's status line (D-131), a sign-in link, its token and its
-digest, and a mail's recipient and words — a relay's error is logged by its code alone (D-138 §8) — a list
+digest, two-step verification's key, its link and the backup codes (D-236), and a mail's recipient and words — a relay's error is logged by its code alone (D-138 §8) — a list
 in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
 written. A value interpolated into a message's text cannot be found that way, so a message is a
 constant and variables go in fields.

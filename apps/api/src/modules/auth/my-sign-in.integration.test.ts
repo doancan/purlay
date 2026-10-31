@@ -67,12 +67,14 @@ describe('integration: how an account signs in', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        twoFactor: false,
       });
       expect(await mySignIn(db, withPassword)).toMatchObject({
         emailLinks: true,
         hasPassword: true,
         github: null,
         oidc: false,
+        twoFactor: false,
       });
     });
   });
@@ -86,6 +88,7 @@ describe('integration: how an account signs in', () => {
         hasPassword: false,
         github: { login: 'octocat' },
         oidc: false,
+        twoFactor: false,
       });
     });
   });

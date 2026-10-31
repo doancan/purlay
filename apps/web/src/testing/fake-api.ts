@@ -128,6 +128,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
       hasPassword: false,
       github: { login: 'ada' },
       oidc: false,
+      twoFactor: false,
     }),
   // The device list is on the same page as the sign-in card: this browser alone, unless a test says.
   mySessions: () =>
