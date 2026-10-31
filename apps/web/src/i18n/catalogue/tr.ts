@@ -2114,6 +2114,17 @@ export const tr = {
   'settings.server.policy.open': 'Herkes',
   'settings.server.policy.open.body': 'Bu sunucuya ulaşabilen herkes hesap açabilir.',
   'settings.server.policy.saved': 'Kaydedildi. Bu bir sonraki kayıttan itibaren geçerli.',
+  'settings.server.accounts.title': 'Hesaplar',
+  'settings.server.accounts.description':
+    'Ayrılan birinin hesabını askıya al: her yerden çıkış yapılır ve giriş yapamaz; mesajları ve adı kalır. Askıyı kaldırınca eskisi gibi geri döner.',
+  'settings.server.accounts.find': 'Ad, kullanıcı adı veya adresle bul',
+  'settings.server.accounts.none': 'Eşleşen hesap yok.',
+  'settings.server.accounts.admin': 'Bu sunucunun yöneticisi',
+  'settings.server.accounts.suspendedOn': '{when} tarihinde askıya alındı',
+  'settings.server.accounts.suspend': 'Askıya al',
+  'settings.server.accounts.lift': 'Askıyı kaldır',
+  'settings.server.accounts.ask':
+    '{name} askıya alınsın mı? Bütün cihazlarda oturumu kapanır ve sen askıyı kaldırana kadar giriş yapamaz.',
   'settings.server.creators.title': 'Kimler çalışma alanı açabilir',
   'settings.server.creators.description':
     'Giriş açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',

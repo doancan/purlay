@@ -2158,6 +2158,17 @@ export const en = {
   'settings.server.policy.open': 'Anyone',
   'settings.server.policy.open.body': 'Anyone who can reach this server can create an account.',
   'settings.server.policy.saved': 'Saved. This applies from the next sign-up.',
+  'settings.server.accounts.title': 'Accounts',
+  'settings.server.accounts.description':
+    'Suspend the account of somebody who has left: they are signed out everywhere and cannot sign in, and their messages and name stay. Lift it to let them back in as they were.',
+  'settings.server.accounts.find': 'Find by name, username or address',
+  'settings.server.accounts.none': 'No account matches.',
+  'settings.server.accounts.admin': 'Administers this server',
+  'settings.server.accounts.suspendedOn': 'Suspended {when}',
+  'settings.server.accounts.suspend': 'Suspend',
+  'settings.server.accounts.lift': 'Lift suspension',
+  'settings.server.accounts.ask':
+    'Suspend {name}? They are signed out on every device and cannot sign in until you lift it.',
   'settings.server.creators.title': 'Who can create workspaces',
   'settings.server.creators.description':
     'Signing in stays open: a person who is invited can always join a workspace.',
