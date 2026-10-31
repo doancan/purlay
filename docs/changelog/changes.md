@@ -91,5 +91,8 @@ have it.
 - **Native app** — A device name can no longer hold zero-width or directional characters, so a session cannot be made to read as another device's in the sessions list (D-191)
 - **Native app** — A wrong sign-in verifier or a burnt code is a warning in the server's log with its reason, and nothing in the log can open a session (D-191)
 - **Client version** — A client header with an empty pre-release identifier is no longer taken for a version (D-190)
+- **Integrations** — A GitHub delivery's signed body sent again under a new delivery id posts nothing: a feed refuses a body it has already posted (D-231)
+- **Sign-in** — Asking for somebody's sign-in links no longer keeps them from signing in by email: the hourly limit is per address and client, with a higher ceiling per address (D-231)
+- **Files** — A file kept in the browser is checked with the server each time it is opened, so somebody removed from a channel can no longer open its files from their cache (D-231)
 
 ---
