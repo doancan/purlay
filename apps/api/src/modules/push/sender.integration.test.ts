@@ -17,6 +17,7 @@ import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/d
 import { edit } from '../messages/edit';
 import { send } from '../messages/messages';
 import { PUSH_FAILURES_MAX, createPushSender, type PushPost } from './sender';
+import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import type { VapidKeys } from './vapid';
 
 afterAll(async () => {
@@ -166,6 +167,7 @@ const sending = async (
   post: PushPost,
   recording = aRecordingLogger(),
   heard: Attention = attention,
+  metrics?: ServerMetrics,
 ): Promise<{
   readonly say: (
     room: Room,
@@ -183,6 +185,7 @@ const sending = async (
     keys: KEYS,
     attention: heard,
     post,
+    ...(metrics === undefined ? {} : { failures: metrics.pushFailures }),
   });
   let at = 0;
   return {
@@ -208,6 +211,15 @@ const sending = async (
 };
 
 const mention = (room: Room, who: string): string => `@${room.members[who]?.username ?? ''}`;
+
+/** The push failures the registry holds, by reason (D-221). */
+const failuresOf = (metrics: ServerMetrics): Record<string, number> =>
+  Object.fromEntries(
+    (
+      metrics.registry.families().find((family) => family.name === 'purlay_push_failures_total')
+        ?.samples ?? []
+    ).map((sample) => [sample.labels['reason'] ?? '', sample.value]),
+  );
 
 describe('integration: a device is told', () => {
   test('of a mention, in its person’s language, with who and where and never what was said', async () => {
@@ -474,6 +486,37 @@ describe('integration: what the push service answers', () => {
     },
   );
 
+  /** What `/metrics` says of pushes: each that did not reach its service, by why; a device gone is no failure. */
+  test.each([
+    [201, {}],
+    [410, {}],
+    [500, { not_taken: 1 }],
+    [429, { not_taken: 1 }],
+    [403, { refused: 1 }],
+  ] as const)('a push answered %p is counted as a failure by why: %o', async (status, counted) => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      await subscribeDevice(db, room, 'bob', await aBrowser());
+      const metrics = serverMetrics();
+      const { say, settled } = await sending(
+        db,
+        aPushService(status).post,
+        aRecordingLogger(),
+        attention,
+        metrics,
+      );
+      await say(room, 'alice', `${mention(room, 'bob')} ping`);
+      await settled();
+      expect(failuresOf(metrics)).toEqual({
+        refused: 0,
+        not_taken: 0,
+        error: 0,
+        dropped: 0,
+        ...counted,
+      });
+    });
+  });
+
   test('one person’s slow push services do not hold anybody else’s', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
@@ -602,9 +645,11 @@ describe('integration: what the push service answers', () => {
           : Promise.resolve({ kind: 'answered', status: 201 });
       };
       const recording = aRecordingLogger();
-      const { say, settled } = await sending(db, post, recording);
+      const metrics = serverMetrics();
+      const { say, settled } = await sending(db, post, recording, attention, metrics);
       await say(room, 'alice', `${mention(room, 'bob')} look`);
       await settled();
+      expect(failuresOf(metrics)).toMatchObject({ error: 1, not_taken: 0 });
       expect(posted.sort()).toEqual([
         'https://push.example.com/bob/1',
         'https://push.example.com/bob/2',
@@ -615,6 +660,7 @@ describe('integration: what the push service answers', () => {
 
   test('a database that fails while the devices are found is said, with the message', async () => {
     const recording = aRecordingLogger();
+    const metrics = serverMetrics();
     const push = await createPushSender({
       database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
       clock,
@@ -622,9 +668,11 @@ describe('integration: what the push service answers', () => {
       keys: KEYS,
       attention,
       post: () => Promise.reject(new Error('nothing is posted')),
+      failures: metrics.pushFailures,
     });
     push.told('m-1', ['u-1']);
     await push.flush(1_000);
+    expect(failuresOf(metrics)).toMatchObject({ error: 1 });
     expect(
       recording.lines.map((line) => [line['level'], line['msg'], line['messageId'], line['stage']]),
     ).toContainEqual(['error', 'push delivery failed', 'm-1', 'finding devices']);
@@ -651,10 +699,12 @@ describe('integration: what the push service answers', () => {
         .execute();
       const service = aPushService();
       const recording = aRecordingLogger();
-      const { say, settled } = await sending(db, service.post, recording);
+      const metrics = serverMetrics();
+      const { say, settled } = await sending(db, service.post, recording, attention, metrics);
       await say(room, 'alice', `${mention(room, 'bob')} look`);
       await settled();
       expect(service.sent).toHaveLength(1_000);
+      expect(failuresOf(metrics)).toMatchObject({ dropped: 1 });
       expect(
         recording.lines.find((line) => line['msg'] === 'push dropped: too many waiting'),
       ).toMatchObject({ dropped: 1 });
