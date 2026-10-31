@@ -60,7 +60,7 @@ export const en = {
   'search.repository': 'GitHub repository',
   'search.since': 'From date',
   'search.until': 'Before date',
-  'search.dateHint': 'UTC dates; the end date is excluded.',
+  'search.dateHint': 'Days in your time zone; the end date is excluded.',
   'search.saved': 'Saved searches',
   'search.saveName': 'Search name',
   'search.save': 'Save this search',
@@ -68,6 +68,24 @@ export const en = {
   'search.removeNamed': 'Remove {name}',
   'search.remove': 'Remove',
   'search.run': 'Search',
+  'search.tooLong': 'Use at most {max} characters.',
+  'search.rangeError': 'The end date must come after the start date.',
+  'search.operators.title': 'Search operators',
+  'search.operators.intro':
+    'Type these with your words. Enter turns them into the filters above and searches for the rest.',
+  'search.operators.in': 'In a channel, or a direct message with someone',
+  'search.operators.from': 'Written by someone; from:me for your own',
+  'search.operators.has': 'Contains code, or has attachments',
+  'search.operators.is': 'Open or resolved threads, or marked questions',
+  'search.operators.repo': 'Mentions a GitHub repository',
+  'search.operators.dates': 'On a day, before it or after it: whole days in your time zone',
+  'search.operators.quote': 'These words as written, even when they look like a filter',
+  'search.operators.unread.channel':
+    'No channel you can see is called “{value}”, so “{token}” was searched for as words.',
+  'search.operators.unread.person':
+    'Nobody here has the username “{value}”, so “{token}” was searched for as words.',
+  'search.operators.unread.value':
+    '“{token}” is not a filter search understands, so it was searched for as words.',
 
   // ── Common ──────────────────────────────────────────────────────────────
   'common.close': 'Close',

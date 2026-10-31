@@ -1,3 +1,8 @@
+/**
+ * Advanced filters (D-204): status, content, questions, a repository and a range of days. A day is the
+ * viewer's — its start in their time zone, sent as a UTC instant — as the `on:`, `before:` and `after:`
+ * operators read it (D-224), so a typed day and a picked one are the same day.
+ */
 import { Value } from '@sinclair/typebox/value';
 import { useState } from 'react';
 import { SearchFilters } from '@purlay/types';
@@ -13,7 +18,7 @@ export const AdvancedFilters = ({
   readonly value: SearchFilters;
   readonly onChange: (value: SearchFilters) => void;
 }): React.JSX.Element => {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const [repositoryError, setRepositoryError] = useState(false);
   const change = <K extends keyof SearchFilters>(key: K, next: SearchFilters[K]): void => {
     const updated: unknown = Object.fromEntries([
@@ -95,23 +100,23 @@ export const AdvancedFilters = ({
         <TextField
           label={t('search.since')}
           type="date"
-          value={value.since?.slice(0, 10) ?? ''}
+          value={value.since === undefined ? '' : format.isoDay(value.since)}
           onChange={(event) => {
             change(
               'since',
-              event.target.value === '' ? undefined : `${event.target.value}T00:00:00.000Z`,
+              event.target.value === '' ? undefined : format.dayStart(event.target.value),
             );
           }}
         />
         <TextField
           label={t('search.until')}
           type="date"
-          value={value.until?.slice(0, 10) ?? ''}
+          value={value.until === undefined ? '' : format.isoDay(value.until)}
           hint={t('search.dateHint')}
           onChange={(event) => {
             change(
               'until',
-              event.target.value === '' ? undefined : `${event.target.value}T00:00:00.000Z`,
+              event.target.value === '' ? undefined : format.dayStart(event.target.value),
             );
           }}
         />
