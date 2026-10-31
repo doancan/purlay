@@ -2224,6 +2224,29 @@ describe('slash commands (D-214)', () => {
     expect(box().value).toBe('/t');
   });
 
+  test('a draft that comes back as a command opens no list: only a `/` typed now does', async () => {
+    const { view, box, user } = await mount({ storage: drafted('/'), props: { autoFocus: true } });
+    expectFocusOn(box());
+    expect(box().value).toBe('/');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    await user.keyboard('t');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    await user.keyboard('{Backspace}{Backspace}/t');
+    expect(box().value).toBe('/t');
+    expect(view.getByRole('listbox', { name: 'Commands' })).toBeDefined();
+  });
+
+  test('Esc holds when the person leaves and comes back: the draft is kept, the list stays shut', async () => {
+    const storage = memory();
+    const first = await mount({ storage, props: { autoFocus: true } });
+    await first.user.type(first.box(), '/');
+    await first.user.keyboard('{Escape}');
+    first.view.unmount();
+    const second = await mount({ storage, props: { autoFocus: true } });
+    expect(second.box().value).toBe('/');
+    expect(second.view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+  });
+
   test('/topic with nothing after it clears the topic', async () => {
     const asked: unknown[] = [];
     const { view, box, user } = await mount({

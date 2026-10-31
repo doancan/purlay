@@ -157,7 +157,11 @@ const Inner = ({
   const listId = useId();
   const runSlash = useSlashRunner(channelId);
   const [commandActive, setCommandActive] = useState(0);
-  const [commandsDismissed, setCommandsDismissed] = useState(false);
+  // Esc shuts the commands until the `/` is gone. A draft that comes back as one starts shut: the
+  // person did not ask for the list on this visit, and on a phone it would cover the feed.
+  const [commandsDismissed, setCommandsDismissed] = useState(
+    () => slashQuery(text, text.length) !== null,
+  );
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
@@ -247,13 +251,15 @@ const Inner = ({
   }, [mentionStart, refreshCandidates]);
   const current = Math.min(active, suggestions.length - 1);
   // The commands, while a `/` and letters are all that is written before the caret (D-214).
-  const slash = focused ? slashQuery(text, caretAt) : null;
+  const typedCommand = slashQuery(text, caretAt);
+  const slash = focused ? typedCommand : null;
   const commands = slash !== null && !commandsDismissed ? commandsFor(slash) : [];
   const commandsOpen = commands.length > 0;
   const currentCommand = Math.min(commandActive, commands.length - 1);
+  // Shut until the `/` is gone from the text — not until focus leaves, which the mount also is.
   useEffect(() => {
-    if (slash === null) setCommandsDismissed(false);
-  }, [slash]);
+    if (typedCommand === null) setCommandsDismissed(false);
+  }, [typedCommand]);
   /** A command chosen from the list: written out with a space after it, for its words. */
   const completeCommand = (name: SlashName): void => {
     const written = `/${name} `;
