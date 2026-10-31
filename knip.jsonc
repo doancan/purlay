@@ -5,6 +5,13 @@
 // is only what it cannot see, and every line says why. The target is not zero
 // exemptions but zero nobody can find (CONTRIBUTING §6.5): this file is the whole
 // list. Nothing here is a file-by-file waiver for code that is simply dead.
+//
+// Knip itself is held at 6.41.0 (D-219: updates are the owner's). From 6.42.1 its Bun plugin reads
+// the root's `bun test apps packages scripts` as filters and matches them against each workspace's
+// own directory (#2165 upstream), so no test under apps/ or packages/ is an entry; 6.44.0 also stops
+// following root scripts into other workspaces (`bun run apps/api/src/cli/…`). Either way 500+ live
+// files read as unused. Bump it when `bun run knip` passes on the new version, not by listing here
+// what it should have found.
 {
   "$schema": "https://unpkg.com/knip@6.39.0/schema.json",
 
