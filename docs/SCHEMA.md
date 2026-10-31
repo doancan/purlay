@@ -1390,15 +1390,20 @@ CREATE TABLE github_deliveries (
     feed_id      UUID NOT NULL REFERENCES github_repo_feeds(id) ON DELETE CASCADE,
     delivery_id  VARCHAR(64) COLLATE "C" NOT NULL,       -- X-GitHub-Delivery
     received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- swept after 30 days
-    PRIMARY KEY (feed_id, delivery_id)
+    body_digest  TEXT,                                   -- SHA-256 of the body as sent, hex (0064)
+    PRIMARY KEY (feed_id, delivery_id),
+    CONSTRAINT github_deliveries_body_is_a_digest CHECK (body_digest ~ '^[0-9a-f]{64}$')
 );
 
 CREATE INDEX idx_github_deliveries_received ON github_deliveries (received_at);
+CREATE UNIQUE INDEX github_deliveries_feed_body_key ON github_deliveries (feed_id, body_digest);
 ```
 
 > A feed is its channel's, in its channel's workspace (I-4), and goes with either. The secret is never
 > returned after the answer that made it and never logged (`ARCHITECTURE.md` §10). A delivery is
-> recorded in the transaction that posts it, so the same delivery again posts nothing.
+> recorded in the transaction that posts it, so the same delivery again posts nothing — by its id, or by its
+body's digest under an id made up, since GitHub signs the body and not the id (D-231 §1). A row recorded
+before 0064 has no digest; NULLs never collide, and the sweep forgets those rows with the rest.
 
 ---
 
@@ -2035,6 +2040,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0061_question_indexes.sql concurrent indexes for questions, assignees, accepted answers and decision authors (D-204)
 0062_channel_bookmarks.sql channel_bookmarks: links a channel's members keep at hand, under its header  (D-218)
 0063_channel_retention.sql channels.min_retention_days, channels.retain_forever: a channel keeps its history longer than its workspace, never shorter  (D-225)
+0064_github_delivery_bodies.sql github_deliveries.body_digest, unique per feed: a signed body sent again under a new delivery id posts nothing  (D-231 §1)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

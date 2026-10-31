@@ -231,6 +231,25 @@ describe('integration: a delivery to a feed', () => {
     });
   });
 
+  test('a signed body sent again under a new delivery id is a replay: it posts nothing (D-231 §1)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const raw = new TextEncoder().encode(JSON.stringify(push()));
+      expect(await world.deliver(null, { raw, deliveryId: 'seen-once' })).toBe('posted');
+      // The id is not signed: anybody who saw the delivery can make up another.
+      expect(await world.deliver(null, { raw, deliveryId: 'made-up' })).toBe('duplicate');
+      // A body that differs by a byte is another delivery, and posts.
+      const next = new TextEncoder().encode(JSON.stringify(push({ after: sha('c') })));
+      expect(await world.deliver(null, { raw: next, deliveryId: 'next' })).toBe('posted');
+      expect(await eventsIn(db, world.room.channelId)).toBe(2);
+      // The same bytes to another feed are that feed's delivery: each feed has its own secret.
+      const other = await aWorld(db, await aRoom(db, ['alice']));
+      expect(await other.deliver(null, { raw, deliveryId: 'seen-once' })).toBe('posted');
+      const said = world.lines.filter((line) => line['msg'] === 'github delivery');
+      expect(said.map((line) => line['outcome'])).toEqual(['posted', 'duplicate', 'posted']);
+    });
+  });
+
   test('a ping learns the repository and posts nothing; an event the feed does not post is ignored', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
