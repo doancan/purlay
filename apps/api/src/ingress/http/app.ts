@@ -200,6 +200,7 @@ import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
+import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
 import { readPresence } from './presence';
@@ -814,6 +815,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .patch(
       '/api/me/profile',
       async ({ request, body }) => await updateMyProfile(sending, request, body),
+    )
+    .get(
+      '/api/me/quiet-hours',
+      async ({ request }) => await readMyQuietHours(dependencies, request),
+    )
+    .put(
+      '/api/me/quiet-hours',
+      async ({ request, body }) => await setMyQuietHours(dependencies, request, body),
     )
     .put('/api/me/locale', async ({ request, body, set }) => {
       await setMyLocale(dependencies, request, body);

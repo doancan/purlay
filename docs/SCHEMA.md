@@ -118,6 +118,13 @@ CREATE TABLE users (
     -- its history and its name. NULL is an account in use. (0065)
     suspended_at TIMESTAMPTZ,
 
+    -- Quiet hours (D-234): minutes after midnight on the profile's clock (`time_zone`), and the days a window
+    -- starts on, a bit each from Sunday (1) to Saturday (64). All NULL, or all set with two different ends
+    -- (`users_quiet_hours_whole`). `from` later than `to` runs past midnight. (0066)
+    quiet_from SMALLINT,
+    quiet_to   SMALLINT,
+    quiet_days SMALLINT,
+
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
     email         TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -145,6 +152,15 @@ CREATE TABLE users (
     -- Soft delete, so authorship on historical messages survives. (D-22)
     deleted_at    TIMESTAMPTZ,
 
+    CONSTRAINT users_quiet_hours_whole CHECK (
+        (quiet_from IS NULL AND quiet_to IS NULL AND quiet_days IS NULL)
+        OR (
+            quiet_from BETWEEN 0 AND 1439
+            AND quiet_to BETWEEN 0 AND 1439
+            AND quiet_from <> quiet_to
+            AND quiet_days BETWEEN 1 AND 127
+        )
+    ),
     CONSTRAINT users_profile_not_blank CHECK (
         (title IS NULL OR btrim(title) <> '')
         AND (time_zone IS NULL OR btrim(time_zone) <> '')
@@ -2054,6 +2070,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0063_channel_retention.sql channels.min_retention_days, channels.retain_forever: a channel keeps its history longer than its workspace, never shorter  (D-225)
 0064_github_delivery_bodies.sql github_deliveries.body_digest, unique per feed: a signed body sent again under a new delivery id posts nothing  (D-231 §1)
 0065_account_suspension.sql users.suspended_at, server_audit_log.target_user_id: the server's administrator suspends an account and lifts it  (D-233)
+0066_quiet_hours.sql users.quiet_from, users.quiet_to, users.quiet_days: a person's quiet hours, every week, on their profile's clock  (D-234)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

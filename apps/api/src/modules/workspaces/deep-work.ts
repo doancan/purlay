@@ -12,6 +12,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { DEEP_WORK_MAX_HOURS, type DeepWorkResponse, type SetDeepWorkRequest } from '@purlay/types';
+import { isQuietNow } from '../users/quiet-hours';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
@@ -55,11 +56,39 @@ export const inDeepWork = async (
   if (userIds.length === 0) return new Set();
   const rows = await executor
     .selectFrom('workspace_members')
-    .select('user_id')
-    .where('workspace_id', '=', workspaceId)
-    .where('user_id', 'in', userIds)
-    .where('is_deep_work_active', '=', true)
-    .where('deep_work_until', '>', now)
+    .innerJoin('users', 'users.id', 'workspace_members.user_id')
+    .select([
+      'workspace_members.user_id',
+      'workspace_members.is_deep_work_active',
+      'workspace_members.deep_work_until',
+      'users.time_zone',
+      'users.quiet_from',
+      'users.quiet_to',
+      'users.quiet_days',
+    ])
+    .where('workspace_members.workspace_id', '=', workspaceId)
+    .where('workspace_members.user_id', 'in', userIds)
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb('workspace_members.is_deep_work_active', '=', true),
+          eb('workspace_members.deep_work_until', '>', now),
+        ]),
+        eb('users.quiet_days', 'is not', null),
+      ]),
+    )
     .execute();
-  return new Set(rows.map((row) => row.user_id));
+  // Deep Work started by hand, or the person's own quiet hours on their profile's clock (D-234): either
+  // holds back what would interrupt, and neither loses anything.
+  return new Set(
+    rows
+      .filter(
+        (row) =>
+          (row.is_deep_work_active &&
+            row.deep_work_until !== null &&
+            new Date(row.deep_work_until) > now) ||
+          isQuietNow(row, now),
+      )
+      .map((row) => row.user_id),
+  );
 };
