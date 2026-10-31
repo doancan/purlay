@@ -110,6 +110,7 @@ describe('the endpoints', () => {
       memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
       mayCreateWorkspace: false,
       isServerAdmin: false,
+      nameFromGitHub: false,
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });

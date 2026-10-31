@@ -1323,6 +1323,7 @@ describe('is the session still there', () => {
       memberships: [],
       mayCreateWorkspace: true,
       isServerAdmin: false,
+      nameFromGitHub: false,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

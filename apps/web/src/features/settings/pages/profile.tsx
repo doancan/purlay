@@ -1,6 +1,7 @@
 /**
- * Profile (#488, D-131, D-146): who you are to the people you work with. Your name, handle and avatar
- * are GitHub's and are shown, not edited; your title, status line and time zone are yours.
+ * Profile (#488, D-131, D-146): who you are to the people you work with. Your handle and avatar are
+ * shown, not edited; your name is GitHub's where GitHub made the account, and yours to set otherwise
+ * (D-235); your title, status line and time zone are yours.
  *
  * Only what you edit is sent; a field you have not touched shows what the server has, so a change made
  * in another tab appears here and is never sent back over it. A field emptied is cleared. The time
@@ -25,6 +26,7 @@ import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { useSession } from '../../session/session';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
+import { NameRow } from './name-row';
 
 /** The zones this browser can format in, for the field's suggestions; none where it cannot say. */
 const zonesHere = (): readonly string[] =>
@@ -43,7 +45,7 @@ export const ProfilePage = (): React.JSX.Element => {
   const describe = useDescribeFailure();
   const formId = useId();
   const zonesId = useId();
-  const { user, profile } = useSession();
+  const { user, profile, nameFromGitHub } = useSession();
   const [edited, setEdited] = useState<Partial<Record<Field, string>>>({});
   // Each field the server refused, with what to say; `form` for what names no field.
   const [problems, setProblems] = useState<Partial<Record<Field | 'form', string>>>({});
@@ -125,7 +127,9 @@ export const ProfilePage = (): React.JSX.Element => {
     >
       <SettingsCard
         title={t('settings.profile.identity')}
-        description={t('settings.profile.identityHint')}
+        description={t(
+          nameFromGitHub ? 'settings.profile.identityHint' : 'settings.profile.identityHintOwn',
+        )}
       >
         <SettingsRow label={t('settings.profile.who')}>
           <div className="flex min-w-0 items-center gap-3">
@@ -138,6 +142,7 @@ export const ProfilePage = (): React.JSX.Element => {
             </span>
           </div>
         </SettingsRow>
+        {!nameFromGitHub && <NameRow />}
       </SettingsCard>
 
       <form
