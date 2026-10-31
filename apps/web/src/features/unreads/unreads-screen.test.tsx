@@ -8,10 +8,20 @@ import type { Channel, MessagePage } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { installDom } from '../../testing/dom';
-import { BOB, IDS, aChannel, aMessage, aSignedInApi, messageIdAt } from '../../testing/fixtures';
+import { ApiError } from '../../data/errors';
+import {
+  BOB,
+  IDS,
+  ME,
+  aChannel,
+  aMessage,
+  aSignedInApi,
+  messageIdAt,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { settle } from '../../testing/channel-harness';
 import { person } from '../../testing/user';
+import { Toaster } from '../../ui/toast';
 import { UNREADS_PAGE } from './unreads-screen';
 import { waitingChannels } from './waiting';
 
@@ -24,10 +34,16 @@ const state = (position: string | null, unread: number): Channel['state'] => ({
 });
 
 const visit = async (channels: Channel[], api: Partial<Api> = {}): ReturnType<typeof renderApp> => {
-  const view = await renderApp(<Outlet />, {
-    path: '/w/acme/unreads',
-    api: aSignedInApi({ channels: () => Promise.resolve(channels), ...api }),
-  });
+  const view = await renderApp(
+    <>
+      <Outlet />
+      <Toaster dismissLabel="Close" />
+    </>,
+    {
+      path: '/w/acme/unreads',
+      api: aSignedInApi({ channels: () => Promise.resolve(channels), ...api }),
+    },
+  );
   await settle();
   return view;
 };
@@ -81,6 +97,56 @@ describe('the screen', () => {
     await person().click(view.getByRole('button', { name: 'Mark read' }));
     await settle();
     expect(reads).toEqual([messageIdAt(2)]);
+  });
+
+  test('a refused Mark read says so', async () => {
+    const view = await visit([aChannel(IDS.api, 'api', { state: state(messageIdAt(1), 1) })], {
+      messages: () => Promise.resolve({ data: [aMessage(2, { sender: BOB })], nextCursor: null }),
+      markRead: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+    });
+    await person().click(view.getByRole('button', { name: 'Mark read' }));
+    expect(await view.findByText(/It could not be marked read\./)).toBeDefined();
+  });
+
+  test('who a message really mentions is highlighted, as in the feed', async () => {
+    const view = await visit([aChannel(IDS.api, 'api', { state: state(messageIdAt(1), 1) })], {
+      messages: () =>
+        Promise.resolve({
+          data: [
+            aMessage(2, {
+              sender: BOB,
+              content: '@dogancan and @bob, not @carol',
+              // Carol is nobody this workspace knows: named, but not a mention.
+              mentions: [ME.id, BOB.id, '00000000-0000-4000-8000-00000000ca01'],
+            }),
+          ],
+          nextCursor: null,
+        }),
+    });
+    const marked = [...view.container.querySelectorAll('[data-mention]')];
+    expect(marked.map((node) => node.textContent)).toEqual(['@dogancan', '@bob']);
+    expect(marked[0]?.hasAttribute('data-mention-me')).toBe(true);
+    expect(marked[1]?.hasAttribute('data-mention-me')).toBe(false);
+  });
+
+  test('a channel whose new messages could not be loaded says so, and Retry asks again', async () => {
+    let answers = 0;
+    const view = await visit([aChannel(IDS.api, 'api', { state: state(messageIdAt(1), 1) })], {
+      messages: () => {
+        answers += 1;
+        return answers === 1
+          ? Promise.reject(new Error('offline'))
+          : Promise.resolve({
+              data: [aMessage(2, { sender: BOB, content: 'back' })],
+              nextCursor: null,
+            });
+      },
+    });
+    expect(view.getByText('What is new here could not be loaded.')).toBeDefined();
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(view.getByText('back')).toBeDefined();
+    expect(view.queryByText('What is new here could not be loaded.')).toBeNull();
   });
 
   test('replies waiting in threads, and no new message in the feed, are said, with a way in', async () => {
