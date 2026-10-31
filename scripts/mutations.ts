@@ -1340,7 +1340,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sign-in-address-loose',
     why: 'one mailbox written many ways is many counts, and none matches the account holding it; what the library refuses is a 500',
     file: 'packages/types/src/mailbox.ts',
-    find: '  return address.length <= ADDRESS_MAX && ADDRESS.test(address) ? address : undefined;\n',
+    find: '  return address.length <= EMAIL_MAX && ADDRESS.test(address) ? address : undefined;\n',
     replace:
       "  return address.includes('@') && !/[\\u0000-\\u001F]/.test(address) ? address : undefined;\n",
     tests: [
@@ -7279,15 +7279,15 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'setup-admin-name-unbounded',
     why: 'a name longer than its column reaches the database as a raw error',
     file: 'apps/api/src/modules/setup/admin.ts',
-    find: 'length > NAME_MAX ||',
-    replace: 'length > NAME_MAX * 100 ||',
+    find: 'length > DISPLAY_NAME_MAX ||',
+    replace: 'length > DISPLAY_NAME_MAX * 100 ||',
     tests: ['apps/api/src/modules/setup/admin.integration.test.ts'],
   },
   {
     id: 'setup-admin-name-takes-controls',
     why: 'a name with a bidi override or a NUL is stored and shown to everybody',
     file: 'apps/api/src/modules/setup/admin.ts',
-    find: '|| CONTROL.test(name)) {',
+    find: '|| FORBIDDEN_IN_NAME.test(name)) {',
     replace: '|| false) {',
     tests: ['apps/api/src/modules/setup/admin.integration.test.ts'],
   },

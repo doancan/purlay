@@ -5,7 +5,7 @@
  *
  * The executor is an argument, so this runs inside a rolled-back transaction in a test (D-46).
  */
-import { isErased } from '@purlay/types';
+import { FORBIDDEN_IN_NAME, isErased } from '@purlay/types';
 import { BROADCAST_NAMES } from '@purlay/markdown';
 import { sql, type Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
@@ -61,14 +61,11 @@ const DISPLAY_NAME_MAX = 128;
 const fitted = (value: string, max: number): string => Array.from(value).slice(0, max).join('');
 
 /**
- * What GitHub's free-text `name` may not carry into a column: control characters
- * (PostgreSQL cannot store a NUL), a lone surrogate, and the bidirectional
- * overrides that make one name read as another. The same set a workspace or
- * channel name is refused for; here it is removed, because sign-in never fails on
- * a value GitHub controls (#233).
+ * What GitHub's free-text `name` may not carry into a column: the set a workspace or channel name is
+ * refused for (`FORBIDDEN_IN_NAME`). Here it is removed, because sign-in never fails on a value GitHub
+ * controls (#233).
  */
-const UNSAFE_IN_NAME =
-  /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const UNSAFE_IN_NAME = new RegExp(FORBIDDEN_IN_NAME.source, 'g');
 const cleanedName = (value: string): string => value.replace(UNSAFE_IN_NAME, '').trim();
 
 /**

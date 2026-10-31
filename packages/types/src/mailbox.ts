@@ -18,11 +18,11 @@ const ATOM = "[a-z0-9_'+-]+";
 const LABEL = '[a-z0-9](?:[a-z0-9-]*[a-z0-9])?';
 const ADDRESS = new RegExp(`^(?:${ATOM}\\.)*${ATOM}(?<!')@(?:${LABEL}\\.)+[a-z]{2,}$`);
 
-/** The longest an address may be (RFC 5321). */
-const ADDRESS_MAX = 254;
+/** The longest an address may be (RFC 5321): the contract's and every field's that takes one. */
+export const EMAIL_MAX = 254;
 
 /** The address as it is stored and compared (D-40): trimmed, lower-cased, one mailbox — or nothing. */
 export const normalisedMailbox = (typed: string): string | undefined => {
   const address = typed.trim().toLowerCase();
-  return address.length <= ADDRESS_MAX && ADDRESS.test(address) ? address : undefined;
+  return address.length <= EMAIL_MAX && ADDRESS.test(address) ? address : undefined;
 };

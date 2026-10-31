@@ -7,6 +7,7 @@
  * It is checked here against the contract's rule — printable, no spaces — so the common slip is
  * answered before a round trip; the server stays the authority, and its refusal lands in the field.
  */
+import { GITHUB_TOKEN_MAX } from '@purlay/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
@@ -179,7 +180,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
             type="password"
             placeholder={t('github.tokenShape')}
             value={token}
-            maxLength={255}
+            maxLength={GITHUB_TOKEN_MAX}
             autoComplete="off"
             spellCheck={false}
             {...(problem?.field === 'token' ? { error: problem.message } : {})}

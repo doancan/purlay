@@ -1,6 +1,6 @@
 /**
  * A channel's name as the contract and the sidebar want it: lowercase letters, numbers and hyphens,
- * starting with a letter or a number, at most 64 (D-123). People type names the way they say them —
+ * starting with a letter or a number, at most `CHANNEL_NAME_MAX` (D-123). People type names the way they say them —
  * "Genel Sohbet", "İstanbul Ekibi" — so the field turns what is typed into that form as it is typed,
  * rather than refusing it after the fact.
  *
@@ -8,12 +8,13 @@
  * a letter's marks are taken off rather than the letter dropped, and the dotless ı, which has no mark
  * to take off, is spelled. Anything else that is not a letter or a number becomes one hyphen.
  */
+import { CHANNEL_NAME_MAX } from '@purlay/types';
 
-/** The rule, once: what the server is sent and what the field checks before it does. */
+/**
+ * The spelling this client gives a channel, once: what the field checks before it sends. Stricter than
+ * the contract, whose `name` format refuses only what cannot be shown safely; the server takes either.
+ */
 export const CHANNEL_NAME = /^[a-z0-9][a-z0-9-]*$/;
-
-/** The longest name, as the contract states it. */
-export const CHANNEL_NAME_MAX = 64;
 
 /**
  * What is typed, as it is typed. A trailing hyphen is kept, or the separator a person has just typed

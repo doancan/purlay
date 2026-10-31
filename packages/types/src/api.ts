@@ -48,6 +48,7 @@ import {
   Uuid,
 } from './models';
 import { PresenceChange } from './events';
+import { EMAIL_MAX } from './mailbox';
 import { REPLAY_OVERLAP_MS } from './message-id';
 
 /**
@@ -108,10 +109,17 @@ export type MeResponse = Static<typeof MeResponse>;
 /** The longest workspace name, as `workspaces.name` holds it (`VARCHAR(64)`, migration 0003). */
 export const WORKSPACE_NAME_MAX = 64;
 
+/** The longest workspace address, as `workspaces.slug` holds it (`VARCHAR(64)`, migration 0003). */
+export const WORKSPACE_SLUG_MAX = 64;
+
 export const CreateWorkspaceRequest = FromClient({
   name: Type.String({ minLength: 1, maxLength: WORKSPACE_NAME_MAX, format: 'name' }),
   /** Lowercase, and an identifier rather than prose — hence `COLLATE "C"` (D-40). */
-  slug: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+  slug: Type.String({
+    minLength: 1,
+    maxLength: WORKSPACE_SLUG_MAX,
+    pattern: '^[a-z0-9][a-z0-9-]*$',
+  }),
 });
 export type CreateWorkspaceRequest = Static<typeof CreateWorkspaceRequest>;
 
@@ -217,8 +225,11 @@ export type UpdateMemberRoleRequest = Static<typeof UpdateMemberRoleRequest>;
 
 // ── Channels ────────────────────────────────────────────────────────────────
 
+/** The longest channel name, as `channels.name` holds it (`VARCHAR(64)`). */
+export const CHANNEL_NAME_MAX = 64;
+
 /** A channel's name, as it is created and as it is renamed: one rule for both. */
-const ChannelName = Type.String({ minLength: 1, maxLength: 64, format: 'name' });
+const ChannelName = Type.String({ minLength: 1, maxLength: CHANNEL_NAME_MAX, format: 'name' });
 /** What a channel is for, in a line. */
 const ChannelTopic = Type.String({ format: 'plain-text' });
 
@@ -407,8 +418,9 @@ export const SetKnowledgeRequest = FromClient({
 export type SetKnowledgeRequest = Static<typeof SetKnowledgeRequest>;
 
 export const SAVED_SEARCH_LIMIT = 50;
+export const SAVED_SEARCH_NAME_MAX = 80;
 export const SaveSearchRequest = FromClient({
-  name: Type.String({ minLength: 1, maxLength: 80, format: 'plain-text' }),
+  name: Type.String({ minLength: 1, maxLength: SAVED_SEARCH_NAME_MAX, format: 'plain-text' }),
   query: SearchCriteria,
 });
 export type SaveSearchRequest = Static<typeof SaveSearchRequest>;
@@ -638,8 +650,9 @@ export type NotificationPage = Static<typeof NotificationPage>;
  * `PUT /api/workspaces/:workspaceId/integrations/github` — the workspace's one GitHub token (D-11,
  * D-23): printable characters, no spaces. Sealed at rest, never logged, never returned.
  */
+export const GITHUB_TOKEN_MAX = 255;
 export const SetGitHubTokenRequest = FromClient({
-  token: Type.String({ minLength: 1, maxLength: 255, pattern: '^[\\x21-\\x7e]+$' }),
+  token: Type.String({ minLength: 1, maxLength: GITHUB_TOKEN_MAX, pattern: '^[\\x21-\\x7e]+$' }),
 });
 export type SetGitHubTokenRequest = Static<typeof SetGitHubTokenRequest>;
 
@@ -850,7 +863,7 @@ export const INVITATION_EMAILS_PER_WORKSPACE_PER_DAY = 200;
  */
 export const CreateInvitationRequest = FromClient({
   emails: Type.Optional(
-    Type.Array(Type.String({ maxLength: 254 }), { maxItems: INVITATION_EMAILS_PER_REQUEST }),
+    Type.Array(Type.String({ maxLength: EMAIL_MAX }), { maxItems: INVITATION_EMAILS_PER_REQUEST }),
   ),
   locale: Type.Optional(SignInLocale),
 });
@@ -903,7 +916,7 @@ export type InvitationTokenRequest = Static<typeof InvitationTokenRequest>;
  */
 export const InvitationPassportRequest = FromClient({
   token: InvitationToken,
-  email: Type.Optional(Type.String({ format: 'email', maxLength: 254 })),
+  email: Type.Optional(Type.String({ format: 'email', maxLength: EMAIL_MAX })),
 });
 export type InvitationPassportRequest = Static<typeof InvitationPassportRequest>;
 
@@ -1535,7 +1548,7 @@ export type NativeTokenRequest = Static<typeof NativeTokenRequest>;
  * in the link's fragment, since the tab that holds it is not the one the mail opens (D-138 §4).
  */
 export const EmailSignInRequest = FromClient({
-  email: Type.String({ format: 'email', maxLength: 254 }),
+  email: Type.String({ format: 'email', maxLength: EMAIL_MAX }),
   locale: SignInLocale,
   invitation: Type.Optional(InvitationToken),
   /** The native application's challenge and state, carried in the link's fragment (D-191). */
@@ -1605,7 +1618,10 @@ export const DEVICE_SESSIONS_MAX = 100;
 // them, and a schema built at the top of a module stays in its bundle whether read or not.
 
 /** `POST /setup/claim` — the setup code from the server's log, as typed: any case, dashes or not. */
-export const SetupClaimRequest = FromClient({ code: Type.String({ minLength: 1, maxLength: 64 }) });
+export const SETUP_CLAIM_CODE_MAX = 64;
+export const SetupClaimRequest = FromClient({
+  code: Type.String({ minLength: 1, maxLength: SETUP_CLAIM_CODE_MAX }),
+});
 export type SetupClaimRequest = Static<typeof SetupClaimRequest>;
 
 /** `POST /setup/address` — the server's address (`APP_URL`), seen and confirmed (Ruling R35). */
@@ -1618,7 +1634,7 @@ export type SetupAddressRequest = Static<typeof SetupAddressRequest>;
  */
 export const SetupAdminRequest = FromClient({
   name: Type.String({ maxLength: 512 }),
-  email: Type.String({ maxLength: 254 }),
+  email: Type.String({ maxLength: EMAIL_MAX }),
   password: Type.String({ maxLength: 1024 }),
 });
 export type SetupAdminRequest = Static<typeof SetupAdminRequest>;
@@ -1636,10 +1652,18 @@ const Skipped = FromClient({ skip: Type.Literal(true) });
  * `POST /setup/github` — the OAuth app's pair, tried against GitHub; kept only when the try works and
  * `save` says to. Or the step skipped.
  */
+export const GITHUB_CLIENT_ID_MAX = 128;
+export const GITHUB_CLIENT_SECRET_MAX = 256;
+
+/** GitHub's OAuth app, as the setup and Settings → Server both send it. */
+const GitHubAppPair = {
+  clientId: Type.String({ minLength: 1, maxLength: GITHUB_CLIENT_ID_MAX }),
+  clientSecret: Type.String({ minLength: 1, maxLength: GITHUB_CLIENT_SECRET_MAX }),
+};
+
 export const SetupGitHubRequest = Type.Union([
   FromClient({
-    clientId: Type.String({ minLength: 1, maxLength: 128 }),
-    clientSecret: Type.String({ minLength: 1, maxLength: 256 }),
+    ...GitHubAppPair,
     save: Type.Optional(Type.Boolean()),
   }),
   Skipped,
@@ -1652,11 +1676,18 @@ export type SetupGitHubRequest = Static<typeof SetupGitHubRequest>;
  * try works and `save` says to. Or the step skipped. Or the letter sent again through the relay
  * already kept — which the client cannot name, since the relay's address is never shown to it again.
  */
+export const SMTP_URL_MAX = 2048;
+
+/** The relay and its sender, as the setup and Settings → Server both send them. */
+const SmtpRelay = {
+  smtpUrl: Type.String({ minLength: 1, maxLength: SMTP_URL_MAX }),
+  from: Type.String({ minLength: 1, maxLength: EMAIL_MAX }),
+  allowPlaintext: Type.Boolean(),
+};
+
 export const SetupSmtpRequest = Type.Union([
   FromClient({
-    smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
-    from: Type.String({ minLength: 1, maxLength: 254 }),
-    allowPlaintext: Type.Boolean(),
+    ...SmtpRelay,
     locale: SignInLocale,
     save: Type.Optional(Type.Boolean()),
   }),
@@ -1668,10 +1699,7 @@ export type SetupSmtpRequest = Static<typeof SetupSmtpRequest>;
 // ── Administration → Server (D-179 §4.8) ─────────────────────────────────────
 
 /** `POST /api/server/github` — GitHub's OAuth app, tried with these values and kept only if it works. */
-export const ServerGitHubRequest = FromClient({
-  clientId: Type.String({ minLength: 1, maxLength: 128 }),
-  clientSecret: Type.String({ minLength: 1, maxLength: 256 }),
-});
+export const ServerGitHubRequest = FromClient(GitHubAppPair);
 export type ServerGitHubRequest = Static<typeof ServerGitHubRequest>;
 
 /** The longest name a single sign-on button carries (D-200): one short line, never a sentence. */
@@ -1681,20 +1709,20 @@ export const OIDC_NAME_MAX = 40;
  * `POST /api/server/oidc` — the OpenID Connect provider (D-200), its discovery and its client tried with these
  * values and kept only if they work. `name` is the button's label; empty is the default.
  */
+export const OIDC_ISSUER_MAX = 512;
+export const OIDC_CLIENT_ID_MAX = 256;
+export const OIDC_CLIENT_SECRET_MAX = 1024;
+
 export const ServerOidcRequest = FromClient({
-  issuer: Type.String({ minLength: 1, maxLength: 512 }),
-  clientId: Type.String({ minLength: 1, maxLength: 256 }),
-  clientSecret: Type.String({ minLength: 1, maxLength: 1024 }),
+  issuer: Type.String({ minLength: 1, maxLength: OIDC_ISSUER_MAX }),
+  clientId: Type.String({ minLength: 1, maxLength: OIDC_CLIENT_ID_MAX }),
+  clientSecret: Type.String({ minLength: 1, maxLength: OIDC_CLIENT_SECRET_MAX }),
   name: Type.Optional(Type.String({ maxLength: OIDC_NAME_MAX })),
 });
 export type ServerOidcRequest = Static<typeof ServerOidcRequest>;
 
 /** `POST /api/server/smtp` — the relay, tried with a test letter to the caller, kept only if it works. */
-export const ServerSmtpRequest = FromClient({
-  smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
-  from: Type.String({ minLength: 1, maxLength: 254 }),
-  allowPlaintext: Type.Boolean(),
-});
+export const ServerSmtpRequest = FromClient(SmtpRelay);
 export type ServerSmtpRequest = Static<typeof ServerSmtpRequest>;
 
 /** `DELETE /api/server/github`, `/smtp` and `/oidc` — the body is optional; `confirmLastChannel` is the only field. */

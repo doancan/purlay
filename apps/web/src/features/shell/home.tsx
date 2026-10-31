@@ -8,7 +8,7 @@
  * (D-155). The same form is the workspace menu's **Create workspace…**, for a person who has one
  * already and may make another (D-124).
  */
-import { WORKSPACE_NAME_MAX } from '@purlay/types';
+import { WORKSPACE_NAME_MAX, WORKSPACE_SLUG_MAX } from '@purlay/types';
 import { useDescribeFailure } from '../../data/failure';
 import { useEffect, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
@@ -132,7 +132,7 @@ export const CreateWorkspace = ({
         hint={t('workspace.create.slugHint')}
         value={address}
         required
-        maxLength={64}
+        maxLength={WORKSPACE_SLUG_MAX}
         autoComplete="off"
         spellCheck={false}
         {...(error?.field === 'slug' ? { error: error.message } : {})}

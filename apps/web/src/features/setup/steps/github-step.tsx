@@ -5,6 +5,7 @@
  * cannot check is the callback address, so the step shows it, to paste, and says what GitHub's own
  * error page means.
  */
+import { GITHUB_CLIENT_ID_MAX, GITHUB_CLIENT_SECRET_MAX } from '@purlay/types';
 import type { ProbeResult } from '@purlay/types';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
@@ -151,7 +152,7 @@ export const GitHubStep = ({ state, done, onBack, onNext }: StepProps): React.JS
             value={clientId}
             autoComplete="off"
             spellCheck={false}
-            maxLength={128}
+            maxLength={GITHUB_CLIENT_ID_MAX}
             className="font-mono"
             invalid={field === 'clientId'}
             onChange={(event) => {
@@ -165,7 +166,7 @@ export const GitHubStep = ({ state, done, onBack, onNext }: StepProps): React.JS
             value={clientSecret}
             autoComplete="off"
             spellCheck={false}
-            maxLength={256}
+            maxLength={GITHUB_CLIENT_SECRET_MAX}
             className="font-mono"
             hint={t('setup.github.secretHint')}
             invalid={field === 'clientSecret'}
