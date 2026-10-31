@@ -606,6 +606,52 @@ describe('the shared Redis (D-201)', () => {
   });
 });
 
+describe('the metrics token (D-221)', () => {
+  const TOKEN = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+  test('is off when unset or empty, in production too: no page is served without it', () => {
+    expect(loadConfig(valid).METRICS_TOKEN).toBeUndefined();
+    expect(loadConfig({ ...valid, METRICS_TOKEN: '' }).METRICS_TOKEN).toBeUndefined();
+    expect(loadConfig(production).METRICS_TOKEN).toBeUndefined();
+  });
+
+  test('takes a token as `openssl rand` writes one, hex or base64, from 32 characters to 512', () => {
+    const base64 = Buffer.from(TOKEN, 'hex').toString('base64');
+    for (const METRICS_TOKEN of [
+      TOKEN,
+      base64,
+      'a'.repeat(32),
+      'a'.repeat(512),
+      'A1._~+/-'.repeat(4),
+    ]) {
+      expect(loadConfig({ ...valid, METRICS_TOKEN }).METRICS_TOKEN).toBe(METRICS_TOKEN);
+    }
+  });
+
+  test('refuses one short enough to guess, too long, or with what a header cannot carry in a bearer', () => {
+    for (const METRICS_TOKEN of [
+      'a'.repeat(31),
+      'a'.repeat(513),
+      `${'a'.repeat(32)} b`,
+      `${'a'.repeat(32)}"`,
+      'ş'.repeat(32),
+      `=${'a'.repeat(32)}`,
+    ]) {
+      expect({ METRICS_TOKEN, refused: refusal({ ...valid, METRICS_TOKEN }) }).toMatchObject({
+        refused: expect.stringContaining('METRICS_TOKEN') as unknown as string,
+      });
+    }
+  });
+
+  test('is a secret: a refusal names the variable and never quotes the token', () => {
+    const METRICS_TOKEN = `secret-metrics-${'x'.repeat(10)}`;
+    const message = refusal({ ...valid, METRICS_TOKEN });
+    expect(message).toContain('METRICS_TOKEN');
+    expect(message).toContain('(value withheld)');
+    expect(message).not.toContain('secret-metrics');
+  });
+});
+
 describe('GitHub sign-in is a setting, not a requirement (D-179, R38)', () => {
   const without = (environment: Record<string, string>): Record<string, string> =>
     Object.fromEntries(

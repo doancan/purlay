@@ -31,7 +31,7 @@ import { authMethods } from './auth-methods';
 import { clientInfo, clientPolicyOf } from './client-info';
 import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
-import { Elysia, type HTTPHeaders } from 'elysia';
+import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
@@ -164,6 +164,11 @@ import {
 } from './messages';
 import { changeReaction } from './reactions';
 import { readiness, recentReadiness, type Readiness } from '../../platform/readiness';
+import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
+import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
+import { PLAN } from '../../modules/jobs/schedule';
+import { EDGE_ROUTE, answerMetrics, methodLabel, routeLabel, statusLabel } from './metrics';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
@@ -272,6 +277,11 @@ export interface Dependencies {
    * (`readWorkspaceCreators`, D-179 §6). A test about something else lets anybody.
    */
   readonly workspaceCreators?: (executor: Executor) => Promise<WorkspaceCreators>;
+  /**
+   * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
+   * absent, the application keeps one of its own — a test reads it through `/metrics`.
+   */
+  readonly metrics?: ServerMetrics;
 }
 
 /**
@@ -306,6 +316,9 @@ export interface HttpApplication {
    */
   readonly settled: () => Promise<void>;
 }
+
+/** Paths asked every few seconds by a machine: their request lines are written at debug. */
+const POLLED: ReadonlySet<string> = new Set(['/health', '/health/ready', '/metrics']);
 
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
@@ -352,6 +365,16 @@ const SETUP_PATH = /^\/setup(?:\/|$)/;
 
 export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
+  const metrics = dependencies.metrics ?? serverMetrics();
+  /** One request's line on the page: never its path as sent, only the route it was registered as. */
+  const observe = (method: string, route: string | undefined, status: number): void => {
+    const started = currentRequest()?.startedAt;
+    if (started === undefined) return;
+    metrics.httpDuration.observe(
+      { method: methodLabel(method), route: routeLabel(route), status: statusLabel(status) },
+      (performance.now() - started) / 1000,
+    );
+  };
   /** `body` served by one instance of the library, the one current now; see `Dependencies.services`. */
   const within = async <T>(body: () => Promise<T>): Promise<T> =>
     dependencies.services === undefined ? await body() : await dependencies.services.within(body);
@@ -372,7 +395,18 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
-  const sockets = createSocketLifecycle({ ...dependencies, userWrites });
+  const sockets = createSocketLifecycle({ ...dependencies, userWrites, metrics });
+  metrics.registry.gauge(
+    'purlay_websocket_connections',
+    'WebSocket connections open on this process.',
+    () => sockets.held().connections,
+  );
+  // The jobs run in the scheduler's container: their record is read from the database per scrape.
+  const readJobs = jobMetrics({
+    read: async () => await readJobRuns(dependencies.database),
+    known: PLAN.map((slot) => slot.job),
+    log,
+  });
   // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
   const githubCalls = limiterFor('github-calls', GITHUB_CALL_BUDGET);
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
@@ -473,6 +507,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       // paths can carry a token and are written as `/auth/*`.
       const turnedAway = (response: Response): Response => {
         const { pathname } = new URL(request.url);
+        observe(request.method, EDGE_ROUTE, response.status);
         log.info('request', {
           method: request.method,
           path: pathname.startsWith('/auth/') ? '/auth/*' : pathname,
@@ -535,6 +570,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           path: where,
         });
       }
+      if (refusal.body.error.code === 'RATE_LIMITED') metrics.rateLimited.inc({ door: 'http' });
       if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
         set.headers['retry-after'] = String(error.retryAfterSeconds);
       }
@@ -543,15 +579,22 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .onAfterResponse(({ request, path, route, set, responseValue }) => {
       const started = currentRequest()?.startedAt;
-      // A balancer and the container's own health check poll these every few seconds; at
-      // info they were most of the log. A probe that FAILS is not lost: readiness writes the
-      // reason at warn.
-      const write = path === '/health' || path === '/health/ready' ? log.debug : log.info;
+      // A balancer and the container's own health check poll these every few seconds, and a
+      // scraper `/metrics`; at info they were most of the log. A probe that FAILS is not lost:
+      // readiness writes the reason at warn.
+      const write = POLLED.has(path) ? log.debug : log.info;
+      // A handler that returns a `Response` (the library's routes) leaves `set.status` unset.
+      const status =
+        responseValue instanceof Response
+          ? responseValue.status
+          : typeof set.status === 'string'
+            ? StatusMap[set.status]
+            : (set.status ?? 200);
+      observe(request.method, route, status);
       write('request', {
         method: request.method,
         path: writtenPath(route, path),
-        // A handler that returns a `Response` (the library's routes) leaves `set.status` unset.
-        status: responseValue instanceof Response ? responseValue.status : set.status,
+        status,
         ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
       });
     })
@@ -570,6 +613,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       saidNotReady = answer;
       set.status = 503;
       return { status: 'not ready' } as const;
+    })
+    // For the operator's scraper alone (D-221): without `METRICS_TOKEN`, or without its token, it is
+    // the 404 of a path nothing serves.
+    .get('/metrics', async ({ request, set }) => {
+      const page = await answerMetrics(
+        { token: dependencies.config.METRICS_TOKEN, metrics, read: readJobs, log },
+        request,
+      );
+      set.headers['content-type'] = EXPOSITION_CONTENT_TYPE;
+      set.headers['cache-control'] = 'no-store';
+      return page;
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))

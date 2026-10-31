@@ -839,6 +839,14 @@ in `platform/logging.ts` that every field and binding passes through, at any dep
 written. A value interpolated into a message's text cannot be found that way, so a message is a
 constant and variables go in fields.
 
+**Metrics** (D-221). `GET /metrics` is Prometheus's text format, off unless `METRICS_TOKEN` is set and a
+`404` like any unknown path to whoever does not hold it. One registry per process (`platform/metrics.ts`),
+made by the composition root and handed in like every other dependency; it is recorded into at the
+boundaries — the HTTP edge, the socket's rate refusals, the push sender, the mail ledger — and a module is
+handed a `Counter`, never the registry. Label values are words the code spells: a route as registered, never
+a path as sent; no id, address, name or content. The jobs run in another container, so their numbers are
+read from `job_runs` per scrape, bounded, and a read that fails leaves the rest of the page.
+
 **Executors are arguments.** Every service and repository takes its `Kysely<Database>` or
 `Transaction<Database>` as a parameter rather than reaching for a module-level handle. This is what
 makes one-transaction-per-test possible, and it is enforced by the same lint boundary as the
