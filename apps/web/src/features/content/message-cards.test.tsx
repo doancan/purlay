@@ -7,6 +7,7 @@ import { installDom } from '../../testing/dom';
 import { BOB, IDS, aMessage, messageIdAt } from '../../testing/fixtures';
 import { mountChannel, page } from '../../testing/channel-harness';
 import { ApiError } from '../../data/errors';
+import { person } from '../../testing/user';
 import { linkedMessages } from './message-cards';
 
 installDom();
@@ -26,6 +27,11 @@ describe('which links are cards', () => {
     ].join('\n');
     expect(linkedMessages(content, ORIGIN, 'acme')).toEqual(['m1', 'm2', 'm6']);
   });
+
+  test('a link that is not a readable address is passed over, and the ones after it still count', () => {
+    const content = `https://exa%zzmple.com/w/acme/c/c1?message=m0 then ${ORIGIN}/w/acme/c/c1?message=m1`;
+    expect(linkedMessages(content, ORIGIN, 'acme')).toEqual(['m1']);
+  });
 });
 
 const linking = (target: string): string =>
@@ -40,6 +46,20 @@ describe('a card', () => {
     });
     const card = await view.findByRole('button', { name: /Pool size is 20 now\./ });
     expect(card.textContent).toContain(BOB.displayName);
+    view.unmountAll();
+  });
+
+  test('opens the message where it lives', async () => {
+    const original = aMessage(1, { sender: BOB, content: 'Pool size is 20 now.' });
+    const view = await mountChannel({
+      messages: page([aMessage(2, { content: linking(original.id) })]),
+      api: { message: () => Promise.resolve(original) },
+    });
+    await person().click(await view.findByRole('button', { name: /Pool size is 20 now\./ }));
+    expect(view.world.history.read()).toEqual({
+      pathname: `/w/acme/c/${original.channelId}`,
+      search: `?message=${original.id}`,
+    });
     view.unmountAll();
   });
 

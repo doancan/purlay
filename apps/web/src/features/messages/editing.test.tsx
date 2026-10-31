@@ -9,7 +9,16 @@ import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { BOB, IDS, ME, aMessage, aSession } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  ME,
+  aChannel,
+  aMessage,
+  aSession,
+  someChannels,
+} from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { expectFocusOn } from '../../testing/focus';
 
@@ -529,6 +538,78 @@ describe('forwarding (D-217)', () => {
       `FYI\n\n${window.location.origin}/w/acme/c/${IDS.api}?message=${theirs.id}`,
     );
     expect(view.getByText('Forwarded')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('Open, on what says it was forwarded, goes to the channel it was sent to', async () => {
+    const view = await mountChannel({ messages: page([theirs]), api: asMember });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const dialog = within(view.getByRole('dialog', { name: 'Forward message' }));
+    await person().click(dialog.getByRole('radio', { name: /deploys/ }));
+    await person().click(dialog.getByRole('button', { name: 'Forward' }));
+    await person().click(view.getByRole('button', { name: 'Open' }));
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
+    view.unmountAll();
+  });
+
+  test('a conversation is found by its person’s name, and the forward goes there', async () => {
+    const view = await mountChannel({
+      messages: page([theirs]),
+      channels: [
+        ...someChannels(),
+        aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE }),
+      ],
+      api: asMember,
+    });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const dialog = within(view.getByRole('dialog', { name: 'Forward message' }));
+    await person().type(
+      dialog.getByRole('searchbox', { name: 'Find a channel or a person' }),
+      'ali',
+    );
+    expect(dialog.getAllByRole('radio').map((radio) => radio.textContent)).toEqual([
+      ALICE.displayName,
+    ]);
+    await person().click(dialog.getByRole('radio', { name: ALICE.displayName }));
+    await person().click(dialog.getByRole('button', { name: 'Forward' }));
+    const frames = view.world.sockets
+      .sent('MESSAGE_SEND')
+      .map((frame) => frame.payload as { channelId: string });
+    expect(frames.at(-1)?.channelId).toBe(IDS.dm);
+    view.unmountAll();
+  });
+
+  test('closed unsent, it sends nothing and opens again with nothing chosen or written', async () => {
+    const view = await mountChannel({ messages: page([theirs]), api: asMember });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const first = within(view.getByRole('dialog', { name: 'Forward message' }));
+    await person().type(
+      first.getByRole('searchbox', { name: 'Find a channel or a person' }),
+      'dep',
+    );
+    await person().click(first.getByRole('radio', { name: /deploys/ }));
+    await person().type(first.getByRole('textbox', { name: 'Add a note (optional)' }), 'FYI');
+    await person().keyboard('{Escape}');
+    expect(view.queryByRole('dialog', { name: 'Forward message' })).toBeNull();
+    expect(view.world.sockets.sent('MESSAGE_SEND')).toEqual([]);
+
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const again = within(view.getByRole('dialog', { name: 'Forward message' }));
+    expect(
+      again.getByRole<HTMLInputElement>('searchbox', { name: 'Find a channel or a person' }).value,
+    ).toBe('');
+    expect(
+      again.getByRole<HTMLInputElement>('textbox', { name: 'Add a note (optional)' }).value,
+    ).toBe('');
+    expect(again.queryByRole('radio', { checked: true })).toBeNull();
+    expect(again.getByRole('button', { name: 'Forward' }).hasAttribute('disabled')).toBe(true);
     view.unmountAll();
   });
 });

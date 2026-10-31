@@ -160,6 +160,104 @@ describe('a channel’s bookmarks', () => {
     view.unmountAll();
   });
 
+  test('an address the server will not take is said under the address', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...aServer(),
+        addBookmark: () => Promise.reject(new ApiError(400, 'VALIDATION_FAILED', 'url')),
+      },
+    });
+    await settle();
+    await addThrough(view, 'https://x.example');
+    const dialog = within(view.getByRole('dialog', { name: 'Add a bookmark' }));
+    expect(dialog.queryByRole('alert')).toBeNull();
+    expect(dialog.getByText('Use a web address, like https://docs.example.com.')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('any other failure to add is said in the form, with what went wrong', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...aServer(),
+        addBookmark: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+      },
+    });
+    await settle();
+    await addThrough(view, 'https://x.example');
+    const dialog = within(view.getByRole('dialog', { name: 'Add a bookmark' }));
+    expect(dialog.getByRole('alert').textContent).toStartWith('The bookmark was not added. ');
+    view.unmountAll();
+  });
+
+  test('Cancel closes the form unsent, and it opens again empty', async () => {
+    const server = aServer();
+    const view = await mountChannel({ messages: page([]), api: server });
+    await settle();
+    await person().click(within(barOf(view)).getByRole('button', { name: 'Add a bookmark' }));
+    const typed = within(await view.findByRole('dialog', { name: 'Add a bookmark' }));
+    await person().type(typed.getByRole('textbox', { name: 'Address' }), 'docs.example.com');
+    await person().click(typed.getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(server.added).toEqual([]);
+
+    await person().click(within(barOf(view)).getByRole('button', { name: 'Add a bookmark' }));
+    const again = within(await view.findByRole('dialog', { name: 'Add a bookmark' }));
+    expect(again.getByRole<HTMLInputElement>('textbox', { name: 'Address' }).value).toBe('');
+    view.unmountAll();
+  });
+
+  test('one added beside those already there is shown after them', async () => {
+    const view = await mountChannel({ messages: page([]), api: aServer([aBookmark()]) });
+    await settle();
+    await addThrough(view, 'https://grafana.local', 'Dashboard');
+    const links = within(barOf(view)).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Runbook', 'Dashboard']);
+    view.unmountAll();
+  });
+
+  test('an Undo the server refuses says so, and the bookmark stays removed', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...aServer([aBookmark()]),
+        addBookmark: () => Promise.reject(new ApiError(409, 'BOOKMARKS_LIMIT', 'full')),
+      },
+    });
+    await settle();
+    await person().click(
+      within(barOf(view)).getByRole('button', { name: 'Remove the bookmark Runbook' }),
+    );
+    await person().click(await view.findByRole('button', { name: 'Undo' }));
+    expect(await view.findByText(/The bookmark was not added\./)).toBeDefined();
+    expect(within(barOf(view)).queryByRole('link')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('removing one someone else already removed says nothing: it is gone, as asked', async () => {
+    const server = aServer([aBookmark()]);
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...server,
+        removeBookmark: () => {
+          server.kept = [];
+          return Promise.reject(new ApiError(404, 'BOOKMARK_NOT_FOUND', 'gone'));
+        },
+      },
+    });
+    await settle();
+    await person().click(
+      within(barOf(view)).getByRole('button', { name: 'Remove the bookmark Runbook' }),
+    );
+    await settle();
+    expect(view.queryByText(/The bookmark was not removed\./)).toBeNull();
+    expect(within(barOf(view)).queryByRole('link')).toBeNull();
+    view.unmountAll();
+  });
+
   test('removing one takes it off at once, and Undo adds the same address and name back', async () => {
     const kept = aBookmark();
     const server = aServer([kept]);

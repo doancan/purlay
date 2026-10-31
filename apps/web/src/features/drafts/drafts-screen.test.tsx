@@ -3,7 +3,7 @@
  * opens, deleting with Undo, and what they sent — asked of search, narrowed to them.
  */
 import { describe, expect, test } from 'bun:test';
-import { within } from '@testing-library/react';
+import { act, within } from '@testing-library/react';
 import type { SearchPage } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
@@ -74,6 +74,17 @@ describe('drafts', () => {
     const view = await visit({});
     expect(view.getByText('No drafts')).toBeDefined();
   });
+
+  test('a draft written in another tab shows up here', async () => {
+    const view = await visit({});
+    view.storage.setItem(draftKey(ME.id, IDS.api, undefined), 'Written elsewhere');
+    await act(async () => {
+      window.dispatchEvent(new Event('storage'));
+      await Promise.resolve();
+    });
+    expect(view.getByText('Written elsewhere')).toBeDefined();
+    expect(view.queryByText('No drafts')).toBeNull();
+  });
 });
 
 describe('sent', () => {
@@ -98,5 +109,70 @@ describe('sent', () => {
     expect(asked).toEqual([{ q: '', senderId: ME.id, before: undefined }]);
     await person().click(view.getByRole('button', { name: /shipped it/ }));
     expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?message=${aMessage(3).id}`);
+  });
+
+  const openSent = async (api: Partial<Api>): Promise<Awaited<ReturnType<typeof visit>>> => {
+    const view = await visit({}, api);
+    const tabs = within(view.getByRole('group', { name: 'Show' }));
+    await person().click(tabs.getByRole('button', { name: 'Sent' }));
+    await settle();
+    return view;
+  };
+
+  test('a reply opens in its thread', async () => {
+    const reply = aMessage(4, { sender: ME, content: 'on it', parentId: 'root1' });
+    const view = await openSent({
+      search: () => Promise.resolve({ data: [reply], nextCursor: null }),
+    });
+    expect(view.getByText('· in a thread')).toBeDefined();
+    await person().click(view.getByRole('button', { name: /on it/ }));
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?thread=root1`);
+  });
+
+  test('nothing sent says so', async () => {
+    const view = await openSent({
+      search: () => Promise.resolve({ data: [], nextCursor: null }),
+    });
+    expect(view.getByText('Nothing sent yet')).toBeDefined();
+  });
+
+  test('a failure to load says so, and Retry asks again', async () => {
+    let answers = 0;
+    const view = await openSent({
+      search: () => {
+        answers += 1;
+        return answers === 1
+          ? Promise.reject(new Error('offline'))
+          : Promise.resolve({
+              data: [aMessage(3, { sender: ME, content: 'shipped it' })],
+              nextCursor: null,
+            });
+      },
+    });
+    expect(view.getByText('Couldn’t load what you sent')).toBeDefined();
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(view.getByText('shipped it')).toBeDefined();
+  });
+
+  test('Load more asks for the page before the last, and adds it below', async () => {
+    const asked: unknown[] = [];
+    const view = await openSent({
+      search: (_workspace, query) => {
+        asked.push(query.before);
+        return Promise.resolve(
+          query.before === undefined
+            ? { data: [aMessage(5, { sender: ME, content: 'newest' })], nextCursor: 'cursor-1' }
+            : { data: [aMessage(2, { sender: ME, content: 'older' })], nextCursor: null },
+        );
+      },
+    });
+    expect(view.queryByText('older')).toBeNull();
+    await person().click(view.getByRole('button', { name: 'Load more' }));
+    await settle();
+    expect(asked).toEqual([undefined, 'cursor-1']);
+    expect(view.getByText('newest')).toBeDefined();
+    expect(view.getByText('older')).toBeDefined();
+    expect(view.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 });
