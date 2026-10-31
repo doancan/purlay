@@ -245,6 +245,10 @@ describe('integration: cross-tenant isolation', () => {
           const stranger = await signedIn(db, 'xt-stranger');
           const theirs = await aTenant(db, owner, 'xt-theirs');
           await aTenant(db, stranger, 'xt-own');
+          if (crossing.archived === true) {
+            const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
+            expect(archived.status).toBe(204);
+          }
           const body = crossing.body?.(NOW, {
             userId: ownerUser.userId,
             workspaceId: theirs.workspaceId,

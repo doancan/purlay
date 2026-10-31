@@ -116,6 +116,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/channels/:channelId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'see the archived channels': {
+    endpoint: 'GET /api/workspaces/:workspaceId/archived-channels',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'bring an archived channel back': {
+    endpoint: 'POST /api/channels/:channelId/restore',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'delete somebody else’s message': {
     endpoint: 'DELETE /api/messages/:messageId',
     allowed: { owner: true, admin: true, member: false },

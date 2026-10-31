@@ -195,6 +195,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishChannelRevoked',
     calledFrom: 'apps/api/src/ingress/http/channels.ts',
   },
+  // Brought back (D-232): it gives access back and takes none away. Its members are told on their own
+  // topics to read their channels again (`CHANNELS_UPDATED`), which no revocation rule covers.
+  'apps/api/src/modules/channels/settings.ts#restoreChannel': {
+    none: 'it restores access and revokes none: its members read their channels again on CHANNELS_UPDATED (#846)',
+  },
   // An account erased: its sessions revoked and the row soft-deleted in one transaction; the
   // ingress publishes after the commit (D-139 §5).
   'apps/api/src/modules/users/erasure.ts#eraseAccount': {
