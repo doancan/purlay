@@ -27,6 +27,7 @@ have it.
 
 - **Mobile** — Purlay installs as an application from the browser; on an iPhone, added to the Home Screen it can receive notifications, and the notifications page says how (D-230)
 - **Channels** — An owner or an admin can bring an archived channel back from General, with its messages and members; its members see it again at once, and a name taken since is said (D-232)
+- **Notifications** — Quiet hours: a window of the day on chosen days, every week, on the clock of your profile's time zone, when nothing pops up or rings — Deep Work by itself; what arrives is kept and counted (D-234)
 - **Administration** — The server's administrator can suspend somebody's account from Server → Accounts: they are signed out on every device and cannot sign in, and their messages and name stay; lifting it lets them back in as they were (D-233)
 - **Administration** — The audit log can be narrowed by person, action and days (in the reader's own time zone, kept in the page's address) and downloaded as CSV or NDJSON; a download is itself on the log, and every entry is also an ids-only line of the server's log (D-222)
 - **Messages** — A file path with a line (`src/retry.ts:14`) or a commit's SHA in a message opens on GitHub, in the repository of the channel's one GitHub feed (D-223)
