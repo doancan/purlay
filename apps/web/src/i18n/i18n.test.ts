@@ -181,37 +181,41 @@ describe('timestamps', () => {
   });
 });
 
-/** A day picked on a page, as the instant it begins where the reader is (D-222). */
-describe('the start of a day', () => {
-  test('is midnight in the zone, said as a UTC instant', () => {
-    expect(createFormatters('en', 'UTC').dayStart('2026-10-01').toISOString()).toBe(
-      '2026-10-01T00:00:00.000Z',
-    );
-    expect(createFormatters('tr', 'Europe/Istanbul').dayStart('2026-10-01').toISOString()).toBe(
-      '2026-09-30T21:00:00.000Z',
-    );
-    expect(createFormatters('en', 'Asia/Kolkata').dayStart('2026-01-01').toISOString()).toBe(
-      '2025-12-31T18:30:00.000Z',
-    );
+describe('a day and its start, where the viewer is (D-224)', () => {
+  const at = (timeZone: string, day: string): string =>
+    createFormatters('en', timeZone).dayStart(day);
+
+  test('a day begins at its midnight there, said as the UTC instant', () => {
+    expect(at('UTC', '2026-10-31')).toBe('2026-10-31T00:00:00.000Z');
+    expect(at('Europe/Istanbul', '2026-10-01')).toBe('2026-09-30T21:00:00.000Z');
+    expect(at('Asia/Kolkata', '2026-01-01')).toBe('2025-12-31T18:30:00.000Z');
+    expect(at('Pacific/Kiritimati', '2026-01-01')).toBe('2025-12-31T10:00:00.000Z');
+  });
+
+  test('on the days the clocks change, and where a change skips midnight itself', () => {
+    expect(at('America/New_York', '2026-03-08')).toBe('2026-03-08T05:00:00.000Z');
+    expect(at('America/New_York', '2026-11-01')).toBe('2026-11-01T04:00:00.000Z');
+    // São Paulo went from 23:59:59 to 01:00 on 4 November 2018: the day began at one.
+    expect(at('America/Sao_Paulo', '2018-11-04')).toBe('2018-11-04T03:00:00.000Z');
   });
 
   test('takes the offset in force that day, on either side of a change of the clocks', () => {
-    const newYork = createFormatters('en', 'America/New_York');
-    // Summer time ends at 02:00 on 1 November 2026: the day before and the day itself start at -4,
-    // the day after at -5.
-    expect(newYork.dayStart('2026-10-31').toISOString()).toBe('2026-10-31T04:00:00.000Z');
-    expect(newYork.dayStart('2026-11-01').toISOString()).toBe('2026-11-01T04:00:00.000Z');
-    expect(newYork.dayStart('2026-11-02').toISOString()).toBe('2026-11-02T05:00:00.000Z');
-    // And begins at 02:00 on 8 March 2026: midnight that day is still at -5.
-    expect(newYork.dayStart('2026-03-08').toISOString()).toBe('2026-03-08T05:00:00.000Z');
-    expect(newYork.dayStart('2026-03-09').toISOString()).toBe('2026-03-09T04:00:00.000Z');
+    // Summer time ends at 02:00 on 1 November 2026: the day before starts at -4, the day after at -5;
+    // it begins at 02:00 on 8 March 2026, so the day after starts at -4.
+    expect(at('America/New_York', '2026-10-31')).toBe('2026-10-31T04:00:00.000Z');
+    expect(at('America/New_York', '2026-11-02')).toBe('2026-11-02T05:00:00.000Z');
+    expect(at('America/New_York', '2026-03-09')).toBe('2026-03-09T04:00:00.000Z');
+    // Ahead of UTC, where the change is late at night: Sydney goes +10 to +11 on 4 October 2026.
+    expect(at('Australia/Sydney', '2026-10-04')).toBe('2026-10-03T14:00:00.000Z');
+    expect(at('Australia/Sydney', '2026-10-05')).toBe('2026-10-04T13:00:00.000Z');
   });
 
-  test('ahead of UTC, where the change is late at night', () => {
-    // Australia/Sydney: summer time begins at 02:00 on 4 October 2026 (+10 → +11).
-    const sydney = createFormatters('en', 'Australia/Sydney');
-    expect(sydney.dayStart('2026-10-04').toISOString()).toBe('2026-10-03T14:00:00.000Z');
-    expect(sydney.dayStart('2026-10-05').toISOString()).toBe('2026-10-04T13:00:00.000Z');
+  test('the day an instant falls on there, which a day’s start reads back as', () => {
+    const istanbul = createFormatters('en', 'Europe/Istanbul');
+    expect(istanbul.isoDay('2026-09-30T21:00:00.000Z')).toBe('2026-10-01');
+    expect(istanbul.isoDay(new Date('2026-09-30T20:59:59.999Z'))).toBe('2026-09-30');
+    // A year still being typed in a date field (`0002`) is not read as 1902.
+    expect(istanbul.isoDay(istanbul.dayStart('0002-10-01'))).toBe('0002-10-01');
   });
 });
 

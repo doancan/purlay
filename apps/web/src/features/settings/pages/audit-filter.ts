@@ -80,12 +80,12 @@ const dayAfter = (isoDay: string): string => {
 /** The filter as the server takes it: days become the instants they begin in the reader's zone. */
 export const auditFilterOf = (
   view: AuditView,
-  dayStart: (isoDay: string) => Date,
+  dayStart: (isoDay: string) => string,
 ): AuditFilter => ({
   ...(view.actorId === null ? {} : { actorId: view.actorId }),
   ...(view.action === null ? {} : { action: view.action }),
-  ...(view.from === null ? {} : { from: dayStart(view.from).toISOString() }),
-  ...(view.to === null ? {} : { to: dayStart(dayAfter(view.to)).toISOString() }),
+  ...(view.from === null ? {} : { from: dayStart(view.from) }),
+  ...(view.to === null ? {} : { to: dayStart(dayAfter(view.to)) }),
 });
 
 /** Where the filtered trail downloads from: a link the browser follows with the session's cookie. */
