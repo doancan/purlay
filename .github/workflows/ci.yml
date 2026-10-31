@@ -302,7 +302,7 @@ jobs:
   # whatever happened before it — a job whose dependency failed is skipped by default, and branch protection
   # counts a skipped required check as passed — and passes only when each job it needs succeeded.
   verify:
-    needs: [static, schema]
+    needs: [static, schema, changes, browser]
     if: always()
     runs-on: ubuntu-latest
     # Checkout and Bun's download, then a few milliseconds of judging; the margin is for a slow download.

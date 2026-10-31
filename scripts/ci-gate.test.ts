@@ -1,25 +1,57 @@
-/** The required `verify` check: passes only when every job it stands for succeeded. */
+/** The required `verify` check: passes only when every job it stands for succeeded (D-203, D-226). */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { GATED, judge, main } from './ci-gate';
 
-const results = (static_: string, schema: string): string =>
+type Job = (typeof GATED)[number];
+
+/**
+ * What `toJSON(needs)` hands the gate: every job succeeded and the change touched what the browser
+ * jobs see, unless said otherwise.
+ */
+const results = (over: Partial<Record<Job, string>> = {}, touched = 'true'): string =>
   JSON.stringify({
-    static: { result: static_, outputs: {} },
-    schema: { result: schema, outputs: {} },
+    static: { result: over.static ?? 'success', outputs: {} },
+    schema: { result: over.schema ?? 'success', outputs: {} },
+    changes: { result: over.changes ?? 'success', outputs: { browser: touched } },
+    browser: { result: over.browser ?? 'success', outputs: {} },
   });
 
 describe('the gate', () => {
-  test('passes when the static checks and the whole test suite succeeded', () => {
-    expect(judge(results('success', 'success'))).toEqual([]);
+  test('passes when the static checks, the whole suite and the browser jobs succeeded', () => {
+    expect(judge(results())).toEqual([]);
+  });
+
+  test('passes a change the browser jobs cannot see, whose browser jobs were skipped for it', () => {
+    expect(judge(results({ browser: 'skipped' }, 'false'))).toEqual([]);
+  });
+
+  test('refuses skipped browser jobs for a change they can see', () => {
+    expect(judge(results({ browser: 'skipped' }, 'true'))).toEqual(['browser ended skipped']);
+  });
+
+  test('refuses skipped browser jobs when it cannot tell whether the change needed them', () => {
+    expect(judge(results({ changes: 'failure', browser: 'skipped' }, ''))).toEqual([
+      'changes ended failure',
+      'browser ended skipped',
+    ]);
+    expect(judge(results({ browser: 'skipped' }, ''))).toEqual(['browser ended skipped']);
+    // A changes job that failed may still have said "false" before it did: its word does not count.
+    expect(judge(results({ changes: 'failure', browser: 'skipped' }, 'false'))).toEqual([
+      'changes ended failure',
+      'browser ended skipped',
+    ]);
+  });
+
+  test('refuses failed browser jobs, whatever the change touched', () => {
+    expect(judge(results({ browser: 'failure' }, 'false'))).toEqual(['browser ended failure']);
   });
 
   const outcomes = ['failure', 'cancelled', 'skipped', ''] as const;
   for (const job of GATED) {
     for (const outcome of outcomes) {
       test(`refuses when ${job} ended ${outcome === '' ? 'with no result' : outcome}`, () => {
-        const both = job === 'static' ? results(outcome, 'success') : results('success', outcome);
-        expect(judge(both)).toEqual([
+        expect(judge(results({ [job]: outcome }))).toEqual([
           `${job} ended ${outcome === '' ? 'with no result' : outcome}`,
         ]);
       });
@@ -27,25 +59,23 @@ describe('the gate', () => {
   }
 
   test('names every job that did not succeed, not only the first', () => {
-    expect(judge(results('failure', 'cancelled'))).toEqual([
+    expect(judge(results({ static: 'failure', schema: 'cancelled', browser: 'failure' }))).toEqual([
       'static ended failure',
       'schema ended cancelled',
+      'browser ended failure',
     ]);
   });
 
   test('refuses when a job it stands for is missing from what it was handed', () => {
-    expect(judge(JSON.stringify({ static: { result: 'success' } }))).toEqual([
-      'schema is not among the jobs this one needs',
-    ]);
+    const handed = JSON.parse(results()) as Record<string, unknown>;
+    delete handed['browser'];
+    expect(judge(JSON.stringify(handed))).toEqual(['browser is not among the jobs this one needs']);
   });
 
   test('refuses a job it does not stand for, so the two lists cannot drift apart quietly', () => {
-    const extra = {
-      ...(JSON.parse(results('success', 'success')) as object),
-      browser: { result: 'success' },
-    };
+    const extra = { ...(JSON.parse(results()) as object), rehearse: { result: 'success' } };
     expect(judge(JSON.stringify(extra))).toEqual([
-      'browser is needed but the gate does not judge it',
+      'rehearse is needed but the gate does not judge it',
     ]);
   });
 
@@ -56,9 +86,11 @@ describe('the gate', () => {
 
 /** What GitHub reads is the exit code, not the reasons: it is tested as the job runs it. */
 describe('the command', () => {
-  test('returns 0 only for two successes, and 1 for anything else or nothing', () => {
-    expect(main({ NEEDS: results('success', 'success') })).toBe(0);
-    expect(main({ NEEDS: results('success', 'skipped') })).toBe(1);
+  test('returns 0 only for a verdict that passes, and 1 for anything else or nothing', () => {
+    expect(main({ NEEDS: results() })).toBe(0);
+    expect(main({ NEEDS: results({ browser: 'skipped' }, 'false') })).toBe(0);
+    expect(main({ NEEDS: results({ schema: 'skipped' }) })).toBe(1);
+    expect(main({ NEEDS: results({ browser: 'skipped' }) })).toBe(1);
     expect(main({})).toBe(1);
   });
 
@@ -67,11 +99,11 @@ describe('the command', () => {
       env: { PATH: process.env['PATH'] ?? '', ...(needs === undefined ? {} : { NEEDS: needs }) },
     }).exitCode;
 
-  test('exits 1 as a process on a failure, a skip and no results, and 0 on two successes', () => {
-    expect(exitOf(results('failure', 'success'))).toBe(1);
-    expect(exitOf(results('success', 'skipped'))).toBe(1);
+  test('exits 1 as a process on a failure, a skip and no results, and 0 on a pass', () => {
+    expect(exitOf(results({ static: 'failure' }))).toBe(1);
+    expect(exitOf(results({ browser: 'skipped' }))).toBe(1);
     expect(exitOf(undefined)).toBe(1);
-    expect(exitOf(results('success', 'success'))).toBe(0);
+    expect(exitOf(results())).toBe(0);
   });
 });
 
