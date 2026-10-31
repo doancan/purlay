@@ -1538,6 +1538,8 @@ export const tr = {
     'Purlay arka planda bir sekmede açıkken bu cihazda haber almak için aç. Önce tarayıcın izin ister.',
   'settings.notifications.unsupported':
     'Bu tarayıcı bildirim gösteremiyor; bekleyenleri yalnızca sekmenin başlığı sayar.',
+  'settings.notifications.installFirst':
+    'iPhone ve iPad’de bildirimler yalnızca ana ekrandaki Purlay’e gelir: Paylaş’a, sonra Ana Ekrana Ekle’ye dokun ve oradan aç.',
   'settings.notifications.closedTabOff':
     'Bu sunucu kapalı sekmeye bildirim göndermiyor; Purlay kapalıyken hiçbir şey duymazsın. Haber almak için bir sekmede açık tut.',
   'settings.notifications.unavailable': 'Burada kullanılamıyor',
