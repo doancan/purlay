@@ -85,6 +85,7 @@ export const keys = {
   savedSearches: (workspaceId: string) => ['saved-searches', workspaceId] as const,
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
+  archivedChannels: (workspaceId: string) => ['archived-channels', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
   /** A channel's repository feeds, an owner's or an admin's to read (D-134). */
   githubFeeds: (channelId: string) => ['github-feeds', channelId] as const,

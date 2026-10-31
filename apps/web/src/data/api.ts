@@ -17,6 +17,7 @@ import {
  */
 import { Type, type Static } from '@sinclair/typebox';
 import {
+  ArchivedChannelList,
   Attachment,
   AuditPage,
   type AuditFilter,
@@ -181,6 +182,13 @@ export interface Api {
   readonly updateChannel: (channelId: string, input: UpdateChannelRequest) => Promise<Channel>;
   /** An owner's or an admin's: archived, for everyone (D-123). */
   readonly archiveChannel: (channelId: string) => Promise<void>;
+  /** An owner's or an admin's: the archived channels they may bring back (D-232). */
+  readonly archivedChannels: (
+    workspaceId: string,
+    signal?: AbortSignal,
+  ) => Promise<ArchivedChannelList>;
+  /** An owner's or an admin's: an archived channel brought back, as it was (D-232). */
+  readonly restoreChannel: (channelId: string) => Promise<void>;
   readonly leaveChannel: (channelId: string) => Promise<void>;
   /** Who is in the channel (D-123). */
   readonly channelMembers: (channelId: string, signal?: AbortSignal) => Promise<ChannelMemberList>;
@@ -529,6 +537,15 @@ export const createApi = (http: Http): Api => {
     updateChannel: (channelId, input) =>
       http.request('PATCH', `/api/channels/${at(channelId)}`, Channel, options({ body: input })),
     archiveChannel: (channelId) => http.send('DELETE', `/api/channels/${at(channelId)}`, options()),
+    archivedChannels: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/archived-channels`,
+        ArchivedChannelList,
+        options({}, signal),
+      ),
+    restoreChannel: (channelId) =>
+      http.send('POST', `/api/channels/${at(channelId)}/restore`, options()),
     leaveChannel: (channelId) =>
       http.send('POST', `/api/channels/${at(channelId)}/leave`, options()),
     channelMembers: (channelId, signal) =>

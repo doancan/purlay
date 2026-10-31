@@ -85,3 +85,39 @@ test('somebody looking at a channel an admin archives is told it was archived', 
     (await openNav(page)).getByRole('link', { name: new RegExp(made.name) }),
   ).toHaveCount(0);
 });
+
+test('an admin restores an archived channel from General, and it is back in a member’s sidebar without a reload (D-232)', async ({
+  page,
+  signIn,
+  room,
+  api,
+  asPerson,
+  world,
+  expectNoAxe,
+}) => {
+  const made = await room({ members: ['dogancan', 'alice'] });
+  const alice = await asPerson('alice');
+  await alice.goto(made.path);
+  await expect(alice.getByRole('heading', { level: 1, name: made.name })).toBeVisible();
+  // As in the archive test above: a live message proves Alice's socket listens before anything is told.
+  await api('dogancan').say(made.id, 'the socket is listening');
+  await expect(
+    alice.locator('[data-message-row]', { hasText: 'the socket is listening' }),
+  ).toBeVisible();
+  await api('dogancan').del(`/api/channels/${made.id}`);
+  await expect(
+    (await openNav(alice)).getByRole('link', { name: new RegExp(made.name) }),
+  ).toHaveCount(0);
+
+  await signIn();
+  await page.goto(`/w/${world.workspace.slug}/settings/general`);
+  const card = page.getByRole('region', { name: 'Archived channels' });
+  const row = card.getByRole('listitem').filter({ hasText: `#${made.name},` });
+  await expect(row).toBeVisible();
+  await expectNoAxe(card);
+  await row.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByText(`#${made.name} is back.`)).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  await expect(await navLink(alice, made.name)).toBeVisible();
+});
