@@ -3,16 +3,32 @@
  *
  * The static checks and the whole test suite are separate jobs, so the unit tests run once — in
  * `schema`, with the integration tests and coverage — instead of once there and once more alone.
- * Branch protection still requires `verify`, and `verify` now means both: this passes only when every
+ * Branch protection still requires `verify`, and `verify` means all of them: this passes only when every
  * job it judges *succeeded*. A failure, a cancellation, a skip, a missing result or a missing job is a
  * refusal, because a skipped required check counts as passed and a gate that reads "nothing failed"
  * passes on nothing having run (`CONTRIBUTING.md` §6.4).
+ *
+ * The browser jobs are judged too (D-226): a change they cannot see skips them, and only then is their
+ * skip a pass — when `changes` succeeded and said so. Anything else, a skip included, is a refusal.
  *
  *   bun run ci:gate        in CI: reads `NEEDS`, the job's `toJSON(needs)`
  */
 
 /** The jobs `verify` stands for. `ci.yml`'s `needs:` for the job is bound to this list by a test. */
-export const GATED = ['static', 'schema'] as const;
+export const GATED = ['static', 'schema', 'changes', 'browser'] as const;
+
+/** Whether `changes` succeeded and said the browser jobs see nothing in this change: their skip is right. */
+const browserNotNeeded = (jobs: Record<string, unknown>): boolean => {
+  const changes = jobs['changes'];
+  if (typeof changes !== 'object' || changes === null) return false;
+  const { result, outputs } = changes as { result?: unknown; outputs?: unknown };
+  return (
+    result === 'success' &&
+    typeof outputs === 'object' &&
+    outputs !== null &&
+    (outputs as { browser?: unknown }).browser === 'false'
+  );
+};
 
 /** Every reason the results do not pass; empty when they do. */
 export const judge = (needs: string): string[] => {
@@ -37,7 +53,8 @@ export const judge = (needs: string): string[] => {
       typeof job === 'object' && job !== null && 'result' in job && typeof job.result === 'string'
         ? job.result
         : '';
-    if (result !== 'success') {
+    const skipIsRight = name === 'browser' && result === 'skipped' && browserNotNeeded(jobs);
+    if (result !== 'success' && !skipIsRight) {
       reasons.push(`${name} ended ${result === '' ? 'with no result' : result}`);
     }
   }
@@ -54,7 +71,7 @@ export const main = (environment: Readonly<Record<string, string | undefined>>):
   const reasons = judge(environment['NEEDS'] ?? '');
   for (const reason of reasons) console.error(`verify — ${reason}`);
   if (reasons.length > 0) return 1;
-  console.log(`verify — ${GATED.join(' and ')} succeeded`);
+  console.log(`verify — ${GATED.join(', ')}: each succeeded, or was rightly skipped`);
   return 0;
 };
 
