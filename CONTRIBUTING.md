@@ -283,7 +283,9 @@ true before anything starts. Wait for *the thing I expect exists, and it has fin
 
 **Test files are isolated (D-220).** The standard suite and mutation commands use Bun's native
 `--isolate`, keeping browser globals and leftover timers from affecting another file. Keep the
-flag when running a multi-file diagnostic.
+flag when running a multi-file diagnostic. The whole suite also runs two files at a time,
+`--parallel=2` (D-228): a test that waits on time must wait for what it needs, not for a turn that
+happens to be enough on an idle machine.
 
 **Green in one state is not green.** Run the full verification in the order the pipeline runs it,
 before committing. A local pass from a different working state is an opinion.
