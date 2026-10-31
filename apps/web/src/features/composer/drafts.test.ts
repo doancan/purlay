@@ -94,4 +94,21 @@ describe('listing drafts (D-215)', () => {
     expect(listDrafts(broken, 'me')).toEqual([]);
     expect(listDrafts(null, 'me')).toEqual([]);
   });
+
+  test('a storage that has drafts but refuses to read them is no drafts, not some of them', () => {
+    const storage = memory();
+    writeDraft(storage, draftKey('me', 'c1', undefined), 'half a thought');
+    writeDraft(storage, draftKey('me', 'c2', undefined), 'another');
+    let reads = 0;
+    const refusesSecond: DraftStorage = {
+      ...storage,
+      length: storage.length,
+      getItem: (key) => {
+        reads += 1;
+        if (reads > 1) throw new Error('blocked');
+        return storage.getItem(key);
+      },
+    };
+    expect(listDrafts(refusesSecond, 'me')).toEqual([]);
+  });
 });

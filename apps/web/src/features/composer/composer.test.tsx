@@ -17,6 +17,7 @@ import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { SessionGate } from '../session/session';
 import { WorkspaceScopeProvider } from '../shell/workspace';
+import { DeepWorkProvider } from '../shell/deep-work';
 import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Toaster } from '../../ui/toast';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -88,6 +89,8 @@ interface Options {
   readonly open?: boolean;
   /** A device with no pointer that hovers: a phone. */
   readonly touchOnly?: boolean;
+  /** Deep Work kept for the workspace, as the shell keeps it; absent, nothing keeps it. */
+  readonly deepWork?: boolean;
 }
 
 interface Mounted {
@@ -136,7 +139,13 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
                 touchOnly: () => options.touchOnly === true,
               }}
             >
-              <Holder />
+              {options.deepWork === true ? (
+                <DeepWorkProvider>
+                  <Holder />
+                </DeepWorkProvider>
+              ) : (
+                <Holder />
+              )}
             </ComposerPortsContext.Provider>
           </OutboxProvider>
           <Toaster dismissLabel="Close" />
@@ -2213,5 +2222,223 @@ describe('slash commands (D-214)', () => {
     await user.keyboard('{Escape}');
     expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
     expect(box().value).toBe('/t');
+  });
+
+  test('/topic with nothing after it clears the topic', async () => {
+    const asked: unknown[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        updateChannel: (_id, input) => {
+          asked.push(input);
+          return Promise.resolve(aChannel(IDS.api, 'api'));
+        },
+      }),
+    });
+    await user.type(box(), '/topic{Enter}');
+    await settle();
+    expect(asked).toEqual([{ topic: null }]);
+    expect(view.getByText('Topic cleared')).toBeDefined();
+  });
+
+  test('a /topic the server refuses says why and keeps the command to try again', async () => {
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        updateChannel: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      }),
+    });
+    await user.type(box(), '/topic Deploys{Enter}');
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(view.queryByText('Topic set')).toBeNull();
+    expect(box().value).toBe('/topic Deploys');
+  });
+
+  test('/unmute brings the level back to mentions, and says so', async () => {
+    const levels: string[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        channels: () => Promise.resolve([aChannel(IDS.api, 'api', { notificationLevel: 'none' })]),
+        setNotificationLevel: (_id, level) => {
+          levels.push(level);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/unmute{Enter}');
+    await settle();
+    expect(levels).toEqual(['mentions']);
+    expect(view.getByText('Unmuted')).toBeDefined();
+    expect(box().value).toBe('');
+  });
+
+  test('/star and /unstar star the channel and let it go, as the header’s star does', async () => {
+    const stars: boolean[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        star: (_id, starred) => {
+          stars.push(starred);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/star{Enter}');
+    await settle();
+    expect(view.getByText('Starred')).toBeDefined();
+    await user.type(box(), '/unstar{Enter}');
+    await settle();
+    expect(view.getByText('Unstarred')).toBeDefined();
+    expect(stars).toEqual([true, false]);
+  });
+
+  test('in a channel the person has not joined, /mute, /star and /leave each say to join first and ask nothing', async () => {
+    const asked: string[] = [];
+    const api = aSignedInApi({
+      channels: () =>
+        Promise.resolve([aChannel(IDS.api, 'api', { state: null, notificationLevel: null })]),
+      setNotificationLevel: () => {
+        asked.push('level');
+        return Promise.resolve();
+      },
+      star: () => {
+        asked.push('star');
+        return Promise.resolve();
+      },
+      leaveChannel: () => {
+        asked.push('leave');
+        return Promise.resolve();
+      },
+    });
+    for (const command of ['/mute', '/star', '/leave']) {
+      const { view, box, user } = await mount({ api });
+      await user.type(box(), `${command}{Enter}`);
+      await settle();
+      expect(view.getByText('Join the channel first.')).toBeDefined();
+      expect(box().value).toBe(command);
+      view.unmount();
+    }
+    expect(asked).toEqual([]);
+  });
+
+  test('/invite @alice adds her to the channel by her id, and says so', async () => {
+    const added: [string, string][] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        addChannelMember: (channelId, userId) => {
+          added.push([channelId, userId]);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/invite @Alice{Enter}');
+    await settle();
+    expect(added).toEqual([[IDS.api, ALICE_USER.id]]);
+    expect(view.getByText('Alice was added')).toBeDefined();
+    expect(box().value).toBe('');
+  });
+
+  test('/invite with nobody named says how to name somebody', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/invite{Enter}');
+    await settle();
+    expect(view.getByText('Name who to add: /invite @name.')).toBeDefined();
+    expect(box().value).toBe('/invite');
+  });
+
+  test('an /invite the server refuses says why and keeps the command', async () => {
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        addChannelMember: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      }),
+    });
+    await user.type(box(), '/invite @bob{Enter}');
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(box().value).toBe('/invite @bob');
+  });
+
+  test('/leave leaves the channel and goes to the workspace, saying which channel was left', async () => {
+    const left: string[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        leaveChannel: (channelId) => {
+          left.push(channelId);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/leave{Enter}');
+    await settle();
+    expect(left).toEqual([IDS.api]);
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme');
+    expect(view.getByText('You left #api.')).toBeDefined();
+  });
+
+  test('a /leave the server refuses stays where it is and says why', async () => {
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        leaveChannel: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      }),
+    });
+    const before = view.world.history.stack.length;
+    await user.type(box(), '/leave{Enter}');
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(view.world.history.stack).toHaveLength(before);
+    expect(box().value).toBe('/leave');
+  });
+
+  test('/deepwork 30m starts Deep Work and /deepwork off ends it, through the shell’s controls', async () => {
+    const asked: unknown[] = [];
+    const { view, box, user } = await mount({
+      deepWork: true,
+      api: aSignedInApi({
+        setDeepWork: (_workspaceId, input) => {
+          asked.push(input);
+          return Promise.resolve({ until: null });
+        },
+      }),
+    });
+    await user.type(box(), '/deepwork 30m{Enter}');
+    await settle();
+    expect(view.getByText('Deep Work started')).toBeDefined();
+    await user.type(box(), '/deepwork off{Enter}');
+    await settle();
+    expect(view.getByText('Deep Work ended')).toBeDefined();
+    const [started, ended] = asked as [{ active: boolean; until?: unknown }, unknown];
+    expect(started.active).toBe(true);
+    expect(typeof started.until).toBe('string');
+    expect(ended).toEqual({ active: false });
+    expect(asked).toHaveLength(2);
+  });
+
+  test('/deepwork for a length it does not know, or where nothing keeps Deep Work, says what it takes', async () => {
+    const kept = await mount({ deepWork: true });
+    await kept.user.type(kept.box(), '/deepwork forever{Enter}');
+    await settle();
+    expect(kept.view.getByText('Deep Work for 30m, 1h, 2h or tomorrow, or off.')).toBeDefined();
+    kept.view.unmount();
+
+    const unkept = await mount();
+    await unkept.user.type(unkept.box(), '/deepwork 1h{Enter}');
+    await settle();
+    expect(unkept.view.getByText('Deep Work for 30m, 1h, 2h or tomorrow, or off.')).toBeDefined();
+  });
+
+  test('/search with no words says what it takes, and goes nowhere', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search{Enter}');
+    await settle();
+    expect(view.getByText('Write what to search for after /search.')).toBeDefined();
+    expect(view.world.history.stack).toEqual(['/']);
+  });
+
+  test('/search goes to the workspace’s search with the words in its address', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search çay & deploy{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?q=${encodeURIComponent('çay & deploy')}`,
+    );
+    expect(box().value).toBe('');
   });
 });
