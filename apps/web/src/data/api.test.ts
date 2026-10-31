@@ -5,7 +5,7 @@
  */
 import { NO_PROFILE } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
-import type { Attachment } from '@purlay/types';
+import type { Attachment, DeviceSession } from '@purlay/types';
 import { createApi, type Api } from './api';
 import { ApiError } from './errors';
 import { createHttp, type UploadRequest } from './http';
@@ -754,6 +754,24 @@ describe('the endpoints', () => {
       oidc: false,
     });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
+  });
+
+  test('where the caller is signed in, and ending one of those sessions by its id (D-193)', async () => {
+    const session: DeviceSession = {
+      id: ID,
+      kind: 'native',
+      name: 'Ada’s MacBook',
+      createdAt: '2026-09-09T08:00:00.000Z',
+      lastUsedAt: '2026-09-10T08:00:00.000Z',
+      expiresAt: '2026-10-09T08:00:00.000Z',
+      current: false,
+    };
+    const read = harness({ data: [session] });
+    expect(await read.api.mySessions()).toEqual({ data: [session] });
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sessions' });
+    const ended = harness(null);
+    await ended.api.endMySession(ID);
+    expect(ended.calls[0]).toMatchObject({ method: 'DELETE', url: `/api/me/sessions/${ID}` });
   });
 
   test('authorising the native application (D-191): the challenge and state go up, the fixed address comes back', async () => {

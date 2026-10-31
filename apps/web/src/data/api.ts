@@ -54,6 +54,7 @@ import {
   NativeAuthorizeResponse,
   type NativeAuthorizeRequest,
   MySignIn,
+  DeviceSessionList,
   EmailSignInPreview,
   type EmailSignInRequest,
   NotificationPage,
@@ -382,6 +383,10 @@ export interface Api {
   readonly eraseAccount: (confirm: string) => Promise<void>;
   /** The ways the caller signs in: their address, and the GitHub account linked to it, if any (D-176, D-179 §5). */
   readonly mySignIn: (signal?: AbortSignal) => Promise<MySignIn>;
+  /** Where the caller is signed in, the one used last first (D-193). */
+  readonly mySessions: (signal?: AbortSignal) => Promise<DeviceSessionList>;
+  /** Ends one of the caller's sessions by its id; one already ended is `SESSION_NOT_FOUND` (D-193 §2). */
+  readonly endMySession: (sessionId: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -909,6 +914,10 @@ export const createApi = (http: Http): Api => {
       ),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
     mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
+    mySessions: (signal) =>
+      http.request('GET', '/api/me/sessions', DeviceSessionList, options({}, signal)),
+    endMySession: (sessionId) =>
+      http.send('DELETE', `/api/me/sessions/${at(sessionId)}`, options()),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),

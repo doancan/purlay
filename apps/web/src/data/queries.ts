@@ -20,6 +20,7 @@ import {
 import type {
   AuthMethods,
   MySignIn,
+  DeviceSessionList,
   Channel,
   MeResponse,
   Message,
@@ -104,6 +105,15 @@ export const useMySignIn = (): UseQueryResult<MySignIn> => {
   return useQuery({
     queryKey: keys.mySignIn,
     queryFn: ({ signal }) => api.mySignIn(signal),
+  });
+};
+
+/** Where the caller is signed in, the one used last first (D-193). */
+export const useMySessions = (): UseQueryResult<DeviceSessionList> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.mySessions,
+    queryFn: ({ signal }) => api.mySessions(signal),
   });
 };
 

@@ -12,6 +12,8 @@ export const keys = {
   me: ['me'] as const,
   /** The ways the caller signs in, and the GitHub account connected (D-176). */
   mySignIn: ['my-sign-in'] as const,
+  /** Where the caller is signed in (D-193). */
+  mySessions: ['my-sessions'] as const,
   /** Which ways in this server offers (D-138 §6). */
   authMethods: ['auth-methods'] as const,
   /** Whether the server is open to setup (D-179 §4). */
