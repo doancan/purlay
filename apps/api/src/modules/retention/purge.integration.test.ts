@@ -4,6 +4,11 @@
  * edge to the millisecond; a thread across the window kept as a tombstone holding its younger replies,
  * and gone the night its last reply is old; the counters, the files' bytes and the files taken back;
  * one line on the trail per workspace, nothing purged or not.
+ *
+ * And a channel that keeps longer (D-225): forever, or a floor of its own, each beside a channel of the
+ * same workspace that follows it; the longer window winning whichever of the two was set first; a thread
+ * across the channel's window; batches that have to look past what a channel keeps; and nothing of one
+ * workspace's setting reaching another's.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Transaction } from '@purlay/db';
@@ -415,6 +420,279 @@ describe('integration: the retention purge', () => {
           metadata: { days: '30', messages: '1', files: '1', filesLeft: '1' },
         },
       ]);
+    });
+  });
+});
+
+/** A second channel of the room's workspace, and nobody in it: messages are written straight in. */
+const anotherChannel = async (db: Transaction, room: Room, name: string): Promise<string> =>
+  (
+    await db
+      .insertInto('channels')
+      .values({ workspace_id: room.workspaceId, name, type: 'public' })
+      .returning('id')
+      .executeTakeFirstOrThrow()
+  ).id;
+
+/** How long a channel keeps, as an owner sets it: forever, a floor of days, or the workspace's. */
+const channelKeeps = async (
+  db: Transaction,
+  channelId: string,
+  keeps: 'forever' | number | null,
+): Promise<void> => {
+  await db
+    .updateTable('channels')
+    .set({
+      retain_forever: keeps === 'forever',
+      min_retention_days: typeof keeps === 'number' ? keeps : null,
+    })
+    .where('id', '=', channelId)
+    .execute();
+};
+
+/** A message written straight into a channel at `at`, as an import would; a reply under `parentId`. */
+const written = async (
+  db: Transaction,
+  room: Room,
+  channelId: string,
+  at: Date,
+  parentId?: string,
+): Promise<string> => {
+  tick += 1;
+  const id = messageId(new Date(at.getTime() + tick));
+  await db
+    .insertInto('messages')
+    .values({
+      id,
+      channel_id: channelId,
+      workspace_id: room.workspaceId,
+      sender_id: member(room, 'ada').userId,
+      content: 'words',
+      created_at: at,
+      ...(parentId === undefined ? {} : { parent_id: parentId }),
+    })
+    .execute();
+  if (parentId !== undefined) {
+    await db
+      .updateTable('messages')
+      .set((eb) => ({ thread_reply_count: eb('thread_reply_count', '+', 1) }))
+      .where('id', '=', parentId)
+      .execute();
+  }
+  return id;
+};
+
+const daysAgo = (days: number, ms = 0): Date => new Date(NOW.getTime() - days * DAY_MS - ms);
+
+/** `count` old messages in a channel, a second apart, from `days` ago backwards. */
+const backlog = (
+  room: Room,
+  channelId: string,
+  count: number,
+  days: number,
+): {
+  id: string;
+  channel_id: string;
+  workspace_id: string;
+  sender_id: string;
+  content: string;
+  created_at: Date;
+}[] =>
+  Array.from({ length: count }, (_, n) => {
+    const at = daysAgo(days, n * 1000);
+    return {
+      id: messageId(at),
+      channel_id: channelId,
+      workspace_id: room.workspaceId,
+      sender_id: member(room, 'ada').userId,
+      content: `old ${String(n)}`,
+      created_at: at,
+    };
+  });
+
+describe('integration: a channel that keeps its history longer (D-225)', () => {
+  test('a channel kept forever loses nothing; the channel beside it follows the workspace', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      const decisions = await anotherChannel(db, room, 'decisions');
+      await keep(db, room, WINDOW_DAYS);
+      await channelKeeps(db, decisions, 'forever');
+      const kept = [
+        await written(db, room, decisions, daysAgo(400)),
+        await written(db, room, decisions, daysAgo(31)),
+      ];
+      const gone = await written(db, room, room.channelId, daysAgo(31));
+
+      expect(await purgeRetention(deps(db))).toMatchObject({ workspaces: 1, deleted: 1 });
+      expect(await present(db, [...kept, gone])).toEqual([...kept].sort());
+      // One line on the trail, with the workspace's window in it, as before (D-139 §3).
+      expect(await trail(db, room.workspaceId)).toEqual([
+        { action: 'retention.purged', metadata: { days: '30', messages: '1', files: '0' } },
+      ]);
+    });
+  });
+
+  test('a floor of ninety days: what is inside it stays, to the millisecond, and what is past it goes', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      await keep(db, room, WINDOW_DAYS);
+      await channelKeeps(db, room.channelId, 90);
+      const inside = await written(db, room, room.channelId, daysAgo(60));
+      const atEdge = await written(db, room, room.channelId, daysAgo(90));
+      const past = await written(db, room, room.channelId, daysAgo(90, 1));
+      await purgeRetention(deps(db));
+      expect(await present(db, [inside, atEdge, past])).toEqual([inside, atEdge].sort());
+    });
+  });
+
+  test('the longer window wins whichever changed last: a workspace lengthened past the floor, or keeping everything', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      await channelKeeps(db, room.channelId, 90);
+      const twoHundred = await written(db, room, room.channelId, daysAgo(200));
+      const fourHundred = await written(db, room, room.channelId, daysAgo(400));
+
+      // The workspace keeps a year now: the channel's ninety days are shorter, and do not shorten it.
+      await keep(db, room, 365);
+      await purgeRetention(deps(db));
+      expect(await present(db, [twoHundred, fourHundred])).toEqual([twoHundred]);
+
+      // The workspace keeps everything: so does every channel in it, whatever its floor says.
+      await keep(db, room, null);
+      expect(await purgeRetention(deps(db))).toMatchObject({ workspaces: 0, deleted: 0 });
+      expect(await present(db, [twoHundred])).toEqual([twoHundred]);
+
+      // Back to thirty days: the floor is the longer window again, and the message is past it.
+      await keep(db, room, WINDOW_DAYS);
+      await purgeRetention(deps(db));
+      expect(await present(db, [twoHundred])).toEqual([]);
+    });
+  });
+
+  test('a thread across a channel’s floor: the old reply goes, the root holds the young one as a tombstone', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      await keep(db, room, WINDOW_DAYS);
+      await channelKeeps(db, room.channelId, 90);
+      const root = await written(db, room, room.channelId, daysAgo(100));
+      const oldReply = await written(db, room, room.channelId, daysAgo(95), root);
+      // Past the workspace's thirty days, inside the channel's ninety.
+      const youngReply = await written(db, room, room.channelId, daysAgo(60), root);
+
+      expect(await purgeRetention(deps(db))).toMatchObject({ deleted: 1, tombstoned: 1 });
+      expect(await present(db, [root, oldReply, youngReply])).toEqual([root, youngReply].sort());
+      expect(await live(db, [root, youngReply])).toEqual([youngReply]);
+      expect(
+        await db
+          .selectFrom('messages')
+          .select('thread_reply_count')
+          .where('id', '=', root)
+          .executeTakeFirstOrThrow(),
+      ).toEqual({ thread_reply_count: 1 });
+    });
+  });
+
+  test('what a kept channel holds is not taken back: its unread count and its files’ bytes stay', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      const storage = aMemoryStore();
+      const old = await post(db, room, 'ada', ago(DAY_MS), 'old, and kept');
+      tick += 1;
+      const id = messageId(new Date(NOW.getTime() + tick));
+      const key = `w/${room.workspaceId}/${id}`;
+      await storage.put(key, new Uint8Array([1]), 'application/octet-stream');
+      await db
+        .insertInto('attachments')
+        .values({
+          id,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          message_id: old,
+          uploader_id: member(room, 'ada').userId,
+          storage_key: key,
+          file_name: 'a.bin',
+          mime_type: 'application/octet-stream',
+          size_bytes: '700',
+        })
+        .execute();
+      await db
+        .updateTable('workspaces')
+        .set({ storage_used_bytes: '700', retention_days: WINDOW_DAYS })
+        .where('id', '=', room.workspaceId)
+        .execute();
+      await channelKeeps(db, room.channelId, 'forever');
+      const before = await counters(db, room, member(room, 'bob').userId);
+
+      expect(await purgeRetention(deps(db, storage))).toMatchObject({
+        deleted: 0,
+        attachments: 0,
+      });
+      expect(await counters(db, room, member(room, 'bob').userId)).toEqual(before);
+      const { storage_used_bytes: used } = await db
+        .selectFrom('workspaces')
+        .select('storage_used_bytes')
+        .where('id', '=', room.workspaceId)
+        .executeTakeFirstOrThrow();
+      expect(used).toBe('700');
+      expect(storage.keys()).toEqual([key]);
+    });
+  });
+
+  test('more than a batch kept, older than more than a batch that goes: every one of those goes', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      const decisions = await anotherChannel(db, room, 'decisions');
+      await keep(db, room, WINDOW_DAYS);
+      await channelKeeps(db, decisions, 'forever');
+      // The kept are the oldest, so a read that limited before it looked at the channel would find a
+      // whole batch of them, and nothing to purge.
+      await db
+        .insertInto('messages')
+        .values(backlog(room, decisions, PURGE_BATCH + 1, 300))
+        .execute();
+      await db
+        .insertInto('messages')
+        .values(backlog(room, room.channelId, PURGE_BATCH + 1, 100))
+        .execute();
+
+      expect(await purgeRetention(deps(db))).toMatchObject({ deleted: PURGE_BATCH + 1 });
+      const left = async (channelId: string): Promise<number> =>
+        (await db.selectFrom('messages').select('id').where('channel_id', '=', channelId).execute())
+          .length;
+      expect(await left(room.channelId)).toBe(0);
+      expect(await left(decisions)).toBe(PURGE_BATCH + 1);
+    });
+  });
+
+  test('an archived channel keeps its setting, and the purge still applies it', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ada', 'bob']);
+      await keep(db, room, WINDOW_DAYS);
+      await channelKeeps(db, room.channelId, 'forever');
+      await db
+        .updateTable('channels')
+        .set({ deleted_at: NOW })
+        .where('id', '=', room.channelId)
+        .execute();
+      const old = await written(db, room, room.channelId, daysAgo(400));
+      await purgeRetention(deps(db));
+      expect(await present(db, [old])).toEqual([old]);
+    });
+  });
+
+  test('one workspace’s channel setting reaches no other workspace', async () => {
+    await withRollback(async (db) => {
+      const keeping = await aRoom(db, ['ada', 'bob']);
+      const following = await aRoom(db, ['ada', 'bob']);
+      for (const room of [keeping, following]) await keep(db, room, WINDOW_DAYS);
+      await channelKeeps(db, keeping.channelId, 'forever');
+      const kept = await written(db, keeping, keeping.channelId, daysAgo(100));
+      const gone = await written(db, following, following.channelId, daysAgo(100));
+
+      // Each workspace by itself, as the run takes them: neither's purge reaches the other.
+      await purgeWorkspace(deps(db), { id: following.workspaceId, retentionDays: WINDOW_DAYS });
+      await purgeWorkspace(deps(db), { id: keeping.workspaceId, retentionDays: WINDOW_DAYS });
+      expect(await present(db, [kept, gone])).toEqual([kept]);
     });
   });
 });
