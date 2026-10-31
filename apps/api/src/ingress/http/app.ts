@@ -1351,24 +1351,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return body;
     })
     .get('/api/attachments/:attachmentId', async ({ request, params, set }) => {
-      const { body, headers } = await downloadAttachment(
+      const download = await downloadAttachment(
         dependencies,
         request,
         params.attachmentId,
         'original',
       );
-      Object.assign(set.headers, headers);
-      return body;
+      Object.assign(set.headers, download.headers);
+      set.status = download.status;
+      return download.status === 304 ? null : download.body;
     })
     .get('/api/attachments/:attachmentId/thumbnail', async ({ request, params, set }) => {
-      const { body, headers } = await downloadAttachment(
+      const download = await downloadAttachment(
         dependencies,
         request,
         params.attachmentId,
         'thumbnail',
       );
-      Object.assign(set.headers, headers);
-      return body;
+      Object.assign(set.headers, download.headers);
+      set.status = download.status;
+      return download.status === 304 ? null : download.body;
     })
     .delete('/api/attachments/:attachmentId', async ({ request, params, set }) => {
       await discardAttachment(

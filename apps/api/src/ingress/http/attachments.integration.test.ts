@@ -30,6 +30,7 @@ interface World {
     path: string,
     who: SignedInUser | null,
     body?: unknown,
+    more?: Record<string, string>,
   ) => Promise<Response>;
   readonly owner: SignedInUser;
   /** In the workspace and its public channel, not in the private one. */
@@ -43,8 +44,11 @@ interface World {
 
 const aWorld = async (db: Executor): Promise<World> => {
   const store = aMemoryStore();
-  const call: World['call'] = async (method, path, who, body) => {
-    const headers: Record<string, string> = who === null ? {} : { cookie: who.cookie };
+  const call: World['call'] = async (method, path, who, body, more = {}) => {
+    const headers: Record<string, string> = {
+      ...more,
+      ...(who === null ? {} : { cookie: who.cookie }),
+    };
     let payload: Uint8Array | string | undefined;
     if (body instanceof Uint8Array) {
       headers['content-type'] = 'application/octet-stream';
@@ -214,7 +218,7 @@ describe('integration: reading an attachment', () => {
         'x-content-type-options': 'nosniff',
         'content-security-policy': "default-src 'none'; frame-ancestors 'none'; sandbox",
         'cross-origin-resource-policy': 'same-origin',
-        'cache-control': 'private, max-age=31536000, immutable',
+        'cache-control': 'private, no-cache',
       });
       // A file has no thumbnail.
       expect(await statusOf(world, `/api/attachments/${id}/thumbnail`, world.owner)).toBe(
@@ -248,6 +252,60 @@ describe('integration: reading an attachment', () => {
       expect(thumbnail.headers.get('content-type')).toBe('image/webp');
       const size = await new Bun.Image(new Uint8Array(await thumbnail.arrayBuffer())).metadata();
       expect([size.width, size.height]).toEqual([512, 256]);
+    });
+  });
+
+  test('a copy in the browser is asked about each time: unchanged is a 304, and nobody’s once access goes (D-231 §3)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const id = await upload(world, world.owner, 'chart.png', twoColourPng(800, 400));
+      await sendWith(world, world.publicChannel, [id]);
+      for (const at of [`/api/attachments/${id}`, `/api/attachments/${id}/thumbnail`]) {
+        const first = await world.call('GET', at, world.member);
+        expect(first.status).toBe(200);
+        expect(first.headers.get('cache-control')).toBe('private, no-cache');
+        const etag = first.headers.get('etag') ?? '';
+        expect(etag).toMatch(/^"[^"]+"$/);
+
+        // Asked again with the copy's tag: nothing to send, and the store is not read for it.
+        const again = await world.call('GET', at, world.member, undefined, {
+          'if-none-match': etag,
+        });
+        expect([again.status, await again.text()]).toEqual([304, '']);
+        expect(again.headers.get('etag')).toBe(etag);
+        expect(again.headers.get('cache-control')).toBe('private, no-cache');
+        // A tag of something else is answered whole.
+        const other = await world.call('GET', at, world.member, undefined, {
+          'if-none-match': '"something-else"',
+        });
+        expect(other.status).toBe(200);
+      }
+      const original = await world.call('GET', `/api/attachments/${id}`, world.member);
+      const thumbnail = await world.call('GET', `/api/attachments/${id}/thumbnail`, world.member);
+      expect(original.headers.get('etag')).not.toBe(thumbnail.headers.get('etag'));
+      const etag = original.headers.get('etag') ?? '';
+
+      // Removed from the workspace, the member's copy is refused when it is asked about.
+      await db
+        .deleteFrom('workspace_members')
+        .where('workspace_id', '=', world.workspaceId)
+        .where('user_id', '=', world.member.userId)
+        .execute();
+      const removed = await world.call('GET', `/api/attachments/${id}`, world.member, undefined, {
+        'if-none-match': etag,
+      });
+      expect(removed.status).toBe(404);
+      // And signed out, it is asked for a session first.
+      const signedOut = await world.call('GET', `/api/attachments/${id}`, null, undefined, {
+        'if-none-match': etag,
+      });
+      expect(signedOut.status).toBe(401);
+      // The owner's is still unchanged, without a read: the objects gone, the answer is still 304.
+      for (const key of world.store.keys()) await world.store.delete(key);
+      const unread = await world.call('GET', `/api/attachments/${id}`, world.owner, undefined, {
+        'if-none-match': etag,
+      });
+      expect(unread.status).toBe(304);
     });
   });
 

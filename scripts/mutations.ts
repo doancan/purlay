@@ -1729,6 +1729,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/integrations/webhook.integration.test.ts'],
   },
   {
+    id: 'attachment-cached-for-a-year',
+    why: 'a member removed from a channel still opens every file of it their browser kept',
+    file: 'apps/api/src/ingress/http/attachments.ts',
+    find: "const CACHING = 'private, no-cache';\n",
+    replace: "const CACHING = 'private, max-age=31536000, immutable';\n",
+    tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
+  },
+  {
+    id: 'attachment-unchanged-before-it-is-allowed',
+    why: 'a kept copy is confirmed to anybody who names its tag, signed in or not, member or not',
+    file: 'apps/api/src/ingress/http/attachments.ts',
+    find: '  const { database, storage } = dependencies;\n',
+    replace:
+      "  const { database, storage } = dependencies;\n  if (request.headers.get('if-none-match') !== null) return { status: 304, headers: {} };\n",
+    tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
+  },
+  {
     id: 'webhook-signature-unchecked',
     why: 'anybody who knows a feed’s address posts into its channel',
     file: 'apps/api/src/modules/integrations/webhook.ts',
