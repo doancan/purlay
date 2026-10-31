@@ -140,8 +140,18 @@ export const judge = (
  * (`PURLAY_E2E_PERFORMANCE=only`, `playwright.config.ts`) on one worker, so nothing else competes for
  * the machine while they measure. Answers the exit code.
  */
-const measureAlone = async (project: string): Promise<number> =>
-  await Bun.spawn(['bun', '--no-env-file', 'run', 'test:e2e', '--', '--workers=1'], {
+export const measureAlone = async (
+  project: string,
+  spawn: (
+    command: string[],
+    options: {
+      env: Record<string, string | undefined>;
+      stdout: 'inherit';
+      stderr: 'inherit';
+    },
+  ) => { readonly exited: Promise<number> } = Bun.spawn,
+): Promise<number> =>
+  await spawn(['bun', '--no-env-file', 'run', 'test:e2e', '--', '--workers=1'], {
     env: { ...process.env, PURLAY_E2E_PROJECT: project, PURLAY_E2E_PERFORMANCE: 'only' },
     stdout: 'inherit',
     stderr: 'inherit',

@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HISTORY_LENGTH, historyOf, judge, main, measured } from './budget-browser';
+import { HISTORY_LENGTH, historyOf, judge, main, measureAlone, measured } from './budget-browser';
 
 const folderWith = (files: Record<string, unknown>): string => {
   const folder = mkdtempSync(join(tmpdir(), 'purlay-budget-browser-'));
@@ -330,4 +330,26 @@ test('malformed JSON and missing nested measurements are refused', async () => {
     (error: unknown) => error,
   );
   expect(malformed).toBeInstanceOf(SyntaxError);
+});
+
+describe('measuring again alone (D-227)', () => {
+  test('runs only the measuring tests of that project, on one worker, and answers their exit code', async () => {
+    const asked: { command: string[]; env: Record<string, string | undefined> }[] = [];
+    const code = await measureAlone('chromium-light', (command, options) => {
+      asked.push({ command, env: options.env });
+      return { exited: Promise.resolve(3) };
+    });
+    expect(code).toBe(3);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.command).toEqual([
+      'bun',
+      '--no-env-file',
+      'run',
+      'test:e2e',
+      '--',
+      '--workers=1',
+    ]);
+    expect(asked[0]?.env['PURLAY_E2E_PROJECT']).toBe('chromium-light');
+    expect(asked[0]?.env['PURLAY_E2E_PERFORMANCE']).toBe('only');
+  });
 });
