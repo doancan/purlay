@@ -9,6 +9,7 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { currentRequest } from '../../platform/logging';
 import { messageId } from '@purlay/types';
+import { writeAuditLine } from './lines';
 
 /** The changes recorded, each a stable machine-readable name. */
 export type ServerAuditAction =
@@ -29,14 +30,25 @@ export const recordServerAudit = async (
   entry: { readonly actorUserId: string; readonly action: ServerAuditAction },
 ): Promise<void> => {
   const now = clock.now();
+  const id = messageId(now);
   await executor
     .insertInto('server_audit_log')
     .values({
-      id: messageId(now),
+      id,
       actor_user_id: entry.actorUserId,
       action: entry.action,
       session_id: currentRequest()?.sessionId ?? null,
       created_at: now,
     })
     .execute();
+  writeAuditLine({
+    trail: 'server',
+    entryId: id,
+    action: entry.action,
+    actorId: entry.actorUserId,
+    workspaceId: null,
+    targetType: null,
+    targetId: null,
+    at: now,
+  });
 };

@@ -20,6 +20,7 @@ import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
 import { currentRequest } from '../../platform/logging';
+import { writeAuditLine } from './lines';
 
 export interface AuditEntry {
   readonly workspaceId: string;
@@ -38,11 +39,12 @@ export const recordAudit = async (
   entry: AuditEntry,
 ): Promise<void> => {
   const now = clock.now();
+  // Application-generated, as a message's: the trail is read newest first by keyset (D-8).
+  const id = messageId(now);
   await executor
     .insertInto('audit_log')
     .values({
-      // Application-generated, as a message's: the trail is read newest first by keyset (D-8).
-      id: messageId(now),
+      id,
       workspace_id: entry.workspaceId,
       actor_user_id: entry.actorUserId,
       action: entry.action,
@@ -54,6 +56,17 @@ export const recordAudit = async (
       created_at: now,
     })
     .execute();
+  writeAuditLine({
+    trail: 'workspace',
+    entryId: id,
+    action: entry.action,
+    actorId: entry.actorUserId,
+    workspaceId: entry.workspaceId,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    at: now,
+    ...(entry.metadata === undefined ? {} : { metadata: entry.metadata }),
+  });
 };
 
 /**

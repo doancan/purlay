@@ -34,6 +34,7 @@ import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
+import { sendAuditLinesTo } from '../modules/audit/lines';
 import { errorTrackingFor } from '../platform/error-tracking';
 import { storeFor } from '../platform/storage';
 
@@ -47,6 +48,8 @@ const { tracker, log } = errorTrackingFor(
   createLogger({ level: config.LOG_LEVEL }),
   systemClock,
 );
+// Every entry this process writes to the trail is also a line of its log, ids only (D-222).
+sendAuditLinesTo(log);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 const clock = systemClock;
 
