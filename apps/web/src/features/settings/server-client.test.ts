@@ -152,3 +152,44 @@ describe('changing the settings', () => {
     expect(failure.reason).toBe('last-channel');
   });
 });
+
+describe('accounts (D-233)', () => {
+  const ADA = {
+    id: '00000000-0000-4000-8000-00000000a0a1',
+    username: 'ada',
+    displayName: 'Ada',
+    email: null,
+    isServerAdmin: false,
+    suspendedAt: '2026-10-31T08:00:00.000Z',
+  };
+
+  test('finds by the words typed, escaped into the query, and nothing typed asks for everyone', async () => {
+    const w = world(200, JSON.stringify([ADA]));
+    const client = createServerClient(w.fetch);
+    expect(await client.accounts('Ada L&')).toEqual([ADA]);
+    await client.accounts('');
+    expect(w.seen.map((one) => [one.path, one.init.method])).toEqual([
+      ['/api/server/accounts?q=Ada%20L%26', 'GET'],
+      ['/api/server/accounts', 'GET'],
+    ]);
+  });
+
+  test('an answer that is not a list of accounts is a failure, never a half-read list', async () => {
+    for (const body of ['{}', JSON.stringify([{ ...ADA, isServerAdmin: 'no' }])]) {
+      expect(
+        isSetupFailure(await failureOf(createServerClient(world(200, body).fetch).accounts(''))),
+      ).toBe(true);
+    }
+  });
+
+  test('suspends with PUT and lifts with DELETE, on the account’s own address', async () => {
+    const w = world(204, '');
+    const client = createServerClient(w.fetch);
+    await client.suspend(ADA.id);
+    await client.lift(ADA.id);
+    expect(w.seen.map((one) => [one.path, one.init.method])).toEqual([
+      [`/api/server/accounts/${ADA.id}/suspension`, 'PUT'],
+      [`/api/server/accounts/${ADA.id}/suspension`, 'DELETE'],
+    ]);
+  });
+});
