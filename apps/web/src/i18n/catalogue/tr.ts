@@ -191,6 +191,22 @@ export const tr = {
   },
   'signIn.password.unreachable': 'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
   'signIn.password.failed': 'Giriş tamamlanamadı. Biraz sonra yeniden dene.',
+  'signIn.code.form': 'İki adımlı doğrulama',
+  'signIn.code.appHint': 'Doğrulama uygulamandaki {digits} haneli kodu gir.',
+  'signIn.code.backupHint':
+    'Kaydettiğin yedek kodlardan birini gir. Her biri yalnızca bir kez işe yarar.',
+  'signIn.code.appLabel': 'Kod',
+  'signIn.code.backupLabel': 'Yedek kod',
+  'signIn.code.submit': 'Doğrula',
+  'signIn.code.useBackup': 'Bunun yerine yedek kod kullan',
+  'signIn.code.useApp': 'Uygulamadaki kodu kullan',
+  'signIn.code.restart': 'Baştan başla',
+  'signIn.code.wrong': 'Bu kod doğru değil. Yeniden dene.',
+  'signIn.code.expired':
+    'Parolanı yeniden gir: ya çok uzun sürdü ya da çok fazla yanlış kod girildi.',
+  'signIn.code.locked': {
+    other: 'Çok fazla yanlış kod girildi. {count} dakika sonra yeniden dene.',
+  },
   'signIn.createAccount.prompt': 'Hesabın yok mu?',
   'signIn.createAccount.action': 'Hesap oluştur',
   'signIn.byInvitation': 'Hesaplar davetle açılır.',
@@ -1600,6 +1616,46 @@ export const tr = {
   'settings.account.password.othersStay':
     'Parolan değişti ama diğer oturumların kapatılamadı. "Her yerden çıkış yap"ı kullan.',
   'settings.account.password.failed': 'Parola değiştirilmedi. Biraz sonra yeniden dene.',
+  'settings.account.twoFactor.title': 'İki adımlı doğrulama',
+  'settings.account.twoFactor.description':
+    'Parolandan sonra, giriş yaparken telefonundaki bir doğrulama uygulamasının kodu da istenir.',
+  'settings.account.twoFactor.otherWays':
+    'Parolanı korur. GitHub, çoklu oturum açma ya da e-postayla gelen bağlantıyla girişte o sağlayıcının kendi güvenliği geçerlidir.',
+  'settings.account.twoFactor.status': 'Durum',
+  'settings.account.twoFactor.on': 'Açık',
+  'settings.account.twoFactor.off': 'Kapalı',
+  'settings.account.twoFactor.start': 'Aç…',
+  'settings.account.twoFactor.stop': 'Kapat…',
+  'settings.account.twoFactor.newCodes': 'Yeni yedek kodlar…',
+  'settings.account.twoFactor.password': 'Parolan',
+  'settings.account.twoFactor.startHint': 'Sen olduğunu parolanla doğrula.',
+  'settings.account.twoFactor.stopHint':
+    'Parolanla doğrula. Bundan sonra yalnızca parolanla giriş yapabilirsin.',
+  'settings.account.twoFactor.newCodesHint':
+    'Parolanla doğrula. Eski yedek kodların artık işe yaramaz.',
+  'settings.account.twoFactor.continue': 'Devam et',
+  'settings.account.twoFactor.scan':
+    'Bu QR kodunu doğrulama uygulamanla tara ya da anahtarı elle gir. Sonra uygulamanın gösterdiği kodu yaz.',
+  'settings.account.twoFactor.qr': 'Doğrulama uygulaman için QR kodu',
+  'settings.account.twoFactor.key': 'Anahtar',
+  'settings.account.twoFactor.link': 'Bu cihazdaki doğrulama uygulamasında aç',
+  'settings.account.twoFactor.code': 'Uygulamadaki kod',
+  'settings.account.twoFactor.confirm': 'Aç',
+  'settings.account.twoFactor.codesTitle': 'Yedek kodlar',
+  'settings.account.twoFactor.codesHint':
+    'Telefonunu kaybedersen her kod bir kez giriş yapmanı sağlar. Yalnızca şimdi gösteriliyor: güvenli bir yere kopyala.',
+  'settings.account.twoFactor.copyCodes': 'Kodları kopyala',
+  'settings.account.twoFactor.done': 'Tamam',
+  'settings.account.twoFactor.onNow': 'İki adımlı doğrulama açık.',
+  'settings.account.twoFactor.offNow': 'İki adımlı doğrulama kapalı.',
+  'settings.account.twoFactor.wrongPassword': 'Bu, parolan değil.',
+  'settings.account.twoFactor.wrongCode': 'Bu kod doğru değil. Uygulamaya bakıp yeniden dene.',
+  'settings.account.twoFactor.tooMany': {
+    other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden dene.',
+  },
+  'settings.account.twoFactor.unreachable':
+    'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'settings.account.twoFactor.failed': 'Bu işlem tamamlanamadı. Biraz sonra yeniden dene.',
   'settings.account.sessions': 'Oturumlar',
   'settings.account.here': 'Bu cihaz',
   'settings.account.hereHint': 'Yalnızca bu tarayıcıda Purlay’den çık.',

@@ -11103,4 +11103,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '      .set({ two_factor_enabled: true })\n',
     tests: ['apps/api/src/cli/admin-reset-password.integration.test.ts'],
   },
+  {
+    id: 'second-step-keeps-a-spent-challenge',
+    why: 'a challenge that is over leaves the person typing codes nothing will take, never back to the password (D-236)',
+    file: 'apps/web/src/features/sign-in/second-step-form.tsx',
+    find: 'if (isLibraryFailure(caught) && CHALLENGE_OVER.has(caught.code)) {',
+    replace: 'if (isLibraryFailure(caught) && CHALLENGE_OVER.has(caught.code) && false) {',
+    tests: ['apps/web/src/features/sign-in/password-sign-in.test.tsx'],
+  },
 ];

@@ -108,6 +108,7 @@ export const sizeTokens = [
   'size-dialog',
   'size-settings',
   'size-field',
+  'size-qr',
   'size-dialog-lg',
   'size-palette',
   'size-palette-list',

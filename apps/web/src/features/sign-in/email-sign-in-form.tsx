@@ -4,7 +4,8 @@
  * **The password** is always offered (`withPassword`): the setup's administrator has one, on a server
  * with or without mail (R30). It is the library's route, answered in one sentence that never says whether
  * the address exists: a wrong address, a wrong password and an account with no password are the same
- * "wrong email or password". A wait is told in minutes, from `Retry-After`.
+ * "wrong email or password". A wait is told in minutes, from `Retry-After`. An account with two-step
+ * verification on is asked for its code after a right password (`SecondStepForm`, D-236).
  *
  * **A link by email** (D-138) is offered only where the server can send mail — as the form's only action
  * on the sign-up screen, and as the second action under the password on the sign-in screen. The answer
@@ -26,6 +27,7 @@ import { TextField } from '../../ui/text-field';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
 import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
 import { PASSWORD_FIELD_MAX } from '../password/password-rules';
+import { SecondStepForm } from './second-step-form';
 
 interface Failure {
   readonly field: 'email' | 'form';
@@ -65,6 +67,8 @@ export const EmailSignInForm = ({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState<'password' | 'link' | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // The password was right and the account asks for a code (D-236): no session yet.
+  const [secondStep, setSecondStep] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   // Where focus goes when one view replaces the other: the sentence that was sent, or the field again.
   const said = useRef<HTMLParagraphElement>(null);
@@ -74,7 +78,7 @@ export const EmailSignInForm = ({
     if (!switched) return;
     if (sentTo === null) field.current?.focus();
     else said.current?.focus();
-  }, [sentTo, switched]);
+  }, [sentTo, switched, secondStep]);
 
   // The link-only form (sign-up) is nothing without mail; the password form is never nothing.
   if (!withPassword && !mail) return null;
@@ -100,6 +104,19 @@ export const EmailSignInForm = ({
     );
   }
 
+  if (secondStep) {
+    return (
+      <SecondStepForm
+        className={cn('flex w-full flex-col gap-3 text-left', ruled)}
+        onRestart={(words) => {
+          setSecondStep(false);
+          setFailure(words === null ? null : { field: 'form', message: words });
+          setSwitched(true);
+        }}
+      />
+    );
+  }
+
   const passwordFailure = (caught: unknown): string => {
     if (isLibraryFailure(caught)) {
       if (caught.status === 429) {
@@ -119,7 +136,13 @@ export const EmailSignInForm = ({
     setBusy('password');
     setFailure(null);
     try {
-      await api.signInWithPassword({ email: email.trim(), password });
+      const outcome = await api.signInWithPassword({ email: email.trim(), password });
+      if (outcome === 'second-step') {
+        setPassword('');
+        setBusy(null);
+        setSecondStep(true);
+        return;
+      }
       // The session is there now: the screen asks who it is, and a person who has one is sent on.
       await client.invalidateQueries({ queryKey: keys.me });
     } catch (caught) {

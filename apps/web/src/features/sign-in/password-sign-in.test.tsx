@@ -9,6 +9,7 @@ import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError, LibraryFailure } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
+import { expectFocusOn } from '../../testing/focus';
 import { installDom } from '../../testing/dom';
 import { aSession, aSignedInApi } from '../../testing/fixtures';
 import { person } from '../../testing/user';
@@ -40,8 +41,23 @@ const visit = async (
     ...(overrides.signInWithPassword === undefined
       ? {}
       : {
-          signInWithPassword: async (input: { email: string; password: string }): Promise<void> => {
-            await overrides.signInWithPassword?.(input);
+          signInWithPassword: async (input: {
+            email: string;
+            password: string;
+          }): Promise<'signed-in' | 'second-step'> => {
+            const outcome = (await overrides.signInWithPassword?.(input)) ?? 'signed-in';
+            signedIn = outcome === 'signed-in';
+            return outcome;
+          },
+        }),
+    ...(overrides.verifySignInCode === undefined
+      ? {}
+      : {
+          verifySignInCode: async (input: {
+            code: string;
+            kind: 'app' | 'backup';
+          }): Promise<void> => {
+            await overrides.verifySignInCode?.(input);
             signedIn = true;
           },
         }),
@@ -68,7 +84,7 @@ describe('the password form on the sign-in card', () => {
     const view = await visit({
       signInWithPassword: async (input) => {
         sent.push(input);
-        await Promise.resolve();
+        return await Promise.resolve('signed-in' as const);
       },
     });
     await expectNoAxeViolations(view.container);
@@ -137,5 +153,134 @@ describe('the password form on the sign-in card', () => {
     await user.click(view.getByRole('button', { name: 'Giriş yap' }));
     await settle();
     expect(view.getByRole('alert').textContent).toBe('E-posta ya da parola yanlış.');
+  });
+});
+
+describe('the second step, for an account with two-step verification on (D-236)', () => {
+  const asked = async (
+    verifySignInCode: (input: { code: string; kind: 'app' | 'backup' }) => Promise<void>,
+    locale: 'en' | 'tr' = 'en',
+  ): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+    const view = await visit(
+      {
+        signInWithPassword: () => Promise.resolve('second-step' as const),
+        verifySignInCode,
+      },
+      locale,
+    );
+    if (locale === 'en') {
+      await submit(view, { email: 'admin@example.test', password: 'the right one 123' });
+    }
+    return view;
+  };
+
+  const enter = async (
+    view: Awaited<ReturnType<typeof renderApp>>,
+    label: string,
+    code: string,
+    button = 'Verify',
+  ): Promise<void> => {
+    const user = person();
+    await user.type(view.getByLabelText(label), code);
+    await user.click(view.getByRole('button', { name: button }));
+    await settle();
+  };
+
+  test('a right password asks for the app’s code, focused, with nothing signed in; the right code lets the person in', async () => {
+    const sent: { code: string; kind: 'app' | 'backup' }[] = [];
+    const view = await asked(async (input) => {
+      sent.push(input);
+      await Promise.resolve();
+    });
+    expect(view.getByRole('form', { name: 'Two-step verification' })).toBeDefined();
+    expect(view.getByText('Enter the 6-digit code from your authenticator app.')).toBeDefined();
+    const field = view.getByLabelText('Code');
+    expectFocusOn(field);
+    expect(field.getAttribute('autocomplete')).toBe('one-time-code');
+    expect(field.getAttribute('inputmode')).toBe('numeric');
+    expect(view.queryByLabelText('Password')).toBeNull();
+    expect(view.world.history.stack.at(-1)).toBe('/sign-in');
+    await expectNoAxeViolations(view.container);
+
+    await enter(view, 'Code', ' 123 456 ');
+    expect(sent).toEqual([{ code: '123456', kind: 'app' }]);
+    expect(view.world.history.stack.at(-1)).not.toBe('/sign-in');
+  });
+
+  test('a backup code instead: said and sent as one, and back to the app’s code', async () => {
+    const sent: { code: string; kind: 'app' | 'backup' }[] = [];
+    const view = await asked(async (input) => {
+      sent.push(input);
+      await Promise.reject(new LibraryFailure(401, 'INVALID_BACKUP_CODE'));
+    });
+    await person().click(view.getByRole('button', { name: 'Use a backup code instead' }));
+    await settle();
+    expectFocusOn(view.getByLabelText('Backup code'));
+    await enter(view, 'Backup code', 'abcde-12345');
+    expect(sent).toEqual([{ code: 'abcde-12345', kind: 'backup' }]);
+    expect(view.getByRole('alert').textContent).toContain('That code is not right. Try again.');
+    expect(view.getByLabelText('Backup code').getAttribute('aria-invalid')).toBe('true');
+    await expectNoAxeViolations(view.container);
+    await person().click(view.getByRole('button', { name: 'Use the code from your app' }));
+    await settle();
+    expect(view.getByLabelText('Code')).toBeDefined();
+    expect(view.queryByRole('alert')).toBeNull();
+  });
+
+  test.each([
+    [new LibraryFailure(401, 'INVALID_CODE'), 'That code is not right. Try again.'],
+    [
+      new LibraryFailure(429, 'ACCOUNT_TEMPORARILY_LOCKED'),
+      'Too many wrong codes. Try again in 15 minutes.',
+    ],
+    [new LibraryFailure(429, 'MALFORMED'), 'Too many attempts. Try again in 1 minute.'],
+    [
+      new LibraryFailure(0, 'NETWORK'),
+      'Purlay could not be reached. Check your connection and try again.',
+    ],
+    [
+      new LibraryFailure(500, 'FAILED_TO_CREATE_SESSION'),
+      'Signing in did not finish. Try again in a moment.',
+    ],
+    [new Error('anything else'), 'Signing in did not finish. Try again in a moment.'],
+  ])('%s is said on the field, which is emptied, and nobody is let in', async (failure, words) => {
+    const view = await asked(() => Promise.reject(failure));
+    await enter(view, 'Code', '654321');
+    expect(view.getByRole('alert').textContent).toContain(words);
+    expect((view.getByLabelText('Code') as HTMLInputElement).value).toBe('');
+    expect(view.world.history.stack.at(-1)).toBe('/sign-in');
+  });
+
+  test.each(['INVALID_TWO_FACTOR_COOKIE', 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE'])(
+    'a challenge that is over (%s) asks for the password again, and says why',
+    async (code) => {
+      const view = await asked(() => Promise.reject(new LibraryFailure(401, code)));
+      await enter(view, 'Code', '654321');
+      expect(view.getByLabelText('Password')).toBeDefined();
+      expect(view.getByRole('alert').textContent).toBe(
+        'Enter your password again: that took too long, or too many codes were wrong.',
+      );
+    },
+  );
+
+  test('Start over goes back to the password, saying nothing', async () => {
+    const view = await asked(() => Promise.resolve());
+    await person().click(view.getByRole('button', { name: 'Start over' }));
+    await settle();
+    expect(view.getByLabelText('Password')).toBeDefined();
+    expect(view.queryByRole('alert')).toBeNull();
+    expectFocusOn(view.getByRole('textbox', { name: 'Email address' }));
+  });
+
+  test('says it in Turkish', async () => {
+    const view = await asked(() => Promise.reject(new LibraryFailure(401, 'INVALID_CODE')), 'tr');
+    const user = person();
+    await user.type(view.getByRole('textbox', { name: 'E-posta adresi' }), 'ada@example.test');
+    await user.type(view.getByLabelText('Parola'), 'dogru-parola-123');
+    await user.click(view.getByRole('button', { name: 'Giriş yap' }));
+    await settle();
+    expect(view.getByText('Doğrulama uygulamandaki 6 haneli kodu gir.')).toBeDefined();
+    await enter(view, 'Kod', '123456', 'Doğrula');
+    expect(view.getByRole('alert').textContent).toContain('Bu kod doğru değil. Yeniden dene.');
   });
 });

@@ -43,6 +43,12 @@ export interface Http {
    * the answer is not read, and a refusal is the library's shape, `LibraryFailure`.
    */
   readonly library: (path: string, body: unknown) => Promise<void>;
+  /** The same, for a route whose answer is read: two-step verification's key and codes (D-236). */
+  readonly libraryRequest: <S extends TSchema>(
+    path: string,
+    schema: S,
+    body: unknown,
+  ) => Promise<Static<S>>;
   /** For an endpoint whose answer is not read (a sign-out). */
   readonly send: (method: Method, path: string, options?: RequestOptions) => Promise<void>;
   /** A GET whose answer is text, not JSON: a file's words, read to be shown (D-210). */
@@ -239,6 +245,28 @@ export const createHttp = (
     return { status: response.status, text };
   };
 
+  /** A POST to one of the library's routes: a refusal in its shape, and no answer at all the network's. */
+  const libraryCall = async (
+    path: string,
+    body: unknown,
+  ): Promise<{ readonly status: number; readonly text: string }> => {
+    const deadline = new AbortController();
+    const cancel = schedule(() => {
+      deadline.abort();
+    }, WRITE_DEADLINE_MS);
+    try {
+      return await exchange('POST', path, { body }, deadline.signal, (status, text, response) =>
+        libraryFailureOf(status, text, response.headers.get('retry-after')),
+      );
+    } catch (error) {
+      // No answer at all is the network's, in the library's vocabulary too.
+      if (error instanceof ApiError) throw new LibraryFailure(error.status, error.code);
+      throw error;
+    } finally {
+      cancel();
+    }
+  };
+
   return {
     request: async <S extends TSchema>(
       method: Method,
@@ -250,21 +278,15 @@ export const createHttp = (
       return answerOf(status, text, schema);
     },
     library: async (path: string, body: unknown): Promise<void> => {
-      const deadline = new AbortController();
-      const cancel = schedule(() => {
-        deadline.abort();
-      }, WRITE_DEADLINE_MS);
-      try {
-        await exchange('POST', path, { body }, deadline.signal, (status, text, response) =>
-          libraryFailureOf(status, text, response.headers.get('retry-after')),
-        );
-      } catch (error) {
-        // No answer at all is the network's, in the library's vocabulary too.
-        if (error instanceof ApiError) throw new LibraryFailure(error.status, error.code);
-        throw error;
-      } finally {
-        cancel();
-      }
+      await libraryCall(path, body);
+    },
+    libraryRequest: async <S extends TSchema>(
+      path: string,
+      schema: S,
+      body: unknown,
+    ): Promise<Static<S>> => {
+      const { status, text } = await libraryCall(path, body);
+      return answerOf(status, text, schema);
     },
     send: async (method: Method, path: string, options: RequestOptions = {}): Promise<void> => {
       await call(method, path, options);
