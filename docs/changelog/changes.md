@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Profile** — A person whose account did not come from GitHub — an emailed link, single sign-on or a password — sets the name everyone sees on Profile; a GitHub account's name stays GitHub's (D-235)
 - **Mobile** — Purlay installs as an application from the browser; on an iPhone, added to the Home Screen it can receive notifications, and the notifications page says how (D-230)
 - **Channels** — An owner or an admin can bring an archived channel back from General, with its messages and members; its members see it again at once, and a name taken since is said (D-232)
 - **Notifications** — Quiet hours: a window of the day on chosen days, every week, on the clock of your profile's time zone, when nothing pops up or rings — Deep Work by itself; what arrives is kept and counted (D-234)
