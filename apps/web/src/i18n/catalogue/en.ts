@@ -1580,6 +1580,8 @@ export const en = {
     'Turn on to be told on this device while Purlay is open in a background tab. Your browser asks first.',
   'settings.notifications.unsupported':
     'This browser cannot show notifications, so only the tab’s title counts what waits.',
+  'settings.notifications.installFirst':
+    'On an iPhone or iPad, notifications come only to Purlay on the Home Screen: tap Share, then Add to Home Screen, and open it from there.',
   'settings.notifications.closedTabOff':
     'This server does not send notifications to a closed tab, so with Purlay closed you hear nothing. Keep it open in a tab to be told.',
   'settings.notifications.unavailable': 'Not available here',

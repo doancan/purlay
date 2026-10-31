@@ -24,6 +24,7 @@ import { Button } from '../../../ui/button';
 import { Select } from '../../../ui/select';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
+import { mustInstallForPush } from '../../push/device';
 import { usePushControls } from '../../push/push';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../../shell/deep-work';
 import { useWorkspace } from '../../shell/workspace';
@@ -109,12 +110,16 @@ const DeviceCard = (): React.JSX.Element => {
   const { t } = useI18n();
   const push = usePushControls();
   if (push === null) {
-    // A browser that can show nothing: said plainly, as PRD §4.5 owes.
+    // A browser that can show nothing: said plainly, as PRD §4.5 owes — and on an iPhone, what changes it.
     return (
       <SettingsCard title={t('push.label')} description={t('settings.notifications.deviceHint')}>
         <SettingsRow
           label={t('settings.notifications.away')}
-          description={t('settings.notifications.unsupported')}
+          description={t(
+            mustInstallForPush()
+              ? 'settings.notifications.installFirst'
+              : 'settings.notifications.unsupported',
+          )}
         >
           <span className="inline-flex items-center gap-2 text-label text-ink-muted">
             <Icon name="info" size="sm" />

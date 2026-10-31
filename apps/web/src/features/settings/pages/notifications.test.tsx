@@ -185,4 +185,17 @@ describe('notifications', () => {
     }
     view.unmount();
   });
+
+  test('on an iPhone outside the Home Screen, it says how to be told there (D-230)', async () => {
+    Object.defineProperty(navigator, 'standalone', { value: false, configurable: true });
+    try {
+      const view = await open();
+      const card = within(view.getByRole('region', { name: 'Notifications on this device' }));
+      expect(card.getByText(/tap Share, then Add to Home Screen/)).toBeDefined();
+      expect(card.queryByText(/cannot show notifications/)).toBeNull();
+      view.unmount();
+    } finally {
+      Reflect.deleteProperty(navigator, 'standalone');
+    }
+  });
 });
