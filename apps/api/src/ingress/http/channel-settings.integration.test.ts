@@ -467,3 +467,149 @@ describe('integration: who is in a channel', () => {
     });
   });
 });
+
+describe('integration: archived channels, and bringing one back (D-232)', () => {
+  const archive = async (world: World, channelId: string, as = world.admin): Promise<void> => {
+    expect((await world.call('DELETE', `/api/channels/${channelId}`, as)).status).toBe(204);
+  };
+  const archivedNames = async (world: World, as: SignedInUser): Promise<string[]> => {
+    const listed = await world.call(
+      'GET',
+      `/api/workspaces/${world.workspaceId}/archived-channels`,
+      as,
+    );
+    expect(listed.status).toBe(200);
+    return ((await listed.json()) as { name: string }[]).map((channel) => channel.name);
+  };
+
+  test('an admin restores it: it is back for its members as it was, each is told, and the trail has it', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await archive(world, world.channelId);
+      expect(await archivedNames(world, world.admin)).toEqual(['ops']);
+      expect((await world.call('GET', `/api/channels/${world.channelId}`, world.bob)).status).toBe(
+        404,
+      );
+      world.published.splice(0);
+
+      const restored = await world.call(
+        'POST',
+        `/api/channels/${world.channelId}/restore`,
+        world.admin,
+      );
+      expect(restored.status).toBe(204);
+
+      const back = await world.call('GET', `/api/channels/${world.channelId}`, world.bob);
+      expect(back.status).toBe(200);
+      expect(((await back.json()) as { name: string }).name).toBe('ops');
+      expect(await archivedNames(world, world.admin)).toEqual([]);
+      expect(
+        world.published
+          .filter(([, frame]) => frame.event === 'CHANNELS_UPDATED')
+          .map(([topic]) => topic)
+          .sort(),
+      ).toEqual([userTopic(world.owner.userId), userTopic(world.bob.userId)].sort());
+      expect(await trail(world)).toContainEqual({
+        action: 'channel.restored',
+        metadata: { name: 'ops' },
+        target_id: world.channelId,
+      });
+    });
+  });
+
+  test('a member neither lists nor restores: 403', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await archive(world, world.channelId);
+      const listed = await world.call(
+        'GET',
+        `/api/workspaces/${world.workspaceId}/archived-channels`,
+        world.bob,
+      );
+      expect(listed.status).toBe(403);
+      const refused = await world.call(
+        'POST',
+        `/api/channels/${world.channelId}/restore`,
+        world.bob,
+      );
+      expect(refused.status).toBe(403);
+      expect(await archivedNames(world, world.admin)).toEqual(['ops']);
+    });
+  });
+
+  test('a private one is listed and restored only by an admin in it; to one outside it, it is not there', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const secret = await aPrivateChannel(world, 'secret');
+      await archive(world, secret, world.owner);
+      expect(await archivedNames(world, world.admin)).toEqual([]);
+      const hidden = await world.call('POST', `/api/channels/${secret}/restore`, world.admin);
+      expect(hidden.status).toBe(404);
+      expect(await archivedNames(world, world.owner)).toEqual(['secret']);
+      expect(
+        (await world.call('POST', `/api/channels/${secret}/restore`, world.owner)).status,
+      ).toBe(204);
+    });
+  });
+
+  test('a name taken since is 409 CHANNEL_NAME_TAKEN, in any case, and the channel stays archived', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await archive(world, world.channelId);
+      const again = await world.call(
+        'POST',
+        `/api/workspaces/${world.workspaceId}/channels`,
+        world.owner,
+        { name: 'OPS' },
+      );
+      expect(again.status).toBe(201);
+      const refused = await world.call(
+        'POST',
+        `/api/channels/${world.channelId}/restore`,
+        world.admin,
+      );
+      expect(refused.status).toBe(409);
+      expect(await refused.json()).toMatchObject({ error: { code: 'CHANNEL_NAME_TAKEN' } });
+      expect(await archivedNames(world, world.admin)).toEqual(['ops']);
+    });
+  });
+
+  test('what is not an archived channel of theirs is 404: live, restored already, a direct message, another workspace, not an id', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const live = await world.call(
+        'POST',
+        `/api/channels/${world.channelId}/restore`,
+        world.admin,
+      );
+      expect(live.status).toBe(404);
+
+      await archive(world, world.channelId);
+      expect(
+        (await world.call('POST', `/api/channels/${world.channelId}/restore`, world.admin)).status,
+      ).toBe(204);
+      expect(
+        (await world.call('POST', `/api/channels/${world.channelId}/restore`, world.admin)).status,
+      ).toBe(404);
+
+      const dm = await aDirectMessage(world);
+      await db.updateTable('channels').set({ deleted_at: NOW }).where('id', '=', dm).execute();
+      expect((await world.call('POST', `/api/channels/${dm}/restore`, world.owner)).status).toBe(
+        404,
+      );
+
+      const stranger = await aSignedInUser(db, clock, 'set-stranger');
+      const slug = aUniqueSlug('set-other');
+      expect(
+        (await world.call('POST', '/api/workspaces', stranger, { name: slug, slug })).status,
+      ).toBe(201);
+      await archive(world, world.channelId);
+      const across = await world.call('POST', `/api/channels/${world.channelId}/restore`, stranger);
+      expect(across.status).toBe(404);
+      expect(await across.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
+      expect(
+        (await world.call('POST', '/api/channels/not-an-id/restore', world.admin)).status,
+      ).toBe(404);
+    });
+  });
+});

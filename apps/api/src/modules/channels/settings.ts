@@ -14,7 +14,9 @@
 import type { Executor, Transaction } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
+  ARCHIVED_CHANNELS_MAX,
   Uuid,
+  type ArchivedChannel,
   type Channel,
   type ChannelMember,
   type UpdateChannelRequest,
@@ -29,7 +31,7 @@ import {
   type ChannelContext,
 } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { channelFor } from './channels';
 
 /** The channel row, locked for the change about to be made; a direct message is not one to change. */
@@ -171,6 +173,135 @@ export const archiveChannel = async (
     // Named, because the channel is no longer listed for the trail to find it by.
     metadata: { name: current.name },
   });
+};
+
+const onlyAdmins = (role: UserRole, message: string): void => {
+  if (role === 'member') throw new AppError({ code: 'FORBIDDEN', message });
+};
+
+/**
+ * The workspace's archived channels that this owner or admin may bring back (D-232), the most recently
+ * archived first: every public one, and a private one only to somebody in it. Archiving keeps the
+ * memberships, and a private channel stays unseen by those outside it, archived or not (D-104).
+ */
+export const archivedChannels = async (
+  executor: Executor,
+  context: WorkspaceContext,
+): Promise<ArchivedChannel[]> => {
+  onlyAdmins(context.role, 'Only an owner or an admin sees archived channels.');
+  const rows = await executor
+    .selectFrom('channels as channel')
+    .select(['channel.id', 'channel.name', 'channel.type', 'channel.deleted_at'])
+    .where('channel.workspace_id', '=', context.workspaceId)
+    .where('channel.deleted_at', 'is not', null)
+    .where('channel.type', '!=', 'direct_message')
+    .where((eb) =>
+      eb.or([
+        eb('channel.type', '=', 'public'),
+        eb.exists(
+          eb
+            .selectFrom('channel_members as member')
+            .select('member.id')
+            .whereRef('member.channel_id', '=', 'channel.id')
+            .where('member.user_id', '=', context.userId),
+        ),
+      ]),
+    )
+    .orderBy('channel.deleted_at', 'desc')
+    .orderBy('channel.id')
+    .limit(ARCHIVED_CHANNELS_MAX)
+    .execute();
+  return rows.flatMap((row) =>
+    row.name === null || row.deleted_at === null || row.type === 'direct_message'
+      ? []
+      : [
+          {
+            id: row.id,
+            name: row.name,
+            type: row.type,
+            archivedAt: new Date(row.deleted_at).toISOString(),
+          },
+        ],
+  );
+};
+
+/** Who is told a channel came back: its members, whose channel lists it rejoins. */
+export interface RestoredChannel {
+  readonly workspaceId: string;
+  readonly memberIds: readonly string[];
+}
+
+/**
+ * Brings an archived channel back (D-232): an owner's or an admin's, as archiving is. Its messages and
+ * memberships were kept, so it returns as it was. Its name may have been taken meanwhile — archiving
+ * frees it — and that is `409 CHANNEL_NAME_TAKEN`: rename the other first. A channel this person could
+ * not see archived (another workspace, a private one they are not in, a direct message, one that is
+ * live) is the stranger's `404`, and so is one archived again after a restore raced it.
+ */
+export const restoreChannel = async (
+  executor: Transaction,
+  clock: Clock,
+  userId: string,
+  channelId: string,
+): Promise<RestoredChannel> => {
+  if (!Value.Check(Uuid, channelId)) throw channelNotFound();
+  const row = await executor
+    .selectFrom('channels')
+    .select(['workspace_id', 'name', 'type'])
+    .where('id', '=', channelId)
+    .where('deleted_at', 'is not', null)
+    .forNoKeyUpdate()
+    .executeTakeFirst();
+  if (row?.name == null || row.type === 'direct_message') throw channelNotFound();
+  // Outside its workspace the channel does not exist, as the guard says of any channel: the workspace's
+  // own refusal here would tell a stranger that this id is an archived channel somewhere.
+  const context = await requireWorkspaceMembership(executor, userId, row.workspace_id).catch(
+    (error: unknown) => {
+      throw error instanceof AppError && error.body.code === 'WORKSPACE_NOT_FOUND'
+        ? channelNotFound()
+        : error;
+    },
+  );
+  const memberIds = (
+    await executor
+      .selectFrom('channel_members')
+      .select('user_id')
+      .where('channel_id', '=', channelId)
+      .execute()
+  ).map((member) => member.user_id);
+  if (row.type === 'private' && !memberIds.includes(userId)) throw channelNotFound();
+  onlyAdmins(context.role, 'Only an owner or an admin restores a channel.');
+
+  const taken = await executor
+    .selectFrom('channels')
+    .select('id')
+    .where('workspace_id', '=', row.workspace_id)
+    .where((eb) => eb(eb.fn('lower', ['name']), '=', row.name?.toLowerCase() ?? ''))
+    .where('type', '!=', 'direct_message')
+    .where('deleted_at', 'is', null)
+    .executeTakeFirst();
+  if (taken !== undefined) {
+    throw new AppError({
+      code: 'CHANNEL_NAME_TAKEN',
+      message: 'A channel with that name exists now. Rename it, then restore this one.',
+    });
+  }
+
+  const now = clock.now();
+  await executor
+    .updateTable('channels')
+    .set({ deleted_at: null, updated_at: now })
+    .where('id', '=', channelId)
+    .execute();
+  await recordAudit(executor, clock, {
+    workspaceId: row.workspace_id,
+    actorUserId: userId,
+    action: 'channel.restored',
+    targetType: 'channel',
+    targetId: channelId,
+    metadata: { name: row.name },
+  });
+  return { workspaceId: row.workspace_id, memberIds };
 };
 
 /**

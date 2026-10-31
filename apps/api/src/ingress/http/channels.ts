@@ -19,6 +19,7 @@ import {
   SetChannelRetentionRequest,
   SetNotificationLevelRequest,
   UpdateChannelRequest,
+  type ArchivedChannel,
   type Channel,
   type ChannelRetention,
   type ChannelMemberList,
@@ -32,6 +33,7 @@ import {
   publishAfterCommit,
   publishAccessRevoked,
   publishChannelAdded,
+  publishChannelsUpdated,
   publishChannelRevoked,
   publishChannelState,
   publishChannelUpdated,
@@ -53,9 +55,11 @@ import { setNotificationLevel } from '../../modules/channels/notification-level'
 import { readChannelRetention, setChannelRetention } from '../../modules/channels/retention';
 import {
   archiveChannel,
+  archivedChannels,
   channelMembers,
   leaveChannel,
   removeChannelMember,
+  restoreChannel,
   updateChannel,
 } from '../../modules/channels/settings';
 import { requireSession } from './session';
@@ -352,6 +356,44 @@ export const archive = async (
   });
   await publishAfterCommit(log, [
     [publication('ACCESS_REVOKED', () => publishChannelRevoked(bus, clock, channelId))],
+  ]);
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/archived-channels` — the archived channels this owner or admin may
+ * bring back, the most recently archived first (D-232).
+ */
+export const listArchived = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<readonly ArchivedChannel[]> => {
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  return await archivedChannels(database, context);
+};
+
+/**
+ * `POST /api/channels/:channelId/restore` — an owner or an admin brings an archived channel back
+ * (D-232). Each of its members reads their channels again, so it returns to their sidebars at once.
+ */
+export const restore = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const restored = await atomicallyOn(database)(
+    async (transaction) => await restoreChannel(transaction, clock, userId, channelId),
+  );
+  await publishAfterCommit(log, [
+    restored.memberIds.map((memberId) =>
+      publication('CHANNELS_UPDATED', () =>
+        publishChannelsUpdated(bus, clock, memberId, restored.workspaceId),
+      ),
+    ),
   ]);
 };
 
