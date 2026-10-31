@@ -105,9 +105,9 @@ export const issueSession = async (
  */
 const LAST_USED_STALE_AFTER_MS = 60 * 60 * 1000;
 
-/** `users.deleted_at`, mapped as the library's `deletedAt`; absent reads as never deleted. */
-const deletedAtOf = (user: object): unknown => {
-  const value: unknown = (user as Readonly<Record<string, unknown>>)['deletedAt'];
+/** A `users` column the library maps (`deletedAt`, `suspendedAt`); absent reads as never set. */
+const markOf = (user: object, field: 'deletedAt' | 'suspendedAt'): unknown => {
+  const value: unknown = (user as Readonly<Record<string, unknown>>)[field];
   return value ?? null;
 };
 
@@ -148,7 +148,10 @@ export const sessionFromHeaders = async (
     const found = await auth.api.getSession({ headers, query: { disableRefresh: true } });
     if (found === null) return undefined;
     // A soft-deleted account keeps no live session, whatever row is left (ARCHITECTURE.md, D-139 §5).
-    if (deletedAtOf(found.user) !== null) return undefined;
+    if (markOf(found.user, 'deletedAt') !== null) return undefined;
+    // Nor a suspended one (D-233): its sessions were deleted when it was suspended, and this refuses one
+    // that a sign-in committed in the same instant.
+    if (markOf(found.user, 'suspendedAt') !== null) return undefined;
     await touch(auth, found.session.id, new Date(found.session.updatedAt));
     return {
       sessionId: found.session.id,

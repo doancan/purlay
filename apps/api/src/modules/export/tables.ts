@@ -272,6 +272,8 @@ export const COLUMNS: Columns = {
     // and a credential's neighbour, never the controller's data about them (D-179).
     email_verified: 'omit',
     is_server_admin: 'omit',
+    // The server's administrator's decision about the account (D-233): the server's, not the workspace's.
+    suspended_at: 'omit',
     locale: 'omit',
     last_seen_at: 'omit',
     updated_at: 'omit',
