@@ -403,6 +403,28 @@ describe('integration: what is refused, and that every refusal is the same', () 
     expect(await sessionsOf(userId)).toBe(before);
   });
 
+  test('a code whose person has since been suspended: refused, and said so (D-233)', async () => {
+    const reasons: string[] = [];
+    const { userId } = await aSignedInPerson();
+    const { verifier, challenge } = aVerifier();
+    const { code } = await authorize(userId, challenge);
+    await cloned.db
+      .updateTable('users')
+      .set({ suspended_at: NOW })
+      .where('id', '=', userId)
+      .execute();
+    const before = await sessionsOf(userId);
+    expect(
+      await exchangeNativeCode(cloned.db, clock, session, {
+        code,
+        verifier,
+        refused: (why) => reasons.push(why),
+      }),
+    ).toBeUndefined();
+    expect(reasons).toEqual(['suspended']);
+    expect(await sessionsOf(userId)).toBe(before);
+  });
+
   test('is the same answer whichever way it failed, and takes the same shape of work', async () => {
     // One value, not four: nothing a caller sees tells an unknown code from a spent one, a burnt one
     // from an expired one, or a wrong verifier from none (the stance of SIGN_IN_LINK_NOT_FOUND, D-138).

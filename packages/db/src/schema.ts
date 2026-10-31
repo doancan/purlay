@@ -361,6 +361,7 @@ export interface ServerAuditLog {
   created_at: Generated<Timestamp>;
   id: string;
   session_id: string | null;
+  target_user_id: string | null;
 }
 
 export interface ServerSettings {
@@ -437,6 +438,7 @@ export interface Users {
   last_seen_at: Timestamp | null;
   locale: Generated<string>;
   status_text: string | null;
+  suspended_at: Timestamp | null;
   time_zone: string | null;
   title: string | null;
   updated_at: Generated<Timestamp>;

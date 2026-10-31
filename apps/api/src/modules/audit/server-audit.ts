@@ -22,12 +22,20 @@ export type ServerAuditAction =
   | 'server.sign_up_changed'
   | 'server.workspace_creators_changed'
   /** The break-glass command set the administrator's password; the actor is the account itself. */
-  | 'server.admin_password_reset';
+  | 'server.admin_password_reset'
+  /** An account suspended, and lifted (D-233): whose, in `target_user_id`. */
+  | 'server.account_suspended'
+  | 'server.account_restored';
 
 export const recordServerAudit = async (
   executor: Executor,
   clock: Clock,
-  entry: { readonly actorUserId: string; readonly action: ServerAuditAction },
+  entry: {
+    readonly actorUserId: string;
+    readonly action: ServerAuditAction;
+    /** Whose account the entry is about, for an action that has one (D-233). */
+    readonly targetUserId?: string;
+  },
 ): Promise<void> => {
   const now = clock.now();
   const id = messageId(now);
@@ -38,6 +46,7 @@ export const recordServerAudit = async (
       actor_user_id: entry.actorUserId,
       action: entry.action,
       session_id: currentRequest()?.sessionId ?? null,
+      target_user_id: entry.targetUserId ?? null,
       created_at: now,
     })
     .execute();
@@ -47,8 +56,8 @@ export const recordServerAudit = async (
     action: entry.action,
     actorId: entry.actorUserId,
     workspaceId: null,
-    targetType: null,
-    targetId: null,
+    targetType: entry.targetUserId === undefined ? null : 'user',
+    targetId: entry.targetUserId ?? null,
     at: now,
   });
 };

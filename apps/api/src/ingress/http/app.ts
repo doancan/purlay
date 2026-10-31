@@ -49,6 +49,7 @@ import {
   startSignIn,
   type AuthResponse,
 } from './auth';
+import { lift, readServerAccounts, suspend } from './accounts';
 import { endMySession, readMySessions } from './devices';
 import { AUTH_BASE_PATH, OIDC_CALLBACK, SIGN_IN_CALLBACK } from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
@@ -775,6 +776,21 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .post('/api/server/creators', async ({ request, body, set }) => {
       await changeWorkspaceCreators(setup, request, body);
+      set.status = 204;
+      return '';
+    })
+    .get(
+      '/api/server/accounts',
+      async ({ request }) =>
+        await readServerAccounts({ ...dependencies, bus: sockets.bus }, request),
+    )
+    .put('/api/server/accounts/:userId/suspension', async ({ request, params, set }) => {
+      await suspend({ ...dependencies, bus: sockets.bus }, request, params.userId);
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/server/accounts/:userId/suspension', async ({ request, params, set }) => {
+      await lift({ ...dependencies, bus: sockets.bus }, request, params.userId);
       set.status = 204;
       return '';
     })

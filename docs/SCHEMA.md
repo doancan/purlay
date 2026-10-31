@@ -114,6 +114,10 @@ CREATE TABLE users (
     -- installed. FALSE for everyone until the person who sets the server up is made one. (D-179, 0047)
     is_server_admin BOOLEAN NOT NULL DEFAULT FALSE,
 
+    -- Suspended by the server's administrator (D-233): the account starts and resolves no session, and keeps
+    -- its history and its name. NULL is an account in use. (0065)
+    suspended_at TIMESTAMPTZ,
+
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
     email         TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -1471,7 +1475,8 @@ The trail of changes to the server's own settings (Administration → Server, D-
 is a workspace's, with its workspace required; the server's settings belong to none, so they have a
 trail of their own, append-only on the same terms (I-9). It says who, which setting and when — the
 action names both (`server.github_connected`, `server.github_disconnected`, `server.smtp_connected`,
-`server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, and `server.admin_password_reset`, written by
+`server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, `server.account_suspended` and
+`server.account_restored` (with `target_user_id`, whose account, D-233), and `server.admin_password_reset`, written by
 `bun run admin:reset-password` with the account itself as the actor and no session) — and never
 the value, a secret least of all. Written in the transaction that saves the setting
 (`modules/audit/server-audit.ts`), so a change that did not commit leaves no row and one that did
@@ -1484,6 +1489,9 @@ CREATE TABLE server_audit_log (
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action        VARCHAR(64) NOT NULL,
     session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
+    -- Whose account an entry is about (`server.account_suspended`, `server.account_restored`, D-233); NULL for
+    -- a setting. (0065)
+    target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT server_audit_log_id_is_uuidv7
@@ -1495,6 +1503,9 @@ CREATE INDEX idx_server_audit_log_actor ON server_audit_log (actor_user_id, id D
 
 CREATE INDEX idx_server_audit_log_session ON server_audit_log (session_id)
     WHERE session_id IS NOT NULL;
+
+CREATE INDEX idx_server_audit_log_target ON server_audit_log (target_user_id)
+    WHERE target_user_id IS NOT NULL;
 ```
 
 ### 9.2. `job_runs`
@@ -2042,6 +2053,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0062_channel_bookmarks.sql channel_bookmarks: links a channel's members keep at hand, under its header  (D-218)
 0063_channel_retention.sql channels.min_retention_days, channels.retain_forever: a channel keeps its history longer than its workspace, never shorter  (D-225)
 0064_github_delivery_bodies.sql github_deliveries.body_digest, unique per feed: a signed body sent again under a new delivery id posts nothing  (D-231 §1)
+0065_account_suspension.sql users.suspended_at, server_audit_log.target_user_id: the server's administrator suspends an account and lifts it  (D-233)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
