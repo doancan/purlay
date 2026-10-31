@@ -196,6 +196,8 @@ export const notify = async (
                 channel_id: context.channelId,
                 message_id: messageId,
                 type,
+                // Told at the send's or edit's instant, by the server's clock (D-106 §1).
+                created_at: now,
                 suppressed_by_deep_work: deep.has(userId),
                 // A root behind the person's position: it exists for the inbox and needs nothing.
                 ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),

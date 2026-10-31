@@ -63,6 +63,7 @@ have it.
 
 - **Notifications** — A visible window behind another no longer marks new channel messages or thread replies read and closes their notices; returning to the conversation reads them (D-147, D-148)
 - **Notifications** — Settings correctly lists channels set to Every message among what can interrupt; resolved questions remain in the inbox (D-107, D-148)
+- **Inbox** — A row's time is when the person was told by the server's clock, so the demo's inbox no longer gives every row the moment it was seeded (D-106)
 
 - **Operations** — The browser budget no longer blocks on the keystroke with 2,000 messages loaded, which the feed decision accepts and a hosted runner measures at twice its neighbour (D-199)
 - **Workspace** — A newly invited member appears in already-open member lists and can be added to a channel without reloading (D-115, D-124)

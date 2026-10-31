@@ -323,6 +323,8 @@ const notifyResolved = async (
       channel_id: target.context.channelId,
       message_id: target.messageId,
       type: 'thread_resolved',
+      // Told when it was closed, by the clock that stamped the resolution (D-106 §1).
+      created_at: now,
       suppressed_by_deep_work: (
         await inDeepWork(executor, target.context.workspaceId, [authorId], now)
       ).has(authorId),

@@ -4702,6 +4702,14 @@ whose question was closed without holding the root, and would ask on every reply
 and carrying the notification in the frame, which would be a second shape of it beside the page's,
 for a list the client reads whole anyway.
 
+**Amended 2026-10-31 — `created_at` is the server's clock, as the message's time is.** It was the
+database's `now()`, while the message, its resolution and every other stamp of a send come from the
+server's injected clock. Live the two agree to the millisecond; under a clock that is not the wall's —
+the demo seed plays two days of history (D-33) — every notification read as the moment of seeding, so
+the inbox gave all its rows one time beside a feed of many. Now the send, the edit that names somebody
+new and the resolution write the instant they already hold. §1's order and the accepted late-commit
+window are unchanged: the instant is still taken before the transaction commits.
+
 ### D-107. What each notification level is told
 
 `notification_level` has been in the schema since the start (`'mentions'` by default), and delivery
