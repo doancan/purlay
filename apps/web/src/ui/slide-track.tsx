@@ -22,7 +22,7 @@ interface Place {
 const lastPlace = new Map<string, Place>();
 
 const markClasses: Record<Mark, string> = {
-  pill: 'top-0 left-0 rounded-md bg-surface-100 shadow-card max-narrow:hidden',
+  pill: 'left-0 rounded-md bg-surface-100 shadow-card max-narrow:hidden',
   underline: 'bottom-0 left-0 border-b-marker border-accent',
 };
 
@@ -54,37 +54,53 @@ export const SlideTrack = ({
     const track = host.current;
     const bead = bar.current;
     if (track === null || bead === null) return;
-    const place = (animate: boolean): void => {
+    const draw = (at: Place, box: DOMRect, origin: DOMRect): void => {
+      bead.style.opacity = '1';
+      bead.style.width = `${String(at.width)}px`;
+      bead.style.transform = `translateX(${String(at.x)}px)`;
+      // The track pads its segments in, so the mark takes the segment's own top and height, not the track's.
+      if (mark === 'pill') {
+        bead.style.top = `${String(box.y - origin.y - track.clientTop)}px`;
+        bead.style.height = `${String(box.height)}px`;
+      }
+    };
+    /** Draws with the transition off, then on again: a jump the eye is not meant to follow. */
+    const jump = (at: Place, box: DOMRect, origin: DOMRect): void => {
+      bead.dataset['instant'] = '';
+      draw(at, box, origin);
+      bead.getBoundingClientRect();
+      delete bead.dataset['instant'];
+    };
+    const place = (slide: boolean): void => {
       const chosen = track.querySelector<HTMLElement>(CHOSEN);
       if (chosen === null) {
         bead.style.opacity = '0';
         return;
       }
-      const next: Place = { x: chosen.offsetLeft, width: chosen.offsetWidth };
-      const from = animate && !arrived.current ? lastPlace.get(memory) : undefined;
-      const draw = (at: Place): void => {
-        bead.style.opacity = '1';
-        bead.style.width = `${String(at.width)}px`;
-        bead.style.transform = `translateX(${String(at.x)}px)`;
-        if (mark === 'pill') bead.style.height = `${String(chosen.offsetHeight)}px`;
-      };
-      if (from === undefined || (from.x === next.x && from.width === next.width)) {
-        bead.dataset['instant'] = '';
-        draw(next);
+      // Fractions of a pixel, from the boxes themselves: a rounded offset left the mark half a pixel off.
+      const box = chosen.getBoundingClientRect();
+      const origin = track.getBoundingClientRect();
+      const next: Place = { x: box.x - origin.x - track.clientLeft, width: box.width };
+      if (!slide) {
+        jump(next, box, origin);
+      } else if (!arrived.current) {
+        // A new track starts where the last one with its name stood, and slides from there.
+        jump(lastPlace.get(memory) ?? next, box, origin);
+        draw(next, box, origin);
       } else {
-        // Start where it stood, then let the transition carry it: the frame between must be seen.
-        bead.dataset['instant'] = '';
-        draw(from);
-        bead.getBoundingClientRect();
-        delete bead.dataset['instant'];
-        draw(next);
+        draw(next, box, origin);
       }
       arrived.current = true;
       lastPlace.set(memory, next);
     };
     place(true);
+    // The first report is the observer starting, not a change: acting on it would cut a slide short.
+    let started = false;
     const observer = new ResizeObserver((): void => {
-      bead.dataset['instant'] = '';
+      if (!started) {
+        started = true;
+        return;
+      }
       place(false);
     });
     observer.observe(track);
