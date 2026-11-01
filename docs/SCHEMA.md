@@ -1671,7 +1671,7 @@ CREATE TABLE object_deletions (
 ### 9.5. `server_settings`
 
 The operator's settings for the whole server (D-179 §6): who may sign up, GitHub's OAuth app, the mail
-relay, and who may make a workspace (D-155, D-169). They are in the database because a person changes
+relay, who may make a workspace (D-155, D-169), and the sign-in policy (D-239). They are in the database because a person changes
 them in the browser; what the process needs before it can read a row — the database, `ENCRYPTION_KEY`,
 the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md`).
 
@@ -1689,6 +1689,12 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   written, never normalised: the id_token's `iss` must equal it byte for byte.
 - **Who may make a workspace** is D-155's rule as a kind — `first`, `anyone` or `listed` — and, for
   `listed`, the GitHub logins in lower case, at least one.
+- **The sign-in policy** (D-239, added by 0068): `require_two_factor` holds an account that signs in with a
+  password back until it turns on two-step verification, and `password_sign_in` is whether a password signs
+  in at all. Off is allowed only while GitHub or single sign-on is connected, and the last of them is not
+  disconnected while it is — a rule the application weighs inside the transaction that saves the change, not
+  a check here: a provider whose secret a rotated key cannot open is set in its columns and no way in, which
+  only the application can tell. `bun run admin:reset-password` turns passwords on again.
 - `imported_from_env_at` is when the environment was copied in, **once**, on the first start; set, every
   later start leaves the row alone (`importFromEnvOnce`). `setup_completed_at` is when the setup in the
   browser was finished.
@@ -1717,6 +1723,9 @@ CREATE TABLE server_settings (
     oidc_client_id               TEXT,
     oidc_client_secret_encrypted TEXT,
     oidc_name                    TEXT,
+    -- The sign-in policy (D-239), added by 0068.
+    require_two_factor           BOOLEAN NOT NULL DEFAULT FALSE,
+    password_sign_in             BOOLEAN NOT NULL DEFAULT TRUE,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -2112,6 +2121,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0065_account_suspension.sql users.suspended_at, server_audit_log.target_user_id: the server's administrator suspends an account and lifts it  (D-233)
 0066_quiet_hours.sql users.quiet_from, users.quiet_to, users.quiet_days: a person's quiet hours, every week, on their profile's clock  (D-234)
 0067_two_factor.sql users.two_factor_enabled, two_factors: two-step verification for an account with a password, its key and backup codes sealed  (D-236)
+0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
