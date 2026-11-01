@@ -8,7 +8,7 @@
  * reason. Nothing here resolves the question.
  */
 import { Type, type Static } from '@sinclair/typebox';
-import { FromClient, GitHubWorkLink, Uuid } from './models';
+import { FromClient, GitHubLink, GitHubWorkLink, Uuid } from './models';
 
 export const GITHUB_ISSUE_TITLE_MAX = 256;
 /** GitHub takes 65,536 characters; the marker and room for what GitHub counts differently are left. */
@@ -50,6 +50,14 @@ export type CreateGitHubIssueRequest = Static<typeof CreateGitHubIssueRequest>;
  */
 export const githubIssueMarker = (clientRequestId: string): string =>
   `<!-- purlay:${clientRequestId} -->`;
+
+/**
+ * `POST /api/messages/:messageId/github-link` — an issue or pull request that already exists, pointed at from a
+ * root: its address in the shape every GitHub link is held to (D-101). `201` when it is newly linked, `200` when
+ * the root already pointed at it. Nothing is written to GitHub, and nothing is resolved.
+ */
+export const LinkGitHubWorkRequest = FromClient({ url: GitHubLink });
+export type LinkGitHubWorkRequest = Static<typeof LinkGitHubWorkRequest>;
 
 /** Why GitHub said no: no access to the repository, issues turned off there, a title or body it refused, or never made. */
 export const GITHUB_ISSUE_REFUSALS = [
