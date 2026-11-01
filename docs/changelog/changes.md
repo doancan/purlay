@@ -94,6 +94,7 @@ have it.
 
 ### Security
 
+- **Security** — The page loads images from its own server only: the exception for GitHub's avatar host, which nothing used, is gone (D-237)
 - **Sign-in** — An account with a password can turn on two-step verification in Sessions & account: after the password, a code from an authenticator app or a one-time backup code; ten wrong codes in a row lock the step for fifteen minutes (D-236)
 - **Native app** — A device name can no longer hold zero-width or directional characters, so a session cannot be made to read as another device's in the sessions list (D-191)
 - **Native app** — A wrong sign-in verifier or a burnt code is a warning in the server's log with its reason, and nothing in the log can open a session (D-191)
