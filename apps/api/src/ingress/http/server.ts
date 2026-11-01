@@ -191,14 +191,17 @@ export const disconnectChannel = async (
   });
 };
 
-/** `POST /api/server/policy` — who may make an account; `204`. */
-export const changeSignUpPolicy = async (
+/**
+ * `POST /api/server/policy` — one rule of the sign-in policy: who may make an account, whether a password
+ * account must turn on two-step verification, whether a password signs in (D-239); `204`.
+ */
+export const changeSignInPolicy = async (
   dependencies: ServerDependencies,
   request: Request,
   body: unknown,
 ): Promise<void> => {
   await asAdmin(dependencies, request, async (admin, module) => {
-    await changePolicy(module, admin, validated(ServerPolicyRequest, body).signUp);
+    await changePolicy(module, admin, validated(ServerPolicyRequest, body));
   });
 };
 

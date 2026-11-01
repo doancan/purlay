@@ -95,8 +95,9 @@ export const readMe = async (
   request: Request,
 ): Promise<MeResponse> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
-  return await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
+  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  const me = await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
+  return { ...me, mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId) };
 };
 
 export const listMyWorkspaces = async (

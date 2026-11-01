@@ -14,6 +14,11 @@
  *   within about half a minute, as for any session removed by the database itself.
  * - **Two-step verification is turned off with it** (D-236): the break-glass is for an account whose way in is
  *   lost, an authenticator app as much as a password; the person turns it on again with the new password.
+ * - **Password sign-in is turned on again with it** (D-239), where the server's administrator had turned it off:
+ *   the break-glass is for a server whose other ways in are gone — a provider down, a secret a rotated key cannot
+ *   open — and a password that does not sign in is no way back. The running server reads its settings when it
+ *   starts or when it changes them itself, so the command says to restart it. Its own row on the trail
+ *   (`server.password_sign_in_changed`).
  * - **It leaves a row** on the server's trail (`server.admin_password_reset`, the account itself as the
  *   actor, no session, never a value), in the same transaction.
  * - **Nothing secret is returned**: not the password, not its hash.
@@ -32,6 +37,8 @@ export type ResetOutcome =
       readonly sessionsEnded: number;
       /** Whether two-step verification was on, and is now off. */
       readonly twoFactorOff: boolean;
+      /** Whether password sign-in was off, and is now on (D-239): the running server needs a restart for it. */
+      readonly passwordsOn: boolean;
     }
   /** No account with that address is the server's administrator — or there is no such account: one answer. */
   | { readonly ok: false; readonly reason: 'not-an-administrator' }
@@ -92,6 +99,24 @@ export const resetAdministratorPassword = async (
       actorUserId: administrator.id,
       action: 'server.admin_password_reset',
     });
-    return { ok: true, email, sessionsEnded: ended.length, twoFactorOff: secondStep.length > 0 };
+    const passwordsOn = await transaction
+      .updateTable('server_settings')
+      .set({ password_sign_in: true, updated_at: clock.now() })
+      .where('password_sign_in', '=', false)
+      .returning('id')
+      .executeTakeFirst();
+    if (passwordsOn !== undefined) {
+      await recordServerAudit(transaction, clock, {
+        actorUserId: administrator.id,
+        action: 'server.password_sign_in_changed',
+      });
+    }
+    return {
+      ok: true,
+      email,
+      sessionsEnded: ended.length,
+      twoFactorOff: secondStep.length > 0,
+      passwordsOn: passwordsOn !== undefined,
+    };
   });
 };

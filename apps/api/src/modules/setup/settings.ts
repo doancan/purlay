@@ -1,7 +1,7 @@
 /**
  * The server's own settings, kept in the database (D-179 §6): who may sign up, GitHub's OAuth app, the
- * single sign-on provider (D-200), the mail relay, and who may make a workspace. One row, `server_settings` (migration 0049), read whole and
- * written by patch.
+ * single sign-on provider (D-200), the mail relay, who may make a workspace, and the sign-in policy (D-239). One
+ * row, `server_settings` (migration 0049), read whole and written by patch.
  *
  * - **The secrets are sealed** by the one credential cipher (`platform/crypto.ts`, D-39 §6) — the GitHub
  *   client secret, and the relay's address, which carries its password — each with its column's name
@@ -19,7 +19,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { OIDC_NAME_MAX, type ServerSettingsView } from '@purlay/types';
-import type { AuthSettings } from '../auth/better-auth';
+import type { AuthSettings, SignInPolicy } from '../auth/better-auth';
 import { workspaceCreatorsOf, type WorkspaceCreators } from '../workspaces/creators';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
@@ -42,7 +42,7 @@ export interface SmtpSettings {
 }
 
 /** Everything the server reads from its settings: what the sign-in library takes, and the rest. */
-export interface ServerSettings extends AuthSettings {
+export interface ServerSettings extends AuthSettings, SignInPolicy {
   readonly smtp: SmtpSettings | undefined;
   /** Who may make a workspace (D-155, D-169). */
   readonly workspaceCreators: WorkspaceCreators;
@@ -60,6 +60,8 @@ export interface SettingsPatch {
   readonly oidc?: NonNullable<AuthSettings['oidc']> | null | undefined;
   readonly smtp?: SmtpSettings | null | undefined;
   readonly workspaceCreators?: WorkspaceCreators | undefined;
+  readonly requireTwoFactor?: boolean | undefined;
+  readonly passwordSignIn?: boolean | undefined;
   /**
    * When the setup was finished — set once, by the finish rule, and never cleared: a setup unfinished
    * again would open `/setup` on a server in use (D-179 §4.8).
@@ -93,6 +95,8 @@ const DEFAULTS: ServerSettings = {
   smtp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
+  requireTwoFactor: false,
+  passwordSignIn: true,
 };
 
 /** A GitHub login, as the configuration's `WORKSPACE_CREATORS` pattern takes one (D-155). */
@@ -205,6 +209,8 @@ const readWith = async (
     smtp,
     workspaceCreators: creatorsOf(row.workspace_creators, row.workspace_creator_logins),
     setupCompletedAt: row.setup_completed_at ?? undefined,
+    requireTwoFactor: row.require_two_factor,
+    passwordSignIn: row.password_sign_in,
   };
 };
 
@@ -256,11 +262,15 @@ interface Written {
   workspace_creators?: string;
   workspace_creator_logins?: string[];
   setup_completed_at?: Date | null;
+  require_two_factor?: boolean;
+  password_sign_in?: boolean;
 }
 
 const columnsOf = async (cipher: CredentialCipher, patch: SettingsPatch): Promise<Written> => {
   const written: Written = {};
   if (patch.signUp !== undefined) written.sign_up = patch.signUp;
+  if (patch.requireTwoFactor !== undefined) written.require_two_factor = patch.requireTwoFactor;
+  if (patch.passwordSignIn !== undefined) written.password_sign_in = patch.passwordSignIn;
   if (patch.github === null) {
     written.github_client_id = null;
     written.github_client_secret_encrypted = null;
@@ -363,6 +373,8 @@ export const relayHost = (smtpUrl: string): string => {
 /** The settings as a response may carry them (`ServerSettingsView`, `@purlay/types`). */
 export const settingsView = (settings: ServerSettings): ServerSettingsView => ({
   signUp: settings.signUp,
+  requireTwoFactor: settings.requireTwoFactor,
+  passwordSignIn: settings.passwordSignIn,
   github:
     settings.github === undefined
       ? null

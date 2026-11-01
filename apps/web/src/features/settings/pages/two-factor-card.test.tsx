@@ -44,6 +44,7 @@ const signIn = (overrides: Partial<MySignIn> = {}): MySignIn => ({
   github: null,
   oidc: false,
   twoFactor: false,
+  twoFactorRequired: false,
   ...overrides,
 });
 
@@ -190,6 +191,20 @@ describe('two-step verification', () => {
     expect(sent).toEqual(['the right one 123']);
     expect(here.getByRole('status').textContent).toBe('Two-step verification is off.');
     expect(here.getByText('Off')).toBeDefined();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('required by the server (D-239): on, it is not offered to be turned off, and says why', async () => {
+    const view = await open({
+      mySignIn: () => Promise.resolve(signIn({ twoFactor: true, twoFactorRequired: true })),
+    });
+    const here = card(view);
+    expect(here.getByText('On')).toBeDefined();
+    expect(
+      here.getByText('This server requires it of an account with a password, so it stays on.'),
+    ).toBeDefined();
+    expect(here.queryByRole('button', { name: 'Turn off…' })).toBeNull();
+    expect(here.getByRole('button', { name: 'New backup codes…' })).toBeDefined();
     await expectNoAxeViolations(view.container);
   });
 

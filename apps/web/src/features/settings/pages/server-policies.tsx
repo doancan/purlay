@@ -1,11 +1,13 @@
 /**
- * Administration → Server's two rules about people: who may make an account, and who may make a
- * workspace (D-179 §4.7, D-155, D-169). The sign-up policy applies as it is chosen; the creators are
- * saved with their button, since a list is typed. Each says in one sentence what it means, and each is
- * read by the server on the next request, so nothing needs a restart.
+ * Administration → Server's rules about people: who may make an account, how they sign in, and who may make a
+ * workspace (D-179 §4.7, D-155, D-169, D-239). The sign-up and sign-in policies apply as they are chosen; the
+ * creators are saved with their button, since a list is typed. Each says in one sentence what it means, and
+ * each is read by the server on the next request, so nothing needs a restart.
  */
 import type { ServerSettingsAnswer } from '@purlay/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { isSetupFailure } from '../../setup/client';
@@ -33,7 +35,7 @@ export const PolicyCard = ({
     setFailure(null);
     setOutcome(null);
     try {
-      await client.policy(signUp);
+      await client.policy({ signUp });
       await refresh();
       setOutcome({ ok: true, words: t('settings.server.policy.saved') });
     } catch (caught) {
@@ -67,6 +69,119 @@ export const PolicyCard = ({
           ]}
           onChange={(value) => {
             void change(value);
+          }}
+        />
+      </SettingsRow>
+      {failure !== null && (
+        <div className="px-6 pb-5 max-narrow:px-4">
+          <ChangeFailure failure={failure} />
+        </div>
+      )}
+    </SettingsCard>
+  );
+};
+
+type SignInRule = 'requireTwoFactor' | 'passwordSignIn';
+
+/**
+ * How people sign in (D-239): whether an account with a password must turn on two-step verification, and
+ * whether a password signs in at all. Each applies as it is chosen, on its own. Passwords can be turned off
+ * only while GitHub or single sign-on serves, and the server refuses it otherwise — said here in its words, as
+ * is a refusal because somebody else changed the page in between. Requiring the second step may hold the
+ * administrator back too: the identity is read again, and the session gate says what to do.
+ */
+export const SignInPolicyCard = ({
+  view,
+}: {
+  readonly view: ServerSettingsAnswer;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const client = useServerClient();
+  const refresh = useRefresh();
+  const queries = useQueryClient();
+  const [pending, setPending] = useState<{
+    readonly rule: SignInRule;
+    readonly on: boolean;
+  } | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [outcome, setOutcome] = useState<Outcome>(null);
+  const providers = view.channels.github || view.channels.oidc;
+
+  const change = async (rule: SignInRule, on: boolean): Promise<void> => {
+    setPending({ rule, on });
+    setFailure(null);
+    setOutcome(null);
+    try {
+      await client.policy(
+        rule === 'requireTwoFactor' ? { requireTwoFactor: on } : { passwordSignIn: on },
+      );
+      await refresh();
+      // Whether the administrator is held back may have changed with it.
+      await queries.invalidateQueries({ queryKey: keys.me });
+      setOutcome({ ok: true, words: t('settings.server.signIn.saved') });
+    } catch (caught) {
+      setFailure(caught);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const valueOf = (rule: SignInRule): 'on' | 'off' => {
+    const on = pending?.rule === rule ? pending.on : view.settings[rule];
+    return on ? 'on' : 'off';
+  };
+
+  return (
+    <SettingsCard
+      title={t('settings.server.signIn.title')}
+      description={t('settings.server.signIn.description')}
+      footer={failure === null && outcome !== null ? <SaveOutcome outcome={outcome} /> : undefined}
+    >
+      <SettingsRow label={t('settings.server.signIn.twoFactor')} wide>
+        <Choices
+          label={t('settings.server.signIn.twoFactor')}
+          value={valueOf('requireTwoFactor')}
+          choices={[
+            {
+              value: 'off',
+              label: t('settings.server.signIn.twoFactor.off'),
+              description: t('settings.server.signIn.twoFactor.off.body'),
+            },
+            {
+              value: 'on',
+              label: t('settings.server.signIn.twoFactor.on'),
+              description: t('settings.server.signIn.twoFactor.on.body'),
+            },
+          ]}
+          onChange={(value) => {
+            void change('requireTwoFactor', value === 'on');
+          }}
+        />
+      </SettingsRow>
+      <SettingsRow
+        label={t('settings.server.signIn.passwords')}
+        wide
+        {...(providers || !view.settings.passwordSignIn
+          ? {}
+          : { description: t('settings.server.signIn.passwords.needsProvider') })}
+      >
+        <Choices
+          label={t('settings.server.signIn.passwords')}
+          value={valueOf('passwordSignIn')}
+          choices={[
+            {
+              value: 'on',
+              label: t('settings.server.signIn.passwords.on'),
+              description: t('settings.server.signIn.passwords.on.body'),
+            },
+            {
+              value: 'off',
+              label: t('settings.server.signIn.passwords.off'),
+              description: t('settings.server.signIn.passwords.off.body'),
+            },
+          ]}
+          onChange={(value) => {
+            void change('passwordSignIn', value === 'on');
           }}
         />
       </SettingsRow>

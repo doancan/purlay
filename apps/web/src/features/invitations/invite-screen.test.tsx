@@ -210,7 +210,8 @@ describe('an invitation, opened by somebody who is not signed in', () => {
       locale,
       api: aSignedInApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-        authMethods: () => Promise.resolve({ ...methods, oidc: null, signUp: 'invite-only' }),
+        authMethods: () =>
+          Promise.resolve({ ...methods, oidc: null, signUp: 'invite-only', password: true }),
         ...api,
       }),
     });
@@ -277,6 +278,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
           email: false,
           oidc: { name: 'Acme SSO' },
           signUp: 'invite-only',
+          password: true,
         }),
       ...api,
     });
@@ -324,6 +326,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
               email: true,
               oidc: { name: null },
               signUp: 'invite-only',
+              password: true,
             }),
         }),
       );

@@ -413,6 +413,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
         github: null,
         oidc: false,
         twoFactor: false,
+        twoFactorRequired: false,
       }),
   };
 
@@ -438,6 +439,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           github: null,
           oidc: true,
           twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('Single sign-on')).toBeDefined();
@@ -462,6 +464,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           github: { login: 'ada-gh' },
           oidc: false,
           twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('GitHub')).toBeDefined();
@@ -482,6 +485,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           github: { login: null },
           oidc: false,
           twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('Linked')).toBeDefined();
@@ -498,6 +502,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           github: { login: 'ada' },
           oidc: false,
           twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('Your GitHub account’s address. You sign in with GitHub.')).toBeDefined();
@@ -524,6 +529,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
               github: null,
               oidc: false,
               twoFactor: false,
+              twoFactorRequired: false,
             }),
     });
     expect(await card.findByRole('button', { name: 'Retry' })).toBeDefined();
@@ -556,6 +562,7 @@ describe('change password', () => {
         github: null,
         oidc: false,
         twoFactor: false,
+        twoFactorRequired: false,
       }),
   };
 
@@ -575,6 +582,7 @@ describe('change password', () => {
           github: null,
           oidc: false,
           twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(without.queryByRole('region', { name: 'Password' })).toBeNull();

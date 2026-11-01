@@ -166,7 +166,8 @@ export const meOf = async (
   clock: Clock,
   userId: string,
   creators: WorkspaceCreators,
-): Promise<MeResponse> => {
+  // Whether the person owes two-step verification is the sign-in policy's to say (D-239), not this module's.
+): Promise<Omit<MeResponse, 'mustEnrolTwoFactor'>> => {
   const user = await executor
     .selectFrom('users')
     .select([

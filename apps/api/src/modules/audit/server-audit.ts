@@ -20,6 +20,9 @@ export type ServerAuditAction =
   | 'server.smtp_connected'
   | 'server.smtp_disconnected'
   | 'server.sign_up_changed'
+  /** The sign-in policy (D-239): two-step verification required of a password, or not; passwords on or off. */
+  | 'server.two_factor_requirement_changed'
+  | 'server.password_sign_in_changed'
   | 'server.workspace_creators_changed'
   /** The break-glass command set the administrator's password; the actor is the account itself. */
   | 'server.admin_password_reset'

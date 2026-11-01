@@ -221,6 +221,8 @@ const uploadRefusal = (
     case 'ATTACHMENT_NOT_FOUND':
     case 'SESSION_NOT_FOUND':
     case 'FORBIDDEN':
+    // The session gate takes the person to turn on two-step verification (D-239).
+    case 'TWO_FACTOR_REQUIRED':
     // Membership is the send's to judge (D-156): an upload is the workspace's, before any channel.
     case 'NOT_A_CHANNEL_MEMBER':
     case 'DATABASE_UNAVAILABLE':

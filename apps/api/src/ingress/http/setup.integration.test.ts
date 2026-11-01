@@ -403,6 +403,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
       email: false,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     const button = await call(wizard, 'GET', '/auth/github');
     expect(button.status).toBe(302);
@@ -428,6 +429,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
       email: true,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     let state = await stateOf(wizard, cookie);
     expect(state.admin).toEqual({ name: ADMIN.name, email: ADMIN.email, emailVerified: false });
@@ -1273,6 +1275,7 @@ describe('integration: the finish rule', () => {
       email: false,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     const cookie = await claimed(wizard);
     await passedTo(wizard, cookie, 'invite');
@@ -1316,6 +1319,7 @@ describe('integration: the finish rule', () => {
       email: true,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     const cookie = await claimed(wizard);
     await passedTo(wizard, cookie, 'invite');

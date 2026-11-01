@@ -23,6 +23,8 @@ const SETTINGS: ServerSettings = {
   },
   workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace']) },
   setupCompletedAt: new Date('2026-10-22T09:00:00.000Z'),
+  requireTwoFactor: false,
+  passwordSignIn: true,
 };
 
 describe('the view of the settings, which is all a response may carry', () => {
@@ -40,6 +42,8 @@ describe('the view of the settings, which is all a response may carry', () => {
       },
       workspaceCreators: { kind: 'listed', logins: ['ada', 'grace'] },
       setupCompletedAt: '2026-10-22T09:00:00.000Z',
+      requireTwoFactor: false,
+      passwordSignIn: true,
     });
     const written = JSON.stringify(view);
     expect(written).not.toContain('gh-secret-value');
@@ -57,6 +61,8 @@ describe('the view of the settings, which is all a response may carry', () => {
         smtp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
+        requireTwoFactor: false,
+        passwordSignIn: true,
       }),
     ).toEqual({
       signUp: 'open',
@@ -65,6 +71,8 @@ describe('the view of the settings, which is all a response may carry', () => {
       smtp: null,
       workspaceCreators: { kind: 'first' },
       setupCompletedAt: null,
+      requireTwoFactor: false,
+      passwordSignIn: true,
     });
   });
 

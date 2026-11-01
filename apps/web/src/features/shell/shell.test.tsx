@@ -458,7 +458,13 @@ describe('the sign-in screen', () => {
     anApi({
       me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
       authMethods: () =>
-        Promise.resolve({ github: true, email: false, oidc: null, signUp: 'invite-only' }),
+        Promise.resolve({
+          github: true,
+          email: false,
+          oidc: null,
+          signUp: 'invite-only',
+          password: true,
+        }),
     });
 
   test('without mail, is a button to GitHub, which is a real navigation, above the password form', async () => {

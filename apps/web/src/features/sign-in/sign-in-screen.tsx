@@ -1,7 +1,7 @@
 /**
  * Sign in. The organisation's single sign-on where a provider is connected (D-200), GitHub where the server
- * has an app connected, the address and password always (the setup's
- * administrator has one, R30), and a link by email where the server can send one (D-138, D-179): the
+ * has an app connected, the address and password unless the server's administrator turned passwords off (the
+ * setup's administrator has one, R30; D-239), and a link by email where the server can send one (D-138, D-179): the
  * screen offers what `/api/auth/methods` says works and nothing it assumes. Under it, "Create an
  * account" where sign-up is open and a plain "by invitation" where it is not (R51). A server with neither
  * GitHub nor mail is waiting for its setup (D-179 §4), and says so plainly above the password. When the
@@ -150,10 +150,11 @@ export const SignInScreen = (): React.JSX.Element => {
                 )}
               </div>
             )}
-            {/* The password is always offered (R30); the link only where mail is on, which the form asks. */}
+            {/* The password unless the server turned it off (R30, D-239) — kept when the server could not be
+                asked; the link only where mail is on. */}
             <EmailSignInForm
               alone={!github && oidc === null && !methods.isError && mail}
-              withPassword
+              withPassword={methods.data?.password !== false}
               mail={mail}
             />
             {methods.isError && (

@@ -8,6 +8,10 @@
  * page that would only bounce again. *Anything else* is a failure of the server or
  * the network, which is not the same as being signed out and must not look like it:
  * it says so, and offers Retry.
+ *
+ * *Signed in, but held back* — the server requires two-step verification of the person's account and it is
+ * off (D-239) — draws nothing of the application either, only the screen that turns it on: every other route
+ * would answer `403 TWO_FACTOR_REQUIRED`. Turned on, the identity is read again and the gate lets the rest in.
  */
 import { createContext, useContext, useEffect } from 'react';
 import { AppSkeleton } from '../../app/skeleton';
@@ -18,6 +22,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { ErrorState } from '../../ui/states';
 import { PushProvider } from '../push/push';
+import { LazyTwoFactorEnrolment } from '../settings/load';
 import type { MeResponse } from '@purlay/types';
 
 const SessionContext = createContext<MeResponse | null>(null);
@@ -71,6 +76,7 @@ export const SessionGate = ({
       />
     );
   }
+  if (me.data.mustEnrolTwoFactor) return <LazyTwoFactorEnrolment email={me.data.user.email} />;
   // Push is a person's, on every signed-in page: a device they turned it on in is tied again on load.
   return (
     <SessionContext.Provider value={me.data}>

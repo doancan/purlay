@@ -48,6 +48,12 @@ export const ErrorCode = Type.Union([
   /** The one irreversible act needs a sign-in from the last minutes, not an old session (D-139 §5). */
   Type.Literal('REAUTHENTICATION_REQUIRED'),
   /**
+   * The server requires two-step verification of an account that signs in with a password, and the caller's
+   * has not turned it on (D-239): nothing but what turning it on needs answers until it has. Not a sign-out —
+   * the session stands, and the same session goes on once it is on.
+   */
+  Type.Literal('TWO_FACTOR_REQUIRED'),
+  /**
    * Writing in a channel the caller can see and is not in: a public channel they have not joined.
    * Joining it is the way on (D-156). Never for a channel they cannot see — that is its `404`.
    */
@@ -233,6 +239,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   FORBIDDEN: 403,
   REAUTHENTICATION_REQUIRED: 403,
+  TWO_FACTOR_REQUIRED: 403,
   NOT_A_CHANNEL_MEMBER: 403,
 
   ROUTE_NOT_FOUND: 404,
@@ -363,13 +370,18 @@ export type SettingsChangeFailedDetails = Static<typeof SettingsChangeFailedDeta
  * Why Administration → Server refused a change (`409 SERVER_CHANGE_REFUSED`): `last-channel` — it would
  * leave the administrator's password as the only way in, and `confirmLastChannel` was not said;
  * `not-connected` — there is nothing of that kind to disconnect; `setup-unfinished` — the setup in the
- * browser is still open, and its steps are the way to change settings until it is finished.
+ * browser is still open, and its steps are the way to change settings until it is finished;
+ * `no-provider` — password sign-in cannot be turned off while neither GitHub nor single sign-on is connected;
+ * `passwords-off` — password sign-in is off, and this is the last of GitHub and single sign-on: nobody could
+ * sign in, so no confirmation lets it go (D-239).
  */
 export const ServerChangeRefusedDetails = Type.Object({
   reason: Type.Union([
     Type.Literal('last-channel'),
     Type.Literal('not-connected'),
     Type.Literal('setup-unfinished'),
+    Type.Literal('no-provider'),
+    Type.Literal('passwords-off'),
   ]),
 });
 export type ServerChangeRefusedDetails = Static<typeof ServerChangeRefusedDetails>;

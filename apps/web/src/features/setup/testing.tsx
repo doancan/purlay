@@ -18,6 +18,8 @@ export const aState = (over: Partial<SetupState> = {}): SetupState => ({
   githubCallbackUrl: `${ORIGIN}/auth/callback/github`,
   settings: {
     signUp: 'invite-only',
+    requireTwoFactor: false,
+    passwordSignIn: true,
     github: null,
     oidc: null,
     smtp: null,

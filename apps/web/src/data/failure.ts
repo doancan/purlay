@@ -27,6 +27,7 @@ export type FailureKey =
   | 'failure.network'
   | 'failure.session'
   | 'failure.reauthenticate'
+  | 'failure.twoFactor'
   | 'failure.notAMember'
   | 'failure.gone'
   | 'failure.slow'
@@ -66,6 +67,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
     // Erasing an account wants a sign-in from the last minutes (D-139 §5).
     case 'REAUTHENTICATION_REQUIRED':
       return 'failure.reauthenticate';
+    // The server holds the person back until their second step is on (D-239).
+    case 'TWO_FACTOR_REQUIRED':
+      return 'failure.twoFactor';
     // Writing in a public channel the person has not joined: the way on is Join (D-156).
     case 'NOT_A_CHANNEL_MEMBER':
       return 'failure.notAMember';
@@ -163,7 +167,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
 /**
  * A 401 on an action is the session ending, not a reason to keep pressing the button: the
  * identity is asked for again, so the session gate takes over and the person is taken to
- * sign in.
+ * sign in. A `TWO_FACTOR_REQUIRED` is the same move: the identity read again says the person must
+ * turn on two-step verification, and the gate shows them only that (D-239).
  */
 const refreshSession = (client: QueryClient): void => {
   void client.invalidateQueries({ queryKey: keys.me });
@@ -176,7 +181,7 @@ export const useDescribeFailure = (): ((error: unknown) => string) => {
   return useCallback(
     (error: unknown): string => {
       const code = codeOf(error);
-      if (code === 'UNAUTHENTICATED') refreshSession(client);
+      if (code === 'UNAUTHENTICATED' || code === 'TWO_FACTOR_REQUIRED') refreshSession(client);
       return t(failureKey(code));
     },
     [t, client],

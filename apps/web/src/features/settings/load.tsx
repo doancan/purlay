@@ -1,6 +1,7 @@
 /**
  * The doors to the settings' chunk (D-146, D-49): the screen in the main column and the navigation in
- * the sidebar's place, both loaded by one `import()` the first time either is drawn, each with a
+ * the sidebar's place — and the screen that turns on two-step verification, which shares its card (D-239) —
+ * loaded by one `import()` the first time either is drawn, each with a
  * quiet skeleton while it comes.
  */
 import { lazy, Suspense } from 'react';
@@ -13,6 +14,7 @@ const load = (): Promise<typeof Deferred> => import('../../app/deferred');
 
 const Screen = lazy(async () => ({ default: (await load()).SettingsScreen }));
 const Nav = lazy(async () => ({ default: (await load()).SettingsNav }));
+const Enrolment = lazy(async () => ({ default: (await load()).TwoFactorEnrolment }));
 
 const Waiting = ({ className }: { readonly className: string }): React.JSX.Element => {
   const { t } = useI18n();
@@ -38,5 +40,16 @@ export const LazySettingsScreen = ({
 export const LazySettingsNav = (): React.JSX.Element => (
   <Suspense fallback={<Waiting className="flex flex-col gap-3 px-4 py-3" />}>
     <Nav />
+  </Suspense>
+);
+
+/** The screen a person the server holds back until their second step is on sees instead (D-239). */
+export const LazyTwoFactorEnrolment = ({
+  email,
+}: {
+  readonly email: string;
+}): React.JSX.Element => (
+  <Suspense fallback={<Waiting className="flex w-full flex-col gap-3 p-10" />}>
+    <Enrolment email={email} />
   </Suspense>
 );

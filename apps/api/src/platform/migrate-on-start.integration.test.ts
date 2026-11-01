@@ -406,7 +406,7 @@ describe('integration: migrate on start', () => {
       expect(await until(port, '/health/ready', 200)).toBe(200);
       expect(await bodyOf(port, '/api/auth/methods')).toEqual([
         200,
-        { github: false, email: false, oidc: null, signUp: 'invite-only' },
+        { github: false, email: false, oidc: null, signUp: 'invite-only', password: true },
       ]);
       // The button's address is a defined answer, never the library's thrown error.
       expect(await bodyOf(port, '/auth/github')).toEqual([
@@ -691,7 +691,7 @@ describe('integration: migrate on start', () => {
         expect(await until(restartedPort, '/health/ready', 200)).toBe(200);
         expect(await bodyOf(restartedPort, '/api/auth/methods')).toEqual([
           200,
-          { github: false, email: false, oidc: null, signUp: 'invite-only' },
+          { github: false, email: false, oidc: null, signUp: 'invite-only', password: true },
         ]);
         expect((await bodyOf(restartedPort, '/auth/github'))[0]).toBe(404);
         expect(restarted.exitCode).toBeNull();

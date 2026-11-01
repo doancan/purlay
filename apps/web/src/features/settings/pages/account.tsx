@@ -115,7 +115,11 @@ const PasswordSection = (): React.JSX.Element | null => {
   return signIn.data?.hasPassword === true ? (
     <>
       <ChangePasswordCard email={signIn.data.email} />
-      <TwoFactorCard email={signIn.data.email} enabled={signIn.data.twoFactor} />
+      <TwoFactorCard
+        email={signIn.data.email}
+        enabled={signIn.data.twoFactor}
+        required={signIn.data.twoFactorRequired}
+      />
     </>
   ) : null;
 };

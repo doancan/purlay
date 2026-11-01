@@ -111,6 +111,7 @@ describe('the endpoints', () => {
       mayCreateWorkspace: false,
       isServerAdmin: false,
       nameFromGitHub: false,
+      mustEnrolTwoFactor: false,
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
@@ -764,6 +765,7 @@ describe('the endpoints', () => {
       github: null,
       oidc: false,
       twoFactor: false,
+      twoFactorRequired: false,
     });
     expect(await read.api.mySignIn()).toEqual({
       email: 'a@example.test',
@@ -772,6 +774,7 @@ describe('the endpoints', () => {
       github: null,
       oidc: false,
       twoFactor: false,
+      twoFactorRequired: false,
     });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
   });
@@ -808,12 +811,19 @@ describe('the endpoints', () => {
   });
 
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
-    const methods = harness({ github: false, email: true, oidc: null, signUp: 'open' });
+    const methods = harness({
+      github: false,
+      email: true,
+      oidc: null,
+      signUp: 'open',
+      password: true,
+    });
     expect(await methods.api.authMethods()).toEqual({
       github: false,
       email: true,
       oidc: null,
       signUp: 'open',
+      password: true,
     });
     expect(methods.calls[0]).toMatchObject({ method: 'GET', url: '/api/auth/methods' });
 

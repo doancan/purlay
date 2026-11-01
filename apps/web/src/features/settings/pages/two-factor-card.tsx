@@ -9,6 +9,10 @@
  *
  * A wrong password is said on its field and a wrong code on its; a wait is told in minutes. The session in
  * this tab is the same one before and after: nothing here signs anybody out.
+ *
+ * Where the server requires it of this account (D-239), it is not offered to be turned off, and the card says
+ * why; the same card is what the enrolment screen shows a person the server holds back until it is on, and that
+ * screen is told when the backup codes have been seen (`onTurnedOn`), not before.
  */
 import type { TwoFactorEnrolment } from '@purlay/types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -74,10 +78,16 @@ const keyOf = (totpURI: string): string =>
 export const TwoFactorCard = ({
   email,
   enabled,
+  required,
+  onTurnedOn,
 }: {
   /** The account's address, for a password manager to file the password under. */
   readonly email: string;
   readonly enabled: boolean;
+  /** The server requires it of this account (D-239): it is not offered to be turned off. */
+  readonly required: boolean;
+  /** Told once the person has turned it on and pressed Done on the backup codes. */
+  readonly onTurnedOn?: () => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
   const api = useApi();
@@ -290,7 +300,9 @@ export const TwoFactorCard = ({
     return (
       <SettingsRow
         label={t('settings.account.twoFactor.status')}
-        description={t('settings.account.twoFactor.otherWays')}
+        description={t(
+          required ? 'settings.account.twoFactor.required' : 'settings.account.twoFactor.otherWays',
+        )}
       >
         <span className="text-label text-ink">
           {t(enabled ? 'settings.account.twoFactor.on' : 'settings.account.twoFactor.off')}
@@ -331,6 +343,7 @@ export const TwoFactorCard = ({
             onClick={() => {
               go({ kind: 'idle' });
               setDone(turnedOn ? 'settings.account.twoFactor.onNow' : null);
+              if (turnedOn) onTurnedOn?.();
             }}
           >
             {t('settings.account.twoFactor.done')}
@@ -358,14 +371,16 @@ export const TwoFactorCard = ({
             >
               {t('settings.account.twoFactor.newCodes')}
             </Button>
-            <Button
-              variant="dangerQuiet"
-              onClick={() => {
-                open('stop');
-              }}
-            >
-              {t('settings.account.twoFactor.stop')}
-            </Button>
+            {!required && (
+              <Button
+                variant="dangerQuiet"
+                onClick={() => {
+                  open('stop');
+                }}
+              >
+                {t('settings.account.twoFactor.stop')}
+              </Button>
+            )}
           </>
         ) : (
           <Button

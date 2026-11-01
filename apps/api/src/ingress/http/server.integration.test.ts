@@ -292,6 +292,8 @@ const ROUTES: readonly [method: 'GET' | 'POST' | 'DELETE', path: string, body: u
   ['DELETE', '/api/server/smtp', undefined],
   ['DELETE', '/api/server/oidc', undefined],
   ['POST', '/api/server/policy', { signUp: 'open' }],
+  ['POST', '/api/server/policy', { requireTwoFactor: true }],
+  ['POST', '/api/server/policy', { passwordSignIn: false }],
   ['POST', '/api/server/creators', { workspaceCreators: { kind: 'anyone' } }],
 ];
 
@@ -376,6 +378,8 @@ describe('integration: Administration → Server', () => {
         smtp: null,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: null,
+        requireTwoFactor: false,
+        passwordSignIn: true,
       },
       needsReentry: [],
       appUrl: ORIGIN,
@@ -1068,6 +1072,195 @@ describe('integration: Administration → Server — single sign-on (D-200)', ()
     });
     expect(over.status).toBe(429);
     expect(Number(over.headers.get('retry-after'))).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('integration: Administration → Server — the sign-in policy (D-239)', () => {
+  const as = (server: Server): Call => ({ cookie: server.admin.cookie });
+  const refusalOf = async (response: Response): Promise<[number, unknown]> => [
+    response.status,
+    ((await response.json()) as { error: { details?: { reason?: unknown } } }).error.details
+      ?.reason,
+  ];
+  const methods = async (server: Server): Promise<{ password: boolean }> =>
+    (await (await call(server, 'GET', '/api/auth/methods')).json()) as { password: boolean };
+
+  test('each rule changes on its own, serves from the next request, and is on the trail without its value', async () => {
+    const server = await aServer();
+    await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+    const required = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { requireTwoFactor: true },
+    });
+    expect(required.status).toBe(204);
+    expect(server.holder.current()?.auth.signInPolicy).toEqual({
+      requireTwoFactor: true,
+      passwordSignIn: true,
+    });
+    const off = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { passwordSignIn: false },
+    });
+    expect(off.status).toBe(204);
+    // The other rule is left as it was: each change names one.
+    expect((await viewOf(server)).settings).toMatchObject({
+      signUp: 'invite-only',
+      requireTwoFactor: true,
+      passwordSignIn: false,
+    });
+    expect((await methods(server)).password).toBe(false);
+    expect(
+      (
+        await call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: true },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await methods(server)).password).toBe(true);
+    expect((await trail(server)).map((row) => row.action)).toEqual([
+      'server.github_connected',
+      'server.two_factor_requirement_changed',
+      'server.password_sign_in_changed',
+      'server.password_sign_in_changed',
+    ]);
+    for (const row of await trail(server)) expect(row.session).toBe(server.admin.sessionId);
+  });
+
+  test('passwords are turned off only while GitHub or single sign-on serves — the mail relay is not one of them', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+    const refused = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { passwordSignIn: false },
+    });
+    expect(await refusalOf(refused)).toEqual([409, 'no-provider']);
+    expect((await readSettings(server.db, cipher)).passwordSignIn).toBe(true);
+    expect((await methods(server)).password).toBe(true);
+    expect((await trail(server)).map((row) => row.action)).toEqual(['server.smtp_connected']);
+
+    const { body } = await aProvider();
+    await call(server, 'POST', '/api/server/oidc', { ...as(server), body });
+    expect(
+      (
+        await call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: false },
+        })
+      ).status,
+    ).toBe(204);
+  });
+
+  test('with passwords off the last of GitHub and single sign-on stays, confirmed or not; the relay and the other provider may go', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    const { body } = await aProvider();
+    await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+    await call(server, 'POST', '/api/server/oidc', { ...as(server), body });
+    await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+    await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { passwordSignIn: false },
+    });
+
+    expect((await call(server, 'DELETE', '/api/server/smtp', as(server))).status).toBe(204);
+    expect((await call(server, 'DELETE', '/api/server/oidc', as(server))).status).toBe(204);
+    for (const confirmLastChannel of [false, true]) {
+      const last = await call(server, 'DELETE', '/api/server/github', {
+        ...as(server),
+        body: { confirmLastChannel },
+      });
+      expect(await refusalOf(last)).toEqual([409, 'passwords-off']);
+    }
+    expect((await readSettings(server.db, cipher)).github).toBeDefined();
+    expect((await viewOf(server)).channels.github).toBe(true);
+  });
+
+  test('two administrators at once — one turning passwords off, one disconnecting the only provider — cannot both pass', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      // No workspace to make: its trail would read the session of the round before's request.
+      const server = await aServer({ noWorkspace: true });
+      const relay = await aRelay();
+      await server.db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', server.member.userId)
+        .execute();
+      await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+      await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+      const [off, gone] = await Promise.all([
+        call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: false },
+        }),
+        call(server, 'DELETE', '/api/server/github', {
+          cookie: server.member.cookie,
+          body: { confirmLastChannel: true },
+        }),
+      ]);
+      expect([off.status, gone.status].sort()).toEqual([204, 409]);
+      const settings = await readSettings(server.db, cipher);
+      // Whichever won, somebody can still sign in: a password, or GitHub.
+      expect(settings.passwordSignIn || settings.github !== undefined).toBe(true);
+      expect(settings.passwordSignIn).toBe(off.status !== 204);
+    }
+  });
+
+  test('two administrators changing two rules at once both keep, each on the trail', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ is_server_admin: true })
+      .where('id', '=', server.member.userId)
+      .execute();
+    await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+    const answers = await Promise.all([
+      call(server, 'POST', '/api/server/policy', {
+        ...as(server),
+        body: { requireTwoFactor: true },
+      }),
+      call(server, 'POST', '/api/server/policy', {
+        cookie: server.member.cookie,
+        body: { passwordSignIn: false },
+      }),
+      call(server, 'POST', '/api/server/policy', { ...as(server), body: { signUp: 'open' } }),
+    ]);
+    expect(answers.map((answer) => answer.status)).toEqual([204, 204, 204]);
+    expect(await readSettings(server.db, cipher)).toMatchObject({
+      requireTwoFactor: true,
+      passwordSignIn: false,
+      signUp: 'open',
+    });
+    const actions = await server.db
+      .selectFrom('server_audit_log')
+      .select('action')
+      .where('action', 'in', [
+        'server.two_factor_requirement_changed',
+        'server.password_sign_in_changed',
+        'server.sign_up_changed',
+      ])
+      .execute();
+    expect(actions.map((row) => row.action).sort()).toEqual([
+      'server.password_sign_in_changed',
+      'server.sign_up_changed',
+      'server.two_factor_requirement_changed',
+    ]);
+  });
+
+  test('a body that is not one rule, of the right type, is refused before anything changes', async () => {
+    const server = await aServer();
+    for (const body of [
+      {},
+      { requireTwoFactor: 'yes' },
+      { passwordSignIn: 1 },
+      { requireTwoFactor: true, passwordSignIn: true },
+      { requireTwoFactor: true, extra: true },
+    ]) {
+      const refused = await call(server, 'POST', '/api/server/policy', { ...as(server), body });
+      expect([JSON.stringify(body), refused.status]).toEqual([JSON.stringify(body), 400]);
+    }
+    expect(await trail(server)).toEqual([]);
   });
 });
 

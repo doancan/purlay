@@ -42,6 +42,8 @@ const settle = async (): Promise<void> => {
 const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswer => ({
   settings: {
     signUp: 'invite-only',
+    requireTwoFactor: false,
+    passwordSignIn: true,
     github: null,
     oidc: null,
     smtp: null,
@@ -60,6 +62,8 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
 const CONNECTED = anAnswer({
   settings: {
     signUp: 'open',
+    requireTwoFactor: false,
+    passwordSignIn: true,
     github: { clientId: 'Iv1.abc123', clientSecret: { set: true } },
     oidc: null,
     smtp: {
@@ -369,11 +373,11 @@ describe('Settings → Server', () => {
   });
 
   test('the sign-up policy applies as it is chosen, with its one sentence', async () => {
-    const asked: string[] = [];
+    const asked: unknown[] = [];
     const view = await render(
       aClient({
-        policy: (signUp) => {
-          asked.push(signUp);
+        policy: (change) => {
+          asked.push(change);
           return Promise.resolve();
         },
       }),
@@ -382,8 +386,79 @@ describe('Settings → Server', () => {
     expect(policy.getByText(en['settings.server.policy.open.body'])).toBeDefined();
     await person().click(policy.getByRole('radio', { name: /Anyone/ }));
     await settle();
-    expect(asked).toEqual(['open']);
+    expect(asked).toEqual([{ signUp: 'open' }]);
     expect(policy.getByText('Saved. This applies from the next sign-up.')).toBeDefined();
+    view.unmount();
+  });
+
+  test('how people sign in (D-239): each rule applies on its own as it is chosen, and the policy is read again', async () => {
+    const asked: unknown[] = [];
+    let now = CONNECTED;
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(now),
+        policy: (change) => {
+          asked.push(change);
+          now = anAnswer({ ...now, settings: { ...now.settings, ...change } });
+          return Promise.resolve();
+        },
+      }),
+    );
+    const signIn = card(view, 'How people sign in');
+    expect(signIn.getByRole('radio', { name: /Optional/ })).toHaveProperty('checked', true);
+    expect(signIn.getByRole('radio', { name: /^On/ })).toHaveProperty('checked', true);
+    await person().click(signIn.getByRole('radio', { name: /Required/ }));
+    await settle();
+    await person().click(signIn.getByRole('radio', { name: /^Off/ }));
+    await settle();
+    expect(asked).toEqual([{ requireTwoFactor: true }, { passwordSignIn: false }]);
+    expect(signIn.getByRole('radio', { name: /Required/ })).toHaveProperty('checked', true);
+    expect(signIn.getByRole('radio', { name: /^Off/ })).toHaveProperty('checked', true);
+    expect(signIn.getByText(en['settings.server.signIn.saved'])).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('passwords cannot be turned off with neither GitHub nor single sign-on: said before, and the refusal in its words', async () => {
+    const view = await render(
+      aClient({
+        policy: () =>
+          Promise.reject(
+            new SetupFailure(409, 'SERVER_CHANGE_REFUSED', 'no', null, {}, null, 'no-provider'),
+          ),
+      }),
+    );
+    const signIn = card(view, 'How people sign in');
+    const needs = en['settings.server.signIn.passwords.needsProvider'];
+    expect(signIn.getAllByText(needs)).toHaveLength(1);
+    await person().click(signIn.getByRole('radio', { name: /^Off/ }));
+    await settle();
+    // The row's sentence, and the refusal's: the choice goes back to what the server holds.
+    expect(signIn.getAllByText(needs)).toHaveLength(2);
+    expect(signIn.getByRole('radio', { name: /^On/ })).toHaveProperty('checked', true);
+    view.unmount();
+  });
+
+  test('with passwords off, the last of GitHub and single sign-on is not offered to be disconnected (D-239)', async () => {
+    const view = await render(
+      aClient({
+        settings: () =>
+          Promise.resolve(
+            anAnswer({
+              ...CONNECTED,
+              settings: { ...CONNECTED.settings, passwordSignIn: false },
+            }),
+          ),
+      }),
+    );
+    await person().click(
+      within(main(view).getByRole('region', { name: 'Sign in with GitHub' })).getByRole('button', {
+        name: 'Disconnect',
+      }),
+    );
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.getByText(en['settings.server.passwordsOffLast'])).toBeDefined();
+    expect(dialog.queryByRole('button', { name: /Disconnect/ })).toBeNull();
     view.unmount();
   });
 

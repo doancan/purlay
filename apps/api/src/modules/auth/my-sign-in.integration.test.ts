@@ -51,6 +51,9 @@ const made = async (db: Database, shape: Shape = {}): Promise<string> => {
   return user.id;
 };
 
+/** Neither rule of the sign-in policy on (D-239). */
+const NO_POLICY = { requireTwoFactor: false, passwordSignIn: true } as const;
+
 const refusal = async (promise: Promise<unknown>): Promise<string> =>
   await promise.then(
     () => 'answered',
@@ -62,14 +65,14 @@ describe('integration: how an account signs in', () => {
     await withRollback(async (db) => {
       const without = await made(db);
       const withPassword = await made(db, { password: true });
-      expect(await mySignIn(db, without)).toMatchObject({
+      expect(await mySignIn(db, without, NO_POLICY)).toMatchObject({
         emailLinks: true,
         hasPassword: false,
         github: null,
         oidc: false,
         twoFactor: false,
       });
-      expect(await mySignIn(db, withPassword)).toMatchObject({
+      expect(await mySignIn(db, withPassword, NO_POLICY)).toMatchObject({
         emailLinks: true,
         hasPassword: true,
         github: null,
@@ -82,13 +85,14 @@ describe('integration: how an account signs in', () => {
   test('an account GitHub made has no link by email, and names its GitHub login', async () => {
     await withRollback(async (db) => {
       const id = await made(db, { githubId: '5001', githubLogin: 'octocat' });
-      expect(await mySignIn(db, id)).toEqual({
+      expect(await mySignIn(db, id, NO_POLICY)).toEqual({
         email: expect.stringContaining('@example.test') as string,
         emailLinks: false,
         hasPassword: false,
         github: { login: 'octocat' },
         oidc: false,
         twoFactor: false,
+        twoFactorRequired: false,
       });
     });
   });
@@ -96,7 +100,7 @@ describe('integration: how an account signs in', () => {
   test('an email account linked to GitHub keeps its links', async () => {
     await withRollback(async (db) => {
       const id = await made(db, { githubId: '5002', githubLogin: 'linked', connected: true });
-      expect(await mySignIn(db, id)).toMatchObject({
+      expect(await mySignIn(db, id, NO_POLICY)).toMatchObject({
         emailLinks: true,
         github: { login: 'linked' },
       });
@@ -115,16 +119,33 @@ describe('integration: how an account signs in', () => {
           provider_id: 'oidc',
         })
         .execute();
-      expect(await mySignIn(db, linked)).toMatchObject({ oidc: true });
-      expect(await mySignIn(db, other)).toMatchObject({ oidc: false });
+      expect(await mySignIn(db, linked, NO_POLICY)).toMatchObject({ oidc: true });
+      expect(await mySignIn(db, other, NO_POLICY)).toMatchObject({ oidc: false });
+    });
+  });
+
+  test('two-step verification is required of an account with a password, only where the policy asks and passwords sign in (D-239)', async () => {
+    await withRollback(async (db) => {
+      const withPassword = await made(db, { password: true });
+      const without = await made(db);
+      const required = { requireTwoFactor: true, passwordSignIn: true };
+      expect(await mySignIn(db, withPassword, required)).toMatchObject({ twoFactorRequired: true });
+      expect(await mySignIn(db, without, required)).toMatchObject({ twoFactorRequired: false });
+      expect(await mySignIn(db, withPassword, NO_POLICY)).toMatchObject({
+        twoFactorRequired: false,
+      });
+      // Passwords off: the password is no way in, so nothing is required of it.
+      expect(
+        await mySignIn(db, withPassword, { requireTwoFactor: true, passwordSignIn: false }),
+      ).toMatchObject({ twoFactorRequired: false });
     });
   });
 
   test('an erased account and an unknown one are both not signed in', async () => {
     await withRollback(async (db) => {
       const erased = await made(db, { deleted: true });
-      expect(await refusal(mySignIn(db, erased))).toBe('UNAUTHENTICATED');
-      expect(await refusal(mySignIn(db, crypto.randomUUID()))).toBe('UNAUTHENTICATED');
+      expect(await refusal(mySignIn(db, erased, NO_POLICY))).toBe('UNAUTHENTICATED');
+      expect(await refusal(mySignIn(db, crypto.randomUUID(), NO_POLICY))).toBe('UNAUTHENTICATED');
     });
   });
 });

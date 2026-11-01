@@ -130,13 +130,17 @@ describe('changing the settings', () => {
     ]);
   });
 
-  test('posts the sign-up policy and the workspace creators', async () => {
+  test('posts each rule of the policy on its own, and the workspace creators', async () => {
     const w = world(204, '');
     const client = createServerClient(w.fetch);
-    await client.policy('open');
+    await client.policy({ signUp: 'open' });
+    await client.policy({ requireTwoFactor: true });
+    await client.policy({ passwordSignIn: false });
     await client.creators({ kind: 'listed', logins: ['ada'] });
     expect(w.seen.map((one) => [one.path, one.init.body])).toEqual([
       ['/api/server/policy', '{"signUp":"open"}'],
+      ['/api/server/policy', '{"requireTwoFactor":true}'],
+      ['/api/server/policy', '{"passwordSignIn":false}'],
       ['/api/server/creators', '{"workspaceCreators":{"kind":"listed","logins":["ada"]}}'],
     ]);
   });

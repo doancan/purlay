@@ -116,6 +116,10 @@ export const en = {
   'app.failed.home': 'Go home',
 
   // ── Sign in ─────────────────────────────────────────────────────────────
+  'enrolTwoFactor.title': 'Turn on two-step verification',
+  'enrolTwoFactor.lede':
+    'This server requires it of every account that signs in with a password. Turn it on to carry on: you stay signed in.',
+  'enrolTwoFactor.signOut': 'Sign out',
   'signIn.title': 'Sign in to Purlay',
   'signIn.lede': 'Team chat where a question stays open until somebody closes it.',
   'signIn.github': 'Continue with GitHub',
@@ -191,6 +195,8 @@ export const en = {
   },
   'signIn.password.unreachable':
     'Purlay could not be reached. Check your connection and try again.',
+  'signIn.password.off':
+    'This server no longer signs in with a password. Use one of the ways above.',
   'signIn.password.failed': 'Signing in did not finish. Try again in a moment.',
   'signIn.code.form': 'Two-step verification',
   'signIn.code.appHint': 'Enter the {digits}-digit code from your authenticator app.',
@@ -1512,6 +1518,7 @@ export const en = {
   // ── Failures: one sentence per cause, shared by every screen ────────────
   'failure.network': 'Check your connection and try again.',
   'failure.session': 'Your session ended. Sign in again to carry on.',
+  'failure.twoFactor': 'This server asks you to turn on two-step verification first.',
   'failure.reauthenticate':
     'Sign out and sign in again, then try once more: this needs a fresh sign-in.',
   'failure.notAMember': 'You are not in this channel. Join it to write here, then try again.',
@@ -1668,6 +1675,8 @@ export const en = {
     'After your password, signing in asks for a code from an authenticator app on your phone.',
   'settings.account.twoFactor.otherWays':
     'It protects your password. Signing in with GitHub, single sign-on or an emailed link relies on that provider’s own security.',
+  'settings.account.twoFactor.required':
+    'This server requires it of an account with a password, so it stays on.',
   'settings.account.twoFactor.status': 'Status',
   'settings.account.twoFactor.on': 'On',
   'settings.account.twoFactor.off': 'Off',
@@ -2277,6 +2286,26 @@ export const en = {
   'settings.server.accounts.lift': 'Lift suspension',
   'settings.server.accounts.ask':
     'Suspend {name}? They are signed out on every device and cannot sign in until you lift it.',
+  'settings.server.signIn.title': 'How people sign in',
+  'settings.server.signIn.description':
+    'Rules for accounts that sign in with a password. GitHub, single sign-on and emailed links keep their own security.',
+  'settings.server.signIn.twoFactor': 'Two-step verification',
+  'settings.server.signIn.twoFactor.off': 'Optional',
+  'settings.server.signIn.twoFactor.off.body': 'Each person with a password decides.',
+  'settings.server.signIn.twoFactor.on': 'Required',
+  'settings.server.signIn.twoFactor.on.body':
+    'Anyone with a password must turn it on before anything else, you included.',
+  'settings.server.signIn.passwords': 'Password sign-in',
+  'settings.server.signIn.passwords.on': 'On',
+  'settings.server.signIn.passwords.on.body': 'An address and password sign in.',
+  'settings.server.signIn.passwords.off': 'Off',
+  'settings.server.signIn.passwords.off.body':
+    'Only GitHub or single sign-on. If they stop working, the server’s administrator turns passwords back on with admin:reset-password.',
+  'settings.server.signIn.passwords.needsProvider':
+    'Connect GitHub or single sign-on first: password sign-in can be turned off only while one of them works.',
+  'settings.server.signIn.saved': 'Saved. It applies from the next request.',
+  'settings.server.passwordsOffLast':
+    'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
   'settings.server.creators.title': 'Who can create workspaces',
   'settings.server.creators.description':
     'Signing in stays open: a person who is invited can always join a workspace.',

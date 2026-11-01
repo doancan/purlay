@@ -33,15 +33,21 @@ describe('the ways in', () => {
   test('each of GitHub and email is on when the server has it, off when it has not — for anybody, signed in or not', async () => {
     expect(await ask(false)).toEqual([
       200,
-      { github: true, email: false, oidc: null, signUp: 'invite-only' },
+      { github: true, email: false, oidc: null, signUp: 'invite-only', password: true },
     ]);
     const [status, body] = await ask(true);
     expect(status).toBe(200);
     expect(Value.Check(AuthMethods, body)).toBe(true);
-    expect(body).toEqual({ github: true, email: true, oidc: null, signUp: 'invite-only' });
+    expect(body).toEqual({
+      github: true,
+      email: true,
+      oidc: null,
+      signUp: 'invite-only',
+      password: true,
+    });
     expect(await ask(true, false)).toEqual([
       200,
-      { github: false, email: true, oidc: null, signUp: 'invite-only' },
+      { github: false, email: true, oidc: null, signUp: 'invite-only', password: true },
     ]);
   });
 
@@ -49,7 +55,13 @@ describe('the ways in', () => {
     const [status, body] = await ask(false, false);
     expect(status).toBe(200);
     expect(Value.Check(AuthMethods, body)).toBe(true);
-    expect(body).toEqual({ github: false, email: false, oidc: null, signUp: 'invite-only' });
+    expect(body).toEqual({
+      github: false,
+      email: false,
+      oidc: null,
+      signUp: 'invite-only',
+      password: true,
+    });
   });
 
   test('single sign-on is on when a provider is connected: its label, or null for the default the client words', async () => {
@@ -72,12 +84,14 @@ describe('the ways in', () => {
       email: false,
       oidc: { name: 'Acme SSO' },
       signUp: 'invite-only',
+      password: true,
     });
     expect(await asked(undefined)).toEqual({
       github: false,
       email: false,
       oidc: { name: null },
       signUp: 'invite-only',
+      password: true,
     });
   });
 

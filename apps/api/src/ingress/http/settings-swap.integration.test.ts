@@ -268,6 +268,7 @@ describe('integration: a change of the settings, served without a restart', () =
         email: false,
         oidc: null,
         signUp: 'invite-only',
+        password: true,
       });
       expect((await authorizeAt(server))[0]).toBe(404);
 
@@ -281,6 +282,7 @@ describe('integration: a change of the settings, served without a restart', () =
         email: false,
         oidc: null,
         signUp: 'open',
+        password: true,
       });
       // The real mounted handler, through GitHub at `GITHUB_URL`: a person signs in.
       const button = await server.app.handle(new Request(`${ORIGIN}/auth/github`));
@@ -300,6 +302,7 @@ describe('integration: a change of the settings, served without a restart', () =
         email: false,
         oidc: null,
         signUp: 'open',
+        password: true,
       });
       expect((await authorizeAt(server))[0]).toBe(404);
       expect(server.holder.current()?.auth.github).toBe(false);
@@ -318,6 +321,7 @@ describe('integration: a change of the settings, served without a restart', () =
         email: false,
         oidc: null,
         signUp: 'invite-only',
+        password: true,
       });
       expect(await askForLink(server, 'ada@example.test')).toBe(503);
       expect('signInMagicLink' in (server.holder.current()?.auth.api ?? {})).toBe(false);
@@ -329,6 +333,7 @@ describe('integration: a change of the settings, served without a restart', () =
         email: true,
         oidc: null,
         signUp: 'open',
+        password: true,
       });
       expect('signInMagicLink' in (server.holder.current()?.auth.api ?? {})).toBe(true);
       expect(await askForLink(server, 'ada@example.test')).toBe(202);
@@ -355,6 +360,7 @@ describe('integration: a change of the settings, served without a restart', () =
         email: false,
         oidc: null,
         signUp: 'open',
+        password: true,
       });
       expect('signInMagicLink' in (server.holder.current()?.auth.api ?? {})).toBe(false);
       expect(await askForLink(server, 'ada@example.test')).toBe(503);
@@ -431,6 +437,7 @@ describe('integration: a change of the settings, served without a restart', () =
       email: false,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
   });
 

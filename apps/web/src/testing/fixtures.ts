@@ -54,6 +54,7 @@ export const aSession = (): MeResponse => ({
   mayCreateWorkspace: true,
   isServerAdmin: false,
   nameFromGitHub: false,
+  mustEnrolTwoFactor: false,
 });
 
 export const aChannel = (

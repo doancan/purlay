@@ -122,7 +122,7 @@ import {
   type SetupDependencies,
 } from './setup';
 import {
-  changeSignUpPolicy,
+  changeSignInPolicy,
   changeWorkspaceCreators,
   connectGitHubApp,
   connectOidcProvider,
@@ -774,7 +774,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return '';
     })
     .post('/api/server/policy', async ({ request, body, set }) => {
-      await changeSignUpPolicy(setup, request, body);
+      await changeSignInPolicy(setup, request, body);
       set.status = 204;
       return '';
     })

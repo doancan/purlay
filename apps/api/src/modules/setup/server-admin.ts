@@ -18,6 +18,10 @@
  *   way for other people to sign in would remain, unless the administrator says so
  *   (`confirmLastChannel`). The rule is weighed inside the swap's own transaction, under its lock, from
  *   what that transaction saved — two disconnects at once cannot both pass it.
+ * - **Never nobody's way in** (D-239). Password sign-in is turned off only while GitHub or single sign-on is
+ *   connected, and the last of them is not disconnected while it is off — no confirmation lets it go. Both
+ *   rules are weighed as the last way in is, inside the swap's transaction, from what that transaction saved:
+ *   two administrators at once, one turning passwords off and one disconnecting the provider, cannot both pass.
  * - **Every change is on the trail** (`server_audit_log`), written in the transaction that saves it:
  *   who, which setting, never the value.
  */
@@ -28,6 +32,7 @@ import {
   type ProbeResult,
   type ServerSettingsAnswer,
   type ServerCreatorsRequest,
+  type ServerPolicyRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import {
@@ -54,7 +59,12 @@ import {
   type RuntimeServices,
   type SettingsChange,
 } from './runtime';
-import { readSettingsToBoot, settingsView, type SmtpSettings } from './settings';
+import {
+  readSettingsToBoot,
+  settingsView,
+  type ServerSettings,
+  type SmtpSettings,
+} from './settings';
 import { setupStatus, type ServerAdminSession } from './setup';
 
 /** What each way in being disconnected is called on the trail. */
@@ -65,13 +75,18 @@ const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc', ServerAuditActio
 };
 
 /** Why a change was refused beyond a failed swap (`409 SERVER_CHANGE_REFUSED`). */
-export type ServerChangeRefusal = 'last-channel' | 'not-connected' | 'setup-unfinished';
+export type ServerChangeRefusal =
+  'last-channel' | 'not-connected' | 'setup-unfinished' | 'no-provider' | 'passwords-off';
 
 const SENTENCES: Record<ServerChangeRefusal, string> = {
   'last-channel':
     'That would leave the administrator’s password as the only way to sign in. Say so to go ahead.',
   'not-connected': 'There is nothing of that kind connected.',
   'setup-unfinished': 'The setup is not finished yet; its steps change the settings until it is.',
+  'no-provider':
+    'Password sign-in can be turned off only while GitHub or single sign-on is connected.',
+  'passwords-off':
+    'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
 };
 
 export class ServerChangeRefused extends Error {
@@ -265,42 +280,71 @@ export const disconnect = async (
       { github: { github: null }, smtp: { smtp: null }, oidc: { oidc: null } }[channel],
       dependencies.change,
       async (transaction) => {
-        if (!confirmLastChannel) {
-          // What this transaction saved, under the swap's lock: the other way is still there, or not.
-          const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
-          if (
-            settings.github === undefined &&
-            settings.smtp === undefined &&
-            settings.oidc === undefined
-          ) {
-            throw new ServerChangeRefused('last-channel');
-          }
+        // What this transaction saved, under the swap's lock: the other way is still there, or not.
+        const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
+        if (channel !== 'smtp' && !settings.passwordSignIn && !hasProvider(settings)) {
+          throw new ServerChangeRefused('passwords-off');
+        }
+        if (
+          !confirmLastChannel &&
+          settings.github === undefined &&
+          settings.smtp === undefined &&
+          settings.oidc === undefined
+        ) {
+          throw new ServerChangeRefused('last-channel');
         }
         await record(transaction);
       },
     );
   } catch (error) {
-    // The swap wraps what its transaction threw; a refusal is the caller's, not a failed swap.
-    if (error instanceof SettingsChangeFailed && error.cause instanceof ServerChangeRefused) {
-      throw error.cause;
-    }
-    throw error;
+    throw refusalOf(error);
   }
 };
 
-/** Who may make an account, saved and served at once. */
+/** The swap wraps what its transaction threw; a refusal is the caller's, not a failed swap. */
+const refusalOf = (error: unknown): unknown =>
+  error instanceof SettingsChangeFailed && error.cause instanceof ServerChangeRefused
+    ? error.cause
+    : error;
+
+/**
+ * Whether a provider that is not the server's own signs people in: GitHub or single sign-on, read as the
+ * swap reads them — a secret the key cannot open is no way in (D-179 §6). Mail is not one: a link is the
+ * server's own relay, and the administrator's address may be one a link does not sign into (D-239).
+ */
+const hasProvider = (settings: ServerSettings): boolean =>
+  settings.github !== undefined || settings.oidc !== undefined;
+
+/**
+ * One rule of the sign-in policy, saved and served at once: who may make an account, whether a password
+ * account must turn on two-step verification, whether a password signs in (D-239). Each on its own trail's
+ * action. Password sign-in is turned off only while GitHub or single sign-on is connected, weighed in the
+ * swap's transaction from what it saved.
+ */
 export const changePolicy = async (
   dependencies: ServerAdminDependencies,
   admin: ServerAdminSession,
-  signUp: 'invite-only' | 'open',
+  change: ServerPolicyRequest,
 ): Promise<void> => {
   await afterTheSetup(dependencies.database);
-  await applySettings(
-    dependencies.database,
-    { signUp },
-    dependencies.change,
-    audited(dependencies, admin, 'server.sign_up_changed'),
-  );
+  const action: ServerAuditAction =
+    'signUp' in change
+      ? 'server.sign_up_changed'
+      : 'requireTwoFactor' in change
+        ? 'server.two_factor_requirement_changed'
+        : 'server.password_sign_in_changed';
+  const record = audited(dependencies, admin, action);
+  try {
+    await applySettings(dependencies.database, change, dependencies.change, async (transaction) => {
+      if ('passwordSignIn' in change && !change.passwordSignIn) {
+        const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
+        if (!hasProvider(settings)) throw new ServerChangeRefused('no-provider');
+      }
+      await record(transaction);
+    });
+  } catch (error) {
+    throw refusalOf(error);
+  }
 };
 
 /** Who may make a workspace, saved at once; the creating routes read it on every request. */

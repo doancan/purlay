@@ -79,6 +79,8 @@ describe('integration: the server settings (D-179 §6)', () => {
         smtp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
+        requireTwoFactor: false,
+        passwordSignIn: true,
       });
     });
   });
@@ -102,6 +104,8 @@ describe('integration: the server settings (D-179 §6)', () => {
         // Lower case, as a login is compared (D-169).
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace-h']) },
         setupCompletedAt: finished,
+        requireTwoFactor: false,
+        passwordSignIn: true,
       });
     });
   });
@@ -195,6 +199,8 @@ describe('integration: the server settings (D-179 §6)', () => {
           smtp: undefined,
           workspaceCreators: { kind: 'anyone' },
           setupCompletedAt: undefined,
+          requireTwoFactor: false,
+          passwordSignIn: true,
         });
         // Nothing was deleted or rewritten: the ciphertext waits for a new value to replace it.
         expect(await rawRow(db)).toEqual(before);
@@ -394,6 +400,8 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         smtp: { ...SMTP, allowPlaintext: true },
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace']) },
         setupCompletedAt: undefined,
+        requireTwoFactor: false,
+        passwordSignIn: true,
       });
       expect((await rawRow(db)).imported).toEqual(clock.now());
 
@@ -425,6 +433,8 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         smtp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
+        requireTwoFactor: false,
+        passwordSignIn: true,
       });
     });
   });
