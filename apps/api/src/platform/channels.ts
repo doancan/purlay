@@ -200,6 +200,19 @@ export const requireChannelsById = async (
 ): Promise<readonly ChannelContext[]> => await allOrNothing(executor, userId, channelIds);
 
 /**
+ * The channels this user can see in the workspace, each as its context: for a write across the
+ * workspace that goes through a channel-scoped one per channel — marking every channel read (D-238).
+ * An archived channel, whose memberships are kept (D-123), mints nothing, as it is seen by nobody.
+ */
+export const visibleChannelsIn = async (
+  executor: Executor,
+  context: WorkspaceContext,
+): Promise<readonly ChannelContext[]> =>
+  (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map((channel) =>
+    mint(context.userId, channel),
+  );
+
+/**
  * The channels this user can see, for a workspace-wide read.
  *
  * Search and the open-questions view narrow with `channel_id = ANY($1)` rather
@@ -210,9 +223,7 @@ export const visibleChannelIds = async (
   executor: Executor,
   context: WorkspaceContext,
 ): Promise<readonly string[]> =>
-  (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map(
-    (channel) => channel.id,
-  );
+  (await visibleChannelsIn(executor, context)).map((channel) => channel.channelId);
 
 /** The one refusal for a message that is not there for the caller; reused, never copied. */
 export const messageNotFound = (): AppError =>

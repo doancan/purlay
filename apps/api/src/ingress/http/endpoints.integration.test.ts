@@ -341,6 +341,11 @@ const STEPS: readonly Step[] = [
     spec: (c) => ({ params: { channelId: c.channelId }, json: { fromMessageId: c.rootId } }),
     status: 200,
   },
+  {
+    id: 'markAllChannelsRead',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
 
   // ── What needs the person
   {

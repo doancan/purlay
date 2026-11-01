@@ -23,6 +23,7 @@ import {
   type Channel,
   type ChannelRetention,
   type ChannelMemberList,
+  type ReadAllChannelsResponse,
   type ReadChannelResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -50,7 +51,7 @@ import {
 } from '../../modules/channels/channels';
 import { openConversation, openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
-import { markRead, markUnread } from '../../modules/channels/read-state';
+import { markAllRead, markRead, markUnread } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
 import { readChannelRetention, setChannelRetention } from '../../modules/channels/retention';
 import {
@@ -205,6 +206,33 @@ export const unreadFrom = async (
     ],
   ]);
   return outcome.state;
+};
+
+/**
+ * `PUT /api/workspaces/:workspaceId/read` — every channel the caller is in, read to its newest message
+ * (D-238). One transaction; after it commits, each channel answered is told to the caller's devices on
+ * their own topic, as a read of one channel tells them — whether or not it moved, so a repeat repairs a
+ * device that missed the first.
+ */
+export const readAllChannels = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<ReadAllChannelsResponse> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const outcomes = await atomicallyOn(database)(
+    async (transaction) => await markAllRead(transaction, clock, context),
+  );
+  await publishAfterCommit(log, [
+    outcomes.map((outcome) =>
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(bus, clock, userId, outcome.channelId, outcome.state, outcome.version),
+      ),
+    ),
+  ]);
+  return { data: outcomes.map(({ channelId, state }) => ({ channelId, state })) };
 };
 
 /**

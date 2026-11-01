@@ -20,7 +20,8 @@ import { sql, type RawBuilder, type Transaction } from '@purlay/db';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
-import type { ChannelContext } from '../../platform/channels';
+import { visibleChannelsIn, type ChannelContext } from '../../platform/channels';
+import type { WorkspaceContext } from '../../platform/tenancy';
 
 /**
  * The notifications still waiting for a person in one channel, of the kinds that need them: what
@@ -183,6 +184,78 @@ export const markRead = async (
       unreadMentionCount: updated.unread_mention_count,
     },
   };
+};
+
+/** One channel "mark every channel read" answered for, and what became of it. */
+export interface ChannelReadOutcome extends ReadOutcome {
+  readonly channelId: string;
+}
+
+/**
+ * "Mark every channel read" (D-238): each channel of the workspace the caller is in and can see, with
+ * anything unread, is read to its newest message — a reply included, since replies count as unread
+ * too — by `markRead`, so the notifications it reads and the numbers it counts are a read's, and a
+ * reply whose notification still waits stays unread (D-147).
+ *
+ * **The memberships are locked first, in one order** — by channel, as the inbox's read takes them —
+ * so two of these at once, or one beside a read of one channel, take turns instead of each holding a
+ * row the other waits for. A channel with nothing unread is not touched and not answered; one whose
+ * only unread is a waiting reply is answered as it is, with nothing moved, so the client can put back
+ * what it painted.
+ */
+export const markAllRead = async (
+  executor: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+): Promise<readonly ChannelReadOutcome[]> => {
+  const visible = new Map(
+    (await visibleChannelsIn(executor, context)).map((channel) => [channel.channelId, channel]),
+  );
+  if (visible.size === 0) return [];
+  const waiting = await executor
+    .selectFrom('channel_members')
+    .select([
+      'channel_id',
+      'last_read_message_id',
+      'unread_count',
+      'unread_mention_count',
+      'state_version',
+    ])
+    .where('user_id', '=', context.userId)
+    .where('channel_id', 'in', [...visible.keys()])
+    // A mention is an unread message first (I-6, held by the table's check), so this is everything.
+    .where('unread_count', '>', 0)
+    .orderBy('channel_id')
+    .forUpdate()
+    .execute();
+
+  const outcomes: ChannelReadOutcome[] = [];
+  for (const member of waiting) {
+    const channel = visible.get(member.channel_id);
+    if (channel === undefined) continue;
+    const newest = await executor
+      .selectFrom('messages')
+      .select('id')
+      .where('channel_id', '=', member.channel_id)
+      .orderBy('id', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    // A count with no message left to read past has no position to move to: answered as it is.
+    const outcome: ReadOutcome =
+      newest === undefined
+        ? {
+            moved: false,
+            version: member.state_version,
+            state: {
+              lastReadMessageId: member.last_read_message_id,
+              unreadCount: member.unread_count,
+              unreadMentionCount: member.unread_mention_count,
+            },
+          }
+        : await markRead(executor, clock, channel, newest.id);
+    outcomes.push({ channelId: member.channel_id, ...outcome });
+  }
+  return outcomes;
 };
 
 /** Below every UUIDv7: counting "past the position" with no position counts the whole channel. */

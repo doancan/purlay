@@ -517,6 +517,17 @@ export const MarkUnreadRequest = FromClient({ fromMessageId: Uuid });
 export type MarkUnreadRequest = Static<typeof MarkUnreadRequest>;
 
 /**
+ * `PUT /api/workspaces/:workspaceId/read` — every channel the caller is in, read to its newest message
+ * (D-238). No body. The answer is each channel that had anything unread, as its row now is — a reply
+ * whose notification still waits keeps counting (D-147) — so the client replaces what it painted.
+ * Bounded by the caller's memberships in one workspace, so not paged.
+ */
+export const ReadAllChannelsResponse = Type.Object({
+  data: Type.Array(Type.Object({ channelId: Uuid, state: ChannelState })),
+});
+export type ReadAllChannelsResponse = Static<typeof ReadAllChannelsResponse>;
+
+/**
  * `PUT /api/messages/:messageId/thread/read` — the newest reply the person has seen in the thread
  * of this root. A reply is read here, not by the channel's read position (D-147): the caller's
  * notifications for this thread's replies up to and including it are read. Nothing is stored but

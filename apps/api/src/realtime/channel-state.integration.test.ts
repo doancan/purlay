@@ -261,6 +261,49 @@ describe('integration: read state follows the person across their devices', () =
     expect(states[1]?.data).toEqual(states[0]?.data);
     await laptop.close();
   });
+
+  test('marking every channel read tells each of the person’s sockets of each channel, and nobody else (D-238)', async () => {
+    const room = await aRoom();
+    const second = (
+      (await (
+        await http('POST', `/api/workspaces/${room.workspaceId}/channels`, room.alice.cookie, {
+          name: 'dev',
+        })
+      ).json()) as { id: string }
+    ).id;
+    expect((await http('POST', `/api/channels/${second}/join`, room.bob.cookie)).ok).toBe(true);
+    const laptop = await connect(room.alice.cookie);
+    const phone = await connect(room.alice.cookie);
+    const bob = await connect(room.bob.cookie);
+    const inFirst = await post(room.bob.cookie, room.channelId, 3);
+    const inSecond = await post(room.bob.cookie, second, 4);
+
+    expect(
+      (await http('PUT', `/api/workspaces/${room.workspaceId}/read`, room.alice.cookie)).status,
+    ).toBe(200);
+
+    for (const device of [laptop, phone]) {
+      await device.until(
+        () => readStates(device, inFirst).length > 0 && readStates(device, inSecond).length > 0,
+        'both channels read',
+      );
+      expect(readStates(device, inFirst).map((f) => f.data)).toEqual([
+        {
+          channelId: room.channelId,
+          state: { lastReadMessageId: inFirst, unreadCount: 0, unreadMentionCount: 0 },
+        },
+      ]);
+      expect(readStates(device, inSecond).map((f) => f.data)).toEqual([
+        {
+          channelId: second,
+          state: { lastReadMessageId: inSecond, unreadCount: 0, unreadMentionCount: 0 },
+        },
+      ]);
+    }
+    await settle(bob);
+    expect(frames(bob, 'CHANNEL_STATE')).toHaveLength(0);
+    for (const client of [laptop, phone, bob]) await client.close();
+  });
 });
 
 describe('integration: a direct message appears for the other person', () => {
