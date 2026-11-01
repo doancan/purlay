@@ -49,7 +49,13 @@ const signedOut = (overrides: Partial<Api>): Api => {
         ? Promise.resolve(aSession())
         : Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
     authMethods: () =>
-      Promise.resolve({ github: true, email: true, oidc: null, signUp: 'invite-only' }),
+      Promise.resolve({
+        github: true,
+        email: true,
+        oidc: null,
+        signUp: 'invite-only',
+        password: true,
+      }),
     ...overrides,
     ...(overrides.consumeEmailSignIn === undefined
       ? {}

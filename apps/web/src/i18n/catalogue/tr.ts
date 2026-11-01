@@ -119,6 +119,10 @@ export const tr = {
   'app.failed.home': 'Ana sayfaya dön',
 
   // ── Giriş ───────────────────────────────────────────────────────────────
+  'enrolTwoFactor.title': 'İki adımlı doğrulamayı aç',
+  'enrolTwoFactor.lede':
+    'Bu sunucu parolayla giriş yapan her hesapta bunu zorunlu tutuyor. Devam etmek için aç; oturumun açık kalır.',
+  'enrolTwoFactor.signOut': 'Çıkış yap',
   'signIn.title': 'Purlay’e giriş yap',
   'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
@@ -190,6 +194,8 @@ export const tr = {
     other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden dene.',
   },
   'signIn.password.unreachable': 'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'signIn.password.off':
+    'Bu sunucu artık parolayla giriş kabul etmiyor. Yukarıdaki yollardan birini kullan.',
   'signIn.password.failed': 'Giriş tamamlanamadı. Biraz sonra yeniden dene.',
   'signIn.code.form': 'İki adımlı doğrulama',
   'signIn.code.appHint': 'Doğrulama uygulamandaki {digits} haneli kodu gir.',
@@ -1471,6 +1477,7 @@ export const tr = {
   // ── Hatalar: her neden için bir cümle, bütün ekranlarda ortak ──────────
   'failure.network': 'Bağlantını kontrol edip tekrar dene.',
   'failure.session': 'Oturumun sona erdi. Devam etmek için tekrar giriş yap.',
+  'failure.twoFactor': 'Bu sunucu önce iki adımlı doğrulamayı açmanı istiyor.',
   'failure.reauthenticate':
     'Çıkış yapıp yeniden giriş yap, sonra tekrar dene: bu işlem yeni bir giriş ister.',
   'failure.notAMember': 'Bu kanalda değilsin. Buraya yazmak için katıl, sonra tekrar dene.',
@@ -1625,6 +1632,8 @@ export const tr = {
     'Parolandan sonra, giriş yaparken telefonundaki bir doğrulama uygulamasının kodu da istenir.',
   'settings.account.twoFactor.otherWays':
     'Parolanı korur. GitHub, çoklu oturum açma ya da e-postayla gelen bağlantıyla girişte o sağlayıcının kendi güvenliği geçerlidir.',
+  'settings.account.twoFactor.required':
+    'Bu sunucu parolası olan hesaplarda bunu zorunlu tutuyor; bu yüzden açık kalır.',
   'settings.account.twoFactor.status': 'Durum',
   'settings.account.twoFactor.on': 'Açık',
   'settings.account.twoFactor.off': 'Kapalı',
@@ -2232,6 +2241,26 @@ export const tr = {
   'settings.server.accounts.lift': 'Askıyı kaldır',
   'settings.server.accounts.ask':
     '{name} askıya alınsın mı? Bütün cihazlarda oturumu kapanır ve sen askıyı kaldırana kadar giriş yapamaz.',
+  'settings.server.signIn.title': 'Giriş yöntemi',
+  'settings.server.signIn.description':
+    'Parolayla giriş yapan hesaplar için kurallar. GitHub, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',
+  'settings.server.signIn.twoFactor': 'İki adımlı doğrulama',
+  'settings.server.signIn.twoFactor.off': 'İsteğe bağlı',
+  'settings.server.signIn.twoFactor.off.body': 'Parolası olan herkes kendisi karar verir.',
+  'settings.server.signIn.twoFactor.on': 'Zorunlu',
+  'settings.server.signIn.twoFactor.on.body':
+    'Parolası olan herkes, sen de dahil, başka bir şey yapmadan önce bunu açmalı.',
+  'settings.server.signIn.passwords': 'Parolayla giriş',
+  'settings.server.signIn.passwords.on': 'Açık',
+  'settings.server.signIn.passwords.on.body': 'E-posta adresi ve parolayla giriş yapılır.',
+  'settings.server.signIn.passwords.off': 'Kapalı',
+  'settings.server.signIn.passwords.off.body':
+    'Yalnızca GitHub ya da tek oturum açma. Bunlar çalışmazsa sunucu yöneticisi admin:reset-password ile parolaları yeniden açar.',
+  'settings.server.signIn.passwords.needsProvider':
+    'Önce GitHub’ı ya da tek oturum açmayı bağla: parolayla giriş ancak bunlardan biri çalışırken kapatılabilir.',
+  'settings.server.signIn.saved': 'Kaydedildi. Bir sonraki istekten itibaren geçerli.',
+  'settings.server.passwordsOffLast':
+    'Parolayla giriş kapalı ve bu, GitHub ile tek oturum açmanın sonuncusu: kimse giriş yapamaz. Önce parolaları aç.',
   'settings.server.creators.title': 'Kimler çalışma alanı açabilir',
   'settings.server.creators.description':
     'Giriş açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',

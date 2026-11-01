@@ -21,7 +21,13 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   // The sign-in card asks on every visit, so a test of anything that lands there need not say so:
   // GitHub alone, as a server without mail answers. A test of email sign-in says otherwise.
   authMethods: () =>
-    Promise.resolve({ github: true, email: false, oidc: null, signUp: 'invite-only' }),
+    Promise.resolve({
+      github: true,
+      email: false,
+      oidc: null,
+      signUp: 'invite-only',
+      password: true,
+    }),
   // A server already set up, as the sign-in card's tests assume.
   setupStatus: () => Promise.resolve({ open: false, appUrl: 'http://localhost' }),
   authorizeNative: unexpected('authorizeNative'),
@@ -135,6 +141,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
       github: { login: 'ada' },
       oidc: false,
       twoFactor: false,
+      twoFactorRequired: false,
     }),
   // The device list is on the same page as the sign-in card: this browser alone, unless a test says.
   mySessions: () =>

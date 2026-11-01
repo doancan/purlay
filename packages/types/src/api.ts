@@ -108,6 +108,13 @@ export const MeResponse = Type.Object({
    * is its own to set (`displayName`, `PATCH /api/me/profile`).
    */
   nameFromGitHub: Type.Boolean(),
+  /**
+   * Whether the server holds the caller back until they turn on two-step verification (D-239): their account
+   * signs in with a password, the server requires the second step of such an account, and theirs is off. Every
+   * other route answers `403 TWO_FACTOR_REQUIRED` until it is on; the client shows nothing but the way to turn
+   * it on, and signing out.
+   */
+  mustEnrolTwoFactor: Type.Boolean(),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -1488,6 +1495,11 @@ export const AuthMethods = Type.Object({
   oidc: Type.Union([Type.Object({ name: Type.Union([Type.String(), Type.Null()]) }), Type.Null()]),
   /** Who may make an account: anybody, or only the holder of an invitation (R51). */
   signUp: Type.Union([Type.Literal('open'), Type.Literal('invite-only')]),
+  /**
+   * Whether an address and a password sign in here: `false` where the server's administrator turned password
+   * sign-in off (D-239), and the sign-in screen then draws no password form.
+   */
+  password: Type.Boolean(),
 });
 export type AuthMethods = Static<typeof AuthMethods>;
 
@@ -1627,6 +1639,11 @@ export const MySignIn = Type.Object({
   oidc: Type.Boolean(),
   /** Whether a password sign-in asks for a code from an authenticator app too (D-236). */
   twoFactor: Type.Boolean(),
+  /**
+   * Whether the server requires it of this account (D-239): it has a password, password sign-in is on, and the
+   * server's administrator asks the second step of every such account — so it cannot be turned off.
+   */
+  twoFactorRequired: Type.Boolean(),
 });
 export type MySignIn = Static<typeof MySignIn>;
 
@@ -1774,10 +1791,16 @@ export const ServerDisconnectRequest = FromClient({
 });
 export type ServerDisconnectRequest = Static<typeof ServerDisconnectRequest>;
 
-/** `POST /api/server/policy` — who may make an account. */
-export const ServerPolicyRequest = FromClient({
-  signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]),
-});
+/**
+ * `POST /api/server/policy` — one of the server's rules about signing in, each changed on its own so two
+ * administrators changing two rules at once never undo each other: who may make an account; whether an account
+ * that signs in with a password must turn on two-step verification; whether a password signs in at all (D-239).
+ */
+export const ServerPolicyRequest = Type.Union([
+  FromClient({ signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]) }),
+  FromClient({ requireTwoFactor: Type.Boolean() }),
+  FromClient({ passwordSignIn: Type.Boolean() }),
+]);
 export type ServerPolicyRequest = Static<typeof ServerPolicyRequest>;
 
 /** The longest list of workspace creators the page takes, and a GitHub login's longest. */

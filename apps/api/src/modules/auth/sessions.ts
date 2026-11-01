@@ -170,16 +170,35 @@ export const sessionFromHeaders = async (
 };
 
 /**
+ * What a session may reach while its person owes the server two-step verification (D-239): `everything` is
+ * refused until it is on; `enrolment` is only what turning it on needs — who they are, how they sign in, and
+ * signing out everywhere.
+ */
+export type SessionReach = 'everything' | 'enrolment';
+
+/** The refusal of a session whose person must turn on two-step verification first (D-239). */
+export const twoFactorRequired = (): AppError =>
+  new AppError({
+    code: 'TWO_FACTOR_REQUIRED',
+    message: 'Turn on two-step verification first.',
+  });
+
+/**
  * The same, as a refusal. A missing cookie and an invalid one produce the same `401`: telling them
- * apart would tell a caller whether a token they hold was ever real (D-60).
+ * apart would tell a caller whether a token they hold was ever real (D-60). A session whose person owes
+ * two-step verification is `403 TWO_FACTOR_REQUIRED` (D-239), unless what it asks is part of turning it on.
  */
 export const requireSessionFromHeaders = async (
   auth: Auth,
   headers: Headers,
+  reach: SessionReach = 'everything',
 ): Promise<SessionOwner> => {
   const owner = await sessionFromHeaders(auth, headers);
   if (owner === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  }
+  if (reach === 'everything' && (await auth.owesTwoFactor(owner.userId))) {
+    throw twoFactorRequired();
   }
   return owner;
 };

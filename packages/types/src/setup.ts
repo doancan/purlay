@@ -99,6 +99,10 @@ export type SetupStepRefusal = FinishProblem | 'admin-exists';
  */
 export interface ServerSettingsView {
   readonly signUp: 'invite-only' | 'open';
+  /** Whether an account that signs in with a password must turn on two-step verification (D-239). */
+  readonly requireTwoFactor: boolean;
+  /** Whether an address and a password sign in at all; off only while GitHub or single sign-on is (D-239). */
+  readonly passwordSignIn: boolean;
   readonly github: {
     readonly clientId: string;
     readonly clientSecret: { readonly set: boolean };

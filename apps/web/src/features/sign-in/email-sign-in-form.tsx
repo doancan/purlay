@@ -1,8 +1,8 @@
 /**
  * Signing in with an address, under GitHub on the sign-in card.
  *
- * **The password** is always offered (`withPassword`): the setup's administrator has one, on a server
- * with or without mail (R30). It is the library's route, answered in one sentence that never says whether
+ * **The password** is offered (`withPassword`) unless the server's administrator turned password sign-in off
+ * (D-239): the setup's administrator has one, on a server with or without mail (R30). It is the library's route, answered in one sentence that never says whether
  * the address exists: a wrong address, a wrong password and an account with no password are the same
  * "wrong email or password". A wait is told in minutes, from `Retry-After`. An account with two-step
  * verification on is asked for its code after a right password (`SecondStepForm`, D-236).
@@ -125,6 +125,11 @@ export const EmailSignInForm = ({
         });
       }
       if (caught.code === 'NETWORK') return t('signIn.password.unreachable');
+      // The administrator turned password sign-in off since this page asked how to sign in (D-239).
+      if (caught.code === 'PASSWORD_SIGN_IN_DISABLED') {
+        void client.invalidateQueries({ queryKey: keys.authMethods });
+        return t('signIn.password.off');
+      }
       // One sentence for an address nobody has, a wrong password and a password the address has none
       // of; a shape the library would not read is no more telling.
       if (caught.status === 401 || caught.status === 400) return t('signIn.password.wrong');

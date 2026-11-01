@@ -36,7 +36,13 @@ const visit = async (
         ? Promise.resolve(aSession())
         : Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
     authMethods: () =>
-      Promise.resolve({ github: false, email: false, oidc: null, signUp: 'invite-only' }),
+      Promise.resolve({
+        github: false,
+        email: false,
+        oidc: null,
+        signUp: 'invite-only',
+        password: true,
+      }),
     ...overrides,
     ...(overrides.signInWithPassword === undefined
       ? {}
@@ -282,5 +288,35 @@ describe('the second step, for an account with two-step verification on (D-236)'
     expect(view.getByText('Doğrulama uygulamandaki 6 haneli kodu gir.')).toBeDefined();
     await enter(view, 'Kod', '123456', 'Doğrula');
     expect(view.getByRole('alert').textContent).toContain('Bu kod doğru değil. Yeniden dene.');
+  });
+
+  test('a server whose administrator turned passwords off draws no password form (D-239)', async () => {
+    const view = await visit({
+      authMethods: () =>
+        Promise.resolve({
+          github: true,
+          email: false,
+          oidc: null,
+          signUp: 'invite-only',
+          password: false,
+        }),
+    });
+    expect(view.queryByRole('form', { name: 'Sign in with a password' })).toBeNull();
+    expect(view.queryByLabelText('Password')).toBeNull();
+    expect(view.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('a password refused because passwords were turned off since the page asked says so', async () => {
+    const view = await visit({
+      signInWithPassword: () =>
+        Promise.reject(new LibraryFailure(403, 'PASSWORD_SIGN_IN_DISABLED')),
+    });
+    await submit(view, { email: 'admin@example.test', password: 'a long and unusual phrase' });
+    expect(
+      view.getByText('This server no longer signs in with a password. Use one of the ways above.'),
+    ).toBeDefined();
+    view.unmount();
   });
 });

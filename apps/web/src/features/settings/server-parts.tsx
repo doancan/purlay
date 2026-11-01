@@ -41,6 +41,13 @@ export const ChangeFailure = ({ failure }: { readonly failure: unknown }): React
   if (isSetupFailure(failure) && failure.reason === 'setup-unfinished') {
     return <Note tone="warn">{t('settings.server.setupUnfinished')}</Note>;
   }
+  // The sign-in policy's two refusals (D-239): nobody would be left a way in.
+  if (isSetupFailure(failure) && failure.reason === 'no-provider') {
+    return <Note tone="warn">{t('settings.server.signIn.passwords.needsProvider')}</Note>;
+  }
+  if (isSetupFailure(failure) && failure.reason === 'passwords-off') {
+    return <Note tone="warn">{t('settings.server.passwordsOffLast')}</Note>;
+  }
   return <FailureNote failure={failure} />;
 };
 
@@ -97,6 +104,12 @@ export const DisconnectDialog = ({
     (other) => other !== (channel === 'smtp' ? 'email' : channel) && view.channels[other],
   );
   const last = !otherServes || forced;
+  // Passwords are off and this is the last of GitHub and single sign-on: nobody could sign in, and the server
+  // refuses whatever is confirmed (D-239). Said before the button, which is not offered.
+  const lastProvider =
+    channel !== 'smtp' &&
+    !view.settings.passwordSignIn &&
+    !(['github', 'oidc'] as const).some((other) => other !== channel && view.channels[other]);
 
   const disconnect = async (): Promise<void> => {
     setBusy(true);
@@ -134,20 +147,26 @@ export const DisconnectDialog = ({
           >
             {t('common.cancel')}
           </Button>
-          <Button
-            variant="danger"
-            busy={busy}
-            onClick={() => {
-              void disconnect();
-            }}
-          >
-            {last ? t('settings.server.disconnectAnyway') : t('settings.server.disconnect')}
-          </Button>
+          {!lastProvider && (
+            <Button
+              variant="danger"
+              busy={busy}
+              onClick={() => {
+                void disconnect();
+              }}
+            >
+              {last ? t('settings.server.disconnectAnyway') : t('settings.server.disconnect')}
+            </Button>
+          )}
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        {last && <Note tone="warn">{t('settings.server.lastWay')}</Note>}
+        {lastProvider ? (
+          <Note tone="warn">{t('settings.server.passwordsOffLast')}</Note>
+        ) : (
+          last && <Note tone="warn">{t('settings.server.lastWay')}</Note>
+        )}
         {failure !== null && <ChangeFailure failure={failure} />}
       </div>
     </Dialog>

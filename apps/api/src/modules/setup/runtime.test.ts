@@ -21,6 +21,8 @@ const NOTHING_SET: ServerSettings = {
   smtp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
+  requireTwoFactor: false,
+  passwordSignIn: true,
 };
 
 const LETTER: MailMessage = { to: 'ada@example.test', subject: 's', text: 't', html: '<p>t</p>' };

@@ -475,8 +475,8 @@ export const readMySignIn = async (
   dependencies: Pick<AuthDependencies, 'auth' | 'database'>,
   request: Request,
 ): Promise<MySignIn> => {
-  const { userId } = await requireSession(dependencies.auth, request);
-  return await mySignIn(dependencies.database, userId);
+  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  return await mySignIn(dependencies.database, userId, dependencies.auth.signInPolicy);
 };
 
 export const signOut = async (
@@ -493,7 +493,7 @@ export const signOutEverywhere = async (
   dependencies: SignOutDependencies,
   request: Request,
 ): Promise<AuthResponse> => {
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
   await signOutEverywhereOf(dependencies, userId);
   return { setCookie: [clearedSessionCookie()] };
 };

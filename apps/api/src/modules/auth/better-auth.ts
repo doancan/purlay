@@ -100,6 +100,19 @@ export interface AuthSettings {
   readonly signUp: 'invite-only' | 'open';
 }
 
+/**
+ * The server's sign-in policy (D-239), as its administrator set it: whether an account that signs in with a
+ * password must turn on two-step verification before anything else answers it, and whether a password signs
+ * in at all. The requirement asks nothing while passwords are off: the password is then no way in to protect.
+ */
+export interface SignInPolicy {
+  readonly requireTwoFactor: boolean;
+  readonly passwordSignIn: boolean;
+}
+
+/** Neither rule on: what every server was before D-239, and what a test's instance is unless it says. */
+const NO_SIGN_IN_POLICY: SignInPolicy = { requireTwoFactor: false, passwordSignIn: true };
+
 export interface AuthDependencies {
   readonly database: Executor;
   readonly baseUrl: string;
@@ -112,6 +125,11 @@ export interface AuthDependencies {
   readonly mailer?: Outbox | undefined;
   readonly log: Logger;
   readonly settings: AuthSettings;
+  /**
+   * The sign-in policy (D-239). The server always passes its settings' (`runtimeServicesFrom`); absent is
+   * neither rule on, which is what a test's instance needs unless it is about the policy.
+   */
+  readonly signInPolicy?: SignInPolicy | undefined;
   /**
    * Where GitHub is (`GITHUB_URL`, `GITHUB_API_URL`): github.com and its API, an Enterprise Server, or
    * a stand-in on this machine. The deployment's, never a setting (D-179).
@@ -828,6 +846,8 @@ const CHANGE_PASSWORD = '/change-password';
 /** The code of the answer to a change of password whose other sessions could not be ended. */
 const OTHER_SESSIONS_NOT_ENDED = 'OTHER_SESSIONS_NOT_ENDED';
 const RESET_PASSWORD = '/reset-password';
+/** The code of the answer to a password sign-in where the server turned passwords off (D-239). */
+const PASSWORD_SIGN_IN_DISABLED = 'PASSWORD_SIGN_IN_DISABLED';
 
 /** Two-step verification's routes (D-236), as the library's hooks see them named. */
 const ENABLE_TWO_FACTOR = '/two-factor/enable';
@@ -1052,6 +1072,15 @@ export type Auth = ReturnType<typeof betterAuth> & {
    * client's address under `CLIENT_ADDRESS_HEADER`, as ingress sets it.
    */
   readonly passwordSignIn: (email: string, password: string, headers: Headers) => Promise<Response>;
+  /** The sign-in policy this instance was built with (D-239). */
+  readonly signInPolicy: SignInPolicy;
+  /**
+   * Whether the server holds this person back until they turn on two-step verification (D-239): the policy
+   * requires it, a password signs in, the account has one, and its second step is off. Read from the database
+   * each time, so turning it on lifts the hold from the next request, on the same session. No read at all
+   * where the policy asks nothing.
+   */
+  readonly owesTwoFactor: (userId: string) => Promise<boolean>;
 };
 
 export const createAuth = (deps: AuthDependencies): Auth => {
@@ -1059,6 +1088,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     throw new Error(`the auth secret must be at least ${String(SECRET_BYTES)} bytes`);
   }
   const { settings, log, mailer } = deps;
+  const policy = deps.signInPolicy ?? NO_SIGN_IN_POLICY;
+  /** The requirement in force: on, and a password a way in for it to protect. */
+  const twoFactorRequired = policy.requireTwoFactor && policy.passwordSignIn;
   const get = deps.fetch ?? fetch;
   const endpoints = githubEndpoints(deps.githubUrls);
 
@@ -1196,6 +1228,26 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           },
         }
       : undefined;
+  };
+
+  /**
+   * What the sign-in policy refuses of the library's routes (D-239), before anything is weighed or counted: a
+   * password sign-in where passwords are off — the same answer whatever the address, so it says nothing of any
+   * account — and turning two-step verification off where the server requires it.
+   */
+  const policyRefusal = (path: string): void => {
+    if (path === SIGN_IN_WITH_PASSWORD && !policy.passwordSignIn) {
+      throw new APIError('FORBIDDEN', {
+        code: PASSWORD_SIGN_IN_DISABLED,
+        message: 'This server does not sign in with a password.',
+      });
+    }
+    if (path === DISABLE_TWO_FACTOR && twoFactorRequired) {
+      throw new APIError('FORBIDDEN', {
+        code: 'TWO_FACTOR_REQUIRED',
+        message: 'This server requires two-step verification of an account with a password.',
+      });
+    }
   };
 
   /** The name an authenticator app files the key under (D-236): this server's, so two servers' keys differ. */
@@ -1371,6 +1423,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       // between a person and signing out: a read of ours that fails is written down and the request
       // goes on, told by the library's own hooks alone.
       before: createAuthMiddleware(async (ctx) => {
+        policyRefusal(ctx.path);
         const round = signInRounds.getStore();
         const changed = await passwordWeighed(ctx.path, ctx.headers, ctx.body, round);
         if (round !== undefined && ctx.path === CHANGE_PASSWORD) {
@@ -1770,6 +1823,20 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     github: settings.github !== undefined,
     oidc: settings.oidc === undefined ? undefined : { name: settings.oidc.name },
     signUp: settings.signUp,
+    signInPolicy: policy,
+    owesTwoFactor: async (userId): Promise<boolean> => {
+      if (!twoFactorRequired) return false;
+      const owing = await deps.database
+        .selectFrom('users')
+        .innerJoin('accounts', 'accounts.user_id', 'users.id')
+        .select('users.id')
+        .where('users.id', '=', userId)
+        .where('users.two_factor_enabled', '=', false)
+        .where('accounts.provider_id', '=', 'credential')
+        .where('accounts.password', 'is not', null)
+        .executeTakeFirst();
+      return owing !== undefined;
+    },
     passwordSignIn: async (email, password, headers): Promise<Response> => {
       const round: SignInRound = { profile: undefined, made: false };
       return await signInRounds.run(

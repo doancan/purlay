@@ -150,6 +150,7 @@ describe('integration: a server built from its settings', () => {
         email: true,
         oidc: null,
         signUp: 'open',
+        password: true,
       });
       services.mail?.post(
         { to: 'ada@example.test', subject: 'A letter', text: 'words', html: '<p>words</p>' },
@@ -177,6 +178,7 @@ describe('integration: a server built from its settings', () => {
       email: false,
       oidc: null,
       signUp: 'open',
+      password: true,
     });
   });
 
@@ -195,6 +197,7 @@ describe('integration: a server built from its settings', () => {
       email: false,
       oidc: null,
       signUp: 'open',
+      password: true,
     });
     const button = await app.handle(new Request(`${ORIGIN}/auth/github`));
     expect([button.status, button.headers.get('location')]).toEqual([404, null]);

@@ -26,6 +26,8 @@ const NOTHING_SET: ServerSettings = {
   smtp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
+  requireTwoFactor: false,
+  passwordSignIn: true,
 };
 
 const ORIGIN = 'https://purlay.test';

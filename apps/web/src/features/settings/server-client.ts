@@ -6,7 +6,12 @@
  * `fetch` is an argument, so a test answers with whatever it likes. It shares the wizard's caller and its
  * guards, so the probe's answer is read exactly as the wizard reads it.
  */
-import type { ProbeResult, ServerAccount, ServerSettingsAnswer } from '@purlay/types';
+import type {
+  ProbeResult,
+  ServerAccount,
+  ServerPolicyRequest,
+  ServerSettingsAnswer,
+} from '@purlay/types';
 import { isProbeResult, isRecord, jsonCaller, malformed, type SetupFetch } from '../setup/client';
 
 interface RelayTry {
@@ -36,7 +41,8 @@ export interface ServerClient {
     channel: 'github' | 'smtp' | 'oidc',
     confirmLastChannel: boolean,
   ) => Promise<void>;
-  readonly policy: (signUp: 'invite-only' | 'open') => Promise<void>;
+  /** One rule of the sign-in policy: who may make an account, two-step verification, passwords (D-239). */
+  readonly policy: (change: ServerPolicyRequest) => Promise<void>;
   readonly creators: (workspaceCreators: CreatorsChoice) => Promise<void>;
   /** Accounts found by name, username or address (D-233). */
   readonly accounts: (words: string, signal?: AbortSignal) => Promise<readonly ServerAccount[]>;
@@ -89,8 +95,8 @@ export const createServerClient = (fetchFn: SetupFetch): ServerClient => {
         confirmLastChannel ? { confirmLastChannel: true } : undefined,
       );
     },
-    policy: async (signUp): Promise<void> => {
-      await call('POST', '/api/server/policy', { signUp });
+    policy: async (change): Promise<void> => {
+      await call('POST', '/api/server/policy', change);
     },
     creators: async (workspaceCreators): Promise<void> => {
       await call('POST', '/api/server/creators', { workspaceCreators });

@@ -29,7 +29,8 @@ const EVERY_FAILURE = SignInFailure.anyOf.map((literal) => literal.const);
 const signedOut = (mail: boolean, github = true): ReturnType<typeof anApi> =>
   anApi({
     me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-    authMethods: () => Promise.resolve({ github, email: mail, oidc: null, signUp: 'invite-only' }),
+    authMethods: () =>
+      Promise.resolve({ github, email: mail, oidc: null, signUp: 'invite-only', password: true }),
   });
 
 /** The one sentence the screen says about the way here, or null when it says none. */
@@ -147,7 +148,14 @@ describe('what the screen offers is what the server has connected', () => {
       anApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
         authMethods: () =>
-          Promise.resolve({ github: false, email: false, oidc, signUp: 'invite-only', ...over }),
+          Promise.resolve({
+            github: false,
+            email: false,
+            oidc,
+            signUp: 'invite-only',
+            password: true,
+            ...over,
+          }),
       });
 
     for (const [locale, label] of [
@@ -208,7 +216,13 @@ describe('what the screen offers is what the server has connected', () => {
       const api = anApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
         authMethods: () =>
-          Promise.resolve({ github: true, email: true, oidc: null, signUp: policy }),
+          Promise.resolve({
+            github: true,
+            email: true,
+            oidc: null,
+            signUp: policy,
+            password: true,
+          }),
       });
       const view = await open(api);
       if (policy === 'open') {
@@ -266,7 +280,7 @@ describe('what the screen offers is what the server has connected', () => {
     expect(view.queryByRole('link', { name: GITHUB })).toBeNull();
     expect(view.queryByText('This server is not set up yet')).toBeNull();
     await act(async () => {
-      answer({ github: true, email: false, oidc: null, signUp: 'invite-only' });
+      answer({ github: true, email: false, oidc: null, signUp: 'invite-only', password: true });
       await Promise.resolve();
     });
     await settle();
@@ -281,7 +295,13 @@ describe('what the screen offers is what the server has connected', () => {
         tries += 1;
         return tries === 1
           ? Promise.reject(new ApiError(404, 'ROUTE_NOT_FOUND', 'broke'))
-          : Promise.resolve({ github: false, email: true, oidc: null, signUp: 'invite-only' });
+          : Promise.resolve({
+              github: false,
+              email: true,
+              oidc: null,
+              signUp: 'invite-only',
+              password: true,
+            });
       },
     });
     const again = await renderApp(<Outlet />, { path: '/sign-in', api: failing });
@@ -314,7 +334,13 @@ describe('what the screen offers is what the server has connected', () => {
         tries += 1;
         return tries === 1
           ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
-          : Promise.resolve({ github: true, email: false, oidc: null, signUp: 'invite-only' });
+          : Promise.resolve({
+              github: true,
+              email: false,
+              oidc: null,
+              signUp: 'invite-only',
+              password: true,
+            });
       },
     });
     const view = await renderApp(<Outlet />, { path: '/sign-in', api: hiccup });
