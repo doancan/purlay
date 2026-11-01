@@ -25,7 +25,9 @@ import {
   GitHubAppStatus,
   GitHubIssueOutcome,
   GitHubRepositoryList,
+  GitHubWorkLink,
   type CreateGitHubIssueRequest,
+  type LinkGitHubWorkRequest,
   MissedMailSetting,
   type SetMissedMailRequest,
   AuditPage,
@@ -479,6 +481,11 @@ export interface Api {
     messageId: string,
     input: CreateGitHubIssueRequest,
   ) => Promise<GitHubIssueOutcome>;
+  /** Points a thread at an issue or pull request that exists (D-246 §3). */
+  readonly linkGitHubWork: (
+    messageId: string,
+    input: LinkGitHubWorkRequest,
+  ) => Promise<GitHubWorkLink>;
   /** An owner: where GitHub's installation screen is. */
   readonly startGitHubInstallation: (workspaceId: string) => Promise<GitHubAppRedirect>;
   readonly removeGitHubInstallation: (workspaceId: string) => Promise<void>;
@@ -1109,6 +1116,13 @@ export const createApi = (http: Http): Api => {
         'POST',
         `/api/messages/${at(messageId)}/github-issue`,
         GitHubIssueOutcome,
+        options({ body: input }),
+      ),
+    linkGitHubWork: (messageId, input) =>
+      http.request(
+        'POST',
+        `/api/messages/${at(messageId)}/github-link`,
+        GitHubWorkLink,
         options({ body: input }),
       ),
     startGitHubInstallation: (workspaceId) =>

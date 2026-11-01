@@ -455,6 +455,7 @@ export const en = {
   'audit.kind.integration.app_connected': 'GitHub App connected',
   'audit.kind.integration.app_disconnected': 'GitHub App disconnected',
   'audit.kind.integration.issue_created': 'Issue created from a thread',
+  'audit.kind.integration.work_linked': 'GitHub work linked to a thread',
   'audit.kind.invitation.created': 'Invitation link made',
   'audit.kind.invitation.revoked': 'Invitation link revoked',
   'audit.kind.message.removed_by_moderator': 'Message deleted by a moderator',
@@ -502,6 +503,7 @@ export const en = {
   'audit.action.integration.app_removed': 'GitHub removed the App installation of {account}',
   'audit.action.integration.issue_created':
     '{actor} created issue {repository}#{number} from a thread',
+  'audit.action.integration.work_linked': '{actor} linked {repository}#{number} to a thread',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
@@ -637,6 +639,17 @@ export const en = {
   'githubIssues.me.forget': 'Stop allowing',
   'githubIssue.work.title': 'GitHub',
   'githubIssue.work.create': 'Create GitHub issue…',
+  'githubIssue.work.link': 'Link an issue or pull request…',
+  'githubIssue.link.title': 'Link an issue or pull request',
+  'githubIssue.link.description':
+    'Point this thread at GitHub work that already exists. Nothing is written to GitHub, and the question is not resolved.',
+  'githubIssue.link.label': 'Address on GitHub',
+  'githubIssue.link.hint': 'https://github.com/owner/repository/issues/12 or …/pull/12',
+  'githubIssue.link.action': 'Link',
+  'githubIssue.link.invalid': 'That is not the address of an issue or a pull request on GitHub.',
+  'githubIssue.link.unreachable':
+    'GitHub has no such issue or pull request that you and the App can both reach.',
+  'githubIssue.link.full': 'This thread already points at as much GitHub work as it can.',
   'githubIssue.dialog.title': 'Create a GitHub issue',
   'githubIssue.dialog.description':
     'Review exactly what will be sent, and where. Creating an issue does not resolve the question.',
