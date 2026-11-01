@@ -387,6 +387,10 @@ it. On a narrow window the navigation opens as the sidebar does.
   for this one, when it was last active. This one is marked *This device* and has no button; every other has
   **Sign out**, which asks nothing, takes the row off at once and says it was signed out, or puts it back and
   says why when refused; one already ended elsewhere stays gone, unsaid.
+  Next, **Your data** (D-241): what an export of the person's own data holds, in a sentence — their account,
+  the workspaces they are in, every message they wrote that stands, their reactions, saved items and files,
+  and nobody else's words — **Export my data**, and their exports, newest first, as an owner's export lists
+  them: being made, a link that works once, downloaded, expired, failed by its reason.
   Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
   to make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), the **archived channels** (D-232) — each with
@@ -814,6 +818,7 @@ missing specified behaviour and does not merge.
 | Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191) |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
+| Your data (Sessions & account) | "You have not exported your data yet." | Skeleton in the card; one being made says so, and the list is read again until it is not | Retry in the card; one already being made is said, and the list read again; past the day's limit, how many a day; any other refusal beside the button. An account suspended or erased before it was made is said as such; the rest as an owner's export (D-241) |
 | How you sign in (Sessions & account) | n/a — always an address, and whether a link to it signs in; the GitHub row is there only when GitHub is linked, and is not offered otherwise | Skeleton in the card | Retry in the card (D-176, D-179) |
 | Where you are signed in (Sessions & account) | "You are not signed in anywhere else." under this device's row | Skeleton in the card | Retry in the card; a sign-out refused puts the row back and says why in a toast (D-193) |
 | Archived channels (General) | "No channel is archived." | Skeleton in the card | Retry in the card; a restore refused because the name is taken says to rename the other channel first (D-232) |

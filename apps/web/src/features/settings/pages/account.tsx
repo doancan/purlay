@@ -10,6 +10,9 @@
  * *Where you are signed in* (D-193) lists each session and signs out any but this one; its own card
  * says how (`devices-card.tsx`).
  *
+ * *Your data* (D-241) is a copy of what the server holds about the person, asked for and downloaded once,
+ * as an owner's export of the workspace is (`export.tsx`) — just before the card that erases it.
+ *
  * *Sign out everywhere* ends every session the person holds, this one with them (D-11); it asks first,
  * because it signs out devices that are not in front of them. *Erase my account* is the dialog it has
  * always been (D-139 §5) — typing the username is the confirmation — opened from a card drawn in the
@@ -36,6 +39,7 @@ import { useSignOut } from '../../shell/sign-out';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
 import { ChangePasswordCard } from './change-password-card';
 import { DevicesCard } from './devices-card';
+import { MyDataCard } from './export';
 import { TwoFactorCard } from './two-factor-card';
 
 const SignInCard = (): React.JSX.Element => {
@@ -193,6 +197,7 @@ export const AccountPage = (): React.JSX.Element => {
           </Button>
         </SettingsRow>
       </SettingsCard>
+      <MyDataCard />
       <SettingsCard title={t('settings.account.danger')} tone="danger">
         <SettingsRow
           label={t('settings.account.leave', { workspace: workspace.name })}

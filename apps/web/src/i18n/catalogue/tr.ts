@@ -544,6 +544,16 @@ export const tr = {
   'export.failure.requesterGone': 'Hazırlanacağı sırada artık sahip değildin.',
   'export.inProgress': 'Bu çalışma alanının bir dışa aktarımı zaten hazırlanıyor.',
   'export.failed': 'Dışa aktarım istenemedi.',
+  'myData.title': 'Verilerin',
+  'myData.description':
+    'Bu sunucunun senin hakkında tuttuklarının tek bir arşivi: hesabın ve ayarların, üyesi olduğun çalışma alanları, silmediğin her mesajın — her çalışma alanında, ayrıldığın kanallar dahil — tepkilerin, kaydettiklerin ve gönderdiğin dosyalar. Başka hiç kimsenin sözleri içinde yer almaz. Arka planda hazırlanır ve bir gün içinde bir kez indirilebilir.',
+  'myData.request': 'Verilerimi dışa aktar',
+  'myData.empty': 'Verilerini henüz dışa aktarmadın.',
+  'myData.inProgress': 'Verilerinin bir dışa aktarımı zaten hazırlanıyor.',
+  'myData.requesterGone': 'Hazırlanacağı sırada hesabın artık kullanımda değildi.',
+  'myData.limited': {
+    other: 'Verilerini günde {count} kez dışa aktarabilirsin. Daha sonra tekrar dene.',
+  },
   'audit.action.storage.quota_changed': 'Depolama kotası {from} yerine {to} yapıldı',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',

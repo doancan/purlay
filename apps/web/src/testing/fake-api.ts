@@ -51,6 +51,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   storage: unexpected('storage'),
   exports: unexpected('exports'),
   requestExport: unexpected('requestExport'),
+  myExports: unexpected('myExports'),
+  requestMyExport: unexpected('requestMyExport'),
   setRetention: unexpected('setRetention'),
   channelRetention: unexpected('channelRetention'),
   setChannelRetention: unexpected('setChannelRetention'),

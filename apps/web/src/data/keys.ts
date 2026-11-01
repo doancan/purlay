@@ -105,6 +105,8 @@ export const keys = {
   storage: (workspaceId: string) => ['storage', workspaceId] as const,
   /** An owner's own exports of a workspace (D-140). */
   exports: (workspaceId: string) => ['exports', workspaceId] as const,
+  /** The caller's own exports of their data (D-241): the person's, in no workspace. */
+  myExports: ['my-exports'] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
   pushKey: ['push-key'] as const,
   /** Every view of a person's saved messages in a workspace: the ids, and each state's pages. */

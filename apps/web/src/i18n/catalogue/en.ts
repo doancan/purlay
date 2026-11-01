@@ -547,6 +547,17 @@ export const en = {
   'export.failure.requesterGone': 'You were no longer an owner when it was to be made.',
   'export.inProgress': 'An export of this workspace is already being made.',
   'export.failed': 'The export was not asked for.',
+  'myData.title': 'Your data',
+  'myData.description':
+    'One archive of what this server holds about you: your account and settings, the workspaces you are in, every message you wrote that you have not deleted — in every workspace, channels you left included — your reactions, saved items and the files you sent. Nobody else’s words are in it. It is made in the background and can be downloaded once, within a day.',
+  'myData.request': 'Export my data',
+  'myData.empty': 'You have not exported your data yet.',
+  'myData.inProgress': 'An export of your data is already being made.',
+  'myData.requesterGone': 'Your account was no longer in use when it was to be made.',
+  'myData.limited': {
+    one: 'You can export your data once a day. Try again later.',
+    other: 'You can export your data {count} times a day. Try again later.',
+  },
   'audit.action.storage.quota_changed': 'The storage quota was changed from {from} to {to}',
   'audit.action.retention.purged':
     'History older than {days} days was cleared: {messages} messages, {files} files',
