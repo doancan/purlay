@@ -134,6 +134,7 @@ const HELD = [
   '/api/workspaces',
   '/api/me/sessions',
   '/api/me/quiet-hours',
+  '/api/me/missed-mail',
   '/api/push/key',
 ] as const;
 
