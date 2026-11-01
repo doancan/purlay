@@ -95,6 +95,14 @@ export const ErrorCode = Type.Union([
   Type.Literal('GITHUB_ACCOUNT_TAKEN'),
   /** The channel already has a feed from this repository (D-134 §1). */
   Type.Literal('GITHUB_FEED_EXISTS'),
+  /** This workspace has no usable GitHub App installation: none connected, or GitHub suspended it (D-246). */
+  Type.Literal('GITHUB_NOT_CONNECTED'),
+  /** The person has not let Purlay write as them, or GitHub no longer takes their authorization (D-246 §2). */
+  Type.Literal('GITHUB_AUTHORIZATION_REQUIRED'),
+  /** GitHub did not answer in time or answered what is not an answer; nothing was kept (D-246). */
+  Type.Literal('GITHUB_UNAVAILABLE'),
+  /** A request id already used for other content: a retry of the same request is never this (D-246 §4). */
+  Type.Literal('GITHUB_REQUEST_CONFLICT'),
   /** Declaring an incident in a channel that has one open (D-137 §1). */
   Type.Literal('INCIDENT_OPEN'),
   /**
@@ -279,6 +287,10 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   PINS_LIMIT: 409,
   BOOKMARKS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
+  GITHUB_NOT_CONNECTED: 409,
+  GITHUB_AUTHORIZATION_REQUIRED: 409,
+  GITHUB_REQUEST_CONFLICT: 409,
+  GITHUB_UNAVAILABLE: 503,
   GITHUB_FEED_EXISTS: 409,
   INCIDENT_OPEN: 409,
   INCIDENT_ID_CONFLICT: 409,

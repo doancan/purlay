@@ -772,6 +772,8 @@ export const AUDIT_ACTIONS = [
   /** A workspace's GitHub App installation connected by an owner, or let go — by an owner or by GitHub (D-246). */
   'integration.app_connected',
   'integration.app_disconnected',
+  /** An issue made from a thread by a person: who, where, which — never its words (D-246 §2). */
+  'integration.issue_created',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
