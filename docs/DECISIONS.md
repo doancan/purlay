@@ -496,13 +496,43 @@ departed user is a profile-level operation, not a row deletion.
 removed Redis, and that cache cannot simply disappear — without it every paste of a popular PR
 link re-hits the GitHub API and burns the workspace's rate limit.
 
-**Decided:** a `link_previews` table keyed by URL hash, with `expires_at`. Reads are a primary
+**Decided:** a `link_previews` table keyed by a hash, with `expires_at`. Reads are a primary
 key lookup; expiry is enforced in the query and swept by a periodic job. This is slower than
-Redis and entirely fast enough at our scale.
+Redis and entirely fast enough at our scale. *Amended 2026-11-01 (#884):* the hash is not of the URL
+alone but of the workspace, the token's version and the URL (D-112 §1), and the five-minute card and
+hour-long negative are constants in `unfurl.ts` — no `UNFURL_*_TTL` variable exists, and `CONFIG.md`
+no longer lists one.
 
 **Also decided:** GitHub API credentials are **workspace-level**, not per-user. Unfurling with
 the viewer's own token would leak which private repositories a given member can see, based on
 whether the card renders. One workspace token means every member sees the same card or no card.
+
+**Amended 2026-11-01 (#884), after the integration's audit.** The token is a fine-grained, read-only
+personal access token on selected repositories, and the server now says what it learns of it:
+1. **It is checked when it is saved.** `GET /rate_limit` (no quota) at `GITHUB_API_URL` — the address the
+   sign-in uses, so one setting says where GitHub is — before anything is stored, outside the
+   transaction and after the caller's role is known. GitHub's `401` is `400` on the `token` field; a GitHub
+   that cannot say (unreachable, failing, rate limiting) is `503 GITHUB_UNAVAILABLE`; either saves
+   nothing and leaves the token that was there. The `X-OAuth-Scopes` header is kept
+   (`github_integrations.token_scopes`), and a classic token with `repo` or a write scope is shown to admins
+   as broader than cards need. A fine-grained token sends no header and is what is asked for.
+2. **A token GitHub refuses is shown, and not used.** A `401` on a card writes `token_invalid_at` on the
+   row it was read from (not on a replacement that landed while the call was out); Settings → Integrations
+   tells admins, `configured` stays true, no call is made with it and no card is served from the cache
+   until the token is replaced or removed, which clears it. It is a state, not a cache entry, because an
+   expired token stays expired however long a minute is.
+3. **A spent quota pauses the workspace.** A `403` or `429` that says when to come back — `Retry-After`,
+   or `x-ratelimit-remaining: 0` with `x-ratelimit-reset`; a bare `429` a minute — stops calls for that
+   workspace until then, at most an hour, and nothing is cached for the link. The pause is held in the
+   process, as the call budget is (D-81, D-25): a node that has not learned of it learns it from its first
+   refused call, so what sharing it would save is one request a node. A `5xx`, a network error, a plain
+   `403` (a repository's refusal, not the token's) and an answer that is not a card stay what they were:
+   no card for that link for a minute (D-112 §3).
+4. **Cards are for github.com links only** (`GitHubLink`); the requests go to `GITHUB_API_URL`. A GitHub
+   Enterprise Server's links are not cards, and the Enterprise setting is for sign-in.
+**Rejected:** conditional requests (`ETag`) — a `304` still spends the primary quota's request on a
+secondary-limit-sensitive path and the five-minute card already bounds it; no measurement asks. *A pause
+shared through the database* — nothing needs it before a second node (D-25).
 
 ---
 
@@ -5029,9 +5059,13 @@ instruction to decide and proceed, and open to their reversal.
 
 **Decided.**
 
-1. **The key is the workspace and the link** — the SHA-256 of the workspace id, a newline and the URL. A card is the
+1. **The key is the workspace, the token's version and the link** — the SHA-256 of the workspace id, a
+   newline, the integration row's `updated_at` as an ISO string, a newline and the URL. A card is the
    workspace's, fetched with its token; a negative is too, since a link missing for A's token may be
-   there for B's. The table stays unscoped by column; the scoping is in the key.
+   there for B's. The token's version is in it so nothing remembered under a replaced token is read under
+   the new one (the entries expire as every entry does). The table stays unscoped by column; the scoping
+   is in the key. (*Corrected 2026-11-01, #884:* the first text left the version out; the code had it
+   from #66.)
 2. **What is fetched is built from parts.** The request names a `GitHubLink` — github.com, an owner,
    a repository, `pull` or `issues`, a number — and the API address is made of those, so no address a
    person wrote is ever fetched. A repository named `.` or `..` is refused: resolved, it would step out
@@ -5041,6 +5075,9 @@ instruction to decide and proceed, and open to their reversal.
    so every render does not ask again, and a GitHub that recovers is asked within a minute.
 4. **A token that does not open** (`ENCRYPTION_KEY` changed) is logged at `error` and no card is
    drawn — never a token silently treated as absent, and never a 500 for a link.
+5. **GitHub refusing the token is not GitHub failing** (*added 2026-11-01, #884; see D-23*). A `401` marks
+   the token bad and stops the calls, a `403`/`429` that names a time pauses the workspace until it, and
+   neither is cached as a minute of "missing"; everything else in §3 is as it was.
 
 **Rejected: sharing public cards across workspaces** by caching a card unscoped when its repository is
 public. Whether a repository is public is itself something only a token can see, and a repository
@@ -6030,7 +6067,13 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
 3. **Each feed has its own secret**: 32 random bytes the server makes, sealed by the one cipher
    (D-39 §6) with the feed's id bound in, answered once with the payload address — the screen that
    shows them says the content type GitHub must send, `application/json` — and never again. A lost
-   secret is a feed removed and made again, which is what connecting it again is told. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
+   secret is regenerated: *amended 2026-11-01 (#884), where it was a feed removed and made again.*
+   `POST /api/channels/:channelId/github-feeds/:feedId/secret`, by an owner or an admin, makes a new
+   secret for the same feed — same id, same address — and answers it once as a feed's creation does; the
+   old one stops verifying at once, since the secret is read per delivery, and the deliveries GitHub sends
+   with it are refused (`401`, and a `warn` line) until the webhook there has the new one, which the
+   screen says before it asks. The trail records `integration.feed_secret_regenerated` with the repository
+   and the channel, never a secret. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
    found before the signature is checked, and a repository's name, unverified, names a feed in every
    workspace that has one.
 4. **A delivery is checked before it is read**: a feed that is not there is `404`; a body without a
@@ -6070,6 +6113,11 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
    many for its bucket (0033) — are on the feed, and every delivery is one log line — feed, delivery,
    event, outcome, never the body. An archived channel's feeds, and a deleted workspace's, refuse
    their deliveries. A refusal before the signature is said in the log alone: anybody can cause one.
+   *Amended 2026-11-01 (#884):* a signature that does not hold is one `warn` line too — `github delivery`
+   with the feed and `outcome: bad_signature`, never the secret, the signature or the body — since a
+   secret pasted wrong at GitHub, or one regenerated and not yet updated there, is otherwise silent; it is
+   still not said on the feed, where anybody's could bury a real failure, and it is bounded by the
+   address bucket.
 
 **Rejected.** *The creator as the author* — every place that asks "is this mine?" would answer yes
 for an admin's every push: their bubble side, their edit shortcut, their unread count, a thread's

@@ -58,7 +58,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `OIDC_CLIENT_SECRET` | — | unset | **Secret.** Never logged. A seed, as `OIDC_ISSUER`, and set with it; kept encrypted in the settings, bound to its column |
 | `OIDC_NAME` | — | unset | What the sign-in button says after *Continue with*: at most 40 visible characters, plain text. A seed, only with the other three (alone it would be dropped at the first start without a word, so it refuses to start); unset says *single sign-on* in the person's language |
 | `GITHUB_URL` | — | `https://github.com` | Where a GitHub sign-in is sent to authorise and its code is redeemed (`/login/oauth/…`). Another only for a GitHub Enterprise Server, or for a stand-in for GitHub on this machine in a run that cannot reach the real one. `https://`, or `http://` to `localhost`, `127.0.0.1` or `[::1]` alone, in any environment; a path is kept, a trailing slash dropped, and credentials, a query or a fragment refused. A deployment's shape, not a setting: never in the browser (D-179) |
-| `GITHUB_API_URL` | — | `https://api.github.com` | GitHub's API, where a sign-in reads the person and their addresses (`/user`, `/user/emails`): `https://<host>/api/v3` on an Enterprise Server. Checked as `GITHUB_URL` is |
+| `GITHUB_API_URL` | — | `https://api.github.com` | GitHub's API, where a sign-in reads the person and their addresses (`/user`, `/user/emails`) and where the workspace's token is checked and link cards are fetched (Limits, below): `https://<host>/api/v3` on an Enterprise Server, for sign-in only — cards are github.com links. Checked as `GITHUB_URL` is |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
 | `WORKSPACE_CREATORS` | — | unset | **A seed**, as `GITHUB_CLIENT_ID`. Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against the login GitHub last gave each account signed in with it — never its username here, which may carry a `-N` (D-169); an account made by an email link has no login, or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is first started if more than its first person should make workspaces; a malformed value refuses to start |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted` and the secrets of the server's settings (below). Rotating it invalidates stored integration tokens and those secrets |
@@ -339,13 +339,35 @@ is served.
 
 ## Limits
 
-Runtime-tunable limits. The **enforced** values live where they are enforced; these only
-configure what is not already a database constraint.
+No limit below is an environment variable: **the enforced values live where they are enforced**, in code or
+in a database constraint, and this section says where, so an operator is not left looking for a knob there is
+not. (An earlier draft listed `UNFURL_CACHE_TTL_SECONDS` and `UNFURL_NEGATIVE_TTL_SECONDS`; neither was ever
+read, and they are gone: D-23, amended.)
 
-| Variable | Required | Default | Notes |
-|---|---|---|---|
-| `UNFURL_CACHE_TTL_SECONDS` | — | `300` | Positive cache (`ARCHITECTURE.md` §8.3) |
-| `UNFURL_NEGATIVE_TTL_SECONDS` | — | `3600` | Negative cache — without it one dead link re-hits the GitHub API forever |
+**GitHub link cards and feeds** (D-23, D-112, D-134):
+
+| What | Value | Where |
+|---|---|---|
+| A card is kept | 5 minutes, for the workspace whose token fetched it | `CARD_TTL_MS` in `modules/integrations/unfurl.ts` |
+| A link GitHub says is not there is kept | 1 hour | `NEGATIVE_TTL_MS`, same file |
+| GitHub failing (`5xx`, a network error, an answer that is not a card, a plain `403`) is held off | 1 minute, for that link | `UNAVAILABLE_TTL_MS`, same file |
+| Calls to GitHub per workspace | 100 at once, then 1 a second, whoever asks; spent, a link is a plain link and nothing is cached | `GITHUB_CALL_BUDGET` in `ingress/http/rate-limit.ts` |
+| GitHub says to wait (`403`/`429` with `Retry-After`, or `x-ratelimit-remaining: 0` with `x-ratelimit-reset`; a bare `429` waits a minute) | the workspace makes no call until then, at most an hour; kept in the process, so each node learns it from its first refused call (D-25) | `refusalOf` and `inProcessPauses` in `unfurl.ts` |
+| GitHub says the token is bad (`401`) | no call is made with it until an admin replaces or removes it; Settings → Integrations says so | `github_integrations.token_invalid_at` |
+| Deliveries to a webhook | per client address 200 at once then 20 a second, before anything is looked up; per feed 100 at once then 2 a second, after its signature held; a body at most 1 MiB | `WEBHOOK_BUDGET`, `WEBHOOK_FEED_BUDGET` in `rate-limit.ts`, `WEBHOOK_BODY_MAX_BYTES` in `edge.ts` |
+
+**The workspace's GitHub token is a fine-grained, read-only personal access token on selected repositories**
+(Contents, Issues and Pull requests: *Read-only*; nothing else), set by an owner or an admin in Settings →
+Integrations. Cards and feeds read titles, states, authors, checks and reviews and write nothing, and a token
+that can write is a larger loss if the database is ever read. Purlay asks GitHub whether it accepts the token
+when it is saved (`GET /rate_limit`, which costs no quota) and refuses one that is not accepted; a classic
+token with the `repo` scope is accepted, and Settings → Integrations warns that it is broader than needed. An
+instance that cannot reach GitHub refuses to save a token (`503 GITHUB_UNAVAILABLE`) rather than keep one unseen.
+
+**Cards are for github.com links only** — the contract's `GitHubLink` is `https://github.com/<owner>/<repo>/pull|issues/<n>` —
+and the requests for them go to `GITHUB_API_URL`, the address a sign-in uses, so one setting says where GitHub is.
+A GitHub Enterprise Server's links are not recognised as cards (unsupported), and pointing `GITHUB_API_URL` at one
+asks its API about github.com links, which it does not have; run Enterprise Server for sign-in only.
 
 > **HTTP limits are not configurable here either, and the writes' budget is the socket's (D-81, D-198).** Sign-in: 30
 > requests per client address at once, then one every two seconds. Writes: 10 a second with a burst

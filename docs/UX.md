@@ -310,7 +310,7 @@ they are reading the channel, is told *You were removed from this channel* in it
 one) or sees it as one not joined (a public one), and their sidebar loses it at once.
 **Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
 the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
-**Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
+**Regenerate secret** and **Disconnect**, each asking in place (regenerating says the old secret stops working at once and deliveries are refused until the webhook has the new one, then shows the address, content type and new secret once, as connecting does), and a form to **Connect** one, which answers with the payload URL, the
 content type and the secret, each with Copy, the secret said to be shown only now, until **Done**. A
 half-typed name survives a look at another tab. A direct message between two has no details: its title is not a button. A group's title opens its
 details (D-127): its people, you first, and **New conversation with these people…**, which opens New
@@ -326,7 +326,11 @@ they left on another screen, is told which, instead of *not found*.
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
 too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*
 with **Disconnect**. The token is never shown again — the field empties once it is saved — and without
-one a link to GitHub stays a plain link, which the dialog says.
+one a link to GitHub stays a plain link, which the dialog says. The help asks for a fine-grained, read-only
+token on selected repositories; GitHub is asked about the token when it is saved, and one it refuses is
+said under the field (one it cannot be asked about, above the button). A saved classic token with `repo`
+is warned about, and a token GitHub later refuses (revoked, expired) shows *Token refused* with when, until
+it is replaced — on Settings → Integrations, to an owner or an admin.
 
 **Workspace settings** (D-124). **Workspace settings…** in the same menu, an owner's or an admin's,
 renames the workspace: a name field and **Save**, and a sentence saying the address stays `/w/<slug>`,

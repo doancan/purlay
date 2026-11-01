@@ -25,6 +25,8 @@ have it.
 
 ### Added
 
+- **Integrations** — Regenerate a repository feed's secret from the channel's details instead of disconnecting it: the feed keeps its address, the old secret stops working at once, and the new one is shown once (D-134)
+- **Integrations** — Saving the workspace's GitHub token asks GitHub whether it accepts it, warns about a classic token with the `repo` scope, and tells admins when GitHub later refused it, until it is replaced (D-23)
 - **Notifications** — Turn on email about direct messages and mentions left unread for fifteen minutes: one letter at most an hour, never in Deep Work or quiet hours, quoting only what you can still read, with a link that stops it without signing in (D-240)
 - **Channels** — Mark every channel read at once with Shift+Esc, from the command palette or the workspace menu; your other devices clear too, and an answer still waiting in a thread stays unread (D-238)
 - **Sign-in** — The server's administrator can require two-step verification of every account with a password (anyone without it is asked to turn it on before anything else) and, while GitHub or single sign-on works, turn password sign-in off; `admin:reset-password` turns it back on (D-239)
@@ -61,6 +63,7 @@ have it.
 
 ### Changed
 
+- **Integrations** — Link cards wait out a GitHub rate limit until the time GitHub names, and ask the same GitHub API address as sign-in (D-23, D-112)
 - **Operations** — A merge reaches the server only after that commit's own checks and its image have both succeeded; a deploy started by hand is held to the same (D-229)
 - **Search** — The date filters are whole days in the viewer's time zone, as the date operators are, rather than UTC days (D-224)
 - **Dependencies** — The toolchain and runtime libraries move to their newest patch releases; the three deprecations they flagged are removed (`dns` lookup order, the build's `rolldownOptions`, the account-linking option the library now makes unconditional); `knip` is held at 6.41 until it reads the entry points again
@@ -75,6 +78,7 @@ have it.
 
 ### Fixed
 
+- **Operations** — A webhook delivery with a bad signature is a warning in the log naming the feed, and `CONFIG.md` lists the real GitHub limits instead of two settings that never existed (D-134, D-23)
 - **Setup** — The administrator's name follows the rule every name does: a right-to-left name with its direction mark is taken, a line separator is not, and the field stops at the 128 characters the server keeps (D-179)
 - **Messages** — Quotes preserve lists and blank lines; code sharing keeps nested fences and pasted text intact, Enter follows the rendered code block, and Undo preserves later edits. Copy and wrap stay reachable on narrow screens (D-205)
 
