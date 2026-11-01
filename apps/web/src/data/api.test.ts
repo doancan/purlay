@@ -607,7 +607,9 @@ describe('the endpoints', () => {
     ).toEqual(made);
     const remove = harness(null);
     await remove.api.disconnectGitHubFeed(ID, ID);
-    expect([...list.calls, ...connect.calls, ...remove.calls]).toEqual([
+    const regenerate = harness(made);
+    expect(await regenerate.api.regenerateGitHubFeedSecret(ID, ID)).toEqual(made);
+    expect([...list.calls, ...connect.calls, ...remove.calls, ...regenerate.calls]).toEqual([
       { method: 'GET', url: `/api/channels/${ID}/github-feeds`, body: undefined },
       {
         method: 'POST',
@@ -615,6 +617,7 @@ describe('the endpoints', () => {
         body: { repository: 'acme/api', events: ['push'] },
       },
       { method: 'DELETE', url: `/api/channels/${ID}/github-feeds/${ID}`, body: undefined },
+      { method: 'POST', url: `/api/channels/${ID}/github-feeds/${ID}/secret`, body: undefined },
     ]);
     // A secret that is not the contract's is never believed.
     const refused = await harness({ ...made, secret: 'short' })
