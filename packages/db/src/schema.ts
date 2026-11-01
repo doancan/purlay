@@ -196,6 +196,17 @@ export interface IncidentUpdates {
   to_value: string;
 }
 
+export interface IncomingWebhooks {
+  channel_id: string;
+  created_at: Timestamp;
+  created_by: string | null;
+  id: string;
+  last_used_at: Timestamp | null;
+  name: string;
+  secret_digest: string;
+  workspace_id: string;
+}
+
 export interface InvitationPassports {
   address_digest: string | null;
   consumed_at: Timestamp | null;
@@ -542,6 +553,7 @@ export interface DB {
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
+  incoming_webhooks: IncomingWebhooks;
   invitation_passports: InvitationPassports;
   job_runs: JobRuns;
   link_previews: LinkPreviews;
