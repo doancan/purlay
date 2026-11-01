@@ -1,13 +1,18 @@
 /**
- * An owner's export of the workspace (D-140): asked for here, made by the server in the background, and
- * downloaded once. What the owner can see goes — the public channels and the private ones and direct
- * messages they are in — and nobody's address.
+ * Exports asked for here, made by the server in the background, and downloaded once: an owner's export
+ * of the workspace (D-140), and a person's export of their own data (D-241). One card for both — the
+ * same list, the same states, the same once-only link — told apart by where it reads and asks, and by
+ * the words that differ.
  *
- * The list is the owner's own exports, newest first, read again every few seconds while one is being
+ * An owner's export holds what the owner can see — the public channels and the private ones and direct
+ * messages they are in — and nobody's address. A person's holds what they wrote and set, in every
+ * workspace, and nobody else's words.
+ *
+ * The list is the caller's own exports, newest first, read again every few seconds while one is being
  * made. A ready one is a link that works once: following it marks it downloaded here at once, as the
  * server does, so the link is not offered twice. A failed one says why, by its code.
  */
-import type { WorkspaceExport } from '@purlay/types';
+import { PERSONAL_EXPORTS_PER_DAY, type WorkspaceExport } from '@purlay/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
@@ -24,25 +29,38 @@ import { SaveOutcome, SettingsCard } from '../page';
 /** How often the list is read again while an export is being made. */
 const EXPORT_POLL_MS = 3_000;
 
-const downloadUrl = (workspaceId: string, exportId: string): string =>
-  `/api/workspaces/${encodeURIComponent(workspaceId)}/exports/${encodeURIComponent(exportId)}/download`;
+/** Where a card reads and asks, and the words it says that are its own. */
+interface ExportSource {
+  readonly queryKey: readonly unknown[];
+  readonly list: (signal: AbortSignal) => Promise<WorkspaceExport[]>;
+  readonly request: () => Promise<WorkspaceExport>;
+  readonly downloadUrl: (exportId: string) => string;
+  readonly words: {
+    readonly title: string;
+    readonly description: string;
+    readonly request: string;
+    readonly empty: string;
+    readonly inProgress: string;
+    readonly requesterGone: string;
+    readonly limited: string;
+  };
+}
 
-export const ExportCard = (): React.JSX.Element => {
+const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.Element => {
   const { t, format } = useI18n();
-  const api = useApi();
   const client = useQueryClient();
   const describe = useDescribeFailure();
-  const { workspace } = useWorkspace();
   const schedule = useContext(RealtimePortsContext).schedule ?? browserSchedule;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   // A link followed: what the server holds is read again shortly, so the list says what happened —
   // downloaded, or still ready because the request never reached it, or expired meanwhile.
   const [followed, setFollowed] = useState(false);
+  const { queryKey, words } = source;
 
   const exports = useQuery({
-    queryKey: keys.exports(workspace.id),
-    queryFn: async ({ signal }) => await api.exports(workspace.id, signal),
+    queryKey,
+    queryFn: async ({ signal }) => await source.list(signal),
   });
   const list = exports.data;
   const making = list?.some((made) => made.status === 'pending') === true;
@@ -67,16 +85,19 @@ export const ExportCard = (): React.JSX.Element => {
     setBusy(true);
     setProblem(null);
     try {
-      const asked = await api.requestExport(workspace.id);
-      client.setQueryData<WorkspaceExport[]>(keys.exports(workspace.id), (held) => [
+      const asked = await source.request();
+      client.setQueryData<WorkspaceExport[]>(queryKey, (held) => [
         asked,
         ...(held ?? []).filter((made) => made.id !== asked.id),
       ]);
     } catch (failure) {
+      const code = codeOf(failure);
       setProblem(
-        codeOf(failure) === 'EXPORT_IN_PROGRESS'
-          ? t('export.inProgress')
-          : `${t('export.failed')} ${describe(failure)}`,
+        code === 'EXPORT_IN_PROGRESS'
+          ? words.inProgress
+          : code === 'RATE_LIMITED'
+            ? words.limited
+            : `${t('export.failed')} ${describe(failure)}`,
       );
       void exports.refetch();
     } finally {
@@ -89,7 +110,7 @@ export const ExportCard = (): React.JSX.Element => {
    * and then read from the server, which says whether the download reached it.
    */
   const spent = (exportId: string): void => {
-    client.setQueryData<WorkspaceExport[]>(keys.exports(workspace.id), (held) =>
+    client.setQueryData<WorkspaceExport[]>(queryKey, (held) =>
       held?.map((made) =>
         made.id === exportId ? { ...made, status: 'downloaded' as const } : made,
       ),
@@ -101,7 +122,7 @@ export const ExportCard = (): React.JSX.Element => {
   const why = (failure: WorkspaceExport['failure']): string => {
     if (failure === null || failure === 'EXPORT_FAILED') return t('export.failure.failed');
     if (failure === 'EXPORT_ABANDONED') return t('export.failure.abandoned');
-    if (failure === 'EXPORT_REQUESTER_GONE') return t('export.failure.requesterGone');
+    if (failure === 'EXPORT_REQUESTER_GONE') return words.requesterGone;
     return t(failureKey(failure));
   };
 
@@ -112,7 +133,7 @@ export const ExportCard = (): React.JSX.Element => {
       case 'ready':
         return (
           <a
-            href={downloadUrl(workspace.id, made.id)}
+            href={source.downloadUrl(made.id)}
             download
             onClick={() => {
               spent(made.id);
@@ -141,8 +162,8 @@ export const ExportCard = (): React.JSX.Element => {
 
   return (
     <SettingsCard
-      title={t('settings.data.export')}
-      description={t('export.description')}
+      title={words.title}
+      description={words.description}
       footer={
         <>
           <SaveOutcome outcome={problem === null ? null : { ok: false, words: problem }} />
@@ -155,7 +176,7 @@ export const ExportCard = (): React.JSX.Element => {
               void ask();
             }}
           >
-            {t('export.request')}
+            {words.request}
           </Button>
         </>
       }
@@ -176,7 +197,7 @@ export const ExportCard = (): React.JSX.Element => {
           <Skeleton />
         </LoadingStatus>
       ) : list.length === 0 ? (
-        <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{t('export.empty')}</p>
+        <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{words.empty}</p>
       ) : (
         <ul aria-label={t('export.list')} className="flex flex-col">
           {list.map((made) => (
@@ -193,5 +214,59 @@ export const ExportCard = (): React.JSX.Element => {
         </ul>
       )}
     </SettingsCard>
+  );
+};
+
+/** An owner's export of the workspace (D-140), on Data & retention. */
+export const ExportCard = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const api = useApi();
+  const { workspace } = useWorkspace();
+  const at = encodeURIComponent(workspace.id);
+  return (
+    <ExportsCard
+      source={{
+        queryKey: keys.exports(workspace.id),
+        list: async (signal) => await api.exports(workspace.id, signal),
+        request: async () => await api.requestExport(workspace.id),
+        downloadUrl: (exportId) =>
+          `/api/workspaces/${at}/exports/${encodeURIComponent(exportId)}/download`,
+        words: {
+          title: t('settings.data.export'),
+          description: t('export.description'),
+          request: t('export.request'),
+          empty: t('export.empty'),
+          inProgress: t('export.inProgress'),
+          requesterGone: t('export.failure.requesterGone'),
+          // Not limited by count: a refusal for load, said as any other is.
+          limited: `${t('export.failed')} ${t('failure.slow')}`,
+        },
+      }}
+    />
+  );
+};
+
+/** A person's export of their own data (D-241), in Sessions & account. */
+export const MyDataCard = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const api = useApi();
+  return (
+    <ExportsCard
+      source={{
+        queryKey: keys.myExports,
+        list: async (signal) => await api.myExports(signal),
+        request: async () => await api.requestMyExport(),
+        downloadUrl: (exportId) => `/api/me/exports/${encodeURIComponent(exportId)}/download`,
+        words: {
+          title: t('myData.title'),
+          description: t('myData.description'),
+          request: t('myData.request'),
+          empty: t('myData.empty'),
+          inProgress: t('myData.inProgress'),
+          requesterGone: t('myData.requesterGone'),
+          limited: t('myData.limited', { count: PERSONAL_EXPORTS_PER_DAY }),
+        },
+      }}
+    />
   );
 };

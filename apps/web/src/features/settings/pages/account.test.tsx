@@ -40,7 +40,11 @@ const open = async (api: Partial<Api> = {}): Promise<View> => {
       <Outlet />
       <Toaster dismissLabel="Close" />
     </>,
-    { path: '/w/acme/settings/account', api: aSignedInApi(api) },
+    {
+      path: '/w/acme/settings/account',
+      // The page's export card (D-241): nothing exported, unless a test says.
+      api: aSignedInApi({ myExports: () => Promise.resolve([]), ...api }),
+    },
   );
   await settle();
   await view.findByRole('heading', { level: 1, name: 'Sessions & account' });

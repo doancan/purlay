@@ -414,6 +414,9 @@ export interface Api {
   /** An owner's exports of the workspace, newest first; and asking for one, made in the background (D-140). */
   readonly exports: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceExport[]>;
   readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
+  /** The caller's own exports of their data, newest first; and asking for one (D-241). */
+  readonly myExports: (signal?: AbortSignal) => Promise<WorkspaceExport[]>;
+  readonly requestMyExport: () => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
   /** The ways the caller signs in: their address, and the GitHub account linked to it, if any (D-176, D-179 §5). */
@@ -986,6 +989,9 @@ export const createApi = (http: Http): Api => {
         WorkspaceExport,
         options(),
       ),
+    myExports: (signal) =>
+      http.request('GET', '/api/me/exports', WorkspaceExports, options({}, signal)),
+    requestMyExport: () => http.request('POST', '/api/me/exports', WorkspaceExport, options()),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
     mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
     mySessions: (signal) =>
