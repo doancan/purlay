@@ -16,7 +16,13 @@
  * than none. The sleep is after each callback's lookup, so both find nothing.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { createApp } from './app';
 import { NOW, testDependencies } from '../../testing/doubles';
 import {
@@ -45,7 +51,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const ORIGIN = 'https://purlay.test';
 const clock = fixedClock(NOW);

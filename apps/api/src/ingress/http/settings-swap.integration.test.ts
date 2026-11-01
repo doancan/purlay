@@ -17,6 +17,7 @@ import {
   withRollback,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { createApp } from './app';
 import { systemClock } from '../../platform/clock';
@@ -56,7 +57,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** Every test starts from a server with nothing connected. */
 beforeEach(async () => {

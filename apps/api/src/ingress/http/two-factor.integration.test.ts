@@ -15,6 +15,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import {
   TWO_FACTOR_CHALLENGE_MINUTES,
@@ -51,7 +52,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 beforeEach(async () => {
   await sql`delete from rate_limits`.execute(db);

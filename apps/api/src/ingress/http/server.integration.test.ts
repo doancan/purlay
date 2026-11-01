@@ -11,7 +11,12 @@
  * value; no secret is in any answer or any line written; and a client is limited.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import {
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
@@ -79,7 +84,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-}, 60_000);
+}, DROP_HOOK_MS);
 
 /** Every line the server writes, raw, as the operator's terminal would show it. */
 const recording = (): { log: Logger; lines: string[] } => {

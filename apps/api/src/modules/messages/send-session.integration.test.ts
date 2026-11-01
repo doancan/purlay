@@ -11,7 +11,12 @@
  * harness's single rolled-back transaction has no order to speak of (D-46).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
@@ -32,7 +37,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const clock = fixedClock(NOW);
 /** Nobody is listening; what is under test is the write. */

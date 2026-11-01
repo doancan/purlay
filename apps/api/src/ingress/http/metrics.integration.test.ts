@@ -10,6 +10,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
@@ -57,7 +58,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const call = async (
   method: string,

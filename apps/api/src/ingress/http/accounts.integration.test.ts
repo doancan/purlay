@@ -12,6 +12,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import type { ServerAccount, ServerFrame, Topic } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
@@ -36,7 +37,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 beforeEach(async () => {
   await sql`delete from rate_limits`.execute(db);

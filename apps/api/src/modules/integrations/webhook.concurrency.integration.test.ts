@@ -19,6 +19,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { credentialCipher } from '../../platform/crypto';
@@ -45,7 +46,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const waitingOnALock = async (): Promise<boolean> => {
   for (let look = 0; look < 500; look += 1) {

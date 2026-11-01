@@ -13,6 +13,7 @@ import {
   type Executor,
   type Transaction,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { INVITATION_TTL_DAYS } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -68,7 +69,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const as = async (db: Executor, room: Room, name: string): Promise<WorkspaceContext> => {
   const person = room.members[name];

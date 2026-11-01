@@ -23,6 +23,7 @@ import {
   withRollback,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from './testing';
 
 // A database of its own (D-228): migration 0064's statements lock the table, and on the shared database a
@@ -38,7 +39,7 @@ const inOwnDatabase = async (body: Parameters<typeof withRollback>[0]): Promise<
 afterAll(async () => {
   await own.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const STATEMENTS = splitStatements(
   readFileSync(join(MIGRATIONS_DIRECTORY, '0064_github_delivery_bodies.sql'), 'utf8'),

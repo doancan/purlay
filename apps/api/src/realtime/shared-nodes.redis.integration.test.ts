@@ -5,7 +5,12 @@
  * Redis must send its sockets back to replay.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import {
   CLOSE_CODES,
   messageId,
@@ -94,7 +99,7 @@ afterAll(async () => {
   b.link.close();
   proxy.stop();
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const http = async (
   node: Node,

@@ -9,7 +9,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, sql, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { SETUP_STEPS, type SetupStep } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { DAY_MS } from '../../platform/clock';
@@ -44,7 +50,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-}, 60_000);
+}, DROP_HOOK_MS);
 
 /** A database of the test's own, cloned from the migrated template: no user, no settings, no code. */
 const aServer = async (): Promise<Executor> => {

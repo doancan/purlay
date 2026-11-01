@@ -7,7 +7,13 @@
  * On a database of each test's own (`cloneIntegrationDatabase`), as the setup's other tests are.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, sql, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { credentialCipher } from '../../platform/crypto';
@@ -75,7 +81,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-}, 60_000);
+}, DROP_HOOK_MS);
 
 const APP_URL = 'https://chat.example.com';
 

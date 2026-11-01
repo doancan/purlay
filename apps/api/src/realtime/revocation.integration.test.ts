@@ -9,7 +9,12 @@
  * publish function they are required to call.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { CLOSE_CODES, messageId, type ServerFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { ServerFrame as ServerFrameSchema } from '@purlay/types';
@@ -64,7 +69,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await nodeB.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const http = async (
   method: string,

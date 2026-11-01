@@ -16,6 +16,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { createApp, type HttpApplication } from './app';
 import { JSON_BODY_MAX_BYTES } from './edge';
@@ -45,7 +46,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 beforeEach(async () => {
   await sql`delete from rate_limits`.execute(db);

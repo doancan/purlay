@@ -15,6 +15,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { messageId, ServerFrame } from '@purlay/types';
@@ -44,7 +45,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const http = async (
   method: string,

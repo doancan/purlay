@@ -15,6 +15,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import type { SignInFailure } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
@@ -64,7 +65,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 // The library counts sign-in attempts per address in this database, and under test every request
 // comes from one: each test starts with none counted.

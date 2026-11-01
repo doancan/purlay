@@ -14,6 +14,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { CLOSE_CODES } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
@@ -51,7 +52,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 interface Answer {
   readonly status: number;

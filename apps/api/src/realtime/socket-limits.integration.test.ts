@@ -7,7 +7,12 @@
  * socket that stopped reading cost 4 MB before it was closed (D-84, amended).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { CLOSE_CODES, messageId, type ServerFrame } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
@@ -44,7 +49,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 interface Client {
   readonly frames: ServerFrame[];

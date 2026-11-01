@@ -9,7 +9,13 @@
  * - Two new addresses wanting one name at once both sign in, under two names (D-138 §5).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { aRecordingLogger, aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
 import { installShutdown } from '../../lifecycle';
@@ -32,7 +38,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const APP = 'https://purlay.test';
 

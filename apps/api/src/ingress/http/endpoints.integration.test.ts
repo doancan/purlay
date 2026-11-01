@@ -20,6 +20,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { ENDPOINTS, messageId, type EndpointSpec } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
@@ -52,7 +53,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** What this test does not call, and where the answer is held to its schema instead. */
 const HELD_ELSEWHERE: Readonly<

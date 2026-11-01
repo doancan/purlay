@@ -9,7 +9,12 @@
  * keys the store keeps refusing, to the ones after them.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { createLogger } from '../../platform/logging';
@@ -38,7 +43,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const clock = fixedClock(NOW);
 const silent = createLogger({ level: 'silent' });
