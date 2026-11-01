@@ -11,6 +11,8 @@ import { join } from 'node:path';
 
 interface Manifest {
   readonly origin: string;
+  /** The scratch database's address, for a spec that runs a scheduled job against it as the scheduler would. */
+  readonly database: string;
   readonly code: string;
   readonly github: { readonly clientId: string; readonly clientSecret: string };
   /** The single sign-on provider the stand-in serves (D-200): its issuer and the client it knows. */
