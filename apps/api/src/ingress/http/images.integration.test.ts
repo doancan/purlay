@@ -161,17 +161,26 @@ describe('integration: an external image through the API', () => {
       while (releases.length < 4 && Date.now() - waitingSince < 5_000) await Bun.sleep(5);
       expect(releases).toHaveLength(4);
       expect(await ask(999)).toBe(404);
-      // Each held fetch let go, and each waiter after it, until every one has answered.
-      const done = Promise.all(held);
-      const state = { settled: false };
-      void done.then(() => {
-        state.settled = true;
-      });
-      while (!state.settled) {
-        releases.shift()?.();
-        await Bun.sleep(1);
+      // Each held fetch let go one at a time, the next only once the one before has answered: what is
+      // fetched is then decoded, one at a time with four waiting (`proxy.ts`), and letting every fetch go
+      // at once — every millisecond, as this did — filled that line on a slow runner and refused a picture
+      // for a reason this test is not about (main, 2026-11-01).
+      const answered = { count: 0 };
+      for (const each of held) {
+        void each.then(() => {
+          answered.count += 1;
+        });
       }
-      expect(await done).toEqual(Array.from({ length: 4 + FETCHES_WAITING }, () => 200));
+      for (let n = 1; n <= held.length; n += 1) {
+        const since = Date.now();
+        while (releases.length === 0 && Date.now() - since < 5_000) await Bun.sleep(1);
+        releases.shift()?.();
+        while (answered.count < n && Date.now() - since < 5_000) await Bun.sleep(1);
+        expect(answered.count).toBe(n);
+      }
+      expect(await Promise.all(held)).toEqual(
+        Array.from({ length: 4 + FETCHES_WAITING }, () => 200),
+      );
     });
   });
 
