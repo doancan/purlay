@@ -568,6 +568,24 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('pointing a thread at work that exists: the address sent and the link read (D-246)', async () => {
+    const work = {
+      id: ID,
+      repository: 'acme/api',
+      kind: 'issue' as const,
+      number: 1,
+      title: 'Retry',
+      state: 'open' as const,
+      origin: 'linked' as const,
+      url: 'https://github.com/acme/api/issues/1',
+    };
+    const linked = harness(work);
+    expect(await linked.api.linkGitHubWork(ID, { url: work.url })).toEqual(work);
+    expect(linked.calls).toEqual([
+      { method: 'POST', url: `/api/messages/${ID}/github-link`, body: { url: work.url } },
+    ]);
+  });
+
   test('a channel’s repository feeds: listed, connected with its body, disconnected (D-134)', async () => {
     const feed = {
       id: ID,

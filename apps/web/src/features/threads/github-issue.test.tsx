@@ -376,3 +376,171 @@ describe('making an issue', () => {
     view.unmount();
   });
 });
+
+describe('pointing a thread at work that exists', () => {
+  const openLink = async (view: Awaited<ReturnType<typeof mount>>): Promise<void> => {
+    await person().click(view.getByRole('button', { name: 'Link an issue or pull request…' }));
+    await settle();
+  };
+
+  test('takes an address as the contract holds every GitHub link, and sends it as written', async () => {
+    const sent: string[] = [];
+    const view = await mount({
+      api: {
+        linkGitHubWork: (_id, input) => {
+          sent.push(input.url);
+          return Promise.resolve({ ...LINK, state: 'merged', kind: 'pull' });
+        },
+      },
+    });
+    await openLink(view);
+    const dialog = within(view.getByRole('dialog'));
+    const link = dialog.getByRole('button', { name: 'Link' });
+    expect((link as HTMLButtonElement).disabled).toBe(true);
+    await person().type(
+      dialog.getByLabelText('Address on GitHub'),
+      'https://gitlab.com/a/b/issues/1',
+    );
+    expect(dialog.getByText(/not the address of an issue or a pull request/)).toBeDefined();
+    expect((link as HTMLButtonElement).disabled).toBe(true);
+    await person().clear(dialog.getByLabelText('Address on GitHub'));
+    await person().type(
+      dialog.getByLabelText('Address on GitHub'),
+      '  https://github.com/acme/api/pull/12  ',
+    );
+    await expectNoAxeViolations(view.getByRole('dialog'));
+    await person().click(link);
+    await settle();
+    expect(sent).toEqual(['https://github.com/acme/api/pull/12']);
+    expect(view.queryByRole('dialog')).toBeNull();
+    view.unmount();
+  });
+
+  test('says in words that it does not exist or cannot be reached, and that a thread can hold no more', async () => {
+    const answers = [
+      new ApiError(400, 'VALIDATION_FAILED', 'GitHub has no such issue or pull request.'),
+      new ApiError(400, 'VALIDATION_FAILED', 'This thread already points at as much as it can.'),
+    ];
+    const view = await mount({
+      api: {
+        linkGitHubWork: () =>
+          Promise.reject(answers.shift() ?? new ApiError(500, 'INTERNAL', 'Something went wrong.')),
+      },
+    });
+    await openLink(view);
+    const dialog = within(view.getByRole('dialog'));
+    await person().type(
+      dialog.getByLabelText('Address on GitHub'),
+      'https://github.com/acme/api/issues/1',
+    );
+    await person().click(dialog.getByRole('button', { name: 'Link' }));
+    await settle();
+    expect(
+      dialog.getByText(
+        /GitHub has no such issue or pull request that you and the App can both reach/,
+      ),
+    ).toBeDefined();
+    await person().click(dialog.getByRole('button', { name: 'Link' }));
+    await settle();
+    expect(dialog.getByText(/already points at as much GitHub work as it can/)).toBeDefined();
+    view.unmount();
+  });
+
+  test('without the person’s own authorization it asks for it first, coming back to this thread', async () => {
+    const returns: string[] = [];
+    const original = leave.to;
+    leave.to = (): void => undefined;
+    try {
+      const view = await mount({
+        status: UNAUTHORISED,
+        api: {
+          startGitHubAuthorization: (returnTo) => {
+            returns.push(returnTo);
+            return Promise.resolve({ url: 'https://github.example/authorize?state=s' });
+          },
+        },
+      });
+      await openLink(view);
+      const dialog = within(view.getByRole('dialog'));
+      expect(dialog.queryByLabelText('Address on GitHub')).toBeNull();
+      await person().click(dialog.getByRole('button', { name: 'Let Purlay create issues as me' }));
+      await settle();
+      view.unmount();
+    } finally {
+      leave.to = original;
+    }
+    expect(returns[0]).toContain('?thread=');
+  });
+
+  test('shows a merged pull request as merged', async () => {
+    const view = await mount({
+      work: [
+        { ...LINK, kind: 'pull', state: 'merged', url: 'https://github.com/acme/api/pull/12' },
+      ],
+    });
+    expect(within(view.getByRole('region', { name: 'GitHub' })).getByText('Merged')).toBeDefined();
+    view.unmount();
+  });
+});
+
+describe('the link dialog on a bad day', () => {
+  test('a refusal that is not the address is said as it is, Enter sends, and Cancel closes', async () => {
+    const view = await mount({
+      api: {
+        linkGitHubWork: () => Promise.reject(new ApiError(503, 'GITHUB_UNAVAILABLE', 'no')),
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Link an issue or pull request…' }));
+    await settle();
+    const dialog = within(view.getByRole('dialog'));
+    await person().type(
+      dialog.getByLabelText('Address on GitHub'),
+      'https://github.com/acme/api/issues/1{Enter}',
+    );
+    await settle();
+    expect(dialog.getByText(/GitHub did not answer. Nothing was changed/)).toBeDefined();
+    await person().click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
+    view.unmount();
+  });
+
+  test('an authorization GitHub no longer takes is asked for again', async () => {
+    let status = READY;
+    const view = await mount({
+      api: {
+        githubApp: () => Promise.resolve(status),
+        linkGitHubWork: () => {
+          status = UNAUTHORISED;
+          return Promise.reject(new ApiError(409, 'GITHUB_AUTHORIZATION_REQUIRED', 'no'));
+        },
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Link an issue or pull request…' }));
+    await settle();
+    const dialog = within(view.getByRole('dialog'));
+    await person().type(
+      dialog.getByLabelText('Address on GitHub'),
+      'https://github.com/acme/api/issues/1',
+    );
+    await person().click(dialog.getByRole('button', { name: 'Link' }));
+    await settle();
+    expect(dialog.getByRole('button', { name: 'Let Purlay create issues as me' })).toBeDefined();
+    view.unmount();
+  });
+
+  test('an authorization that cannot be started is said', async () => {
+    const view = await mount({
+      status: UNAUTHORISED,
+      api: {
+        startGitHubAuthorization: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Link an issue or pull request…' }));
+    await settle();
+    const dialog = within(view.getByRole('dialog'));
+    await person().click(dialog.getByRole('button', { name: 'Let Purlay create issues as me' }));
+    await settle();
+    expect(dialog.getByText(/Something went wrong/)).toBeDefined();
+    view.unmount();
+  });
+});

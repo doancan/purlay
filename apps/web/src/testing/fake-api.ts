@@ -45,6 +45,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   githubApp: unexpected('githubApp'),
   githubRepositories: unexpected('githubRepositories'),
   createGitHubIssue: unexpected('createGitHubIssue'),
+  linkGitHubWork: unexpected('linkGitHubWork'),
   startGitHubInstallation: unexpected('startGitHubInstallation'),
   removeGitHubInstallation: unexpected('removeGitHubInstallation'),
   startGitHubAuthorization: unexpected('startGitHubAuthorization'),

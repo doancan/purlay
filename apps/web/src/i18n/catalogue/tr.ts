@@ -443,6 +443,7 @@ export const tr = {
   'audit.kind.integration.app_connected': 'GitHub App bağlandı',
   'audit.kind.integration.app_disconnected': 'GitHub App bağlantısı kesildi',
   'audit.kind.integration.issue_created': 'Bir konuşmadan issue açıldı',
+  'audit.kind.integration.work_linked': 'Bir konuşmaya GitHub işi bağlandı',
   'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
   'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
   'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
@@ -484,6 +485,8 @@ export const tr = {
   'audit.action.integration.app_removed': 'GitHub, {account} hesabının App kurulumunu kaldırdı',
   'audit.action.integration.issue_created':
     '{actor}, bir konuşmadan {repository}#{number} issue’sunu açtı',
+  'audit.action.integration.work_linked':
+    '{actor}, {repository}#{number} işini bir konuşmaya bağladı',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
@@ -614,6 +617,17 @@ export const tr = {
   'githubIssues.me.forget': 'İzni kaldır',
   'githubIssue.work.title': 'GitHub',
   'githubIssue.work.create': 'GitHub issue’su oluştur…',
+  'githubIssue.work.link': 'Bir issue ya da pull request bağla…',
+  'githubIssue.link.title': 'Bir issue ya da pull request bağla',
+  'githubIssue.link.description':
+    'Bu konuşmayı GitHub’da zaten var olan bir işe bağla. GitHub’a hiçbir şey yazılmaz ve soru çözülmüş olmaz.',
+  'githubIssue.link.label': 'GitHub adresi',
+  'githubIssue.link.hint': 'https://github.com/sahip/depo/issues/12 ya da …/pull/12',
+  'githubIssue.link.action': 'Bağla',
+  'githubIssue.link.invalid': 'Bu, GitHub’daki bir issue ya da pull request adresi değil.',
+  'githubIssue.link.unreachable':
+    'GitHub’da, senin ve App’in birlikte ulaşabildiği böyle bir issue ya da pull request yok.',
+  'githubIssue.link.full': 'Bu konuşma zaten bağlanabilecek kadar çok GitHub işine işaret ediyor.',
   'githubIssue.dialog.title': 'GitHub issue’su oluştur',
   'githubIssue.dialog.description':
     'Neyin nereye gönderileceğini tam olarak gözden geçir. Issue açmak soruyu çözülmüş yapmaz.',

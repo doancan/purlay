@@ -30,6 +30,7 @@ import { Dialog } from '../../ui/dialog';
 import { Select } from '../../ui/select';
 import { TextField } from '../../ui/text-field';
 import { Note } from '../setup/parts';
+import { GitHubLinkDialog } from './github-link';
 import { leave } from '../sign-in/leave';
 import { useWorkspace } from '../shell/workspace';
 
@@ -53,6 +54,7 @@ export const GitHubWorkPanel = ({
   const api = useApi();
   const { workspace } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
   const status = useQuery({
     queryKey: keys.githubApp(workspace.id),
     queryFn: async ({ signal }) => await api.githubApp(workspace.id, signal),
@@ -72,14 +74,24 @@ export const GitHubWorkPanel = ({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-label font-semibold text-ink">{t('githubIssue.work.title')}</h3>
         {mayCreate && (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setOpen(true);
-            }}
-          >
-            {t('githubIssue.work.create')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setLinking(true);
+              }}
+            >
+              {t('githubIssue.work.link')}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setOpen(true);
+              }}
+            >
+              {t('githubIssue.work.create')}
+            </Button>
+          </div>
         )}
       </div>
       {work.length > 0 && (
@@ -99,6 +111,15 @@ export const GitHubWorkPanel = ({
             </li>
           ))}
         </ul>
+      )}
+      {linking && (
+        <GitHubLinkDialog
+          rootId={root.id}
+          channelId={root.channelId}
+          onClose={() => {
+            setLinking(false);
+          }}
+        />
       )}
       {open && (
         <GitHubIssueDialog
