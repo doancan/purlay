@@ -774,6 +774,8 @@ export const AUDIT_ACTIONS = [
   'integration.app_disconnected',
   /** An issue made from a thread by a person: who, where, which — never its words (D-246 §2). */
   'integration.issue_created',
+  /** An existing issue or pull request linked to a thread: who, where, which — never its title (D-246 §3). */
+  'integration.work_linked',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
