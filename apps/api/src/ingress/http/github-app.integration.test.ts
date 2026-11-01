@@ -541,9 +541,11 @@ describe('integration: the App’s deliveries (D-246 §1)', () => {
           .where('received_at', '>=', NOW)
           .execute(),
       ).toEqual([]);
-      expect(await (await deliver(world, 'issues', { action: 'opened' })).json()).toEqual({
+      expect(await (await deliver(world, 'star', { action: 'created' })).json()).toEqual({
         outcome: 'ignored',
       });
+      // An issues event names its repository, installation and issue: one that does not is refused.
+      expect((await deliver(world, 'issues', { action: 'opened' })).status).toBe(400);
     });
   });
 });

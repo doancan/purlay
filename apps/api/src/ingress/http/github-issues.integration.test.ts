@@ -14,198 +14,27 @@ import {
   withRollback,
   DROP_HOOK_MS,
   type ClonedDatabase,
-  type Executor,
 } from '@purlay/db';
+import { GitHubRepositoryList, githubIssueMarker, messageId } from '@purlay/types';
 import {
-  GitHubIssueOutcome,
-  GitHubRepositoryList,
-  githubIssueMarker,
-  messageId,
-  type Message,
-} from '@purlay/types';
-import { keepAuthorization } from '../../modules/integrations/github-app';
-import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
-import { credentialCipher } from '../../platform/crypto';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { fixedClock } from '../../platform/clock';
-import { testDependencies } from '../../testing/doubles';
-import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from '../../testing/github-app-stub';
-import { aGitHubStub } from '../../testing/github-stub';
-import { aRoom } from '../../testing/rooms';
-import { aSession } from '../../testing/signed-in';
-import { createApp } from './app';
+  aWorld,
+  API,
+  codeOf,
+  create,
+  NOW,
+  outcomeOf,
+  PERSON,
+  request,
+  rootOf,
+  WEB,
+  type World,
+} from '../../testing/github-world';
 
 const clones: ClonedDatabase[] = [];
 afterAll(async () => {
   for (const clone of clones) await clone.drop();
   await closeIntegrationDatabase();
 }, DROP_HOOK_MS);
-
-const NOW = new Date('2026-11-01T12:00:00.000Z');
-const PERSON = { id: 501, login: 'ayse-dev' };
-const API = { id: 77, fullName: 'acme/api', private: true };
-const WEB = { id: 78, fullName: 'acme/web', private: false };
-const cipher = credentialCipher(DEVELOPMENT_ENCRYPTION_KEY);
-
-interface World {
-  readonly call: (method: string, path: string, who: Person, body?: unknown) => Promise<Response>;
-  readonly github: GitHubAppStub;
-  readonly time: { now: Date };
-  readonly db: Executor;
-  readonly workspaceId: string;
-  readonly channelId: string;
-  readonly rootId: string;
-  readonly owner: Person;
-  readonly member: Person;
-  readonly outsider: Person;
-}
-
-interface Person {
-  readonly userId: string;
-  readonly cookie: string;
-}
-
-const aWorld = async (
-  db: Executor,
-  options: {
-    readonly type?: 'public' | 'private';
-    readonly installed?: boolean;
-    /** How long a call to GitHub may take before it is taken as lost. */
-    readonly deadlineMs?: number;
-    readonly authorized?: boolean;
-  } = {},
-): Promise<World> => {
-  const room = await aRoom(db, ['owner', 'member'], {
-    type: options.type ?? 'public',
-    outsiders: ['outsider'],
-  });
-  const time = { now: NOW };
-  const github = aGitHubAppStub(PERSON, { now: () => time.now.getTime() });
-  github.install(31, 'acme', [API, WEB]);
-  const stub = aGitHubStub({ ...PERSON, name: null, email: 'ayse@example.test' }, {}, undefined, {
-    app: github,
-  });
-  const appFetch: typeof stub.appFetch = async (url, init) =>
-    await stub.appFetch(url, {
-      ...init,
-      signal: AbortSignal.timeout(options.deadlineMs ?? 5_000),
-    });
-  const app = createApp(
-    testDependencies({
-      database: db,
-      clock: { now: () => time.now },
-      githubApp: () => GITHUB_APP_STUB,
-      githubAppFetch: appFetch,
-    }),
-  );
-  const personOf = async (name: string): Promise<Person> => {
-    const userId =
-      room.members[name]?.userId ??
-      room.outsiders[name]?.userId ??
-      '00000000-0000-4000-8000-000000000000';
-    const { token } = await aSession(db, fixedClock(NOW), userId, 30);
-    return { userId, cookie: `${SESSION_COOKIE}=${token}` };
-  };
-  const owner = await personOf('owner');
-  const member = await personOf('member');
-  const outsider = await personOf('outsider');
-  if (options.installed !== false) {
-    await db
-      .insertInto('github_app_installations')
-      .values({
-        id: crypto.randomUUID(),
-        workspace_id: room.workspaceId,
-        installation_id: '31',
-        account_login: 'acme',
-        account_type: 'Organization',
-        connected_by: owner.userId,
-        connected_at: NOW,
-      })
-      .execute();
-  }
-  if (options.authorized !== false) {
-    await keepAuthorization(
-      db,
-      { clock: { now: () => time.now }, cipher },
-      owner.userId,
-      PERSON,
-      github.grantUser(),
-    );
-  }
-  const call: World['call'] = async (method, path, who, body) =>
-    await app.handle(
-      new Request(`https://purlay.test${path}`, {
-        method,
-        headers: {
-          cookie: who.cookie,
-          origin: 'https://purlay.test',
-          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      }),
-    );
-  const rootId = messageId(NOW);
-  const sent = await call('POST', `/api/channels/${room.channelId}/messages`, owner, {
-    id: rootId,
-    content: 'How should the retry back off?',
-  });
-  expect(sent.status).toBe(201);
-  return {
-    call,
-    github,
-    time,
-    db,
-    workspaceId: room.workspaceId,
-    channelId: room.channelId,
-    rootId,
-    owner,
-    member,
-    outsider,
-  };
-};
-
-const request = (
-  over: Record<string, unknown> = {},
-): {
-  clientRequestId: string;
-  repositoryId: number;
-  title: string;
-  body: string;
-  copyPrivateText: boolean;
-} => ({
-  clientRequestId: crypto.randomUUID(),
-  repositoryId: API.id,
-  title: 'Retry with jitter',
-  body: 'Decided: exponential, with jitter.',
-  copyPrivateText: false,
-  ...over,
-});
-
-const create = async (
-  world: World,
-  body: unknown,
-  who: Person = world.owner,
-  at: string = world.rootId,
-): Promise<{ status: number; headers: Headers; json: unknown }> => {
-  const response = await world.call('POST', `/api/messages/${at}/github-issue`, who, body);
-  return { status: response.status, headers: response.headers, json: await response.json() };
-};
-
-const outcomeOf = (json: unknown): GitHubIssueOutcome => {
-  if (!Value.Check(GitHubIssueOutcome, json)) throw new Error('not a GitHubIssueOutcome');
-  return json;
-};
-
-const codeOf = (json: unknown): string => (json as { error: { code: string } }).error.code;
-
-const rootOf = async (world: World): Promise<Message> => {
-  const page = (await (
-    await world.call('GET', `/api/channels/${world.channelId}/messages`, world.owner)
-  ).json()) as { data: Message[] };
-  const found = page.data.find((message) => message.id === world.rootId);
-  if (found === undefined) throw new Error('the root is not on the page');
-  return found;
-};
 
 describe('integration: the repositories a person may choose (D-246 §2)', () => {
   test('are the ones both they and the App reach, as the contract says them', async () => {
@@ -695,6 +524,111 @@ describe('integration: who may make it, checked as it is sent (D-246 §2)', () =
       expect(
         outcomeOf((await create(world, request({ title: 'x'.repeat(256), body: '' }))).json).status,
       ).toBe('created');
+    });
+  });
+});
+
+describe('integration: the paths a bad day takes (D-246 §4)', () => {
+  test('a refresh token GitHub refuses ends the authorization, and the person is asked for it again', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      world.github.expireUserTokens();
+      world.time.now = new Date(NOW.getTime() + 9 * 3_600_000);
+      // Revoked on GitHub: the refresh token is spent with it.
+      world.github.revokeUser();
+      const refused = await create(world, request());
+      expect([refused.status, codeOf(refused.json)]).toEqual([
+        409,
+        'GITHUB_AUTHORIZATION_REQUIRED',
+      ]);
+      expect(
+        await db
+          .selectFrom('github_user_authorizations')
+          .select('id')
+          .where('user_id', '=', world.owner.userId)
+          .execute(),
+      ).toEqual([]);
+    });
+  });
+
+  test('a limit met at the create itself gives the claim back, with its wait, and the same request goes through', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const body = request();
+      world.github.behaviour.create = 'limits';
+      const limited = await create(world, body);
+      expect([limited.status, limited.headers.get('retry-after')]).toEqual([429, '30']);
+      expect(
+        await db
+          .selectFrom('github_operations')
+          .select('id')
+          .where('workspace_id', '=', world.workspaceId)
+          .execute(),
+      ).toEqual([]);
+      world.github.behaviour.create = 'creates';
+      expect(outcomeOf((await create(world, body)).json).status).toBe('created');
+      expect(world.github.items).toHaveLength(1);
+    });
+  });
+
+  test('GitHub unreachable while looking for a lost answer is still not known, and is not a look', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db, { deadlineMs: 100 });
+      world.github.behaviour.create = 'creates-silently';
+      const body = request();
+      expect(outcomeOf((await create(world, body)).json).status).toBe('unknown');
+      world.github.behaviour.create = 'creates';
+      world.github.behaviour.unreachable = true;
+      expect(outcomeOf((await create(world, body)).json).status).toBe('unknown');
+      const row = await db
+        .selectFrom('github_operations')
+        .select('attempts')
+        .where('workspace_id', '=', world.workspaceId)
+        .executeTakeFirstOrThrow();
+      expect(row.attempts).toBe(0);
+    });
+  });
+
+  test('the App’s own token refused is GitHub unavailable, and the person’s authorization stays', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db, { deadlineMs: 100 });
+      world.github.behaviour.create = 'creates-silently';
+      const body = request();
+      expect(outcomeOf((await create(world, body)).json).status).toBe('unknown');
+      world.github.behaviour.appTokenRefused = true;
+      // Looking for the lost answer: not known yet, which is the truth.
+      expect(outcomeOf((await create(world, body)).json).status).toBe('unknown');
+      // Reading linked work as the installation: GitHub not answering, never the person's fault.
+      const linked = await world.call(
+        'POST',
+        `/api/messages/${world.rootId}/github-link`,
+        world.owner,
+        {
+          url: 'https://github.com/acme/api/issues/1',
+        },
+      );
+      expect([linked.status, codeOf(await linked.json())]).toEqual([503, 'GITHUB_UNAVAILABLE']);
+      expect(
+        await db
+          .selectFrom('github_user_authorizations')
+          .select('id')
+          .where('user_id', '=', world.owner.userId)
+          .execute(),
+      ).toHaveLength(1);
+    });
+  });
+
+  test('a refused operation holding a reason the contract does not name is a defect, said loudly', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const body = request();
+      await create(world, body);
+      await db
+        .updateTable('github_operations')
+        .set({ status: 'refused', reason: 'made-up', issue_number: null })
+        .where('workspace_id', '=', world.workspaceId)
+        .execute();
+      expect((await create(world, body)).status).toBe(500);
     });
   });
 });
