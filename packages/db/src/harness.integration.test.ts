@@ -266,3 +266,33 @@ describe('integration: the database the rollback harness uses directly', () => {
     }
   });
 });
+
+/**
+ * #797: a file's `afterAll` that ran out of time left the shared pool closing while the next file asked for
+ * it, and every query after that read "driver has already been destroyed". Whoever asks while a close is
+ * under way, or after it, is given a pool that works — never the one being destroyed.
+ */
+describe('integration harness: the shared pool while it is being closed (#797)', () => {
+  test('a close still under way hands the next caller a new pool, not the closing one', async () => {
+    const closing = integrationDatabase();
+    await sql`select 1`.execute(closing);
+    const closed = closeIntegrationDatabase();
+    const next = integrationDatabase();
+    expect(next).not.toBe(closing);
+    const { rows } = await sql<{ one: number }>`select 1 as one`.execute(next);
+    expect(rows).toEqual([{ one: 1 }]);
+    await closed;
+    // The close that was under way ended the old pool only.
+    expect(
+      (await sql<{ one: number }>`select 1 as one`.execute(integrationDatabase())).rows,
+    ).toEqual([{ one: 1 }]);
+  });
+
+  test('two closes at once end the pool once, and neither throws', async () => {
+    await sql`select 1`.execute(integrationDatabase());
+    await Promise.all([closeIntegrationDatabase(), closeIntegrationDatabase()]);
+    expect(
+      (await sql<{ one: number }>`select 1 as one`.execute(integrationDatabase())).rows,
+    ).toEqual([{ one: 1 }]);
+  });
+});

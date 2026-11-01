@@ -11111,4 +11111,13 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'if (isLibraryFailure(caught) && CHALLENGE_OVER.has(caught.code) && false) {',
     tests: ['apps/web/src/features/sign-in/password-sign-in.test.tsx'],
   },
+  {
+    id: 'closing-pool-handed-out',
+    why: 'the next file is handed the shared pool while it is being destroyed, and every query fails (#797)',
+    file: 'packages/db/src/testing.ts',
+    find: '  const closing = shared;\n  shared = undefined;\n  if (closing !== undefined) await closing.destroy();\n',
+    replace:
+      '  const closing = shared;\n  if (closing !== undefined) await closing.destroy();\n  shared = undefined;\n',
+    tests: ['packages/db/src/harness.integration.test.ts'],
+  },
 ];
