@@ -74,7 +74,9 @@ interface GitHubAppBehaviour {
    * and never answers, so the caller's deadline is all it hears (`creates-silently`); never answers and makes
    * nothing (`hangs`); or `502`.
    */
-  create?: 'creates' | 'creates-silently' | 'hangs' | 'fails' | 'slow';
+  create?: 'creates' | 'creates-silently' | 'hangs' | 'fails' | 'slow' | 'limits';
+  /** The App's own token is refused, as GitHub refuses one whose key is revoked: a `401` to every call made as the App. */
+  appTokenRefused?: boolean;
   /** Every call fails to connect. */
   unreachable?: boolean;
 }
@@ -86,6 +88,8 @@ export interface GitHubAppStub {
   readonly behaviour: GitHubAppBehaviour;
   /** Every API call asked of it, as `METHOD path`, in order. */
   readonly calls: string[];
+  /** Whose token each call carried, in the same order: the App itself, a person, or an installation. */
+  readonly callers: ('app' | 'user' | 'installation')[];
   /** The App's callback, as registered on GitHub; set by a test that knows its server's address. */
   callbackUrl: string;
   /** An installation of the App on an account, with its repositories. */
@@ -145,6 +149,7 @@ export const aGitHubAppStub = (
   const items: StubItem[] = [];
   const behaviour: GitHubAppBehaviour = {};
   const calls: string[] = [];
+  const callers: ('app' | 'user' | 'installation')[] = [];
   const codes = new Map<
     string,
     { readonly redirectUri: string; readonly challenge: string | null; spent: boolean }
@@ -160,6 +165,7 @@ export const aGitHubAppStub = (
     items,
     behaviour,
     calls,
+    callers,
     callbackUrl: 'https://purlay.test/api/github-app/callback',
     install: (id, login, repositories, installOptions = {}) => {
       const installation: StubInstallation = {
@@ -375,8 +381,9 @@ export const aGitHubAppStub = (
     user: { login: item.creator },
     created_at: item.createdAt,
     updated_at: item.updatedAt,
+    // GitHub says a pull request is one by this key on the issues route, and gives its own `merged` on its own.
     ...(item.kind === 'pull'
-      ? { merged_at: item.merged ? item.updatedAt : null, merged: item.merged }
+      ? { pull_request: {}, merged_at: item.merged ? item.updatedAt : null, merged: item.merged }
       : {}),
   });
 
@@ -393,6 +400,12 @@ export const aGitHubAppStub = (
     }
     const mode = behaviour.create ?? 'creates';
     if (mode === 'fails') return new Response('', { status: 502 });
+    if (mode === 'limits') {
+      return Response.json(
+        { message: 'You have exceeded a secondary rate limit.' },
+        { status: 403, headers: { 'retry-after': '30' } },
+      );
+    }
     const make = (): StubItem => {
       const at = new Date(now()).toISOString();
       const item: StubItem = {
@@ -433,6 +446,7 @@ export const aGitHubAppStub = (
     // Not the App's: the sign-in stub's own token, or no token at all.
     if (!isApp && !isUser && !isInstallation) return undefined;
     calls.push(`${request.method} ${path}`);
+    callers.push(isApp ? 'app' : isUser ? 'user' : 'installation');
     if (behaviour.limit !== undefined && behaviour.limit.times > 0) {
       behaviour.limit.times -= 1;
       return Response.json(
@@ -441,6 +455,7 @@ export const aGitHubAppStub = (
       );
     }
     if (isApp) {
+      if (behaviour.appTokenRefused === true) return badCredentials();
       const problem = appTokenProblem(bearer);
       if (problem !== undefined) return Response.json({ message: problem }, { status: 401 });
       if (path === '/app') {

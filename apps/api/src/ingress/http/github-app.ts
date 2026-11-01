@@ -24,6 +24,7 @@ import {
   type AppOutcome,
 } from '../../modules/integrations/github-app-webhook';
 import { AppError } from '../../platform/errors';
+import type { EventBus } from '../../platform/events';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { requireSession } from './session';
 import { validated } from './validate';
@@ -110,6 +111,8 @@ export const githubAppCallback = async (
 };
 
 export interface AppWebhookRouteDependencies extends GitHubAppRouteDependencies {
+  /** What a delivery that changes what a thread shows tells the rooms through. */
+  readonly bus: EventBus;
   /** Whether this address may knock once more: the feeds' bucket, before anything is looked at. */
   readonly mayKnock: (address: string) => Promise<boolean>;
   /** This node's count of deliveries being read, shared with the feeds' address. */

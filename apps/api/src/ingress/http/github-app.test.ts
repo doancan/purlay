@@ -40,6 +40,12 @@ const attempt = async (
         seal: () => Promise.reject(new Error('unused')),
         open: () => Promise.reject(new Error('unused')),
       },
+      bus: {
+        publish: () => Promise.resolve(),
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      },
       app: over.app === false ? undefined : GITHUB_APP_STUB,
       api: githubAppApi(
         githubAppCaller(

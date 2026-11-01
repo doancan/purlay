@@ -23,14 +23,18 @@
  * - **Audited by identifier**: who, which repository, which issue — never a title or a body.
  */
 import { createHash } from 'node:crypto';
-import { sql, type Executor } from '@purlay/db';
+import type { Executor } from '@purlay/db';
 import {
   githubIssueMarker,
   GITHUB_REPOSITORIES_MAX,
+  GITHUB_WORK_PER_THREAD_MAX,
+  GitHubLink,
   type CreateGitHubIssueRequest,
   type GitHubIssueOutcome,
   type GitHubIssueRefusal,
   type GitHubRepository,
+  type GitHubWorkLink,
+  type LinkGitHubWorkRequest,
 } from '@purlay/types';
 import {
   requireChannelMember,
@@ -38,16 +42,10 @@ import {
   type VisibleMessage,
 } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
-import {
-  publication,
-  publishAfterCommit,
-  publishThreadUpdated,
-  type EventBus,
-} from '../../platform/events';
+import type { EventBus } from '../../platform/events';
 import { appJwt } from '../../platform/github-app-key';
 import { atomicallyOn } from '../../platform/transactions';
 import { recordAudit } from '../audit/audit';
-import { readBuilt } from '../messages/reader';
 import {
   GitHubRateLimited,
   GitHubUnauthorized,
@@ -56,6 +54,7 @@ import {
 } from './github-app-api';
 import { keepAuthorization, requireApp, sealedIn, type GitHubAppDependencies } from './github-app';
 import { workLinkOf } from './github-work';
+import { announce, tell } from './github-work-events';
 
 export interface GitHubIssueDependencies extends GitHubAppDependencies {
   readonly bus: EventBus;
@@ -319,14 +318,14 @@ const dropped = async (database: Executor, operation: Pick<Operation, 'id'>): Pr
  * The issue exists: the operation is `created`, the root is linked, the trail has it and the thread is told —
  * all or none, in one transaction; the thread is told after it commits.
  */
-const finish = async (
-  dependencies: GitHubIssueDependencies,
-  target: VisibleMessage,
+export const finishOperation = async (
+  dependencies: Pick<GitHubIssueDependencies, 'database' | 'clock' | 'bus' | 'log'>,
+  channelId: string,
   actorId: string,
   operation: Operation,
   issue: IssueOnGitHub,
 ): Promise<GitHubIssueOutcome> => {
-  const { database, clock, bus, log } = dependencies;
+  const { database, clock } = dependencies;
   const done = await atomicallyOn(database)(async (transaction) => {
     const now = clock.now();
     await transaction
@@ -339,7 +338,7 @@ const finish = async (
       .values({
         id: crypto.randomUUID(),
         workspace_id: operation.workspace_id,
-        channel_id: target.context.channelId,
+        channel_id: channelId,
         root_id: operation.root_id,
         repository_id: operation.repository_id,
         repository_full_name: operation.repository_full_name,
@@ -352,19 +351,14 @@ const finish = async (
         created_by: actorId,
         created_at: now,
       })
-      // A second finish of one operation — a reconciliation racing its own answer — links once.
+      // A second finish of one operation — a reconciliation racing its own answer, or the delivery that saw the
+      // issue first — links once.
       .onConflict((conflict) =>
         conflict.columns(['root_id', 'repository_id', 'kind', 'number']).doUpdateSet({
           title: issue.title.slice(0, 256),
         }),
       )
       .returning(['id', 'repository_full_name', 'kind', 'number', 'title', 'state', 'origin'])
-      .executeTakeFirstOrThrow();
-    const root = await transaction
-      .updateTable('messages')
-      .set({ state_version: sql<number>`state_version + 1` })
-      .where('id', '=', operation.root_id)
-      .returning('state_version')
       .executeTakeFirstOrThrow();
     await recordAudit(transaction, clock, {
       workspaceId: operation.workspace_id,
@@ -375,30 +369,38 @@ const finish = async (
       metadata: {
         repository: operation.repository_full_name,
         issue: String(issue.number),
-        channelId: target.context.channelId,
+        channelId,
       },
     });
-    const message = await readBuilt(transaction, operation.root_id);
-    if (message?.thread == null) throw new Error('a root with a link has no thread');
-    return { link: workLinkOf(link), thread: message.thread, version: root.state_version };
+    return {
+      link: workLinkOf(link),
+      notice: await announce(transaction, channelId, operation.root_id),
+    };
   });
-  await publishAfterCommit(log, [
-    [
-      publication('THREAD_UPDATED', () =>
-        publishThreadUpdated(
-          bus,
-          clock,
-          {
-            channelId: target.context.channelId,
-            messageId: operation.root_id,
-            thread: done.thread,
-          },
-          done.version,
-        ),
-      ),
-    ],
-  ]);
+  await tell(dependencies, [done.notice]);
   return { status: 'created', link: done.link };
+};
+
+/**
+ * The installation's own token, minted as the App. GitHub refusing it is the App's trouble — its key, or the
+ * installation — and never the person's token, which stays: so it is said as GitHub not answering.
+ */
+const installationTokenOf = async (
+  dependencies: GitHubAppDependencies,
+  installationId: number,
+): Promise<string> => {
+  const app = requireApp(dependencies.app);
+  try {
+    return await dependencies.api.installationToken(
+      appJwt(app.clientId, app.privateKey, dependencies.clock.now()),
+      installationId,
+    );
+  } catch (error) {
+    if (error instanceof GitHubUnauthorized) {
+      throw new GitHubUnavailable('GitHub did not take the App’s own token');
+    }
+    throw error;
+  }
 };
 
 /** GitHub's reads, as the installation: the issue that ends in the operation's marker, if there is one. */
@@ -406,10 +408,8 @@ const sighted = async (
   dependencies: GitHubAppDependencies,
   operation: Operation,
 ): Promise<IssueOnGitHub | undefined> => {
-  const app = requireApp(dependencies.app);
   const installation = await installationOf(dependencies.database, operation.workspace_id);
-  const jwt = appJwt(app.clientId, app.privateKey, dependencies.clock.now());
-  const token = await dependencies.api.installationToken(jwt, installation.installationId);
+  const token = await installationTokenOf(dependencies, installation.installationId);
   // From a minute before the operation was claimed, a clock's slack, to now.
   const since = new Date(new Date(operation.created_at).getTime() - 60_000);
   const issues = await dependencies.api.issuesSince(token, operation.repository_full_name, since);
@@ -435,7 +435,8 @@ const reconcile = async (
     if (error instanceof GitHubUnavailable) return { status: 'unknown' };
     throw await translated(dependencies, actorId, error);
   }
-  if (issue !== undefined) return await finish(dependencies, target, actorId, operation, issue);
+  if (issue !== undefined)
+    return await finishOperation(dependencies, target.context.channelId, actorId, operation, issue);
   const attempts = operation.attempts + 1;
   const late =
     clock.now().getTime() - new Date(operation.created_at).getTime() >= RECONCILE_GIVE_UP_MS;
@@ -571,5 +572,129 @@ export const createIssue = async (
     await settle(dependencies, operation, { status: 'refused', reason: made.refused });
     return { status: 'refused', reason: made.refused };
   }
-  return await finish(dependencies, target, userId, operation, made);
+  return await finishOperation(dependencies, target.context.channelId, userId, operation, made);
+};
+
+/** The contract's own pattern for an address, so what is accepted and what is taken apart cannot differ. */
+const WORK_ADDRESS = new RegExp(GitHubLink.pattern ?? '^$');
+
+/**
+ * `POST /api/messages/:messageId/github-link` — an issue or pull request that exists, pointed at from a root.
+ *
+ * Read with the **installation's** token, never the person's: what a thread shows of it is the workspace's, the
+ * same for everybody, and survives the person. The person's own access still decides whether they may point at
+ * it — the repository must be one GitHub lists for them inside the installation — so a title cannot be had by
+ * naming a private repository one cannot see; the answer is the same whether it does not exist or may not be
+ * reached. Nothing is written to GitHub and nothing is resolved.
+ */
+export const linkWork = async (
+  dependencies: GitHubIssueDependencies,
+  userId: string,
+  rootId: string,
+  input: LinkGitHubWorkRequest,
+): Promise<{ readonly link: GitHubWorkLink; readonly created: boolean }> => {
+  requireApp(dependencies.app);
+  const { database, clock } = dependencies;
+  const target = await requireMessageById(database, userId, rootId);
+  await requireChannelMember(
+    database,
+    target.context,
+    'Join the channel to link GitHub work to it.',
+  );
+  if (target.parentId !== null) {
+    throw invalid('messageId', 'Only the message that started a thread can point at GitHub work.');
+  }
+  const parts = WORK_ADDRESS.exec(input.url);
+  if (parts === null) throw invalid('url', 'That is not an issue or pull request address.');
+  const [, owner = '', name = '', , number = ''] = parts;
+  const workspaceId = target.context.workspaceId;
+  const installation = await installationOf(database, workspaceId);
+  const unreachable = invalid(
+    'url',
+    'GitHub has no such issue or pull request that you and the App can both reach.',
+  );
+  const found = await asCaller(dependencies, userId, async () => {
+    const person = await personOf(dependencies, userId);
+    const repositories = await repositoriesOf(dependencies, installation.installationId, person);
+    const repository = repositories.find(
+      (candidate) => candidate.fullName.toLowerCase() === `${owner}/${name}`.toLowerCase(),
+    );
+    if (repository === undefined) return undefined;
+    const token = await installationTokenOf(dependencies, installation.installationId);
+    const work = await dependencies.api.item(token, repository.fullName, Number(number));
+    return work === 'missing' ? undefined : { repository, work };
+  });
+  if (found === undefined) throw unreachable;
+  const { repository, work } = found;
+  const made = await atomicallyOn(database)(async (transaction) => {
+    const existing = await transaction
+      .selectFrom('github_links')
+      .select(['id', 'repository_full_name', 'kind', 'number', 'title', 'state', 'origin'])
+      .where('root_id', '=', rootId)
+      .orderBy('created_at')
+      .execute();
+    const same = existing.find(
+      (row) =>
+        row.kind === work.kind &&
+        row.number === work.number &&
+        row.repository_full_name === repository.fullName,
+    );
+    if (same !== undefined) return { link: workLinkOf(same), created: false, notice: undefined };
+    if (existing.length >= GITHUB_WORK_PER_THREAD_MAX) {
+      throw invalid('url', 'This thread already points at as much GitHub work as it can.');
+    }
+    const now = clock.now();
+    const row = await transaction
+      .insertInto('github_links')
+      .values({
+        id: crypto.randomUUID(),
+        workspace_id: workspaceId,
+        channel_id: target.context.channelId,
+        root_id: rootId,
+        repository_id: repository.id,
+        repository_full_name: repository.fullName,
+        kind: work.kind,
+        number: work.number,
+        title: work.title.slice(0, 256),
+        state: work.state,
+        state_at: work.updatedAt,
+        origin: 'linked',
+        created_by: userId,
+        created_at: now,
+      })
+      .onConflict((conflict) => conflict.doNothing())
+      .returning(['id', 'repository_full_name', 'kind', 'number', 'title', 'state', 'origin'])
+      .executeTakeFirst();
+    // Linked by another click in the same instant: theirs stands, and this is the same answer.
+    if (row === undefined) {
+      const raced = await transaction
+        .selectFrom('github_links')
+        .select(['id', 'repository_full_name', 'kind', 'number', 'title', 'state', 'origin'])
+        .where('root_id', '=', rootId)
+        .where('repository_id', '=', String(repository.id))
+        .where('kind', '=', work.kind)
+        .where('number', '=', work.number)
+        .executeTakeFirstOrThrow();
+      return { link: workLinkOf(raced), created: false, notice: undefined };
+    }
+    await recordAudit(transaction, clock, {
+      workspaceId,
+      actorUserId: userId,
+      action: 'integration.work_linked',
+      targetType: 'message',
+      targetId: rootId,
+      metadata: {
+        repository: repository.fullName,
+        number: String(work.number),
+        channelId: target.context.channelId,
+      },
+    });
+    return {
+      link: workLinkOf(row),
+      created: true,
+      notice: await announce(transaction, target.context.channelId, rootId),
+    };
+  });
+  if (made.notice !== undefined) await tell(dependencies, [made.notice]);
+  return { link: made.link, created: made.created };
 };

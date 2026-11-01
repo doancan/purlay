@@ -5,12 +5,15 @@
  */
 import {
   CreateGitHubIssueRequest,
+  LinkGitHubWorkRequest,
+  type GitHubWorkLink,
   type GitHubIssueOutcome,
   type GitHubRepositoryList,
 } from '@purlay/types';
 import {
   allowedRepositories,
   createIssue,
+  linkWork,
   type GitHubIssueDependencies,
 } from '../../modules/integrations/github-issues';
 import type { Auth } from '../../modules/auth/better-auth';
@@ -57,4 +60,15 @@ export const makeGitHubIssue = async (
     messageId,
     validated(CreateGitHubIssueRequest, body),
   );
+};
+
+/** `POST /api/messages/:messageId/github-link` — a member of the channel, pointing at work that exists. */
+export const linkGitHubWork = async (
+  dependencies: GitHubIssueRouteDependencies,
+  request: Request,
+  messageId: string,
+  body: unknown,
+): Promise<{ readonly link: GitHubWorkLink; readonly created: boolean }> => {
+  const { userId } = await requireSession(dependencies.auth, request);
+  return await linkWork(dependencies, userId, messageId, validated(LinkGitHubWorkRequest, body));
 };

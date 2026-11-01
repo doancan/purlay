@@ -521,6 +521,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ following: true }),
     visibility: MESSAGE,
   },
+  'POST /api/messages/:messageId/github-link': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+    body: () => ({ url: 'https://github.com/acme/api/issues/1' }),
+  },
   'POST /api/messages/:messageId/github-issue': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
