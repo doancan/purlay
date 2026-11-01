@@ -27,6 +27,7 @@ have it.
 
 - **Notifications** — Turn on email about direct messages and mentions left unread for fifteen minutes: one letter at most an hour, never in Deep Work or quiet hours, quoting only what you can still read, with a link that stops it without signing in (D-240)
 - **Channels** — Mark every channel read at once with Shift+Esc, from the command palette or the workspace menu; your other devices clear too, and an answer still waiting in a thread stays unread (D-238)
+- **Sign-in** — The server's administrator can sign people out after a time without use (an hour to a week) and ask them to sign in again after a time at all (a day to ninety days), in the browser and the Mac app; sessions already open follow from their next request (D-244)
 - **Sign-in** — The server's administrator can require two-step verification of every account with a password (anyone without it is asked to turn it on before anything else) and, while GitHub or single sign-on works, turn password sign-in off; `admin:reset-password` turns it back on (D-239)
 - **Profile** — A person whose account did not come from GitHub — an emailed link, single sign-on or a password — sets the name everyone sees on Profile; a GitHub account's name stays GitHub's (D-235)
 - **Mobile** — Purlay installs as an application from the browser; on an iPhone, added to the Home Screen it can receive notifications, and the notifications page says how (D-230)
