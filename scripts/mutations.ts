@@ -87,6 +87,11 @@ const SETUP_LIMITS = 'apps/api/src/ingress/http/rate-limit.ts';
 const SETUP_WIZARD = 'apps/api/src/modules/setup/wizard.ts';
 const COOKIES = 'apps/api/src/platform/cookies.ts';
 
+const PERSONAL_EXPORT = 'apps/api/src/modules/export/personal.ts';
+const PERSONAL_EXPORT_TESTS = 'apps/api/src/modules/export/personal.integration.test.ts';
+const PERSONAL_REQUESTS = 'apps/api/src/modules/export/personal-requests.ts';
+const PERSONAL_HTTP_TESTS = 'apps/api/src/ingress/http/personal-exports.integration.test.ts';
+
 const INVITE_MAIL = 'apps/api/src/modules/workspaces/invitation-mail.ts';
 const INVITE_MAIL_TESTS = 'apps/api/src/modules/workspaces/invitation-mail.integration.test.ts';
 
@@ -658,9 +663,12 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'export-expects-a-key-uploads-never-write',
     why: 'the export’s key check and the uploads’ key disagree, and every export of a workspace with a file fails',
     file: 'apps/api/src/modules/export/export.ts',
-    find: '      if (key !== null && !key.startsWith(workspacePrefix(scope.workspaceId))) {\n',
-    replace: '      if (key !== null && !key.startsWith(`${scope.workspaceId}/`)) {\n',
-    tests: ['apps/api/src/modules/export/export.integration.test.ts'],
+    find: '      if (key !== null && !key.startsWith(workspacePrefix(file.workspace_id))) {\n',
+    replace: '      if (key !== null && !key.startsWith(`${file.workspace_id}/`)) {\n',
+    tests: [
+      'apps/api/src/modules/export/export.integration.test.ts',
+      'apps/api/src/modules/export/personal.integration.test.ts',
+    ],
   },
   {
     id: 'export-downloaded-twice',
@@ -11374,5 +11382,103 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  if (before?.available !== true) return null;\n',
     replace: '  if (before === undefined) return null;\n',
     tests: ['apps/web/src/features/settings/pages/notifications.test.tsx'],
+  },
+  {
+    id: 'personal-export-offers-deleted-words',
+    why: 'a person’s export offers back the words of messages they deleted (D-241, D-9)',
+    file: PERSONAL_EXPORT,
+    find: '  sql`select id from messages where sender_id = ${userId} and deleted_at is null`;\n',
+    replace: '  sql`select id from messages where sender_id = ${userId}`;\n',
+    tests: [PERSONAL_EXPORT_TESTS],
+  },
+  {
+    id: 'personal-export-carries-others-reactions',
+    why: 'a person’s export carries the reactions other people left on their messages (D-241)',
+    file: PERSONAL_EXPORT,
+    find: "  reactions: (u) => ({ where: sql`user_id = ${u}`, order: 'id' }),\n",
+    replace:
+      "  reactions: (u) => ({ where: sql`message_id in (${theirMessages(u)})`, order: 'id' }),\n",
+    tests: [PERSONAL_EXPORT_TESTS],
+  },
+  {
+    id: 'personal-export-carries-others-files',
+    why: 'a person’s export carries every file of a channel they wrote in, other people’s too (D-241)',
+    file: PERSONAL_EXPORT,
+    find: '  sql`uploader_id = ${userId} and message_id in (${theirMessages(userId)})`;\n',
+    replace:
+      '  sql`message_id in (select id from messages where channel_id in (select channel_id from messages where sender_id = ${userId}))`;\n',
+    tests: [PERSONAL_EXPORT_TESTS],
+  },
+  {
+    id: 'personal-export-writes-an-omitted-column',
+    why: 'a column the classification left out — another person’s id, a storage key — is written all the same (D-241)',
+    file: PERSONAL_EXPORT,
+    find: "      .filter(([, decided]) => decided === 'export')\n",
+    replace: '',
+    tests: [PERSONAL_EXPORT_TESTS],
+  },
+  {
+    id: 'personal-export-downloaded-by-another-person',
+    why: 'somebody else downloads a person’s export of everything they wrote (D-241)',
+    file: PERSONAL_REQUESTS,
+    find: "    .where('id', '=', exportId)\n    .where('user_id', '=', userId)\n    .where('status', '=', 'ready')\n",
+    replace: "    .where('id', '=', exportId)\n    .where('status', '=', 'ready')\n",
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-download-locks-out-of-order',
+    why: 'a download and the same person’s erasure each wait for the other, and the database kills one (D-241)',
+    file: PERSONAL_REQUESTS,
+    find: "    .where('deleted_at', 'is', null)\n    .forKeyShare()\n",
+    replace: "    .where('deleted_at', 'is', null)\n",
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-listed-to-another-person',
+    why: 'somebody else sees when a person exported their data, and the id that downloads it (D-241)',
+    file: PERSONAL_REQUESTS,
+    find: "    .select(COLUMNS)\n    .where('user_id', '=', userId)\n",
+    replace: '    .select(COLUMNS)\n',
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-downloaded-after-it-expired',
+    why: 'a person’s archive past its expiry is still served until the sweep comes (D-241)',
+    file: PERSONAL_REQUESTS,
+    find: "    .where('status', '=', 'ready')\n    .where('expires_at', '>', now)\n",
+    replace: "    .where('status', '=', 'ready')\n",
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-twice-at-once',
+    why: 'a person asks twice and two exports of everything they wrote are made at once (D-241)',
+    file: PERSONAL_REQUESTS,
+    find: '  if (making !== undefined) {\n',
+    replace: '  if (making !== undefined && false) {\n',
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-unlimited',
+    why: 'a person asks for exports of everything they wrote without end, each a read of their whole history (D-241)',
+    file: PERSONAL_REQUESTS,
+    find: '  if (recent.length >= PERSONAL_EXPORTS_PER_DAY && oldest !== undefined) {\n',
+    replace: '  if (recent.length > PERSONAL_EXPORTS_PER_DAY && oldest !== undefined) {\n',
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-made-for-a-suspended-account',
+    why: 'an archive of a suspended person’s data is made, and waits in the store for nobody (D-241, D-233)',
+    file: PERSONAL_REQUESTS,
+    find: '  if (row.deleted_at !== null || row.suspended_at !== null) {\n',
+    replace: '  if (row.deleted_at !== null) {\n',
+    tests: [PERSONAL_HTTP_TESTS],
+  },
+  {
+    id: 'personal-export-outlives-erasure',
+    why: 'an erased person’s export stays downloadable, a copy of what they wrote outliving the account (D-241)',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: '  await endPersonalExports(executor, clock, person.id);\n',
+    replace: '',
+    tests: [PERSONAL_HTTP_TESTS],
   },
 ];

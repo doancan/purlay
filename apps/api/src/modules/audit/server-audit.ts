@@ -28,7 +28,13 @@ export type ServerAuditAction =
   | 'server.admin_password_reset'
   /** An account suspended, and lifted (D-233): whose, in `target_user_id`. */
   | 'server.account_suspended'
-  | 'server.account_restored';
+  | 'server.account_restored'
+  /**
+   * A person asked for an export of their own data, and downloaded it (D-241): the actor and the account
+   * are the person. The operator answers access requests (D-28), so the record is on their trail.
+   */
+  | 'account.export_requested'
+  | 'account.export_downloaded';
 
 export const recordServerAudit = async (
   executor: Executor,

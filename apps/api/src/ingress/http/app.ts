@@ -22,7 +22,14 @@ import { putKnowledge, readSavedSearches, putSavedSearch, deleteSavedSearch } fr
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
-import { askForExport, downloadExport, readExports } from './exports';
+import {
+  askForExport,
+  askForMyExport,
+  downloadExport,
+  downloadMyExport,
+  readExports,
+  readMyExports,
+} from './exports';
 import { goneMessageReference } from '../../platform/gone-message';
 import { askForSignInLink, consumeSignIn, previewSignIn } from './magic-link';
 import { afterAnswer } from '../../platform/after-answer';
@@ -248,6 +255,8 @@ export interface Dependencies {
    * (`exportQueue`). A test about something else makes none.
    */
   readonly exportRunner: (exportId: string) => void;
+  /** And a person's export of their own data, in the same queue (D-241). */
+  readonly personalExportRunner: (exportId: string) => void;
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
   readonly githubApi?: GitHubApi;
   /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
@@ -803,6 +812,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .post('/api/me/erase', async ({ request, body, set }) =>
       respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
     )
+    .post('/api/me/exports', async ({ request, set }) => {
+      const asked = await askForMyExport(dependencies, request);
+      set.status = 202;
+      return asked;
+    })
+    .get('/api/me/exports', async ({ request }) => await readMyExports(dependencies, request))
+    .get('/api/me/exports/:exportId/download', async ({ request, params }) => {
+      const { body, headers } = await downloadMyExport(dependencies, request, params.exportId);
+      // Our own Response, as an owner's export's download is: a cancel must reach the archive's.
+      return new Response(body, { headers });
+    })
     .get('/api/me', async ({ request }) => await readMe(creating, request))
     .get('/api/me/sign-in', async ({ request }) => await readMySignIn(dependencies, request))
     .get(

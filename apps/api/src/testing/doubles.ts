@@ -243,6 +243,7 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
   storage: aStoreThatMustNotBeTouched(),
   // An export asked for is made by nobody, unless the test is about exports and says so.
   exportRunner: (): void => undefined,
+  personalExportRunner: (): void => undefined,
   attention: nobodyActive,
   // Anybody may make a workspace, so a test makes the ones it needs; who may is the creators' own
   // tests' (D-155), which read the server's setting.

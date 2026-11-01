@@ -4,7 +4,8 @@
  * - **What is theirs goes.** The `users` columns that say who they are — the address to an
  *   unroutable placeholder, the name to `deleted-user-…`, the GitHub id and the profile cleared — every
  *   session revoked with its address and agent, the devices push reaches, the sign-in links waiting
- *   for the old address, what they saved and what they were told.
+ *   for the old address, what they saved and what they were told, and the exports of their own data they
+ *   asked for, archives and all (D-241).
  * - **What the team holds stays**, under the anonymised row: their messages, reactions, memberships,
  *   incident roles and the trail. Erasure never cascades (D-9); content erasure is another act.
  * - **Asked for on purpose.** Their username, typed, and a session signed in within the last minutes:
@@ -22,6 +23,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { recordAudit } from '../audit/audit';
 import { availableUsername } from '../auth/identity';
+import { endPersonalExports } from '../export/personal-requests';
 import { inviterMailKey } from '../workspaces/invitation-mail';
 import { addressCounterKey } from '../auth/magic-link';
 import { passportAddressDigest } from '../workspaces/invitation-passport';
@@ -216,6 +218,8 @@ export const eraseAccount = async (
   await executor.deleteFrom('notifications').where('user_id', '=', person.id).execute();
   // And when they were last mailed about what they missed, with each letter's stop link (D-240).
   await executor.deleteFrom('missed_mail_letters').where('user_id', '=', person.id).execute();
+  // A copy of their own data they asked for (D-241): no longer downloadable, its archive swept.
+  await endPersonalExports(executor, clock, person.id);
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
   // left behind, the pair would also hand a returning GitHub sign-in the erased account (D-38, D-179).
   await executor.deleteFrom('accounts').where('user_id', '=', person.id).execute();
