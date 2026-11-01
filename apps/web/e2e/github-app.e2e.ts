@@ -8,7 +8,7 @@
  * Its own server, scratch database and GitHub stand-in (`fresh.ts`); run narrow and light, since the other
  * specs of the wizard hold the wide and the dark.
  */
-import { generateKeyPairSync } from 'node:crypto';
+import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { messageId } from '@purlay/types';
 import { expect, test } from '@playwright/test';
 import { portFor, startFresh, type FreshServer } from './fresh';
@@ -165,6 +165,46 @@ test('the administrator connects the App, an owner installs it, a person allows 
   // Not resolved by it: the thread's own action is still the one on offer.
   await expect(page.getByText(/^Resolved by/)).toHaveCount(0);
 
+  // A second thread points at the issue that exists, and follows it: GitHub's signed event, and the open thread
+  // says closed without a reload — shown, never resolved, nobody told.
+  const secondId = messageId(wallClock());
+  const second = await page.request.post(`/api/channels/${channelId}/messages`, {
+    data: { id: secondId, content: 'Is the retry issue still open?' },
+    headers: { origin },
+  });
+  expect(second.status()).toBe(201);
+  await page.goto(`/w/acme-engineering/c/${channelId}?thread=${secondId}`);
+  const other = page.getByRole('region', { name: 'GitHub' });
+  await other.getByRole('button', { name: 'Link an issue or pull request…' }).click();
+  const linking = page.getByRole('dialog', { name: 'Link an issue or pull request' });
+  await linking.getByLabel('Address on GitHub').fill('https://github.com/acme/api/issues/1');
+  await linking.getByRole('button', { name: 'Link' }).click();
+  await expect(other.getByRole('link', { name: 'acme/api#1' })).toBeVisible();
+  await expect(other.getByText('Open')).toBeVisible();
+  const event = JSON.stringify({
+    action: 'closed',
+    installation: { id: 31 },
+    repository: { id: 77, full_name: 'acme/api' },
+    issue: {
+      number: 1,
+      title: 'How should the retry back off, Ayşe?',
+      state: 'closed',
+      updated_at: new Date(wallClock().getTime() + 60_000).toISOString(),
+    },
+  });
+  const delivered = await page.request.post('/api/webhooks/github-app', {
+    data: event,
+    headers: {
+      'content-type': 'application/json',
+      'x-github-event': 'issues',
+      'x-github-delivery': crypto.randomUUID(),
+      'x-hub-signature-256': `sha256=${createHmac('sha256', githubApp.webhookSecret).update(event).digest('hex')}`,
+    },
+  });
+  expect(await delivered.json()).toEqual({ outcome: 'applied' });
+  await expect(other.getByText('Closed')).toBeVisible();
+  await expect(page.getByText(/^Resolved by/)).toHaveCount(0);
+
   // The same page, in Turkish, for somebody whose browser is.
   const turkish = await browser.newContext({
     baseURL: origin,
@@ -176,7 +216,7 @@ test('the administrator connects the App, an owner installs it, a person allows 
   // The thread, in Turkish: the work it points at, and the dialog's words.
   await tr.goto(`/w/acme-engineering/c/${channelId}?thread=${rootId}`);
   const iş = tr.getByRole('region', { name: 'GitHub' });
-  await expect(iş.getByText('Açık')).toBeVisible();
+  await expect(iş.getByText('Kapalı')).toBeVisible();
   await iş.getByRole('button', { name: 'GitHub issue’su oluştur…' }).click();
   const pencere = tr.getByRole('dialog', { name: 'GitHub issue’su oluştur' });
   await expect(
