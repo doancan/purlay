@@ -48,6 +48,23 @@
   }
 
   /*
+   * After a click the ring stays off everything that is not a place to type (`ui/input-modality.ts`):
+   * a button the mouse pressed, or that focus returned to, is not asking where the keyboard is.
+   */
+  :root[data-pointer]
+    :focus-visible:not(
+      input,
+      textarea,
+      select,
+      [contenteditable],
+      [role='textbox'],
+      [role='searchbox'],
+      [role='combobox']
+    ) {
+    outline: none;
+  }
+
+  /*
    * Shiki paints code with its css-variables theme, which names a variable per kind of token.
    * Each is mapped to a syntax token here, and on every element that sets a theme (not only the
    * root), so highlighting follows whichever theme the code sits in — including the gallery's two

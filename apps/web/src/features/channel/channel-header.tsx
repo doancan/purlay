@@ -130,7 +130,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             <h1 className="min-w-0 truncate text-title text-ink">
               <button
                 type="button"
-                className="max-w-full truncate rounded-sm hover:text-accent-text"
+                className="max-w-full truncate rounded-sm hover:text-ink"
                 onClick={() => {
                   setDetails(true);
                 }}
@@ -161,7 +161,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             <h1 className="min-w-0 truncate text-title text-ink">
               <button
                 type="button"
-                className="max-w-full truncate rounded-sm hover:text-accent-text"
+                className="max-w-full truncate rounded-sm hover:text-ink"
                 onClick={() => {
                   setDetails(true);
                 }}

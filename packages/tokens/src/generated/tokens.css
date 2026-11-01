@@ -123,7 +123,7 @@
   --avatar-4: #172b44;
   --avatar-5: #3a1c2f;
   --avatar-6: #302b17;
-  --focus-ring: var(--accent-text);
+  --focus-ring: #c4c4cc;
   --composer-edge: #6577a0;
   --danger: #f87171;
   --warning: #f59e0b;
@@ -235,7 +235,7 @@
   --avatar-4: #1a3a5c;
   --avatar-5: #512a4c;
   --avatar-6: #3d3a24;
-  --focus-ring: var(--accent-text);
+  --focus-ring: #c4c4d8;
   --composer-edge: #7378bd;
   --danger: #f87171;
   --warning: #f59e0b;

@@ -101,7 +101,7 @@ const FileRow = ({
               ? t('attachment.open', { name: attachment.fileName })
               : t('attachment.download', { name: attachment.fileName, size })
           }
-          className="truncate rounded-sm text-label font-medium text-ink hover:text-accent-text"
+          className="truncate rounded-sm text-label font-medium text-ink hover:text-ink"
         >
           {attachment.fileName}
         </a>

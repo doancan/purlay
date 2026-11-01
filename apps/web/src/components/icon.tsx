@@ -44,6 +44,7 @@ import {
   BellRing,
   Check,
   ChevronDown,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
@@ -189,6 +190,8 @@ const glyphs = {
   /** One back and one on, in a sequence: the image viewer's pictures (D-159). */
   previous: ChevronLeft,
   next: ChevronRight,
+  /** A day to pick: the date field's calendar. */
+  calendar: CalendarDays,
   shortcuts: Keyboard,
   warning: TriangleAlert,
   info: Info,

@@ -9,6 +9,7 @@ import { SearchFilters } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Select } from '../../ui/select';
 import { Button } from '../../ui/button';
+import { DateField } from '../../ui/date-field';
 import { TextField } from '../../ui/text-field';
 
 export const AdvancedFilters = ({
@@ -97,27 +98,19 @@ export const AdvancedFilters = ({
             if (valid && next !== (value.repository ?? '')) change('repository', next || undefined);
           }}
         />
-        <TextField
+        <DateField
           label={t('search.since')}
-          type="date"
           value={value.since === undefined ? '' : format.isoDay(value.since)}
-          onChange={(event) => {
-            change(
-              'since',
-              event.target.value === '' ? undefined : format.dayStart(event.target.value),
-            );
+          onChange={(day) => {
+            change('since', day === '' ? undefined : format.dayStart(day));
           }}
         />
-        <TextField
+        <DateField
           label={t('search.until')}
-          type="date"
           value={value.until === undefined ? '' : format.isoDay(value.until)}
           hint={t('search.dateHint')}
-          onChange={(event) => {
-            change(
-              'until',
-              event.target.value === '' ? undefined : format.dayStart(event.target.value),
-            );
+          onChange={(day) => {
+            change('until', day === '' ? undefined : format.dayStart(day));
           }}
         />
       </div>

@@ -898,7 +898,7 @@ const Inner = ({
               onFocus={() => {
                 setStopAt(10);
               }}
-              className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-accent-text"
+              className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-ink"
               onClick={togglePreview}
             />
           </div>

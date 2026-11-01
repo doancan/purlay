@@ -31,7 +31,7 @@ import { Avatar } from '../../../ui/avatar';
 import { Button, buttonStyle } from '../../../ui/button';
 import { Select } from '../../../ui/select';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
-import { TextField } from '../../../ui/text-field';
+import { DateField } from '../../../ui/date-field';
 import { href } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { AuthorPicker } from '../../search/author-picker';
@@ -416,24 +416,22 @@ export const AuditPage = (): React.JSX.Element => {
               ))}
             </Select>
           </div>
-          <TextField
+          <DateField
             label={t('audit.filter.from')}
-            type="date"
             value={view.from ?? ''}
-            onChange={(event) => {
-              narrow({ from: event.target.value === '' ? null : event.target.value });
+            onChange={(day) => {
+              narrow({ from: day === '' ? null : day });
             }}
           />
-          <TextField
+          <DateField
             label={t('audit.filter.to')}
-            type="date"
             value={view.to ?? ''}
             {...(view.from === null ? {} : { min: view.from })}
             {...(backwards
               ? { error: t('audit.filter.backwards') }
               : { hint: t('audit.filter.dateHint') })}
-            onChange={(event) => {
-              narrow({ to: event.target.value === '' ? null : event.target.value });
+            onChange={(day) => {
+              narrow({ to: day === '' ? null : day });
             }}
           />
         </div>
