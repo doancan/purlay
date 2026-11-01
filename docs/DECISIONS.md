@@ -11455,11 +11455,36 @@ step says which.*
    every workspace that connected it (GitHub's id is not unique to a workspace); a suspension is kept and
    said, and used for nothing. Deliveries are signed by the App's webhook secret, applied once by id and by
    body digest (D-231 §1), and swept after thirty days.
-8. **Later steps, as the PRD orders them** — review and create from a thread, keep linked work current, and
-   writes that can be recovered — add: channel membership and GitHub access rechecked at submission; a bounded
-   operation record keyed by workspace, actor and client request id (a reused id with other content is a
-   conflict); a lost create answer reconciled by a unique marker through GitHub reads, never repeated blindly;
-   `Retry-After` obeyed and retries bounded; actor, repository and issue ids audited, never bodies or secrets.
+8. **An issue is made from a thread by a review, and the write is recoverable before it is enabled** (the PRD's
+   second and fourth steps, built together). The thread offers a repository — only one GitHub lists for the person's
+   own token inside the installation, so one both they and the App reach — an editable title and body that start as
+   the question, its accepted answer, the decision note and a link back, and a review of the destination and the
+   exact text, marker line included, before **Create**. The words of a conversation that is not public are copied
+   only when the person ticks that they choose it. Title and body only. Channel membership, the installation, the
+   authorization and the repository are all checked again as it is sent. The issue is linked to the root
+   (`github_links`, shown in the thread and told by `THREAD_UPDATED`), and **does not resolve the question** nor
+   notify anybody.
+   - **One request, one issue.** The client's request id, with the workspace and the person, keys a bounded record
+     (`github_operations`, thirty days) claimed *before* GitHub is asked: a double click, a retry and a second tab
+     are one operation, and only the request that claimed it posts. The id with other content (a digest of it, never
+     the words) is `409 GITHUB_REQUEST_CONFLICT`.
+   - **A lost answer is found, never repeated.** GitHub not answering — a timeout, a `5xx`, a reply that is not an
+     answer — leaves the operation `unknown`. The same request sent again reads GitHub as the installation (which
+     survives the person) for the issue that ends in the marker, `<!-- purlay:<request id> -->`, which the review
+     showed. Not seen after fifteen minutes, or twenty looks, it is `refused` as `not-created` and may be started
+     again with a new id; a claimed operation never answered is taken as unknown after two minutes. It is never
+     posted a second time on a guess.
+   - **A limit is the client's to wait out.** GitHub's `Retry-After` (or its reset) comes back as `429` with the
+     same header and the claim is given back, so the same request goes through afterwards; nothing here sleeps or
+     retries on its own, so retries are bounded by the person and the twenty looks.
+   - **The person's token** is refreshed under its row's lock when it is within a minute of lapsing — a refresh token
+     is spent by the refresh that uses it — and forgotten when GitHub stops taking it (`409
+     GITHUB_AUTHORIZATION_REQUIRED`, asked for again in the dialog).
+   - **Audited by identifier**: who, which repository, which issue and channel — never a title or a body
+     (`integration.issue_created`). Links and operations are classified for the workspace's export (links
+     exported, operations not) and are not in a person's own.
+   - **Following linked work** — a link to an existing issue or pull request, signed issue and pull-request events
+     into the thread, their state shown — is the PRD's third step and its own pull request.
 
 **Rejected.** *Asking for the person's authorization at sign-in* — a sign-in that can write to repositories
 is a bigger grant than anybody agreed to, and most people never create an issue. *One person's token for

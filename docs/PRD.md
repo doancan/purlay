@@ -189,9 +189,9 @@ channels (D-125) · every channel marked read at once (D-238) · a sign-in polic
 verification required of a password, password sign-in off where GitHub or single sign-on serves (D-239) ·
 opt-in email about direct messages and mentions left unread, at most one an hour (D-240) ·
 a person's export of their own data (D-241) ·
-GitHub issues from conversations, built in the order below — step 1, connecting the GitHub App, is built (D-246)
+GitHub issues from conversations, built in the order below — connecting the GitHub App, and making an issue from a thread with the write recoverable, are built (D-246)
 
-**Next proposal: GitHub issues from conversations (D-246; step 1 built, steps 2–4 planned).** Build on the
+**Next proposal: GitHub issues from conversations (D-246; steps 1, 2 and 4 built, step 3 planned).** Build on the
 existing workspace credential, link previews, signed webhooks and delivery deduplication. The
 delivery order after questions, decisions and saved search is:
 
