@@ -15,6 +15,15 @@ interface Manifest {
   readonly database: string;
   readonly code: string;
   readonly github: { readonly clientId: string; readonly clientSecret: string };
+  /** The GitHub App the stand-in plays (D-246), as GitHub's settings page would show it. */
+  readonly githubApp: {
+    readonly appId: number;
+    readonly slug: string;
+    readonly clientId: string;
+    readonly clientSecret: string;
+    readonly privateKey: string;
+    readonly webhookSecret: string;
+  };
   /** The single sign-on provider the stand-in serves (D-200): its issuer and the client it knows. */
   readonly oidc: {
     readonly issuer: string;
