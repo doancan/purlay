@@ -1,3 +1,5 @@
+import type { SessionIdleTimeoutHours, SessionMaxAgeDays } from './api';
+
 /**
  * The steps of the setup in the browser (D-179 §4), in the order the wizard walks them.
  *
@@ -103,6 +105,10 @@ export interface ServerSettingsView {
   readonly requireTwoFactor: boolean;
   /** Whether an address and a password sign in at all; off only while GitHub or single sign-on is (D-239). */
   readonly passwordSignIn: boolean;
+  /** How many hours unused sign a session out; `null` is never (D-244). */
+  readonly sessionIdleTimeoutHours: SessionIdleTimeoutHours | null;
+  /** How many days from its sign-in a session lives at most; `null` is `SESSION_TTL_DAYS` alone (D-244). */
+  readonly sessionMaxAgeDays: SessionMaxAgeDays | null;
   readonly github: {
     readonly clientId: string;
     readonly clientSecret: { readonly set: boolean };

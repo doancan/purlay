@@ -294,6 +294,8 @@ const ROUTES: readonly [method: 'GET' | 'POST' | 'DELETE', path: string, body: u
   ['POST', '/api/server/policy', { signUp: 'open' }],
   ['POST', '/api/server/policy', { requireTwoFactor: true }],
   ['POST', '/api/server/policy', { passwordSignIn: false }],
+  ['POST', '/api/server/policy', { sessionIdleTimeoutHours: 1 }],
+  ['POST', '/api/server/policy', { sessionMaxAgeDays: 1 }],
   ['POST', '/api/server/creators', { workspaceCreators: { kind: 'anyone' } }],
 ];
 
@@ -380,6 +382,8 @@ describe('integration: Administration → Server', () => {
         setupCompletedAt: null,
         requireTwoFactor: false,
         passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       },
       needsReentry: [],
       appUrl: ORIGIN,
@@ -1261,6 +1265,130 @@ describe('integration: Administration → Server — the sign-in policy (D-239)'
       expect([JSON.stringify(body), refused.status]).toEqual([JSON.stringify(body), 400]);
     }
     expect(await trail(server)).toEqual([]);
+  });
+});
+
+describe('integration: Administration → Server — how long a session lives (D-244)', () => {
+  const as = (server: Server): Call => ({ cookie: server.admin.cookie });
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  const travel = async (
+    server: Server,
+    sessionId: string,
+    times: { readonly createdAt?: Date; readonly lastUsedAt?: Date },
+  ): Promise<void> => {
+    await server.db
+      .updateTable('sessions')
+      .set({
+        ...(times.createdAt === undefined ? {} : { created_at: times.createdAt }),
+        ...(times.lastUsedAt === undefined ? {} : { last_used_at: times.lastUsedAt }),
+      })
+      .where('id', '=', sessionId)
+      .execute();
+  };
+  const ago = (ms: number): Date => new Date(Date.now() - ms);
+  const sessionLeft = async (server: Server, sessionId: string): Promise<boolean> =>
+    (await server.db
+      .selectFrom('sessions')
+      .select('id')
+      .where('id', '=', sessionId)
+      .executeTakeFirst()) !== undefined;
+
+  test('each rule applies from the next request to the sessions already open, and is on the trail without its value', async () => {
+    const server = await aServer();
+    // The control: unused for two hours and signed in eight days ago, both still sign in today.
+    await travel(server, server.member.sessionId, { lastUsedAt: ago(2 * HOUR) });
+    await travel(server, server.owner.sessionId, { createdAt: ago(8 * DAY) });
+    expect((await call(server, 'GET', '/api/me', { cookie: server.member.cookie })).status).toBe(
+      200,
+    );
+    expect((await call(server, 'GET', '/api/me', { cookie: server.owner.cookie })).status).toBe(
+      200,
+    );
+    // Those reads were use; the member is left unused for two hours again.
+    await travel(server, server.member.sessionId, { lastUsedAt: ago(2 * HOUR) });
+
+    const idle = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { sessionIdleTimeoutHours: 1 },
+    });
+    expect(idle.status).toBe(204);
+    expect(server.holder.current()?.auth.sessionLifetime).toEqual({
+      sessionIdleTimeoutHours: 1,
+      sessionMaxAgeDays: null,
+    });
+    expect((await call(server, 'GET', '/api/me', { cookie: server.member.cookie })).status).toBe(
+      401,
+    );
+    expect(await sessionLeft(server, server.member.sessionId)).toBe(false);
+    // The owner was used a moment ago: the idle timeout leaves it; the administrator's own session too.
+    expect((await call(server, 'GET', '/api/me', { cookie: server.owner.cookie })).status).toBe(
+      200,
+    );
+
+    const aged = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { sessionMaxAgeDays: 7 },
+    });
+    expect(aged.status).toBe(204);
+    expect((await viewOf(server)).settings).toMatchObject({
+      sessionIdleTimeoutHours: 1,
+      sessionMaxAgeDays: 7,
+      // Each change names one rule: the others are as they were.
+      signUp: 'invite-only',
+      requireTwoFactor: false,
+      passwordSignIn: true,
+    });
+    expect((await call(server, 'GET', '/api/me', { cookie: server.owner.cookie })).status).toBe(
+      401,
+    );
+    expect(await sessionLeft(server, server.owner.sessionId)).toBe(false);
+
+    // Off again: a session neither rule would have kept signs in as before.
+    for (const body of [{ sessionIdleTimeoutHours: null }, { sessionMaxAgeDays: null }]) {
+      expect(
+        (await call(server, 'POST', '/api/server/policy', { ...as(server), body })).status,
+      ).toBe(204);
+    }
+    const kept = await aSignedInUser(server.db, systemClock, 'srv-kept');
+    await travel(server, kept.sessionId, { createdAt: ago(20 * DAY), lastUsedAt: ago(9 * DAY) });
+    expect((await call(server, 'GET', '/api/me', { cookie: kept.cookie })).status).toBe(200);
+    expect(await readSettings(server.db, cipher)).toMatchObject({
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
+    });
+
+    const session = server.admin.sessionId;
+    expect(await trail(server)).toEqual([
+      { action: 'server.session_idle_timeout_changed', actor: server.admin.userId, session },
+      { action: 'server.session_max_age_changed', actor: server.admin.userId, session },
+      { action: 'server.session_idle_timeout_changed', actor: server.admin.userId, session },
+      { action: 'server.session_max_age_changed', actor: server.admin.userId, session },
+    ]);
+  });
+
+  test('only a value the page offers is taken: anything else is refused before anything changes', async () => {
+    const server = await aServer();
+    for (const body of [
+      { sessionIdleTimeoutHours: 2 },
+      { sessionIdleTimeoutHours: 0 },
+      { sessionIdleTimeoutHours: -1 },
+      { sessionIdleTimeoutHours: '8' },
+      { sessionIdleTimeoutHours: 8.5 },
+      { sessionMaxAgeDays: 365 },
+      { sessionMaxAgeDays: 0 },
+      { sessionMaxAgeDays: 'yedi gün' },
+      { sessionIdleTimeoutHours: 1, sessionMaxAgeDays: 7 },
+      { sessionMaxAgeDays: 7, signUp: 'open' },
+    ]) {
+      const refused = await call(server, 'POST', '/api/server/policy', { ...as(server), body });
+      expect([JSON.stringify(body), refused.status]).toEqual([JSON.stringify(body), 400]);
+    }
+    expect(await trail(server)).toEqual([]);
+    expect(await readSettings(server.db, cipher)).toMatchObject({
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
+    });
   });
 });
 

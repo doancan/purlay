@@ -44,6 +44,8 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
     signUp: 'invite-only',
     requireTwoFactor: false,
     passwordSignIn: true,
+    sessionIdleTimeoutHours: null,
+    sessionMaxAgeDays: null,
     github: null,
     oidc: null,
     smtp: null,
@@ -64,6 +66,8 @@ const CONNECTED = anAnswer({
     signUp: 'open',
     requireTwoFactor: false,
     passwordSignIn: true,
+    sessionIdleTimeoutHours: null,
+    sessionMaxAgeDays: null,
     github: { clientId: 'Iv1.abc123', clientSecret: { set: true } },
     oidc: null,
     smtp: {
@@ -459,6 +463,81 @@ describe('Settings → Server', () => {
     const dialog = within(view.getByRole('dialog'));
     expect(dialog.getByText(en['settings.server.passwordsOffLast'])).toBeDefined();
     expect(dialog.queryByRole('button', { name: /Disconnect/ })).toBeNull();
+    view.unmount();
+  });
+
+  test('how long a session lasts (D-244): each rule offers only what the server takes, and applies on its own as it is chosen', async () => {
+    const asked: unknown[] = [];
+    let now = anAnswer();
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(now),
+        policy: (change) => {
+          asked.push(change);
+          now = anAnswer({ ...now, settings: { ...now.settings, ...change } });
+          return Promise.resolve();
+        },
+      }),
+    );
+    const lifetime = card(view, 'How long a session lasts');
+    const idle = lifetime.getByRole('combobox', { name: 'Sign out when unused for' });
+    const maxAge = lifetime.getByRole('combobox', { name: 'Sign in again after' });
+    const optionsOf = (select: HTMLElement): string[] =>
+      within(select)
+        .getAllByRole('option')
+        .map((option) => option.textContent);
+    expect(optionsOf(idle)).toEqual(['Never', '1 hour', '8 hours', '1 day', '1 week']);
+    expect(optionsOf(maxAge)).toEqual([
+      'Only the server’s own lifetime',
+      '1 day',
+      '1 week',
+      '30 days',
+      '90 days',
+    ]);
+    expect(idle).toHaveProperty('value', 'off');
+
+    await person().selectOptions(idle, '8 hours');
+    await settle();
+    await person().selectOptions(maxAge, '30 days');
+    await settle();
+    await person().selectOptions(idle, 'Never');
+    await settle();
+    expect(asked).toEqual([
+      { sessionIdleTimeoutHours: 8 },
+      { sessionMaxAgeDays: 30 },
+      { sessionIdleTimeoutHours: null },
+    ]);
+    expect(idle).toHaveProperty('value', 'off');
+    expect(maxAge).toHaveProperty('value', '30');
+    expect(lifetime.getByText(en['settings.server.signIn.saved'])).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('a session rule the server refuses is said on its card, and the choice goes back to what it holds', async () => {
+    const view = await render(
+      aClient({
+        policy: () =>
+          Promise.reject(
+            new SetupFailure(
+              409,
+              'SERVER_CHANGE_REFUSED',
+              'no',
+              null,
+              {},
+              null,
+              'setup-unfinished',
+            ),
+          ),
+      }),
+    );
+    const lifetime = card(view, 'How long a session lasts');
+    const idle = lifetime.getByRole('combobox', { name: 'Sign out when unused for' });
+    await person().selectOptions(idle, '1 hour');
+    await settle();
+    expect(lifetime.queryByText(en['settings.server.signIn.saved'])).toBeNull();
+    expect(lifetime.getByText(en['settings.server.setupUnfinished'])).toBeDefined();
+    expect(idle).toHaveProperty('value', 'off');
     view.unmount();
   });
 

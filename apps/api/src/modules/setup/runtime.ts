@@ -101,6 +101,10 @@ export const runtimeServicesFrom = (
       requireTwoFactor: settings.requireTwoFactor,
       passwordSignIn: settings.passwordSignIn,
     },
+    sessionLifetime: {
+      sessionIdleTimeoutHours: settings.sessionIdleTimeoutHours,
+      sessionMaxAgeDays: settings.sessionMaxAgeDays,
+    },
     mailer: mail,
   });
   return { auth, mailer, mail, needsReentry, settings };
@@ -393,6 +397,8 @@ export const applySettings = async (
       signUp: candidate.settings.signUp,
       requireTwoFactor: candidate.settings.requireTwoFactor,
       passwordSignIn: candidate.settings.passwordSignIn,
+      sessionIdleTimeoutHours: candidate.settings.sessionIdleTimeoutHours,
+      sessionMaxAgeDays: candidate.settings.sessionMaxAgeDays,
     });
     return candidate;
   });

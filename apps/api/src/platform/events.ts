@@ -228,17 +228,19 @@ export const publishChannelUpdated = async (
 /**
  * These sessions were signed out: every socket each holds, on any node, is told and
  * closed. Published after the revocation is written, so a socket is never closed
- * for a sign-out that did not happen (#194).
+ * for a sign-out that did not happen (#194). `expired` where the server's lifetime
+ * policy ended them (D-244).
  */
 export const publishSessionsEnded = async (
   bus: EventBus,
   clock: Clock,
   sessionIds: readonly string[],
+  reason: 'signed-out' | 'expired' = 'signed-out',
 ): Promise<void> => {
   for (const sessionId of sessionIds) {
     await bus.publish(sessionTopic(sessionId), {
       event: 'SESSION_ENDED',
-      data: { reason: 'signed-out' },
+      data: { reason },
       ts: clock.now().getTime(),
     });
   }

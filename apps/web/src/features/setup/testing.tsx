@@ -20,6 +20,8 @@ export const aState = (over: Partial<SetupState> = {}): SetupState => ({
     signUp: 'invite-only',
     requireTwoFactor: false,
     passwordSignIn: true,
+    sessionIdleTimeoutHours: null,
+    sessionMaxAgeDays: null,
     github: null,
     oidc: null,
     smtp: null,

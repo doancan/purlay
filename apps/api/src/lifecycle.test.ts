@@ -321,6 +321,8 @@ describe('shutting down a server whose relay the settings replaced (D-179 §4.9)
     setupCompletedAt: undefined,
     requireTwoFactor: false,
     passwordSignIn: true,
+    sessionIdleTimeoutHours: null,
+    sessionMaxAgeDays: null,
   };
   const pairOf = (holder: RuntimeHolder, port: number | undefined): RuntimeServices => {
     const mailer =

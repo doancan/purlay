@@ -173,7 +173,11 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     database,
     clock,
     log,
-    source: { sessions: hub.sessions, end: hub.deliver },
+    source: {
+      sessions: hub.sessions,
+      end: hub.deliver,
+      lifetime: () => dependencies.auth.sessionLifetime,
+    },
     ...(dependencies.liveness?.timers === undefined
       ? {}
       : { timers: dependencies.liveness.timers }),
@@ -300,6 +304,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   userWrites: dependencies.userWrites,
                   presence,
                   attention: dependencies.attention,
+                  sessionLifetime: () => dependencies.auth.sessionLifetime,
                   log,
                   push: dependencies.push,
                   // The real boundary. D-35: one transaction, published after it returns.
