@@ -410,6 +410,8 @@ export const PERSONAL_COLUMNS: PersonalColumns = {
     retention_days: 'omit',
     storage_quota_bytes: 'omit',
     storage_used_bytes: 'omit',
+    purge_started_at: 'omit',
+    purged_at: 'omit',
   },
   workspace_members: {
     id: 'export',
