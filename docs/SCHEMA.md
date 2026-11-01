@@ -130,6 +130,10 @@ CREATE TABLE users (
     -- Its key is in `two_factors`. (0067)
     two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
 
+    -- When the person asked to be emailed about the mentions and direct messages they leave unread (D-240);
+    -- NULL is off, as every account starts. Only what they were told since is ever mailed. (0069)
+    missed_mail_since TIMESTAMPTZ,
+
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
     email         TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -1165,6 +1169,11 @@ CREATE TABLE notifications (
     read_at      TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    -- When a missed-mail letter took it, or passed it over for good — its message gone, its channel or
+    -- workspace no longer the person's (D-240). Set once, under the person's row lock: never mailed twice.
+    -- Put back to NULL only when the relay refused the letter. (0069)
+    mailed_at    TIMESTAMPTZ,
+
     UNIQUE (user_id, message_id, type),
 
     CONSTRAINT notifications_message_channel_fkey
@@ -1956,6 +1965,35 @@ CREATE INDEX idx_native_authorizations_user ON native_authorizations (user_id, e
 CREATE INDEX idx_native_authorizations_expiry ON native_authorizations (expires_at);
 ```
 
+### 9.10. `missed_mail_letters`
+
+Each letter the scheduled `mail:missed` sent a person about what they missed (D-240), read and written by
+`modules/notifications/missed-mail.ts`.
+
+- **The hour between two**: a person gets no letter while one of theirs has `sent_at` within the last hour, read
+  under their row's lock.
+- **The stop link is never stored**: `stop_digest` is the SHA-256 of the 64 hex digits the letter's link carries
+  (`platform/tokens.ts`), unique. Whoever opens it turns off the letters of `user_id`, and nobody else's.
+- **Thirty days**: the link opens while `sent_at` is within thirty days, and the job deletes the row after that.
+  A letter the relay refused is deleted at once, with its notifications given back.
+- **A person's own**: `user_id`, `ON DELETE CASCADE`; erasure deletes the person's rows.
+
+Instance-wide; never exported.
+
+```sql
+CREATE TABLE missed_mail_letters (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sent_at     TIMESTAMPTZ NOT NULL,
+    stop_digest TEXT COLLATE "C" NOT NULL,
+
+    CONSTRAINT missed_mail_letters_stop_digest_key UNIQUE (stop_digest)
+);
+
+-- The person's last letter, for the hour between two (D-240).
+CREATE INDEX idx_missed_mail_letters_user ON missed_mail_letters (user_id, sent_at DESC);
+```
+
 ---
 
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
@@ -2122,6 +2160,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0066_quiet_hours.sql users.quiet_from, users.quiet_to, users.quiet_days: a person's quiet hours, every week, on their profile's clock  (D-234)
 0067_two_factor.sql users.two_factor_enabled, two_factors: two-step verification for an account with a password, its key and backup codes sealed  (D-236)
 0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
+0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

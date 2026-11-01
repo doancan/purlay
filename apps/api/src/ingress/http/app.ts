@@ -202,6 +202,7 @@ import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
+import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
 import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
 import { readPresence } from './presence';
@@ -825,6 +826,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/me/quiet-hours',
       async ({ request, body }) => await setMyQuietHours(dependencies, request, body),
     )
+    .get(
+      '/api/me/missed-mail',
+      async ({ request }) => await readMyMissedMail(dependencies, request),
+    )
+    .put(
+      '/api/me/missed-mail',
+      async ({ request, body }) => await setMyMissedMail(dependencies, request, body),
+    )
+    // Public: a letter's link, opened in whichever browser, signed in or not (D-240).
+    .post('/api/missed-mail/stop', async ({ body, set }) => {
+      await stopMissedMailByLink(dependencies, body);
+      set.status = 204;
+      return null;
+    })
     .put('/api/me/locale', async ({ request, body, set }) => {
       await setMyLocale(dependencies, request, body);
       set.status = 204;

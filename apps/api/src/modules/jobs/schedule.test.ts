@@ -23,8 +23,42 @@ describe('the next run of a slot', () => {
     expect(nextRun(daily, at('2026-09-30T12:00:00.000Z'))).toEqual(at('2026-10-01T03:00:00.000Z'));
   });
 
+  test('every quarter hour: the next of the four offsets still ahead, across the hour', () => {
+    const quarterly: Slot = { job: 'mail:missed', every: 'quarter-hour', minute: 7 };
+    expect(nextRun(quarterly, at('2026-09-09T12:00:00.000Z'))).toEqual(
+      at('2026-09-09T12:07:00.000Z'),
+    );
+    expect(nextRun(quarterly, at('2026-09-09T12:07:00.000Z'))).toEqual(
+      at('2026-09-09T12:22:00.000Z'),
+    );
+    expect(nextRun(quarterly, at('2026-09-09T12:40:00.000Z'))).toEqual(
+      at('2026-09-09T12:52:00.000Z'),
+    );
+    expect(nextRun(quarterly, at('2026-09-09T23:52:00.000Z'))).toEqual(
+      at('2026-09-10T00:07:00.000Z'),
+    );
+  });
+
+  test('no two slots fall on the same minute, so the loop never passes one over', () => {
+    const minutes = PLAN.flatMap((slot) =>
+      slot.every === 'quarter-hour'
+        ? [0, 15, 30, 45].map((offset) => `*:${String(slot.minute + offset)}`)
+        : slot.every === 'hour'
+          ? [`*:${String(slot.minute)}`]
+          : [`${String(slot.hour)}:${String(slot.minute)}`],
+    );
+    const hourly = new Set(
+      minutes.filter((minute) => minute.startsWith('*:')).map((m) => m.slice(2)),
+    );
+    for (const minute of minutes) {
+      if (!minute.startsWith('*:')) expect(hourly.has(minute.split(':')[1] ?? '')).toBe(false);
+    }
+    expect(hourly.size).toBe(minutes.filter((minute) => minute.startsWith('*:')).length);
+  });
+
   test('the deployment’s plan names every job the runner knows, each once', () => {
     expect(PLAN.map((slot) => slot.job).sort()).toEqual([
+      'mail:missed',
       'purge:retention',
       'reconcile:storage',
       'sweep:deletions',
@@ -89,7 +123,7 @@ describe('the loop', () => {
       },
       run: (job) => {
         ran.push(`${now.toISOString()} ${job}`);
-        if (ran.length === 5) stop = true;
+        if (ran.length === 7) stop = true;
         return Promise.resolve(job === 'reconcile:storage' ? 1 : 0);
       },
       stopped: () => stop,
@@ -100,10 +134,12 @@ describe('the loop', () => {
     });
     expect(ran).toEqual([
       '2026-09-09T02:50:00.000Z jobs:first',
+      '2026-09-09T02:52:00.000Z mail:missed',
       '2026-09-09T03:00:00.000Z sweep:orphans',
+      '2026-09-09T03:07:00.000Z mail:missed',
       '2026-09-09T03:15:00.000Z sweep:sessions',
+      '2026-09-09T03:22:00.000Z mail:missed',
       '2026-09-09T03:30:00.000Z reconcile:storage',
-      '2026-09-09T03:40:00.000Z sweep:exports',
     ]);
     expect(said.find((s) => s.fields['job'] === 'reconcile:storage')).toMatchObject({
       msg: 'a scheduled job exited with a failure',

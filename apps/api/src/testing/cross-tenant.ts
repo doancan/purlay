@@ -702,6 +702,12 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
   'GET /api/me/quiet-hours': 'reads the caller’s own quiet hours and names no workspace (D-234)',
   'PUT /api/me/quiet-hours': 'sets the caller’s own quiet hours and names no workspace (D-234)',
+  'GET /api/me/missed-mail':
+    'reads whether the caller asked to be mailed about what they missed, and names no workspace (D-240)',
+  'PUT /api/me/missed-mail':
+    'turns the caller’s own missed-mail letters on or off, and names no workspace (D-240)',
+  'POST /api/missed-mail/stop':
+    'nobody need be signed in: the token in the body names the one person whose letters it stops, whoever opens it (D-240)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
   'GET /api/me/sign-in':

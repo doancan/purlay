@@ -124,8 +124,14 @@ describe('integration: erasing an account', () => {
           time_zone: 'Europe/Istanbul',
           status_text: 'here',
           last_seen_at: NOW,
+          // She asked to be mailed about what she missed, and was (D-240).
+          missed_mail_since: NOW,
         })
         .where('id', '=', ada.userId)
+        .execute();
+      await db
+        .insertInto('missed_mail_letters')
+        .values({ user_id: ada.userId, sent_at: NOW, stop_digest: 'a'.repeat(64) })
         .execute();
       const sent = await sendMessage(db, clock, ada.context, {
         id: messageId(NOW),
@@ -253,6 +259,7 @@ describe('integration: erasing an account', () => {
         time_zone: null,
         status_text: null,
         last_seen_at: null,
+        missed_mail_since: null,
         deleted_at: NOW,
       });
       expect(isErased({ username: row.username })).toBe(true);
@@ -272,6 +279,7 @@ describe('integration: erasing an account', () => {
         'saved_messages',
         'thread_follows',
         'notifications',
+        'missed_mail_letters',
       ] as const) {
         expect(
           await db.selectFrom(table).select('user_id').where('user_id', '=', ada.userId).execute(),

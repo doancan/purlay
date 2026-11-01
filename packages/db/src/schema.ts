@@ -269,6 +269,13 @@ export interface MessageVersions {
   workspace_id: string;
 }
 
+export interface MissedMailLetters {
+  id: Generated<string>;
+  sent_at: Timestamp;
+  stop_digest: string;
+  user_id: string;
+}
+
 export interface NativeAuthorizations {
   challenge: string;
   code_digest: string;
@@ -284,6 +291,7 @@ export interface Notifications {
   channel_id: string;
   created_at: Generated<Timestamp>;
   id: Generated<string>;
+  mailed_at: Timestamp | null;
   message_id: string;
   read_at: Timestamp | null;
   suppressed_by_deep_work: Generated<boolean>;
@@ -449,6 +457,7 @@ export interface Users {
   is_server_admin: Generated<boolean>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;
+  missed_mail_since: Timestamp | null;
   quiet_days: number | null;
   quiet_from: number | null;
   quiet_to: number | null;
@@ -539,6 +548,7 @@ export interface DB {
   mentions: Mentions;
   message_versions: MessageVersions;
   messages: Messages;
+  missed_mail_letters: MissedMailLetters;
   native_authorizations: NativeAuthorizations;
   notifications: Notifications;
   object_deletions: ObjectDeletions;

@@ -219,6 +219,11 @@ export const ErrorCode = Type.Union([
    * address changed since: one answer (D-179 §4.3).
    */
   Type.Literal('ADMIN_LINK_NOT_FOUND'),
+  /**
+   * A missed-mail letter's link that does not open — unknown, or its letter older than the link lasts: one
+   * answer (D-240).
+   */
+  Type.Literal('MAIL_LINK_NOT_FOUND'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -301,6 +306,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   SETTINGS_CHANGE_FAILED: 500,
   SERVER_CHANGE_REFUSED: 409,
   ADMIN_LINK_NOT_FOUND: 404,
+  MAIL_LINK_NOT_FOUND: 404,
 
   INTERNAL: 500,
   STORAGE_UNAVAILABLE: 503,

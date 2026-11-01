@@ -280,6 +280,8 @@ export const COLUMNS: Columns = {
     quiet_from: 'omit',
     quiet_to: 'omit',
     quiet_days: 'omit',
+    // Whether the person asked for email about what they missed (D-240): their own setting, as quiet hours.
+    missed_mail_since: 'omit',
     locale: 'omit',
     last_seen_at: 'omit',
     updated_at: 'omit',
@@ -299,6 +301,8 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   github_integrations: 'the sealed GitHub token: a credential never leaves',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   notifications: 'each person’s inbox, their own state',
+  missed_mail_letters:
+    'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',
   saved_messages: 'each person’s saved items, their own state',
   saved_searches: 'each person’s named filters, their own state',
   thread_follows: 'which threads each person follows or let go, their own state',

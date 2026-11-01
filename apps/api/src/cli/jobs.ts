@@ -9,6 +9,7 @@
  *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
  *   sweep:exports      exports nobody downloaded in time, and any whose making was cut off (D-140)
  *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)
+ *   mail:missed        one letter to each person who asked, about what waited unread for them (D-240)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
@@ -28,6 +29,10 @@ import {
   sweepOrphans,
 } from '../modules/jobs/jobs';
 import { jobReport, neverSucceeded } from '../modules/jobs/report';
+import { mailMissedMessages } from '../modules/notifications/missed-mail';
+import { readSettingsToBoot } from '../modules/setup/settings';
+import { credentialCipher } from '../platform/crypto';
+import { smtpMailer } from '../platform/mail';
 import { FIRST_RUN } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
@@ -52,6 +57,33 @@ const { tracker, log } = errorTrackingFor(
 sendAuditLinesTo(log);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 const clock = systemClock;
+
+/**
+ * The relay the server's settings name, as the API builds it (`runtimeServicesFrom`): read once a run, so a
+ * relay changed in Administration is the one the next run sends through. None set, none built.
+ */
+const missedMail = async (): Promise<Readonly<Record<string, number>>> => {
+  const { settings } = await readSettingsToBoot(database, credentialCipher(config.ENCRYPTION_KEY));
+  const mailer =
+    settings.smtp === undefined
+      ? undefined
+      : smtpMailer({
+          SMTP_URL: settings.smtp.smtpUrl,
+          MAIL_FROM: settings.smtp.from,
+          SMTP_ALLOW_PLAINTEXT: settings.smtp.allowPlaintext,
+        });
+  try {
+    return await mailMissedMessages({
+      database,
+      clock,
+      log,
+      send: mailer?.send,
+      appUrl: config.APP_URL,
+    });
+  } finally {
+    mailer?.close();
+  }
+};
 
 const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number>>>>> = {
   'sweep:orphans': async () =>
@@ -78,6 +110,7 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
       log,
       storage: storeFor(config),
     }),
+  'mail:missed': missedMail,
 };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>

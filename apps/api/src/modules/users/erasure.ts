@@ -201,6 +201,8 @@ export const eraseAccount = async (
       email_verified: false,
       is_server_admin: false,
       two_factor_enabled: false,
+      // Nothing is mailed to an erased account, and its address is gone (D-240).
+      missed_mail_since: null,
       deleted_at: now,
       updated_at: now,
     })
@@ -212,6 +214,8 @@ export const eraseAccount = async (
   await executor.deleteFrom('saved_messages').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('thread_follows').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('notifications').where('user_id', '=', person.id).execute();
+  // And when they were last mailed about what they missed, with each letter's stop link (D-240).
+  await executor.deleteFrom('missed_mail_letters').where('user_id', '=', person.id).execute();
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
   // left behind, the pair would also hand a returning GitHub sign-in the erased account (D-38, D-179).
   await executor.deleteFrom('accounts').where('user_id', '=', person.id).execute();

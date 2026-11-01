@@ -99,6 +99,9 @@ const PASSPORT_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
  */
 export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
 
+/** A missed-mail letter's stop link, opened without a session (D-240): charged to `AUTH_BUDGET`. */
+const MAIL_STOP_ROUTE = '/api/missed-mail/stop';
+
 /** The route that spends a native sign-in code, charged to `NATIVE_TOKEN_BUDGET`. */
 const NATIVE_TOKEN_ROUTE = '/api/native/token';
 
@@ -259,6 +262,14 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
     // Asked by a client before anybody has signed in, as the sign-in screen asks the setup's status: it is
     // sign-in traffic, charged to the client's address (D-186).
     if (method === 'GET' && pathname === '/api/client') {
+      const address = clientAddress(peer, request.headers, trustProxy);
+      return (await auth.consume(limitKeyFor(address)))
+        ? undefined
+        : retryAfterSeconds(budgets.auth);
+    }
+
+    // Public, so charged to the client as sign-in traffic, before the link in the body is looked at (D-240).
+    if (method === 'POST' && pathname === MAIL_STOP_ROUTE) {
       const address = clientAddress(peer, request.headers, trustProxy);
       return (await auth.consume(limitKeyFor(address)))
         ? undefined
