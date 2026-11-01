@@ -375,7 +375,10 @@ it. On a narrow window the navigation opens as the sidebar does.
 - **Keyboard shortcuts** — the reference, as a page.
 - **A thread's GitHub** (D-246) — under the decision, only where the workspace has an installation in use and for
   a member of the channel: what the root points at (`acme/api#12 · Retry with jitter · Open`, a link built from its
-  parts) and **Create GitHub issue…**. The dialog first asks for the person's own authorization if there is none
+  parts, with its state — *Open*, *Closed* or *Merged*, kept current by GitHub's events and changing under the open
+  thread without a reload; nothing is announced or counted unread) and **Link an issue or pull request…**, which takes
+  its address on GitHub and says in one sentence that it does not exist or cannot be reached — and **Create GitHub
+  issue…**. The dialog first asks for the person's own authorization if there is none
   (**Let Purlay create issues as me**, back to this thread), then offers the repositories both they and the App
   reach, the title and the description — the question, its accepted answer, the decision and a link back, in the
   person's language — and, for a conversation that is not public, a box to choose to copy its words. Below, the
