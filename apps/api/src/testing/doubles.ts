@@ -21,6 +21,7 @@ import { createLogger, type Logger } from '../platform/logging';
 import { deriveAuthSecret, type Auth, type AuthSettings } from '../modules/auth/better-auth';
 import type { MailMessage, Outbox } from '../platform/mail';
 import { aTestAuth } from './signed-in';
+import { aGitHubApiThatOnlyChecksTokens } from './github-stub';
 import { inProcessBackplane } from '../realtime/bus';
 import { NO_LOG } from '../platform/events';
 import type { ObjectStore } from '../platform/storage';
@@ -171,6 +172,7 @@ export const testDependencies = ({
   const backplane = overrides.backplane ?? inProcessBackplane();
   return {
     ...defaults(database, config),
+    githubApi: aGitHubApiThatOnlyChecksTokens,
     ...overrides,
     backplane,
     auth:
