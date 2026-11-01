@@ -250,6 +250,7 @@ const uploadRefusal = (
     case 'GITHUB_FEED_NOT_FOUND':
     case 'GITHUB_FEEDS_LIMIT':
     case 'GITHUB_REPOSITORY_MISMATCH':
+    case 'GITHUB_UNAVAILABLE':
     case 'IMAGE_NOT_AVAILABLE':
     case 'INCIDENT_ID_CONFLICT':
     case 'INCIDENT_NOT_FOUND':

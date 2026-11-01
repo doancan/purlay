@@ -53,9 +53,11 @@ import { readRetention, setRetention } from '../../modules/workspaces/retention'
 import { readStorage } from '../../modules/attachments/quota';
 import {
   githubIntegrationOf,
+  mayConfigure,
   removeGitHubToken,
   setGitHubToken,
 } from '../../modules/integrations/github';
+import { verifiedToken, type GitHubApi } from '../../modules/integrations/unfurl';
 import type { CredentialCipher } from '../../platform/crypto';
 import {
   NO_LOG,
@@ -370,9 +372,18 @@ export const readGitHubIntegration = async (
   return await githubIntegrationOf(database, context);
 };
 
-/** `PUT` sets the workspace's token, sealed; `DELETE` removes it (D-11, D-39 §6). */
+/**
+ * `PUT` sets the workspace's token, sealed; `DELETE` removes it (D-11, D-39 §6). A token is asked of
+ * GitHub first, outside the transaction (no row is locked across a call to another server) and only
+ * after the caller's role is known, so a member cannot spend a request of this server's on a stranger's
+ * token.
+ */
 export const changeGitHubToken = async (
-  dependencies: WorkspaceDependencies & { readonly cipher: CredentialCipher },
+  dependencies: WorkspaceDependencies & {
+    readonly cipher: CredentialCipher;
+    readonly githubApi: GitHubApi;
+    readonly log: Logger;
+  },
   request: Request,
   workspaceId: string,
   body: unknown,
@@ -387,7 +398,9 @@ export const changeGitHubToken = async (
     return;
   }
   const { token } = validated(SetGitHubTokenRequest, body);
+  mayConfigure(context);
+  const { scopes } = await verifiedToken(dependencies.githubApi, dependencies.log, token);
   await atomicallyOn(database)(async (transaction) => {
-    await setGitHubToken(transaction, clock, cipher, context, token);
+    await setGitHubToken(transaction, clock, cipher, context, token, scopes);
   });
 };

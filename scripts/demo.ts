@@ -121,6 +121,17 @@ if (files !== null) {
   rmSync(files, { recursive: true, force: true });
   say(`attachments are kept in ${files}`);
 }
+// GitHub's API is not reachable from here either: a token saved on the Integrations page is checked
+// against this stand-in, which knows every token and says nothing of its scopes (D-23, amended).
+// It answers nothing else, so a card is a plain link here as it was.
+const github = Bun.serve({
+  port: 0,
+  hostname: '127.0.0.1',
+  fetch: (request) =>
+    new URL(request.url).pathname === '/rate_limit' && request.headers.has('authorization')
+      ? Response.json({ resources: {} })
+      : Response.json({ message: 'Not Found' }, { status: 404 }),
+});
 say(`starting the API on :${String(apiPort)}…`);
 const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
@@ -133,6 +144,7 @@ const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], 
     DATABASE_URL: demoUrl,
     GITHUB_CLIENT_ID: 'demo',
     GITHUB_CLIENT_SECRET: 'demo',
+    GITHUB_API_URL: `http://127.0.0.1:${String(github.port)}`,
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
     // A sandbox: the browser tests' outsiders make workspaces of their own (D-124, D-155).
     WORKSPACE_CREATORS: '*',
@@ -158,6 +170,7 @@ const ready = async (): Promise<boolean> => {
 };
 if (!(await ready())) {
   api.kill();
+  await github.stop(true);
   throw new Error('the API did not become ready');
 }
 
@@ -179,6 +192,7 @@ say('  Ctrl-C stops everything. The database is thrown away on the next start.')
 
 const stop = async (): Promise<void> => {
   api.kill();
+  await github.stop(true);
   await front.stop(true);
   rmSync(directory, { recursive: true, force: true });
   process.exit(0);

@@ -928,7 +928,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .put(
       '/api/workspaces/:workspaceId/integrations/github',
       async ({ request, params, body, set }) => {
-        await changeGitHubToken({ ...dependencies, cipher }, request, params.workspaceId, body);
+        await changeGitHubToken(
+          { ...dependencies, cipher, githubApi: github },
+          request,
+          params.workspaceId,
+          body,
+        );
         set.status = 204;
         return null;
       },
@@ -937,7 +942,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/integrations/github',
       async ({ request, params, set }) => {
         await changeGitHubToken(
-          { ...dependencies, cipher },
+          { ...dependencies, cipher, githubApi: github },
           request,
           params.workspaceId,
           undefined,
