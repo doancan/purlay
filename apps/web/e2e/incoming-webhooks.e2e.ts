@@ -28,7 +28,7 @@ test.describe('a channel’s incoming webhooks', () => {
     const hooks = dialog.getByRole('region', { name: 'Incoming webhooks' });
     await expect(hooks.getByText(/No incoming webhook/)).toBeVisible();
 
-    await hooks.getByLabel(/^Webhook name/).fill('CI');
+    await hooks.getByLabel(/^Posts as/).fill('CI');
     await hooks.getByRole('button', { name: 'Make webhook' }).click();
     const setup = hooks.getByRole('region', { name: 'The address of CI' });
     await expect(setup).toBeVisible();

@@ -1108,7 +1108,7 @@ export const en = {
   'hooks.title': 'Incoming webhooks',
   'hooks.empty':
     'No incoming webhook. Make one, and a CI job or a monitor can post a message here with its address.',
-  'hooks.name': 'Webhook name',
+  'hooks.name': 'Posts as',
   'hooks.nameHint': 'What its messages say they are from, such as CI or Alerts.',
   'hooks.nameRequired': 'Give the webhook a name.',
   'hooks.nameInvalid': 'Use a shorter name, of letters people can see.',
