@@ -699,11 +699,6 @@ export const tr = {
     'GitHub tokenı {when} tarihinde reddetti: iptal edilmiş ya da süresi dolmuş. Sen değiştirene kadar bağlantılar düz bağlantı olarak kalır.',
   'github.broad':
     'Bu, repo yetkisi olan klasik bir token gibi görünüyor: sahibinin erişebildiği her depoyu okuyabilir ve yazabilir. Kartlar için seçili depolarda ince ayarlı, salt okunur bir token yeterli ve daha güvenlidir.',
-  'github.save': 'Tokenı kaydet',
-  'github.saved': 'Token kaydedildi.',
-  'github.saveFailed': 'Token kaydedilmedi.',
-  'github.disconnect': 'Bağlantıyı kes',
-  'github.disconnectFailed': 'GitHub bağlantısı kesilmedi.',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
@@ -1696,8 +1691,6 @@ export const tr = {
   'failure.bookmarksLimit': 'Bir kanal bu kadar yer imi tutabilir. Önce birini kaldır.',
   'failure.githubFeedsLimit':
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
-  'failure.githubFeedExists':
-    'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için bağlantıyı kaldırıp yeniden bağla.',
   'failure.incomingWebhooksLimit':
     'Bir kanalda olabilecek gelen webhook sınırına ulaşıldı. Önce birini iptal et.',
   'failure.githubUnavailable':
@@ -1705,6 +1698,7 @@ export const tr = {
   'failure.githubNotConnected':
     'Bu çalışma alanının GitHub kurulumu kullanımda değil. Bir sahip, Ayarlar → Entegrasyonlar’dan bağlayabilir.',
   'failure.githubAuthorization': 'Önce Purlay’in senin adına issue açmasına izin ver.',
+  'failure.githubFeedExists':
     'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için akıştan yenile.',
   'failure.incidentOpen': 'Bu kanalda zaten açık bir olay var. Onu değiştir ya da önce çöz.',
   'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',

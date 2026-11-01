@@ -699,11 +699,6 @@ export const en = {
     'GitHub refused the token on {when}: it was revoked or has expired. Links stay plain until you replace it.',
   'github.broad':
     'This looks like a classic token with the repo scope: it can read and write every repository its owner can. A fine-grained, read-only token on selected repositories is enough, and safer.',
-  'github.save': 'Save token',
-  'github.saved': 'The token was saved.',
-  'github.saveFailed': 'The token was not saved.',
-  'github.disconnect': 'Disconnect',
-  'github.disconnectFailed': 'GitHub was not disconnected.',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
@@ -1732,14 +1727,13 @@ export const en = {
   'failure.bookmarksLimit': 'That is as many bookmarks as a channel keeps. Remove one first.',
   'failure.githubFeedsLimit':
     'That is as many repositories as a channel hears from. Disconnect one first.',
-  'failure.githubFeedExists':
-    'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
   'failure.incomingWebhooksLimit':
     'That is as many incoming webhooks as a channel has. Revoke one first.',
   'failure.githubUnavailable': 'GitHub did not answer. Nothing was changed. Try again in a minute.',
   'failure.githubNotConnected':
     'This workspace’s GitHub installation is not in use. An owner can connect it in Settings → Integrations.',
   'failure.githubAuthorization': 'Let Purlay create issues as you first.',
+  'failure.githubFeedExists':
     'This channel already hears from that repository. To get a new secret, regenerate it from the feed.',
   'failure.incidentOpen':
     'This channel already has an incident open. Change that one, or resolve it first.',

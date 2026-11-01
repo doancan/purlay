@@ -16,6 +16,7 @@ import { fixedClock } from '../../platform/clock';
 import { channelTopic } from '../../platform/events';
 import { createLogger } from '../../platform/logging';
 import { atomicallyOn } from '../../platform/transactions';
+import { NO_SESSION_LIFETIME } from '../../modules/auth/session-lifetime';
 import { inMemoryAttention } from '../../platform/attention';
 import { inProcessBackplane, inProcessEventBus, type Backplane } from '../../realtime/bus';
 import { inMemoryPresenceRegistry } from '../../realtime/presence';
@@ -432,6 +433,7 @@ describe('integration: writing in an announcement channel over the socket', () =
         presence: inMemoryPresenceRegistry(clock),
         attention: inMemoryAttention(clock),
         log,
+        sessionLifetime: () => NO_SESSION_LIFETIME,
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
         atomically: atomicallyOn(world.db),
       },

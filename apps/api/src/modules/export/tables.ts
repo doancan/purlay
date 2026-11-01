@@ -470,6 +470,7 @@ export const PERSONAL_COLUMNS: PersonalColumns = {
     last_message_at: 'omit',
     min_retention_days: 'omit',
     retain_forever: 'omit',
+    only_admins_post: 'omit',
     state_version: 'omit',
   },
   channel_members: {
@@ -600,6 +601,8 @@ export const PERSONAL_EXCLUDED: Readonly<Record<Exclude<keyof Database, Personal
   github_repo_feeds: 'a channel’s feed and its sealed secret: the workspace’s',
   github_integrations: 'the workspace’s sealed GitHub token: a credential',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
+  incoming_webhooks:
+    'a channel’s incoming webhooks: the digest of a secret, a credential, and the workspace’s (D-245)',
   github_app_installations: 'the workspace’s connection to the server’s GitHub App (D-246)',
   github_user_authorizations:
     'the person’s sealed GitHub App tokens: credentials, never exported (D-246)',

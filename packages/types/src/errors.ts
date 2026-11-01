@@ -104,7 +104,10 @@ export const ErrorCode = Type.Union([
   Type.Literal('GITHUB_NOT_CONNECTED'),
   /** The person has not let Purlay write as them, or GitHub no longer takes their authorization (D-246 §2). */
   Type.Literal('GITHUB_AUTHORIZATION_REQUIRED'),
-  /** GitHub did not answer in time or answered what is not an answer; nothing was kept (D-246). */
+  /**
+   * GitHub did not answer in time or answered what is not an answer — unreachable, failing, or not taking
+   * the calls for now; nothing was kept, and the request may be retried (D-246; D-23, amended, #884).
+   */
   Type.Literal('GITHUB_UNAVAILABLE'),
   /** A request id already used for other content: a retry of the same request is never this (D-246 §4). */
   Type.Literal('GITHUB_REQUEST_CONFLICT'),
@@ -214,11 +217,6 @@ export const ErrorCode = Type.Union([
   Type.Literal('PUSH_UNAVAILABLE'),
   /** This server cannot send a sign-in link: no `SMTP_URL` and `MAIL_FROM` (D-138 §6). */
   Type.Literal('EMAIL_SIGN_IN_UNAVAILABLE'),
-  /**
-   * GitHub could not be asked whether a token it is given is good — unreachable, failing, or not taking
-   * the calls for now. Nothing was saved, and the request may be retried (D-23, amended; #884).
-   */
-  Type.Literal('GITHUB_UNAVAILABLE'),
   // The setup in the browser (D-179 §4)
   /**
    * A `/setup` route to anybody but the browser holding the setup's claim: setup finished, never
@@ -350,7 +348,6 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   STORAGE_UNAVAILABLE: 503,
   PUSH_UNAVAILABLE: 503,
   EMAIL_SIGN_IN_UNAVAILABLE: 503,
-  GITHUB_UNAVAILABLE: 503,
   DATABASE_UNAVAILABLE: 503,
 };
 

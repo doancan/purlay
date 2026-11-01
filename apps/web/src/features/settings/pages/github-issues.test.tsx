@@ -57,7 +57,13 @@ const open = async (
           ...session,
           memberships: session.memberships.map((m) => ({ ...m, role })),
         }),
-      githubIntegration: () => Promise.resolve({ configured: false, updatedAt: null }),
+      githubIntegration: () =>
+        Promise.resolve({
+          configured: false,
+          updatedAt: null,
+          invalidSince: null,
+          broadScopes: false,
+        }),
       ...api,
     }),
   });
