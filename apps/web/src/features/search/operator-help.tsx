@@ -19,7 +19,7 @@ export const OperatorHelp = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
     <details className="text-label text-ink">
-      <summary className="w-fit cursor-pointer rounded-sm py-1 text-accent-text">
+      <summary className="w-fit cursor-pointer rounded-sm py-1 text-ink-muted hover:text-ink">
         {t('search.operators.title')}
       </summary>
       <p className="mt-2 text-caption text-ink-muted">{t('search.operators.intro')}</p>

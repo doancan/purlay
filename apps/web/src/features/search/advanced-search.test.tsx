@@ -9,6 +9,7 @@ import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { settle } from '../../testing/channel-harness';
 import { AdvancedFilters } from './search-filters';
+import { clearDay, pickDay } from '../../testing/date';
 
 installDom();
 
@@ -31,8 +32,8 @@ describe('advanced search', () => {
     await person().selectOptions(view.getByLabelText('Thread status'), 'resolved');
     await person().selectOptions(view.getByLabelText('Content'), 'code');
     await person().selectOptions(view.getByLabelText('Questions'), 'yes');
-    await person().type(view.getByLabelText('From date'), '2026-10-01');
-    await person().type(view.getByLabelText('Before date'), '2026-10-29');
+    await pickDay(view, 'From date', '2026-10-01');
+    await pickDay(view, 'Before date', '2026-10-29');
     fireEvent.blur(view.getByLabelText('GitHub repository'), {
       target: { value: 'bad repository' },
     });
@@ -52,8 +53,8 @@ describe('advanced search', () => {
     await person().selectOptions(view.getByLabelText('Content'), '');
     await person().selectOptions(view.getByLabelText('Questions'), '');
     await person().selectOptions(view.getByLabelText('Thread status'), 'open');
-    await person().clear(view.getByLabelText('From date'));
-    await person().clear(view.getByLabelText('Before date'));
+    await clearDay(view, 'From date');
+    await clearDay(view, 'Before date');
     fireEvent.blur(view.getByLabelText('GitHub repository'), { target: { value: '' } });
     await person().selectOptions(view.getByLabelText('Thread status'), '');
     await person().click(view.getByRole('button', { name: 'Clear advanced filters' }));

@@ -24,6 +24,7 @@ import { NavToggle } from '../shell/nav';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { IconButton } from '../../ui/icon-button';
+import { SlideTrack } from '../../ui/slide-track';
 import { NotificationLevelMenu } from './notification-level-menu';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
@@ -42,9 +43,9 @@ const ChannelDetailsDialog = lazy(async () => ({
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
-  'inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
+  'relative inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
 /** The segment the person is on: raised out of the track by a one-pixel card shadow (D-110). */
-export const activeSegmentClasses = 'bg-surface-100 text-ink shadow-card max-narrow:hidden';
+export const activeSegmentClasses = 'text-ink max-narrow:hidden';
 /** The track the two segments sit in; the title before it takes the room, so it sits at the right. */
 export const segmentTrackClasses =
   'flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
@@ -100,12 +101,13 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
   const openText =
     open !== null && open.count > 0 ? `${format.number(open.count)}${open.more ? '+' : ''}` : null;
+  const views = !direct || openText !== null;
   const questionsName =
     openText === null ? t('header.questions') : `${t('header.questions')} ${openText}`;
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline max-narrow:gap-1 border-border-subtle pr-4 pl-6 max-narrow:pl-4">
-      <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
+      <div data-header-title="" className="flex min-w-0 flex-1 basis-0 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (
           <Avatar
@@ -204,8 +206,13 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
       </div>
       {/* A channel always offers its open questions — they are the product's argument; a
       conversation only while it has some, where an empty view would be one more control. */}
-      {(!direct || openText !== null) && (
-        <nav aria-label={t('header.views')} className={segmentTrackClasses}>
+      {views && (
+        <SlideTrack
+          as="nav"
+          memory="views"
+          aria-label={t('header.views')}
+          className={segmentTrackClasses}
+        >
           <Link
             to="channel"
             params={{ slug: workspace.slug, channelId: channel.id }}
@@ -233,11 +240,18 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
               <span className="font-mono text-caption text-warning-text">{openText}</span>
             )}
           </Link>
-        </nav>
+        </SlideTrack>
       )}
       {/* What the header does, in one group at one spacing: the panels it opens, then how this
           channel notifies and who is in it, set apart by a hairline. */}
-      <div className="flex shrink-0 items-center gap-1 max-narrow:gap-0">
+      {/* Equal room either side of the views track keeps it where it is on the questions screen too,
+          so changing views moves nothing but the mark. */}
+      <div
+        className={cn(
+          'flex items-center justify-end gap-1 max-narrow:gap-0',
+          views ? 'flex-1 basis-0 max-narrow:flex-none' : 'shrink-0',
+        )}
+      >
         <PanelControls direct={direct} channel={channel} />
         <span
           aria-hidden="true"

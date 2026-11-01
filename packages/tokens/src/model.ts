@@ -47,6 +47,10 @@ const RESERVED = [...Object.values(PREFIX), 'text-', 'font-'];
 /** Motion is "effectively none" (`UX.md` §9): the longest transition the system allows, in ms. */
 const MAX_DURATION_MS = 200;
 
+/** The one motion allowed to run longer: a celebration is an event, not an interface transition. */
+const CELEBRATION_TOKEN = 'duration-celebrate';
+const MAX_CELEBRATION_MS = 4000;
+
 /** The spacing grid, in px. */
 const GRID = 4;
 
@@ -307,12 +311,14 @@ export const parseTokens = (raw: unknown): Parsed => {
     const n = /^\d+(?:\.\d+)?px$/.test(value) ? Number.parseFloat(value) : undefined;
     return n === undefined || n < 1 || n > 4 ? `"${value}" is not 1px to 4px` : undefined;
   });
-  const duration = plain('duration', file.duration.tokens, ({ value }) => {
+  const duration = plain('duration', file.duration.tokens, (token) => {
+    const { value } = token;
     const match = MS.exec(value);
     if (match === null) return `"${value}" is not a whole number of ms`;
-    return Number(match[1]) <= MAX_DURATION_MS
+    const limit = token.name === CELEBRATION_TOKEN ? MAX_CELEBRATION_MS : MAX_DURATION_MS;
+    return Number(match[1]) <= limit
       ? undefined
-      : `${value} is longer than the ${String(MAX_DURATION_MS)}ms motion allows (UX §9)`;
+      : `${value} is longer than the ${String(limit)}ms motion allows (UX §9)`;
   });
   const easing = plain('easing', file.easing.tokens, ({ value }) => {
     const match = BEZIER.exec(value);

@@ -230,6 +230,87 @@
 }
 
 /*
+ * The party popper's firework (`ui/fireworks.tsx`): a rocket's trail draws upward, then its burst opens
+ * from the centre and fades. One show, no loop; its length is `duration-celebrate` (0ms under reduced motion).
+ */
+@keyframes firework-rocket {
+  from {
+    transform: scaleY(0);
+    opacity: 1;
+  }
+  35% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+
+@keyframes firework-burst {
+  from {
+    opacity: 0;
+    transform: scale(0.08);
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* The sparks sink as they go out, slowly, which is what makes a burst hang rather than pop. */
+@keyframes firework-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(var(--sink, 1) * var(--space-1)));
+  }
+}
+
+@utility animate-firework-rocket {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  opacity: 0;
+  animation: firework-rocket calc(var(--duration-celebrate) * 0.3) var(--easing-standard) both;
+}
+
+@utility animate-firework-burst {
+  transform-origin: 0 0;
+  opacity: 0;
+  animation: firework-burst calc(var(--duration-celebrate) * 0.46) var(--easing-standard) both;
+}
+
+@utility animate-firework-fall {
+  animation: firework-fall calc(var(--duration-celebrate) * 0.55) linear both;
+}
+
+/* A segmented control's selected mark slides to the segment now chosen (`ui/slide-track.tsx`). */
+@utility slide-mark {
+  transition-property: transform, width, height, opacity;
+  transition-duration: var(--duration-slide);
+  transition-timing-function: var(--easing-standard);
+
+  &[data-instant] {
+    transition-property: none;
+  }
+}
+
+/* A firework's rays and sparks: a line of the marker's weight at any window size. */
+@utility firework-line {
+  stroke-width: var(--stroke-marker);
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+
+/*
  * A thin scrollbar that is always drawn, in the theme's tones: what scrolls sideways — a long line
  * of code — says so before it is scrolled. macOS hides an overlay scrollbar until then, which left a
  * line cut at the block's edge with no sign of more. Chromium and Safari draw a styled one always;

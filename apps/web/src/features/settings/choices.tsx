@@ -52,7 +52,7 @@ export const Choices = <V extends string>({
             className={cn(
               'flex cursor-pointer items-start gap-3 rounded-lg border-hairline px-4 py-3 transition-colors duration-hover ease-standard',
               chosen
-                ? 'border-accent bg-accent-subtle'
+                ? 'border-composer-edge bg-accent-subtle'
                 : 'border-border-subtle bg-surface-100 hover:bg-surface-050',
             )}
           >

@@ -3,7 +3,7 @@
  * in words — and an action this client does not know yet said by its name, never dropped.
  */
 import { describe, expect, test } from 'bun:test';
-import { act, within } from '@testing-library/react';
+import { act, fireEvent, waitFor, within } from '@testing-library/react';
 import type { AuditEntry, AuditPage, UserRole } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
@@ -13,6 +13,7 @@ import { installDom } from '../../../testing/dom';
 import { ALICE, BOB, IDS, ME, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
+import { dayShown, pickDay } from '../../../testing/date';
 
 installDom();
 
@@ -665,8 +666,8 @@ describe('the audit log, narrowed and downloaded', () => {
     ]);
     const main = within(view.getByRole('main'));
     expect(main.getByLabelText<HTMLSelectElement>('Action').value).toBe('member.removed');
-    expect(main.getByLabelText<HTMLInputElement>('From').value).toBe('2026-10-01');
-    expect(main.getByLabelText<HTMLInputElement>('To').value).toBe('2026-10-31');
+    expect(dayShown(main, 'From')).toContain('October 1, 2026');
+    expect(dayShown(main, 'To')).toContain('October 31, 2026');
     expect(main.getByRole('button', { name: `Person ${ALICE.displayName}` })).toBeDefined();
     // Narrowed to nothing is not "nothing has happened".
     expect(main.getByText('No entry matches these filters.')).toBeDefined();
@@ -719,8 +720,8 @@ describe('the audit log, narrowed and downloaded', () => {
     await person().click(await view.findByRole('menuitemradio', { name: ALICE.displayName }));
     await settle();
     expect(view.world.history.stack.at(-1)).toBe(`/w/acme/settings/audit?actor=${ALICE.id}`);
-    await person().type(main.getByLabelText('From'), '2026-10-01');
-    await person().type(main.getByLabelText('To'), '2026-10-02');
+    await pickDay(main, 'From', '2026-10-01');
+    await pickDay(main, 'To', '2026-10-02');
     await settle();
     expect(view.world.history.stack.at(-1)).toBe(
       `/w/acme/settings/audit?actor=${ALICE.id}&from=2026-10-01&to=2026-10-02`,
@@ -731,7 +732,12 @@ describe('the audit log, narrowed and downloaded', () => {
       to: '2026-10-03T00:00:00.000Z',
     });
     // The last day's field only lets a day from the first on be picked.
-    expect(main.getByLabelText<HTMLInputElement>('To').min).toBe('2026-10-01');
+    fireEvent.click(main.getByRole('button', { name: /^To/ }));
+    const grid = await waitFor(() => within(document.body).getByRole('grid'));
+    expect(within(grid).getByLabelText<HTMLButtonElement>('September 30, 2026').disabled).toBe(
+      true,
+    );
+    expect(within(grid).getByLabelText<HTMLButtonElement>('October 1, 2026').disabled).toBe(false);
   });
 
   test('older entries are asked for under the same filter', async () => {

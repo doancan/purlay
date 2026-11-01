@@ -31,6 +31,7 @@ import {
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { placeOf } from './search-screen';
+import { dayShown } from '../../testing/date';
 
 installDom();
 
@@ -607,12 +608,8 @@ describe('operators typed with the words (D-224)', () => {
     expect(asked.map(({ q, since, until }) => ({ q, since, until }))).toEqual([
       { q: '', since: '2026-10-31T00:00:00.000Z', until: '2026-11-01T00:00:00.000Z' },
     ]);
-    expect(within(view.container).getByLabelText<HTMLInputElement>('From date').value).toBe(
-      '2026-10-31',
-    );
-    expect(within(view.container).getByLabelText<HTMLInputElement>('Before date').value).toBe(
-      '2026-11-01',
-    );
+    expect(dayShown(within(view.container), 'From date')).toContain('October 31, 2026');
+    expect(dayShown(within(view.container), 'Before date')).toContain('November 1, 2026');
     view.unmount();
   });
 

@@ -210,7 +210,7 @@ export const DateField = ({
                               : cn(
                                   'hover:bg-surface-200',
                                   outside ? 'text-ink-muted' : 'text-ink',
-                                  day === today && 'font-semibold underline underline-offset-4',
+                                  day === today && 'font-semibold underline',
                                 ),
                           )}
                         >
@@ -240,7 +240,7 @@ export const DateField = ({
                   onChange('');
                   setOpen(false);
                 }}
-                className="rounded-md px-2 py-1 text-label text-ink-muted hover:bg-surface-200 hover:text-ink disabled:opacity-50"
+                className="rounded-md px-2 py-1 text-label text-ink-muted hover:bg-surface-200 hover:text-ink disabled:text-ink-muted"
               >
                 {t('date.clear')}
               </button>
