@@ -1,7 +1,7 @@
 /**
  * A channel's details (D-123), opened from its name in the header: the product's wide dialog with
- * tabs (D-154). **About** — its name and topic, what the person is told about said in words, and at
- * the foot a danger zone with Leave and (for an owner or an admin) Archive; **Members** — who is in
+ * tabs (D-154). **About** — its name and topic, what the person is told about said in words, for an
+ * owner or an admin whether only they post in it (D-243), and at the foot a danger zone with Leave and (for an owner or an admin) Archive; **Members** — who is in
  * it, found by name when there are many, with Add people and — for whoever may (D-172) — Remove; **Integrations** — the repositories it
  * hears from, an owner's or an admin's only (D-134), and absent for anybody else. Files and pins are
  * not here (#485).
@@ -49,7 +49,7 @@ import { CHANNEL_NAME, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
 import { useLeaveRefusal } from './leave';
 import { LEVELS, useChooseLevel } from './notification-level-menu';
-import { Radio } from '../../ui/checkbox';
+import { Checkbox, Radio } from '../../ui/checkbox';
 
 const sectionTitle = 'text-label font-semibold text-ink';
 
@@ -200,6 +200,59 @@ const Notifications = ({ channel }: { readonly channel: Channel }): React.JSX.El
           </label>
         ))}
       </div>
+    </fieldset>
+  );
+};
+
+/**
+ * Who posts in the feed (D-243), for an owner or an admin in the channel: only they, or everybody —
+ * replies in a thread stay everybody's either way, and the hint says so. Saved as it is ticked, painted
+ * before the answer; a refusal puts the box back as the server has it and says why.
+ */
+const Posting = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+  const { t } = useI18n();
+  const describe = useDescribeFailure();
+  const { updateChannel } = useActions();
+  const hintId = useId();
+  const [asked, setAsked] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const change = async (onlyAdminsPost: boolean): Promise<void> => {
+    setAsked(onlyAdminsPost);
+    setProblem(null);
+    try {
+      await updateChannel(channel.id, { onlyAdminsPost });
+    } catch (failure) {
+      setProblem(`${t('details.saveFailed')} ${describe(failure)}`);
+    } finally {
+      setAsked(null);
+    }
+  };
+
+  return (
+    <fieldset className="flex flex-col">
+      <legend className={cn(sectionTitle, 'mb-2')}>{t('details.posting')}</legend>
+      <label className="flex items-start gap-2 text-body text-ink">
+        <Checkbox
+          checked={asked ?? channel.onlyAdminsPost}
+          disabled={asked !== null}
+          aria-describedby={hintId}
+          onChange={(event) => {
+            void change(event.target.checked);
+          }}
+        />
+        <span className="flex flex-col">
+          {t('details.onlyAdminsPost')}
+          <span id={hintId} className="text-caption text-ink-muted">
+            {t('details.onlyAdminsPostHint')}
+          </span>
+        </span>
+      </label>
+      {problem !== null && (
+        <p role="alert" className="mt-2 text-label text-danger-text">
+          {problem}
+        </p>
+      )}
     </fieldset>
   );
 };
@@ -676,6 +729,8 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
             <>
               <NameAndTopic channel={channel} />
               <Notifications channel={channel} />
+              {/* Who posts is an owner's or an admin's to say, from inside the channel (D-243). */}
+              {configures && channel.state !== null && <Posting channel={channel} />}
               {/* How long it keeps its history is an owner's, as the workspace's is (D-225). */}
               {role === 'owner' && channel.type !== 'direct_message' && (
                 <ChannelRetentionSection channel={channel} />

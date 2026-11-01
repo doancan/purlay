@@ -686,6 +686,7 @@ export const tr = {
   'header.feed': 'Akış',
   'header.questions': 'Açık sorular',
   'header.noTopic': 'Henüz konu yok',
+  'header.announcement': 'Buraya yalnızca sahipler ve yöneticiler yazar',
 
   // ── Kanal ayrıntıları ───────────────────────────────────────────────────
   'details.title': '#{name} ayrıntıları',
@@ -702,6 +703,9 @@ export const tr = {
   'details.nobody': 'Bu kanalda kimse yok. Herkes katılabilir.',
   'details.you': 'sen',
   'details.notifications': 'Bildirimler',
+  'details.posting': 'Yazma',
+  'details.onlyAdminsPost': 'Yalnızca sahipler ve yöneticiler yazabilir',
+  'details.onlyAdminsPostHint': 'Kanaldaki herkes yine de thread’lere yanıt yazabilir.',
   'details.tabs': 'Kanal ayrıntıları',
   'details.tab.about': 'Hakkında',
   'details.tab.members': 'Üyeler',
@@ -1135,6 +1139,8 @@ export const tr = {
   'channel.join.notice': '#{name} kanalını üye olmadan okuyorsun.',
   'channel.join.action': 'Kanala katıl',
   'channel.join.failed': 'Kanala katılınamadı.',
+  'channel.announcement.notice':
+    'Bu kanala yalnızca sahipler ve yöneticiler yazar. Yine de bir thread’e yanıt yazabilirsin.',
   'message.reactWith': '{emoji} ile tepki ver',
   'message.quickReactions': 'Hızlı tepkiler',
   'message.reactionOf': {
