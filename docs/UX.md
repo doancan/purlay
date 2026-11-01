@@ -1021,6 +1021,13 @@ that is read again after every change and never polled:
   applies from the next request.*). With neither GitHub nor single sign-on connected, the row says to connect
   one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
   not offered: the dialog says why, and has no **Disconnect**.
+- **How long a session lasts** (D-244) — two selects, each applied as it is chosen (*Saved. It applies from the
+  next request.*): *Sign out when unused for* — *Never*, *1 hour*, *8 hours*, *1 day*, *1 week* (using Purlay in
+  an open window counts; a window left open does not) — and *Sign in again after* — *Only the server's own
+  lifetime*, *1 day*, *1 week*, *30 days*, *90 days* (however much it is used; `SESSION_TTL_DAYS` still ends it
+  if sooner). Both apply to the browser and the Mac application, and to sessions already open from their next
+  request: a session they end is signed out as any other — the next action, or the open window's socket within
+  about half a minute, brings the sign-in screen.
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
