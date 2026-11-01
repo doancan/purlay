@@ -690,7 +690,8 @@ CREATE TABLE messages (
     channel_id   UUID NOT NULL,
 
     -- RESTRICT, because users are soft-deleted and authorship must survive. (D-22)
-    -- NULL for a message nobody wrote: a repository's event (`messages_sender_by_type`, 0032, D-134).
+    -- NULL for a message nobody wrote: a repository's event (`messages_sender_by_type`, 0032, D-134), or an
+    -- incoming webhook's post (0074, D-245).
     sender_id    UUID REFERENCES users(id) ON DELETE RESTRICT,
 
     -- Threads are exactly two levels deep: a root message and its replies.
@@ -745,11 +746,12 @@ CREATE TABLE messages (
 
     -- A person's message has its sender; an event has none. Added by 0032. (D-134 §6)
     CONSTRAINT messages_sender_by_type CHECK ((message_type = 'text') = (sender_id IS NOT NULL)),
-    -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032.
+    -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032;
+    -- 0074 adds an incoming webhook's post, `{ kind: 'incoming_webhook', name }` (D-245).
     CONSTRAINT messages_event_known CHECK (
         message_type = 'text'
         OR metadata = '{}'::jsonb
-        OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release')
+        OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release', 'incoming_webhook')
     ),
 
     -- Only root messages are resolvable; resolving a reply is meaningless.
@@ -1500,6 +1502,43 @@ CREATE UNIQUE INDEX github_deliveries_feed_body_key ON github_deliveries (feed_i
 > recorded in the transaction that posts it, so the same delivery again posts nothing — by its id, or by its
 body's digest under an id made up, since GitHub signs the body and not the id (D-231 §1). A row recorded
 before 0064 has no digest; NULLs never collide, and the sweep forgets those rows with the rest.
+
+### 8.4. `incoming_webhooks`
+
+A channel's incoming webhooks (migration 0074, D-245): an address a CI job or a monitor posts a message to,
+under the hook's name, with no session. Made, listed and revoked by an owner or an admin, as a feed is.
+
+```sql
+CREATE TABLE incoming_webhooks (
+    id            UUID PRIMARY KEY,                   -- the address's first part
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id    UUID NOT NULL,
+    name          VARCHAR(80) NOT NULL,               -- what its messages say they are from
+    secret_digest TEXT COLLATE "C" NOT NULL,          -- SHA-256 of the address's secret, hex; never the secret
+    -- The hook is the channel's: it outlives the account of the person who made it.
+    created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL,
+    last_used_at  TIMESTAMPTZ,                        -- set by each post, under the row's lock
+
+    CONSTRAINT incoming_webhooks_name_length CHECK (char_length(name) BETWEEN 1 AND 80),
+    -- The channel in this workspace. (I-4)
+    CONSTRAINT incoming_webhooks_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_incoming_webhooks_channel ON incoming_webhooks (channel_id, created_at);
+CREATE INDEX idx_incoming_webhooks_workspace ON incoming_webhooks (workspace_id);
+CREATE INDEX idx_incoming_webhooks_created_by ON incoming_webhooks (created_by)
+    WHERE created_by IS NOT NULL;
+```
+
+> The secret is 32 random bytes, answered once inside the path and never stored (`platform/tokens.ts`); a post
+> digests what it was given and compares in constant time, so a copy of the database posts nothing. At most
+> `INCOMING_WEBHOOKS_PER_CHANNEL_MAX` a channel, counted under the channel's row lock. Revoking deletes the row:
+> a post racing it waits on the row lock its `last_used_at` takes, and finds nothing. What a hook posted is a
+> `system_event` whose metadata keeps the name it posted under (`messages_event_known`), so a hook revoked or
+> renamed since still names what it said. Never exported (D-245).
 
 ---
 
@@ -2255,6 +2294,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0071_workspace_deletion.sql workspaces.purge_started_at, workspaces.purged_at, server_audit_log.target_workspace_id: an owner deletes a workspace, a grace period to take it back, then its content erased  (D-242)
 0072_announcement_channels.sql channels.only_admins_post: only the workspace's owners and admins post a root in the channel  (D-243)
 0073_session_lifetime.sql server_settings.session_idle_timeout_hours, session_max_age_days: how long a session may go unused, and live  (D-244)
+0074_incoming_webhooks.sql incoming_webhooks, and an incoming webhook's post among the kinds of messages_event_known: a channel's incoming webhooks  (D-245)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

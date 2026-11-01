@@ -101,6 +101,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 242 decisions, each with its rejected alternatives |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 241 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 245 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
