@@ -5920,7 +5920,8 @@ export const MUTATIONS: readonly Mutation[] = [
     why: 'the request line, and a failure thrown under the library, are written with the path as sent: a reset link’s token reaches the log on every click',
     file: APP,
     find: '    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
-    replace: '    route !== LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
+    replace:
+      '    route !== LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {

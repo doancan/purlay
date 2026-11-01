@@ -1102,7 +1102,7 @@ export const tr = {
   'hooks.title': 'Gelen webhook’lar',
   'hooks.empty':
     'Gelen webhook yok. Bir tane oluştur; bir CI işi ya da izleme aracı adresiyle buraya mesaj gönderebilir.',
-  'hooks.name': 'Webhook adı',
+  'hooks.name': 'Gönderen adı',
   'hooks.nameHint': 'Mesajlarının kimden geldiği, örneğin CI ya da Uyarılar.',
   'hooks.nameRequired': 'Webhook’a bir ad ver.',
   'hooks.nameInvalid': 'Daha kısa, görünen harflerden oluşan bir ad kullan.',
