@@ -61,6 +61,8 @@ const SERVER_ADMIN = 'apps/api/src/modules/setup/server-admin.ts';
 const GITHUB_APP = 'apps/api/src/modules/integrations/github-app.ts';
 const GITHUB_APP_WEBHOOK = 'apps/api/src/modules/integrations/github-app-webhook.ts';
 const GITHUB_APP_TESTS = 'apps/api/src/ingress/http/github-app.integration.test.ts';
+const GITHUB_ISSUES = 'apps/api/src/modules/integrations/github-issues.ts';
+const GITHUB_ISSUES_TESTS = 'apps/api/src/ingress/http/github-issues.integration.test.ts';
 const OIDC = 'apps/api/src/modules/auth/oidc.ts';
 const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
 const RESET_PASSWORD = 'apps/api/src/modules/setup/reset-password.ts';
@@ -11556,5 +11558,69 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  if (!itself.ok) return itself;\n',
     replace: '',
     tests: [SERVER_TESTS],
+  },
+  {
+    id: 'github-issue-without-membership',
+    why: 'a person taken out of a channel makes an issue from its thread with the form they opened before (D-246 §2)',
+    file: GITHUB_ISSUES,
+    find: '  await requireChannelMember(\n',
+    replace: '  await (async (..._ignored: unknown[]) => undefined)(\n',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-private-words-copied-silently',
+    why: 'the words of a private conversation are copied to GitHub without the person saying so (D-246 §2)',
+    file: GITHUB_ISSUES,
+    find: "  if (target.context.channelType !== 'public' && !input.copyPrivateText) {\n",
+    replace: '  if (false) {\n',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-same-id-other-content',
+    why: 'a request id reused for other words is answered as the first request, and the person is told it went through (D-246 §4)',
+    file: GITHUB_ISSUES,
+    find: '  if (operation.content_digest !== digest || operation.root_id !== target.messageId) {\n',
+    replace: '  if (false) {\n',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-never-gives-up',
+    why: 'GitHub’s reads never show an issue and the operation stays unknown for ever, so the person can neither retry nor stop waiting (D-246 §4)',
+    file: GITHUB_ISSUES,
+    find: 'const RECONCILE_GIVE_UP_MS = 15 * 60_000;\n',
+    replace: 'const RECONCILE_GIVE_UP_MS = 15 * 60_000 * 1_000_000;\n',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-repository-not-rechecked',
+    why: 'a repository the person can no longer reach on GitHub is still written to, from a form opened before (D-246 §2)',
+    file: GITHUB_ISSUES,
+    find: "    if (repository === undefined) return { refused: 'no-access' as const };\n",
+    replace: '',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-claim-not-unique',
+    why: 'two clicks on Create both claim the operation, and both post (D-246 §4)',
+    file: GITHUB_ISSUES,
+    find: '      .onConflict((conflict) => conflict.doNothing())\n      .returningAll()\n',
+    replace: '      .returningAll()\n',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-suspended-installation-written-to',
+    why: 'an installation GitHub suspended is still written through (D-246 §1)',
+    file: GITHUB_ISSUES,
+    find: '  if (row.suspended_at !== null) throw notConnected();\n',
+    replace: '',
+    tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-issue-refused-token-kept',
+    why: 'a token GitHub refuses is kept, and the person is asked to authorize again for ever (D-246 §2)',
+    file: GITHUB_ISSUES,
+    find: "    await dependencies.database\n      .deleteFrom('github_user_authorizations')\n      .where('user_id', '=', userId)\n      .execute();\n    return authorizationRequired();\n",
+    replace: '    return authorizationRequired();\n',
+    tests: [GITHUB_ISSUES_TESTS],
   },
 ];
