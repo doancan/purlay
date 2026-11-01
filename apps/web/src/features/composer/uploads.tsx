@@ -238,6 +238,8 @@ const uploadRefusal = (
     case 'SETTINGS_CHANGE_FAILED':
     case 'SERVER_CHANGE_REFUSED':
     case 'ADMIN_LINK_NOT_FOUND':
+    // The page a letter's link opens, never an upload's (D-240).
+    case 'MAIL_LINK_NOT_FOUND':
     case 'CHANNEL_NAME_TAKEN':
     case 'CHANNEL_NOT_FOUND':
     case 'CLIENT_TOO_OLD':

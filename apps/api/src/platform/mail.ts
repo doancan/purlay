@@ -75,7 +75,8 @@ export const transportOptions = (
   };
 };
 
-const escapeHtml = (value: string): string =>
+/** Text made safe inside HTML, attribute values included. */
+export const escapeHtml = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
@@ -141,7 +142,7 @@ export const smtpMailer = (
 const FLUSH_BOUND_MS = 2_000;
 
 /** A relay's error code, `EENVELOPE` and its like; nothing else of the error. */
-const codeOf = (error: unknown): string => {
+export const codeOf = (error: unknown): string => {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : 'unknown';
 };

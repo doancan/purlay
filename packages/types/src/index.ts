@@ -25,3 +25,4 @@ export * from './setup';
 export * from './password';
 export * from './quiet-hours';
 export * from './two-factor';
+export * from './missed-mail';
