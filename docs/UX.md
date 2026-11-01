@@ -373,6 +373,16 @@ it. On a narrow window the navigation opens as the sidebar does.
   one an hour). The letter ends with a link to `/mail/stop#…`, a page of its own that needs no sign-in: it asks
   *Stop these emails?* and stops them only on its button, so a mail scanner that opens it changes nothing.
 - **Keyboard shortcuts** — the reference, as a page.
+- **A thread's GitHub** (D-246) — under the decision, only where the workspace has an installation in use and for
+  a member of the channel: what the root points at (`acme/api#12 · Retry with jitter · Open`, a link built from its
+  parts) and **Create GitHub issue…**. The dialog first asks for the person's own authorization if there is none
+  (**Let Purlay create issues as me**, back to this thread), then offers the repositories both they and the App
+  reach, the title and the description — the question, its accepted answer, the decision and a link back, in the
+  person's language — and, for a conversation that is not public, a box to choose to copy its words. Below, the
+  **review**: the destination (*In acme/api, as ayse:*) and the exact text, down to the hidden marker line, before
+  **Create issue**. GitHub not answering says so and offers **Check again** — the same request, never a second issue
+  — with the words locked; a refusal is said in its own words and editing afterwards is a new request. Creating one
+  does not resolve the thread.
 - **Sessions & account** — a **Create issues as you** card (D-246) only where the server has a GitHub App:
   off until the person chooses, *Not allowed. Purlay writes nothing to GitHub as you.*, with **Let Purlay create
   issues as me** — GitHub's authorization screen, coming back to this page with the outcome in one line — and, once

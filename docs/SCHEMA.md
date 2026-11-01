@@ -1637,6 +1637,82 @@ CREATE TABLE github_app_deliveries (
 CREATE INDEX idx_github_app_deliveries_received ON github_app_deliveries (received_at);
 ```
 
+### 8.5. `github_links` and `github_operations` (D-246)
+
+- **`github_links`** — a root linked to an issue or a pull request, made from the thread or pointed at: the
+  repository by its number and its name, the title and state as GitHub last said them, and `state_at`, GitHub's own
+  instant, so a delivery that arrives out of order cannot move it back. Channel-scoped (the composite key every
+  channel row has), `ON DELETE CASCADE` from the root; exported with the workspace (D-140), never in a person's
+  own. A link outlives the installation that found it: a record, not a permission.
+- **`github_operations`** — the bounded record of one attempt to make an issue, keyed by workspace, actor and the
+  client's request id. `content_digest` is a SHA-256 of what was asked, never the words; `marker` is the line
+  the issue ends with, by which a lost answer is found again; `status` is `pending`, `created` (with its issue
+  number), `unknown` or `refused` (with a closed reason). Swept thirty days after its last change; never exported.
+
+```sql
+CREATE TABLE github_links (
+    id                   UUID PRIMARY KEY,
+    workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id           UUID NOT NULL,
+    root_id              UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    repository_id        BIGINT NOT NULL,
+    repository_full_name VARCHAR(140) NOT NULL,
+    kind                 VARCHAR(8) NOT NULL,
+    number               INTEGER NOT NULL,
+    title                VARCHAR(256) NOT NULL,
+    state                VARCHAR(8) NOT NULL,
+    state_at             TIMESTAMPTZ NOT NULL,
+    origin               VARCHAR(8) NOT NULL,
+    created_by           UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at           TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_links_root_item_key UNIQUE (root_id, repository_id, kind, number),
+    CONSTRAINT github_links_kind_known CHECK (kind IN ('issue', 'pull')),
+    CONSTRAINT github_links_state_known CHECK (state IN ('open', 'closed', 'merged')),
+    CONSTRAINT github_links_merged_is_a_pull CHECK (state <> 'merged' OR kind = 'pull'),
+    CONSTRAINT github_links_origin_known CHECK (origin IN ('created', 'linked')),
+    CONSTRAINT github_links_number_positive CHECK (number > 0),
+    CONSTRAINT github_links_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_github_links_workspace ON github_links (workspace_id);
+CREATE INDEX idx_github_links_channel ON github_links (channel_id);
+CREATE INDEX idx_github_links_created_by ON github_links (created_by) WHERE created_by IS NOT NULL;
+CREATE INDEX idx_github_links_item ON github_links (repository_id, kind, number);
+
+CREATE TABLE github_operations (
+    id                   UUID PRIMARY KEY,
+    workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    actor_id             UUID REFERENCES users(id) ON DELETE CASCADE,
+    client_request_id    UUID NOT NULL,
+    content_digest       TEXT COLLATE "C" NOT NULL,
+    root_id              UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    repository_id        BIGINT NOT NULL,
+    repository_full_name VARCHAR(140) NOT NULL,
+    marker               TEXT COLLATE "C" NOT NULL,
+    status               VARCHAR(8) NOT NULL,
+    reason               VARCHAR(32),
+    issue_number         INTEGER,
+    attempts             INTEGER NOT NULL DEFAULT 0,
+    created_at           TIMESTAMPTZ NOT NULL,
+    updated_at           TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_operations_request_key UNIQUE (workspace_id, actor_id, client_request_id),
+    CONSTRAINT github_operations_status_known
+        CHECK (status IN ('pending', 'created', 'unknown', 'refused')),
+    CONSTRAINT github_operations_digest_is_a_digest CHECK (content_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT github_operations_created_has_issue CHECK ((status = 'created') = (issue_number IS NOT NULL)),
+    CONSTRAINT github_operations_refused_has_reason CHECK ((status = 'refused') = (reason IS NOT NULL)),
+    CONSTRAINT github_operations_attempts_bounded CHECK (attempts BETWEEN 0 AND 20)
+);
+
+CREATE INDEX idx_github_operations_root ON github_operations (root_id);
+CREATE INDEX idx_github_operations_actor ON github_operations (actor_id) WHERE actor_id IS NOT NULL;
+CREATE INDEX idx_github_operations_updated ON github_operations (updated_at);
+CREATE INDEX idx_github_operations_marker ON github_operations (marker);
+```
+
 ---
 
 ## 9. Administration & Operations
@@ -2408,6 +2484,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0073_session_lifetime.sql server_settings.session_idle_timeout_hours, session_max_age_days: how long a session may go unused, and live  (D-244)
 0074_incoming_webhooks.sql incoming_webhooks, and an incoming webhook's post among the kinds of messages_event_known: a channel's incoming webhooks  (D-245)
 0075_github_app.sql server_settings.github_app_*, github_app_installations, github_user_authorizations, github_app_handshakes, github_app_deliveries: the GitHub App, a workspace's installation, a person's own authorization  (D-246)
+0076_github_links.sql github_links, github_operations: what a thread points at on GitHub, and the bounded record that makes creating an issue recoverable  (D-246)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
