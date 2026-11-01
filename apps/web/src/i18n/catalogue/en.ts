@@ -771,6 +771,23 @@ export const en = {
   'erase.signOut': 'Sign out to sign in again',
   'erase.lastOwner': 'Hand these workspaces to another owner first: {workspaces}.',
   'erase.failed': 'Your account was not erased.',
+  'deleteWorkspace.title': 'Delete {workspace}',
+  'deleteWorkspace.entry': 'Delete workspace…',
+  'deleteWorkspace.hint':
+    'It leaves everyone at once. After {days} days its messages, files and channels are erased for good; until then any owner can keep it.',
+  'deleteWorkspace.body':
+    'It disappears for everyone in it now. After {days} days every message, file, channel, invitation and integration in it is erased, and that cannot be undone. Until then any owner can keep it.',
+  'deleteWorkspace.exportFirst':
+    'To keep a copy, export it and download the export before you delete it.',
+  'deleteWorkspace.exportLink': 'Go to exports',
+  'deleteWorkspace.confirm': 'Type the workspace’s name, {workspace}, to confirm',
+  'deleteWorkspace.mismatch': 'That is not the workspace’s name.',
+  'deleteWorkspace.submit': 'Delete workspace',
+  'deleteWorkspace.failed': 'The workspace was not deleted.',
+  'scheduledDeletion.region': 'Workspaces being deleted',
+  'scheduledDeletion.notice': '{workspace} is being deleted: its content is erased after {when}.',
+  'scheduledDeletion.keep': 'Keep {workspace}',
+  'scheduledDeletion.failed': 'The deletion was not taken back.',
   'signIn.erased': 'Your account was erased.',
   'profile.localTime': '{time} local time',
   'profile.zone': 'Time zone',
