@@ -20,6 +20,7 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
+import { GitHubInstallationCard } from './github-issues';
 
 /** `SetGitHubTokenRequest`'s rule: printable ASCII, no spaces. */
 const TOKEN = /^[\x21-\x7e]+$/;
@@ -190,6 +191,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
           />
         </SettingsCard>
       </form>
+      <GitHubInstallationCard />
     </SettingsPage>
   );
 };

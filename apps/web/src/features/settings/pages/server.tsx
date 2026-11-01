@@ -16,6 +16,7 @@ import { SettingsPage } from '../page';
 import { SERVER_SETTINGS_KEY, useServerClient } from '../server-context';
 import { EmailCard, GitHubCard } from './server-channels';
 import { OidcCard } from './server-oidc';
+import { GitHubAppCard } from './server-github-app';
 import { AccountsCard } from './server-accounts';
 import { CreatorsCard, PolicyCard, SessionLifetimeCard, SignInPolicyCard } from './server-policies';
 
@@ -55,6 +56,7 @@ export const ServerPage = (): React.JSX.Element => {
           <GitHubCard view={settings.data} />
           <OidcCard view={settings.data} />
           <EmailCard view={settings.data} />
+          <GitHubAppCard view={settings.data} />
           <PolicyCard view={settings.data} />
           <SignInPolicyCard view={settings.data} />
           <SessionLifetimeCard view={settings.data} />

@@ -205,6 +205,19 @@ export const AuditPage = (): React.JSX.Element => {
           ? t('audit.action.integration.webhook_revoked_from', { actor, webhook, channel })
           : t('audit.action.integration.webhook_created_in', { actor, webhook, channel });
       }
+      // GitHub let the installation go when nobody here did: said as GitHub's (D-246).
+      case 'integration.app_connected':
+        return t('audit.action.integration.app_connected', {
+          actor,
+          account: entry.metadata['account'] ?? '',
+        });
+      case 'integration.app_disconnected':
+        return entry.actor === null
+          ? t('audit.action.integration.app_removed', { account: entry.metadata['account'] ?? '' })
+          : t('audit.action.integration.app_disconnected', {
+              actor,
+              account: entry.metadata['account'] ?? '',
+            });
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
