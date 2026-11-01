@@ -118,7 +118,7 @@ describe('a channel’s incoming webhooks, as an owner sees them', () => {
     });
     const dialog = await openDetails(view);
     const hooks = hooksOf(dialog);
-    await person().type(within(hooks).getByLabelText(/^Webhook name/), '  CI  ');
+    await person().type(within(hooks).getByLabelText(/^Posts as/), '  CI  ');
     await person().click(within(hooks).getByRole('button', { name: 'Make webhook' }));
     await settle();
 
@@ -156,7 +156,7 @@ describe('a channel’s incoming webhooks, as an owner sees them', () => {
       },
     });
     const hooks = hooksOf(await openDetails(view));
-    const field = within(hooks).getByLabelText(/^Webhook name/);
+    const field = within(hooks).getByLabelText(/^Posts as/);
     await person().type(field, '   ');
     await person().click(within(hooks).getByRole('button', { name: 'Make webhook' }));
     expect(within(hooks).getByText('Give the webhook a name.')).toBeDefined();
