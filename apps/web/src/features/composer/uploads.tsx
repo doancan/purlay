@@ -258,6 +258,7 @@ const uploadRefusal = (
     case 'GITHUB_REPOSITORY_MISMATCH':
     case 'INCOMING_WEBHOOK_NOT_FOUND':
     case 'INCOMING_WEBHOOKS_LIMIT':
+    case 'GITHUB_UNAVAILABLE':
     case 'IMAGE_NOT_AVAILABLE':
     case 'INCIDENT_ID_CONFLICT':
     case 'INCIDENT_NOT_FOUND':
