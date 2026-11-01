@@ -708,6 +708,12 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'turns the caller’s own missed-mail letters on or off, and names no workspace (D-240)',
   'POST /api/missed-mail/stop':
     'nobody need be signed in: the token in the body names the one person whose letters it stops, whoever opens it (D-240)',
+  'POST /api/me/exports':
+    'asks for an export of the caller’s own data and names no workspace; what it holds is bound to the caller, never to a workspace they name (D-241)',
+  'GET /api/me/exports':
+    'the caller’s own exports of their data, and names no workspace; nobody else’s is in it (D-241)',
+  'GET /api/me/exports/:exportId/download':
+    'one of the caller’s own exports, once; somebody else’s is the same 404 as one that is not there (D-241)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
   'GET /api/me/sign-in':

@@ -237,6 +237,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     storage: storeFor(config),
     // The seed asks for no export: nothing for a runner to start.
     exportRunner: quiet,
+    personalExportRunner: quiet,
     // Nobody is in front of a page here: the seed pushes nothing either way.
     attention: nobodyActive,
     rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },

@@ -35,7 +35,8 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { aSession } from '../../testing/signed-in';
 import { sendMessage } from '../../modules/messages/messages';
-import { exportQueue, sayAlive, sweepExports } from '../../modules/export/requests';
+import { exportQueue } from '../../modules/export/queue';
+import { sayAlive, sweepExports } from '../../modules/export/requests';
 import { createApp } from './app';
 
 let cloned: ClonedDatabase;
@@ -559,6 +560,7 @@ describe('integration: an owner’s export', () => {
     later.advance(5 * 60_000);
     await sayAlive(
       { database: cloned.db, clock: later, log: silent, storage: world.store },
+      'workspace_exports',
       asked.id,
     );
     expect(
@@ -576,6 +578,7 @@ describe('integration: an owner’s export', () => {
         log,
         storage: world.store,
       },
+      'workspace_exports',
       asked.id,
     );
     expect(lines.map((line) => line['msg'])).toEqual(['an export could not say it is alive']);

@@ -8,7 +8,7 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
-import { exportQueue } from './modules/export/requests';
+import { exportQueue } from './modules/export/queue';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -189,6 +189,7 @@ const app = createApp({
   database,
   storage,
   exportRunner: exports.start,
+  personalExportRunner: exports.startPersonal,
   attention,
   metrics,
   ...(client === undefined ? {} : { client }),

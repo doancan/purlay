@@ -14,7 +14,7 @@
  *   parent's (`BOUNDS`) — the substitute for a request's `WorkspaceContext`, which a command has none of.
  *   People are those the exported rows name (`PEOPLE`).
  */
-import type { Executor, Transaction } from '@purlay/db';
+import type { Database, Executor, Transaction } from '@purlay/db';
 import { EXPORT_FORMAT, type ExportManifest } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
@@ -157,7 +157,43 @@ const latestMigration = (name: string | undefined): string => {
 };
 
 /** Takes each line a table's rows make, a page at a time. */
-export type LineSink = (table: ExportedTable, lines: readonly string[]) => Promise<void>;
+export type LineSink = (table: keyof Database, lines: readonly string[]) => Promise<void>;
+
+/**
+ * One table's rows, as the database writes each, through a cursor a page at a time: what both a
+ * workspace's export and a person's (D-241) read with. Answers how many rows there were.
+ */
+export const readTable = async (
+  transaction: Transaction,
+  table: keyof Database,
+  read: {
+    readonly columns: RawBuilder<unknown>;
+    readonly where: RawBuilder<unknown>;
+    readonly order: string;
+  },
+  sink: LineSink,
+): Promise<number> => {
+  const cursor = `export_${table}`;
+  await sql`declare ${sql.raw(cursor)} no scroll cursor for
+    select row_to_json(t)::text as line from (
+      select ${read.columns} from ${sql.table(table)} where ${read.where} order by ${sql.raw(read.order)}
+    ) t`.execute(transaction);
+  let rows = 0;
+  for (;;) {
+    const page = await sql<{
+      line: string;
+    }>`fetch ${sql.raw(String(PAGE))} from ${sql.raw(cursor)}`.execute(transaction);
+    if (page.rows.length === 0) break;
+    rows += page.rows.length;
+    await sink(
+      table,
+      page.rows.map((row) => row.line),
+    );
+    if (page.rows.length < PAGE) break;
+  }
+  await sql`close ${sql.raw(cursor)}`.execute(transaction);
+  return rows;
+};
 
 /** Reads every table of the scope inside the transaction it is given, handing the lines on. */
 export const readTables = async (
@@ -167,29 +203,22 @@ export const readTables = async (
 ): Promise<Readonly<Record<ExportedTable, number>>> => {
   const counted = {} as Record<ExportedTable, number>;
   for (const table of TABLE_ORDER) {
-    const { where, order } = BOUNDS[table](scope);
-    const cursor = `export_${table}`;
-    await sql`declare ${sql.raw(cursor)} no scroll cursor for
-      select row_to_json(t)::text as line from (
-        select ${projection(table, scope)} from ${sql.table(table)} where ${where} order by ${sql.raw(order)}
-      ) t`.execute(transaction);
-    let rows = 0;
-    for (;;) {
-      const page = await sql<{
-        line: string;
-      }>`fetch ${sql.raw(String(PAGE))} from ${sql.raw(cursor)}`.execute(transaction);
-      if (page.rows.length === 0) break;
-      rows += page.rows.length;
-      await sink(
-        table,
-        page.rows.map((row) => row.line),
-      );
-      if (page.rows.length < PAGE) break;
-    }
-    await sql`close ${sql.raw(cursor)}`.execute(transaction);
-    counted[table] = rows;
+    counted[table] = await readTable(
+      transaction,
+      table,
+      { columns: projection(table, scope), ...BOUNDS[table](scope) },
+      sink,
+    );
   }
   return counted;
+};
+
+/** The shape every row was in, read inside the snapshot: the last migration the database had. */
+export const schemaOf = async (transaction: Transaction): Promise<string> => {
+  const latest = await sql<{ name: string }>`
+    select name from kysely_migration order by name desc limit 1
+  `.execute(transaction);
+  return latestMigration(latest.rows[0]?.name);
 };
 
 /** The channels an operator's export covers: every channel of the workspace, archived ones too. */
@@ -202,20 +231,27 @@ export const everyChannel = async (executor: Executor, workspaceId: string): Pro
       .execute()
   ).map((row) => row.id);
 
-/** A file the export names: where the store keeps it, and how many bytes the row says it has. */
-interface StoredFile {
+/**
+ * A file the export names: whose workspace it is, where the store keeps it, and how many bytes the row
+ * says it has.
+ */
+export interface StoredFile {
   readonly id: string;
+  readonly workspace_id: string;
   readonly storage_key: string;
   readonly thumbnail_key: string | null;
   readonly size_bytes: string;
 }
 
-/** The files the snapshot's attachments name, read inside it. */
-const objectsOf = async (transaction: Transaction, scope: Scope): Promise<StoredFile[]> =>
+/** The files of the attachments `where` selects, read inside the snapshot. */
+export const filesOf = async (
+  transaction: Transaction,
+  where: RawBuilder<unknown>,
+): Promise<StoredFile[]> =>
   (
     await sql<StoredFile>`
-      select id, storage_key, thumbnail_key, size_bytes::text as size_bytes from attachments
-      where message_id in (${messagesOf(scope)}) order by id
+      select id, workspace_id, storage_key, thumbnail_key, size_bytes::text as size_bytes
+      from attachments where ${where} order by id
     `.execute(transaction)
   ).rows;
 
@@ -226,18 +262,17 @@ const objectsOf = async (transaction: Transaction, scope: Scope): Promise<Stored
  * refuses to answer is not absence (`storage.ts`): the export stops. A file whose bytes are not the
  * row's stops it too: a copy that might be partial is no copy.
  */
-const copyObjects = async (
+export const copyObjects = async (
   database: Executor,
   storage: ObjectStore,
-  scope: Scope,
   objects: readonly StoredFile[],
   directory: ExportDirectory,
 ): Promise<ExportManifest['blobs']> => {
   const blobs = { count: 0, bytes: 0, removed: [] as string[], missing: [] as string[] };
   for (const file of objects) {
-    // Defence in depth: a key of this workspace's or none (`workspacePrefix` names them so).
+    // Defence in depth: a key of the row's own workspace or none (`workspacePrefix` names them so).
     for (const key of [file.storage_key, file.thumbnail_key]) {
-      if (key !== null && !key.startsWith(workspacePrefix(scope.workspaceId))) {
+      if (key !== null && !key.startsWith(workspacePrefix(file.workspace_id))) {
         throw new Error(`attachment ${file.id} names a file outside its workspace`);
       }
     }
@@ -293,18 +328,13 @@ export const exportWorkspace = async (
   const { database, clock, log, storage } = dependencies;
   const directory = await exportDirectory(target);
   try {
-    const { tables, schema, objects } = await snapshotOn(database)(async (transaction) => {
-      const latest = await sql<{ name: string }>`
-        select name from kysely_migration order by name desc limit 1
-      `.execute(transaction);
-      return {
-        schema: latestMigration(latest.rows[0]?.name),
-        tables: await readTables(transaction, scope, directory.write),
-        objects: await objectsOf(transaction, scope),
-      };
-    });
+    const { tables, schema, objects } = await snapshotOn(database)(async (transaction) => ({
+      schema: await schemaOf(transaction),
+      tables: await readTables(transaction, scope, directory.write),
+      objects: await filesOf(transaction, sql`message_id in (${messagesOf(scope)})`),
+    }));
     // The snapshot has committed: the files are copied outside it, however slow the store.
-    const blobs = await copyObjects(database, storage, scope, objects, directory);
+    const blobs = await copyObjects(database, storage, objects, directory);
     const manifest: ExportManifest = {
       format: EXPORT_FORMAT,
       exportedAt: clock.now().toISOString(),
