@@ -137,6 +137,7 @@ import {
   listChannels,
   openConversationWith,
   openDirectMessageWith,
+  readAllChannels,
   readChannel,
   readUpTo,
   unreadFrom,
@@ -1133,6 +1134,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/workspaces/:workspaceId/archived-channels',
       async ({ request, params }) => await listArchived(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/read',
+      async ({ request, params }) =>
+        await readAllChannels({ ...dependencies, bus: sockets.bus }, request, params.workspaceId),
     )
     .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
       set.status = 201;

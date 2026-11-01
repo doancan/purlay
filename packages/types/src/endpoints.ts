@@ -54,6 +54,7 @@ import {
   ReadChannelRequest,
   MarkUnreadRequest,
   ReadChannelResponse,
+  ReadAllChannelsResponse,
   ReadNotificationsRequest,
   ReadThreadRequest,
   SaveMessageRequest,
@@ -291,6 +292,13 @@ export const ENDPOINTS = [
     auth: 'session',
     body: MarkUnreadRequest,
     responses: { 200: ReadChannelResponse },
+  }),
+  read({
+    id: 'markAllChannelsRead',
+    method: 'PUT',
+    path: '/api/workspaces/:workspaceId/read',
+    auth: 'session',
+    responses: { 200: ReadAllChannelsResponse },
   }),
   read({
     id: 'starChannel',

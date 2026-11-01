@@ -3,12 +3,18 @@
  * that is not in the channel (D-99 §4, I-3, I-6).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import {
+  closeIntegrationDatabase,
+  withRollback,
+  type Executor,
+  type Transaction,
+} from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { requireChannelById, type ChannelContext } from '../../platform/channels';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aChannelWith, aConversation, aMessageIn } from '../../testing/conversations';
 import type { TestUser } from '../../testing/users';
-import { markRead } from './read-state';
+import { markAllRead, markRead } from './read-state';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -221,6 +227,233 @@ describe('integration: moving a read position', () => {
 
       const error = await markRead(db, clock, context, message).catch((t: unknown) => t);
       expect(error).toMatchObject({ status: 404, body: { code: 'CHANNEL_NOT_FOUND' } });
+    });
+  });
+});
+
+describe('integration: marking every channel read (D-238)', () => {
+  interface Workspace {
+    readonly workspaceId: string;
+    readonly reader: TestUser;
+    readonly writer: TestUser;
+    /** A channel both are in, and something in it. */
+    readonly channel: (name: string) => Promise<string>;
+    readonly say: (
+      channelId: string,
+      sender: TestUser,
+      options?: { parentId?: string },
+    ) => Promise<string>;
+    /** The reader's counters as sends would have left them. */
+    readonly unread: (channelId: string, count: number, mentions?: number) => Promise<void>;
+    readonly row: (channelId: string) => Promise<{
+      last_read_message_id: string | null;
+      unread_count: number;
+      unread_mention_count: number;
+      state_version: number;
+    }>;
+    readonly readAll: () => ReturnType<typeof markAllRead>;
+  }
+
+  const aWorkspace = async (db: Transaction): Promise<Workspace> => {
+    const { workspaceId, users } = await aConversation(db, 'ra-reader', 'ra-writer');
+    const [reader, writer] = users as [TestUser, TestUser];
+    return {
+      workspaceId,
+      reader,
+      writer,
+      channel: async (name) => await aChannelWith(db, workspaceId, name, reader, writer),
+      say: async (channelId, sender, options) =>
+        await aMessageIn(db, { workspaceId, channelId }, sender, options),
+      unread: async (channelId, count, mentions = 0): Promise<void> => {
+        await db
+          .updateTable('channel_members')
+          .set({ unread_count: count, unread_mention_count: mentions })
+          .where('channel_id', '=', channelId)
+          .where('user_id', '=', reader.userId)
+          .execute();
+      },
+      row: async (channelId) =>
+        await db
+          .selectFrom('channel_members')
+          .select(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
+          .where('channel_id', '=', channelId)
+          .where('user_id', '=', reader.userId)
+          .executeTakeFirstOrThrow(),
+      readAll: async () =>
+        await markAllRead(
+          db,
+          clock,
+          await requireWorkspaceMembership(db, reader.userId, workspaceId),
+        ),
+    };
+  };
+
+  test('reads each channel with something unread to its newest message, a reply included', async () => {
+    await withRollback(async (db) => {
+      const space = await aWorkspace(db);
+      const ops = await space.channel('ops');
+      const dev = await space.channel('dev');
+      const quiet = await space.channel('quiet');
+      await space.say(ops, space.writer);
+      const opsNewest = await space.say(ops, space.writer);
+      const root = await space.say(dev, space.reader);
+      // The channel's newest message is a reply: the feed is read past it too.
+      const reply = await space.say(dev, space.writer, { parentId: root });
+      await space.say(quiet, space.writer);
+      await space.unread(ops, 2);
+      await space.unread(dev, 1);
+      const quietBefore = await space.row(quiet);
+
+      const outcomes = await space.readAll();
+
+      expect(outcomes.map((outcome) => outcome.channelId)).toEqual([ops, dev].sort());
+      for (const outcome of outcomes) expect(outcome.moved).toBe(true);
+      expect(await space.row(ops)).toMatchObject({
+        last_read_message_id: opsNewest,
+        unread_count: 0,
+        unread_mention_count: 0,
+      });
+      expect(await space.row(dev)).toMatchObject({
+        last_read_message_id: reply,
+        unread_count: 0,
+        unread_mention_count: 0,
+      });
+      // Nothing unread there: not touched, so not answered and no version spent.
+      expect(await space.row(quiet)).toEqual(quietBefore);
+    });
+  });
+
+  test('the notifications of the roots are read; a reply still waiting stays unread (D-147)', async () => {
+    await withRollback(async (db) => {
+      const space = await aWorkspace(db);
+      const ops = await space.channel('ops');
+      const root = await space.say(ops, space.reader);
+      const mention = await space.say(ops, space.writer);
+      const answer = await space.say(ops, space.writer, { parentId: root });
+      for (const [messageId, type] of [
+        [mention, 'mention'],
+        [answer, 'thread_reply'],
+      ] as const) {
+        await db
+          .insertInto('notifications')
+          .values({
+            user_id: space.reader.userId,
+            workspace_id: space.workspaceId,
+            channel_id: ops,
+            message_id: messageId,
+            type,
+          })
+          .execute();
+      }
+      await space.unread(ops, 2, 2);
+
+      const [outcome] = await space.readAll();
+
+      expect(outcome?.state).toEqual({
+        lastReadMessageId: answer,
+        unreadCount: 1,
+        unreadMentionCount: 1,
+      });
+      const waiting = await db
+        .selectFrom('notifications')
+        .select('message_id')
+        .where('user_id', '=', space.reader.userId)
+        .where('read_at', 'is', null)
+        .execute();
+      expect(waiting.map((row) => row.message_id)).toEqual([answer]);
+    });
+  });
+
+  test('again, only what still waits is answered, as it is, and nothing moves', async () => {
+    await withRollback(async (db) => {
+      const space = await aWorkspace(db);
+      const ops = await space.channel('ops');
+      const dev = await space.channel('dev');
+      const root = await space.say(ops, space.reader);
+      const answer = await space.say(ops, space.writer, { parentId: root });
+      await space.say(dev, space.writer);
+      await db
+        .insertInto('notifications')
+        .values({
+          user_id: space.reader.userId,
+          workspace_id: space.workspaceId,
+          channel_id: ops,
+          message_id: answer,
+          type: 'thread_reply',
+        })
+        .execute();
+      await space.unread(ops, 1, 1);
+      await space.unread(dev, 1);
+      await space.readAll();
+      const version = (await space.row(ops)).state_version;
+
+      const again = await space.readAll();
+
+      expect(again).toEqual([
+        {
+          channelId: ops,
+          moved: false,
+          version,
+          state: { lastReadMessageId: answer, unreadCount: 1, unreadMentionCount: 1 },
+        },
+      ]);
+      expect((await space.row(ops)).state_version).toBe(version);
+    });
+  });
+
+  test('an archived channel, one not joined and another workspace are left as they are', async () => {
+    await withRollback(async (db) => {
+      const space = await aWorkspace(db);
+      const archived = await space.channel('archived');
+      await space.say(archived, space.writer);
+      await space.unread(archived, 1);
+      await db
+        .updateTable('channels')
+        .set({ deleted_at: new Date('2026-09-01T00:00:00.000Z') })
+        .where('id', '=', archived)
+        .execute();
+      // Public and seen, never joined: no position to move.
+      const notJoined = await aChannelWith(db, space.workspaceId, 'elsewhere', space.writer);
+      await space.say(notJoined, space.writer);
+      // The reader's membership in another workspace, with something unread.
+      const other = await aConversation(db, 'ra-other');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: other.workspaceId, user_id: space.reader.userId })
+        .execute();
+      const away = await aChannelWith(db, other.workspaceId, 'away', space.reader);
+      await aMessageIn(db, { workspaceId: other.workspaceId, channelId: away }, space.writer);
+      await db
+        .updateTable('channel_members')
+        .set({ unread_count: 1 })
+        .where('channel_id', '=', away)
+        .where('user_id', '=', space.reader.userId)
+        .execute();
+      const archivedBefore = await space.row(archived);
+      const awayBefore = await space.row(away);
+
+      expect(await space.readAll()).toEqual([]);
+      expect(await space.row(archived)).toEqual(archivedBefore);
+      expect(await space.row(away)).toEqual(awayBefore);
+    });
+  });
+
+  test('a count with no message left to read past is answered as it is, not refused', async () => {
+    await withRollback(async (db) => {
+      const space = await aWorkspace(db);
+      const ops = await space.channel('ops');
+      await space.unread(ops, 1);
+      const before = await space.row(ops);
+
+      expect(await space.readAll()).toEqual([
+        {
+          channelId: ops,
+          moved: false,
+          version: before.state_version,
+          state: { lastReadMessageId: null, unreadCount: 1, unreadMentionCount: 0 },
+        },
+      ]);
+      expect(await space.row(ops)).toEqual(before);
     });
   });
 });

@@ -662,6 +662,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },
   },
+  'PUT /api/workspaces/:workspaceId/read': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'moves only the caller’s own memberships, of channels `visibleChannelsIn` mints, and answers only those; an archived channel, one not joined and another workspace’s are asserted in `read-state.integration.test.ts`',
+    },
+  },
   'PUT /api/notifications/read': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: (_now, owner) => ({ workspaceId: owner.workspaceId }),
