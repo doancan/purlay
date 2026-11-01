@@ -41,6 +41,8 @@ export const COLLATED_COLUMNS: readonly (readonly [table: string, column: string
   ['github_app_handshakes', 'state_digest'],
   ['github_app_deliveries', 'delivery_id'],
   ['github_app_deliveries', 'body_digest'],
+  ['github_operations', 'content_digest'],
+  ['github_operations', 'marker'],
 ];
 
 export type Readiness =
