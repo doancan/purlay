@@ -81,6 +81,8 @@ describe('integration: the server settings (D-179 §6)', () => {
         setupCompletedAt: undefined,
         requireTwoFactor: false,
         passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       });
     });
   });
@@ -106,6 +108,8 @@ describe('integration: the server settings (D-179 §6)', () => {
         setupCompletedAt: finished,
         requireTwoFactor: false,
         passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       });
     });
   });
@@ -201,6 +205,8 @@ describe('integration: the server settings (D-179 §6)', () => {
           setupCompletedAt: undefined,
           requireTwoFactor: false,
           passwordSignIn: true,
+          sessionIdleTimeoutHours: null,
+          sessionMaxAgeDays: null,
         });
         // Nothing was deleted or rewritten: the ciphertext waits for a new value to replace it.
         expect(await rawRow(db)).toEqual(before);
@@ -402,6 +408,8 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         setupCompletedAt: undefined,
         requireTwoFactor: false,
         passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       });
       expect((await rawRow(db)).imported).toEqual(clock.now());
 
@@ -435,6 +443,8 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         setupCompletedAt: undefined,
         requireTwoFactor: false,
         passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       });
     });
   });

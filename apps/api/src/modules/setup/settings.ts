@@ -1,6 +1,7 @@
 /**
  * The server's own settings, kept in the database (D-179 §6): who may sign up, GitHub's OAuth app, the
- * single sign-on provider (D-200), the mail relay, who may make a workspace, and the sign-in policy (D-239). One
+ * single sign-on provider (D-200), the mail relay, who may make a workspace, the sign-in policy (D-239) and how long
+ * a session lives (D-244). One
  * row, `server_settings` (migration 0049), read whole and written by patch.
  *
  * - **The secrets are sealed** by the one credential cipher (`platform/crypto.ts`, D-39 §6) — the GitHub
@@ -18,8 +19,14 @@
  * and the secret sessions are signed with, which is derived from `ENCRYPTION_KEY` and never a setting.
  */
 import type { Executor } from '@purlay/db';
-import { OIDC_NAME_MAX, type ServerSettingsView } from '@purlay/types';
+import {
+  OIDC_NAME_MAX,
+  SESSION_IDLE_TIMEOUT_HOURS,
+  SESSION_MAX_AGE_DAYS,
+  type ServerSettingsView,
+} from '@purlay/types';
 import type { AuthSettings, SignInPolicy } from '../auth/better-auth';
+import type { SessionLifetime } from '../auth/session-lifetime';
 import { workspaceCreatorsOf, type WorkspaceCreators } from '../workspaces/creators';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
@@ -42,7 +49,7 @@ export interface SmtpSettings {
 }
 
 /** Everything the server reads from its settings: what the sign-in library takes, and the rest. */
-export interface ServerSettings extends AuthSettings, SignInPolicy {
+export interface ServerSettings extends AuthSettings, SignInPolicy, SessionLifetime {
   readonly smtp: SmtpSettings | undefined;
   /** Who may make a workspace (D-155, D-169). */
   readonly workspaceCreators: WorkspaceCreators;
@@ -62,6 +69,9 @@ export interface SettingsPatch {
   readonly workspaceCreators?: WorkspaceCreators | undefined;
   readonly requireTwoFactor?: boolean | undefined;
   readonly passwordSignIn?: boolean | undefined;
+  /** How long a session may go unused, and live (D-244); `null` turns the rule off. */
+  readonly sessionIdleTimeoutHours?: SessionLifetime['sessionIdleTimeoutHours'] | undefined;
+  readonly sessionMaxAgeDays?: SessionLifetime['sessionMaxAgeDays'] | undefined;
   /**
    * When the setup was finished — set once, by the finish rule, and never cleared: a setup unfinished
    * again would open `/setup` on a server in use (D-179 §4.8).
@@ -97,6 +107,8 @@ const DEFAULTS: ServerSettings = {
   setupCompletedAt: undefined,
   requireTwoFactor: false,
   passwordSignIn: true,
+  sessionIdleTimeoutHours: null,
+  sessionMaxAgeDays: null,
 };
 
 /** A GitHub login, as the configuration's `WORKSPACE_CREATORS` pattern takes one (D-155). */
@@ -123,6 +135,18 @@ const signUpOf = (stored: string): AuthSettings['signUp'] => {
   if (stored === 'invite-only' || stored === 'open') return stored;
   // The column's check refuses anything else; a row past it is a defect, said loudly.
   throw new Error(`server_settings.sign_up holds an unknown value`);
+};
+
+/** A lifetime rule as stored: `null` is off, and a value the server does not offer is a defect, said loudly. */
+const offeredOf = <V extends number>(
+  offered: readonly V[],
+  stored: number | null,
+  column: string,
+): V | null => {
+  if (stored === null) return null;
+  const chosen = offered.find((value) => value === stored);
+  if (chosen === undefined) throw new Error(`server_settings.${column} holds an unknown value`);
+  return chosen;
 };
 
 const creatorsOf = (kind: string, logins: readonly string[]): WorkspaceCreators => {
@@ -211,6 +235,16 @@ const readWith = async (
     setupCompletedAt: row.setup_completed_at ?? undefined,
     requireTwoFactor: row.require_two_factor,
     passwordSignIn: row.password_sign_in,
+    sessionIdleTimeoutHours: offeredOf(
+      SESSION_IDLE_TIMEOUT_HOURS,
+      row.session_idle_timeout_hours,
+      'session_idle_timeout_hours',
+    ),
+    sessionMaxAgeDays: offeredOf(
+      SESSION_MAX_AGE_DAYS,
+      row.session_max_age_days,
+      'session_max_age_days',
+    ),
   };
 };
 
@@ -264,6 +298,8 @@ interface Written {
   setup_completed_at?: Date | null;
   require_two_factor?: boolean;
   password_sign_in?: boolean;
+  session_idle_timeout_hours?: number | null;
+  session_max_age_days?: number | null;
 }
 
 const columnsOf = async (cipher: CredentialCipher, patch: SettingsPatch): Promise<Written> => {
@@ -271,6 +307,10 @@ const columnsOf = async (cipher: CredentialCipher, patch: SettingsPatch): Promis
   if (patch.signUp !== undefined) written.sign_up = patch.signUp;
   if (patch.requireTwoFactor !== undefined) written.require_two_factor = patch.requireTwoFactor;
   if (patch.passwordSignIn !== undefined) written.password_sign_in = patch.passwordSignIn;
+  if (patch.sessionIdleTimeoutHours !== undefined) {
+    written.session_idle_timeout_hours = patch.sessionIdleTimeoutHours;
+  }
+  if (patch.sessionMaxAgeDays !== undefined) written.session_max_age_days = patch.sessionMaxAgeDays;
   if (patch.github === null) {
     written.github_client_id = null;
     written.github_client_secret_encrypted = null;
@@ -375,6 +415,8 @@ export const settingsView = (settings: ServerSettings): ServerSettingsView => ({
   signUp: settings.signUp,
   requireTwoFactor: settings.requireTwoFactor,
   passwordSignIn: settings.passwordSignIn,
+  sessionIdleTimeoutHours: settings.sessionIdleTimeoutHours,
+  sessionMaxAgeDays: settings.sessionMaxAgeDays,
   github:
     settings.github === undefined
       ? null

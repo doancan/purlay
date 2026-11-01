@@ -315,11 +315,21 @@ const refusalOf = (error: unknown): unknown =>
 const hasProvider = (settings: ServerSettings): boolean =>
   settings.github !== undefined || settings.oidc !== undefined;
 
+/** What a change of one rule of `POST /api/server/policy` is called on the trail. */
+const policyChanged = (change: ServerPolicyRequest): ServerAuditAction => {
+  if ('signUp' in change) return 'server.sign_up_changed';
+  if ('requireTwoFactor' in change) return 'server.two_factor_requirement_changed';
+  if ('passwordSignIn' in change) return 'server.password_sign_in_changed';
+  if ('sessionIdleTimeoutHours' in change) return 'server.session_idle_timeout_changed';
+  return 'server.session_max_age_changed';
+};
+
 /**
  * One rule of the sign-in policy, saved and served at once: who may make an account, whether a password
- * account must turn on two-step verification, whether a password signs in (D-239). Each on its own trail's
- * action. Password sign-in is turned off only while GitHub or single sign-on is connected, weighed in the
- * swap's transaction from what it saved.
+ * account must turn on two-step verification, whether a password signs in (D-239), how long a session may go
+ * unused and live (D-244). Each on its own trail's action. Password sign-in is turned off only while GitHub or
+ * single sign-on is connected, weighed in the swap's transaction from what it saved. A lifetime applies to the
+ * sessions already open from their next request: nothing else is written.
  */
 export const changePolicy = async (
   dependencies: ServerAdminDependencies,
@@ -327,13 +337,7 @@ export const changePolicy = async (
   change: ServerPolicyRequest,
 ): Promise<void> => {
   await afterTheSetup(dependencies.database);
-  const action: ServerAuditAction =
-    'signUp' in change
-      ? 'server.sign_up_changed'
-      : 'requireTwoFactor' in change
-        ? 'server.two_factor_requirement_changed'
-        : 'server.password_sign_in_changed';
-  const record = audited(dependencies, admin, action);
+  const record = audited(dependencies, admin, policyChanged(change));
   try {
     await applySettings(dependencies.database, change, dependencies.change, async (transaction) => {
       if ('passwordSignIn' in change && !change.passwordSignIn) {

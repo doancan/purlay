@@ -23,6 +23,9 @@ export type ServerAuditAction =
   /** The sign-in policy (D-239): two-step verification required of a password, or not; passwords on or off. */
   | 'server.two_factor_requirement_changed'
   | 'server.password_sign_in_changed'
+  /** How long a session lives (D-244): signed out after so long unused, and after so long at all. */
+  | 'server.session_idle_timeout_changed'
+  | 'server.session_max_age_changed'
   | 'server.workspace_creators_changed'
   /** The break-glass command set the administrator's password; the actor is the account itself. */
   | 'server.admin_password_reset'

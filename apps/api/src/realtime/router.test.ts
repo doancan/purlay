@@ -19,6 +19,7 @@ import { inProcessEventBus } from './bus';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
+import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
@@ -39,6 +40,7 @@ const subscribeWith = async (
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           presence: inMemoryPresenceRegistry(clock),
           attention: nobodyActive,
+          sessionLifetime: () => NO_SESSION_LIFETIME,
           log,
           socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
           atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),

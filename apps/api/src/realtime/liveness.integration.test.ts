@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   type ClonedDatabase,
+  type Executor,
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
 } from '@purlay/db';
@@ -18,9 +19,11 @@ import { createApp, type HttpApplication } from '../ingress/http/app';
 import { systemClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
 import { testConfig, testDependencies } from '../testing/doubles';
-import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
+import { aSession, aSignedInUser, type SignedInUser } from '../testing/signed-in';
+import { aUserRow } from '../testing/users';
 import type { Timers } from './hub';
 import { startLivenessSweep, SWEEP_BATCH_MAX } from './liveness';
+import { NO_SESSION_LIFETIME, type SessionLifetime } from '../modules/auth/session-lifetime';
 
 const origin = 'https://purlay.test';
 
@@ -238,6 +241,7 @@ describe('integration: the liveness sweep, one query for all', () => {
         timers: timers.timers,
         source: {
           sessions: () => sessionsOf(sockets),
+          lifetime: () => NO_SESSION_LIFETIME,
           end: (socketId) => {
             ended.push(socketId);
           },
@@ -262,6 +266,7 @@ describe('integration: the liveness sweep, one query for all', () => {
       timers: timers.timers,
       source: {
         sessions: () => open,
+        lifetime: () => NO_SESSION_LIFETIME,
         end: () => undefined,
       },
     });
@@ -295,6 +300,7 @@ describe('integration: the liveness sweep, one query for all', () => {
       timers: timers.timers,
       source: {
         sessions: () => sessionsOf(3),
+        lifetime: () => NO_SESSION_LIFETIME,
         end: (socketId) => {
           ended.push(socketId);
         },
@@ -310,5 +316,64 @@ describe('integration: the liveness sweep, one query for all', () => {
     await until(() => ended.length === 3, 'the next tick to run');
     sweep.stop();
     expect(timers.pending()).toBe(0);
+  });
+});
+
+describe('integration: the liveness sweep and the server’s session lifetime (D-244)', () => {
+  const HOUR = 60 * 60 * 1000;
+  const IDLE: SessionLifetime = { sessionIdleTimeoutHours: 8, sessionMaxAgeDays: null };
+  const ago = (ms: number): Date => new Date(Date.now() - ms);
+  const aLiveSession = async (
+    db: Executor,
+    name: string,
+  ): Promise<{ readonly sessionId: string }> => {
+    const user = await aUserRow(db, name);
+    return { sessionId: (await aSession(db, systemClock, user.userId)).sessionId };
+  };
+  const travel = async (
+    db: Executor,
+    sessionId: string,
+    times: { readonly lastUsedAt: Date },
+  ): Promise<void> => {
+    await db
+      .updateTable('sessions')
+      .set({ last_used_at: times.lastUsedAt })
+      .where('id', '=', sessionId)
+      .execute();
+  };
+
+  test('an open socket whose session lapsed is ended at the sweep’s next check, as expired; one in use is not', async () => {
+    const db = cloned.db;
+    const unused = await aLiveSession(db, 'sweep-unused');
+    const used = await aLiveSession(db, 'sweep-used');
+    await travel(db, unused.sessionId, { lastUsedAt: ago(9 * HOUR) });
+    await travel(db, used.sessionId, { lastUsedAt: ago(HOUR) });
+    let lifetime = NO_SESSION_LIFETIME;
+    const ended: [string, ServerFrame][] = [];
+    const sweep = startLivenessSweep({
+      database: db,
+      clock: systemClock,
+      log: silent,
+      source: {
+        sessions: () => [
+          { socketId: 'socket-unused', sessionId: unused.sessionId },
+          { socketId: 'socket-used', sessionId: used.sessionId },
+        ],
+        end: (socketId, frame) => {
+          ended.push([socketId, frame]);
+        },
+        lifetime: () => lifetime,
+      },
+    });
+    // Off: nothing is ended — the control for what follows.
+    await sweep.tick();
+    expect(ended).toEqual([]);
+    // Turned on with both sockets open: read at the next check.
+    lifetime = IDLE;
+    await sweep.tick();
+    expect(ended.map(([socketId, frame]) => [socketId, frame.event, frame.data])).toEqual([
+      ['socket-unused', 'SESSION_ENDED', { reason: 'expired' }],
+    ]);
+    sweep.stop();
   });
 });

@@ -2280,6 +2280,20 @@ export const tr = {
   'settings.server.signIn.passwords.needsProvider':
     'Önce GitHub’ı ya da tek oturum açmayı bağla: parolayla giriş ancak bunlardan biri çalışırken kapatılabilir.',
   'settings.server.signIn.saved': 'Kaydedildi. Bir sonraki istekten itibaren geçerli.',
+  'settings.server.lifetime.title': 'Bir oturum ne kadar sürer',
+  'settings.server.lifetime.description':
+    'Bir süre kullanılmayan ya da ne yapılırsa yapılsın belli bir süreyi dolduran oturumları kapat; tarayıcıda da Mac uygulamasında da. Açık oturumlar bir sonraki isteklerinden itibaren buna uyar.',
+  'settings.server.lifetime.idle': 'Şu kadar kullanılmayınca oturumu kapat',
+  'settings.server.lifetime.idle.hint':
+    'Açık bir pencerede Purlay’i kullanmak sayılır; açık bırakılmış bir pencere sayılmaz.',
+  'settings.server.lifetime.idle.off': 'Hiçbir zaman',
+  'settings.server.lifetime.maxAge': 'Şu kadar sonra yeniden giriş istensin',
+  'settings.server.lifetime.maxAge.hint':
+    'Ne kadar kullanılırsa kullanılsın. Oturum, sunucunun kendi süresi (SESSION_TTL_DAYS) dolunca da kapanır; hangisi önce gelirse.',
+  'settings.server.lifetime.maxAge.off': 'Yalnızca sunucunun kendi süresi',
+  'settings.server.lifetime.hours': { other: '{count} saat' },
+  'settings.server.lifetime.days': { other: '{count} gün' },
+  'settings.server.lifetime.weeks': { other: '{count} hafta' },
   'settings.server.passwordsOffLast':
     'Parolayla giriş kapalı ve bu, GitHub ile tek oturum açmanın sonuncusu: kimse giriş yapamaz. Önce parolaları aç.',
   'settings.server.creators.title': 'Kimler çalışma alanı açabilir',

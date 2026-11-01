@@ -27,6 +27,7 @@ import { AppError } from '../../platform/errors';
 import { readCookie, SESSION_COOKIE } from '../../platform/cookies';
 import { randomToken } from '../../platform/tokens';
 import type { Auth } from './better-auth';
+import { ACTIVITY_STALE_AFTER_MS, fixedEnd } from './session-lifetime';
 
 /**
  * The clock a session's expiry is judged by. Better Auth compares `expires_at` with the wall clock
@@ -45,7 +46,10 @@ export interface IssuedSession {
 export interface SessionOwner {
   readonly sessionId: string;
   readonly userId: string;
-  /** When it stops resolving, so a long-lived connection can end on time. */
+  /**
+   * When it stops resolving whatever is done with it — its expiry, or the server's maximum age if that is sooner
+   * (D-244) — so a long-lived connection can end on time. An idle timeout moves with use, and is the sweep's.
+   */
   readonly expiresAt: Date;
 }
 
@@ -114,11 +118,16 @@ const markOf = (user: object, field: 'deletedAt' | 'suspendedAt'): unknown => {
 /**
  * Refreshes `last_used_at` (the library's `updatedAt`) by row id when it is stale, through the
  * library's adapter, so nothing about the token is touched and the library's own refresh, which the
- * seam turns off, is not needed for it.
+ * seam turns off, is not needed for it. Where the server signs out an unused session, stale sooner:
+ * the column is then what the idle timeout is judged by (D-244).
  */
 const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<void> => {
   const now = SESSION_CLOCK.now();
-  if (now.getTime() - lastUsed.getTime() <= LAST_USED_STALE_AFTER_MS) return;
+  const staleAfter =
+    auth.sessionLifetime.sessionIdleTimeoutHours === null
+      ? LAST_USED_STALE_AFTER_MS
+      : ACTIVITY_STALE_AFTER_MS;
+  if (now.getTime() - lastUsed.getTime() <= staleAfter) return;
   const { adapter } = await auth.$context;
   await adapter.update({
     model: 'session',
@@ -134,7 +143,8 @@ const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<voi
  * carry the same cookie and resolve it here. Missing, malformed, tampered, expired, revoked and
  * unknown all answer `undefined`: a caller that could tell them apart could ask questions about
  * sessions it does not hold (D-60). A failure that is not about the session — the database is down
- * — is thrown, never read as *signed out*.
+ * — is thrown, never read as *signed out*. A session the server's lifetime policy ended is one of
+ * them: the library's read of it is where it is ended (`lapsedCallerEnded` in `better-auth.ts`, D-244).
  */
 export const sessionFromHeaders = async (
   auth: Auth,
@@ -156,7 +166,10 @@ export const sessionFromHeaders = async (
     return {
       sessionId: found.session.id,
       userId: found.user.id,
-      expiresAt: new Date(found.session.expiresAt),
+      expiresAt: fixedEnd(auth.sessionLifetime, {
+        createdAt: new Date(found.session.createdAt),
+        expiresAt: new Date(found.session.expiresAt),
+      }),
     };
   } catch (error) {
     // A refresh that found its row deleted under it: the library's word for a session that ended

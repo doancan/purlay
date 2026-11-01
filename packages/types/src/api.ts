@@ -1792,14 +1792,40 @@ export const ServerDisconnectRequest = FromClient({
 export type ServerDisconnectRequest = Static<typeof ServerDisconnectRequest>;
 
 /**
+ * How long a session may go unused before it is signed out, in hours, as a server's administrator may choose it
+ * (D-244): an hour, a working day, a day, a week. A fixed set, so the page offers exactly what the server takes.
+ */
+export const SESSION_IDLE_TIMEOUT_HOURS = [1, 8, 24, 168] as const;
+export type SessionIdleTimeoutHours = (typeof SESSION_IDLE_TIMEOUT_HOURS)[number];
+
+/** How long a session may live from its sign-in, in days, whatever its use (D-244). */
+export const SESSION_MAX_AGE_DAYS = [1, 7, 30, 90] as const;
+export type SessionMaxAgeDays = (typeof SESSION_MAX_AGE_DAYS)[number];
+
+/** One of the idle timeouts, or `null`: off, a session is never signed out for being unused (D-244). */
+export const SessionIdleTimeout = Type.Union([
+  ...SESSION_IDLE_TIMEOUT_HOURS.map((hours) => Type.Literal(hours)),
+  Type.Null(),
+]);
+
+/** One of the maximum ages, or `null`: off, a session lives as long as `SESSION_TTL_DAYS` (D-244). */
+export const SessionMaxAge = Type.Union([
+  ...SESSION_MAX_AGE_DAYS.map((days) => Type.Literal(days)),
+  Type.Null(),
+]);
+
+/**
  * `POST /api/server/policy` — one of the server's rules about signing in, each changed on its own so two
  * administrators changing two rules at once never undo each other: who may make an account; whether an account
- * that signs in with a password must turn on two-step verification; whether a password signs in at all (D-239).
+ * that signs in with a password must turn on two-step verification; whether a password signs in at all (D-239);
+ * how long a session may go unused, and how long it may live (D-244).
  */
 export const ServerPolicyRequest = Type.Union([
   FromClient({ signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]) }),
   FromClient({ requireTwoFactor: Type.Boolean() }),
   FromClient({ passwordSignIn: Type.Boolean() }),
+  FromClient({ sessionIdleTimeoutHours: SessionIdleTimeout }),
+  FromClient({ sessionMaxAgeDays: SessionMaxAge }),
 ]);
 export type ServerPolicyRequest = Static<typeof ServerPolicyRequest>;
 

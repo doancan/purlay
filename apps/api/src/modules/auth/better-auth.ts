@@ -79,6 +79,14 @@ import {
 } from './identity';
 import { countAttempt, giveBack, type Attempt } from './password-attempts';
 import { revokeOtherSessionsById } from './revoke-other-sessions';
+import {
+  endLapsedSession,
+  lapsed,
+  lifetimeLimited,
+  NO_SESSION_LIFETIME,
+  type SessionLifetime,
+} from './session-lifetime';
+import { SESSION_CLOCK } from './sessions';
 import { linkLetter, type SignInLocale } from './sign-in-letters';
 import { heldTransaction, rememberingTransactions } from './sign-up-transaction';
 import { consumePassport, passportAllows } from '../workspaces/invitation-passport';
@@ -130,6 +138,10 @@ export interface AuthDependencies {
    * neither rule on, which is what a test's instance needs unless it is about the policy.
    */
   readonly signInPolicy?: SignInPolicy | undefined;
+  /**
+   * How long a session lives (D-244). The server always passes its settings'; absent is neither rule on.
+   */
+  readonly sessionLifetime?: SessionLifetime | undefined;
   /**
    * Where GitHub is (`GITHUB_URL`, `GITHUB_API_URL`): github.com and its API, an Enterprise Server, or
    * a stand-in on this machine. The deployment's, never a setting (D-179).
@@ -533,7 +545,15 @@ const personEnding = async (
 const callerSession = async (
   database: Executor,
   headers: Headers | undefined,
-): Promise<{ readonly id: string; readonly userId: string } | undefined> => {
+): Promise<
+  | {
+      readonly id: string;
+      readonly userId: string;
+      readonly createdAt: Date;
+      readonly lastUsedAt: Date;
+    }
+  | undefined
+> => {
   const cookie = readCookie(headers?.get('cookie') ?? null, SESSION_COOKIE);
   if (cookie === undefined) return undefined;
   let decoded: string;
@@ -545,10 +565,17 @@ const callerSession = async (
   const [raw = ''] = decoded.split('.');
   const row = await database
     .selectFrom('sessions as sessions_ended')
-    .select(['sessions_ended.id', 'sessions_ended.user_id'])
+    .select([
+      'sessions_ended.id',
+      'sessions_ended.user_id',
+      'sessions_ended.created_at',
+      'sessions_ended.last_used_at',
+    ])
     .where('sessions_ended.token_hash', '=', sessionTokenDigest(raw))
     .executeTakeFirst();
-  return row === undefined ? undefined : { id: row.id, userId: row.user_id };
+  return row === undefined
+    ? undefined
+    : { id: row.id, userId: row.user_id, createdAt: row.created_at, lastUsedAt: row.last_used_at };
 };
 
 /** Every session of the person, by the person: one indexed read, however many they hold. */
@@ -1081,6 +1108,13 @@ export type Auth = ReturnType<typeof betterAuth> & {
    * where the policy asks nothing.
    */
   readonly owesTwoFactor: (userId: string) => Promise<boolean>;
+  /** How long a session lives on this instance (D-244). */
+  readonly sessionLifetime: SessionLifetime;
+  /**
+   * Ends a session this lifetime let lapse, if its row still says so, and tells the sockets it held (D-244).
+   * Nothing where it was ended already or used in between.
+   */
+  readonly endLapsedSession: (sessionId: string) => Promise<void>;
 };
 
 export const createAuth = (deps: AuthDependencies): Auth => {
@@ -1089,6 +1123,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   }
   const { settings, log, mailer } = deps;
   const policy = deps.signInPolicy ?? NO_SIGN_IN_POLICY;
+  const lifetime = deps.sessionLifetime ?? NO_SESSION_LIFETIME;
   /** The requirement in force: on, and a password a way in for it to protect. */
   const twoFactorRequired = policy.requireTwoFactor && policy.passwordSignIn;
   const get = deps.fetch ?? fetch;
@@ -1098,13 +1133,38 @@ export const createAuth = (deps: AuthDependencies): Auth => {
    * Every session the library ends, told to the sockets it holds once the end is committed, as our
    * own sign-out does (D-85, #194). Never thrown: the end is already written.
    */
-  const sessionsEnded = async (sessionIds: readonly string[]): Promise<void> => {
+  const sessionsEnded = async (
+    sessionIds: readonly string[],
+    reason: 'signed-out' | 'expired' = 'signed-out',
+  ): Promise<void> => {
     // One publication a session: one that fails is logged, and the rest are still told.
     await publishAfterCommit(log, [
       sessionIds.map((sessionId) =>
-        publication('SESSION_ENDED', () => publishSessionsEnded(deps.bus, deps.clock, [sessionId])),
+        publication('SESSION_ENDED', () =>
+          publishSessionsEnded(deps.bus, deps.clock, [sessionId], reason),
+        ),
       ),
     ]);
+  };
+
+  /** A session the lifetime let lapse, deleted while its row still says so, and told once (D-244). */
+  const endLapsed = async (sessionId: string): Promise<void> => {
+    if (await endLapsedSession(deps.database, lifetime, SESSION_CLOCK.now(), sessionId)) {
+      await sessionsEnded([sessionId], 'expired');
+    }
+  };
+
+  /**
+   * The library's own routes read the session themselves, not through `sessionFromHeaders`: a session the lifetime
+   * let lapse is ended here first, so the library finds none — a route that needs one answers its `401`, and a
+   * sign-in goes on as from a browser that holds nothing (D-244). One read, and only while a rule is on.
+   */
+  const lapsedCallerEnded = async (headers: Headers | undefined): Promise<void> => {
+    if (!lifetimeLimited(lifetime)) return;
+    const caller = await callerSession(deps.database, headers);
+    if (caller !== undefined && lapsed(lifetime, caller, SESSION_CLOCK.now())) {
+      await endLapsed(caller.id);
+    }
   };
 
   /**
@@ -1424,6 +1484,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       // goes on, told by the library's own hooks alone.
       before: createAuthMiddleware(async (ctx) => {
         policyRefusal(ctx.path);
+        await lapsedCallerEnded(ctx.headers);
         const round = signInRounds.getStore();
         const changed = await passwordWeighed(ctx.path, ctx.headers, ctx.body, round);
         if (round !== undefined && ctx.path === CHANGE_PASSWORD) {
@@ -1824,6 +1885,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     oidc: settings.oidc === undefined ? undefined : { name: settings.oidc.name },
     signUp: settings.signUp,
     signInPolicy: policy,
+    sessionLifetime: lifetime,
+    endLapsedSession: endLapsed,
     owesTwoFactor: async (userId): Promise<boolean> => {
       if (!twoFactorRequired) return false;
       const owing = await deps.database

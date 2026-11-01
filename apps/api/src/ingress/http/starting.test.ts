@@ -28,6 +28,8 @@ const NOTHING_SET: ServerSettings = {
   setupCompletedAt: undefined,
   requireTwoFactor: false,
   passwordSignIn: true,
+  sessionIdleTimeoutHours: null,
+  sessionMaxAgeDays: null,
 };
 
 const ORIGIN = 'https://purlay.test';

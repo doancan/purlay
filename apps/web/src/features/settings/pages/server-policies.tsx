@@ -1,15 +1,23 @@
 /**
- * Administration → Server's rules about people: who may make an account, how they sign in, and who may make a
- * workspace (D-179 §4.7, D-155, D-169, D-239). The sign-up and sign-in policies apply as they are chosen; the
+ * Administration → Server's rules about people: who may make an account, how they sign in, how long a session
+ * lasts, and who may make a workspace (D-179 §4.7, D-155, D-169, D-239, D-244). The sign-up, sign-in and session
+ * policies apply as they are chosen; the
  * creators are saved with their button, since a list is typed. Each says in one sentence what it means, and
  * each is read by the server on the next request, so nothing needs a restart.
  */
-import type { ServerSettingsAnswer } from '@purlay/types';
+import {
+  SESSION_IDLE_TIMEOUT_HOURS,
+  SESSION_MAX_AGE_DAYS,
+  type ServerSettingsAnswer,
+  type SessionIdleTimeoutHours,
+  type SessionMaxAgeDays,
+} from '@purlay/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
+import { Select } from '../../../ui/select';
 import { isSetupFailure } from '../../setup/client';
 import { Choices } from '../choices';
 import { SaveOutcome, SettingsCard, SettingsRow, SettingsTextRow } from '../page';
@@ -184,6 +192,127 @@ export const SignInPolicyCard = ({
             void change('passwordSignIn', value === 'on');
           }}
         />
+      </SettingsRow>
+      {failure !== null && (
+        <div className="px-6 pb-5 max-narrow:px-4">
+          <ChangeFailure failure={failure} />
+        </div>
+      )}
+    </SettingsCard>
+  );
+};
+
+/** What a select says for a rule that is off: no number is a duration. */
+const OFF = 'off';
+
+type LifetimeChange =
+  | { readonly sessionIdleTimeoutHours: SessionIdleTimeoutHours | null }
+  | { readonly sessionMaxAgeDays: SessionMaxAgeDays | null };
+
+/**
+ * How long a session lasts (D-244): signed out after so long unused, and signed in again after so long whatever
+ * is done. Each a select of the durations the server takes (`@purlay/types`), applied as it is chosen, on its
+ * own. Sessions already open follow from their next request, the native application's too.
+ */
+export const SessionLifetimeCard = ({
+  view,
+}: {
+  readonly view: ServerSettingsAnswer;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const client = useServerClient();
+  const refresh = useRefresh();
+  const idleId = useId();
+  const maxAgeId = useId();
+  const [pending, setPending] = useState<LifetimeChange | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [outcome, setOutcome] = useState<Outcome>(null);
+
+  const change = async (next: LifetimeChange): Promise<void> => {
+    setPending(next);
+    setFailure(null);
+    setOutcome(null);
+    try {
+      await client.policy(next);
+      await refresh();
+      setOutcome({ ok: true, words: t('settings.server.signIn.saved') });
+    } catch (caught) {
+      setFailure(caught);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  /** A duration in the words a person uses: weeks, days or hours, whichever divides it. */
+  const hoursNamed = (hours: number): string =>
+    hours % (24 * 7) === 0
+      ? t('settings.server.lifetime.weeks', { count: hours / (24 * 7) })
+      : hours % 24 === 0
+        ? t('settings.server.lifetime.days', { count: hours / 24 })
+        : t('settings.server.lifetime.hours', { count: hours });
+
+  const idle =
+    pending !== null && 'sessionIdleTimeoutHours' in pending
+      ? pending.sessionIdleTimeoutHours
+      : view.settings.sessionIdleTimeoutHours;
+  const maxAge =
+    pending !== null && 'sessionMaxAgeDays' in pending
+      ? pending.sessionMaxAgeDays
+      : view.settings.sessionMaxAgeDays;
+
+  return (
+    <SettingsCard
+      title={t('settings.server.lifetime.title')}
+      description={t('settings.server.lifetime.description')}
+      footer={failure === null && outcome !== null ? <SaveOutcome outcome={outcome} /> : undefined}
+    >
+      <SettingsRow
+        label={t('settings.server.lifetime.idle')}
+        description={t('settings.server.lifetime.idle.hint')}
+        htmlFor={idleId}
+        fill
+      >
+        <Select
+          id={idleId}
+          className="w-full"
+          value={idle === null ? OFF : String(idle)}
+          onChange={(event) => {
+            const chosen = SESSION_IDLE_TIMEOUT_HOURS.find(
+              (hours) => String(hours) === event.target.value,
+            );
+            void change({ sessionIdleTimeoutHours: chosen ?? null });
+          }}
+        >
+          <option value={OFF}>{t('settings.server.lifetime.idle.off')}</option>
+          {SESSION_IDLE_TIMEOUT_HOURS.map((hours) => (
+            <option key={hours} value={String(hours)}>
+              {hoursNamed(hours)}
+            </option>
+          ))}
+        </Select>
+      </SettingsRow>
+      <SettingsRow
+        label={t('settings.server.lifetime.maxAge')}
+        description={t('settings.server.lifetime.maxAge.hint')}
+        htmlFor={maxAgeId}
+        fill
+      >
+        <Select
+          id={maxAgeId}
+          className="w-full"
+          value={maxAge === null ? OFF : String(maxAge)}
+          onChange={(event) => {
+            const chosen = SESSION_MAX_AGE_DAYS.find((days) => String(days) === event.target.value);
+            void change({ sessionMaxAgeDays: chosen ?? null });
+          }}
+        >
+          <option value={OFF}>{t('settings.server.lifetime.maxAge.off')}</option>
+          {SESSION_MAX_AGE_DAYS.map((days) => (
+            <option key={days} value={String(days)}>
+              {hoursNamed(days * 24)}
+            </option>
+          ))}
+        </Select>
       </SettingsRow>
       {failure !== null && (
         <div className="px-6 pb-5 max-narrow:px-4">
