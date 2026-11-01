@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Threads** — A thread can point at an issue or pull request that already exists on GitHub, and shows whether it is open, closed or merged: GitHub's signed events keep it current, in any order and however often they repeat, and tell nobody — the question stays open until a person resolves it (D-246)
 - **Threads** — From a thread, a member can create a GitHub issue after reviewing the repository, the title and body and the exact text that will be sent; it is linked back to the thread, which is not resolved by it. A double click or a lost answer from GitHub never makes two: sent again, the request finds the issue by its marker, and a limit says how long to wait (D-246)
 - **Integrations** — Where the server has a GitHub App, an owner connects its installation to the workspace and chooses the repositories on GitHub, and anyone can let Purlay write to GitHub as them from Sessions & account — off until chosen, never asked at sign-in; GitHub removing or suspending the installation, or a person revoking the App, ends it here at once, and nothing exists on a server without an App (D-246)
 - **Administration** — The server's administrator connects the GitHub App in Server, tried as its client and as itself before it is kept, with its secrets stored encrypted and never shown again (D-246)

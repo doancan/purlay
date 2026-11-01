@@ -11483,8 +11483,26 @@ step says which.*
    - **Audited by identifier**: who, which repository, which issue and channel — never a title or a body
      (`integration.issue_created`). Links and operations are classified for the workspace's export (links
      exported, operations not) and are not in a person's own.
-   - **Following linked work** — a link to an existing issue or pull request, signed issue and pull-request events
-     into the thread, their state shown — is the PRD's third step and its own pull request.
+9. **Linked work is followed, quietly** (the PRD's third step). A member of the channel may also point a root at an
+   issue or pull request that exists, by its address. It is read with the **installation's** token — what a thread
+   shows is the workspace's, the same for everybody, and survives the person — while the person's own access still
+   decides whether they may point at it: the repository must be one GitHub lists for them inside the installation, and
+   one answer says it does not exist or may not be reached, so a private repository's titles cannot be had by
+   naming it. A thread holds at most twenty. The App's `issues` and `pull_request` events then keep each link's title
+   and state — open, closed, merged — current:
+   - **Deliveries are the feeds' kind** (D-134 §5, D-231 §1): signed by the App's secret, applied once by id and by
+     body digest, bounded and read within a deadline.
+   - **Out of order, and again, is nothing.** A link keeps GitHub's own `updated_at` for the item (`state_at`); an
+     older event is dropped, and one that says what the link already says only moves that instant — so repeated state
+     updates **coalesce** into the one a person sees, and the next older word is still judged by the newest.
+   - **Only the installation's workspaces.** A delivery changes the links of the workspaces that connected the
+     installation it came through, whatever repository it names.
+   - **Shown, never told.** A change is drawn on the root and sent to those with its thread open (`THREAD_UPDATED`); it
+     is no message and no unread, and notifies nobody, so the notification levels and Deep Work (D-12, D-15) hold by there
+     being nothing to hold. **Resolving the question stays a person's act** (D-204).
+   - **An issue seen being opened with the marker of an operation still waiting on GitHub's answer completes it**
+     (§8), so a lost answer is found by the webhook as well as by the reads.
+   - **A link outlives the installation**: removed on GitHub, the work stays on the thread, followed no more.
 
 **Rejected.** *Asking for the person's authorization at sign-in* — a sign-in that can write to repositories
 is a bigger grant than anybody agreed to, and most people never create an issue. *One person's token for
