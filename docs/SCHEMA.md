@@ -1378,6 +1378,12 @@ CREATE TABLE github_integrations (
     -- Encrypted at the application layer. Never logged, never returned by an API. (D-11)
     access_token_encrypted TEXT,
 
+    -- When GitHub first answered the token 401: no call is made with it until it is replaced, and
+    -- replacing or removing it clears this (D-23, amended).
+    token_invalid_at TIMESTAMPTZ,
+    -- X-OAuth-Scopes as GitHub gave it when the token was saved; NULL for a fine-grained token.
+    token_scopes    TEXT,
+
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -2208,6 +2214,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
 0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
 0070_personal_exports.sql personal_exports: a person's export of their own data, made in the background, downloaded once  (D-241)
+0090_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
