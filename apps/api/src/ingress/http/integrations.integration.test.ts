@@ -35,6 +35,7 @@ const github: GitHubApi = {
   },
   // No checks for these cards: what the endpoint does with them is the module's test (#423).
   checks: () => Promise.resolve({}),
+  check: () => Promise.resolve({ scopes: null }),
 };
 
 const call = async (

@@ -16,6 +16,7 @@ import {
   NEGATIVE_TTL_MS,
   UNAVAILABLE_TTL_MS,
   githubApi,
+  inProcessPauses,
   unfurl,
   type UnfurlDependencies,
 } from './unfurl';
@@ -89,6 +90,7 @@ const dependencies = (
   github: githubApi(`http://localhost:${String(server.port)}`),
   log: aRecordingLogger().log,
   mayCallGitHub,
+  pauses: inProcessPauses(),
 });
 
 describe('integration: unfurling a GitHub link', () => {

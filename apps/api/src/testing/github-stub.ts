@@ -16,6 +16,7 @@
  * The API calls take only a token this stub issued, as `Authorization: Bearer`.
  */
 import type { GithubFetch } from '../modules/auth/better-auth';
+import type { GitHubApi } from '../modules/integrations/unfurl';
 
 /** A GitHub account as GitHub's API describes it. */
 export interface GitHubPerson {
@@ -268,4 +269,99 @@ export const aGitHubStub = (
   };
 
   return { authorize, fetch, calls, refusals, presentedCodes, serve };
+};
+
+/**
+ * GitHub's REST API for a workspace's token, served on a port (the sign-in's side is `aGitHubStub`): the
+ * calls the unfurl and the token check make, and what GitHub says when it is not well (#884).
+ *
+ * A call carries a bearer token this stub was told of (`accept`) or is `401 Bad credentials`, as
+ * GitHub answers a revoked one. `/rate_limit` answers `200` with `X-OAuth-Scopes` for a classic token
+ * and none for a fine-grained one; a repository's pull request or issue is one fixed item; `/graphql`
+ * is one fixed rollup. `answer` replaces answers — a `403` with `x-ratelimit-remaining: 0`, a `429` with
+ * `Retry-After`, a `503` — until it is given `null`. No call leaves the machine.
+ */
+export interface GitHubApiStub {
+  readonly url: string;
+  /** Every call, in order, with the token it carried. */
+  readonly requests: { readonly path: string; readonly token: string }[];
+  /** GitHub knows this token; `scopes` is its `X-OAuth-Scopes` (`null`: a fine-grained token sends none). */
+  readonly accept: (token: string, scopes?: string | null) => void;
+  /** GitHub no longer knows it: `401` from now on. */
+  readonly revoke: (token: string) => void;
+  /** Answers replaced by this one's, until `null`; where it gives `null` for a path, GitHub answers as usual. */
+  readonly answer: (response: ((path: string) => Response | null) | null) => void;
+  readonly stop: () => Promise<void>;
+}
+
+const STUB_PULL = {
+  title: 'Retry the socket with backoff',
+  state: 'open',
+  merged_at: null,
+  user: { login: 'octo', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
+};
+
+const STUB_CHECKS = {
+  data: {
+    repository: {
+      pullRequest: {
+        reviewDecision: 'APPROVED',
+        commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] },
+      },
+    },
+  },
+};
+
+export const aGitHubApiStub = (): GitHubApiStub => {
+  const known = new Map<string, string | null>();
+  const requests: { path: string; token: string }[] = [];
+  let replaced: ((path: string) => Response | null) | null = null;
+  const server = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    fetch: (request) => {
+      const { pathname } = new URL(request.url);
+      const token = (request.headers.get('authorization') ?? '').replace(/^Bearer /i, '');
+      requests.push({ path: pathname, token });
+      const instead = replaced?.(pathname) ?? null;
+      if (instead !== null) return instead;
+      if (!known.has(token)) return Response.json({ message: 'Bad credentials' }, { status: 401 });
+      if (pathname === '/rate_limit') {
+        const scopes = known.get(token) ?? null;
+        return Response.json(
+          { resources: {} },
+          { headers: scopes === null ? {} : { 'x-oauth-scopes': scopes } },
+        );
+      }
+      if (pathname === '/graphql') return Response.json(STUB_CHECKS);
+      if (/^\/repos\/[^/]+\/[^/]+\/(pulls|issues)\/\d+$/.test(pathname)) {
+        return Response.json(STUB_PULL);
+      }
+      return Response.json({ message: 'Not Found' }, { status: 404 });
+    },
+  });
+  return {
+    url: `http://127.0.0.1:${String(server.port)}`,
+    requests,
+    accept: (token, scopes = null): void => void known.set(token, scopes),
+    revoke: (token): void => void known.delete(token),
+    answer: (response): void => {
+      replaced = response;
+    },
+    stop: async (): Promise<void> => {
+      await server.stop(true);
+    },
+  };
+};
+
+/**
+ * The GitHub client for a test that saves a token and asks nothing else of GitHub: every token is
+ * good, and a card is a call a test did not mean to make.
+ */
+export const aGitHubApiThatOnlyChecksTokens: GitHubApi = {
+  item: () =>
+    Promise.reject(new Error('GitHub’s API was asked for an item by a test that does not unfurl')),
+  checks: () =>
+    Promise.reject(new Error('GitHub’s API was asked for checks by a test that does not unfurl')),
+  check: () => Promise.resolve({ scopes: null }),
 };

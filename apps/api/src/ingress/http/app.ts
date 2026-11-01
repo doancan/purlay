@@ -188,7 +188,7 @@ import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
-import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
+import { githubApi, inProcessPauses, type GitHubApi } from '../../modules/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
@@ -427,6 +427,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   });
   // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
   const githubCalls = limiterFor('github-calls', GITHUB_CALL_BUDGET);
+  // Workspaces GitHub told to wait, and GitHub's API at the address the sign-in uses (D-23, amended).
+  const githubPauses = inProcessPauses();
+  const github =
+    dependencies.githubApi ??
+    githubApi(dependencies.config.GITHUB_API_URL, () => dependencies.clock.now().getTime());
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
@@ -902,8 +907,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           {
             ...dependencies,
             cipher,
-            githubApi: dependencies.githubApi ?? githubApi(),
+            githubApi: github,
             githubCalls,
+            githubPauses,
           },
           request,
           body,
