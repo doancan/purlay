@@ -173,6 +173,8 @@ export interface GithubIntegrations {
   created_by: string | null;
   id: string;
   installation_id: Int8 | null;
+  token_invalid_at: Timestamp | null;
+  token_scopes: string | null;
   updated_at: Generated<Timestamp>;
   workspace_id: string;
 }
