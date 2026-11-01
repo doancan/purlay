@@ -11620,4 +11620,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '      onlyAdminsPost: false,\n',
     tests: [ANNOUNCEMENT_TESTS],
   },
+  {
+    id: 'announcement-composer-for-a-member',
+    why: 'a member is given the composer in an announcement channel, and every send they make is refused (D-243)',
+    file: 'apps/web/src/features/channel/channel-screen.tsx',
+    find: "                ) : channel.onlyAdminsPost && role !== 'owner' && role !== 'admin' ? (\n",
+    replace: '                ) : channel.onlyAdminsPost && role === undefined ? (\n',
+    tests: ['apps/web/src/features/channel/announcement.test.tsx'],
+  },
+  {
+    id: 'announcement-offered-to-a-member',
+    why: 'a member is offered the box saying who posts, which the server refuses them (D-243)',
+    file: 'apps/web/src/features/channel/channel-details.tsx',
+    find: '              {configures && channel.state !== null && <Posting channel={channel} />}\n',
+    replace: '              {channel.state !== null && <Posting channel={channel} />}\n',
+    tests: ['apps/web/src/features/channel/announcement.test.tsx'],
+  },
 ];

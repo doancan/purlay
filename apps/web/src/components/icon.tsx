@@ -72,6 +72,7 @@ import {
   Link2,
   Lock,
   LogOut,
+  Megaphone,
   Menu,
   MessagesSquare,
   Monitor,
@@ -197,6 +198,8 @@ const glyphs = {
   invite: Link2,
   /** What signs a person in, and the end of an account: sessions and erasure. */
   lock: KeyRound,
+  /** A channel whose feed only its owners and admins post in: an announcement channel (D-243). */
+  announcement: Megaphone,
   /** Another service connected to the workspace: GitHub (D-23). */
   integration: Plug,
   /** GitHub itself: the sign-in button's mark. */

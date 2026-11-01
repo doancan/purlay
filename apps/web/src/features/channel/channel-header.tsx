@@ -172,6 +172,12 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             {/* The star is the channel's own, beside its name where Slack and Linear keep it, not one
                 more icon in the cluster of actions on the right. */}
             <StarToggle channel={channel} />
+            {/* Said by name to a screen reader; the composer below says what it means (D-243). */}
+            {channel.onlyAdminsPost && (
+              <span className="inline-flex shrink-0 text-ink-subtle">
+                <Icon name="announcement" size="sm" label={t('header.announcement')} />
+              </span>
+            )}
             <span
               aria-hidden="true"
               className="h-4 shrink-0 border-l-hairline border-border-subtle max-narrow:hidden"

@@ -20,7 +20,8 @@
  *
  * A channel the person can see but has not joined has no read position and cannot be
  * written to; it shows its messages and a way to join, in place of the composer, so a link
- * to a public channel is useful before they are in it.
+ * to a public channel is useful before they are in it. In an announcement channel a member who is
+ * not an owner or an admin is told so in the composer's place, and replies in a thread (D-243).
  */
 import { useDescribeFailure } from '../../data/failure';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
@@ -39,6 +40,7 @@ import { useRoute } from '../../router/router-provider';
 import { rememberChannel } from '../questions/last-channel';
 import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
+import { useWorkspaceRole } from '../settings/role';
 import { useGone } from '../../realtime/realtime-provider';
 import { ChannelHeader, useChannelTitle } from './channel-header';
 import { MessageFeed } from './message-feed';
@@ -88,6 +90,21 @@ const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
 };
 
 /**
+ * In an announcement channel, in the composer's place for anybody but an owner or an admin: who posts
+ * here, and that a thread is still theirs to reply in (D-243). The server is the authority; this only
+ * spares a person a message that would be refused.
+ */
+const AnnouncementNotice = (): React.JSX.Element => {
+  const { t } = useI18n();
+  return (
+    <p className="flex items-center gap-2 border-t-hairline border-border-subtle px-4 py-3 text-body text-ink-muted">
+      <Icon name="announcement" />
+      {t('channel.announcement.notice')}
+    </p>
+  );
+};
+
+/**
  * The channel's own column: header, feed and composer. Below the narrow line an open thread covers
  * it, and what is covered is hidden too — from a screen reader and from Tab — while keeping its
  * place and its scroll, so closing the thread puts the reader back where they were.
@@ -113,6 +130,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
   const { t } = useI18n();
   const { search, navigate } = useRoute();
   const member = channel.state !== null;
+  const role = useWorkspaceRole();
   const conversation = channel.type === 'direct_message';
   // The thread the address asks for, read when the channel opens and not again.
   const [openThread] = useState(() => threadInSearch(search));
@@ -172,10 +190,12 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
                   onLinkMissing={setMissing}
                   onLeaveWindow={leaveWindow}
                 />
-                {member ? (
-                  <Composer channelId={channel.id} channelName={title} autoFocus />
-                ) : (
+                {!member ? (
                   <JoinBar channel={channel} />
+                ) : channel.onlyAdminsPost && role !== 'owner' && role !== 'admin' ? (
+                  <AnnouncementNotice />
+                ) : (
+                  <Composer channelId={channel.id} channelName={title} autoFocus />
                 )}
               </ConversationColumn>
               <ThreadPanel
