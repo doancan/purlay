@@ -138,6 +138,8 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     quietHours: () => Promise.resolve({ quietHours: null, timeZone: null }),
     // And whether this server can email the person about what they missed (D-240): it cannot, unless a test says.
     missedMail: () => Promise.resolve({ on: false, available: false }),
+    // A server without a GitHub App: nothing of issues is offered (D-246).
+    githubApp: () => Promise.resolve({ available: false, installation: null, authorization: null }),
     ...overrides,
   });
 

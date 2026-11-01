@@ -47,6 +47,7 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
     github: null,
     oidc: null,
     smtp: null,
+    githubApp: null,
     workspaceCreators: { kind: 'first' },
     setupCompletedAt: '2026-10-01T00:00:00.000Z',
   },
@@ -54,6 +55,10 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
   oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  githubApp: {
+    callbackUrl: 'https://purlay.test/api/github-app/callback',
+    webhookUrl: 'https://purlay.test/api/webhooks/github-app',
+  },
   channels: { github: false, email: false, oidc: false },
   adminEmail: 'admin@example.test',
   ...over,
@@ -71,6 +76,7 @@ const CONNECTED = anAnswer({
       from: 'purlay@example.test',
       allowPlaintext: false,
     },
+    githubApp: null,
     workspaceCreators: { kind: 'listed', logins: ['ada', 'grace'] },
     setupCompletedAt: '2026-10-01T00:00:00.000Z',
   },
@@ -85,6 +91,7 @@ const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
   github: unexpected('github'),
   oidc: unexpected('oidc'),
   smtp: unexpected('smtp'),
+  githubApp: unexpected('githubApp'),
   disconnect: unexpected('disconnect'),
   policy: unexpected('policy'),
   creators: unexpected('creators'),
@@ -1020,6 +1027,206 @@ describe('Settings → Server → Accounts (D-233)', () => {
     expect(asked[0]).toBe('');
     expect(asked.at(-1)).toBe('zzz');
     expect(card(view, 'Accounts').getByText('No account matches.')).toBeDefined();
+    view.unmount();
+  });
+});
+
+describe('Settings → Server — the GitHub App (D-246)', () => {
+  const KEY = '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----';
+
+  const fill = async (github: Scope): Promise<void> => {
+    await person().click(github.getByRole('button', { name: 'Connect the GitHub App' }));
+    await person().type(github.getByLabelText('App ID'), '4242');
+    await person().type(github.getByLabelText('App slug'), 'purlay-issues');
+    await person().type(github.getByLabelText('Client ID'), 'Iv23.x');
+    await person().type(github.getByLabelText('Client secret'), 'secret');
+    await person().type(github.getByLabelText('Private key'), 'k');
+    await person().type(github.getByLabelText('Webhook secret'), 'hook');
+  };
+
+  test('says nothing is offered until it is connected, shows the two addresses to paste, and passes axe', async () => {
+    const view = await render(aClient());
+    const app = card(view, 'GitHub App for issues');
+    expect(app.getByText('Not connected')).toBeDefined();
+    expect(app.getByText(en['settings.server.githubApp.empty'])).toBeDefined();
+    const page = view.getByRole('main').textContent;
+    expect(page).toContain('https://purlay.test/api/github-app/callback');
+    expect(page).toContain('https://purlay.test/api/webhooks/github-app');
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
+  test.each(['key-rejected', 'app-mismatch', 'secret-rejected'] as const)(
+    'a try that fails for %s is said, keeps what was typed and keeps nothing',
+    async (reason) => {
+      const failed: ProbeResult = { ok: false, reason, raw: 'GitHub said no' };
+      const view = await render(aClient({ githubApp: () => Promise.resolve(failed) }));
+      const app = card(view, 'GitHub App for issues');
+      await fill(app);
+      await person().click(app.getByRole('button', { name: 'Try the connection and save' }));
+      await settle();
+      expect(app.getByText(en[REASONS[reason].what])).toBeDefined();
+      expect(app.getByLabelText('App ID')).toHaveProperty('value', '4242');
+      view.unmount();
+    },
+  );
+
+  test('a good try saves, sends the key as typed once, and the secrets are emptied', async () => {
+    const sent: unknown[] = [];
+    const view = await render(
+      aClient({
+        githubApp: (candidate) => {
+          sent.push(candidate);
+          return Promise.resolve({ ok: true });
+        },
+      }),
+    );
+    const app = card(view, 'GitHub App for issues');
+    await fill(app);
+    await person().click(app.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(sent).toEqual([
+      {
+        appId: 4242,
+        slug: 'purlay-issues',
+        clientId: 'Iv23.x',
+        clientSecret: 'secret',
+        privateKey: 'k',
+        webhookSecret: 'hook',
+      },
+    ]);
+    expect(app.getByText(en['settings.server.githubApp.saved'])).toBeDefined();
+    expect(KEY).toContain('PRIVATE KEY');
+    view.unmount();
+  });
+
+  test('a form opened can be closed again, and a refused change is said in the card, keeping the form', async () => {
+    const view = await render(
+      aClient({ githubApp: () => Promise.reject(new SetupFailure(500, 'INTERNAL', 'no')) }),
+    );
+    const app = card(view, 'GitHub App for issues');
+    await fill(app);
+    await person().click(app.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(app.getByRole('alert')).toBeDefined();
+    expect(app.getByLabelText('App ID')).toHaveProperty('value', '4242');
+    await person().click(app.getByRole('button', { name: 'Cancel' }));
+    expect(app.queryByLabelText('App ID')).toBeNull();
+    expect(app.getByRole('button', { name: 'Connect the GitHub App' })).toBeDefined();
+    view.unmount();
+  });
+
+  test('a secret the key could not open says to enter it again, and lets the App go from the form', async () => {
+    let disconnected = '';
+    const lost = anAnswer({ needsReentry: ['githubApp'] });
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(lost),
+        disconnect: (channel) => {
+          disconnected = channel;
+          return Promise.resolve();
+        },
+      }),
+    );
+    const app = card(view, 'GitHub App for issues');
+    expect(app.getByText(en['settings.server.reentry'])).toBeDefined();
+    expect(app.getByLabelText('App ID')).toBeDefined();
+    expect(app.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    await person().click(app.getByRole('button', { name: 'Disconnect' }));
+    await person().click(
+      within(view.getByRole('dialog')).getByRole('button', { name: 'Disconnect' }),
+    );
+    await settle();
+    expect(disconnected).toBe('github-app');
+    view.unmount();
+  });
+
+  test('a disconnect that fails is said in the question, which stays open', async () => {
+    const connected = anAnswer({
+      settings: {
+        ...anAnswer().settings,
+        githubApp: {
+          appId: 4242,
+          slug: 'purlay-issues',
+          clientId: 'Iv23.x',
+          clientSecret: { set: true },
+          privateKey: { set: true },
+          webhookSecret: { set: true },
+        },
+      },
+    });
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(connected),
+        disconnect: () => Promise.reject(new SetupFailure(500, 'INTERNAL', 'no')),
+      }),
+    );
+    const app = card(view, 'GitHub App for issues');
+    await person().click(app.getByRole('button', { name: 'Disconnect' }));
+    const dialog = within(view.getByRole('dialog'));
+    await person().click(dialog.getByRole('button', { name: 'Disconnect' }));
+    await settle();
+    expect(within(view.getByRole('dialog')).getByRole('alert')).toBeDefined();
+    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
+    view.unmount();
+  });
+
+  test('a card that is connected can be replaced: its identity is kept in the form, its secrets are not', async () => {
+    const connected = anAnswer({
+      settings: {
+        ...anAnswer().settings,
+        githubApp: {
+          appId: 4242,
+          slug: 'purlay-issues',
+          clientId: 'Iv23.x',
+          clientSecret: { set: true },
+          privateKey: { set: true },
+          webhookSecret: { set: true },
+        },
+      },
+    });
+    const view = await render(aClient({ settings: () => Promise.resolve(connected) }));
+    const app = card(view, 'GitHub App for issues');
+    await person().click(app.getByRole('button', { name: 'Replace credentials' }));
+    expect(app.getByLabelText('App ID')).toHaveProperty('value', '4242');
+    expect(app.getByLabelText('Client secret')).toHaveProperty('value', '');
+    expect(app.getByLabelText('Private key')).toHaveProperty('value', '');
+    view.unmount();
+  });
+
+  test('connected, it shows who it is and no secret; disconnecting asks once and says what stays', async () => {
+    const connected = anAnswer({
+      settings: {
+        ...anAnswer().settings,
+        githubApp: {
+          appId: 4242,
+          slug: 'purlay-issues',
+          clientId: 'Iv23.x',
+          clientSecret: { set: true },
+          privateKey: { set: true },
+          webhookSecret: { set: true },
+        },
+      },
+    });
+    let disconnected = '';
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(connected),
+        disconnect: (channel) => {
+          disconnected = channel;
+          return Promise.resolve();
+        },
+      }),
+    );
+    const app = card(view, 'GitHub App for issues');
+    expect(app.getByText('purlay-issues · App 4242')).toBeDefined();
+    await person().click(app.getByRole('button', { name: 'Disconnect' }));
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.getByText(en['settings.server.githubApp.disconnectBody'])).toBeDefined();
+    await person().click(dialog.getByRole('button', { name: 'Disconnect' }));
+    await settle();
+    expect(disconnected).toBe('github-app');
     view.unmount();
   });
 });

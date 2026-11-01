@@ -529,6 +529,27 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('the GitHub App: status read, each trip started at its own route, installation and authorization let go (D-246)', async () => {
+    const status = { available: true, installation: null, authorization: null };
+    const redirect = { url: 'https://github.example/x' };
+    const read = harness(status);
+    expect(await read.api.githubApp(ID)).toEqual(status);
+    const install = harness(redirect);
+    expect(await install.api.startGitHubInstallation(ID)).toEqual(redirect);
+    const authorize = harness(redirect);
+    expect(await authorize.api.startGitHubAuthorization('/w/acme')).toEqual(redirect);
+    const gone = harness(null);
+    await gone.api.removeGitHubInstallation(ID);
+    await gone.api.forgetGitHubAuthorization();
+    expect([...read.calls, ...install.calls, ...authorize.calls, ...gone.calls]).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/github-app`, body: undefined },
+      { method: 'POST', url: `/api/workspaces/${ID}/github-app/installation`, body: undefined },
+      { method: 'POST', url: '/api/github-app/authorization', body: { returnTo: '/w/acme' } },
+      { method: 'DELETE', url: `/api/workspaces/${ID}/github-app/installation`, body: undefined },
+      { method: 'DELETE', url: '/api/github-app/authorization', body: undefined },
+    ]);
+  });
+
   test('a channel’s repository feeds: listed, connected with its body, disconnected (D-134)', async () => {
     const feed = {
       id: ID,

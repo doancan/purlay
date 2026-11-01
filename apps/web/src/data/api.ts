@@ -21,6 +21,8 @@ import {
   Attachment,
   QuietHoursSetting,
   type SetQuietHoursRequest,
+  GitHubAppRedirect,
+  GitHubAppStatus,
   MissedMailSetting,
   type SetMissedMailRequest,
   AuditPage,
@@ -440,6 +442,14 @@ export interface Api {
   /** Whether the caller is emailed about what they missed, and whether it can be offered (D-240). */
   readonly missedMail: (signal?: AbortSignal) => Promise<MissedMailSetting>;
   readonly setMissedMail: (input: SetMissedMailRequest) => Promise<MissedMailSetting>;
+  /** The GitHub App in a workspace: whether the server has one, its installation, the caller's own authorization (D-246). */
+  readonly githubApp: (workspaceId: string, signal?: AbortSignal) => Promise<GitHubAppStatus>;
+  /** An owner: where GitHub's installation screen is. */
+  readonly startGitHubInstallation: (workspaceId: string) => Promise<GitHubAppRedirect>;
+  readonly removeGitHubInstallation: (workspaceId: string) => Promise<void>;
+  /** The caller, to GitHub's screen for letting Purlay write as them, coming back to `returnTo`. */
+  readonly startGitHubAuthorization: (returnTo: string) => Promise<GitHubAppRedirect>;
+  readonly forgetGitHubAuthorization: () => Promise<void>;
   /** A letter's stop link, spent without a session (D-240). */
   readonly stopMissedMail: (token: string) => Promise<void>;
 }
@@ -1016,5 +1026,30 @@ export const createApi = (http: Http): Api => {
       http.request('PUT', '/api/me/missed-mail', MissedMailSetting, options({ body: input })),
     stopMissedMail: (token) =>
       http.send('POST', '/api/missed-mail/stop', options({ body: { token } })),
+    githubApp: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/github-app`,
+        GitHubAppStatus,
+        options({}, signal),
+      ),
+    startGitHubInstallation: (workspaceId) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/github-app/installation`,
+        GitHubAppRedirect,
+        options(),
+      ),
+    removeGitHubInstallation: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/github-app/installation`, options()),
+    startGitHubAuthorization: (returnTo) =>
+      http.request(
+        'POST',
+        '/api/github-app/authorization',
+        GitHubAppRedirect,
+        options({ body: { returnTo } }),
+      ),
+    forgetGitHubAuthorization: () =>
+      http.send('DELETE', '/api/github-app/authorization', options()),
   };
 };

@@ -23,6 +23,7 @@ export const aState = (over: Partial<SetupState> = {}): SetupState => ({
     github: null,
     oidc: null,
     smtp: null,
+    githubApp: null,
     workspaceCreators: { kind: 'first' },
     setupCompletedAt: null,
   },

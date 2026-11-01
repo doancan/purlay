@@ -19,6 +19,7 @@ describe('the client the Server cards call through', () => {
       github: () => Promise.reject(new Error('unused')),
       oidc: () => Promise.reject(new Error('unused')),
       smtp: () => Promise.reject(new Error('unused')),
+      githubApp: () => Promise.reject(new Error('unused')),
       disconnect: () => Promise.reject(new Error('unused')),
       policy: () => Promise.reject(new Error('unused')),
       creators: () => Promise.reject(new Error('unused')),

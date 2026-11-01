@@ -440,6 +440,8 @@ export const tr = {
   'audit.kind.integration.token_removed': 'GitHub tokenı kaldırıldı',
   'audit.kind.integration.feed_created': 'Depo bağlandı',
   'audit.kind.integration.feed_removed': 'Deponun bağlantısı kesildi',
+  'audit.kind.integration.app_connected': 'GitHub App bağlandı',
+  'audit.kind.integration.app_disconnected': 'GitHub App bağlantısı kesildi',
   'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
   'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
   'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
@@ -474,6 +476,11 @@ export const tr = {
     '{actor}, {repository} deposunu {channel} kanalına bağladı',
   'audit.action.integration.feed_removed_from':
     '{actor}, {repository} deposunun {channel} kanalına bağlantısını kaldırdı',
+  'audit.action.integration.app_connected':
+    '{actor}, {account} hesabının GitHub App kurulumunu bağladı',
+  'audit.action.integration.app_disconnected':
+    '{actor}, {account} hesabının GitHub App kurulumunun bağlantısını kesti',
+  'audit.action.integration.app_removed': 'GitHub, {account} hesabının App kurulumunu kaldırdı',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
@@ -573,6 +580,35 @@ export const tr = {
   'github.saveFailed': 'Token kaydedilmedi.',
   'github.disconnect': 'Bağlantıyı kes',
   'github.disconnectFailed': 'GitHub bağlantısı kesilmedi.',
+  'githubIssues.title': 'GitHub issue’ları',
+  'githubIssues.description':
+    'Bir konuşmadan issue açmak ve takip etmek için GitHub App’i bağla. Depoları GitHub’da sen seçersin; çalışma alanı tokenı ve depo akışları etkilenmez.',
+  'githubIssues.notInstalled': 'Henüz bağlı bir kurulum yok.',
+  'githubIssues.installed': '{account} hesabına {when} tarihinden beri kurulu.',
+  'githubIssues.suspendedBadge': 'Askıda',
+  'githubIssues.suspended':
+    'GitHub bu kurulumu askıya aldı. Kaldırılana kadar ona hiçbir şey yazılmaz.',
+  'githubIssues.connect': 'GitHub’da bağla',
+  'githubIssues.reconnect': 'Yeniden bağla',
+  'githubIssues.disconnect': 'Bağlantıyı kes',
+  'githubIssues.outcome.connected': 'Kurulum bağlandı.',
+  'githubIssues.outcome.authorized': 'Purlay artık senin adına issue açabilir.',
+  'githubIssues.outcome.expired':
+    'O GitHub yolculuğu çok uzun sürdü ya da zaten kullanıldı. Yeniden başla.',
+  'githubIssues.outcome.refused': 'GitHub işlemi tamamlamadı. Hiçbir şey bağlanmadı.',
+  'githubIssues.outcome.not-yours':
+    'Bu, burada sahibi olduğun bir kurulum değil ya da yolculuk senin değil.',
+  'githubIssues.outcome.unavailable': 'GitHub’a ulaşılamadı. Bir dakika sonra yeniden dene.',
+  'githubIssues.me.title': 'Senin adına issue aç',
+  'githubIssues.me.description':
+    'Sen açana kadar kapalıdır. Açarsan Purlay, kendi GitHub erişiminle, yalnızca hem senin hem App’in erişebildiği depolarda issue açar.',
+  'githubIssues.me.label': 'GitHub’a benim adıma yaz',
+  'githubIssues.me.off': 'İzin verilmedi. Purlay GitHub’a senin adına hiçbir şey yazmaz.',
+  'githubIssues.me.on': 'İzin verildi: {login}.',
+  'githubIssues.me.badgeOn': 'İzinli',
+  'githubIssues.me.badgeOff': 'Kapalı',
+  'githubIssues.me.allow': 'Purlay benim adıma issue açabilsin',
+  'githubIssues.me.forget': 'İzni kaldır',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
@@ -2117,6 +2153,16 @@ export const tr = {
   'setup.reason.unexpected-reply.fix1': 'Bir dakika sonra yeniden dene.',
   'setup.reason.unexpected-reply.fix2':
     'Sürerse adresi kontrol et; aşağıdaki yanıt neyin cevap verdiğini söyler.',
+  'setup.reason.key-rejected.what': 'GitHub, bu özel anahtarın imzaladığını reddetti.',
+  'setup.reason.key-rejected.fix1':
+    'GitHub’da App’in sayfasında bir özel anahtar oluştur ve dosyanın tamamını buraya yapıştır.',
+  'setup.reason.key-rejected.fix2':
+    'GitHub’da iptal edilmiş bir anahtarın imzasına GitHub güvenmez.',
+  'setup.reason.app-mismatch.what': 'Bu özel anahtar başka bir GitHub App’e ait.',
+  'setup.reason.app-mismatch.fix1':
+    'App ID’yi, kısa adı (slug) ve Client ID’yi GitHub’da aynı App’in sayfasından kopyala.',
+  'setup.reason.app-mismatch.fix2':
+    'Aşağıdaki yanıt, anahtarın hangi App olarak imzaladığını söyler.',
   'setup.reason.issuer-mismatch.what':
     'Bu adres yanıt veriyor ama keşif belgesi başka bir yayıncı (issuer) adı bildiriyor.',
   'setup.reason.issuer-mismatch.fix1':
@@ -2205,6 +2251,33 @@ export const tr = {
   'settings.server.github.disconnectBody':
     'İnsanlar artık GitHub ile giriş yapamaz. Açık oturumlar açık kalır.',
   'settings.server.github.disconnected': 'GitHub’ın bağlantısı kesildi.',
+  'settings.server.githubApp.title': 'Issue’ler için GitHub App',
+  'settings.server.githubApp.description':
+    'Tek bir GitHub App, çalışma alanlarının bir konuşmadan issue açmasını ve takip etmesini sağlar. Giriş, yukarıdaki OAuth uygulamasıyla sürer.',
+  'settings.server.githubApp.empty':
+    'Bir App bağlanana kadar hiçbir çalışma alanında GitHub issue özelliği görünmez.',
+  'settings.server.githubApp.which': '{slug} · App {id}',
+  'settings.server.githubApp.callback': 'Geri çağrı adresi',
+  'settings.server.githubApp.callbackHint':
+    'Bunu App’in Callback URL alanına yapıştır ve “Request user authorization (OAuth) during installation” seçeneğini aç.',
+  'settings.server.githubApp.webhook': 'Webhook adresi',
+  'settings.server.githubApp.webhookHint':
+    'Bunu App’in Webhook URL alanına, application/json içerik türüyle yapıştır.',
+  'settings.server.githubApp.appIdLabel': 'App ID',
+  'settings.server.githubApp.slugLabel': 'App kısa adı',
+  'settings.server.githubApp.slugHint': 'github.com/apps/<kısa ad> adresinin son parçası.',
+  'settings.server.githubApp.keyLabel': 'Özel anahtar',
+  'settings.server.githubApp.keyHint':
+    'GitHub’ın ürettiği .pem dosyasının tamamını yapıştır. Şifreli saklanır ve bir daha gösterilmez.',
+  'settings.server.githubApp.webhookSecretLabel': 'Webhook gizli anahtarı',
+  'settings.server.githubApp.hint':
+    'Bir şey kaydedilmeden önce GitHub’a App sorulur: istemcisi ve anahtarının neyi imzaladığı.',
+  'settings.server.githubApp.connect': 'GitHub App’i bağla',
+  'settings.server.githubApp.saved': 'Kaydedildi. Çalışma alanları artık bir kurulum bağlayabilir.',
+  'settings.server.githubApp.disconnectTitle': 'GitHub App’in bağlantısı kesilsin mi?',
+  'settings.server.githubApp.disconnectBody':
+    'Artık issue açılmaz ve takip edilmez. Yapılmış bağlantılar, çalışma alanı tokenı ve depo akışları olduğu gibi kalır.',
+  'settings.server.githubApp.disconnected': 'GitHub App’in bağlantısı kesildi.',
   'settings.server.oidc.title': 'Tek oturum açma',
   'settings.server.oidc.description':
     'İnsanlar kuruluşunun OpenID Connect sağlayıcısıyla giriş yapar — Okta, Entra ID, Google Workspace, Keycloak, Authentik gibi.',

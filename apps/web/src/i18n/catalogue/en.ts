@@ -446,6 +446,8 @@ export const en = {
   'audit.kind.integration.token_removed': 'GitHub token removed',
   'audit.kind.integration.feed_created': 'Repository connected',
   'audit.kind.integration.feed_removed': 'Repository disconnected',
+  'audit.kind.integration.app_connected': 'GitHub App connected',
+  'audit.kind.integration.app_disconnected': 'GitHub App disconnected',
   'audit.kind.invitation.created': 'Invitation link made',
   'audit.kind.invitation.revoked': 'Invitation link revoked',
   'audit.kind.message.removed_by_moderator': 'Message deleted by a moderator',
@@ -476,6 +478,11 @@ export const en = {
   'audit.action.integration.feed_removed': '{actor} disconnected {repository} from a channel',
   'audit.action.integration.feed_created_in': '{actor} connected {repository} to {channel}',
   'audit.action.integration.feed_removed_from': '{actor} disconnected {repository} from {channel}',
+  'audit.action.integration.app_connected':
+    '{actor} connected the GitHub App installation of {account}',
+  'audit.action.integration.app_disconnected':
+    '{actor} disconnected the GitHub App installation of {account}',
+  'audit.action.integration.app_removed': 'GitHub removed the App installation of {account}',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
@@ -577,6 +584,34 @@ export const en = {
   'github.saveFailed': 'The token was not saved.',
   'github.disconnect': 'Disconnect',
   'github.disconnectFailed': 'GitHub was not disconnected.',
+  'githubIssues.title': 'GitHub issues',
+  'githubIssues.description':
+    'Connect the GitHub App to create issues from a conversation and follow them. You choose the repositories on GitHub; the workspace token and repository feeds are not affected.',
+  'githubIssues.notInstalled': 'No installation is connected yet.',
+  'githubIssues.installed': 'Installed on {account} since {when}.',
+  'githubIssues.suspendedBadge': 'Suspended',
+  'githubIssues.suspended':
+    'GitHub has suspended this installation. Nothing is written to it until it is lifted.',
+  'githubIssues.connect': 'Connect on GitHub',
+  'githubIssues.reconnect': 'Connect again',
+  'githubIssues.disconnect': 'Disconnect',
+  'githubIssues.outcome.connected': 'The installation is connected.',
+  'githubIssues.outcome.authorized': 'Purlay may create issues as you.',
+  'githubIssues.outcome.expired':
+    'That GitHub trip took too long or was already used. Start again.',
+  'githubIssues.outcome.refused': 'GitHub did not complete it. Nothing was connected.',
+  'githubIssues.outcome.not-yours': 'That is not an installation you own here, or not your trip.',
+  'githubIssues.outcome.unavailable': 'GitHub could not be reached. Try again in a minute.',
+  'githubIssues.me.title': 'Create issues as you',
+  'githubIssues.me.description':
+    'Off until you turn it on. Purlay then creates an issue with your own GitHub access, only in repositories both you and the App can reach.',
+  'githubIssues.me.label': 'Write to GitHub as me',
+  'githubIssues.me.off': 'Not allowed. Purlay writes nothing to GitHub as you.',
+  'githubIssues.me.on': 'Allowed, as {login}.',
+  'githubIssues.me.badgeOn': 'Allowed',
+  'githubIssues.me.badgeOff': 'Off',
+  'githubIssues.me.allow': 'Let Purlay create issues as me',
+  'githubIssues.me.forget': 'Stop allowing',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
@@ -2162,6 +2197,15 @@ export const en = {
   'setup.reason.unexpected-reply.fix1': 'Try again in a minute.',
   'setup.reason.unexpected-reply.fix2':
     'If it stays, check the address — the reply below says what answered.',
+  'setup.reason.key-rejected.what': 'GitHub refused what this private key signed.',
+  'setup.reason.key-rejected.fix1':
+    'Generate a private key on the App’s page on GitHub and paste the whole file here.',
+  'setup.reason.key-rejected.fix2':
+    'A key that was revoked on GitHub signs nothing GitHub believes.',
+  'setup.reason.app-mismatch.what': 'This private key belongs to another GitHub App.',
+  'setup.reason.app-mismatch.fix1':
+    'Copy the App ID, the slug and the Client ID from the same App’s page on GitHub.',
+  'setup.reason.app-mismatch.fix2': 'The reply below says which App the key signs as.',
   'setup.reason.issuer-mismatch.what':
     'That address answers, but its discovery document names another issuer.',
   'setup.reason.issuer-mismatch.fix1':
@@ -2251,6 +2295,33 @@ export const en = {
   'settings.server.github.disconnectBody':
     'People will no longer be able to sign in with GitHub. Sessions already open stay open.',
   'settings.server.github.disconnected': 'GitHub is disconnected.',
+  'settings.server.githubApp.title': 'GitHub App for issues',
+  'settings.server.githubApp.description':
+    'One GitHub App lets workspaces create issues from a conversation and follow them. Sign-in stays the OAuth app above.',
+  'settings.server.githubApp.empty':
+    'Until an App is connected, nothing about GitHub issues is offered in any workspace.',
+  'settings.server.githubApp.which': '{slug} · App {id}',
+  'settings.server.githubApp.callback': 'Callback URL',
+  'settings.server.githubApp.callbackHint':
+    'Paste this as the App’s Callback URL, and turn on “Request user authorization (OAuth) during installation”.',
+  'settings.server.githubApp.webhook': 'Webhook URL',
+  'settings.server.githubApp.webhookHint':
+    'Paste this as the App’s Webhook URL, content type application/json.',
+  'settings.server.githubApp.appIdLabel': 'App ID',
+  'settings.server.githubApp.slugLabel': 'App slug',
+  'settings.server.githubApp.slugHint': 'The last part of github.com/apps/<slug>.',
+  'settings.server.githubApp.keyLabel': 'Private key',
+  'settings.server.githubApp.keyHint':
+    'Paste the whole .pem file GitHub generated. It is stored encrypted and never shown again.',
+  'settings.server.githubApp.webhookSecretLabel': 'Webhook secret',
+  'settings.server.githubApp.hint':
+    'GitHub is asked about the App before anything is saved: its client, and what its key signs.',
+  'settings.server.githubApp.connect': 'Connect the GitHub App',
+  'settings.server.githubApp.saved': 'Saved. Workspaces can connect an installation now.',
+  'settings.server.githubApp.disconnectTitle': 'Disconnect the GitHub App?',
+  'settings.server.githubApp.disconnectBody':
+    'No more issues are created or followed. Links already made, the workspace token and repository feeds stay as they are.',
+  'settings.server.githubApp.disconnected': 'The GitHub App is disconnected.',
   'settings.server.oidc.title': 'Single sign-on',
   'settings.server.oidc.description':
     'People sign in through your organisation’s OpenID Connect provider — Okta, Entra ID, Google Workspace, Keycloak, Authentik and the like.',

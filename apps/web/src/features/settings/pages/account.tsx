@@ -40,6 +40,7 @@ import { SettingsCard, SettingsPage, SettingsRow } from '../page';
 import { ChangePasswordCard } from './change-password-card';
 import { DevicesCard } from './devices-card';
 import { MyDataCard } from './export';
+import { GitHubWriteCard } from './github-issues';
 import { TwoFactorCard } from './two-factor-card';
 
 const SignInCard = (): React.JSX.Element => {
@@ -197,6 +198,7 @@ export const AccountPage = (): React.JSX.Element => {
           </Button>
         </SettingsRow>
       </SettingsCard>
+      <GitHubWriteCard />
       <MyDataCard />
       <SettingsCard title={t('settings.account.danger')} tone="danger">
         <SettingsRow
