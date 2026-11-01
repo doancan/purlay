@@ -1,5 +1,5 @@
 /**
- * The track of a side-by-side group — the header's Feed | Open questions, the dialog's tabs — with the
+ * The track of a side-by-side group (D-247) — the header's Feed | Open questions, the dialog's tabs — with the
  * mark that shows which one is chosen sliding from the old segment to the new, instead of jumping.
  *
  * The chosen segment says so in the markup (`aria-current` or `aria-selected`), and that is all this

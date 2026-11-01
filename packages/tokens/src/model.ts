@@ -47,7 +47,7 @@ const RESERVED = [...Object.values(PREFIX), 'text-', 'font-'];
 /** Motion is "effectively none" (`UX.md` §9): the longest transition the system allows, in ms. */
 const MAX_DURATION_MS = 200;
 
-/** The one motion allowed to run longer: a celebration is an event, not an interface transition. */
+/** The one motion allowed to run longer: a celebration is an event, not an interface transition (D-247). */
 const CELEBRATION_TOKEN = 'duration-celebrate';
 const MAX_CELEBRATION_MS = 4000;
 

@@ -1,5 +1,5 @@
 /**
- * Which device last drove the page — the key that decides whether a button wears its focus ring.
+ * Which device last drove the page (D-247) — the key that decides whether a button wears its focus ring.
  *
  * `:focus-visible` already hides the ring after a click, but focus that the page *moves* (a menu or
  * dialog handing focus back to its trigger) shows it again, so a mouse user sees a ring they never asked

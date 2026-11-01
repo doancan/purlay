@@ -192,7 +192,8 @@ a person's export of their own data (D-241) · an owner deletes a workspace, wit
 announcement channels, whose feed only owners and admins post in (D-243) · a session lifetime
 policy: signed out after a time unused, and signed in again after a time at all (D-244) ·
 incoming webhooks: a channel's address that CI and monitoring post markdown to, quietly (D-245) ·
-GitHub issues from conversations, built in the order below — connecting the GitHub App, making an issue from a thread with the write recoverable, and linking and following existing issues and pull requests, are built (D-246)
+GitHub issues from conversations, built in the order below — connecting the GitHub App, making an issue from a thread with the write recoverable, and linking and following existing issues and pull requests, are built (D-246) ·
+interface polish: keyboard-only focus rings on buttons, a calendar date field, sliding view marks, a firework for the party popper, softer control edges and styled select lists (D-247)
 
 **Next proposal: GitHub issues from conversations (D-246; built).** Build on the
 existing workspace credential, link previews, signed webhooks and delivery deduplication. The

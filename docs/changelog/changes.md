@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Interface** — Focus rings on buttons appear for the keyboard only and the dark themes use neutral gray where they were blue; dates are picked from a calendar; the Feed and Open questions marks slide and stay where they are between screens; sending the party popper sets off a firework; light-theme control edges are softer and a select opens as a styled list in Chromium (D-247)
 - **Workspaces** — An owner can delete a workspace from General, typing its name and offered an export first; it leaves everyone at once, any owner can keep it for seven days, and then its content is erased (D-242)
 - **Channels** — An owner or an admin can make a channel one where only owners and admins post in the feed, from its details; everybody else in it is told so in place of the composer and still replies in threads, and a GitHub feed keeps posting (D-243)
 - **Channels** — An owner or an admin makes an incoming webhook in a channel's details: CI and monitoring post markdown to its address, shown once, and the message arrives under the hook's name, unread for everyone and notifying nobody; revoke it from the same list (D-245)

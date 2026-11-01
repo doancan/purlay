@@ -21,7 +21,7 @@
 
 const TEXT = 4.5;
 const BOUNDARY = 3;
-/** A control's own edge, soft by design: the field's fill and its label already say it is a control. */
+/** A control's own edge, soft by design (D-247): the field's fill and its label already say it is a control. */
 const CONTROL_EDGE = 1.6;
 
 export interface Pair {
