@@ -10,6 +10,7 @@ import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { PERMISSIONS } from '../../testing/permissions';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -38,7 +39,9 @@ const call = async (
   as: SignedInUser,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: world.db, clock })).handle(
+  await createApp(
+    testDependencies({ database: world.db, clock, githubApp: () => GITHUB_APP_STUB }),
+  ).handle(
     new Request(`https://purlay.test${path}`, {
       method,
       headers: {
@@ -237,6 +240,29 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'start connecting a GitHub App installation': async (world, as) =>
+    await call(world, 'POST', `/api/workspaces/${world.workspaceId}/github-app/installation`, as),
+  'disconnect the GitHub App installation': async (world, as) => {
+    // Connected by the owner first (as the callback would have), so there is one to remove whoever tries.
+    await world.db
+      .insertInto('github_app_installations')
+      .values({
+        id: crypto.randomUUID(),
+        workspace_id: world.workspaceId,
+        installation_id: '31',
+        account_login: 'acme',
+        account_type: 'Organization',
+        connected_by: world.people.owner.userId,
+        connected_at: NOW,
+      })
+      .execute();
+    return await call(
+      world,
+      'DELETE',
+      `/api/workspaces/${world.workspaceId}/github-app/installation`,
+      as,
+    );
+  },
   'list a channel’s repository feeds': async (world, as) =>
     await call(world, 'GET', `/api/channels/${world.channelId}/github-feeds`, as),
   'connect a repository to a channel': async (world, as) =>
@@ -368,9 +394,14 @@ describe('integration: every administrative write is on the trail, once', () => 
 
   /** Reads that are themselves administrative acts: taking the trail away is on it (D-222). */
   const RECORDED_READS: ReadonlySet<string> = new Set(['download the audit trail']);
+  /** A write that changes nothing yet: GitHub's screen is where the change is made, and the callback records it. */
+  const CHANGES_NOTHING: ReadonlySet<string> = new Set([
+    'start connecting a GitHub App installation',
+  ]);
 
   for (const [name, entry] of Object.entries(PERMISSIONS)) {
-    const reads = entry.endpoint.startsWith('GET ') && !RECORDED_READS.has(name);
+    const reads =
+      (entry.endpoint.startsWith('GET ') && !RECORDED_READS.has(name)) || CHANGES_NOTHING.has(name);
     test(`${name}: ${reads ? 'no row' : 'one row'}`, async () => {
       await withRollback(async (db) => {
         const world = await aWorld(db);

@@ -5,6 +5,7 @@
  * Each reason is met the way the service gives it, and each reply is read for the secrets it must not
  * carry.
  */
+import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
@@ -19,6 +20,9 @@ import { PROBE_REASONS, type ProbeReason, type ProbeResult } from '@purlay/types
 import { smtpTransport, textLetter, type SmtpTransportFactory } from '../../platform/mail';
 import { aSelfSignedCertificate } from '../../testing/certificate';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from '../../testing/github-stub';
+import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from '../../testing/github-app-stub';
+import { githubAppApi, githubAppCaller } from '../integrations/github-app-api';
+import type { GitHubAppSettings } from './settings';
 import { aClosedPort, aScriptedRelay, type RelayScript } from '../../testing/smtp-relay';
 import { aGitHubPerson } from '../../testing/github-sign-in';
 import { aFloodingServer, aRedirectingServer } from '../../testing/hostile-servers';
@@ -33,6 +37,7 @@ import {
   GITHUB_PROBE_CODE,
   GITHUB_PROBE_TIMEOUT_MS,
   OIDC_PROBE_CODE,
+  probeAppKey,
   probeGitHub,
   probeOidc,
   probeSmtp,
@@ -831,6 +836,74 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
     );
     expect(result.reason).toBe('unexpected-reply');
     expect(result.raw).not.toContain('S3CRET-echoed');
+  });
+});
+
+describe('integration: trying the GitHub App as itself (D-246 §1)', () => {
+  const urls = { web: 'https://github.example', api: 'https://api.github.example' };
+  const tryApp = async (
+    over: Partial<GitHubAppSettings> = {},
+    behave: (app: GitHubAppStub) => void = () => undefined,
+  ): Promise<ProbeResult> => {
+    const app = aGitHubAppStub({ id: 1, login: 'ayse' });
+    behave(app);
+    const github = aGitHubStub(
+      { id: 1, login: 'ayse', name: null, email: 'a@example.test' },
+      {},
+      undefined,
+      {
+        app,
+      },
+    );
+    return seen(
+      await probeAppKey(
+        githubAppApi(
+          githubAppCaller(github.appFetch, () => new Date()),
+          urls,
+        ),
+        systemClock,
+        { ...GITHUB_APP_STUB, ...over },
+      ),
+    );
+  };
+
+  test('a key the App’s own, for the App named, is believed', async () => {
+    expect(await tryApp()).toEqual({ ok: true });
+  });
+
+  test('another App’s key is refused by GitHub, and its words are the reason', async () => {
+    const other = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+    }).privateKey;
+    expect(failure(await tryApp({ privateKey: other })).reason).toBe('key-rejected');
+  });
+
+  test('an App other than the one named — its id, its slug or its client — is a mismatch that says which signed', async () => {
+    for (const over of [{ appId: 2 }, { slug: 'another' }]) {
+      const answer = failure(await tryApp(over));
+      expect(answer.reason).toBe('app-mismatch');
+      expect(answer.raw).toContain(`app ${String(GITHUB_APP_STUB.appId)}`);
+    }
+  });
+
+  test('a GitHub that limits, or that cannot be reached, is said as such and never believed', async () => {
+    const limited = failure(
+      await tryApp({}, (app) => {
+        app.behaviour.limit = { times: 1, retryAfter: 42 };
+      }),
+    );
+    expect([limited.reason, limited.raw]).toEqual([
+      'unreachable',
+      'GitHub is limiting requests for 42 s',
+    ]);
+    const down = failure(
+      await tryApp({}, (app) => {
+        app.behaviour.unreachable = true;
+      }),
+    );
+    expect(down.reason).toBe('unexpected-reply');
   });
 });
 

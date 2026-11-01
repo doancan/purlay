@@ -5,7 +5,7 @@
  * needs it (`CONFIG.md`). These check that it does — and that it fails usefully,
  * naming every problem at once and never quoting a credential back.
  */
-import { createECDH } from 'node:crypto';
+import { createECDH, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { tlsFromEnvironment } from '@purlay/db';
@@ -923,5 +923,49 @@ describe('single sign-on is a setting, off while unset (D-200)', () => {
 
   test('a label with no provider is refused: it would be dropped at the first start without a word', () => {
     expect(refusal({ ...valid, OIDC_NAME: 'Acme' })).toContain('OIDC_NAME: set with OIDC_ISSUER');
+  });
+});
+
+describe('the GitHub App is a setting, off while unset (D-246)', () => {
+  const key = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  }).privateKey;
+  const app = {
+    GITHUB_APP_ID: '4242',
+    GITHUB_APP_SLUG: 'purlay-issues',
+    GITHUB_APP_CLIENT_ID: 'Iv23.purlay',
+    GITHUB_APP_CLIENT_SECRET: 'app-secret-value',
+    GITHUB_APP_PRIVATE_KEY: key.trim().replaceAll('\n', '\\n'),
+    GITHUB_APP_WEBHOOK_SECRET: 'hook-secret-value',
+  };
+
+  test('a server boots with none of it, in production too', () => {
+    expect(loadConfig(valid).GITHUB_APP_ID).toBeUndefined();
+    expect(() => loadConfig(production)).not.toThrow();
+  });
+
+  test('all six are read, the id as a number and the key with its line breaks written out', () => {
+    const config = loadConfig({ ...valid, ...app });
+    expect([config.GITHUB_APP_ID, config.GITHUB_APP_SLUG]).toEqual([4242, 'purlay-issues']);
+  });
+
+  test.each(Object.keys(app))('without %s alone it is refused, never quoting a secret', (left) => {
+    const partial = Object.fromEntries(Object.entries(app).filter(([name]) => name !== left));
+    const message = refusal({ ...valid, ...partial });
+    expect(message).toContain('set all six, or none');
+    for (const secret of ['app-secret-value', 'hook-secret-value', 'PRIVATE KEY']) {
+      expect(message).not.toContain(secret);
+    }
+  });
+
+  test('a key this server could not sign with is refused, and a slug that is not GitHub’s', () => {
+    expect(refusal({ ...valid, ...app, GITHUB_APP_PRIVATE_KEY: 'not a key' })).toContain(
+      'GITHUB_APP_PRIVATE_KEY: is not a PEM private key',
+    );
+    expect(refusal({ ...valid, ...app, GITHUB_APP_SLUG: 'Not A Slug' })).toContain(
+      'GITHUB_APP_SLUG',
+    );
   });
 });

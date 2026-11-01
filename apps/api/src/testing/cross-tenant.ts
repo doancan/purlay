@@ -571,6 +571,18 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'the workspace’s own credential, no channel' },
   },
+  'GET /api/workspaces/:workspaceId/github-app': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
+  'POST /api/workspaces/:workspaceId/github-app/installation': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
+  'DELETE /api/workspaces/:workspaceId/github-app/installation': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
   'PUT /api/workspaces/:workspaceId/integrations/github': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ token: 'ghp_crossing' }),
@@ -774,6 +786,14 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'nobody is signed in and no workspace is named: the token is the capability, and the passport it makes opens only a sign-up, never a workspace (`invitation-passport.integration.test.ts`)',
   'POST /api/invitations/accept':
     'names no workspace: the token is the capability, and admits only to its own, into no channel',
+  'POST /api/github-app/authorization':
+    'authorizes the caller’s own GitHub access and names no workspace; the token is bound to the caller and used only for their own writes (D-246 §2)',
+  'DELETE /api/github-app/authorization':
+    'forgets the caller’s own GitHub tokens and names no workspace; nobody else’s is touched (D-246 §2)',
+  'GET /api/github-app/callback':
+    'a browser GitHub sent back: the state in the query names the one person and workspace it was made for, spent on return, and the same browser must come back (`github-app.integration.test.ts`)',
+  'POST /api/webhooks/github-app':
+    'nobody is signed in: the App’s webhook secret is the capability, and it only ends access GitHub itself ended (`github-app.integration.test.ts`)',
   'POST /api/webhooks/github/:feedId':
     'nobody is signed in: the feed’s secret is the capability, and posts only into its own channel (`webhook.integration.test.ts`)',
   'POST /api/webhooks/incoming/:webhookId/:secret':

@@ -88,6 +88,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/workspaces/:workspaceId/integrations/github',
     allowed: { owner: true, admin: true, member: false },
   },
+  'start connecting a GitHub App installation': {
+    endpoint: 'POST /api/workspaces/:workspaceId/github-app/installation',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'disconnect the GitHub App installation': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/github-app/installation',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'list a channel’s repository feeds': {
     endpoint: 'GET /api/channels/:channelId/github-feeds',
     allowed: { owner: true, admin: true, member: false },
