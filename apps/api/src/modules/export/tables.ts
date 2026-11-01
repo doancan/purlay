@@ -85,6 +85,8 @@ export const COLUMNS: Columns = {
     // How long the channel keeps its history, as the workspace's window goes (D-225).
     min_retention_days: 'export',
     retain_forever: 'export',
+    // Who posts a root in it: everybody, or its workspace's owners and admins (D-243).
+    only_admins_post: 'export',
     // The realtime layer's ordering, not the record.
     state_version: 'omit',
   },
