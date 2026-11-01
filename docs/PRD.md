@@ -190,6 +190,8 @@ verification required of a password, password sign-in off where GitHub or single
 opt-in email about direct messages and mentions left unread, at most one an hour (D-240) ·
 a person's export of their own data (D-241) · an owner deletes a workspace, with a week to take it back (D-242) ·
 announcement channels, whose feed only owners and admins post in (D-243)
+opt-in email about direct messages and mentions left unread, at most one an hour (D-240) · a session lifetime
+policy: signed out after a time unused, and signed in again after a time at all (D-244)
 
 **Next proposal: GitHub issues from conversations (planned, not implemented).** Build on the
 existing workspace credential, link previews, signed webhooks and delivery deduplication. The

@@ -548,6 +548,14 @@ not keep a live session. Ending a session deletes its row, so there is no "revok
 caller cannot learn from it whether a token was ever real or an account ever existed. `last_used_at`
 is refreshed at most once an hour rather than on every request. (D-60)
 
+**The server's lifetime policy** (D-244), off unless the server's administrator sets it: a session unused for
+the idle timeout, or as old as the maximum age since its sign-in, is ended where the session is read — the
+library's own hook, before every one of its endpoints, so our seam (`sessionFromHeaders`, through the library's
+`getSession`) and the library's routes alike find nothing and answer as signed out. Its row is deleted, only while
+it still says so, and its sockets are told. Judged from the row's own `created_at` and `last_used_at`, so a change
+of policy reaches the sessions already open. While a timeout is set `last_used_at` is refreshed every five minutes
+of use, and the socket's `ACTIVE` counts as use.
+
 **Signing in joins nothing.** A person enters a workspace by creating it or by an invitation link
 (D-115); Phase 0's open join (D-37) is retired, and its variable is refused at boot.
 
@@ -559,7 +567,8 @@ token-in-query-string path — query strings land in access logs.
 
 **After the handshake, a connection lives exactly as long as its session.** Signing out and signing
 out everywhere publish `SESSION_ENDED` on each ended session's topic; expiry is a timer set from
-`expires_at` when the socket opens. Either way the frame is delivered first and the connection is
+`expires_at` — or the server's maximum age, if sooner (D-244) — when the socket opens. A session the idle timeout
+ended, or a maximum age set after the socket opened, is found by the liveness sweep within about half a minute. Either way the frame is delivered first and the connection is
 then closed with `CLOSE_CODES.SESSION_ENDED`, so the client knows not to reconnect into a refusal.
 The session is **not** re-read per frame. (D-68)
 
