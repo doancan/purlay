@@ -91,16 +91,18 @@ export const withRollback = async (
 /**
  * Closes the shared pool. Every integration file calls this in `afterAll`.
  *
- * That is safe because `integrationDatabase` reopens on demand: the runner works
- * through the files one at a time, so a file that closes the pool costs the next
- * one a reconnection and nothing else. Naming one file as "the last" would be a
- * fact nothing enforces, wrong the moment a file is added.
+ * That is safe because `integrationDatabase` reopens on demand: a file that closes the pool costs the next
+ * one a reconnection and nothing else. Naming one file as "the last" would be a fact nothing enforces,
+ * wrong the moment a file is added.
+ *
+ * **The pool is let go before it is ended** (#797): whoever asks while the end is still under way — the next
+ * file, after a hook that ran out of time — is given a new pool, never one being destroyed. Two closes at
+ * once each end what they let go, which is the pool once.
  */
 export const closeIntegrationDatabase = async (): Promise<void> => {
-  if (shared !== undefined) {
-    await shared.destroy();
-    shared = undefined;
-  }
+  const closing = shared;
+  shared = undefined;
+  if (closing !== undefined) await closing.destroy();
 };
 
 /** How long a drop waits for the connections of its database to finish closing before it forces them. */
@@ -290,6 +292,14 @@ export const prepareTemplateForRun = async (
  * under test, so the bound is the queue's, not a test's (D-228).
  */
 export const CLONE_HOOK_MS = 30_000;
+
+/**
+ * The time a hook that drops clones gets (#797): a drop makes the server run a checkpoint and wait for it,
+ * which on a CI disk after a file's writes is seconds, and a file may drop dozens — past the five seconds
+ * a hook has by default, which failed files that had passed every test. The bound is the server's, not the
+ * code under test's.
+ */
+export const DROP_HOOK_MS = 60_000;
 
 /**
  * A database of this test file's own, cloned from a migrated template (D-46).
