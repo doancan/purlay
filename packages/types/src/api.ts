@@ -264,12 +264,14 @@ export type AddChannelMemberRequest = Static<typeof AddChannelMemberRequest>;
 
 /**
  * `PATCH /api/channels/:channelId` — a member of the channel renames it or sets what it is for
- * (D-123). Each field is optional and only what is sent changes; a `null` topic clears it. The answer
+ * (D-123); an owner or an admin among them also says whether only owners and admins post in its feed
+ * (D-243). Each field is optional and only what is sent changes; a `null` topic clears it. The answer
  * is the channel as the caller now sees it, and the room hears `CHANNEL_UPDATED`.
  */
 export const UpdateChannelRequest = FromClient({
   name: Type.Optional(ChannelName),
   topic: Type.Optional(Type.Union([ChannelTopic, Type.Null()])),
+  onlyAdminsPost: Type.Optional(Type.Boolean()),
 });
 export type UpdateChannelRequest = Static<typeof UpdateChannelRequest>;
 
@@ -775,6 +777,7 @@ export const AUDIT_ACTIONS = [
   'workspace.renamed',
   'retention.changed',
   'channel.retention_changed',
+  'channel.posting_changed',
   'account.erased',
   'content.erased',
   'workspace.export_requested',

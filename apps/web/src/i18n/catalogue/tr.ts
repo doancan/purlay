@@ -436,6 +436,7 @@ export const tr = {
   'audit.kind.channel.member_added': 'Kanala eklendi',
   'audit.kind.channel.member_removed': 'Kanaldan çıkarıldı',
   'audit.kind.channel.retention_changed': 'Kanalın saklama süresi değişti',
+  'audit.kind.channel.posting_changed': 'Kanala kimin yazacağı değişti',
   'audit.kind.integration.token_set': 'GitHub tokenı ayarlandı',
   'audit.kind.integration.token_removed': 'GitHub tokenı kaldırıldı',
   'audit.kind.integration.feed_created': 'Depo bağlandı',
@@ -484,6 +485,14 @@ export const tr = {
     '{actor} bir kanalın geçmişini saklama süresini {from} yerine {to} yaptı',
   'audit.action.channel.retention_changed_in':
     '{actor}, {channel} kanalının geçmişini saklama süresini {from} yerine {to} yaptı',
+  'audit.action.channel.posting_admins':
+    '{actor} bir kanala yalnızca sahiplerin ve yöneticilerin yazmasına izin verdi',
+  'audit.action.channel.posting_admins_in':
+    '{actor}, {channel} kanalına yalnızca sahiplerin ve yöneticilerin yazmasına izin verdi',
+  'audit.action.channel.posting_everyone':
+    '{actor} bir kanala yeniden herkesin yazmasına izin verdi',
+  'audit.action.channel.posting_everyone_in':
+    '{actor}, {channel} kanalına yeniden herkesin yazmasına izin verdi',
   'audit.action.account.erased': 'Bir üye hesabını sildi',
   'audit.action.content.erased':
     'Bir üyenin yazdıkları istek üzerine silindi: {messages} mesaj, {files} dosya',
@@ -1481,6 +1490,8 @@ export const tr = {
   'failure.reauthenticate':
     'Çıkış yapıp yeniden giriş yap, sonra tekrar dene: bu işlem yeni bir giriş ister.',
   'failure.notAMember': 'Bu kanalda değilsin. Buraya yazmak için katıl, sonra tekrar dene.',
+  'failure.onlyAdminsPost':
+    'Bu kanala yalnızca sahipler ve yöneticiler yazar. Bunun yerine bir thread’e yanıt yaz.',
   'failure.gone':
     'Bu artık kullanılamıyor. Kaldırılmış olabilir ya da erişimini kaybetmiş olabilirsin.',
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',

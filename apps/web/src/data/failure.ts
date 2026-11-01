@@ -42,6 +42,7 @@ export type FailureKey =
   | 'failure.incidentResolved'
   | 'failure.incidentRespondersLimit'
   | 'failure.incidentPostmortemChanged'
+  | 'failure.onlyAdminsPost'
   | 'failure.generic';
 
 /**
@@ -73,6 +74,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
     // Writing in a public channel the person has not joined: the way on is Join (D-156).
     case 'NOT_A_CHANNEL_MEMBER':
       return 'failure.notAMember';
+    // A new message in an announcement channel from a member: the way on is a thread (D-243).
+    case 'ONLY_ADMINS_POST':
+      return 'failure.onlyAdminsPost';
     case 'FORBIDDEN':
     case 'ROUTE_NOT_FOUND':
     case 'WORKSPACE_NOT_FOUND':

@@ -58,6 +58,11 @@ export const ErrorCode = Type.Union([
    * Joining it is the way on (D-156). Never for a channel they cannot see — that is its `404`.
    */
   Type.Literal('NOT_A_CHANNEL_MEMBER'),
+  /**
+   * A new message in an announcement channel's feed from somebody whose workspace role is `member`: only
+   * its owners and admins post there (D-243). A reply in one of its threads is still theirs to write.
+   */
+  Type.Literal('ONLY_ADMINS_POST'),
   // Absence, and everything a boundary turns into absence
   /** No such route. Distinct from a resource that does not exist, or is not yours. */
   Type.Literal('ROUTE_NOT_FOUND'),
@@ -246,6 +251,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   REAUTHENTICATION_REQUIRED: 403,
   TWO_FACTOR_REQUIRED: 403,
   NOT_A_CHANNEL_MEMBER: 403,
+  ONLY_ADMINS_POST: 403,
 
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,

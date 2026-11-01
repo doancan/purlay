@@ -73,6 +73,7 @@ describe('publishing the wedge', () => {
       topic: null,
       incident: null,
       codeRepository: null,
+      onlyAdminsPost: false,
       type: 'direct_message',
       lastMessageAt: null,
       state,

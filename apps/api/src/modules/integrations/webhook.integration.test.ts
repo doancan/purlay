@@ -196,6 +196,19 @@ describe('integration: a delivery to a feed', () => {
     });
   });
 
+  test('an announcement channel’s feed still posts: an event is nobody’s root to refuse (D-243)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await db
+        .updateTable('channels')
+        .set({ only_admins_post: true })
+        .where('id', '=', world.room.channelId)
+        .execute();
+      expect(await world.deliver(push())).toBe('posted');
+      expect(await eventsIn(db, world.room.channelId)).toBe(1);
+    });
+  });
+
   test('a merged pull request is posted to a feed that hears of them, and a push to it is not', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db, undefined, false, ['pull_request', 'release']);
