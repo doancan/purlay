@@ -2373,6 +2373,20 @@ export const en = {
   'settings.server.signIn.passwords.needsProvider':
     'Connect GitHub or single sign-on first: password sign-in can be turned off only while one of them works.',
   'settings.server.signIn.saved': 'Saved. It applies from the next request.',
+  'settings.server.lifetime.title': 'How long a session lasts',
+  'settings.server.lifetime.description':
+    'Sign people out after a time without use, or after a time whatever they do — in the browser and the Mac app alike. Sessions already open follow from their next request.',
+  'settings.server.lifetime.idle': 'Sign out when unused for',
+  'settings.server.lifetime.idle.hint':
+    'Using Purlay in an open window counts; a window left open does not.',
+  'settings.server.lifetime.idle.off': 'Never',
+  'settings.server.lifetime.maxAge': 'Sign in again after',
+  'settings.server.lifetime.maxAge.hint':
+    'However much it is used. A session also ends at the server’s own lifetime (SESSION_TTL_DAYS), whichever comes first.',
+  'settings.server.lifetime.maxAge.off': 'Only the server’s own lifetime',
+  'settings.server.lifetime.hours': { one: '{count} hour', other: '{count} hours' },
+  'settings.server.lifetime.days': { one: '{count} day', other: '{count} days' },
+  'settings.server.lifetime.weeks': { one: '{count} week', other: '{count} weeks' },
   'settings.server.passwordsOffLast':
     'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
   'settings.server.creators.title': 'Who can create workspaces',

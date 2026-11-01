@@ -116,6 +116,12 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishSessionsEnded',
     calledFrom: 'apps/api/src/ingress/http/devices.ts',
   },
+  // A session the server's lifetime policy ended, deleted as it is read; the instance announces the one it deleted
+  // (`endLapsed` in `better-auth.ts`, D-244).
+  'apps/api/src/modules/auth/session-lifetime.ts#endLapsedSession': {
+    publishes: 'publishSessionsEnded',
+    calledFrom: 'apps/api/src/modules/auth/better-auth.ts',
+  },
   // Sign out everywhere.
   'apps/api/src/modules/auth/sessions.ts#revokeAllSessions': {
     publishes: 'publishSessionsEnded',

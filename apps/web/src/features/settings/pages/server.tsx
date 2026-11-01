@@ -17,7 +17,7 @@ import { SERVER_SETTINGS_KEY, useServerClient } from '../server-context';
 import { EmailCard, GitHubCard } from './server-channels';
 import { OidcCard } from './server-oidc';
 import { AccountsCard } from './server-accounts';
-import { CreatorsCard, PolicyCard, SignInPolicyCard } from './server-policies';
+import { CreatorsCard, PolicyCard, SessionLifetimeCard, SignInPolicyCard } from './server-policies';
 
 export const ServerPage = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -57,6 +57,7 @@ export const ServerPage = (): React.JSX.Element => {
           <EmailCard view={settings.data} />
           <PolicyCard view={settings.data} />
           <SignInPolicyCard view={settings.data} />
+          <SessionLifetimeCard view={settings.data} />
           <CreatorsCard view={settings.data} />
           <AccountsCard />
         </>

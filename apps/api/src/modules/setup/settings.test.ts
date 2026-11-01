@@ -25,6 +25,8 @@ const SETTINGS: ServerSettings = {
   setupCompletedAt: new Date('2026-10-22T09:00:00.000Z'),
   requireTwoFactor: false,
   passwordSignIn: true,
+  sessionIdleTimeoutHours: null,
+  sessionMaxAgeDays: null,
 };
 
 describe('the view of the settings, which is all a response may carry', () => {
@@ -44,6 +46,8 @@ describe('the view of the settings, which is all a response may carry', () => {
       setupCompletedAt: '2026-10-22T09:00:00.000Z',
       requireTwoFactor: false,
       passwordSignIn: true,
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
     });
     const written = JSON.stringify(view);
     expect(written).not.toContain('gh-secret-value');
@@ -63,6 +67,8 @@ describe('the view of the settings, which is all a response may carry', () => {
         setupCompletedAt: undefined,
         requireTwoFactor: false,
         passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       }),
     ).toEqual({
       signUp: 'open',
@@ -73,6 +79,8 @@ describe('the view of the settings, which is all a response may carry', () => {
       setupCompletedAt: null,
       requireTwoFactor: false,
       passwordSignIn: true,
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
     });
   });
 

@@ -9,21 +9,31 @@
 import type { Executor } from '@purlay/db';
 import { DEVICE_SESSIONS_MAX, type DeviceSession } from '@purlay/types';
 import { AppError } from '../../platform/errors';
+import { fixedEnd, lapseCutoffs, type SessionLifetime } from './session-lifetime';
 import { SESSION_CLOCK } from './sessions';
 
-/** The caller's live sessions, the one used last first; at most `DEVICE_SESSIONS_MAX`. */
+/**
+ * The caller's live sessions, the one used last first; at most `DEVICE_SESSIONS_MAX`. A session the server's
+ * lifetime policy ended is not one (D-244), and each says when it ends whatever is done with it.
+ */
 export const deviceSessions = async (
   executor: Executor,
   userId: string,
   currentSessionId: string,
+  lifetime: SessionLifetime,
 ): Promise<readonly DeviceSession[]> => {
-  const rows = await executor
+  const now = SESSION_CLOCK.now();
+  const { usedBy, createdBy } = lapseCutoffs(lifetime, now);
+  let live = executor
     .selectFrom('sessions')
     .select(['id', 'device_name', 'created_at', 'last_used_at', 'expires_at'])
     .where('user_id', '=', userId)
     // Judged by the clock the library judges a session by (`SESSION_CLOCK`): a row it has let lapse is not a place
     // the person is signed in, whatever the sweep has or has not deleted yet.
-    .where('expires_at', '>', SESSION_CLOCK.now())
+    .where('expires_at', '>', now);
+  if (usedBy !== undefined) live = live.where('last_used_at', '>', usedBy);
+  if (createdBy !== undefined) live = live.where('created_at', '>', createdBy);
+  const rows = await live
     // The id breaks a tie, so two sessions used in one instant list in one order every time.
     .orderBy('last_used_at', 'desc')
     .orderBy('id', 'desc')
@@ -35,7 +45,10 @@ export const deviceSessions = async (
     name: row.device_name,
     createdAt: row.created_at.toISOString(),
     lastUsedAt: row.last_used_at.toISOString(),
-    expiresAt: row.expires_at.toISOString(),
+    expiresAt: fixedEnd(lifetime, {
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    }).toISOString(),
     current: row.id === currentSessionId,
   }));
 };
