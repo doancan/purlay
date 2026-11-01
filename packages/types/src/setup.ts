@@ -1,4 +1,5 @@
 import type { SessionIdleTimeoutHours, SessionMaxAgeDays } from './api';
+import type { GitHubAppAddresses, GitHubAppView } from './github-app';
 
 /**
  * The steps of the setup in the browser (D-179 §4), in the order the wizard walks them.
@@ -62,6 +63,10 @@ export const PROBE_REASONS = [
   'message-refused',
   /** An answer that is not the service's: a page that is not GitHub, a greeting that is not SMTP. */
   'unexpected-reply',
+  /** GitHub refused the token the App's private key signed: another App's key, or the key replaced (D-246). */
+  'key-rejected',
+  /** The key signs as an App whose id, slug or client id is not the one given (D-246). */
+  'app-mismatch',
   /** The provider's discovery document names another issuer than the one given (D-200 §2). */
   'issuer-mismatch',
   /** Reached, and what it answers is not an OpenID Connect provider this server can sign in with (D-200 §2). */
@@ -95,6 +100,9 @@ export type FinishProblem = (typeof FINISH_PROBLEMS)[number];
 /** Why a step was refused to the browser holding the setup (`409 SETUP_STEP_REFUSED`). */
 export type SetupStepRefusal = FinishProblem | 'admin-exists';
 
+/** A setting holding a sealed secret: what a rotated `ENCRYPTION_KEY` can leave unreadable (D-179 §6). */
+export type SealedSettingName = 'github' | 'smtp' | 'oidc' | 'githubApp';
+
 /**
  * The server's settings as a response may carry them (D-179 §6): a secret is whether it is set, the
  * relay's address is its scheme, host and port alone, and no field could hold a secret.
@@ -121,6 +129,8 @@ export interface ServerSettingsView {
     /** What the sign-in button says; `null` is the default, `Single sign-on`. */
     readonly name: string | null;
   } | null;
+  /** The GitHub App issues are written through (D-246): who it is, never its secrets. */
+  readonly githubApp: GitHubAppView | null;
   readonly smtp: {
     /** That a relay is set, and where; never its user, never its password. */
     readonly address: { readonly set: true; readonly host: string };
@@ -157,7 +167,7 @@ export interface SetupState {
   /** The settings now, as a response may carry them. */
   readonly settings: ServerSettingsView;
   /** The secrets a rotated `ENCRYPTION_KEY` left unreadable: read as unset until entered again. */
-  readonly needsReentry: readonly ('github' | 'smtp' | 'oidc')[];
+  readonly needsReentry: readonly SealedSettingName[];
   /**
    * The ways for other people to sign in that are connected and were tried when saved, and serve now:
    * what the finish rule counts (D-179 §4.5).
@@ -193,11 +203,13 @@ export interface SetupVerifyAnswer {
  */
 export interface ServerSettingsAnswer {
   readonly settings: ServerSettingsView;
-  readonly needsReentry: readonly ('github' | 'smtp' | 'oidc')[];
+  readonly needsReentry: readonly SealedSettingName[];
   readonly appUrl: string;
   readonly githubCallbackUrl: string;
   /** The callback address to register with the single sign-on provider: `APP_URL/auth/callback/oidc` (D-200). */
   readonly oidcCallbackUrl: string;
+  /** What the GitHub App's settings on GitHub point at (D-246). */
+  readonly githubApp: GitHubAppAddresses;
   /** Which ways for other people to sign in serve now. */
   readonly channels: {
     readonly github: boolean;
