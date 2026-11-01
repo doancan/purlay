@@ -196,6 +196,13 @@ const MessageRowView = ({
         {!grouped && (
           <div className="mb-1 flex items-baseline gap-2">
             <span className="text-label font-semibold text-ink">{author.displayName}</span>
+            {/* Said in words beside the name, not a badge: a hook's name is whatever its admin chose,
+            and must not pass for a person's (D-245). */}
+            {message.incomingWebhook !== undefined && (
+              <span data-incoming-webhook="" className="text-caption text-ink-muted">
+                {t('message.incomingWebhook')}
+              </span>
+            )}
             {time}
             {sending}
           </div>

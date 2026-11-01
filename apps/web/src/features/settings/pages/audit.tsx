@@ -189,6 +189,22 @@ export const AuditPage = (): React.JSX.Element => {
           ? t('audit.action.integration.feed_removed_from', { actor, repository, channel })
           : t('audit.action.integration.feed_created_in', { actor, repository, channel });
       }
+      // A hook's channel, named as a feed's is: only one this viewer can see (D-245).
+      case 'integration.webhook_created':
+      case 'integration.webhook_revoked': {
+        const webhook = entry.metadata['name'] ?? '';
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        const revoked = entry.action === 'integration.webhook_revoked';
+        if (name == null) {
+          return revoked
+            ? t('audit.action.integration.webhook_revoked', { actor, webhook })
+            : t('audit.action.integration.webhook_created', { actor, webhook });
+        }
+        const channel = `#${name}`;
+        return revoked
+          ? t('audit.action.integration.webhook_revoked_from', { actor, webhook, channel })
+          : t('audit.action.integration.webhook_created_in', { actor, webhook, channel });
+      }
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
