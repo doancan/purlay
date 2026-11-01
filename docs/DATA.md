@@ -74,6 +74,7 @@ is rotated out (§4).
 | `audit_log` | Who did what in a workspace, from which session | The workspace's trail of who changed what (D-116) | For the life of the workspace; kept, under the anonymised person, after erasure (D-139 §5) |
 | `github_integrations` | Who connected GitHub; the sealed token | A workspace's GitHub access (D-23) | Until disconnected |
 | `github_repo_feeds` | Who connected a feed; its repository | Repository feeds (D-134) | Until removed |
+| `incoming_webhooks` | Who made a channel's incoming webhook, its name, and when it last posted; the SHA-256 of its secret, never the secret | Posting to a channel from CI and monitoring (D-245) | Until revoked; with the channel; who made it is named as the anonymised person after their erasure (D-139 §5). Never exported. What it posted is a message, kept as messages are |
 | `github_deliveries` | None: a delivery's id and its body's digest (D-231) | Telling a repeated webhook from a new one (D-134 §5) | `GITHUB_DELIVERIES_KEPT_DAYS` (`sweep:github-deliveries`) |
 | `link_previews` | A GitHub item's title and state, and its author's login and avatar address, per workspace | Unfurls (D-23) | Until each expires (`sweep:link-previews`) |
 | `workspace_exports` | Who asked for an export; the archive in the object store | An owner's export (D-140) | The archive until it is downloaded or `EXPORT_KEPT_HOURS` pass (`sweep:exports`); the row as the record that it was made |

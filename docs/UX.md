@@ -311,7 +311,12 @@ one) or sees it as one not joined (a public one), and their sidebar loses it at 
 **Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
 the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
 **Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
-content type and the secret, each with Copy, the secret said to be shown only now, until **Done**. A
+content type and the secret, each with Copy, the secret said to be shown only now, until **Done**; and under
+them its **Incoming webhooks** (D-245) — each with its name, who made it and when, and when it last posted,
+**Revoke** asking in place (what it posted stays), and a form to **Make webhook** with a name, which answers
+with the address and Copy, said to hold its secret and be shown only now, with an example of the JSON to post,
+until **Done**. What a hook posts is drawn as a person's markdown is, under the hook's name with the word
+*webhook* in the caption beside it, never grouped with the message above. A
 half-typed name survives a look at another tab. A direct message between two has no details: its title is not a button. A group's title opens its
 details (D-127): its people, you first, and **New conversation with these people…**, which opens New
 message with them already picked — a group's people never change, so more people is a new
@@ -826,6 +831,7 @@ missing specified behaviour and does not merge.
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 | Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
+| Channel details: incoming webhooks | "No incoming webhook…" above the Make webhook form | Skeleton row | Retry; a make or a revoke refused is said above the form, a name refused on its field (D-245) |
 | Channel details: History (owner) | — (always a setting: the workspace's window until changed) | Skeleton row | Retry |
 | Edit history | "No earlier versions: they were not kept, or were removed." | Skeleton row | Retry; older versions that fail to come are said below the ones shown |
 
