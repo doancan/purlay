@@ -44,4 +44,49 @@ describe('SlideTrack', () => {
     const second = await renderApp(tabs('b'));
     expect(second.container.querySelector('[role="tablist"] > span')).not.toBeNull();
   });
+
+  test('a resize puts the mark back under its segment at once, and stops watching when it leaves', async () => {
+    const real = globalThis.ResizeObserver;
+    const reports: (() => void)[] = [];
+    let disconnected = 0;
+    globalThis.ResizeObserver = class {
+      constructor(callback: () => void) {
+        reports.push(callback);
+      }
+      observe = (): undefined => undefined;
+      unobserve = (): undefined => undefined;
+      disconnect(): void {
+        disconnected++;
+      }
+    } as unknown as typeof ResizeObserver;
+    const view = await renderApp(tabs('a'));
+    const mark = view.container.querySelector<HTMLElement>('[role="tablist"] > span');
+    // The observer starting is not a change; the next report is.
+    reports[0]?.();
+    reports[0]?.();
+    expect(mark?.hasAttribute('data-instant')).toBe(false);
+    expect(mark?.style.transform).toContain('translateX');
+    view.unmount();
+    globalThis.ResizeObserver = real;
+    expect(disconnected).toBeGreaterThan(0);
+  });
+
+  test('a pill takes the segment’s own top and height, and follows it when the choice changes', async () => {
+    const pills = (chosen: 'a' | 'b'): React.JSX.Element => (
+      <SlideTrack memory="pill-track" as="nav" aria-label="views">
+        <a href="#a" aria-current={chosen === 'a' ? 'page' : undefined}>
+          A
+        </a>
+        <a href="#b" aria-current={chosen === 'b' ? 'page' : undefined}>
+          B
+        </a>
+      </SlideTrack>
+    );
+    const view = await renderApp(pills('a'));
+    const mark = view.container.querySelector<HTMLElement>('nav > span');
+    expect(mark?.style.top).not.toBe('');
+    expect(mark?.style.height).not.toBe('');
+    view.rerender(pills('b'));
+    expect(mark?.style.transform).toContain('translateX');
+  });
 });
