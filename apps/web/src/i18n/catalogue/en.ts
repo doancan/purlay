@@ -670,6 +670,7 @@ export const en = {
   'header.feed': 'Feed',
   'header.questions': 'Open questions',
   'header.noTopic': 'No topic yet',
+  'header.announcement': 'Only owners and admins post here',
 
   // ── Channel details ─────────────────────────────────────────────────────
   'details.title': 'Details of #{name}',
@@ -686,6 +687,9 @@ export const en = {
   'details.nobody': 'Nobody is in this channel. Anyone can join it.',
   'details.you': 'you',
   'details.notifications': 'Notifications',
+  'details.posting': 'Posting',
+  'details.onlyAdminsPost': 'Only owners and admins can post',
+  'details.onlyAdminsPostHint': 'Everyone in the channel can still reply in threads.',
   'details.tabs': 'Channel details',
   'details.tab.about': 'About',
   'details.tab.members': 'Members',
@@ -1110,6 +1114,8 @@ export const en = {
   'channel.join.notice': 'You are reading #{name} without being a member.',
   'channel.join.action': 'Join channel',
   'channel.join.failed': 'Could not join the channel.',
+  'channel.announcement.notice':
+    'Only owners and admins post in this channel. You can still reply in a thread.',
   'message.reactWith': 'React with {emoji}',
   'message.quickReactions': 'Quick reactions',
   'message.reactionOf': {
