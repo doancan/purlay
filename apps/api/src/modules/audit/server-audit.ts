@@ -1,5 +1,6 @@
 /**
- * The trail of changes to the server's own settings (D-26, D-179 §4.8, `SCHEMA.md` §9.1a): one row per
+ * The trail of changes to the server's own settings, and of what happens to a whole workspace — its erasure
+ * once its deletion's grace period is over (D-242) — (D-26, D-179 §4.8, `SCHEMA.md` §9.1a): one row per
  * change, written **in the transaction that saves the setting**, so a change that did not commit leaves
  * no record and one that did cannot lack it. Who, which setting and what was done — the action names
  * the first two of those — and never a value: a secret least of all. Append-only (I-9): nothing here
@@ -34,16 +35,21 @@ export type ServerAuditAction =
    * are the person. The operator answers access requests (D-28), so the record is on their trail.
    */
   | 'account.export_requested'
-  | 'account.export_downloaded';
+  | 'account.export_downloaded'
+  /** A workspace's content erased, its deletion's grace period over (D-242): which, in `target_workspace_id`. */
+  | 'server.workspace_purged';
 
 export const recordServerAudit = async (
   executor: Executor,
   clock: Clock,
   entry: {
-    readonly actorUserId: string;
+    /** Who did it; null only when nobody did (a job, D-242). */
+    readonly actorUserId: string | null;
     readonly action: ServerAuditAction;
     /** Whose account the entry is about, for an action that has one (D-233). */
     readonly targetUserId?: string;
+    /** Which workspace the entry is about, for an action that has one (D-242). */
+    readonly targetWorkspaceId?: string;
   },
 ): Promise<void> => {
   const now = clock.now();
@@ -56,6 +62,7 @@ export const recordServerAudit = async (
       action: entry.action,
       session_id: currentRequest()?.sessionId ?? null,
       target_user_id: entry.targetUserId ?? null,
+      target_workspace_id: entry.targetWorkspaceId ?? null,
       created_at: now,
     })
     .execute();
@@ -64,9 +71,14 @@ export const recordServerAudit = async (
     entryId: id,
     action: entry.action,
     actorId: entry.actorUserId,
-    workspaceId: null,
-    targetType: entry.targetUserId === undefined ? null : 'user',
-    targetId: entry.targetUserId ?? null,
+    workspaceId: entry.targetWorkspaceId ?? null,
+    targetType:
+      entry.targetUserId !== undefined
+        ? 'user'
+        : entry.targetWorkspaceId !== undefined
+          ? 'workspace'
+          : null,
+    targetId: entry.targetUserId ?? entry.targetWorkspaceId ?? null,
     at: now,
   });
 };

@@ -60,6 +60,7 @@ describe('the next run of a slot', () => {
     expect(PLAN.map((slot) => slot.job).sort()).toEqual([
       'mail:missed',
       'purge:retention',
+      'purge:workspaces',
       'reconcile:storage',
       'sweep:deletions',
       'sweep:email-sign-ins',
