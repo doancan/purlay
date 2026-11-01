@@ -11,7 +11,12 @@
  * On a clone of its own: the library's sign-up is a transaction of its own (`github-sign-in.ts`).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { createApp } from './app';
 import { DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from '../../platform/config';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -37,7 +42,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** GitHub's addresses as the configuration gives them, from this environment. */
 const githubUrlsOf = (environment: Record<string, string>): { web: string; api: string } => {

@@ -14,7 +14,13 @@
  * trigger is what stops the write and that the same request commits without it.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { createApp } from './app';
 import { aSignedInUser } from '../../testing/signed-in';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -40,7 +46,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const ORIGIN = 'https://purlay.test';
 const clock = fixedClock(NOW);

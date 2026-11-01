@@ -13,6 +13,7 @@ import {
   createDatabase,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { CLOSE_CODES, messageId, type ServerFrame } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
@@ -32,7 +33,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** An API process: its own pool, its own listener. */
 const aProcess = (): {

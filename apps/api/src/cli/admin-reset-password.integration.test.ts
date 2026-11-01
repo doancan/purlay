@@ -6,7 +6,12 @@
  * password given as an argument or in the environment is neither accepted nor repeated.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { hashPassword } from 'better-auth/crypto';
 import { signInAdmin } from '../modules/setup/admin';
 import { systemClock } from '../platform/clock';
@@ -25,7 +30,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 interface Ran {
   readonly code: number;

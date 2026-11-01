@@ -12,6 +12,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import type { UserRole } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -30,7 +31,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const idOf = (room: Room, name: string): string => {
   const found = room.members[name] ?? room.outsiders[name];

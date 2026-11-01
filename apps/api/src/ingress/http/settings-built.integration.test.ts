@@ -8,7 +8,12 @@
  * this machine that records what it is told.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { createApp } from './app';
 import { systemClock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
@@ -36,7 +41,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** What the composition root builds, from what the database says now, with GitHub at `githubUrl`. */
 const servicesFromTheDatabase = async (githubUrl: string): Promise<RuntimeServices> =>

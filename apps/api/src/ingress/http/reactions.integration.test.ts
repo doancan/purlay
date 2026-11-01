@@ -19,6 +19,7 @@ import {
   type ClonedDatabase,
   type Executor,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId, ReactionsResponse } from '@purlay/types';
 import { REACTION_KINDS_MAX } from '../../modules/reactions/reactions';
@@ -293,7 +294,7 @@ describe('integration: two people adding a new kind at the limit', () => {
 
   afterAll(async () => {
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   /**
    * Both count nineteen kinds and both insert, unless something makes the second

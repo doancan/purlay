@@ -9,7 +9,12 @@
  */
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { tokenDigest } from '../../platform/tokens';
@@ -32,7 +37,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const NOW = new Date('2026-10-26T12:00:00.000Z');
 const clock = fixedClock(NOW);

@@ -9,6 +9,7 @@ import {
   closeIntegrationDatabase,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { aRoom } from '../../testing/rooms';
@@ -23,7 +24,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 describe('integration: two stars at once', () => {
   test('one changes the row, the other finds it changed', async () => {

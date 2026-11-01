@@ -13,6 +13,7 @@ import {
   sql,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId, SAVED_MAX } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
@@ -30,7 +31,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 /** Whether a statement here is waiting on a lock, asked of the database until one is. */
 const waitingOnALock = async (db: ClonedDatabase['db']): Promise<boolean> => {

@@ -9,6 +9,7 @@ import {
   withRollback,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { SIGN_IN_CALLBACK, messageId } from '@purlay/types';
 import { createApp } from './app';
@@ -193,7 +194,7 @@ describe('integration: the address a session records', () => {
   }, CLONE_HOOK_MS);
   afterAll(async () => {
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   /** A GitHub sign-in of a person of its own; answers the address its session recorded. */
   const signInRecording = async (

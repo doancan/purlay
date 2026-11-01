@@ -14,6 +14,7 @@ import {
   sessionTokenDigest,
   sql,
   type Executor,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import {
   DEVELOPMENT_ENCRYPTION_KEY,
@@ -49,7 +50,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const BASE = 'https://purlay.example.com';
 const silent = createLogger({ level: 'silent' });

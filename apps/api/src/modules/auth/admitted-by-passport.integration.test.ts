@@ -5,7 +5,12 @@
  * is not decided here.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { admittedByPassport } from './better-auth';
 import { aMovableClock } from '../../testing/doubles';
 
@@ -17,7 +22,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const deps = (): Parameters<typeof admittedByPassport>[0] => ({
   database: cloned.db,

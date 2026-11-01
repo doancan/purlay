@@ -10,7 +10,13 @@
  * moment of each publish — which sees a row only if it is committed (D-46).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
@@ -26,7 +32,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 

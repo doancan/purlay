@@ -10,7 +10,12 @@
  * server writes.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { SETUP_STEPS, type SetupState } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { systemClock, type Clock } from '../../platform/clock';
@@ -61,7 +66,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-}, 60_000);
+}, DROP_HOOK_MS);
 
 /** A clock the test moves, from the wall clock: the setup code's hour is read from it. */
 const movable = (): Clock & { advance: (ms: number) => void } => {

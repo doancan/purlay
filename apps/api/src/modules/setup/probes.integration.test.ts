@@ -11,6 +11,7 @@ import {
   closeIntegrationDatabase,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { systemClock } from '../../platform/clock';
 import { createLogger } from '../../platform/logging';
@@ -76,7 +77,7 @@ afterAll(async () => {
   for (const stop of stops) await stop();
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const LETTER = textLetter(
   'ada@example.com',

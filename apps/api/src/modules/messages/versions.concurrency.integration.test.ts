@@ -9,6 +9,7 @@ import {
   closeIntegrationDatabase,
   type ClonedDatabase,
   CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
@@ -27,7 +28,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const outcome = async (work: Promise<unknown>): Promise<string> =>
   await work.then(

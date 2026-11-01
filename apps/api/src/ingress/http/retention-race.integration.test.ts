@@ -13,7 +13,13 @@
  * Triggers that sleep or wait on a lock hold the window open, so the outcome is not left to scheduling.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, CLONE_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { DAY_MS, fixedClock } from '../../platform/clock';
 import { aRecordingLogger, NOW, testDependencies } from '../../testing/doubles';
@@ -46,7 +52,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const DAYS = 30;
 const OLD = new Date(NOW.getTime() - (DAYS + 1) * DAY_MS);
