@@ -375,6 +375,8 @@ export interface ServerSettings {
   oidc_client_secret_encrypted: string | null;
   oidc_issuer: string | null;
   oidc_name: string | null;
+  password_sign_in: Generated<boolean>;
+  require_two_factor: Generated<boolean>;
   setup_completed_at: Timestamp | null;
   sign_up: Generated<string>;
   smtp_allow_plaintext: Generated<boolean>;
