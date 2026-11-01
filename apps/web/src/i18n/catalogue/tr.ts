@@ -444,6 +444,8 @@ export const tr = {
   'audit.kind.integration.token_removed': 'GitHub tokenı kaldırıldı',
   'audit.kind.integration.feed_created': 'Depo bağlandı',
   'audit.kind.integration.feed_removed': 'Deponun bağlantısı kesildi',
+  'audit.kind.integration.webhook_created': 'Gelen webhook oluşturuldu',
+  'audit.kind.integration.webhook_revoked': 'Gelen webhook iptal edildi',
   'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
   'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
   'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
@@ -480,6 +482,14 @@ export const tr = {
     '{actor}, {repository} deposunu {channel} kanalına bağladı',
   'audit.action.integration.feed_removed_from':
     '{actor}, {repository} deposunun {channel} kanalına bağlantısını kaldırdı',
+  'audit.action.integration.webhook_created':
+    '{actor} bir kanalda “{webhook}” gelen webhook’unu oluşturdu',
+  'audit.action.integration.webhook_revoked':
+    '{actor} bir kanalda “{webhook}” gelen webhook’unu iptal etti',
+  'audit.action.integration.webhook_created_in':
+    '{actor}, {channel} kanalında “{webhook}” gelen webhook’unu oluşturdu',
+  'audit.action.integration.webhook_revoked_from':
+    '{actor}, {channel} kanalında “{webhook}” gelen webhook’unu iptal etti',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
@@ -938,6 +948,7 @@ export const tr = {
   'deferred.unavailable': 'Açılmadı. Bağlantını kontrol edip tekrar dene.',
   'viewer.unavailable': 'Görüntüleyici açılmadı. Bağlantını kontrol edip tekrar dene.',
   'message.deleted': 'Bu mesaj silindi.',
+  'message.incomingWebhook': 'webhook',
   'message.edit': 'Düzenle',
   'message.delete': 'Sil',
   'saved.save': 'Sonrası için kaydet',
@@ -1086,6 +1097,34 @@ export const tr = {
   'feeds.setup.once':
     'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse depo bağlantısını kaldırıp yeniden bağlamak gerekir.',
   'feeds.setup.done': 'Tamam',
+
+  // ── Bir kanalın gelen webhook’ları (D-245) ──────────────────────────────
+  'hooks.title': 'Gelen webhook’lar',
+  'hooks.empty':
+    'Gelen webhook yok. Bir tane oluştur; bir CI işi ya da izleme aracı adresiyle buraya mesaj gönderebilir.',
+  'hooks.name': 'Webhook adı',
+  'hooks.nameHint': 'Mesajlarının kimden geldiği, örneğin CI ya da Uyarılar.',
+  'hooks.nameRequired': 'Webhook’a bir ad ver.',
+  'hooks.nameInvalid': 'Daha kısa, görünen harflerden oluşan bir ad kullan.',
+  'hooks.make': 'Webhook oluştur',
+  'hooks.makeFailed': 'Webhook oluşturulamadı.',
+  'hooks.made': '{when} oluşturuldu',
+  'hooks.madeBy': '{who} tarafından {when} oluşturuldu',
+  'hooks.neverUsed': 'Henüz kullanılmadı',
+  'hooks.lastUsed': 'Son gönderim {when}',
+  'hooks.revoke': 'İptal et',
+  'hooks.revokeOne': '{name} webhook’unu iptal et',
+  'hooks.revokeAsk':
+    '{name} iptal edilsin mi? Adresi hemen çalışmayı bırakır. Gönderdikleri kanalda kalır.',
+  'hooks.revokeFailed': 'Webhook iptal edilemedi.',
+  'hooks.setup.title': '{name} webhook’unun adresi',
+  'hooks.setup.steps':
+    'Bu adrese application/json içerik türüyle JSON gönder, örneğin {example}. Metin markdown’dır.',
+  'hooks.setup.example': 'Dağıtım bitti',
+  'hooks.setup.copy': 'Adresi kopyala',
+  'hooks.setup.once':
+    'Adres gizli anahtarını taşır ve yalnızca şimdi gösteriliyor. Kaybedilirse webhook’u iptal edip yenisini oluşturmak gerekir.',
+  'hooks.setup.done': 'Tamam',
 
   // ── Bir mesajın önceki sürümleri (D-135) ────────────────────────────────
   'history.open': 'Düzenlendi — önceki halini göster',
@@ -1545,6 +1584,8 @@ export const tr = {
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
   'failure.githubFeedExists':
     'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için bağlantıyı kaldırıp yeniden bağla.',
+  'failure.incomingWebhooksLimit':
+    'Bir kanalda olabilecek gelen webhook sınırına ulaşıldı. Önce birini iptal et.',
   'failure.incidentOpen': 'Bu kanalda zaten açık bir olay var. Onu değiştir ya da önce çöz.',
   'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',
   'failure.incidentRespondersLimit':
