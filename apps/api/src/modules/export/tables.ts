@@ -35,6 +35,7 @@ export type ExportedTable =
   | 'message_versions'
   | 'pinned_messages'
   | 'channel_bookmarks'
+  | 'github_links'
   | 'attachments'
   | 'incidents'
   | 'incident_updates'
@@ -163,6 +164,23 @@ export const COLUMNS: Columns = {
     message_id: 'export',
     pinned_by: 'export',
     pinned_at: 'export',
+  },
+  // The GitHub work a thread points at, as GitHub last said it (D-246): the channel's own record.
+  github_links: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    root_id: 'export',
+    repository_id: 'export',
+    repository_full_name: 'export',
+    kind: 'export',
+    number: 'export',
+    title: 'export',
+    state: 'export',
+    state_at: 'export',
+    origin: 'export',
+    created_by: 'export',
+    created_at: 'export',
   },
   // A channel's links, the members' own content about it (D-218).
   channel_bookmarks: {
@@ -315,6 +333,8 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
     'digests of the state of a trip to GitHub and back, and its sealed verifier, for ten minutes: credentials (D-246)',
   github_app_deliveries:
     'an idempotency log of the GitHub App’s deliveries, nobody’s record (D-246)',
+  github_operations:
+    'the bounded record of one attempt to make an issue — its request id, a digest of what was asked, never the words: an idempotency record, nobody’s (D-246 §4)',
   notifications: 'each person’s inbox, their own state',
   missed_mail_letters:
     'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',
@@ -586,6 +606,9 @@ export const PERSONAL_EXCLUDED: Readonly<Record<Exclude<keyof Database, Personal
   github_app_handshakes:
     'digests and a sealed verifier of a trip to GitHub, ten minutes long: credentials',
   github_app_deliveries: 'an idempotency log of the GitHub App’s deliveries, nobody’s record',
+  github_links:
+    'the GitHub work a thread points at: the team’s record, in the workspace’s export (D-246)',
+  github_operations: 'a bounded idempotency record of making an issue: nobody’s record (D-246 §4)',
   workspace_invitations: 'a workspace’s links and their digests: the workspace’s, and credentials',
   link_previews: 'a cache of other sites’ pages',
   job_runs: 'the scheduler’s own record',

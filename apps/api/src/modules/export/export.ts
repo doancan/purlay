@@ -46,6 +46,7 @@ export const TABLE_ORDER: readonly ExportedTable[] = [
   'incident_updates',
   'incident_responders',
   'github_repo_feeds',
+  'github_links',
   'workspace_invitations',
   'audit_log',
 ];
@@ -97,6 +98,7 @@ const PEOPLE = (scope: Scope): RawBuilder<unknown> => sql`
   union select actor_user_id from audit_log where workspace_id = ${scope.workspaceId}
   union select created_by from workspace_invitations where workspace_id = ${scope.workspaceId}
   union select created_by from github_repo_feeds where channel_id in (${channelsIn(scope)})
+  union select created_by from github_links where channel_id in (${channelsIn(scope)})
 `;
 
 /** Each table's rows in the scope, and the order they are written in. */
@@ -125,6 +127,7 @@ const BOUNDS: Readonly<
     where: sql`incident_id in (${incidentsOf(s)})`,
     order: 'incident_id, user_id',
   }),
+  github_links: (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
   github_repo_feeds: (s) => ({
     where: sql`channel_id in (${channelsIn(s)})`,
     order: 'id',
