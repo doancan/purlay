@@ -360,6 +360,11 @@ it. On a narrow window the navigation opens as the sidebar does.
   Then **Quiet hours** (D-234): off, or a start and an end — one earlier than the start runs past midnight, and
   says so — and the days a window starts on, named in the reader's language, read on the clock of the profile's
   time zone, which the card names; with no time zone on the profile it says so and leads to Profile.
+  **Email** (D-240), only where the server can send mail and the person's address is verified: one check box,
+  *Email me about direct messages and mentions I haven't read*, off until checked, applied when it is checked,
+  with a sentence saying when a letter goes (fifteen minutes unread, never in Deep Work or quiet hours, at most
+  one an hour). The letter ends with a link to `/mail/stop#…`, a page of its own that needs no sign-in: it asks
+  *Stop these emails?* and stops them only on its button, so a mail scanner that opens it changes nothing.
 - **Keyboard shortcuts** — the reference, as a page.
 - **Sessions & account** — first *How you sign in* (D-176, amended by D-179): the address and whether a
   link sent to it signs in, and, only when GitHub is linked, a GitHub row with the login — read only,
@@ -813,6 +818,8 @@ missing specified behaviour and does not merge.
 | Where you are signed in (Sessions & account) | "You are not signed in anywhere else." under this device's row | Skeleton in the card | Retry in the card; a sign-out refused puts the row back and says why in a toast (D-193) |
 | Archived channels (General) | "No channel is archived." | Skeleton in the card | Retry in the card; a restore refused because the name is taken says to rename the other channel first (D-232) |
 | Quiet hours (Notifications) | Off, with the profile's zone named; without a zone, a link to Profile | Skeleton in the card | A save refused or failed is said beside Save, and what was set stays (D-234) |
+| Email (Notifications) | Not drawn where the server cannot send mail or the address is not verified | Not drawn until the server has said whether it can be offered | Whether it can be offered could not be read: said in the card, with Retry; a change refused is put back and said in a toast (D-240) |
+| Stop link (`/mail/stop`) | n/a — a link always asks, or says it is not complete | The button busy while it asks | "This link does not open" for one too old or unknown, with the way to Purlay; any other failure said above the button, which tries again (D-240) |
 | Accounts (Settings → Server) | "No account matches." | Skeleton rows | Retry in the card; a change refused is said in the card (D-233) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
