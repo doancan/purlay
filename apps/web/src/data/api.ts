@@ -21,6 +21,8 @@ import {
   Attachment,
   QuietHoursSetting,
   type SetQuietHoursRequest,
+  MissedMailSetting,
+  type SetMissedMailRequest,
   AuditPage,
   type AuditFilter,
   ChannelList,
@@ -432,6 +434,11 @@ export interface Api {
   /** The caller's quiet hours and the profile's time zone they are read in (D-234). */
   readonly quietHours: (signal?: AbortSignal) => Promise<QuietHoursSetting>;
   readonly setQuietHours: (input: SetQuietHoursRequest) => Promise<QuietHoursSetting>;
+  /** Whether the caller is emailed about what they missed, and whether it can be offered (D-240). */
+  readonly missedMail: (signal?: AbortSignal) => Promise<MissedMailSetting>;
+  readonly setMissedMail: (input: SetMissedMailRequest) => Promise<MissedMailSetting>;
+  /** A letter's stop link, spent without a session (D-240). */
+  readonly stopMissedMail: (token: string) => Promise<void>;
 }
 
 export const createApi = (http: Http): Api => {
@@ -997,5 +1004,11 @@ export const createApi = (http: Http): Api => {
       http.request('GET', '/api/me/quiet-hours', QuietHoursSetting, options({}, signal)),
     setQuietHours: (input) =>
       http.request('PUT', '/api/me/quiet-hours', QuietHoursSetting, options({ body: input })),
+    missedMail: (signal) =>
+      http.request('GET', '/api/me/missed-mail', MissedMailSetting, options({}, signal)),
+    setMissedMail: (input) =>
+      http.request('PUT', '/api/me/missed-mail', MissedMailSetting, options({ body: input })),
+    stopMissedMail: (token) =>
+      http.send('POST', '/api/missed-mail/stop', options({ body: { token } })),
   };
 };

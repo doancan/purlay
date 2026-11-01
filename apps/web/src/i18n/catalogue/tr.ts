@@ -1569,6 +1569,27 @@ export const tr = {
   'quietHours.save': 'Kaydet',
   'quietHours.saved': 'Kaydedildi.',
   'quietHours.failed': 'Sessiz saatler kaydedilmedi.',
+  'missedMail.title': 'E-posta',
+  'missedMail.description':
+    'Purlay’dan ve cihazlarından uzaktayken: seni hâlâ bekleyenler hakkında, saatte en fazla bir e-posta.',
+  'missedMail.on': 'Okumadığım doğrudan mesajlar ve bahsetmeler için bana e-posta gönder',
+  'missedMail.hint':
+    'Biri 15 dakika okunmadan beklediğinde gönderilir — Deep Work’te ya da sessiz saatlerinde asla — ve yalnızca hâlâ okuyabildiğin mesajlardan alıntı yapar.',
+  'missedMail.failed': 'E-posta ayarı değiştirilmedi.',
+  'mailStop.title': 'Bu e-postalar dursun mu?',
+  'mailStop.body':
+    'Okumadığın doğrudan mesajlar ve bahsetmeler için artık e-posta almayacaksın. İstediğinde Ayarlar → Bildirimler’den yeniden açabilirsin.',
+  'mailStop.action': 'Bu e-postaları durdur',
+  'mailStop.done.title': 'Bu e-postaları artık almayacaksın',
+  'mailStop.done.body': 'İstediğin zaman Ayarlar → Bildirimler’den yeniden açabilirsin.',
+  'mailStop.refused.title': 'Bu bağlantı açılmıyor',
+  'mailStop.refused.body':
+    'Otuz günden eski bir e-postadan olabilir. E-postaları bunun yerine Ayarlar → Bildirimler’den kapat.',
+  'mailStop.missing.title': 'Bu bağlantı eksik',
+  'mailStop.missing.body':
+    'E-postadaki bağlantının tamamını aç ya da e-postaları Ayarlar → Bildirimler’den kapat.',
+  'mailStop.failed': 'E-postalar durdurulamadı.',
+  'mailStop.open': 'Purlay’ı aç',
   'settings.notifications.deepWorkHint':
     'Açıkken sana hiçbir şey iletilmez — ne burada ne cihazlarında. Süresi dolunca kendiliğinden biter.',
   'settings.notifications.deepWorkStart': 'Deep Work’ü başlat',

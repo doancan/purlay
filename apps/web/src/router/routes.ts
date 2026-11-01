@@ -26,6 +26,8 @@ const ROUTES = {
   // Making an account, where the server lets anybody (R51); by invitation it says so and points back.
   signUp: '/sign-up',
   invite: '/invite',
+  // A missed-mail letter's stop link (D-240); its token is in the fragment, as a sign-in link's.
+  mailStop: '/mail/stop',
   // The setup in the browser (D-179 §4); the address link's page keeps its token in the fragment.
   setup: '/setup',
   setupVerify: '/setup/verify',
