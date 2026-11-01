@@ -270,6 +270,8 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     ),
   'read the workspace’s storage and quota': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/storage`, as),
+  'let only owners and admins post in a channel': async (world, as) =>
+    await call(world, 'PATCH', `/api/channels/${world.channelId}`, as, { onlyAdminsPost: true }),
   'archive a channel': async (world, as) =>
     await call(world, 'DELETE', `/api/channels/${world.channelId}`, as),
   'see the archived channels': async (world, as) =>

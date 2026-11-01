@@ -76,6 +76,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   topic: null,
   incident: null,
   codeRepository: null,
+  onlyAdminsPost: false,
   type: 'public',
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
@@ -735,27 +736,31 @@ describe('the frames', () => {
       expect(other?.state?.unreadCount).toBe(3);
     });
 
-    test('a channel’s new name and topic replace what the list holds, and a late rename does not undo a newer one (D-123)', () => {
+    test('a channel’s new name, topic and who posts replace what the list holds, and a late change does not undo a newer one (D-123, D-243)', () => {
       const w = world();
       w.client.setQueryData(keys.channels(WS), [channel(CH)]);
       w.engine.start();
       w.open();
-      const renamed = (name: string, version: number): ServerFrame =>
+      const renamed = (name: string, version: number, onlyAdminsPost = false): ServerFrame =>
         frame({
           event: 'CHANNEL_UPDATED',
-          data: { channelId: CH, name, topic: `about ${name}` },
+          data: { channelId: CH, name, topic: `about ${name}`, onlyAdminsPost },
           version,
           ts: T0,
         });
       const held = (): Channel | undefined =>
         w.client.getQueryData<Channel[]>(keys.channels(WS))?.[0];
 
-      w.deliver(renamed('genel-sohbet', 2));
-      expect(held()).toMatchObject({ name: 'genel-sohbet', topic: 'about genel-sohbet' });
+      w.deliver(renamed('genel-sohbet', 2, true));
+      expect(held()).toMatchObject({
+        name: 'genel-sohbet',
+        topic: 'about genel-sohbet',
+        onlyAdminsPost: true,
+      });
       w.deliver(renamed('general', 1)); // committed first, arrived last
-      expect(held()?.name).toBe('genel-sohbet');
+      expect(held()).toMatchObject({ name: 'genel-sohbet', onlyAdminsPost: true });
       w.deliver(renamed('lobby', 3));
-      expect(held()?.name).toBe('lobby');
+      expect(held()).toMatchObject({ name: 'lobby', onlyAdminsPost: false });
     });
 
     test('a thread summary and a reaction set are ordered separately, though they share a counter', () => {

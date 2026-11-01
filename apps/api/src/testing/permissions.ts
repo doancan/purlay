@@ -120,6 +120,10 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'GET /api/workspaces/:workspaceId/storage',
     allowed: { owner: true, admin: false, member: false },
   },
+  'let only owners and admins post in a channel': {
+    endpoint: 'PATCH /api/channels/:channelId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'archive a channel': {
     endpoint: 'DELETE /api/channels/:channelId',
     allowed: { owner: true, admin: true, member: false },

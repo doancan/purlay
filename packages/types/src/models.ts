@@ -249,6 +249,11 @@ export const Channel = Type.Object({
    * Told to whoever can see the channel — who reads that feed's events in it already.
    */
   codeRepository: Type.Union([Type.String({ pattern: GITHUB_REPOSITORY_PATTERN }), Type.Null()]),
+  /**
+   * Whether only the workspace's owners and admins post in its feed (D-243): an announcement channel.
+   * Everybody in it still replies in a thread. Always false for a direct message.
+   */
+  onlyAdminsPost: Type.Boolean(),
 });
 export type Channel = Static<typeof Channel>;
 

@@ -12,6 +12,8 @@ const WORKSPACES_TESTS = ['apps/api/src/modules/workspaces/workspaces.integratio
 const MESSAGES = 'apps/api/src/modules/messages/messages.ts';
 const MESSAGES_TESTS = ['apps/api/src/modules/messages/messages.integration.test.ts'];
 
+const ANNOUNCEMENT_TESTS = 'apps/api/src/ingress/http/announcement.integration.test.ts';
+
 const FOLLOW_TESTS = 'apps/api/src/ingress/http/thread-follow.integration.test.ts';
 const FOLLOW_PANEL_TESTS = 'apps/web/src/features/threads/thread.test.tsx';
 
@@ -11563,5 +11565,59 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "{role === 'owner' && <DeleteWorkspaceCard />}",
     replace: '{<DeleteWorkspaceCard />}',
     tests: ['apps/web/src/features/settings/pages/delete-workspace.test.tsx'],
+    id: 'announcement-member-posts-a-root',
+    why: 'a member writes a new message in an announcement channel’s feed (D-243)',
+    file: MESSAGES,
+    find: "  return role !== 'member';\n",
+    replace: '  return true;\n',
+    tests: [ANNOUNCEMENT_TESTS],
+  },
+  {
+    id: 'announcement-reply-refused',
+    why: 'a member is refused a reply in an announcement channel’s thread, which stays everybody’s (D-243)',
+    file: MESSAGES,
+    find: '  if (input.parentId === undefined && !(await mayPostRoot(executor, context))) {\n',
+    replace: '  if (!(await mayPostRoot(executor, context))) {\n',
+    tests: [ANNOUNCEMENT_TESTS],
+  },
+  {
+    id: 'announcement-role-read-before-the-lock',
+    why: 'an admin demoted while their send is in flight still posts a root, read before the role change committed (D-243)',
+    file: MESSAGES,
+    find: "    .where('id', '=', context.workspaceId)\n    .forKeyShare()\n",
+    replace: "    .where('id', '=', context.workspaceId)\n",
+    tests: ['apps/api/src/modules/messages/announcement.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'announcement-retry-refused',
+    why: 'a retry of a root written before the channel became an announcement channel is refused, not answered (D-33, D-243)',
+    file: MESSAGES,
+    find: '    if (retried) return await again(existing);\n',
+    replace: '',
+    tests: [ANNOUNCEMENT_TESTS],
+  },
+  {
+    id: 'announcement-a-members-call',
+    why: 'a member says only owners and admins post in a channel, or lets everybody again (D-243)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "    onlyAdmins(role, 'Only an owner or an admin says who posts in a channel.');\n",
+    replace: '',
+    tests: [ANNOUNCEMENT_TESTS, 'apps/api/src/ingress/http/permissions.integration.test.ts'],
+  },
+  {
+    id: 'announcement-off-the-trail',
+    why: 'who may post in a channel changes and the trail does not say so (D-243)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "      action: 'channel.posting_changed',\n",
+    replace: "      action: 'channel.renamed',\n",
+    tests: [ANNOUNCEMENT_TESTS],
+  },
+  {
+    id: 'announcement-room-not-told',
+    why: 'the room hears a channel became an announcement channel without hearing so, and keeps its composer (D-243)',
+    file: 'apps/api/src/platform/events.ts',
+    find: '      onlyAdminsPost: data.onlyAdminsPost,\n',
+    replace: '      onlyAdminsPost: false,\n',
+    tests: [ANNOUNCEMENT_TESTS],
   },
 ];

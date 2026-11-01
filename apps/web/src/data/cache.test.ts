@@ -64,6 +64,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   topic: null,
   incident: null,
   codeRepository: null,
+  onlyAdminsPost: false,
   type: 'public',
   lastMessageAt: null,
   state,

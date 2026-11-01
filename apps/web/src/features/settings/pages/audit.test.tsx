@@ -191,6 +191,34 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('who posts in a channel is said both ways, the channel named only to a viewer who can see it (D-243)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(3, {
+              action: 'channel.posting_changed',
+              targetId: entryId(99),
+              metadata: { from: 'everyone', to: 'admins' },
+            }),
+            anEntry(2, {
+              action: 'channel.posting_changed',
+              metadata: { from: 'admins', to: 'everyone' },
+            }),
+            anEntry(1, {
+              action: 'channel.posting_changed',
+              metadata: { from: 'everyone', to: 'admins' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} let only owners and admins post in a channel`,
+      `${ME.displayName} let everyone post in #api again`,
+      `${ME.displayName} let only owners and admins post in #api`,
+    ]);
+  });
+
   test('an account erased is said without naming the person who is gone (D-139 §5)', async () => {
     const view = await openPage({
       audit: () =>
