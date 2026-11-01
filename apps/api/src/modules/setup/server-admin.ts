@@ -27,6 +27,8 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import {
+  GITHUB_APP_CALLBACK,
+  GITHUB_APP_WEBHOOK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type ProbeResult,
@@ -62,10 +64,62 @@ import {
 import {
   readSettingsToBoot,
   settingsView,
+  type GitHubAppSettings,
   type ServerSettings,
   type SmtpSettings,
 } from './settings';
 import { setupStatus, type ServerAdminSession } from './setup';
+import { probeAppKey } from './probes';
+import type { GitHubAppApi } from '../integrations/github-app-api';
+
+/**
+ * The GitHub App issues are written through (D-246 §1), tried as the OAuth app is — its client id and secret
+ * against GitHub's token endpoint (`probeGitHub`) — and then as itself: a token its private key signed must be
+ * one GitHub takes, for the App with the id, slug and client id given. Kept only if both held. Not a way in, so
+ * nothing the sign-in library is built from changes, and disconnecting it needs no confirmation.
+ */
+export const connectGitHubIssuesApp = async (
+  dependencies: ServerAdminDependencies & {
+    readonly github: Omit<GitHubProbeDependencies, 'timeoutMs'>;
+    readonly api: GitHubAppApi;
+  },
+  admin: ServerAdminSession,
+  candidate: GitHubAppSettings,
+): Promise<ProbeResult> => {
+  await afterTheSetup(dependencies.database);
+  const pair = await probeGitHub(admin, candidate, {
+    ...dependencies.github,
+    timeoutMs: GITHUB_PROBE_TIMEOUT_MS,
+  });
+  if (!pair.ok) return pair;
+  const itself = await probeAppKey(dependencies.api, dependencies.clock, candidate);
+  if (!itself.ok) return itself;
+  await applySettings(
+    dependencies.database,
+    { githubApp: candidate },
+    dependencies.change,
+    audited(dependencies, admin, 'server.github_app_connected'),
+  );
+  return itself;
+};
+
+/** The App let go: nothing more is written to GitHub; links and the workspace's token stay (D-246 §6). */
+export const disconnectGitHubIssuesApp = async (
+  dependencies: ServerAdminDependencies,
+  admin: ServerAdminSession,
+  current: RuntimeServices,
+): Promise<void> => {
+  await afterTheSetup(dependencies.database);
+  if (current.settings.githubApp === undefined && !current.needsReentry.includes('githubApp')) {
+    throw new ServerChangeRefused('not-connected');
+  }
+  await applySettings(
+    dependencies.database,
+    { githubApp: null },
+    dependencies.change,
+    audited(dependencies, admin, 'server.github_app_disconnected'),
+  );
+};
 
 /** What each way in being disconnected is called on the trail. */
 const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc', ServerAuditAction>> = {
@@ -148,6 +202,10 @@ export const serverSettingsOf = async (
     appUrl,
     githubCallbackUrl: `${appUrl}${SIGN_IN_CALLBACK}`,
     oidcCallbackUrl: `${appUrl}${OIDC_CALLBACK}`,
+    githubApp: {
+      callbackUrl: `${appUrl}${GITHUB_APP_CALLBACK}`,
+      webhookUrl: `${appUrl}${GITHUB_APP_WEBHOOK}`,
+    },
     channels: {
       github: current.auth.github,
       email: current.mail !== undefined,

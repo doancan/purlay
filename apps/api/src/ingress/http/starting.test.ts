@@ -24,6 +24,7 @@ const NOTHING_SET: ServerSettings = {
   github: undefined,
   oidc: undefined,
   smtp: undefined,
+  githubApp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
   requireTwoFactor: false,

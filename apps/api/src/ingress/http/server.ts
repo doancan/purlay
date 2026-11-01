@@ -18,6 +18,7 @@ import {
   ServerCreatorsRequest,
   ServerDisconnectRequest,
   OIDC_NAME_MAX,
+  ServerGitHubAppRequest,
   ServerGitHubRequest,
   ServerOidcRequest,
   ServerPolicyRequest,
@@ -30,21 +31,33 @@ import {
   changeCreators,
   changePolicy,
   connectGitHub,
+  connectGitHubIssuesApp,
   connectOidc,
   connectRelay,
   disconnect,
+  disconnectGitHubIssuesApp,
   serverSettingsOf,
   ServerChangeRefused,
   type ServerAdminDependencies,
 } from '../../modules/setup/server-admin';
 import { requireServerAdmin, type ServerAdminSession } from '../../modules/setup/setup';
 import { AppError } from '../../platform/errors';
+import { githubAppKeyProblem } from '../../platform/github-app-key';
+import {
+  githubAppApi,
+  githubAppCaller,
+  platformAppFetch,
+  type GitHubAppFetch,
+} from '../../modules/integrations/github-app-api';
 import { oidcIssuerProblem, oidcNameProblem } from '../../platform/oidc-address';
 import { refusedField, said, swapping, type SetupDependencies } from './setup';
 import { validated } from './validate';
 
-/** What the routes need: the setup's own dependencies — the pool, the clock, the holder's swap. */
-export type ServerDependencies = SetupDependencies;
+/**
+ * What the routes need: the setup's own dependencies — the pool, the clock, the holder's swap — and, for a test,
+ * how the GitHub App's own calls reach GitHub.
+ */
+export type ServerDependencies = SetupDependencies & { readonly githubAppFetch?: GitHubAppFetch };
 
 /** The guard, then the work, a refusal of the module said as the contract says it. */
 const asAdmin = async <T>(
@@ -112,6 +125,49 @@ export const connectGitHubApp = async (
       { clientId: input.clientId, clientSecret: input.clientSecret },
     );
   });
+
+/**
+ * `POST /api/server/github-app` — the GitHub App issues are written through (D-246): its client pair and its
+ * key tried against GitHub, and kept only if both worked; `200` with the outcome either way. A key this server
+ * could not sign with is refused as input before anything is called.
+ */
+export const connectIssuesApp = async (
+  dependencies: ServerDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ProbeResult> =>
+  await asAdmin(dependencies, request, async (admin, module) => {
+    const input = validated(ServerGitHubAppRequest, body);
+    const keyProblem = githubAppKeyProblem(input.privateKey);
+    if (keyProblem !== undefined) {
+      throw refusedField('That cannot be tried.', 'privateKey', keyProblem);
+    }
+    const urls = { web: dependencies.config.GITHUB_URL, api: dependencies.config.GITHUB_API_URL };
+    return await connectGitHubIssuesApp(
+      {
+        ...module,
+        github: { fetch: async (url, init) => await fetch(url, init), githubUrls: urls },
+        api: githubAppApi(
+          githubAppCaller(dependencies.githubAppFetch ?? platformAppFetch, () =>
+            dependencies.clock.now(),
+          ),
+          urls,
+        ),
+      },
+      admin,
+      input,
+    );
+  });
+
+/** `DELETE /api/server/github-app` — the App let go; `204`. Links already made stay (D-246 §6). */
+export const disconnectIssuesApp = async (
+  dependencies: ServerDependencies,
+  request: Request,
+): Promise<void> => {
+  await asAdmin(dependencies, request, async (admin, module) => {
+    await disconnectGitHubIssuesApp(module, admin, swapping(dependencies).current);
+  });
+};
 
 /**
  * `POST /api/server/oidc` — the single sign-on provider tried (its discovery, its keys, the client); `200` with

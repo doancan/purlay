@@ -10,6 +10,7 @@
  * policy and the creators take effect on the next request; every change is on the trail without its
  * value; no secret is in any answer or any line written; and a client is limited.
  */
+import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
@@ -18,6 +19,8 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import {
+  GITHUB_APP_CALLBACK,
+  GITHUB_APP_WEBHOOK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type MeResponse,
@@ -42,6 +45,7 @@ import type { RateBudget } from '../../realtime/rate-limiter';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import { aGitHubPerson, signInWithGitHub } from '../../testing/github-sign-in';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS, type GitHubStub } from '../../testing/github-stub';
+import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import {
   anOidcStub,
@@ -124,7 +128,10 @@ const aServer = async (
   const cloned = await cloneIntegrationDatabase();
   clones.push(cloned.drop);
   const person = aGitHubPerson();
-  const github = aGitHubStub(person);
+  // The GitHub the server talks to also plays the App issues are written through (D-246).
+  const github = aGitHubStub(person, {}, GITHUB_STUB_CREDENTIALS, {
+    app: aGitHubAppStub({ id: person.id, login: person.login }),
+  });
   const served = github.serve(0);
   stops.push(served.stop);
   const { log, lines } = recording();
@@ -291,6 +298,8 @@ const ROUTES: readonly [method: 'GET' | 'POST' | 'DELETE', path: string, body: u
   ['DELETE', '/api/server/github', undefined],
   ['DELETE', '/api/server/smtp', undefined],
   ['DELETE', '/api/server/oidc', undefined],
+  ['POST', '/api/server/github-app', { ...GITHUB_APP_STUB }],
+  ['DELETE', '/api/server/github-app', undefined],
   ['POST', '/api/server/policy', { signUp: 'open' }],
   ['POST', '/api/server/policy', { requireTwoFactor: true }],
   ['POST', '/api/server/policy', { passwordSignIn: false }],
@@ -378,6 +387,7 @@ describe('integration: Administration → Server', () => {
         github: null,
         oidc: null,
         smtp: null,
+        githubApp: null,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: null,
         requireTwoFactor: false,
@@ -389,6 +399,10 @@ describe('integration: Administration → Server', () => {
       appUrl: ORIGIN,
       githubCallbackUrl: `${ORIGIN}${SIGN_IN_CALLBACK}`,
       oidcCallbackUrl: `${ORIGIN}${OIDC_CALLBACK}`,
+      githubApp: {
+        callbackUrl: `${ORIGIN}${GITHUB_APP_CALLBACK}`,
+        webhookUrl: `${ORIGIN}${GITHUB_APP_WEBHOOK}`,
+      },
       channels: { github: false, email: false, oidc: false },
       adminEmail: server.admin.email,
     });
@@ -1389,6 +1403,92 @@ describe('integration: Administration → Server — how long a session lives (D
       sessionIdleTimeoutHours: null,
       sessionMaxAgeDays: null,
     });
+  });
+});
+
+describe('integration: Administration → Server — the GitHub App (D-246)', () => {
+  const ANOTHER_KEY = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  }).privateKey;
+
+  const tryApp = async (
+    server: Server,
+    over: Readonly<Record<string, unknown>> = {},
+  ): Promise<Response> =>
+    await call(server, 'POST', '/api/server/github-app', {
+      cookie: server.admin.cookie,
+      body: { ...GITHUB_APP_STUB, ...over },
+    });
+
+  test('tried as its client and as itself, kept only when both hold, and never shown again', async () => {
+    const server = await aServer();
+    for (const [over, reason] of [
+      [{ clientSecret: BAD_SECRET }, 'secret-rejected'],
+      [{ privateKey: ANOTHER_KEY }, 'key-rejected'],
+      [{ appId: 4243 }, 'app-mismatch'],
+      [{ slug: 'another-app' }, 'app-mismatch'],
+    ] as const) {
+      const answer = (await (await tryApp(server, over)).json()) as { ok: boolean; reason: string };
+      expect([answer.ok, answer.reason]).toEqual([false, reason]);
+    }
+    expect((await viewOf(server)).settings.githubApp).toBeNull();
+    expect(await trail(server)).toEqual([]);
+
+    const kept = await tryApp(server);
+    expect(await kept.json()).toEqual({ ok: true });
+    const view = await viewOf(server);
+    expect(view.settings.githubApp).toEqual({
+      appId: GITHUB_APP_STUB.appId,
+      slug: GITHUB_APP_STUB.slug,
+      clientId: GITHUB_APP_STUB.clientId,
+      clientSecret: { set: true },
+      privateKey: { set: true },
+      webhookSecret: { set: true },
+    });
+    expect(view.githubApp).toEqual({
+      callbackUrl: `${ORIGIN}/api/github-app/callback`,
+      webhookUrl: `${ORIGIN}/api/webhooks/github-app`,
+    });
+    // It serves at once: what the holder serves now is the App.
+    expect(server.holder.current()?.settings.githubApp?.appId).toBe(GITHUB_APP_STUB.appId);
+    const written = [JSON.stringify(view), ...server.lines].join('\n');
+    for (const secret of [
+      GITHUB_APP_STUB.clientSecret,
+      GITHUB_APP_STUB.webhookSecret,
+      'BEGIN RSA PRIVATE KEY',
+    ]) {
+      expect(written).not.toContain(secret);
+    }
+
+    expect(
+      (await call(server, 'DELETE', '/api/server/github-app', { cookie: server.admin.cookie }))
+        .status,
+    ).toBe(204);
+    expect((await viewOf(server)).settings.githubApp).toBeNull();
+    const again = await call(server, 'DELETE', '/api/server/github-app', {
+      cookie: server.admin.cookie,
+    });
+    expect(again.status).toBe(409);
+    expect((await trail(server)).map((entry) => entry.action)).toEqual([
+      'server.github_app_connected',
+      'server.github_app_disconnected',
+    ]);
+  });
+
+  test('a key this server could not sign with is refused as input, and GitHub is not asked', async () => {
+    const server = await aServer();
+    const asked = server.github.calls.urls.length;
+    const refused = await tryApp(server, { privateKey: '-----BEGIN NOTHING-----' });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        code: 'VALIDATION_FAILED',
+        details: { fields: { privateKey: 'is not a PEM private key' } },
+      },
+    });
+    expect(server.github.calls.urls.length).toBe(asked);
   });
 });
 
