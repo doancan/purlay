@@ -188,7 +188,7 @@ channel's files · profiles with a title, a time zone and a status · starred ch
 channels (D-125) · every channel marked read at once (D-238) · a sign-in policy: two-step
 verification required of a password, password sign-in off where GitHub or single sign-on serves (D-239) ·
 opt-in email about direct messages and mentions left unread, at most one an hour (D-240) ·
-a person's export of their own data (D-241)
+a person's export of their own data (D-241) · an owner deletes a workspace, with a week to take it back (D-242)
 
 **Next proposal: GitHub issues from conversations (planned, not implemented).** Build on the
 existing workspace credential, link previews, signed webhooks and delivery deduplication. The
