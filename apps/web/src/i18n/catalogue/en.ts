@@ -1610,6 +1610,27 @@ export const en = {
   'quietHours.save': 'Save',
   'quietHours.saved': 'Saved.',
   'quietHours.failed': 'Quiet hours were not saved.',
+  'missedMail.title': 'Email',
+  'missedMail.description':
+    'For when you are away from Purlay and your devices: one email, at most one an hour, about what still needs you.',
+  'missedMail.on': 'Email me about direct messages and mentions I haven’t read',
+  'missedMail.hint':
+    'Sent once one has waited unread for 15 minutes — never during Deep Work or your quiet hours — and quoting only what you can still read.',
+  'missedMail.failed': 'Email was not changed.',
+  'mailStop.title': 'Stop these emails?',
+  'mailStop.body':
+    'You will no longer be emailed about direct messages and mentions you haven’t read. You can turn it on again in Settings → Notifications.',
+  'mailStop.action': 'Stop these emails',
+  'mailStop.done.title': 'You won’t get these emails any more',
+  'mailStop.done.body': 'Turn them on again whenever you like, in Settings → Notifications.',
+  'mailStop.refused.title': 'This link does not open',
+  'mailStop.refused.body':
+    'It may be from an email more than thirty days old. Turn the emails off in Settings → Notifications instead.',
+  'mailStop.missing.title': 'This link is not complete',
+  'mailStop.missing.body':
+    'Open the whole link from the email, or turn the emails off in Settings → Notifications.',
+  'mailStop.failed': 'The emails were not stopped.',
+  'mailStop.open': 'Open Purlay',
   'settings.notifications.deepWorkHint':
     'While it is on, nothing is delivered to you — not here, not on your devices. It ends on its own.',
   'settings.notifications.deepWorkStart': 'Start Deep Work',

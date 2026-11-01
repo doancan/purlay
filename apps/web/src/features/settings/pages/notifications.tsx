@@ -10,6 +10,7 @@
  * - **This device** is the Web Push switch (D-126) where the browser and the server can send; where
  *   they cannot, the page says plainly that a closed tab hears nothing — PRD §4.5 owes that sentence
  *   and a missing switch alone does not say it.
+ * - **Email** about the direct messages and mentions left unread, where the server can send it (D-240).
  * - **Channels** lists every channel you are in with its level (D-107), changed here as from the
  *   channel's bell: painted at once, put back and said when refused.
  */
@@ -30,6 +31,7 @@ import { usePushControls } from '../../push/push';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../../shell/deep-work';
 import { useWorkspace } from '../../shell/workspace';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import { MissedMailCard } from './missed-mail-card';
 import { QuietHoursCard } from './quiet-hours-card';
 
 const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
@@ -259,6 +261,7 @@ export const NotificationsPage = (): React.JSX.Element => {
       <WhatInterrupts />
       <DeepWorkCard />
       <DeviceCard />
+      <MissedMailCard />
       <QuietHoursCard />
       <ChannelLevels />
     </SettingsPage>

@@ -136,6 +136,8 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     incident: () => Promise.resolve({ incident: null }),
     // And whether this is the person's quiet hours (D-234): none, unless a test says.
     quietHours: () => Promise.resolve({ quietHours: null, timeZone: null }),
+    // And whether this server can email the person about what they missed (D-240): it cannot, unless a test says.
+    missedMail: () => Promise.resolve({ on: false, available: false }),
     ...overrides,
   });
 

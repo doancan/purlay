@@ -267,3 +267,70 @@ describe('quiet hours (D-234)', () => {
     view.unmount();
   });
 });
+
+describe('email about what was missed (D-240)', () => {
+  const EMAIL = 'Email me about direct messages and mentions I haven’t read';
+
+  test('not offered where the server cannot send it', async () => {
+    const view = await open();
+    expect(view.queryByRole('region', { name: 'Email' })).toBeNull();
+    expect(view.queryByRole('checkbox', { name: EMAIL })).toBeNull();
+    view.unmount();
+  });
+
+  test('offered off; turned on at once and kept as the server answers; turned off again', async () => {
+    const sent: unknown[] = [];
+    const view = await open({
+      missedMail: () => Promise.resolve({ on: false, available: true }),
+      setMissedMail: (input) => {
+        sent.push(input);
+        return Promise.resolve({ on: input.on, available: true });
+      },
+    });
+    const card = within(view.getByRole('region', { name: 'Email' }));
+    expect(card.getByText(/never during Deep Work or your quiet hours/)).toBeDefined();
+    const box = (): HTMLInputElement =>
+      card.getByRole<HTMLInputElement>('checkbox', { name: EMAIL });
+    expect(box().checked).toBe(false);
+    await person().click(box());
+    expect(box().checked).toBe(true);
+    await settle();
+    await person().click(box());
+    await settle();
+    expect(box().checked).toBe(false);
+    expect(sent).toEqual([{ on: true }, { on: false }]);
+    await expectNoAxeViolations(view.getByRole('region', { name: 'Email' }));
+    view.unmount();
+  });
+
+  test('a refusal puts it back and says so', async () => {
+    const view = await open({
+      missedMail: () => Promise.resolve({ on: false, available: true }),
+      setMissedMail: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+    });
+    const box = (): HTMLInputElement =>
+      main(view).getByRole<HTMLInputElement>('checkbox', { name: EMAIL });
+    await person().click(box());
+    await settle();
+    expect(box().checked).toBe(false);
+    expect(view.getByText(/^Email was not changed\./)).toBeDefined();
+    view.unmount();
+  });
+
+  test('when whether it can be offered could not be read, it says so and asks again', async () => {
+    let asked = 0;
+    const view = await open({
+      missedMail: () => {
+        asked += 1;
+        return asked === 1
+          ? Promise.reject(new ApiError(500, 'INTERNAL', 'no'))
+          : Promise.resolve({ on: true, available: true });
+      },
+    });
+    const card = await view.findByRole('region', { name: 'Email' });
+    await person().click(within(card).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(main(view).getByRole<HTMLInputElement>('checkbox', { name: EMAIL }).checked).toBe(true);
+    view.unmount();
+  });
+});
