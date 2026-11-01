@@ -366,7 +366,10 @@ it. On a narrow window the navigation opens as the sidebar does.
   one an hour). The letter ends with a link to `/mail/stop#…`, a page of its own that needs no sign-in: it asks
   *Stop these emails?* and stops them only on its button, so a mail scanner that opens it changes nothing.
 - **Keyboard shortcuts** — the reference, as a page.
-- **Sessions & account** — first *How you sign in* (D-176, amended by D-179): the address and whether a
+- **Sessions & account** — a **Create issues as you** card (D-246) only where the server has a GitHub App:
+  off until the person chooses, *Not allowed. Purlay writes nothing to GitHub as you.*, with **Let Purlay create
+  issues as me** — GitHub's authorization screen, coming back to this page with the outcome in one line — and, once
+  allowed, *Allowed, as `login`* with **Stop allowing**. Never asked at sign-in. Also first *How you sign in* (D-176, amended by D-179): the address and whether a
   link sent to it signs in, and, only when GitHub is linked, a GitHub row with the login — read only,
   nothing to press. There is no **Connect GitHub**: one verified address is one account (D-179 §5), so a
   person who signs in with GitHub on an address they verified by link arrives in the account they have.
@@ -399,7 +402,12 @@ it. On a narrow window the navigation opens as the sidebar does.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
-- **Integrations** — the GitHub connection, as below.
+- **Integrations** — the GitHub connection, as below; and, only where the server has a GitHub App (D-246), a
+  **GitHub issues** card: *Not connected* or *Installed on acme since …* (*Suspended* when GitHub says so, with a
+  sentence that nothing is written to it), **Connect on GitHub** (or **Connect again**) — a full navigation to
+  GitHub's own screen, where the repositories are chosen — and **Disconnect**. How the trip ended is one line in
+  the card from `?github=` (*connected*, *expired*, *refused*, *not an installation you own*, *GitHub could not
+  be reached*). Not drawn where there is no App: nothing of issues exists then.
 - **Audit log** — the trail as a table, newest first, a page at a time, narrowed by person, action and days,
   and downloaded as CSV or NDJSON (D-222).
 - **Data & retention** — the workspace's **storage**: a meter with what is used and the quota in words
@@ -813,6 +821,7 @@ missing specified behaviour and does not merge.
 | Sign-up | n/a — a form, always | The button busy while it asks | On an *invite-only* server without an invitation, one sentence that an invitation is needed, with what to do; an address refused under the field; "switched off" or the failure above the button (D-179) |
 | A workspace with nobody else | "Only you are here for now" + **Invite people** | n/a — the sidebar's skeleton | A send that fails says *not sent* and keeps the link to copy (D-179) |
 | Invite people (dialog) | n/a — always the link, and the address field where the server sends mail | The send and the link buttons busy while they ask; the field is held | *Could not send the invitations* / *Could not make a link* above the link, the addresses kept; each address refused named with its reason (not an address, a daily limit, no mail on this server), the rest *asked of the mail server*, never *sent*; the link shown whatever happened |
+| GitHub issues (Settings → Integrations), Create issues as you (Sessions & account) | Not connected, and not allowed, each in one sentence; not drawn at all without a GitHub App | Not drawn until the status is known | A refusal beside the button; the status is not changed by a failure (D-246) |
 | Administration → Server (Settings → Server) | Each way in not connected says what that stops and offers to connect it; the two policies always have a value | Skeleton cards | A failed try as in the wizard, nothing kept and what was typed still there; the settings that could not be read, with Retry; a secret the key could not open, on its card; a setup still open, said in a sentence; anybody who is not the administrator is *not found* |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
 | Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191) |
@@ -973,7 +982,11 @@ and says that GitHub's page *"The redirect_uri MUST match the registered callbac
 afterwards. It is **the server administrator's alone** — `isServerAdmin` on `GET /api/me`, never a
 workspace role: an owner of a workspace is not offered it, and its address is *not found* for everybody
 else, as the server answers `404` to the same people. It has its own heading in the navigation, *Server*,
-under the account's and the workspace's, and is in the palette. Six cards, in this order, over one query
+under the account's and the workspace's, and is in the palette. Seven cards, in this order — the **GitHub App
+for issues** (D-246) is the fourth, after E-mail: its App ID, slug, Client ID and secret, the private key (a
+textarea) and the webhook secret, with the callback and webhook addresses to copy; tried as its client and then as
+itself before it is kept, with `key-rejected` and `app-mismatch` said in the wizard's three parts; its secrets
+never shown again; **Disconnect** asks once and says that links, the workspace token and feeds stay — over one query
 that is read again after every change and never polled:
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one

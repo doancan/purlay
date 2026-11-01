@@ -113,6 +113,7 @@
     "4.5": "A copy for the person"
   },
   "docs/DECISIONS.md": {},
+  "docs/DEPLOY.md": {},
   "docs/OVERVIEW.md": {},
   "docs/PRD.md": {
     "1": "The Problem",
@@ -177,15 +178,23 @@
     "7.5": "`saved_messages`",
     "7.6": "`pinned_messages`",
     "7.7": "`thread_follows`",
+    "7.8": "`channel_bookmarks`",
     "8": "GitHub Integration",
     "8.1": "`github_integrations`",
     "8.2": "`link_previews`",
     "8.3": "`github_repo_feeds` and `github_deliveries`",
+    "8.4": "The GitHub App (D-246)",
     "9": "Administration & Operations",
     "9.1": "`audit_log`",
+    "9.10": "`missed_mail_letters`",
     "9.2": "`job_runs`",
     "9.3": "`workspace_exports`",
-    "9.4": "`object_deletions`"
+    "9.4": "`object_deletions`",
+    "9.5": "`server_settings`",
+    "9.6": "`setup_state`",
+    "9.7": "`admin_email_verification`",
+    "9.8": "`invitation_passports`",
+    "9.9": "`native_authorizations`"
   },
   "docs/UX.md": {
     "1": "Principles",
@@ -196,6 +205,7 @@
     "1.5": "State is always visible",
     "10": "Not in Phase 1",
     "11": "Setting up a server and making an account",
+    "12": "The native client",
     "2": "Layout",
     "3": "The message row",
     "3.1": "Delivery state",
@@ -216,6 +226,7 @@
   "docs/spikes/cross-browser.md": {},
   "docs/spikes/design-tokens.md": {},
   "docs/spikes/elysia.md": {},
+  "docs/spikes/first-use-journey.md": {},
   "docs/spikes/frontend-budget.md": {},
   "docs/spikes/garage-admin.md": {},
   "docs/spikes/image-pipeline.md": {},

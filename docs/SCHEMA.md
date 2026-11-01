@@ -1475,6 +1475,103 @@ CREATE UNIQUE INDEX github_deliveries_feed_body_key ON github_deliveries (feed_i
 body's digest under an id made up, since GitHub signs the body and not the id (D-231 §1). A row recorded
 before 0064 has no digest; NULLs never collide, and the sweep forgets those rows with the rest.
 
+### 8.4. The GitHub App (D-246)
+
+The server's App is a row of `server_settings` (§9.5). What belongs to a workspace or a person is here, read and
+written by `modules/integrations/github-app*.ts`.
+
+- **`github_app_installations`** — at most one installation per workspace, connected by an owner. GitHub's
+  `installation_id` is **not** unique: two workspaces of one organisation may both connect it, so it is indexed for
+  the deliveries that name it, not constrained. It goes with its workspace; `connected_by` outlives its person as
+  NULL. `suspended_at` is GitHub's word, kept as said.
+- **`github_user_authorizations`** — a person's own App user access token and its refresh token, **one per
+  person**, never a workspace's. Both sealed by the one cipher with the row's id and the column bound in
+  (D-39 §6); never logged, returned or exported. The expiries are GitHub's (an App whose tokens do not expire
+  leaves them NULL); an expiry belongs to a refresh token. `github_user_id` finds the row when GitHub says that
+  person revoked the App.
+- **`github_app_handshakes`** — a trip to GitHub and back, by the digest of its `state` (only the digest is kept),
+  ten minutes long and spent on return. An `install` is a workspace's and has no verifier; an `authorize` is a
+  person's and carries its PKCE verifier, sealed.
+- **`github_app_deliveries`** — each delivery to the App's one address, recorded in the transaction that applies it:
+  its id, and its body's digest, each unique, so a redelivery or a signed body under a made-up id applies nothing
+  (D-134 §5, D-231 §1). Swept after thirty days.
+
+```sql
+CREATE TABLE github_app_installations (
+    id              UUID PRIMARY KEY,
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    installation_id BIGINT NOT NULL,
+    account_login   VARCHAR(39) NOT NULL,
+    account_type    VARCHAR(16) NOT NULL,
+    suspended_at    TIMESTAMPTZ,
+    connected_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    connected_at    TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_app_installations_workspace_key UNIQUE (workspace_id),
+    CONSTRAINT github_app_installations_installation_positive CHECK (installation_id > 0),
+    CONSTRAINT github_app_installations_account_type_known
+        CHECK (account_type IN ('User', 'Organization'))
+);
+
+CREATE INDEX idx_github_app_installations_installation
+    ON github_app_installations (installation_id);
+CREATE INDEX idx_github_app_installations_connected_by
+    ON github_app_installations (connected_by) WHERE connected_by IS NOT NULL;
+
+CREATE TABLE github_user_authorizations (
+    id                      UUID PRIMARY KEY,
+    user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    github_user_id          BIGINT NOT NULL,
+    github_login            VARCHAR(39) NOT NULL,
+    access_token_encrypted  TEXT NOT NULL,
+    access_expires_at       TIMESTAMPTZ,
+    refresh_token_encrypted TEXT,
+    refresh_expires_at      TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ NOT NULL,
+    updated_at              TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_user_authorizations_user_key UNIQUE (user_id),
+    CONSTRAINT github_user_authorizations_github_user_positive CHECK (github_user_id > 0),
+    CONSTRAINT github_user_authorizations_refresh_expiry
+        CHECK (refresh_expires_at IS NULL OR refresh_token_encrypted IS NOT NULL)
+);
+
+CREATE INDEX idx_github_user_authorizations_github_user
+    ON github_user_authorizations (github_user_id);
+
+CREATE TABLE github_app_handshakes (
+    state_digest       TEXT COLLATE "C" PRIMARY KEY,
+    user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id       UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+    purpose            VARCHAR(16) NOT NULL,
+    verifier_encrypted TEXT,
+    return_to          VARCHAR(512),
+    expires_at         TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_app_handshakes_purpose_known CHECK (purpose IN ('install', 'authorize')),
+    CONSTRAINT github_app_handshakes_purpose_shape CHECK (
+        (purpose = 'install' AND workspace_id IS NOT NULL AND verifier_encrypted IS NULL)
+        OR (purpose = 'authorize' AND workspace_id IS NULL AND verifier_encrypted IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_github_app_handshakes_user ON github_app_handshakes (user_id);
+CREATE INDEX idx_github_app_handshakes_workspace
+    ON github_app_handshakes (workspace_id) WHERE workspace_id IS NOT NULL;
+CREATE INDEX idx_github_app_handshakes_expires ON github_app_handshakes (expires_at);
+
+CREATE TABLE github_app_deliveries (
+    delivery_id VARCHAR(64) COLLATE "C" PRIMARY KEY,
+    body_digest TEXT COLLATE "C" NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_app_deliveries_body_key UNIQUE (body_digest),
+    CONSTRAINT github_app_deliveries_body_is_a_digest CHECK (body_digest ~ '^[0-9a-f]{64}$')
+);
+
+CREATE INDEX idx_github_app_deliveries_received ON github_app_deliveries (received_at);
+```
+
 ---
 
 ## 9. Administration & Operations
@@ -1781,6 +1878,13 @@ CREATE TABLE server_settings (
     -- The sign-in policy (D-239), added by 0068.
     require_two_factor           BOOLEAN NOT NULL DEFAULT FALSE,
     password_sign_in             BOOLEAN NOT NULL DEFAULT TRUE,
+    -- The GitHub App issues are written through (D-246), added by 0075; the three secrets sealed as the others.
+    github_app_id                       BIGINT,
+    github_app_slug                     TEXT,
+    github_app_client_id                TEXT,
+    github_app_client_secret_encrypted  TEXT,
+    github_app_private_key_encrypted    TEXT,
+    github_app_webhook_secret_encrypted TEXT,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -1799,7 +1903,15 @@ CREATE TABLE server_settings (
     CONSTRAINT server_settings_oidc_not_blank
         CHECK (oidc_issuer <> '' AND oidc_client_id <> '' AND oidc_name <> ''),
     CONSTRAINT server_settings_oidc_name_needs_provider
-        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL)
+        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL),
+    CONSTRAINT server_settings_github_app_whole
+        CHECK ((github_app_id IS NULL) = (github_app_slug IS NULL)
+               AND (github_app_id IS NULL) = (github_app_client_id IS NULL)
+               AND (github_app_id IS NULL) = (github_app_client_secret_encrypted IS NULL)
+               AND (github_app_id IS NULL) = (github_app_private_key_encrypted IS NULL)
+               AND (github_app_id IS NULL) = (github_app_webhook_secret_encrypted IS NULL)),
+    CONSTRAINT server_settings_github_app_shape
+        CHECK (github_app_id > 0 AND github_app_slug ~ '^[a-z0-9][a-z0-9-]{0,63}$' AND github_app_client_id <> '')
 );
 ```
 
@@ -2208,6 +2320,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
 0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
 0070_personal_exports.sql personal_exports: a person's export of their own data, made in the background, downloaded once  (D-241)
+0075_github_app.sql server_settings.github_app_*, github_app_installations, github_user_authorizations, github_app_handshakes, github_app_deliveries: the GitHub App, a workspace's installation, a person's own authorization  (D-246)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

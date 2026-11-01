@@ -25,6 +25,8 @@ have it.
 
 ### Added
 
+- **Integrations** — Where the server has a GitHub App, an owner connects its installation to the workspace and chooses the repositories on GitHub, and anyone can let Purlay write to GitHub as them from Sessions & account — off until chosen, never asked at sign-in; GitHub removing or suspending the installation, or a person revoking the App, ends it here at once, and nothing exists on a server without an App (D-246)
+- **Administration** — The server's administrator connects the GitHub App in Server, tried as its client and as itself before it is kept, with its secrets stored encrypted and never shown again (D-246)
 - **Notifications** — Turn on email about direct messages and mentions left unread for fifteen minutes: one letter at most an hour, never in Deep Work or quiet hours, quoting only what you can still read, with a link that stops it without signing in (D-240)
 - **Channels** — Mark every channel read at once with Shift+Esc, from the command palette or the workspace menu; your other devices clear too, and an answer still waiting in a thread stays unread (D-238)
 - **Sign-in** — The server's administrator can require two-step verification of every account with a password (anyone without it is asked to turn it on before anything else) and, while GitHub or single sign-on works, turn password sign-in off; `admin:reset-password` turns it back on (D-239)

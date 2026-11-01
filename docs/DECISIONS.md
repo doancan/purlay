@@ -11407,3 +11407,70 @@ data, across workspaces).
 
 **Cost of reversing.** Remove the card and the three routes, and drop `personal_exports` in a new migration once no
 archive is left under `u/`.
+
+### D-246. GitHub issues from conversations: one GitHub App, three kinds of token — builds on D-11, D-23, D-134, D-179, D-39 §6; closes #874
+
+**Context.** `PRD.md` §4 Phase 2 proposed creating and following GitHub issues from a thread and asked for the
+distinction from D-11 to be recorded before any code. D-11 and D-23 say what is true of sign-in and of the
+workspace's credential: a card is drawn with **one credential per workspace, never a member's**, since whether it
+renders would tell who can see a private repository. Writing an issue *as a person* needs the opposite — their
+own access — and neither is sign-in.
+
+**Decision.** *Built in the PRD's order; this entry is the whole design, and the pull request that builds each
+step says which.*
+
+1. **One GitHub App, three kinds of token, each for one thing and never for another's.**
+   - **Sign-in** stays the OAuth app (`read:user user:email`, D-38, D-179), untouched and never asked for more.
+   - **The installation's token** — minted from the App's private key — reads everything shared: link state,
+     what a thread shows of an issue, webhooks. It survives any person leaving, and is never a person's.
+   - **A person's own App user access token** exists only for **that person's writes** (creating an issue). It
+     expires (eight hours), has a sealed refresh token, and reaches only what both the person and the App can.
+   Shared previews and cards keep the rule of D-23: nothing a person's token reached is ever shown to the
+   channel. D-11's *identity* is not amended — sign-in is not a GitHub authorization to write — and D-23's
+   *workspace credential* is not replaced: the workspace token and the feeds keep working as they were.
+2. **Least privilege on the App**: Issues **write**, Pull requests **read**, Metadata **read**, Contents **none**,
+   no organisation-wide permission. Labels and assignees are out: they would need more, and nobody asked.
+3. **The App is a setting of the server's** (D-179 §6): its id, slug and client id in the clear; its client
+   secret, its private key and its webhook secret sealed by the one cipher (D-39 §6), each bound to its
+   column, all six or none (`0075`). Seeded once from `GITHUB_APP_*`, then changed in Administration → Server,
+   where it is **tried before it is kept** — the client pair at GitHub's token endpoint, then a JSON Web Token
+   its key signs (`GET /app`) — and kept only if both held and the App is the one named. It is not a way in:
+   disconnecting it needs no confirmation.
+4. **The capability is the App.** Without one, the feature is invisible and nothing changes: no card, no
+   route (`404 ROUTE_NOT_FOUND`), no address for deliveries, and `GET …/github-app` says `available: false`.
+   Disconnecting it later stops every write and leaves what exists — links, the workspace token, feeds.
+5. **An owner connects the installation** and chooses its repositories on GitHub's own screen. The trip's
+   `state` is a random token of which only the digest is kept, for ten minutes, spent as it is read. GitHub's
+   callback names an installation in its query, which anybody can write, so it is believed only when the
+   `code` GitHub sent with it (the App asks for authorization during installation), redeemed, belongs to a
+   person who GitHub says can reach that installation, who is the browser that left, and who is still the
+   workspace's owner. The code's token is then **dropped**, not kept: connecting is not the person's consent
+   to write as them.
+6. **A person's own authorization is a separate, explicit opt-in** — "Let Purlay create issues as me" on
+   Sessions & account, off until chosen, never asked at sign-in. PKCE `S256`, the verifier sealed in the
+   handshake; the access and refresh tokens sealed to their row and column. The person forgets it at any
+   time, and GitHub's `github_app_authorization` revocation forgets it too.
+7. **Revocation is believed from three places** — the person, GitHub's delivery to the App's one address, and
+   a `401` from GitHub — and **closes writes, keeps links**. An installation removed on GitHub is let go in
+   every workspace that connected it (GitHub's id is not unique to a workspace); a suspension is kept and
+   said, and used for nothing. Deliveries are signed by the App's webhook secret, applied once by id and by
+   body digest (D-231 §1), and swept after thirty days.
+8. **Later steps, as the PRD orders them** — review and create from a thread, keep linked work current, and
+   writes that can be recovered — add: channel membership and GitHub access rechecked at submission; a bounded
+   operation record keyed by workspace, actor and client request id (a reused id with other content is a
+   conflict); a lost create answer reconciled by a unique marker through GitHub reads, never repeated blindly;
+   `Retry-After` obeyed and retries bounded; actor, repository and issue ids audited, never bodies or secrets.
+
+**Rejected.** *Asking for the person's authorization at sign-in* — a sign-in that can write to repositories
+is a bigger grant than anybody agreed to, and most people never create an issue. *One person's token for
+shared cards* — D-23's reason, unchanged: whether a card renders would say what that person can see, and
+the card would vanish when they left. *A second GitHub App for sign-in* — D-179 built sign-in on the OAuth
+app and nothing here needs it moved. *The installation token for writes* — every issue would be by "Purlay",
+and any member could write anywhere the App can reach. *A GitHub OAuth app's `repo` scope for writes* — it
+reaches every repository the person can, private ones included, and cannot be limited to the App's.
+*Believing the installation id in the callback's query* — it is a number anybody can type. *Keeping the
+installation's authorization code's token* — it would make connecting also a consent nobody gave.
+
+**Cost of reversing.** Remove the cards, the routes and the App's address; drop the six columns and four
+tables of `0075` (`github_app_*`, `github_user_authorizations`). The workspace token, the feeds and sign-in
+never read them.
