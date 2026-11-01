@@ -42,7 +42,12 @@ describe('integration: the workspace’s GitHub token', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const alice = await as(db, room, 'alice');
-      expect(await githubIntegrationOf(db, alice)).toEqual({ configured: false, updatedAt: null });
+      expect(await githubIntegrationOf(db, alice)).toEqual({
+        configured: false,
+        updatedAt: null,
+        invalidSince: null,
+        broadScopes: false,
+      });
 
       await setGitHubToken(db, clock, cipher, alice, TOKEN);
       const row = await stored(db, room);
@@ -53,6 +58,8 @@ describe('integration: the workspace’s GitHub token', () => {
       expect(await githubIntegrationOf(db, alice)).toEqual({
         configured: true,
         updatedAt: NOW.toISOString(),
+        invalidSince: null,
+        broadScopes: false,
       });
       const trail = await db
         .selectFrom('audit_log')
@@ -79,6 +86,21 @@ describe('integration: the workspace’s GitHub token', () => {
           after?.id ?? '',
         ),
       ).toBe('ghp_second');
+    });
+  });
+
+  test('the scopes it was saved with say whether it is broad; a replacement forgets the last one’s', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = await as(db, room, 'alice');
+      await setGitHubToken(db, clock, cipher, alice, 'ghp_classic', 'repo, read:org');
+      expect(await githubIntegrationOf(db, alice)).toMatchObject({ broadScopes: true });
+      await setGitHubToken(db, clock, cipher, alice, 'ghp_narrow', 'read:user');
+      expect(await githubIntegrationOf(db, alice)).toMatchObject({ broadScopes: false });
+      await setGitHubToken(db, clock, cipher, alice, 'ghp_classic_again', 'workflow');
+      await setGitHubToken(db, clock, cipher, alice, 'github_pat_fine');
+      expect(await githubIntegrationOf(db, alice)).toMatchObject({ broadScopes: false });
+      expect((await stored(db, room))?.access_token_encrypted).not.toBeNull();
     });
   });
 

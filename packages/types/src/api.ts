@@ -731,10 +731,19 @@ export const SetGitHubTokenRequest = FromClient({
 });
 export type SetGitHubTokenRequest = Static<typeof SetGitHubTokenRequest>;
 
-/** `GET …/integrations/github` — whether a token is set, and since when. Never the token. */
+/**
+ * `GET …/integrations/github` — whether a token is set, and since when. Never the token.
+ *
+ * `invalidSince` is when GitHub first refused the token (`401`: revoked or expired): no call is made
+ * with it until it is replaced, and replacing or removing it clears this (D-23, amended; #884).
+ * `broadScopes` is whether the token, when saved, was a classic one with `repo` or a write scope —
+ * more than cards and feeds need, which is a fine-grained, read-only token on selected repositories.
+ */
 export const GitHubIntegration = Type.Object({
   configured: Type.Boolean(),
   updatedAt: Type.Union([Timestamp, Type.Null()]),
+  invalidSince: Type.Union([Timestamp, Type.Null()]),
+  broadScopes: Type.Boolean(),
 });
 export type GitHubIntegration = Static<typeof GitHubIntegration>;
 
