@@ -378,6 +378,33 @@ export const channelStateChanged = (
   editChannels(client, channelId, (c) => ({ ...c, state }));
 };
 
+/**
+ * Every channel of a workspace with something unread, painted read before the server answers (D-238):
+ * the counts go to nothing, the position stays where it is until the answer says where it went.
+ * Answers how to put back what it painted — each channel only while it is still as painted, since a
+ * frame heard in between is newer than both.
+ */
+export const allChannelsRead = (client: QueryClient, workspaceId: string): (() => void) => {
+  const before = (client.getQueryData<Channel[]>(keys.channels(workspaceId)) ?? []).flatMap(
+    (channel) =>
+      channel.state !== null && channel.state.unreadCount > 0
+        ? [{ channelId: channel.id, state: channel.state }]
+        : [],
+  );
+  for (const { channelId, state } of before) {
+    channelStateChanged(client, channelId, { ...state, unreadCount: 0, unreadMentionCount: 0 });
+  }
+  return () => {
+    for (const { channelId, state } of before) {
+      editChannels(client, channelId, (c) =>
+        c.state?.unreadCount === 0 && c.state.lastReadMessageId === state.lastReadMessageId
+          ? { ...c, state }
+          : c,
+      );
+    }
+  };
+};
+
 /** The caller's notification level in a channel, as they chose it or as it was before a refusal. */
 export const channelLevelChanged = (
   client: QueryClient,

@@ -249,6 +249,9 @@ export const en = {
   'rowMenu.label': 'Actions for {name}',
   'rowMenu.markRead': 'Mark as read',
   'rowMenu.readFailed': 'It was not marked as read.',
+  'readAll.label': 'Mark all channels read',
+  'readAll.done': 'All channels are marked read.',
+  'readAll.failed': 'The channels were not marked read.',
   'rowMenu.star': 'Star',
   'rowMenu.unstar': 'Unstar',
   'rowMenu.copyLink': 'Copy link',
@@ -1385,6 +1388,7 @@ export const en = {
   'alerts.many': '{count} conversations need you',
   'alerts.waiting': 'Something here needs you',
   'shortcuts.deepWork': 'Start or end Deep Work',
+  'shortcuts.readAll': 'Mark all channels read',
 
   // ── Notification level (D-107) ─────────────────────────────────────────
   'level.label': 'Notify me about',

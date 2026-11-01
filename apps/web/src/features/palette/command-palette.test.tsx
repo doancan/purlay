@@ -172,6 +172,8 @@ describe('what is on offer before anything is typed', () => {
       'Integrations',
       'Audit log',
       'Data & retention',
+      // What Shift+Esc does (D-238).
+      'Mark all channels read',
       'Theme: System',
       'Theme: Light',
       'Theme: Dark',
@@ -541,6 +543,23 @@ describe('what each kind of item does', () => {
     for (const page of ['General', 'Members', 'Invitations', 'Audit log', 'Data & retention']) {
       expect(offered).not.toContain(page);
     }
+  });
+
+  test('every channel is marked read, and the palette closes (D-238)', async () => {
+    const asked: string[] = [];
+    const { input, closed } = await mount(
+      apiWith({
+        markAllRead: (workspaceId) => {
+          asked.push(workspaceId);
+          return Promise.resolve({ data: [] });
+        },
+      }),
+    );
+    await person().type(input(), 'mark all');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(asked).toEqual([IDS.workspace]);
+    expect(closed()).toEqual([false]);
   });
 
   test('a theme is applied at once, and the palette closes', async () => {

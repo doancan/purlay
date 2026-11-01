@@ -6,13 +6,15 @@
  * - `Cmd/Ctrl+/` — the shortcut reference.
  * - `Alt+↑` / `Alt+↓` — the previous / next channel with something unread, in the order
  *   the sidebar lists them, wrapping; nothing happens when nothing else is unread.
+ * - `Shift+Esc` — every channel marked read (D-238).
  *
  * **One `keydown` listener on `document`**, which is the right place for a key that
  * must work wherever focus is. It claims only chords that carry a modifier, so there
  * is no single-letter shortcut here to collide with typing, and the composer keeps
  * its `Cmd+K` and `Alt+Arrow` like everywhere else: a person writing a message can
  * still jump to another channel. The single keys — `T`, `R`, `↑`, `↓` on a message —
- * belong to the feed and are handled where the message has focus.
+ * belong to the feed and are handled where the message has focus. `Shift+Esc` has a second
+ * listener of its own, on the way in rather than on the way out (below).
  *
  * It stands down for an event somebody already handled (`defaultPrevented`) and for
  * an IME composition in progress, where a key is a character being chosen. While an
@@ -33,7 +35,11 @@ import { displayName, inSidebarOrder, stepUnread } from '../palette/channels';
 import { isMacPlatform, type PlatformSource } from '../shortcuts/platform';
 import { useSession } from '../session/session';
 import { useOverlay } from './overlay';
+import { useMarkAllRead } from './read-all';
 import { useWorkspace } from './workspace';
+
+/** What holds its own Escape: a key pressed inside one is left to it. */
+const TOPMOST = '[role="dialog"], [role="alertdialog"], [role="menu"]';
 
 interface GlobalKeysProps {
   /** What to read the platform from; the browser's `navigator` when absent. */
@@ -47,6 +53,7 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
   const { match, navigate } = useRoute();
   const channels = useChannels(workspace.id).data;
   const { overlay, setOverlay } = useOverlay();
+  const markAllRead = useMarkAllRead();
   const [announcement, setAnnouncement] = useState('');
   const mac = useMemo(() => isMacPlatform(platform ?? navigator), [platform]);
   // Both overlays are in the deferred chunk (D-163). A key has no pointer to preload it on, so it
@@ -68,10 +75,30 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
 
   // What the keys read, as it is now: kept in a ref so the listener is bound once, not torn down and
   // bound again each time the channel list changes — which is every message that arrives.
-  const latest = useRef({ channels, currentId, overlay });
+  const latest = useRef({ channels, currentId, overlay, markAllRead });
   useEffect(() => {
-    latest.current = { channels, currentId, overlay };
+    latest.current = { channels, currentId, overlay, markAllRead };
   });
+
+  // `Shift+Esc` is taken as the page is entered (the capture phase), before anything inside it sees the
+  // key: the panels, the feed, the editor and the composer read Escape without asking about Shift, and
+  // would close or leave as well. A dialog or a menu is the topmost thing, and its Escape is its own.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !event.shiftKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.defaultPrevented || event.isComposing || latest.current.overlay !== null) return;
+      if (event.target instanceof Element && event.target.closest(TOPMOST) !== null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      // A key held down repeats: one press is one request.
+      if (!event.repeat) latest.current.markAllRead();
+    };
+    document.addEventListener('keydown', onKeyDown, { capture: true });
+    return (): void => {
+      document.removeEventListener('keydown', onKeyDown, { capture: true });
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

@@ -70,6 +70,7 @@ import {
   SavedPage,
   ReactionsResponse,
   SearchPage,
+  ReadAllChannelsResponse,
   ReadChannelResponse,
   ThreadFollow,
   ThreadPage,
@@ -228,6 +229,8 @@ export interface Api {
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
   /** "Mark unread from here" (D-212): the position back to just before this message. */
   readonly markUnread: (channelId: string, fromMessageId: string) => Promise<ReadChannelResponse>;
+  /** Every channel the caller is in, read to its newest message (D-238). */
+  readonly markAllRead: (workspaceId: string) => Promise<ReadAllChannelsResponse>;
   /** A workspace's members online now, for a member (D-136). */
   readonly presence: (workspaceId: string, signal?: AbortSignal) => Promise<PresenceSnapshot>;
   /** What a message said before each edit, newest first (D-135). */
@@ -738,6 +741,13 @@ export const createApi = (http: Http): Api => {
         `/api/channels/${at(channelId)}/unread`,
         ReadChannelResponse,
         options({ body: { fromMessageId } }),
+      ),
+    markAllRead: (workspaceId) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/read`,
+        ReadAllChannelsResponse,
+        options(),
       ),
     messages: (channelId, page = {}, signal) =>
       http.request(

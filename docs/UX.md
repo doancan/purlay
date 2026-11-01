@@ -61,8 +61,9 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
 - **Sidebar (264px)** — the workspace's card (D-209): its mark, its name and, under it, your role and how many
   are in it, framed, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
-  radios with their marks, the current one checked, **Create workspace…**, and for an owner or an admin
-  **Invite people…** and **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
+  radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
+  channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
+  **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
   field (the palette's door, `⌘K`), **All unreads** while a channel waits (D-216: each unread, unmuted channel's
   new messages oldest first, a page each, Mark read reading what was shown, replies said to wait in their
   threads), the **starred** channels — a section of their own above the
@@ -722,6 +723,9 @@ The hardest problem in the product, and the subject of O-5, closed by D-199.
 - **Marking read** happens when the bottom is reached with the page visible and its window focused,
   or on channel exit for the messages the person already reached. A blur cancels a pending read;
   returning to focus reads what is then in view. Never on mere render or from a visible window behind another.
+- **Mark all channels read** (`Shift+Esc`, D-238) reads every channel the person is in to its newest
+  message at once: the badges clear before the server answers and come back, with a toast, if it refuses;
+  a toast says it was done. An answer waiting in a thread keeps its channel's badge, as below.
 - **The feed reads the feed, not the threads** (D-147). Reading the channel to the bottom reads what
   the feed shows; an answer in a thread keeps waiting — on the badge, in the tab title, in the inbox —
   until its thread is open in the panel with the page in front of the person, which reads its replies
@@ -767,6 +771,7 @@ is read.
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
 | `Shift+F10` · `ContextMenu` | On a sidebar row: its context menu, under the row (D-165) |
 | `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; another while is the account menu's or the palette's |
+| `Shift+Esc` | Mark all channels read — every channel of the workspace the person is in, each to its newest message; an answer waiting in a thread still waits (D-147). Anywhere in the page, the composer included, but inside a dialog or a menu, whose Escape is its own; also **Mark all channels read** in the palette and the workspace menu (D-238) |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
 product; an invisible focus ring is a broken product, not a style choice. (`PRD.md` §5)

@@ -1024,6 +1024,16 @@ describe('the endpoints', () => {
     });
   });
 
+  test('marking every channel read names the workspace, sends nothing, and reads the states (D-238)', async () => {
+    const all = harness({ data: [{ channelId: ID, state }] });
+    expect((await all.api.markAllRead(ID)).data).toEqual([{ channelId: ID, state }]);
+    expect(all.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/workspaces/${ID}/read`,
+      body: undefined,
+    });
+  });
+
   test('one message, and the window of messages around it, are read by its id', async () => {
     const one = harness(message);
     expect((await one.api.message(ID)).content).toBe('hi');

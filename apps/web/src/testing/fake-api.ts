@@ -14,6 +14,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   me: unexpected('me'),
   attachmentText: unexpected('attachmentText'),
   markUnread: unexpected('markUnread'),
+  markAllRead: unexpected('markAllRead'),
   message: unexpected('message'),
   workspaces: unexpected('workspaces'),
   createWorkspace: unexpected('createWorkspace'),
