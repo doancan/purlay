@@ -133,6 +133,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('BOOKMARKS_LIMIT'),
   /** The channel already hears from as many repositories as it may (D-134). */
   Type.Literal('GITHUB_FEEDS_LIMIT'),
+  /** The channel already has as many incoming webhooks as it may (D-245). */
+  Type.Literal('INCOMING_WEBHOOKS_LIMIT'),
   /**
    * An attachment id already used for another upload — somebody else's, another workspace's, or
    * the same person's with other bytes. A retry of the same upload answers the attachment instead.
@@ -156,6 +158,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('NATIVE_CODE_NOT_FOUND'),
   /** A repository's feed that does not exist, or is in a channel the caller cannot see (D-134). */
   Type.Literal('GITHUB_FEED_NOT_FOUND'),
+  /**
+   * An incoming webhook that is not there — unknown, revoked, a wrong secret, its channel archived or its
+   * workspace deleted, or in a channel the caller cannot see: one answer for all (D-245).
+   */
+  Type.Literal('INCOMING_WEBHOOK_NOT_FOUND'),
   /** An external image the proxy will not or cannot show — one answer for every reason (#110). */
   Type.Literal('IMAGE_NOT_AVAILABLE'),
   Type.Literal('LAST_OWNER'),
@@ -279,6 +286,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   PINS_LIMIT: 409,
   BOOKMARKS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
+  INCOMING_WEBHOOKS_LIMIT: 409,
   GITHUB_FEED_EXISTS: 409,
   INCIDENT_OPEN: 409,
   INCIDENT_ID_CONFLICT: 409,
@@ -295,6 +303,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   SIGN_IN_LINK_NOT_FOUND: 404,
   NATIVE_CODE_NOT_FOUND: 404,
   GITHUB_FEED_NOT_FOUND: 404,
+  INCOMING_WEBHOOK_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,
   LAST_CHANNEL_MEMBER: 409,

@@ -392,6 +392,23 @@ export const GitHubEvent = Type.Union([
 ]);
 export type GitHubEvent = Static<typeof GitHubEvent>;
 
+/** The longest name an incoming webhook posts under (D-245): a label, as a channel's name is. */
+export const INCOMING_WEBHOOK_NAME_MAX = 80;
+
+/** What an incoming webhook is called, and what its messages say they are from (D-245). */
+export const IncomingWebhookName = Type.String({
+  minLength: 1,
+  maxLength: INCOMING_WEBHOOK_NAME_MAX,
+  format: 'name',
+});
+
+/**
+ * Who a message an incoming webhook posted is from (D-245): the hook's name as it was when it posted,
+ * kept with the message, so one revoked since still names what it said.
+ */
+export const IncomingWebhookAuthor = Closed({ name: IncomingWebhookName });
+export type IncomingWebhookAuthor = Static<typeof IncomingWebhookAuthor>;
+
 /**
  * What the parser records about a text message when it is written: hints for the
  * renderer, derived once (`SCHEMA.md` §6.4, `ARCHITECTURE.md` §8.1). Not on the wire
@@ -506,12 +523,20 @@ export const Message = Type.Object({
   channelId: Uuid,
   /**
    * Who wrote it; null for a message nobody wrote — a repository's event (D-134 §6), which carries
-   * `githubEvent` instead. At most one of the two is set — both are null for a removed event: the
+   * `githubEvent` instead, or an incoming webhook's, which carries `incomingWebhook` (D-245). At most
+   * one of the three is set — none for a removed event: the
    * database holds it (`messages_sender_by_type`) and the one reader builds both from the same row.
    */
   sender: Type.Union([User, Type.Null()]),
   /** What happened in a repository, for a message its feed posted; null for a person's, and a tombstone's. */
   githubEvent: Type.Union([GitHubEvent, Type.Null()]),
+  /**
+   * The incoming webhook a message was posted through, by the name it posted under (D-245); absent for
+   * every other message and for a tombstone. Its `sender` and `githubEvent` are null, and its words are
+   * `content`, markdown like a person's. Optional because it is an addition: a server before it never
+   * sends it, and a client before it draws the message as one nobody wrote.
+   */
+  incomingWebhook: Type.Optional(IncomingWebhookAuthor),
   content: Type.String(),
   /** Set when the message has been edited; the content is the current version. */
   editedAt: Type.Union([Timestamp, Type.Null()]),

@@ -31,6 +31,7 @@ import {
   GitHubLink,
   IncidentSeverity,
   IncidentStatus,
+  IncomingWebhookName,
   Membership,
   OpenIncidentStatus,
   PROFILE_STATUS_MAX,
@@ -769,6 +770,8 @@ export const AUDIT_ACTIONS = [
   'integration.token_removed',
   'integration.feed_created',
   'integration.feed_removed',
+  'integration.webhook_created',
+  'integration.webhook_revoked',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
@@ -1334,6 +1337,55 @@ export const WebhookAnswer = Type.Object({
   ]),
 });
 export type WebhookAnswer = Static<typeof WebhookAnswer>;
+
+// ── A channel's incoming webhooks (D-245) ───────────────────────────────────
+
+/** How many incoming webhooks one channel may have. */
+export const INCOMING_WEBHOOKS_PER_CHANNEL_MAX = 10;
+
+/** One incoming webhook, as its channel's list says it: never its secret, which is not kept. */
+export const IncomingWebhook = Type.Object({
+  id: Uuid,
+  channelId: Uuid,
+  name: IncomingWebhookName,
+  /** Who made it; null once that account is gone. */
+  createdBy: Type.Union([User, Type.Null()]),
+  createdAt: Timestamp,
+  /** When it last posted; null until it has. */
+  lastUsedAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type IncomingWebhook = Static<typeof IncomingWebhook>;
+
+/** `GET /api/channels/:channelId/incoming-webhooks` — an owner's or an admin's; oldest first, bounded. */
+export const IncomingWebhookList = Type.Array(IncomingWebhook, {
+  maxItems: INCOMING_WEBHOOKS_PER_CHANNEL_MAX,
+});
+export type IncomingWebhookList = Static<typeof IncomingWebhookList>;
+
+/** `POST /api/channels/:channelId/incoming-webhooks` — what its messages will say they are from. */
+export const CreateIncomingWebhookRequest = FromClient({ name: IncomingWebhookName });
+export type CreateIncomingWebhookRequest = Static<typeof CreateIncomingWebhookRequest>;
+
+/**
+ * The hook made, with the path a tool posts to on this server's origin: its id and its secret, in this
+ * answer only — the server keeps a digest of the secret and can never say it again (D-245).
+ */
+export const CreatedIncomingWebhook = Type.Object({
+  webhook: IncomingWebhook,
+  path: Type.String({ pattern: '^/api/webhooks/incoming/[0-9a-f-]{36}/[0-9a-f]{64}$' }),
+});
+export type CreatedIncomingWebhook = Static<typeof CreatedIncomingWebhook>;
+
+/**
+ * `POST /api/webhooks/incoming/:hookId/:secret` — the message, as markdown: Slack's `text`, and nothing
+ * else, so a field a tool expects to be drawn is refused rather than dropped without a word (D-245).
+ */
+export const IncomingWebhookPost = FromClient({ text: MessageContent });
+export type IncomingWebhookPost = Static<typeof IncomingWebhookPost>;
+
+/** What a post through an incoming webhook made: `201` and the message's id (D-245). */
+export const IncomingWebhookAnswer = Type.Object({ messageId: Uuid });
+export type IncomingWebhookAnswer = Static<typeof IncomingWebhookAnswer>;
 
 // ── A message's earlier versions (#82, D-135) ───────────────────────────────
 
