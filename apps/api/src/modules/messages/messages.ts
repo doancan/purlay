@@ -28,6 +28,7 @@ import {
   type ThreadSummary,
 } from '@purlay/types';
 import { AppError } from '../../platform/errors';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { requireLiveSession } from '../auth/sessions';
 import type { Clock } from '../../platform/clock';
 import {
@@ -131,6 +132,33 @@ const requireRoot = async (
     });
   }
   return { authorId: parent.sender_id };
+};
+
+/**
+ * Whether this sender may write a root here: anywhere, except an announcement channel, whose roots are
+ * its owners' and admins' (D-243). Anywhere else this is one read of the channel's row by its primary
+ * key; a reply never asks.
+ *
+ * The role is read under the workspace row's `KEY SHARE` lock — the one the message's own foreign key
+ * would take a moment later, taken first so the role is read under it — which a role change's
+ * `FOR UPDATE` waits on and waits for (D-111 §2). A demotion that committed first is the answer; one
+ * still in flight waits for this send, which was made while the sender was an admin.
+ */
+const mayPostRoot = async (executor: Executor, context: ChannelContext): Promise<boolean> => {
+  const channel = await executor
+    .selectFrom('channels')
+    .select('only_admins_post')
+    .where('id', '=', context.channelId)
+    .executeTakeFirst();
+  if (channel?.only_admins_post !== true) return true;
+  await executor
+    .selectFrom('workspaces')
+    .select('id')
+    .where('id', '=', context.workspaceId)
+    .forKeyShare()
+    .execute();
+  const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  return role !== 'member';
 };
 
 /** The summary of a root's thread as it is now, and the version it was read at. */
@@ -262,6 +290,19 @@ export const sendMessage = async (
 
   const root =
     input.parentId === undefined ? undefined : await requireRoot(executor, context, input.parentId);
+
+  if (input.parentId === undefined && !(await mayPostRoot(executor, context))) {
+    // A retry of a root this sender wrote before the channel became an announcement channel is
+    // answered with it, as any retry is (D-8, D-33); anything else is refused before it is written.
+    const existing = await readMessage(executor, input.id);
+    const retried =
+      existing?.channel_id === context.channelId && existing.sender_id === context.userId;
+    if (retried) return await again(existing);
+    throw new AppError({
+      code: 'ONLY_ADMINS_POST',
+      message: 'Only owners and admins post here. Reply in a thread instead.',
+    });
+  }
 
   const inserted = await executor
     .insertInto('messages')

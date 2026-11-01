@@ -152,7 +152,12 @@ describe('integration: renaming a channel and setting its topic', () => {
           channelTopic(world.channelId),
           {
             event: 'CHANNEL_UPDATED',
-            data: { channelId: world.channelId, name: 'genel-sohbet', topic: null },
+            data: {
+              channelId: world.channelId,
+              name: 'genel-sohbet',
+              topic: null,
+              onlyAdminsPost: false,
+            },
             version: 1,
             ts: NOW.getTime(),
           },
@@ -165,6 +170,7 @@ describe('integration: renaming a channel and setting its topic', () => {
               channelId: world.channelId,
               name: 'genel-sohbet',
               topic: 'Anything that is not a project',
+              onlyAdminsPost: false,
             },
             version: 2,
             ts: NOW.getTime(),

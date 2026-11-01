@@ -52,6 +52,7 @@ interface ChannelRow {
   readonly member_count: string | number | null;
   /** Its one GitHub feed's repository (D-223); null with none or several. */
   readonly code_repository: string | null;
+  readonly only_admins_post: boolean;
 }
 
 interface KeyPerson {
@@ -129,6 +130,7 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
   memberCount: Number(row.member_count ?? 0),
   incident: incidentOf(row),
   codeRepository: row.code_repository,
+  onlyAdminsPost: row.only_admins_post,
 });
 
 /**
@@ -188,6 +190,7 @@ const readChannels = async (
       'channels.topic as topic',
       'channels.type as type',
       'channels.last_message_at as last_message_at',
+      'channels.only_admins_post as only_admins_post',
       'channel_members.user_id as member_user_id',
       'channel_members.last_read_message_id as last_read_message_id',
       'channel_members.unread_count as unread_count',

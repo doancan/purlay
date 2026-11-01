@@ -26,6 +26,7 @@ const channel = {
   starred: false,
   incident: null,
   codeRepository: null,
+  onlyAdminsPost: false,
   peer: null,
   peers: [],
   memberCount: 1,

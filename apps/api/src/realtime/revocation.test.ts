@@ -61,7 +61,7 @@ const everyChannelFrame = (channelId: string): ServerFrame[] => {
     CHANNEL_STATE: { event: 'CHANNEL_STATE', data: { channelId }, version: 1, ts: 1 },
     CHANNEL_UPDATED: {
       event: 'CHANNEL_UPDATED',
-      data: { channelId, name: 'secret-name', topic: null },
+      data: { channelId, name: 'secret-name', topic: null, onlyAdminsPost: false },
       version: 1,
       ts: 1,
     },

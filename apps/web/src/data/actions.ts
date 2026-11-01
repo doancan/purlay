@@ -28,7 +28,7 @@ import type { Api } from './api';
 import {
   allChannelsRead,
   channelAdded,
-  channelRenamed,
+  channelUpdated,
   channelStateChanged,
   channelsRevoked,
   patchMessage,
@@ -226,7 +226,11 @@ export const createActions = (
     },
     updateChannel: async (channelId, input): Promise<Channel> => {
       const channel = await api.updateChannel(channelId, input);
-      channelRenamed(client, channelId, { name: channel.name ?? '', topic: channel.topic });
+      channelUpdated(client, channelId, {
+        name: channel.name ?? '',
+        topic: channel.topic,
+        onlyAdminsPost: channel.onlyAdminsPost,
+      });
       // The answer carries no version: a rename that committed after this one may have been
       // painted by its frame first, and this would hide it. The list read again settles on the
       // server's (D-123 §6).

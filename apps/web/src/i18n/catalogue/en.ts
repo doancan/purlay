@@ -445,6 +445,7 @@ export const en = {
   'audit.kind.channel.member_added': 'Added to a channel',
   'audit.kind.channel.member_removed': 'Removed from a channel',
   'audit.kind.channel.retention_changed': 'Channel history window changed',
+  'audit.kind.channel.posting_changed': 'Who posts in a channel changed',
   'audit.kind.integration.token_set': 'GitHub token set',
   'audit.kind.integration.token_removed': 'GitHub token removed',
   'audit.kind.integration.feed_created': 'Repository connected',
@@ -491,6 +492,10 @@ export const en = {
     '{actor} changed how long a channel keeps its history from {from} to {to}',
   'audit.action.channel.retention_changed_in':
     '{actor} changed how long {channel} keeps its history from {from} to {to}',
+  'audit.action.channel.posting_admins': '{actor} let only owners and admins post in a channel',
+  'audit.action.channel.posting_admins_in': '{actor} let only owners and admins post in {channel}',
+  'audit.action.channel.posting_everyone': '{actor} let everyone post in a channel again',
+  'audit.action.channel.posting_everyone_in': '{actor} let everyone post in {channel} again',
   'audit.action.account.erased': 'A member erased their account',
   'audit.action.content.erased':
     'A member’s writing was erased on request: {messages} messages, {files} files',
@@ -1555,6 +1560,8 @@ export const en = {
   'failure.reauthenticate':
     'Sign out and sign in again, then try once more: this needs a fresh sign-in.',
   'failure.notAMember': 'You are not in this channel. Join it to write here, then try again.',
+  'failure.onlyAdminsPost':
+    'Only owners and admins post in this channel. Reply in a thread instead.',
   'failure.gone':
     'This is no longer available. It may have been removed, or you may have lost access.',
   'failure.slow': 'You are going too fast. Wait a moment and try again.',

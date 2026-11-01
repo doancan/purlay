@@ -224,6 +224,20 @@ export const AuditPage = (): React.JSX.Element => {
               channel: `#${name}`,
             });
       }
+      // Named only to a viewer who can see the channel, as a feed's is (#691, D-243).
+      case 'channel.posting_changed': {
+        const name = channels.data?.find((c) => c.id === entry.targetId)?.name;
+        const admins = entry.metadata['to'] === 'admins';
+        if (name == null) {
+          return admins
+            ? t('audit.action.channel.posting_admins', { actor })
+            : t('audit.action.channel.posting_everyone', { actor });
+        }
+        const channel = `#${name}`;
+        return admins
+          ? t('audit.action.channel.posting_admins_in', { actor, channel })
+          : t('audit.action.channel.posting_everyone_in', { actor, channel });
+      }
       // The person is gone, so the sentence names nobody (D-139 §5).
       case 'account.erased':
         return t('audit.action.account.erased');

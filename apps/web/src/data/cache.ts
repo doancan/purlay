@@ -429,13 +429,21 @@ export const channelStarred = (
   );
 };
 
-/** A channel's name or topic changed (D-123): what every screen showing it reads from. */
-export const channelRenamed = (
+/**
+ * A channel's name, topic or who posts in it changed (D-123, D-243): what every screen showing it
+ * reads from.
+ */
+export const channelUpdated = (
   client: QueryClient,
   channelId: string,
-  named: { readonly name: string; readonly topic: string | null },
+  changed: Pick<Channel, 'topic' | 'onlyAdminsPost'> & { readonly name: string },
 ): void => {
-  editChannels(client, channelId, (c) => ({ ...c, name: named.name, topic: named.topic }));
+  editChannels(client, channelId, (c) => ({
+    ...c,
+    name: changed.name,
+    topic: changed.topic,
+    onlyAdminsPost: changed.onlyAdminsPost,
+  }));
 };
 
 /** The person's Deep Work in one workspace, as another tab or device set it (#526). */

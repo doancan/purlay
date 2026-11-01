@@ -197,16 +197,29 @@ export const publishWorkspaceClosed = async (
   }
 };
 
-/** A channel's name or topic changed: everyone watching it hears both, at the row's version (D-123). */
+/**
+ * A channel's name, topic or who posts in it changed: everyone watching it hears all three, at the
+ * row's version (D-123, D-243).
+ */
 export const publishChannelUpdated = async (
   bus: EventBus,
   clock: Clock,
-  data: { readonly channelId: string; readonly name: string; readonly topic: string | null },
+  data: {
+    readonly channelId: string;
+    readonly name: string;
+    readonly topic: string | null;
+    readonly onlyAdminsPost: boolean;
+  },
   version: number,
 ): Promise<void> => {
   await bus.publish(channelTopic(data.channelId), {
     event: 'CHANNEL_UPDATED',
-    data: { channelId: data.channelId, name: data.name, topic: data.topic },
+    data: {
+      channelId: data.channelId,
+      name: data.name,
+      topic: data.topic,
+      onlyAdminsPost: data.onlyAdminsPost,
+    },
     version,
     ts: clock.now().getTime(),
   });

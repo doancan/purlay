@@ -1,6 +1,7 @@
 /**
- * A channel's own settings, and leaving it (D-123): rename it or set what it is for, archive it,
- * leave it, take somebody else out of it (D-172), see who is in it.
+ * A channel's own settings, and leaving it (D-123): rename it or set what it is for, say whether only
+ * owners and admins post in it (D-243), archive it, leave it, take somebody else out of it (D-172), see
+ * who is in it.
  *
  * Each takes the `ChannelContext` the guard minted, so a channel the caller cannot see is the
  * stranger's `404` before anything here runs (D-34). **A direct message has none of these**: it has
@@ -38,11 +39,15 @@ import { channelFor } from './channels';
 const lockNamed = async (
   executor: Transaction,
   context: ChannelContext,
-): Promise<{ readonly name: string; readonly topic: string | null }> => {
+): Promise<{
+  readonly name: string;
+  readonly topic: string | null;
+  readonly onlyAdminsPost: boolean;
+}> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
   const row = await executor
     .selectFrom('channels')
-    .select(['name', 'topic'])
+    .select(['name', 'topic', 'only_admins_post'])
     .where('id', '=', context.channelId)
     .where('deleted_at', 'is', null)
     // NO KEY UPDATE: what the UPDATE takes anyway, and a message pointing here is not made to wait.
@@ -50,16 +55,24 @@ const lockNamed = async (
     .executeTakeFirst();
   // Archived between the guard's read and this lock: gone, as the guard would now say.
   if (row?.name == null) throw channelNotFound();
-  return { name: row.name, topic: row.topic };
+  return { name: row.name, topic: row.topic, onlyAdminsPost: row.only_admins_post };
 };
 
-/** What a rename tells the room; null when nothing changed and nobody is told. */
+/** What a change tells the room; null when nothing changed and nobody is told. */
 interface ChannelUpdate {
   readonly channelId: string;
   readonly name: string;
   readonly topic: string | null;
+  readonly onlyAdminsPost: boolean;
   readonly version: number;
 }
+
+const onlyAdmins = (role: UserRole, message: string): void => {
+  if (role === 'member') throw new AppError({ code: 'FORBIDDEN', message });
+};
+
+/** Who posts in a channel's feed, as the trail names it (D-243). */
+const postingOf = (onlyAdminsPost: boolean): string => (onlyAdminsPost ? 'admins' : 'everyone');
 
 export interface Updated {
   readonly channel: Channel;
@@ -67,12 +80,18 @@ export interface Updated {
 }
 
 /**
- * Renames the channel, or sets what it is for, or both. A member of the channel may: seeing a
- * public channel is not being in it (`403`), as for bringing people in (D-104).
+ * Renames the channel, or sets what it is for, or says who posts in its feed, or several. A member of
+ * the channel may: seeing a public channel is not being in it (`403`), as for bringing people in
+ * (D-104).
+ *
+ * **Who posts is an owner's or an admin's** (D-243): a member asking to change it is `403 FORBIDDEN`,
+ * the role read inside this transaction, so a demotion that committed first is the answer. It is on the
+ * trail, as a rename is.
  *
  * The name is checked against the workspace's live channels before the write, so a taken one is a
  * `409` a person can act on; the unique index is still the authority, and losing the race to it is
- * the same answer (D-78). Asking for what is already there changes nothing and tells nobody.
+ * the same answer (D-78). Asking for what is already there changes nothing and tells nobody — the
+ * posting rule too, whoever asks: the outcome asked for is already true.
  */
 export const updateChannel = async (
   executor: Transaction,
@@ -84,8 +103,21 @@ export const updateChannel = async (
   await requireChannelMember(executor, context, 'Join the channel to change it.');
   const name = input.name ?? current.name;
   const topic = input.topic === undefined ? current.topic : input.topic;
-  if (name === current.name && topic === current.topic) {
+  const onlyAdminsPost = input.onlyAdminsPost ?? current.onlyAdminsPost;
+  if (
+    name === current.name &&
+    topic === current.topic &&
+    onlyAdminsPost === current.onlyAdminsPost
+  ) {
     return { channel: await channelFor(executor, context.userId, context.channelId), update: null };
+  }
+  if (onlyAdminsPost !== current.onlyAdminsPost) {
+    const { role } = await requireWorkspaceMembership(
+      executor,
+      context.userId,
+      context.workspaceId,
+    );
+    onlyAdmins(role, 'Only an owner or an admin says who posts in a channel.');
   }
 
   if (name.toLowerCase() !== current.name.toLowerCase()) {
@@ -111,6 +143,7 @@ export const updateChannel = async (
     .set((eb) => ({
       name,
       topic,
+      only_admins_post: onlyAdminsPost,
       updated_at: clock.now(),
       state_version: eb('state_version', '+', 1),
     }))
@@ -130,10 +163,27 @@ export const updateChannel = async (
       metadata: { from: current.name, to: name },
     });
   }
+  if (onlyAdminsPost !== current.onlyAdminsPost) {
+    // Who may speak in a channel: a workspace-visible act, as a rename is (D-26, D-243).
+    await recordAudit(executor, clock, {
+      workspaceId: context.workspaceId,
+      actorUserId: context.userId,
+      action: 'channel.posting_changed',
+      targetType: 'channel',
+      targetId: context.channelId,
+      metadata: { from: postingOf(current.onlyAdminsPost), to: postingOf(onlyAdminsPost) },
+    });
+  }
 
   return {
     channel: await channelFor(executor, context.userId, context.channelId),
-    update: { channelId: context.channelId, name, topic, version: written.state_version },
+    update: {
+      channelId: context.channelId,
+      name,
+      topic,
+      onlyAdminsPost,
+      version: written.state_version,
+    },
   };
 };
 
@@ -173,10 +223,6 @@ export const archiveChannel = async (
     // Named, because the channel is no longer listed for the trail to find it by.
     metadata: { name: current.name },
   });
-};
-
-const onlyAdmins = (role: UserRole, message: string): void => {
-  if (role === 'member') throw new AppError({ code: 'FORBIDDEN', message });
 };
 
 /**

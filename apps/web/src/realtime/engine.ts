@@ -49,7 +49,7 @@ import {
 import type { Api } from '../data/api';
 import {
   channelAdded,
-  channelRenamed,
+  channelUpdated,
   incidentChanged,
   channelStateChanged,
   channelsRevoked,
@@ -658,7 +658,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       case 'CHANNEL_UPDATED':
         if (isNewest('channel', frame.data.channelId, frame.version)) {
-          channelRenamed(client, frame.data.channelId, frame.data);
+          channelUpdated(client, frame.data.channelId, frame.data);
         }
         return;
       case 'CHANNEL_ADDED': {

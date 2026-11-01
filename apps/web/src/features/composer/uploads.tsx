@@ -225,6 +225,7 @@ const uploadRefusal = (
     case 'TWO_FACTOR_REQUIRED':
     // Membership is the send's to judge (D-156): an upload is the workspace's, before any channel.
     case 'NOT_A_CHANNEL_MEMBER':
+    case 'ONLY_ADMINS_POST':
     case 'DATABASE_UNAVAILABLE':
     case 'INTERNAL':
     case 'MALFORMED':
