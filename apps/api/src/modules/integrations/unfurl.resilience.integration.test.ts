@@ -101,6 +101,7 @@ const kept = async (db: Executor): Promise<number> =>
       await db
         .selectFrom('link_previews')
         .select((eb) => eb.fn.countAll().as('count'))
+        .where('url', 'like', 'https://github.com/acme/api/%')
         .executeTakeFirstOrThrow()
     ).count,
   );

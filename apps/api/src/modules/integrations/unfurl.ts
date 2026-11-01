@@ -366,9 +366,9 @@ export const unfurl = async (
     .where('workspace_id', '=', context.workspaceId)
     .where('access_token_encrypted', 'is not', null)
     .executeTakeFirst();
+  if (integration === undefined) return null;
   // A token GitHub refused is no token: no card is drawn from the cache nor asked of GitHub until an
   // admin replaces it, which clears this.
-  if (integration === undefined) return null;
   if (integration.token_invalid_at !== null) return null;
   const version = new Date(integration.updated_at).toISOString();
   // The workspace is part of the key: a card is this workspace's, fetched with its token.

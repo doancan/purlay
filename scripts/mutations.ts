@@ -1771,8 +1771,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'webhook-signature-unchecked',
     why: 'anybody who knows a feed’s address posts into its channel',
     file: 'apps/api/src/modules/integrations/webhook.ts',
-    find: '  if (!signedBy(secret, delivery.body, delivery.signature)) throw unsigned();\n',
-    replace: '',
+    find: '  if (!signedBy(secret, delivery.body, delivery.signature)) {\n',
+    replace: '  if (false) {\n',
     tests: ['apps/api/src/modules/integrations/webhook.integration.test.ts'],
   },
   {
