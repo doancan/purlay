@@ -20,6 +20,8 @@ export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
   'attachments_message_channel_fkey',
   'attachments_message_workspace_fkey',
   'channel_members_last_read_channel_fkey',
+  'github_links_root_id_fkey',
+  'github_operations_root_id_fkey',
   'mentions_message_channel_fkey',
   'mentions_message_id_fkey',
   'message_versions_message_channel_fkey',

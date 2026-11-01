@@ -176,6 +176,41 @@ export interface GithubIntegrations {
   workspace_id: string;
 }
 
+export interface GithubLinks {
+  channel_id: string;
+  created_at: Timestamp;
+  created_by: string | null;
+  id: string;
+  kind: string;
+  number: number;
+  origin: string;
+  repository_full_name: string;
+  repository_id: Int8;
+  root_id: string;
+  state: string;
+  state_at: Timestamp;
+  title: string;
+  workspace_id: string;
+}
+
+export interface GithubOperations {
+  actor_id: string | null;
+  attempts: Generated<number>;
+  client_request_id: string;
+  content_digest: string;
+  created_at: Timestamp;
+  id: string;
+  issue_number: number | null;
+  marker: string;
+  reason: string | null;
+  repository_full_name: string;
+  repository_id: Int8;
+  root_id: string;
+  status: string;
+  updated_at: Timestamp;
+  workspace_id: string;
+}
+
 export interface GithubRepoFeeds {
   channel_id: string;
   created_at: Generated<Timestamp>;
@@ -601,6 +636,8 @@ export interface DB {
   github_app_installations: GithubAppInstallations;
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
+  github_links: GithubLinks;
+  github_operations: GithubOperations;
   github_repo_feeds: GithubRepoFeeds;
   github_user_authorizations: GithubUserAuthorizations;
   incident_responders: IncidentResponders;
