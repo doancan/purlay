@@ -1,5 +1,5 @@
 /**
- * The fireworks 🎉 sets off: rockets climb, then burst into rays and sparks that open slowly and drift down,
+ * The fireworks 🎉 sets off (D-247): rockets climb, then burst into rays and sparks that open slowly and drift down,
  * in the theme's own colours. There are five shows and one is picked each time, never the one just seen.
  *
  * Plain SVG and CSS keyframes (`index.css`), no library and no canvas: the shapes are drawn once, the

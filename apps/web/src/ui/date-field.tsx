@@ -1,5 +1,5 @@
 /**
- * A date field: a button that says the day in the person's language and opens a month to pick it from.
+ * A date field (D-247): a button that says the day in the person's language and opens a month to pick it from.
  *
  * The browser's own `<input type="date">` is three spinning segments, a picker that looks different in
  * every browser, and no way to clear it from the keyboard. This one is a labelled button (the field's
