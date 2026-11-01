@@ -100,6 +100,18 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/channels/:channelId/github-feeds/:feedId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'list a channel’s incoming webhooks': {
+    endpoint: 'GET /api/channels/:channelId/incoming-webhooks',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'make an incoming webhook': {
+    endpoint: 'POST /api/channels/:channelId/incoming-webhooks',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'revoke an incoming webhook': {
+    endpoint: 'DELETE /api/channels/:channelId/incoming-webhooks/:webhookId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'make an invitation link': {
     endpoint: 'POST /api/workspaces/:workspaceId/invitations',
     allowed: { owner: true, admin: true, member: false },

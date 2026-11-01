@@ -124,6 +124,23 @@ const aFeed = async (db: Executor, workspaceId: string, channelId: string): Prom
   return id;
 };
 
+/** An incoming webhook of a channel, as a row: what revoking one names (D-245). */
+const aWebhook = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
+  const id = crypto.randomUUID();
+  await db
+    .insertInto('incoming_webhooks')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      name: 'Visible',
+      secret_digest: 'not compared here',
+      created_at: NOW,
+    })
+    .execute();
+  return id;
+};
+
 const aBookmark = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
   const id = crypto.randomUUID();
   await db
@@ -153,6 +170,8 @@ interface World {
   readonly incident: string;
   /** A bookmark of the visible channel: the control for removing one (D-218). */
   readonly bookmark: string;
+  /** An incoming webhook of the visible channel: the control for revoking one (D-245). */
+  readonly webhook: string;
   /** An earlier version of the outsider's own visible message: the control for removing one. */
   readonly version: string;
   /** Each one hidden from the outsider for a different reason. */
@@ -306,6 +325,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     feed: await aFeed(db, workspaceId, visible),
     incident: await anIncident(db, workspaceId, visible),
     bookmark: await aBookmark(db, workspaceId, visible),
+    webhook: await aWebhook(db, workspaceId, visible),
     version: await aVersion(db, workspaceId, visible, threads.ownVisible),
     hidden,
     threads,
@@ -367,6 +387,7 @@ describe('integration: channel visibility', () => {
               versionId: NEVER_EXISTED,
               incidentId: world.incident,
               bookmarkId: world.bookmark,
+              webhookId: world.webhook,
               exportId: NEVER_EXISTED,
             });
 
@@ -412,6 +433,7 @@ describe('integration: channel visibility', () => {
               versionId: world.version,
               incidentId: NEVER_EXISTED,
               bookmarkId: NEVER_EXISTED,
+              webhookId: NEVER_EXISTED,
               exportId: NEVER_EXISTED,
             });
 
@@ -476,6 +498,7 @@ describe('integration: channel visibility', () => {
                 versionId: NEVER_EXISTED,
                 incidentId: NEVER_EXISTED,
                 bookmarkId: NEVER_EXISTED,
+                webhookId: NEVER_EXISTED,
                 exportId: NEVER_EXISTED,
               }),
               cookie,

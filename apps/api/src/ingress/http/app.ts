@@ -64,6 +64,7 @@ import { clientAddress, peerOf, type PeerSource } from './client-address';
 import {
   GITHUB_CALL_BUDGET,
   httpLimits,
+  INCOMING_WEBHOOK_BUDGET,
   WEBHOOK_BUDGET,
   WEBHOOK_FEED_BUDGET,
   WRITE_BUDGET,
@@ -89,6 +90,7 @@ import {
   responseHeaders,
   DOCUMENT_HEADERS,
   clientTooOldResponse,
+  pathWithoutSecret,
 } from './edge';
 import { clientFileFor, isUnchanged, type Client } from './client';
 import { refusalFor } from './errors';
@@ -217,6 +219,12 @@ import { deleteVersion, listVersions } from './versions';
 import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
+import {
+  listIncomingWebhooks,
+  makeIncomingWebhook,
+  postIncomingWebhook,
+  revokeIncomingWebhook,
+} from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
 import {
@@ -455,6 +463,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     later: afterInvitationAnswers.run,
   });
   const feedPosts = limiterFor('webhook-feeds', WEBHOOK_FEED_BUDGET);
+  // Each incoming webhook's posts, once its secret held; before it, the address's knocks (D-245).
+  const hookPosts = limiterFor('incoming-webhooks', INCOMING_WEBHOOK_BUDGET);
   // Who may make a workspace: the setting as it is now, each time it is asked (D-155, D-179 §6).
   const creating = {
     ...dependencies,
@@ -489,10 +499,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   /**
    * The path a log line names a request by: as sent, except under the library's routes, where it is
    * the route as the library's own table spells it (`Auth.routeOf`) — a reset's token travels in a
-   * path segment there, and nothing a caller wrote belongs in the log (D-179 §3).
+   * path segment there, and nothing a caller wrote belongs in the log (D-179 §3) — and an incoming
+   * webhook's, whose secret is its last segment (D-245).
    */
   const writtenPath = (route: string | undefined, path: string): string =>
-    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : path;
+    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
     // What an upload needs, and no more: every other body is bounded at the edge by its length,
@@ -530,7 +541,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         observe(request.method, EDGE_ROUTE, response.status);
         log.info('request', {
           method: request.method,
-          path: pathname.startsWith('/auth/') ? '/auth/*' : pathname,
+          path: pathname.startsWith('/auth/') ? '/auth/*' : pathWithoutSecret(pathname),
           status: response.status,
           ms: Math.round(performance.now() - (currentRequest()?.startedAt ?? performance.now())),
         });
@@ -1077,6 +1088,50 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    .get(
+      '/api/channels/:channelId/incoming-webhooks',
+      async ({ request, params }) =>
+        await listIncomingWebhooks(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/incoming-webhooks', async ({ request, params, body, set }) => {
+      const created = await makeIncomingWebhook(dependencies, request, params.channelId, body);
+      set.status = 201;
+      return created;
+    })
+    .delete(
+      '/api/channels/:channelId/incoming-webhooks/:webhookId',
+      async ({ request, params, set }) => {
+        await revokeIncomingWebhook(dependencies, request, params.channelId, params.webhookId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/webhooks/incoming/:webhookId/:secret',
+      async ({ request, params, body, set, server }) => {
+        const answer = await postIncomingWebhook(
+          {
+            database: dependencies.database,
+            clock: dependencies.clock,
+            bus: sockets.bus,
+            log: dependencies.log,
+            mayPost: async (webhookId) => await hookPosts.consume(webhookId),
+            mayKnock: async (address) => await knocks.consume(address),
+          },
+          params,
+          body,
+          limitKeyFor(
+            clientAddress(
+              peerOf(server, request),
+              request.headers,
+              dependencies.config.TRUST_PROXY,
+            ),
+          ),
+        );
+        set.status = 201;
+        return answer;
+      },
+    )
     .get(
       '/api/channels/:channelId/incident',
       async ({ request, params }) => await readIncident(dependencies, request, params.channelId),
