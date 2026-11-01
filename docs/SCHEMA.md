@@ -404,9 +404,22 @@ CREATE TABLE workspaces (
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- When an owner asked for it to be deleted: from then it is no workspace to anybody (the tenancy
+    -- guard refuses it), and NULL again if an owner takes it back within the grace period. (D-242)
     deleted_at  TIMESTAMPTZ,
+    -- When `purge:workspaces` claimed it, under the row's lock: past this, nobody can take it back. (0071)
+    purge_started_at TIMESTAMPTZ,
+    -- When its content was gone. The row stays, a tombstone with its name, for the trails that refer
+    -- to it (I-9). (0071)
+    purged_at   TIMESTAMPTZ,
 
     CONSTRAINT storage_used_non_negative CHECK (storage_used_bytes >= 0),
+
+    -- Claimed only once asked for, purged only once claimed. (0071)
+    CONSTRAINT workspaces_deletion_order CHECK (
+        (purge_started_at IS NULL OR deleted_at IS NOT NULL)
+        AND (purged_at IS NULL OR purge_started_at IS NOT NULL)
+    ),
 
     -- A floor, not a preference. A typo of `1` in a retention field would delete a
     -- team's memory overnight and no correct value is that small. (D-27)
@@ -1542,9 +1555,10 @@ trail of their own, append-only on the same terms (I-9). It says who, which sett
 action names both (`server.github_connected`, `server.github_disconnected`, `server.smtp_connected`,
 `server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, `server.account_suspended` and
 `server.account_restored` (with `target_user_id`, whose account, D-233), `account.export_requested` and
-`account.export_downloaded` (a person's export of their own data, the person as actor and `target_user_id`, D-241), and `server.admin_password_reset`, written by
-`bun run admin:reset-password` with the account itself as the actor and no session) — and never
-the value, a secret least of all. Written in the transaction that saves the setting
+`account.export_downloaded` (a person's export of their own data, the person as actor and `target_user_id`, D-241), `server.admin_password_reset`, written by
+`bun run admin:reset-password` with the account itself as the actor and no session, and `server.workspace_purged`
+(with `target_workspace_id`, written by `purge:workspaces` with no actor once a deleted workspace's content is gone,
+D-242) — and never the value, a secret least of all. Written in the transaction that saves the setting
 (`modules/audit/server-audit.ts`), so a change that did not commit leaves no row and one that did
 cannot lack it. Append-only is held as `audit_log`'s is — by the sweep in
 `modules/audit/append-only.test.ts`, which covers both tables; neither has a trigger.
@@ -1558,6 +1572,9 @@ CREATE TABLE server_audit_log (
     -- Whose account an entry is about (`server.account_suspended`, `server.account_restored`, D-233); NULL for
     -- a setting. (0065)
     target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- Which workspace an entry is about (`server.workspace_purged`, D-242); RESTRICT, as `audit_log`'s:
+    -- the record outlives what it describes. (0071)
+    target_workspace_id UUID REFERENCES workspaces(id) ON DELETE RESTRICT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT server_audit_log_id_is_uuidv7
@@ -1572,6 +1589,9 @@ CREATE INDEX idx_server_audit_log_session ON server_audit_log (session_id)
 
 CREATE INDEX idx_server_audit_log_target ON server_audit_log (target_user_id)
     WHERE target_user_id IS NOT NULL;
+
+CREATE INDEX idx_server_audit_log_workspace ON server_audit_log (target_workspace_id)
+    WHERE target_workspace_id IS NOT NULL;
 ```
 
 ### 9.2. `job_runs`
@@ -1586,7 +1606,7 @@ require an instance-administrator role that does not exist and that D-3 delibera
 CREATE TABLE job_runs (
     -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions', 'sweep:github-deliveries',
     -- 'sweep:email-sign-ins', 'sweep:exports', 'sweep:deletions',
-    -- 'reconcile:storage', 'purge:retention'
+    -- 'reconcile:storage', 'purge:retention', 'purge:workspaces'
     job_name             VARCHAR(64) PRIMARY KEY,
 
     last_started_at      TIMESTAMPTZ,
@@ -2208,6 +2228,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
 0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
 0070_personal_exports.sql personal_exports: a person's export of their own data, made in the background, downloaded once  (D-241)
+0071_workspace_deletion.sql workspaces.purge_started_at, workspaces.purged_at, server_audit_log.target_workspace_id: an owner deletes a workspace, a grace period to take it back, then its content erased  (D-242)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
