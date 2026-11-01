@@ -32,6 +32,7 @@ const ANSWER = {
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
   oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  githubApp: { callbackUrl: 'https://purlay.test/cb', webhookUrl: 'https://purlay.test/hook' },
   channels: { github: true, email: false, oidc: false },
   adminEmail: 'admin@example.test',
 };
@@ -63,6 +64,8 @@ describe('reading the settings', () => {
       { ...ANSWER, channels: { github: true } },
       { ...ANSWER, needsReentry: 'x' },
       { ...ANSWER, appUrl: undefined },
+      { ...ANSWER, githubApp: { callbackUrl: 'x' } },
+      { ...ANSWER, githubApp: undefined },
     ]) {
       const failure = await failureOf(
         createServerClient(world(200, JSON.stringify(broken)).fetch).settings(),
@@ -93,6 +96,22 @@ describe('trying a channel', () => {
     expect(verdict).toEqual({ ok: true });
     expect(w.seen[0]?.path).toBe('/api/server/oidc');
     expect(w.seen[0]?.init.method).toBe('POST');
+  });
+
+  test('posts the GitHub App candidate and returns the verdict, and disconnects it by its own path', async () => {
+    const w = world(200, JSON.stringify({ ok: true }));
+    const candidate = {
+      appId: 1,
+      slug: 'purlay',
+      clientId: 'a',
+      clientSecret: 'b',
+      privateKey: 'k',
+      webhookSecret: 'w',
+    };
+    expect(await createServerClient(w.fetch).githubApp(candidate)).toEqual({ ok: true });
+    expect(w.seen[0]?.path).toBe('/api/server/github-app');
+    expect(w.seen[0]?.init.method).toBe('POST');
+    await createServerClient(world(204, '').fetch).disconnect('github-app', false);
   });
 
   test('posts the relay candidate and returns a refused verdict as it is', async () => {

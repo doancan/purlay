@@ -90,6 +90,7 @@ export const keys = {
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   archivedChannels: (workspaceId: string) => ['archived-channels', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
+  githubApp: (workspaceId: string) => ['github-app', workspaceId] as const,
   /** A channel's repository feeds, an owner's or an admin's to read (D-134). */
   githubFeeds: (channelId: string) => ['github-feeds', channelId] as const,
   incomingWebhooks: (channelId: string) => ['incoming-webhooks', channelId] as const,
