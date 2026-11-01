@@ -70,10 +70,11 @@ interface GitHubAppBehaviour {
   /** The next `times` API calls are refused as a limit, with `Retry-After: retryAfter`. */
   limit?: { times: number; retryAfter: number };
   /**
-   * What `POST /repos/…/issues` does: makes it and answers (`creates`); makes it and never answers, so the
-   * caller's deadline is all it hears (`creates-silently`); never answers and makes nothing (`hangs`); or `502`.
+   * What `POST /repos/…/issues` does: makes it and answers (`creates`), or only after a moment (`slow`); makes it
+   * and never answers, so the caller's deadline is all it hears (`creates-silently`); never answers and makes
+   * nothing (`hangs`); or `502`.
    */
-  create?: 'creates' | 'creates-silently' | 'hangs' | 'fails';
+  create?: 'creates' | 'creates-silently' | 'hangs' | 'fails' | 'slow';
   /** Every call fails to connect. */
   unreachable?: boolean;
 }
@@ -102,6 +103,13 @@ export interface GitHubAppStub {
   readonly installOnGitHub: (location: string, installationId: number) => string;
   /** The person on GitHub's authorization screen, pressing Authorize: the callback, with a code and the state. */
   readonly authorizeOnGitHub: (location: string) => string;
+  /** A person who has authorized, without the trip: the tokens GitHub would have given them. */
+  readonly grantUser: () => {
+    readonly accessToken: string;
+    readonly accessExpiresIn: number;
+    readonly refreshToken: string;
+    readonly refreshExpiresIn: number;
+  };
   /** Every user access token and refresh token the stub gave is revoked, as revoking the App on GitHub does. */
   readonly revokeUser: () => void;
   /** Every user access token given so far has expired, its refresh token still good. */
@@ -204,6 +212,15 @@ export const aGitHubAppStub = (
       back.searchParams.set('state', get('state'));
       return back.toString();
     },
+    grantUser: () => {
+      const given = mint();
+      return {
+        accessToken: given.access_token,
+        accessExpiresIn: given.expires_in,
+        refreshToken: given.refresh_token,
+        refreshExpiresIn: given.refresh_token_expires_in,
+      };
+    },
     revokeUser: () => {
       userTokens.clear();
       refreshTokens.clear();
@@ -263,20 +280,28 @@ export const aGitHubAppStub = (
   const bearerOf = (request: Request): string =>
     (request.headers.get('authorization') ?? '').replace(/^Bearer /i, '');
 
-  const issueTokens = (): Response => {
+  const mint = (): {
+    access_token: string;
+    expires_in: number;
+    refresh_token: string;
+    refresh_token_expires_in: number;
+    token_type: string;
+    scope: string;
+  } => {
     const accessToken = `ghu_${random()}`;
     const refreshToken = `ghr_${random()}`;
     userTokens.set(accessToken, { expiresAt: now() + ACCESS_SECONDS * 1000 });
     refreshTokens.add(refreshToken);
-    return Response.json({
+    return {
       access_token: accessToken,
       expires_in: ACCESS_SECONDS,
       refresh_token: refreshToken,
       refresh_token_expires_in: REFRESH_SECONDS,
       token_type: 'bearer',
       scope: '',
-    });
+    };
   };
+  const issueTokens = (): Response => Response.json(mint());
 
   const token = async (request: Request): Promise<Response | undefined> => {
     const text = await request.clone().text();
@@ -386,6 +411,8 @@ export const aGitHubAppStub = (
       items.push(item);
       return item;
     };
+    // Answered, but only after a moment: the time in which a second click can arrive.
+    if (mode === 'slow') await new Promise((resolve) => setTimeout(resolve, 150));
     if (mode === 'creates-silently') make();
     if (mode === 'creates-silently' || mode === 'hangs') {
       // Never answered: the caller's deadline is the only end it has.
