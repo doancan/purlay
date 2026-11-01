@@ -107,11 +107,17 @@ describe('integration: a deletion taken back as its grace period ends', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
+    let taken = (): void => undefined;
+    const holding = new Promise<void>((resolve) => {
+      taken = resolve;
+    });
     const cancelling = cloned.db.transaction().execute(async (transaction) => {
       await takeBackDeletion(transaction, clock, context);
+      taken();
       await held;
     });
-    // The job's claim waits on the row the cancellation holds.
+    // The job starts only once the cancellation holds the row, so its claim waits on it.
+    await holding;
     const running = purge();
     await somebodyWaits();
     release();
@@ -134,6 +140,10 @@ describe('integration: a deletion taken back as its grace period ends', () => {
       release = resolve;
     });
     // The claim, as the job makes it, held open.
+    let claimed = (): void => undefined;
+    const holding = new Promise<void>((resolve) => {
+      claimed = resolve;
+    });
     const claiming = cloned.db.transaction().execute(async (transaction) => {
       await transaction
         .updateTable('workspaces')
@@ -141,8 +151,11 @@ describe('integration: a deletion taken back as its grace period ends', () => {
         .where('id', '=', room.workspaceId)
         .where('purge_started_at', 'is', null)
         .execute();
+      claimed();
       await held;
     });
+    // The request is made only once the claim holds the row, so it waits on it.
+    await holding;
     const cancelling = createApp(testDependencies({ database: cloned.db, clock })).handle(
       new Request(`https://purlay.test/api/workspaces/${room.workspaceId}/deletion`, {
         method: 'DELETE',
