@@ -13,6 +13,8 @@ describe('the reasons a try fails (D-179 §4.4)', () => {
       'recipient-refused',
       'message-refused',
       'unexpected-reply',
+      'key-rejected',
+      'app-mismatch',
       'issuer-mismatch',
       'discovery-invalid',
     ]);
