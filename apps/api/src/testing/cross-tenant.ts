@@ -391,6 +391,10 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: { kind: 'channel', admin: true },
   },
+  'POST /api/channels/:channelId/github-feeds/:feedId/secret': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
   'DELETE /api/channels/:channelId/star': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/workspaces/:workspaceId/conversations': {
     refusal: 'WORKSPACE_NOT_FOUND',

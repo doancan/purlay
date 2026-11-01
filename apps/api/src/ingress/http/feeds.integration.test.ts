@@ -77,6 +77,44 @@ describe('integration: a channel’s feeds over HTTP', () => {
     });
   });
 
+  test('a regenerated secret is a 200 the contract parses, for the same feed and address, a different secret, shown only there (#884)', async () => {
+    await withRollback(async (db) => {
+      const { call, channelId } = await anAdmin(db);
+      const made: unknown = await (
+        await call('POST', `/api/channels/${channelId}/github-feeds`, {
+          repository: 'acme/api',
+          events: ['push'],
+        })
+      ).json();
+      if (!Value.Check(CreatedGitHubFeed, made)) throw new Error('not a CreatedGitHubFeed');
+      const path = `/api/channels/${channelId}/github-feeds/${made.feed.id}/secret`;
+
+      const response = await call('POST', path);
+      expect(response.status).toBe(200);
+      const again: unknown = await response.json();
+      if (!Value.Check(CreatedGitHubFeed, again)) throw new Error('not a CreatedGitHubFeed');
+      expect(again.feed).toEqual(made.feed);
+      expect(again.webhookPath).toBe(made.webhookPath);
+      expect(again.secret).not.toBe(made.secret);
+      const listed = JSON.stringify(
+        await (await call('GET', `/api/channels/${channelId}/github-feeds`)).json(),
+      );
+      expect(listed).not.toContain(again.secret);
+
+      // Each regeneration is its own secret.
+      const third: unknown = await (await call('POST', path)).json();
+      if (!Value.Check(CreatedGitHubFeed, third)) throw new Error('not a CreatedGitHubFeed');
+      expect(third.secret).not.toBe(again.secret);
+
+      // No such feed, or not an id: not found, as a disconnect says it.
+      for (const id of [crypto.randomUUID(), 'not-a-uuid']) {
+        const missing = await call('POST', `/api/channels/${channelId}/github-feeds/${id}/secret`);
+        expect(missing.status).toBe(404);
+        expect(await missing.json()).toMatchObject({ error: { code: 'GITHUB_FEED_NOT_FOUND' } });
+      }
+    });
+  });
+
   test('every name at the edges of the contract is one the table holds', async () => {
     const owner39 = `a${'b'.repeat(38)}`;
     const name100 = 'n'.repeat(100);

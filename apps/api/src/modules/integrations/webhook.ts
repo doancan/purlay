@@ -11,7 +11,7 @@
  *
  * What fails after the signature held is said where the feed was set up — the reason and its time —
  * and answered so GitHub shows the delivery failed. Every delivery is one line of the log: feed,
- * delivery, event and outcome, never the body.
+ * delivery, event and outcome, never the body; a bad signature is one too, naming only the feed.
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
@@ -155,7 +155,13 @@ export const receiveDelivery = async (
     });
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
-  if (!signedBy(secret, delivery.body, delivery.signature)) throw unsigned();
+  if (!signedBy(secret, delivery.body, delivery.signature)) {
+    // Said to the operator and not on the feed (anybody may send one, D-134 §8): the feed and the
+    // outcome, never the secret, the signature or a byte of the body — the usual cause is a secret
+    // pasted wrong at GitHub, or one regenerated and not yet updated there (#884).
+    log.warn('github delivery', { feedId: feed.id, outcome: 'bad_signature' });
+    throw unsigned();
+  }
 
   const line = { feedId: feed.id, deliveryId: delivery.deliveryId, event: delivery.event };
   if (

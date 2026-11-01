@@ -217,6 +217,23 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       repository: 'acme/permission',
       events: ['push'],
     }),
+  'regenerate a repository feed’s secret': async (world, as) => {
+    // Connected by the owner first, so there is a feed whoever tries.
+    const made = await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/github-feeds`,
+      world.people.owner,
+      { repository: 'acme/permission', events: ['push'] },
+    );
+    const { feed } = (await made.json()) as { feed: { id: string } };
+    return await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/github-feeds/${feed.id}/secret`,
+      as,
+    );
+  },
   'disconnect a repository from a channel': async (world, as) => {
     // Connected by the owner first, so there is one to disconnect whoever tries.
     const made = await call(
@@ -310,6 +327,7 @@ describe('integration: every administrative write is on the trail, once', () => 
     'revoke an invitation link': 1,
     'remove the GitHub token': 1,
     'disconnect a repository from a channel': 1,
+    'regenerate a repository feed’s secret': 1,
   };
 
   /** Reads that are themselves administrative acts: taking the trail away is on it (D-222). */

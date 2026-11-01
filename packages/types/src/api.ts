@@ -778,6 +778,7 @@ export const AUDIT_ACTIONS = [
   'integration.token_removed',
   'integration.feed_created',
   'integration.feed_removed',
+  'integration.feed_secret_regenerated',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',

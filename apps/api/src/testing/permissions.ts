@@ -88,6 +88,10 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'POST /api/channels/:channelId/github-feeds',
     allowed: { owner: true, admin: true, member: false },
   },
+  'regenerate a repository feed’s secret': {
+    endpoint: 'POST /api/channels/:channelId/github-feeds/:feedId/secret',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'disconnect a repository from a channel': {
     endpoint: 'DELETE /api/channels/:channelId/github-feeds/:feedId',
     allowed: { owner: true, admin: true, member: false },
