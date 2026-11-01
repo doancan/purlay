@@ -446,6 +446,7 @@ export const en = {
   'audit.kind.integration.token_removed': 'GitHub token removed',
   'audit.kind.integration.feed_created': 'Repository connected',
   'audit.kind.integration.feed_removed': 'Repository disconnected',
+  'audit.kind.integration.feed_secret_regenerated': 'Feed secret regenerated',
   'audit.kind.invitation.created': 'Invitation link made',
   'audit.kind.invitation.revoked': 'Invitation link revoked',
   'audit.kind.message.removed_by_moderator': 'Message deleted by a moderator',
@@ -476,6 +477,10 @@ export const en = {
   'audit.action.integration.feed_removed': '{actor} disconnected {repository} from a channel',
   'audit.action.integration.feed_created_in': '{actor} connected {repository} to {channel}',
   'audit.action.integration.feed_removed_from': '{actor} disconnected {repository} from {channel}',
+  'audit.action.integration.feed_secret_regenerated':
+    '{actor} regenerated the secret of the {repository} feed',
+  'audit.action.integration.feed_secret_regenerated_in':
+    '{actor} regenerated the secret of the {repository} feed in {channel}',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
@@ -572,11 +577,6 @@ export const en = {
     'A fine-grained personal access token, read-only (Contents, Issues and Pull requests: read), limited to the selected repositories your team links to. GitHub checks it when you save.',
   'github.tokenShape': 'github_pat_…',
   'github.invalid': 'A token is one word of letters, digits and symbols, with no spaces.',
-  'github.save': 'Save token',
-  'github.saved': 'The token was saved.',
-  'github.saveFailed': 'The token was not saved.',
-  'github.disconnect': 'Disconnect',
-  'github.disconnectFailed': 'GitHub was not disconnected.',
   'github.rejected':
     'GitHub does not accept this token. Check that it was copied whole and has not expired or been revoked.',
   'github.unreachable':
@@ -585,6 +585,11 @@ export const en = {
     'GitHub refused the token on {when}: it was revoked or has expired. Links stay plain until you replace it.',
   'github.broad':
     'This looks like a classic token with the repo scope: it can read and write every repository its owner can. A fine-grained, read-only token on selected repositories is enough, and safer.',
+  'github.save': 'Save token',
+  'github.saved': 'The token was saved.',
+  'github.saveFailed': 'The token was not saved.',
+  'github.disconnect': 'Disconnect',
+  'github.disconnectFailed': 'GitHub was not disconnected.',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
@@ -1052,6 +1057,11 @@ export const en = {
   'feeds.disconnectAsk':
     'Disconnect {repository}? Its webhook stops working, and its secret is gone.',
   'feeds.disconnectFailed': 'Couldn’t disconnect the repository.',
+  'feeds.regenerate': 'Regenerate secret',
+  'feeds.regenerateOne': 'Regenerate secret of {repository}',
+  'feeds.regenerateAsk':
+    'Regenerate the secret of {repository}? The old secret stops working at once, and GitHub’s deliveries are refused until the webhook has the new one.',
+  'feeds.regenerateFailed': 'Couldn’t regenerate the secret.',
   'feeds.neverDelivered': 'No delivery yet',
   'feeds.lastDelivery': 'Last delivery {when}',
   'feeds.failure.channel_archived': 'Refused {when}: this channel was archived.',
@@ -1066,9 +1076,11 @@ export const en = {
   'feeds.setup.contentType': 'Content type',
   'feeds.setup.secret': 'Secret',
   'feeds.setup.copy': 'Copy the {what}',
-  'feeds.setup.once':
-    'The secret is shown only now. Lost, it means disconnecting the repository and connecting it again.',
+  'feeds.setup.once': 'The secret is shown only now. Lost, regenerate it from the feed.',
   'feeds.setup.done': 'Done',
+  'feeds.setup.regeneratedTitle': 'Give {repository}’s webhook on GitHub its new secret',
+  'feeds.setup.regeneratedSteps':
+    'In the repository’s Settings → Webhooks, edit the webhook and paste the new secret. The address and content type stay as they are.',
 
   // ── A message's earlier versions (D-135) ────────────────────────────────
   'history.open': 'Edited — show what it said before',
@@ -1553,7 +1565,7 @@ export const en = {
   'failure.githubFeedsLimit':
     'That is as many repositories as a channel hears from. Disconnect one first.',
   'failure.githubFeedExists':
-    'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
+    'This channel already hears from that repository. To get a new secret, regenerate it from the feed.',
   'failure.incidentOpen':
     'This channel already has an incident open. Change that one, or resolve it first.',
   'failure.incidentResolved': 'This incident is resolved. Declare a new one if it is back.',
@@ -1832,6 +1844,7 @@ export const en = {
   'settings.integrations.connected': 'Connected',
   'settings.integrations.notConnected': 'Not connected',
   'settings.integrations.replace': 'Replace token',
+  'settings.integrations.refused': 'Token refused',
   'settings.audit.title': 'Audit log',
   'settings.data.title': 'Data & retention',
   'settings.data.description':
@@ -1844,7 +1857,6 @@ export const en = {
   'theme.label': 'Theme',
   'theme.system': 'System',
   'theme.light': 'Light',
-  'settings.integrations.refused': 'Token refused',
   'theme.dark': 'Dark',
   'theme.midnight': 'Midnight',
   'language.label': 'Language',

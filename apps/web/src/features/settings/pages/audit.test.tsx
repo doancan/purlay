@@ -321,6 +321,30 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('a feed’s secret regenerated is said with the repository, and the channel only to a viewer who can see it (#884)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'integration.feed_secret_regenerated',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', channelId: IDS.api },
+            }),
+            anEntry(1, {
+              action: 'integration.feed_secret_regenerated',
+              targetType: 'integration',
+              metadata: { repository: 'acme/web', channelId: entryId(99) },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} regenerated the secret of the acme/api feed in #api`,
+      `${ME.displayName} regenerated the secret of the acme/web feed`,
+    ]);
+  });
+
   test('somebody added to a channel is said with whom, and the channel only to a viewer who can see it', async () => {
     const view = await openPage({
       audit: () =>

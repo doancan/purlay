@@ -157,6 +157,11 @@ export interface Api {
     input: CreateGitHubFeedRequest,
   ) => Promise<CreatedGitHubFeed>;
   readonly disconnectGitHubFeed: (channelId: string, feedId: string) => Promise<void>;
+  /** A new secret for the feed, same address; the old one stops working at once. Shown once (#884). */
+  readonly regenerateGitHubFeedSecret: (
+    channelId: string,
+    feedId: string,
+  ) => Promise<CreatedGitHubFeed>;
   readonly removeGitHubToken: (workspaceId: string) => Promise<void>;
   /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
   readonly unfurl: (
@@ -523,6 +528,13 @@ export const createApi = (http: Http): Api => {
         `/api/channels/${at(channelId)}/github-feeds`,
         CreatedGitHubFeed,
         options({ body: input }),
+      ),
+    regenerateGitHubFeedSecret: (channelId, feedId) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/github-feeds/${at(feedId)}/secret`,
+        CreatedGitHubFeed,
+        options(),
       ),
     disconnectGitHubFeed: (channelId, feedId) =>
       http.send('DELETE', `/api/channels/${at(channelId)}/github-feeds/${at(feedId)}`, options()),

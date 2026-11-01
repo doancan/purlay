@@ -189,6 +189,17 @@ export const AuditPage = (): React.JSX.Element => {
           ? t('audit.action.integration.feed_removed_from', { actor, repository, channel })
           : t('audit.action.integration.feed_created_in', { actor, repository, channel });
       }
+      case 'integration.feed_secret_regenerated': {
+        const repository = entry.metadata['repository'] ?? '';
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        return name == null
+          ? t('audit.action.integration.feed_secret_regenerated', { actor, repository })
+          : t('audit.action.integration.feed_secret_regenerated_in', {
+              actor,
+              repository,
+              channel: `#${name}`,
+            });
+      }
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
