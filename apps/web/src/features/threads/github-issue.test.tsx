@@ -368,6 +368,59 @@ describe('making an issue', () => {
     failing.unmount();
   });
 
+  test('a body typed is what is sent, and Enter in the title sends it', async () => {
+    const sent: CreateGitHubIssueRequest[] = [];
+    const view = await mount({
+      api: {
+        createGitHubIssue: (_id, input) => {
+          sent.push(input);
+          return Promise.resolve({ status: 'created', link: LINK } satisfies GitHubIssueOutcome);
+        },
+      },
+    });
+    await openDialog(view);
+    const dialog = within(view.getByRole('dialog'));
+    await person().type(dialog.getByLabelText('Description'), 'Üstel geri çekilme');
+    await person().type(dialog.getByLabelText('Title'), '{Enter}');
+    await settle();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.body).toContain('Üstel geri çekilme');
+    view.unmount();
+  });
+
+  test('Escape closes it without sending anything', async () => {
+    const sent: CreateGitHubIssueRequest[] = [];
+    const view = await mount({
+      api: {
+        createGitHubIssue: (_id, input) => {
+          sent.push(input);
+          return Promise.reject(new ApiError(500, 'INTERNAL', 'no'));
+        },
+      },
+    });
+    await openDialog(view);
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(sent).toEqual([]);
+    view.unmount();
+  });
+
+  test('an authorization that cannot be started is said, and the dialog stays', async () => {
+    const view = await mount({
+      status: UNAUTHORISED,
+      api: {
+        startGitHubAuthorization: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+      },
+    });
+    await openDialog(view);
+    const dialog = within(view.getByRole('dialog'));
+    await person().click(dialog.getByRole('button', { name: 'Let Purlay create issues as me' }));
+    await settle();
+    expect(dialog.getByText(/Something went wrong/)).toBeDefined();
+    view.unmount();
+  });
+
   test('cancel closes it without sending anything', async () => {
     const view = await mount({});
     await openDialog(view);
@@ -501,6 +554,25 @@ describe('the link dialog on a bad day', () => {
     expect(dialog.getByText(/GitHub did not answer. Nothing was changed/)).toBeDefined();
     await person().click(dialog.getByRole('button', { name: 'Cancel' }));
     expect(view.queryByRole('dialog')).toBeNull();
+    view.unmount();
+  });
+
+  test('Escape closes the dialog that links work, and nothing is sent', async () => {
+    let sent = false;
+    const view = await mount({
+      api: {
+        linkGitHubWork: () => {
+          sent = true;
+          return Promise.reject(new ApiError(500, 'INTERNAL', 'no'));
+        },
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Link an issue or pull request…' }));
+    await settle();
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(sent).toBe(false);
     view.unmount();
   });
 

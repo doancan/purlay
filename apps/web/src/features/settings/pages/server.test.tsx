@@ -1220,6 +1220,40 @@ describe('Settings → Server — the GitHub App (D-246)', () => {
     view.unmount();
   });
 
+  test('the question before letting the App go is dismissed with Escape, and nothing is disconnected', async () => {
+    let disconnected = false;
+    const connected = anAnswer({
+      settings: {
+        ...anAnswer().settings,
+        githubApp: {
+          appId: 4242,
+          slug: 'purlay-issues',
+          clientId: 'Iv23.x',
+          clientSecret: { set: true },
+          privateKey: { set: true },
+          webhookSecret: { set: true },
+        },
+      },
+    });
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(connected),
+        disconnect: () => {
+          disconnected = true;
+          return Promise.resolve();
+        },
+      }),
+    );
+    const app = card(view, 'GitHub App for issues');
+    await person().click(app.getByRole('button', { name: 'Disconnect' }));
+    expect(view.getByRole('dialog')).toBeDefined();
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(disconnected).toBe(false);
+    view.unmount();
+  });
+
   test('a disconnect that fails is said in the question, which stays open', async () => {
     const connected = anAnswer({
       settings: {
