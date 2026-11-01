@@ -396,6 +396,85 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('an incoming webhook made and revoked is said with its name, and the channel only to a viewer who can see it (D-245)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(4, {
+              action: 'integration.webhook_revoked',
+              targetType: 'integration',
+              metadata: { name: 'CI', channelId: IDS.api },
+            }),
+            anEntry(3, {
+              action: 'integration.webhook_revoked',
+              targetType: 'integration',
+              metadata: { name: 'Nöbet', channelId: entryId(99) },
+            }),
+            anEntry(2, {
+              action: 'integration.webhook_created',
+              targetType: 'integration',
+              metadata: { name: 'CI', channelId: IDS.api },
+            }),
+            anEntry(1, {
+              action: 'integration.webhook_created',
+              targetType: 'integration',
+              metadata: { name: 'Nöbet', channelId: entryId(99) },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} revoked the incoming webhook “CI” in #api`,
+      `${ME.displayName} revoked the incoming webhook “Nöbet” in a channel`,
+      `${ME.displayName} made the incoming webhook “CI” in #api`,
+      `${ME.displayName} made the incoming webhook “Nöbet” in a channel`,
+    ]);
+  });
+
+  test('the GitHub App connected, let go by an owner or removed by GitHub, and an issue made or linked, are said by identifier alone (D-246)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(5, {
+              action: 'integration.app_connected',
+              targetType: 'integration',
+              metadata: { account: 'acme' },
+            }),
+            anEntry(4, {
+              action: 'integration.app_disconnected',
+              targetType: 'integration',
+              metadata: { account: 'acme' },
+            }),
+            anEntry(3, {
+              action: 'integration.app_disconnected',
+              actor: null,
+              targetType: 'integration',
+              metadata: { account: 'acme' },
+            }),
+            anEntry(2, {
+              action: 'integration.issue_created',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', issue: '12' },
+            }),
+            anEntry(1, {
+              action: 'integration.work_linked',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', number: '14' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} connected the GitHub App installation of acme`,
+      `${ME.displayName} disconnected the GitHub App installation of acme`,
+      'GitHub removed the App installation of acme',
+      `${ME.displayName} created issue acme/api#12 from a thread`,
+      `${ME.displayName} linked acme/api#14 to a thread`,
+    ]);
+  });
+
   test('somebody added to a channel is said with whom, and the channel only to a viewer who can see it', async () => {
     const view = await openPage({
       audit: () =>
