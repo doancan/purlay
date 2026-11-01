@@ -91,6 +91,7 @@ export const keys = {
   archivedChannels: (workspaceId: string) => ['archived-channels', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
   githubApp: (workspaceId: string) => ['github-app', workspaceId] as const,
+  githubRepositories: (workspaceId: string) => ['github-repositories', workspaceId] as const,
   /** A channel's repository feeds, an owner's or an admin's to read (D-134). */
   githubFeeds: (channelId: string) => ['github-feeds', channelId] as const,
   /** Who among a workspace's members is online, as read at an epoch (D-136). */

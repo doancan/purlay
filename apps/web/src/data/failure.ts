@@ -38,6 +38,9 @@ export type FailureKey =
   | 'failure.bookmarksLimit'
   | 'failure.githubFeedsLimit'
   | 'failure.githubFeedExists'
+  | 'failure.githubUnavailable'
+  | 'failure.githubNotConnected'
+  | 'failure.githubAuthorization'
   | 'failure.incidentOpen'
   | 'failure.incidentResolved'
   | 'failure.incidentRespondersLimit'
@@ -110,6 +113,12 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.githubFeedsLimit';
     case 'GITHUB_FEED_EXISTS':
       return 'failure.githubFeedExists';
+    case 'GITHUB_UNAVAILABLE':
+      return 'failure.githubUnavailable';
+    case 'GITHUB_NOT_CONNECTED':
+      return 'failure.githubNotConnected';
+    case 'GITHUB_AUTHORIZATION_REQUIRED':
+      return 'failure.githubAuthorization';
     case 'INCIDENT_OPEN':
       return 'failure.incidentOpen';
     case 'INCIDENT_RESOLVED':
@@ -136,6 +145,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'SAVED_SEARCH_NOT_FOUND':
     case 'SAVED_SEARCH_LIMIT':
     case 'MESSAGE_ID_CONFLICT':
+    case 'GITHUB_REQUEST_CONFLICT':
     case 'INCIDENT_ID_CONFLICT':
     case 'ACCOUNT_EMAIL_CONFLICT':
     // A lost race on the GitHub id's index, said by the callback as `failed` (D-179).

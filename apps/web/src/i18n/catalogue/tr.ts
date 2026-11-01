@@ -442,6 +442,7 @@ export const tr = {
   'audit.kind.integration.feed_removed': 'Deponun bağlantısı kesildi',
   'audit.kind.integration.app_connected': 'GitHub App bağlandı',
   'audit.kind.integration.app_disconnected': 'GitHub App bağlantısı kesildi',
+  'audit.kind.integration.issue_created': 'Bir konuşmadan issue açıldı',
   'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
   'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
   'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
@@ -481,6 +482,8 @@ export const tr = {
   'audit.action.integration.app_disconnected':
     '{actor}, {account} hesabının GitHub App kurulumunun bağlantısını kesti',
   'audit.action.integration.app_removed': 'GitHub, {account} hesabının App kurulumunu kaldırdı',
+  'audit.action.integration.issue_created':
+    '{actor}, bir konuşmadan {repository}#{number} issue’sunu açtı',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
@@ -609,6 +612,43 @@ export const tr = {
   'githubIssues.me.badgeOff': 'Kapalı',
   'githubIssues.me.allow': 'Purlay benim adıma issue açabilsin',
   'githubIssues.me.forget': 'İzni kaldır',
+  'githubIssue.work.title': 'GitHub',
+  'githubIssue.work.create': 'GitHub issue’su oluştur…',
+  'githubIssue.dialog.title': 'GitHub issue’su oluştur',
+  'githubIssue.dialog.description':
+    'Neyin nereye gönderileceğini tam olarak gözden geçir. Issue açmak soruyu çözülmüş yapmaz.',
+  'githubIssue.authorize.body':
+    'Senin adına issue açmak için Purlay’in GitHub’a senin adına yazmasına izin ver. Sen açana kadar kapalıdır ve yalnızca hem senin hem App’in görebildiği depolara ulaşır.',
+  'githubIssue.authorize.action': 'Purlay benim adıma issue açabilsin',
+  'githubIssue.repository.label': 'Depo',
+  'githubIssue.repository.private': '{name} (özel)',
+  'githubIssue.repository.empty':
+    'Seçilecek depo yok: sen ve App birlikte hiçbirine ulaşamıyorsunuz.',
+  'githubIssue.repository.failed': 'Depolar okunamadı.',
+  'githubIssue.title.label': 'Başlık',
+  'githubIssue.body.label': 'Açıklama',
+  'githubIssue.copy.label':
+    'Bu konuşma herkese açık değil. Sözlerinin GitHub’a kopyalanmasını seçiyorum.',
+  'githubIssue.review.heading': 'Oluşturulacak olan',
+  'githubIssue.review.destination': '{repository} deposunda, {login} olarak:',
+  'githubIssue.review.marker':
+    'Son satır görünmez bir işarettir. GitHub’ın yanıtı kaybolursa Purlay’in issue’yu yeniden bulmasını sağlar.',
+  'githubIssue.create': 'Issue oluştur',
+  'githubIssue.done': 'Bitti',
+  'githubIssue.state.created': '{repository}#{number} oluşturuldu.',
+  'githubIssue.state.pending': 'Issue oluşturuluyor. Biraz sonra yeniden bak.',
+  'githubIssue.state.unknown':
+    'GitHub yanıt vermedi; issue’nun açılıp açılmadığı bilinmiyor. Hiçbir şey iki kez oluşturulmaz: yeniden bak.',
+  'githubIssue.state.checkAgain': 'Yeniden bak',
+  'githubIssue.state.tryAgain': 'Yeniden dene',
+  'githubIssue.state.refused.no-access': 'GitHub, o depoda issue açmana izin vermiyor.',
+  'githubIssue.state.refused.issues-disabled': 'O depoda issue’lar kapalı.',
+  'githubIssue.state.refused.invalid': 'GitHub bu başlığı ya da açıklamayı reddetti.',
+  'githubIssue.state.refused.not-created':
+    'GitHub bu istek için hiçbir issue göstermedi. Hiçbir şey oluşturulmadı; yeniden başlayabilirsin.',
+  'githubIssue.draft.answer': 'Kabul edilen cevap',
+  'githubIssue.draft.decision': 'Karar',
+  'githubIssue.draft.source': 'Purlay’deki tartışma',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
@@ -1541,6 +1581,11 @@ export const tr = {
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
   'failure.githubFeedExists':
     'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için bağlantıyı kaldırıp yeniden bağla.',
+  'failure.githubUnavailable':
+    'GitHub yanıt vermedi. Hiçbir şey değişmedi. Bir dakika sonra yeniden dene.',
+  'failure.githubNotConnected':
+    'Bu çalışma alanının GitHub kurulumu kullanımda değil. Bir sahip, Ayarlar → Entegrasyonlar’dan bağlayabilir.',
+  'failure.githubAuthorization': 'Önce Purlay’in senin adına issue açmasına izin ver.',
   'failure.incidentOpen': 'Bu kanalda zaten açık bir olay var. Onu değiştir ya da önce çöz.',
   'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',
   'failure.incidentRespondersLimit':

@@ -202,6 +202,13 @@ export const AuditPage = (): React.JSX.Element => {
               actor,
               account: entry.metadata['account'] ?? '',
             });
+      // By identifier alone: which repository and which issue, never a word of it (D-246).
+      case 'integration.issue_created':
+        return t('audit.action.integration.issue_created', {
+          actor,
+          repository: entry.metadata['repository'] ?? '',
+          number: entry.metadata['issue'] ?? '',
+        });
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
