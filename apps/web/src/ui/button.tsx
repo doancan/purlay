@@ -11,7 +11,7 @@
  * - `ghost` — in a toolbar or a row, where an edge on every control would be noise.
  * - `danger` — destructive and not undoable, filled so it cannot be mistaken.
  * - `dangerQuiet` — a destructive action *offered*, not yet taken (Leave, Archive): the danger ink
- *   with no fill, so it reads as a warning; the step that takes it asks first and is `danger`.
+ *   on a pale danger wash, filling solid on hover, so it reads as a warning and answers the pointer; the step that takes it asks first and is `danger`.
  *
  * `disabled` looks the same for all five on purpose: the variant says what a
  * control would do, and a control that cannot do it says nothing. The edge stays
@@ -38,8 +38,9 @@ const variantClasses = {
   primary: 'border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover',
   secondary: 'border-border-subtle bg-surface-100 text-ink shadow-card hover:bg-surface-050',
   ghost: 'border-transparent text-ink-muted hover:bg-surface-200 hover:text-ink',
-  danger: 'border-danger bg-danger text-on-status',
-  dangerQuiet: 'border-transparent text-danger-text hover:bg-danger-subtle',
+  danger: 'border-danger bg-danger text-on-status hover:brightness-90',
+  dangerQuiet:
+    'border-transparent bg-danger-subtle text-danger-text hover:border-danger hover:bg-danger hover:text-on-status',
 } as const;
 
 export type ButtonVariant = keyof typeof variantClasses;

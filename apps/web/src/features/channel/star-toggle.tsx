@@ -92,7 +92,7 @@ export const StarToggle = ({
       label={t('star.label')}
       glyph="star"
       aria-pressed={channel.starred}
-      className={cn('max-narrow:hidden', channel.starred && 'text-accent-text')}
+      className={cn('max-narrow:hidden', channel.starred && 'text-ink')}
       onClick={() => {
         set(!channel.starred);
       }}
