@@ -195,17 +195,17 @@ export const responseHeaders = (appUrl: string): Record<string, string> => ({
  * response: an API answer loads nothing, a document loads the client from its own origin.
  *
  * No inline script and no `eval`: the build emits files, and `theme-init.js` is one so it
- * needs no hash. Two exceptions, each D-102's: inline **style**, because the dialog
- * primitive's scroll lock writes a `<style>` element (D-52), and GitHub's avatar host,
- * until avatars come through the image proxy. `connect-src 'self'` covers the socket, a
- * same-origin `wss:` under CSP Level 3.
+ * needs no hash. One exception, D-102's: inline **style**, because the dialog primitive's
+ * scroll lock writes a `<style>` element (D-52). Images are this origin's alone: an avatar is
+ * initials on a tint and fetches nothing (D-100, D-237), and another host's picture comes
+ * through the image proxy. `connect-src 'self'` covers the socket, a same-origin `wss:` under
+ * CSP Level 3.
  */
 const DOCUMENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  // TODO(#850): 'self' alone once avatars are served from our own origin.
-  "img-src 'self' https://avatars.githubusercontent.com",
+  "img-src 'self'",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

@@ -58,9 +58,9 @@ describe('the shell', () => {
     expect(Object.fromEntries(policy)).toEqual({
       'default-src': ["'self'"],
       'script-src': ["'self'"],
-      // The two exceptions D-102 names, and no third.
+      // The one exception D-102 names, and no second (D-237 took the avatar host's back).
       'style-src': ["'self'", "'unsafe-inline'"],
-      'img-src': ["'self'", 'https://avatars.githubusercontent.com'],
+      'img-src': ["'self'"],
       'font-src': ["'self'"],
       'connect-src': ["'self'"],
       'object-src': ["'none'"],
