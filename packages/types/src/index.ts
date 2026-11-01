@@ -26,3 +26,4 @@ export * from './password';
 export * from './quiet-hours';
 export * from './two-factor';
 export * from './missed-mail';
+export * from './github-app';

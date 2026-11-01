@@ -769,6 +769,9 @@ export const AUDIT_ACTIONS = [
   'integration.token_removed',
   'integration.feed_created',
   'integration.feed_removed',
+  /** A workspace's GitHub App installation connected by an owner, or let go — by an owner or by GitHub (D-246). */
+  'integration.app_connected',
+  'integration.app_disconnected',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
