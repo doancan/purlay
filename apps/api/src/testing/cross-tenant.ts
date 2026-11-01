@@ -610,6 +610,23 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
         'the caller takes only themselves out; what they lose is every channel, told to their own sockets',
     },
   },
+  'POST /api/workspaces/:workspaceId/deletion': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    // The name the crossing's owner gave their workspace (`aTenant`): the control asks for it exactly.
+    body: () => ({ confirm: 'xt-theirs' }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'the workspace itself (D-242); its channels are named only to the sockets told they closed',
+    },
+  },
+  'DELETE /api/workspaces/:workspaceId/deletion': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace itself, taken back (D-242); no channel is named or listed',
+    },
+  },
   'GET /api/attachments/:attachmentId': {
     refusal: 'ATTACHMENT_NOT_FOUND',
     visibility: {

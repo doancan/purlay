@@ -170,6 +170,11 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('RETENTION_TOO_SHORT'),
   /**
+   * Taking back a workspace's deletion once its erasure has begun (D-242): the grace period is over, and
+   * what has gone cannot come back.
+   */
+  Type.Literal('WORKSPACE_DELETION_STARTED'),
+  /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
    */
@@ -299,6 +304,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   LAST_OWNER: 409,
   LAST_CHANNEL_MEMBER: 409,
   RETENTION_TOO_SHORT: 409,
+  WORKSPACE_DELETION_STARTED: 409,
   RATE_LIMITED: 429,
   SETUP_UNAVAILABLE: 404,
   SETUP_LOCKED: 429,

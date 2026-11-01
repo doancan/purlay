@@ -55,6 +55,7 @@ export const aSession = (): MeResponse => ({
   isServerAdmin: false,
   nameFromGitHub: false,
   mustEnrolTwoFactor: false,
+  scheduledDeletions: [],
 });
 
 export const aChannel = (

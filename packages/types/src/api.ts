@@ -84,6 +84,13 @@ export type PageQuery = Static<typeof PageQuery>;
 
 // ── Identity ────────────────────────────────────────────────────────────────
 
+/**
+ * A workspace whose deletion was asked for, and when its content goes unless an owner takes it back
+ * (D-242): what asking answers, and what `GET /api/me` lists for its owners.
+ */
+export const WorkspaceDeletion = Type.Object({ workspace: Workspace, purgeAt: Timestamp });
+export type WorkspaceDeletion = Static<typeof WorkspaceDeletion>;
+
 /** `GET /api/me` — the caller, and the workspaces they belong to. */
 export const MeResponse = Type.Object({
   user: CurrentUser,
@@ -115,6 +122,12 @@ export const MeResponse = Type.Object({
    * it on, and signing out.
    */
   mustEnrolTwoFactor: Type.Boolean(),
+  /**
+   * The workspaces the caller owns whose deletion was asked for and can still be taken back (D-242): gone
+   * from `memberships` and from everybody's screens, and listed here so an owner can say no in time.
+   * Empty for anybody who owns none.
+   */
+  scheduledDeletions: Type.Array(WorkspaceDeletion),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -152,6 +165,22 @@ export const UpdateWorkspaceRequest = FromClient({
   name: Type.String({ minLength: 1, maxLength: WORKSPACE_NAME_MAX, format: 'name' }),
 });
 export type UpdateWorkspaceRequest = Static<typeof UpdateWorkspaceRequest>;
+
+/**
+ * How long a workspace whose deletion was asked for waits before its content is erased (D-242): any owner
+ * can take it back until then. A week, so an owner away for a few days, or a deletion nobody else agreed
+ * to, is still in time — and short enough that a team that meant it is not kept waiting for the erasure.
+ */
+export const WORKSPACE_DELETION_GRACE_DAYS = 7;
+
+/**
+ * `POST /api/workspaces/:workspaceId/deletion` — an owner asks for the workspace to be deleted, typing its
+ * name (D-242): the one act here that ends in an erasure, so it is not made by a slip of the hand.
+ */
+export const DeleteWorkspaceRequest = FromClient({
+  confirm: Type.String({ maxLength: WORKSPACE_NAME_MAX }),
+});
+export type DeleteWorkspaceRequest = Static<typeof DeleteWorkspaceRequest>;
 
 /** The shortest window an owner may keep history for — the database's `retention_days_sane` (D-27). */
 export const RETENTION_DAYS_MIN = 30;
@@ -782,6 +811,8 @@ export const AUDIT_ACTIONS = [
   'retention.purged',
   'storage.quota_changed',
   'audit.exported',
+  'workspace.deletion_requested',
+  'workspace.deletion_cancelled',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** One of the recorded actions, by name: what a filter on the trail names (D-222). */

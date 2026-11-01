@@ -112,6 +112,7 @@ describe('the endpoints', () => {
       isServerAdmin: false,
       nameFromGitHub: false,
       mustEnrolTwoFactor: false,
+      scheduledDeletions: [],
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });

@@ -414,6 +414,9 @@ export const en = {
   'audit.goneChannel': 'a channel that is gone',
   'audit.unknown': '{actor}: {action}',
   'audit.action.audit.exported': '{actor} downloaded the audit log',
+  'audit.action.workspace.deletion_requested':
+    '{actor} asked for the workspace to be deleted after {when}',
+  'audit.action.workspace.deletion_cancelled': '{actor} took back the workspace’s deletion',
   'audit.filters': 'Narrow the log',
   'audit.filter.person': 'Person',
   'audit.filter.action': 'Action',
@@ -458,6 +461,8 @@ export const en = {
   'audit.kind.retention.purged': 'History cleared',
   'audit.kind.storage.quota_changed': 'Storage quota changed',
   'audit.kind.audit.exported': 'Audit log downloaded',
+  'audit.kind.workspace.deletion_requested': 'Workspace deletion asked for',
+  'audit.kind.workspace.deletion_cancelled': 'Workspace deletion taken back',
   'audit.action.member.role_changed': '{actor} changed {target}’s role from {from} to {to}',
   'audit.action.member.removed': '{actor} removed {target}',
   'audit.action.member.left': '{actor} left the workspace',
@@ -1553,6 +1558,8 @@ export const en = {
     'That is as many people as an incident has responding. Take somebody off first.',
   'failure.incidentPostmortemChanged':
     'Somebody else saved the postmortem since you began. Your text is kept: read theirs, then save again.',
+  'failure.deletionStarted':
+    'Too late: the workspace is already being erased, and its deletion can no longer be taken back.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",

@@ -132,6 +132,33 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PUT', `/api/channels/${world.channelId}/retention`, as, {
       keepsAtLeast: 'forever',
     }),
+  'ask for the workspace to be deleted': async (world, as) => {
+    const { name } = await world.db
+      .selectFrom('workspaces')
+      .select('name')
+      .where('id', '=', world.workspaceId)
+      .executeTakeFirstOrThrow();
+    return await call(world, 'POST', `/api/workspaces/${world.workspaceId}/deletion`, as, {
+      confirm: name,
+    });
+  },
+  'take back the workspace’s deletion': async (world, as) => {
+    // Asked for by the owner first, so each role is tried on a deletion there is to take back.
+    const { name } = await world.db
+      .selectFrom('workspaces')
+      .select('name')
+      .where('id', '=', world.workspaceId)
+      .executeTakeFirstOrThrow();
+    const asked = await call(
+      world,
+      'POST',
+      `/api/workspaces/${world.workspaceId}/deletion`,
+      world.people.owner,
+      { confirm: name },
+    );
+    expect(asked.status).toBe(200);
+    return await call(world, 'DELETE', `/api/workspaces/${world.workspaceId}/deletion`, as);
+  },
   'export the workspace': async (world, as) =>
     await call(world, 'POST', `/api/workspaces/${world.workspaceId}/exports`, as),
   'read the workspace’s exports': async (world, as) =>
@@ -310,6 +337,7 @@ describe('integration: every administrative write is on the trail, once', () => 
     'revoke an invitation link': 1,
     'remove the GitHub token': 1,
     'disconnect a repository from a channel': 1,
+    'take back the workspace’s deletion': 1,
   };
 
   /** Reads that are themselves administrative acts: taking the trail away is on it (D-222). */
