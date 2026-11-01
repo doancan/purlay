@@ -133,6 +133,33 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface GithubAppDeliveries {
+  body_digest: string;
+  delivery_id: string;
+  received_at: Timestamp;
+}
+
+export interface GithubAppHandshakes {
+  expires_at: Timestamp;
+  purpose: string;
+  return_to: string | null;
+  state_digest: string;
+  user_id: string;
+  verifier_encrypted: string | null;
+  workspace_id: string | null;
+}
+
+export interface GithubAppInstallations {
+  account_login: string;
+  account_type: string;
+  connected_at: Timestamp;
+  connected_by: string | null;
+  id: string;
+  installation_id: Int8;
+  suspended_at: Timestamp | null;
+  workspace_id: string;
+}
+
 export interface GithubDeliveries {
   body_digest: string | null;
   delivery_id: string;
@@ -163,6 +190,19 @@ export interface GithubRepoFeeds {
   repository_id: Int8 | null;
   secret_encrypted: string;
   workspace_id: string;
+}
+
+export interface GithubUserAuthorizations {
+  access_expires_at: Timestamp | null;
+  access_token_encrypted: string;
+  created_at: Timestamp;
+  github_login: string;
+  github_user_id: Int8;
+  id: string;
+  refresh_expires_at: Timestamp | null;
+  refresh_token_encrypted: string | null;
+  updated_at: Timestamp;
+  user_id: string;
 }
 
 export interface IncidentResponders {
@@ -401,6 +441,12 @@ export interface ServerAuditLog {
 
 export interface ServerSettings {
   created_at: Generated<Timestamp>;
+  github_app_client_id: string | null;
+  github_app_client_secret_encrypted: string | null;
+  github_app_id: Int8 | null;
+  github_app_private_key_encrypted: string | null;
+  github_app_slug: string | null;
+  github_app_webhook_secret_encrypted: string | null;
   github_client_id: string | null;
   github_client_secret_encrypted: string | null;
   id: Generated<boolean>;
@@ -567,9 +613,13 @@ export interface DB {
   channel_bookmarks: ChannelBookmarks;
   channel_members: ChannelMembers;
   channels: Channels;
+  github_app_deliveries: GithubAppDeliveries;
+  github_app_handshakes: GithubAppHandshakes;
+  github_app_installations: GithubAppInstallations;
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
   github_repo_feeds: GithubRepoFeeds;
+  github_user_authorizations: GithubUserAuthorizations;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
