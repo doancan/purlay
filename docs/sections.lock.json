@@ -184,6 +184,7 @@
     "8.2": "`link_previews`",
     "8.3": "`github_repo_feeds` and `github_deliveries`",
     "8.4": "The GitHub App (D-246)",
+    "8.5": "`github_links` and `github_operations` (D-246)",
     "9": "Administration & Operations",
     "9.1": "`audit_log`",
     "9.10": "`missed_mail_letters`",
