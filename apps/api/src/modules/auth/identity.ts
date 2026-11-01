@@ -219,6 +219,16 @@ export const recordGitHubSignIn = async (
         message: 'That account is gone. Sign in again.',
       });
     }
+    // One GitHub identity per account (D-179 §3): the library's check at the link (`better-auth.ts`) and
+    // this write are not one step, and two callbacks of different GitHub accounts for one address can
+    // both pass it. The row is locked here, so the second finds the first's id and is refused, its
+    // sign-in rolled back with its link.
+    if (account.github_id !== null && account.github_id !== githubId) {
+      throw new AppError({
+        code: 'FORBIDDEN',
+        message: 'That account signs in another way.',
+      });
+    }
     // Made by GitHub: this sign-in made it, or it has GitHub's id and was never connected to one —
     // its id written as it was made (`better-auth.ts`'s user hook), so this holds whatever failed after.
     const githubMade =
