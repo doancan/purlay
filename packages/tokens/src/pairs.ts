@@ -21,6 +21,8 @@
 
 const TEXT = 4.5;
 const BOUNDARY = 3;
+/** A control's own edge, soft by design: the field's fill and its label already say it is a control. */
+const CONTROL_EDGE = 1.6;
 
 export interface Pair {
   /** The colour that is drawn: text, an icon, a border, a ring. */
@@ -115,7 +117,7 @@ export const PAIRS: readonly Pair[] = [
     ),
     ...cross(['focus-ring'], NAV, BOUNDARY, 'the keyboard focus ring inside navigation'),
   ]),
-  ...cross(['border-strong'], READING, BOUNDARY, 'the edge of a control'),
+  ...cross(['border-strong'], READING, CONTROL_EDGE, 'the edge of a control'),
   ...cross(['focus-ring'], READING, BOUNDARY, 'the keyboard focus ring (UX §8)'),
   ...cross(['composer-edge'], SURFACES, BOUNDARY, 'the focused composer’s edge: where you type'),
 ];

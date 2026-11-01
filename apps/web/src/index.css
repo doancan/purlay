@@ -292,6 +292,66 @@
   animation: firework-fall calc(var(--duration-celebrate) * 0.55) linear both;
 }
 
+/*
+ * A select, drawn in the product's tokens where the browser can: `appearance: base-select` lets the page
+ * style the list that opens (Chromium), so it is a card of rows like the menus, not the system's list.
+ * Elsewhere the same select is the platform's own — still accessible and right on a phone. Its arrow is
+ * the icon set's chevron (`ui/select.tsx`), so the browser's is hidden.
+ */
+@utility select-base {
+  appearance: none;
+
+  @supports (appearance: base-select) {
+    appearance: base-select;
+    display: flex;
+    align-items: center;
+
+    &::picker-icon {
+      display: none;
+    }
+
+    &::picker(select) {
+      appearance: base-select;
+      box-sizing: border-box;
+      min-width: anchor-size(width);
+      margin-block: var(--space-1);
+      padding: var(--space-1);
+      border: var(--stroke-hairline) solid var(--border-subtle);
+      border-radius: var(--radius-2xl);
+      background: var(--surface-100);
+      box-shadow: var(--shadow-float);
+    }
+
+    & option {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      color: var(--ink);
+      font-family: var(--text-label-family);
+      font-size: var(--text-label-size);
+      font-weight: var(--weight-normal);
+      cursor: pointer;
+    }
+
+    & option:hover,
+    & option:focus-visible {
+      background: var(--surface-200);
+      outline: none;
+    }
+
+    & option:checked {
+      font-weight: var(--weight-semibold);
+    }
+
+    & option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+    }
+  }
+}
+
 /* A segmented control's selected mark slides to the segment now chosen (`ui/slide-track.tsx`). */
 @utility slide-mark {
   transition-property: transform, width, height, opacity;
