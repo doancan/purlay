@@ -22,6 +22,8 @@ export type Slot = { readonly job: string; readonly minute: number } & (
 /** The jobs, at quiet times and apart, so a slow one does not overlap the next. */
 export const PLAN: readonly Slot[] = [
   { job: 'sweep:sessions', every: 'hour', minute: 15 },
+  // Before the night's other work, so what a deleted workspace held is not purged or counted again (D-242).
+  { job: 'purge:workspaces', every: 'day', hour: 2, minute: 0 },
   // Before the storage count is checked, so a night's purge is in what it checks (D-139 §2).
   { job: 'purge:retention', every: 'day', hour: 2, minute: 30 },
   { job: 'sweep:orphans', every: 'day', hour: 3, minute: 0 },
