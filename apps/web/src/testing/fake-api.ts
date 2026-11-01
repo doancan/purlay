@@ -43,6 +43,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   setQuietHours: unexpected('setQuietHours'),
   missedMail: unexpected('missedMail'),
   githubApp: unexpected('githubApp'),
+  githubRepositories: unexpected('githubRepositories'),
+  createGitHubIssue: unexpected('createGitHubIssue'),
   startGitHubInstallation: unexpected('startGitHubInstallation'),
   removeGitHubInstallation: unexpected('removeGitHubInstallation'),
   startGitHubAuthorization: unexpected('startGitHubAuthorization'),

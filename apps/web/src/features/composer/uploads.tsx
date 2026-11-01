@@ -232,6 +232,11 @@ const uploadRefusal = (
     case 'UNKNOWN':
     case 'ACCOUNT_EMAIL_CONFLICT':
     case 'GITHUB_ACCOUNT_TAKEN':
+    // GitHub's, never an upload's (D-246).
+    case 'GITHUB_UNAVAILABLE':
+    case 'GITHUB_NOT_CONNECTED':
+    case 'GITHUB_AUTHORIZATION_REQUIRED':
+    case 'GITHUB_REQUEST_CONFLICT':
     // The setup's, never an upload's.
     case 'SETUP_UNAVAILABLE':
     case 'SETUP_LOCKED':
