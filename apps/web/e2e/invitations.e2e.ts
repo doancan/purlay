@@ -111,7 +111,7 @@ test.describe('an invitation', () => {
     // is the integration tests' (`invitation-mail.integration.test.ts`).
     await page.route('**/api/auth/methods', async (route) => {
       await route.fulfill({
-        json: { github: true, email: true, oidc: null, signUp: 'invite-only' },
+        json: { github: true, email: true, oidc: null, signUp: 'invite-only', password: true },
       });
     });
     await signIn();
