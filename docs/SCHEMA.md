@@ -229,7 +229,7 @@ CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS N
 
 `device_name` is the name the person's Mac gave itself, written when the native application's code is spent (D-191) and read only back to that person (D-193); it is bounded as the request is (`NATIVE_DEVICE_NAME_PATTERN`).
 
-`last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60)
+`last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60) Where the server signs out an unused session, at most every five minutes instead, and also when the page says the person is using it (the socket's `ACTIVE`), since it is then what the idle timeout is judged by; a session is ended when `last_used_at` plus the timeout, or `created_at` plus the maximum age, has passed, and its row is deleted (D-244).
 
 Expired rows are not kept: `purgeDeadSessions` removes them in bounded batches, called by the scheduler (#71), and with them any row from before D-179 that still carries `revoked_at`. (D-87)
 
@@ -1680,7 +1680,7 @@ CREATE TABLE object_deletions (
 ### 9.5. `server_settings`
 
 The operator's settings for the whole server (D-179 §6): who may sign up, GitHub's OAuth app, the mail
-relay, who may make a workspace (D-155, D-169), and the sign-in policy (D-239). They are in the database because a person changes
+relay, who may make a workspace (D-155, D-169), the sign-in policy (D-239) and how long a session lives (D-244). They are in the database because a person changes
 them in the browser; what the process needs before it can read a row — the database, `ENCRYPTION_KEY`,
 the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md`).
 
@@ -1704,6 +1704,12 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   disconnected while it is — a rule the application weighs inside the transaction that saves the change, not
   a check here: a provider whose secret a rotated key cannot open is set in its columns and no way in, which
   only the application can tell. `bun run admin:reset-password` turns passwords on again.
+- **How long a session lives** (D-244, added by 0073): `session_idle_timeout_hours` signs out a session unused for
+  that long, and `session_max_age_days` one that old since its sign-in, whatever its use; `NULL` is off, as every
+  server was before. Which values may be chosen is `@purlay/types`' (`SESSION_IDLE_TIMEOUT_HOURS`,
+  `SESSION_MAX_AGE_DAYS`); the check here refuses only what no policy could mean. Nothing is written into
+  `sessions` (§3.2): each session is judged from its own `created_at` and `last_used_at` when it is read, so a
+  change reaches the sessions already open.
 - `imported_from_env_at` is when the environment was copied in, **once**, on the first start; set, every
   later start leaves the row alone (`importFromEnvOnce`). `setup_completed_at` is when the setup in the
   browser was finished.
@@ -1735,6 +1741,9 @@ CREATE TABLE server_settings (
     -- The sign-in policy (D-239), added by 0068.
     require_two_factor           BOOLEAN NOT NULL DEFAULT FALSE,
     password_sign_in             BOOLEAN NOT NULL DEFAULT TRUE,
+    -- How long a session lives (D-244), added by 0073; NULL is off.
+    session_idle_timeout_hours   SMALLINT,
+    session_max_age_days         SMALLINT,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -1753,7 +1762,9 @@ CREATE TABLE server_settings (
     CONSTRAINT server_settings_oidc_not_blank
         CHECK (oidc_issuer <> '' AND oidc_client_id <> '' AND oidc_name <> ''),
     CONSTRAINT server_settings_oidc_name_needs_provider
-        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL)
+        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL),
+    CONSTRAINT server_settings_session_lifetime_positive
+        CHECK (session_idle_timeout_hours > 0 AND session_max_age_days > 0)
 );
 ```
 
@@ -2161,6 +2172,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0067_two_factor.sql users.two_factor_enabled, two_factors: two-step verification for an account with a password, its key and backup codes sealed  (D-236)
 0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
 0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
+0073_session_lifetime.sql server_settings.session_idle_timeout_hours, session_max_age_days: how long a session may go unused, and live  (D-244)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

@@ -385,6 +385,8 @@ export interface ServerSettings {
   oidc_name: string | null;
   password_sign_in: Generated<boolean>;
   require_two_factor: Generated<boolean>;
+  session_idle_timeout_hours: number | null;
+  session_max_age_days: number | null;
   setup_completed_at: Timestamp | null;
   sign_up: Generated<string>;
   smtp_allow_plaintext: Generated<boolean>;
