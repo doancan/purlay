@@ -395,7 +395,15 @@ it. On a narrow window the navigation opens as the sidebar does.
   to make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), the **archived channels** (D-232) — each with
   when it was archived, a private one only to its members, and **Restore**; a name taken since says to rename the
-  other first — and *Create workspace…*.
+  other first — *Create workspace…*, and for an owner only a **Danger zone** with *Delete workspace…* (D-242).
+  Its dialog says the workspace leaves everyone at once and is erased after seven days unless an owner keeps
+  it, links to the export (Data & retention) for a copy first, and enables **Delete workspace** only once the
+  name is typed exactly; a refusal of the name is said under the field, any other above the buttons, and what
+  was typed stays. Done, the tab goes to the front door. Every owner of a workspace being deleted sees, under
+  the connection's bar in each workspace they still have — and on the front door when it was their last — one
+  danger-toned bar: *<workspace> is being deleted: its content is erased after <when>.* with **Keep
+  <workspace>**, which takes it back for everybody; a refusal (too late) is said in the bar. Its members see
+  nothing: it has left their sidebar, and a tab open on it shows *not found*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
