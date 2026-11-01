@@ -167,8 +167,6 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'STORAGE_UNAVAILABLE':
     case 'PUSH_UNAVAILABLE':
     case 'EMAIL_SIGN_IN_UNAVAILABLE':
-    // The integrations page says it in words of its own (#884).
-    case 'GITHUB_UNAVAILABLE':
     // The setup's own: its screens say each in words of their own (`UX.md` §11); anywhere else, generic.
     case 'SETUP_UNAVAILABLE':
     case 'SETUP_LOCKED':

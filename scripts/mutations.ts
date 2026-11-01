@@ -11578,6 +11578,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "{role === 'owner' && <DeleteWorkspaceCard />}",
     replace: '{<DeleteWorkspaceCard />}',
     tests: ['apps/web/src/features/settings/pages/delete-workspace.test.tsx'],
+  },
+  {
     id: 'announcement-member-posts-a-root',
     why: 'a member writes a new message in an announcement channel’s feed (D-243)',
     file: MESSAGES,
@@ -11648,6 +11650,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '              {configures && channel.state !== null && <Posting channel={channel} />}\n',
     replace: '              {channel.state !== null && <Posting channel={channel} />}\n',
     tests: ['apps/web/src/features/channel/announcement.test.tsx'],
+  },
+  {
     id: 'lapsed-session-read-as-live',
     why: 'a session unused past the idle timeout or older than the maximum age is still served (D-244)',
     file: 'apps/api/src/modules/auth/better-auth.ts',
@@ -11731,6 +11735,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  ...SESSION_IDLE_TIMEOUT_HOURS.map((hours) => Type.Literal(hours)),\n',
     replace: '  Type.Integer({ minimum: 1 }),\n',
     tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'incoming-webhook-secret-unchecked',
     why: 'anybody who knows a hook’s id posts into its channel, whatever secret they send',
     file: HOOKS,
@@ -11825,6 +11831,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "  path.replace(INCOMING_WEBHOOK_SECRET, '$1/:secret');\n",
     replace: '  path;\n',
     tests: ['apps/api/src/ingress/http/incoming-webhooks.integration.test.ts'],
+  },
+  {
     id: 'github-app-callback-any-browser',
     why: 'a trip comes back in somebody else’s browser and connects an installation, or a token, of the person who left (D-246)',
     file: GITHUB_APP,
@@ -12016,6 +12024,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "  if (done.outcome === 'applied' && change?.kind === 'opened') {\n",
     replace: '  if (false) {\n',
     tests: [GITHUB_WORK_TESTS],
+  },
+  {
     id: 'unfurl-uses-a-token-github-refused',
     why: 'a token GitHub called revoked is asked with on every link, and its cached cards are still served (#884)',
     file: 'apps/api/src/modules/integrations/unfurl.ts',
