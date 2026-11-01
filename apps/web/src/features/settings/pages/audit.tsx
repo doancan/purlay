@@ -225,6 +225,12 @@ export const AuditPage = (): React.JSX.Element => {
           repository: entry.metadata['repository'] ?? '',
           number: entry.metadata['issue'] ?? '',
         });
+      case 'integration.work_linked':
+        return t('audit.action.integration.work_linked', {
+          actor,
+          repository: entry.metadata['repository'] ?? '',
+          number: entry.metadata['number'] ?? '',
+        });
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
