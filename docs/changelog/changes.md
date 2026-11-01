@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Channels** — An owner or an admin can make a channel one where only owners and admins post in the feed, from its details; everybody else in it is told so in place of the composer and still replies in threads, and a GitHub feed keeps posting (D-243)
 - **Notifications** — Turn on email about direct messages and mentions left unread for fifteen minutes: one letter at most an hour, never in Deep Work or quiet hours, quoting only what you can still read, with a link that stops it without signing in (D-240)
 - **Channels** — Mark every channel read at once with Shift+Esc, from the command palette or the workspace menu; your other devices clear too, and an answer still waiting in a thread stays unread (D-238)
 - **Sign-in** — The server's administrator can require two-step verification of every account with a password (anyone without it is asked to turn it on before anything else) and, while GitHub or single sign-on works, turn password sign-in off; `admin:reset-password` turns it back on (D-239)
