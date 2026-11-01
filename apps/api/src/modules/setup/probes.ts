@@ -37,7 +37,8 @@ import {
   type MailMessage,
   type SmtpTransportFactory,
 } from '../../platform/mail';
-import { systemClock } from '../../platform/clock';
+import { systemClock, type Clock } from '../../platform/clock';
+import { appJwt } from '../../platform/github-app-key';
 import { readCapped } from '../../platform/http-body';
 import type { Logger } from '../../platform/logging';
 import { smtpUrlProblem } from '../../platform/smtp-address';
@@ -50,7 +51,13 @@ import {
   type OidcCredentials,
   type OidcFetch,
 } from '../auth/oidc';
-import type { SmtpSettings } from './settings';
+import {
+  GitHubRateLimited,
+  GitHubUnauthorized,
+  GitHubUnavailable,
+  type GitHubAppApi,
+} from '../integrations/github-app-api';
+import type { GitHubAppSettings, SmtpSettings } from './settings';
 import type { ServerAdminSession, SetupSession } from './setup';
 
 /**
@@ -202,6 +209,42 @@ const githubVerdict = (status: number, text: string, secret: string): ProbeResul
     );
   }
   return failed('unexpected-reply', rawReply(`HTTP ${String(status)}: ${text}`, [secret]));
+};
+
+/**
+ * Whether GitHub takes a token the App's private key signed, as the App given (D-246): `GET /app` as itself.
+ * Refused is `key-rejected`; an App other than the id, slug and client id given is `app-mismatch`. The key
+ * never leaves this process — only what it signed does.
+ */
+export const probeAppKey = async (
+  api: GitHubAppApi,
+  clock: Clock,
+  candidate: GitHubAppSettings,
+): Promise<ProbeResult> => {
+  try {
+    const app = await api.app(appJwt(candidate.clientId, candidate.privateKey, clock.now()));
+    if (
+      app.id !== candidate.appId ||
+      app.slug !== candidate.slug ||
+      app.clientId !== candidate.clientId
+    ) {
+      return failed(
+        'app-mismatch',
+        `the key signs as app ${String(app.id)} (${app.slug}, ${app.clientId})`,
+      );
+    }
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof GitHubUnauthorized) return failed('key-rejected', 'HTTP 401');
+    if (error instanceof GitHubRateLimited) {
+      return failed(
+        'unreachable',
+        `GitHub is limiting requests for ${String(error.retryAfterSeconds)} s`,
+      );
+    }
+    if (error instanceof GitHubUnavailable) return failed('unexpected-reply', error.message);
+    throw error;
+  }
 };
 
 /** Whether GitHub takes this client id and secret together. Sends no code GitHub ever issued. */

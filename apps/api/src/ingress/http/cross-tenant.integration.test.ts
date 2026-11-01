@@ -29,6 +29,7 @@ import {
   requestInit,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -52,9 +53,9 @@ const call = async (
   cookie: string,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock, storage: STORE })).handle(
-    new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)),
-  );
+  await createApp(
+    testDependencies({ database: db, clock, storage: STORE, githubApp: () => GITHUB_APP_STUB }),
+  ).handle(new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)));
 
 const signedIn = async (db: Executor, name: string): Promise<string> =>
   (await aSignedInUser(db, clock, name)).cookie;

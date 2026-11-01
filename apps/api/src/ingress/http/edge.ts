@@ -85,7 +85,7 @@ export const isUploadRequest = (request: Request): boolean =>
  * one segment for the id, never wider than the route. Its body is GitHub's JSON, held to its own
  * bound rather than the client's, since a push of twenty commits is longer than any message.
  */
-const WEBHOOK_PATH = /^\/api\/webhooks\/github\/[^/]+$/;
+const WEBHOOK_PATH = /^\/api\/webhooks\/(?:github\/[^/]+|github-app)$/;
 
 /** How long a delivery may be. GitHub's own cap is far larger; a longer push is refused and shown failed there. */
 export const WEBHOOK_BODY_MAX_BYTES = 1024 * 1024;

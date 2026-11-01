@@ -69,6 +69,14 @@ x-environment: &environment
   OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
   OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
   OIDC_NAME: ${OIDC_NAME:-}
+  # The GitHub App issues are written through (D-246), a seed read on the first start only: all six or none,
+  # empty is none — nothing of GitHub issues is then offered.
+  GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+  GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+  GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+  GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+  GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+  GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
   # Where GitHub is: github.com and its API unless set, for a GitHub Enterprise Server. Empty is unset.
   GITHUB_URL: ${GITHUB_URL:-}
   GITHUB_API_URL: ${GITHUB_API_URL:-}

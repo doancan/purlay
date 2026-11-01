@@ -16,6 +16,8 @@
  * The API calls take only a token this stub issued, as `Authorization: Bearer`.
  */
 import type { GithubFetch } from '../modules/auth/better-auth';
+import type { GitHubAppFetch } from '../modules/integrations/github-app-api';
+import { answeredWithin, type GitHubAppStub } from './github-app-stub';
 
 /** A GitHub account as GitHub's API describes it. */
 export interface GitHubPerson {
@@ -51,6 +53,8 @@ export interface GitHubStub {
   readonly authorize: (location: string) => Authorized;
   /** The token endpoint and the API, as a `fetch` the sign-in library is handed. */
   readonly fetch: GithubFetch;
+  /** The same, as the GitHub App's calls are made (D-246): its App's answers first, when it plays one. */
+  readonly appFetch: GitHubAppFetch;
   readonly calls: GitHubCalls;
   /** Every token request the stub refused, with GitHub's `error`, for a test to read. */
   readonly refusals: string[];
@@ -112,7 +116,11 @@ export const aGitHubStub = (
     readonly clientId: string;
     readonly clientSecret: string;
   } = GITHUB_STUB_CREDENTIALS,
-  options: { readonly now?: () => number } = {},
+  options: {
+    readonly now?: () => number;
+    /** A GitHub App this GitHub also plays (`github-app-stub.ts`), answered on the same addresses. */
+    readonly app?: GitHubAppStub;
+  } = {},
 ): GitHubStub => {
   const now = options.now ?? Date.now;
   const codes = new Map<
@@ -221,6 +229,10 @@ export const aGitHubStub = (
       headers: init.headers,
       ...(init.body === undefined ? {} : { body: init.body }),
     });
+    if (options.app !== undefined) {
+      const answered = await answeredWithin(options.app.handle(request), init.signal);
+      if (answered !== undefined) return answered;
+    }
     const { pathname } = new URL(url);
     if (pathname === TOKEN_PATH) {
       switch (behaviour.token ?? 'gives') {
@@ -248,6 +260,24 @@ export const aGitHubStub = (
       hostname,
       fetch: async (request) => {
         const { pathname, search } = new URL(request.url);
+        const app = options.app;
+        if (app !== undefined) {
+          // GitHub's installation screen, and its authorization screen for the App: the person presses the
+          // button at once, for the first installation they can reach.
+          if (pathname === `/apps/${app.credentials.slug}/installations/new`) {
+            const reachable = [...app.installations.values()].find((each) => each.reachable);
+            if (reachable === undefined) return new Response('no installation', { status: 404 });
+            return Response.redirect(app.installOnGitHub(request.url, reachable.id), 302);
+          }
+          if (
+            pathname === '/login/oauth/authorize' &&
+            new URL(request.url).searchParams.get('client_id') === app.credentials.clientId
+          ) {
+            return Response.redirect(app.authorizeOnGitHub(request.url), 302);
+          }
+          const answered = await app.handle(request);
+          if (answered !== undefined) return answered;
+        }
         if (pathname === '/login/oauth/authorize') {
           const { code, state, redirectUri } = authorize(`${AUTHORIZE_URL}${search}`);
           const back = new URL(redirectUri);
@@ -267,5 +297,14 @@ export const aGitHubStub = (
     };
   };
 
-  return { authorize, fetch, calls, refusals, presentedCodes, serve };
+  const appFetch: GitHubAppFetch = async (url, init) =>
+    await fetch(url, {
+      ...(init.method === 'POST' ? { method: 'POST' } : {}),
+      headers: init.headers,
+      ...(init.body === undefined ? {} : { body: init.body }),
+      redirect: 'manual',
+      signal: init.signal,
+    });
+
+  return { authorize, fetch, appFetch, calls, refusals, presentedCodes, serve };
 };

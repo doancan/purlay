@@ -17,6 +17,9 @@ export type ServerAuditAction =
   | 'server.github_disconnected'
   | 'server.oidc_connected'
   | 'server.oidc_disconnected'
+  /** The GitHub App issues are written through (D-246). */
+  | 'server.github_app_connected'
+  | 'server.github_app_disconnected'
   | 'server.smtp_connected'
   | 'server.smtp_disconnected'
   | 'server.sign_up_changed'

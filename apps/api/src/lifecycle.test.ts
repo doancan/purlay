@@ -317,6 +317,7 @@ describe('shutting down a server whose relay the settings replaced (D-179 §4.9)
     github: undefined,
     oidc: undefined,
     smtp: undefined,
+    githubApp: undefined,
     workspaceCreators: { kind: 'first' },
     setupCompletedAt: undefined,
     requireTwoFactor: false,

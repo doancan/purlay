@@ -58,7 +58,12 @@ import {
 } from './auth';
 import { lift, readServerAccounts, suspend } from './accounts';
 import { endMySession, readMySessions } from './devices';
-import { AUTH_BASE_PATH, OIDC_CALLBACK, SIGN_IN_CALLBACK } from '@purlay/types';
+import {
+  AUTH_BASE_PATH,
+  GITHUB_APP_CALLBACK,
+  OIDC_CALLBACK,
+  SIGN_IN_CALLBACK,
+} from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
 import {
@@ -134,9 +139,28 @@ import {
   connectGitHubApp,
   connectOidcProvider,
   connectMailRelay,
+  connectIssuesApp,
   disconnectChannel,
+  disconnectIssuesApp,
   readServerSettings,
 } from './server';
+import {
+  beginAuthorization,
+  beginInstallation,
+  endAuthorization,
+  endInstallation,
+  githubAppCallback,
+  readGitHubAppStatus,
+  receiveAppWebhook,
+  type GitHubAppRouteDependencies,
+} from './github-app';
+import {
+  githubAppApi,
+  githubAppCaller,
+  platformAppFetch,
+  type GitHubAppFetch,
+} from '../../modules/integrations/github-app-api';
+import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
   createWorkspaceChannel,
   joinPublicChannel,
@@ -259,6 +283,13 @@ export interface Dependencies {
   readonly personalExportRunner: (exportId: string) => void;
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
   readonly githubApi?: GitHubApi;
+  /**
+   * The GitHub App issues are written through (D-246), as this request reads it; absent, the settings' as the
+   * holder serves them (`settingsChange`), and without a holder, none. A test hands its own.
+   */
+  readonly githubApp?: () => GitHubAppSettings | undefined;
+  /** How the App's calls reach GitHub; absent, the platform's `fetch`. A test hands its stand-in's. */
+  readonly githubAppFetch?: GitHubAppFetch;
   /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
   readonly externalFetch?: ExternalFetch;
   readonly log: Logger;
@@ -459,6 +490,31 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
   };
   const delivering = { count: 0 };
+  // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
+  const githubUrls = {
+    web: dependencies.config.GITHUB_URL,
+    api: dependencies.config.GITHUB_API_URL,
+  };
+  const appApi = githubAppApi(
+    githubAppCaller(dependencies.githubAppFetch ?? platformAppFetch, () =>
+      dependencies.clock.now(),
+    ),
+    githubUrls,
+  );
+  const githubApp = (): GitHubAppRouteDependencies => ({
+    auth: dependencies.auth,
+    database: dependencies.database,
+    clock: dependencies.clock,
+    log,
+    cipher,
+    app:
+      dependencies.githubApp === undefined
+        ? dependencies.settingsChange?.holder.current()?.settings.githubApp
+        : dependencies.githubApp(),
+    api: appApi,
+    urls: githubUrls,
+    appUrl: dependencies.config.APP_URL,
+  });
 
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
@@ -576,6 +632,13 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
       if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK) {
         return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
+      }
+      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246).
+      if (path === GITHUB_APP_CALLBACK) {
+        if (refusal.status === 500) log.error('request failed', { err: error, path });
+        set.status = 302;
+        set.headers.location = '/?github=unavailable';
+        return '';
       }
       const where = writtenPath(route, path);
       // The client is told INTERNAL and nothing else; the cause is written here.
@@ -773,6 +836,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return '';
     })
+    .post(
+      '/api/server/github-app',
+      async ({ request, body }) => await connectIssuesApp(setup, request, body),
+    )
+    .delete('/api/server/github-app', async ({ request, set }) => {
+      await disconnectIssuesApp(setup, request);
+      set.status = 204;
+      return '';
+    })
     .delete('/api/server/oidc', async ({ request, set }) => {
       await disconnectChannel(setup, request, 'oidc');
       set.status = 204;
@@ -909,6 +981,39 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           body,
         ),
     )
+    .get(
+      '/api/workspaces/:workspaceId/github-app',
+      async ({ request, params }) =>
+        await readGitHubAppStatus(githubApp(), request, params.workspaceId),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/github-app/installation',
+      async ({ request, params }) =>
+        await beginInstallation(githubApp(), request, params.workspaceId),
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/github-app/installation',
+      async ({ request, params, set }) => {
+        await endInstallation(githubApp(), request, params.workspaceId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/github-app/authorization',
+      async ({ request, body }) => await beginAuthorization(githubApp(), request, body),
+    )
+    .delete('/api/github-app/authorization', async ({ request, set }) => {
+      await endAuthorization(githubApp(), request);
+      set.status = 204;
+      return null;
+    })
+    .get('/api/github-app/callback', async ({ request, set }) => {
+      set.status = 302;
+      set.headers.location = await githubAppCallback(githubApp(), request);
+      set.headers['cache-control'] = 'no-store';
+      return '';
+    })
     .get(
       '/api/workspaces/:workspaceId/presence',
       async ({ request, params }) =>
@@ -1383,6 +1488,32 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         return attachment;
       },
       // The body is the file, read by the handler after the session and the membership (D-109 §3).
+      { parse: 'none' },
+    )
+    .post(
+      '/api/webhooks/github-app',
+      async ({ request, server }) => {
+        const outcome = await receiveAppWebhook(
+          {
+            ...githubApp(),
+            mayKnock: async (address) => await knocks.consume(address),
+            inFlight: delivering,
+            deadline: async (ms) => {
+              await Bun.sleep(ms);
+            },
+          },
+          request,
+          limitKeyFor(
+            clientAddress(
+              peerOf(server, request),
+              request.headers,
+              dependencies.config.TRUST_PROXY,
+            ),
+          ),
+        );
+        return { outcome };
+      },
+      // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
       { parse: 'none' },
     )
     .post(

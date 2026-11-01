@@ -1,6 +1,7 @@
 /**
  * The server's own settings, kept in the database (D-179 §6): who may sign up, GitHub's OAuth app, the
- * single sign-on provider (D-200), the mail relay, who may make a workspace, and the sign-in policy (D-239). One
+ * single sign-on provider (D-200), the mail relay, the GitHub App issues are written through (D-246), who may
+ * make a workspace, and the sign-in policy (D-239). One
  * row, `server_settings` (migration 0049), read whole and written by patch.
  *
  * - **The secrets are sealed** by the one credential cipher (`platform/crypto.ts`, D-39 §6) — the GitHub
@@ -18,12 +19,18 @@
  * and the secret sessions are signed with, which is derived from `ENCRYPTION_KEY` and never a setting.
  */
 import type { Executor } from '@purlay/db';
-import { OIDC_NAME_MAX, type ServerSettingsView } from '@purlay/types';
+import {
+  GITHUB_APP_SLUG_PATTERN,
+  OIDC_NAME_MAX,
+  type SealedSettingName,
+  type ServerSettingsView,
+} from '@purlay/types';
 import type { AuthSettings, SignInPolicy } from '../auth/better-auth';
 import { workspaceCreatorsOf, type WorkspaceCreators } from '../workspaces/creators';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import { SealBroken, type CredentialCipher } from '../../platform/crypto';
+import { githubAppKeyProblem, normalisedKey } from '../../platform/github-app-key';
 import { oidcIssuerProblem, oidcNameProblem } from '../../platform/oidc-address';
 import { smtpUrlProblem } from '../../platform/smtp-address';
 import { atomicallyOn } from '../../platform/transactions';
@@ -41,9 +48,25 @@ export interface SmtpSettings {
   readonly allowPlaintext: boolean;
 }
 
+/**
+ * The GitHub App issues are written through (D-246 §1): who it is to GitHub, and its three secrets — the client
+ * secret a code is redeemed with, the private key it signs as itself with, and the secret its deliveries are
+ * signed with. Each secret is named so the logger's list finds it at any depth (`NEVER_LOGGED`).
+ */
+export interface GitHubAppSettings {
+  readonly appId: number;
+  readonly slug: string;
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly privateKey: string;
+  readonly webhookSecret: string;
+}
+
 /** Everything the server reads from its settings: what the sign-in library takes, and the rest. */
 export interface ServerSettings extends AuthSettings, SignInPolicy {
   readonly smtp: SmtpSettings | undefined;
+  /** The GitHub App (D-246); unset, nothing of issues from conversations is offered. */
+  readonly githubApp: GitHubAppSettings | undefined;
   /** Who may make a workspace (D-155, D-169). */
   readonly workspaceCreators: WorkspaceCreators;
   /** When the setup in the browser was finished; unset until it is. */
@@ -59,6 +82,7 @@ export interface SettingsPatch {
   readonly github?: NonNullable<AuthSettings['github']> | null | undefined;
   readonly oidc?: NonNullable<AuthSettings['oidc']> | null | undefined;
   readonly smtp?: SmtpSettings | null | undefined;
+  readonly githubApp?: GitHubAppSettings | null | undefined;
   readonly workspaceCreators?: WorkspaceCreators | undefined;
   readonly requireTwoFactor?: boolean | undefined;
   readonly passwordSignIn?: boolean | undefined;
@@ -74,6 +98,7 @@ export interface SettingsSeed {
   readonly github?: NonNullable<AuthSettings['github']>;
   readonly oidc?: NonNullable<AuthSettings['oidc']>;
   readonly smtp?: SmtpSettings;
+  readonly githubApp?: GitHubAppSettings;
   readonly workspaceCreators: WorkspaceCreators;
 }
 
@@ -85,6 +110,9 @@ const SEALED_IN = {
   githubClientSecret: 'server_settings.github_client_secret_encrypted',
   oidcClientSecret: 'server_settings.oidc_client_secret_encrypted',
   smtpUrl: 'server_settings.smtp_url_encrypted',
+  githubAppClientSecret: 'server_settings.github_app_client_secret_encrypted',
+  githubAppPrivateKey: 'server_settings.github_app_private_key_encrypted',
+  githubAppWebhookSecret: 'server_settings.github_app_webhook_secret_encrypted',
 } as const;
 
 /** A server that has never written its settings reads these: closed, nothing connected. */
@@ -93,6 +121,7 @@ const DEFAULTS: ServerSettings = {
   github: undefined,
   oidc: undefined,
   smtp: undefined,
+  githubApp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
   requireTwoFactor: false,
@@ -103,6 +132,8 @@ const DEFAULTS: ServerSettings = {
 const LOGIN = /^[a-z0-9][a-z0-9-]{0,38}$/;
 /** Whether `login` is a GitHub login as the creators setting takes one (lower case, as it is kept). */
 export const isGitHubLogin = (login: string): boolean => LOGIN.test(login);
+
+const GITHUB_APP_SLUG = new RegExp(GITHUB_APP_SLUG_PATTERN);
 
 /** An address, roughly: the relay is the judge of the rest. */
 const ADDRESS = /^[^\s@<>]+@[^\s@<>]+$/;
@@ -132,7 +163,7 @@ const creatorsOf = (kind: string, logins: readonly string[]): WorkspaceCreators 
 };
 
 /** A setting that holds a sealed secret: what a rotated `ENCRYPTION_KEY` leaves unreadable. */
-export type SealedSetting = 'github' | 'smtp' | 'oidc';
+export type SealedSetting = SealedSettingName;
 
 /** The settings as a start reads them, and which sealed secrets it could not open. */
 export interface BootSettings {
@@ -207,10 +238,68 @@ const readWith = async (
     github,
     oidc,
     smtp,
+    githubApp: await githubAppOf(row, open),
     workspaceCreators: creatorsOf(row.workspace_creators, row.workspace_creator_logins),
     setupCompletedAt: row.setup_completed_at ?? undefined,
     requireTwoFactor: row.require_two_factor,
     passwordSignIn: row.password_sign_in,
+  };
+};
+
+/**
+ * The App's three secrets opened, or nothing — the App is whole or not there (`server_settings_github_app_whole`);
+ * one secret that does not open is the App's, and all of it is read as unset.
+ */
+const githubAppOf = async (
+  row: {
+    readonly github_app_id: string | null;
+    readonly github_app_slug: string | null;
+    readonly github_app_client_id: string | null;
+    readonly github_app_client_secret_encrypted: string | null;
+    readonly github_app_private_key_encrypted: string | null;
+    readonly github_app_webhook_secret_encrypted: string | null;
+  },
+  open: (
+    setting: SealedSetting,
+    value: string,
+    column: (typeof SEALED_IN)[keyof typeof SEALED_IN],
+  ) => Promise<string | undefined>,
+): Promise<GitHubAppSettings | undefined> => {
+  if (
+    row.github_app_id === null ||
+    row.github_app_slug === null ||
+    row.github_app_client_id === null ||
+    row.github_app_client_secret_encrypted === null ||
+    row.github_app_private_key_encrypted === null ||
+    row.github_app_webhook_secret_encrypted === null
+  ) {
+    return undefined;
+  }
+  const clientSecret = await open(
+    'githubApp',
+    row.github_app_client_secret_encrypted,
+    SEALED_IN.githubAppClientSecret,
+  );
+  const privateKey = await open(
+    'githubApp',
+    row.github_app_private_key_encrypted,
+    SEALED_IN.githubAppPrivateKey,
+  );
+  const webhookSecret = await open(
+    'githubApp',
+    row.github_app_webhook_secret_encrypted,
+    SEALED_IN.githubAppWebhookSecret,
+  );
+  if (clientSecret === undefined || privateKey === undefined || webhookSecret === undefined) {
+    return undefined;
+  }
+  return {
+    appId: Number(row.github_app_id),
+    slug: row.github_app_slug,
+    clientId: row.github_app_client_id,
+    clientSecret,
+    privateKey,
+    webhookSecret,
   };
 };
 
@@ -259,6 +348,12 @@ interface Written {
   smtp_url_encrypted?: string | null;
   mail_from?: string | null;
   smtp_allow_plaintext?: boolean;
+  github_app_id?: number | null;
+  github_app_slug?: string | null;
+  github_app_client_id?: string | null;
+  github_app_client_secret_encrypted?: string | null;
+  github_app_private_key_encrypted?: string | null;
+  github_app_webhook_secret_encrypted?: string | null;
   workspace_creators?: string;
   workspace_creator_logins?: string[];
   setup_completed_at?: Date | null;
@@ -324,6 +419,42 @@ const columnsOf = async (cipher: CredentialCipher, patch: SettingsPatch): Promis
     written.smtp_url_encrypted = await sealed(cipher, patch.smtp.smtpUrl, SEALED_IN.smtpUrl);
     written.mail_from = patch.smtp.from;
     written.smtp_allow_plaintext = patch.smtp.allowPlaintext;
+  }
+  if (patch.githubApp === null) {
+    written.github_app_id = null;
+    written.github_app_slug = null;
+    written.github_app_client_id = null;
+    written.github_app_client_secret_encrypted = null;
+    written.github_app_private_key_encrypted = null;
+    written.github_app_webhook_secret_encrypted = null;
+  } else if (patch.githubApp !== undefined) {
+    const app = patch.githubApp;
+    if (!Number.isSafeInteger(app.appId) || app.appId < 1) throw new Error('an App id is a number');
+    if (!GITHUB_APP_SLUG.test(app.slug)) throw new Error('an App slug is GitHub’s');
+    if ([app.clientId, app.clientSecret, app.webhookSecret].includes('')) {
+      throw new Error('a GitHub App is its client id, its client secret and its webhook secret');
+    }
+    // As the App will sign with it: a key it could not use would be kept, and refuse every installation after.
+    const problem = githubAppKeyProblem(app.privateKey);
+    if (problem !== undefined) throw new Error(`the private key ${problem}`);
+    written.github_app_id = app.appId;
+    written.github_app_slug = app.slug;
+    written.github_app_client_id = app.clientId;
+    written.github_app_client_secret_encrypted = await sealed(
+      cipher,
+      app.clientSecret,
+      SEALED_IN.githubAppClientSecret,
+    );
+    written.github_app_private_key_encrypted = await sealed(
+      cipher,
+      normalisedKey(app.privateKey),
+      SEALED_IN.githubAppPrivateKey,
+    );
+    written.github_app_webhook_secret_encrypted = await sealed(
+      cipher,
+      app.webhookSecret,
+      SEALED_IN.githubAppWebhookSecret,
+    );
   }
   if (patch.workspaceCreators !== undefined) {
     const creators = patch.workspaceCreators;
@@ -396,6 +527,17 @@ export const settingsView = (settings: ServerSettings): ServerSettingsView => ({
           from: settings.smtp.from,
           allowPlaintext: settings.smtp.allowPlaintext,
         },
+  githubApp:
+    settings.githubApp === undefined
+      ? null
+      : {
+          appId: settings.githubApp.appId,
+          slug: settings.githubApp.slug,
+          clientId: settings.githubApp.clientId,
+          clientSecret: { set: true },
+          privateKey: { set: true },
+          webhookSecret: { set: true },
+        },
   workspaceCreators:
     settings.workspaceCreators.kind === 'listed'
       ? { kind: 'listed', logins: [...settings.workspaceCreators.logins].sort() }
@@ -414,6 +556,12 @@ type Seeding = Pick<
   | 'SMTP_URL'
   | 'MAIL_FROM'
   | 'SMTP_ALLOW_PLAINTEXT'
+  | 'GITHUB_APP_ID'
+  | 'GITHUB_APP_SLUG'
+  | 'GITHUB_APP_CLIENT_ID'
+  | 'GITHUB_APP_CLIENT_SECRET'
+  | 'GITHUB_APP_PRIVATE_KEY'
+  | 'GITHUB_APP_WEBHOOK_SECRET'
   | 'WORKSPACE_CREATORS'
 >;
 
@@ -448,6 +596,24 @@ export const envSeedOf = (config: Seeding): SettingsSeed => ({
           allowPlaintext: config.SMTP_ALLOW_PLAINTEXT,
         },
       }),
+  // All six or none (the configuration checks it).
+  ...(config.GITHUB_APP_ID === undefined ||
+  config.GITHUB_APP_SLUG === undefined ||
+  config.GITHUB_APP_CLIENT_ID === undefined ||
+  config.GITHUB_APP_CLIENT_SECRET === undefined ||
+  config.GITHUB_APP_PRIVATE_KEY === undefined ||
+  config.GITHUB_APP_WEBHOOK_SECRET === undefined
+    ? {}
+    : {
+        githubApp: {
+          appId: config.GITHUB_APP_ID,
+          slug: config.GITHUB_APP_SLUG,
+          clientId: config.GITHUB_APP_CLIENT_ID,
+          clientSecret: config.GITHUB_APP_CLIENT_SECRET,
+          privateKey: config.GITHUB_APP_PRIVATE_KEY,
+          webhookSecret: config.GITHUB_APP_WEBHOOK_SECRET,
+        },
+      }),
   workspaceCreators: workspaceCreatorsOf(config.WORKSPACE_CREATORS),
 });
 
@@ -468,6 +634,12 @@ export const ignoredEnvironment = (config: Seeding): string[] =>
       ['MAIL_FROM', config.MAIL_FROM !== undefined],
       // A boolean with a default: only `true` is something the operator wrote.
       ['SMTP_ALLOW_PLAINTEXT', config.SMTP_ALLOW_PLAINTEXT],
+      ['GITHUB_APP_ID', config.GITHUB_APP_ID !== undefined],
+      ['GITHUB_APP_SLUG', config.GITHUB_APP_SLUG !== undefined],
+      ['GITHUB_APP_CLIENT_ID', config.GITHUB_APP_CLIENT_ID !== undefined],
+      ['GITHUB_APP_CLIENT_SECRET', config.GITHUB_APP_CLIENT_SECRET !== undefined],
+      ['GITHUB_APP_PRIVATE_KEY', config.GITHUB_APP_PRIVATE_KEY !== undefined],
+      ['GITHUB_APP_WEBHOOK_SECRET', config.GITHUB_APP_WEBHOOK_SECRET !== undefined],
       ['WORKSPACE_CREATORS', config.WORKSPACE_CREATORS !== undefined],
     ] as const
   )
@@ -495,6 +667,7 @@ export const importFromEnvOnce = async (
     github: seed.github ?? null,
     oidc: seed.oidc ?? null,
     smtp: seed.smtp ?? null,
+    githubApp: seed.githubApp ?? null,
     workspaceCreators: seed.workspaceCreators,
   });
   return await atomicallyOn(executor)(async (transaction) => {

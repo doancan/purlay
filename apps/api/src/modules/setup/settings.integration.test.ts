@@ -17,6 +17,7 @@ import { fixedClock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { credentialCipher, SealBroken } from '../../platform/crypto';
 import { testConfig } from '../../testing/doubles';
+import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import {
   envSeedOf,
   ignoredEnvironment,
@@ -77,6 +78,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         github: undefined,
         oidc: undefined,
         smtp: undefined,
+        githubApp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
         requireTwoFactor: false,
@@ -93,6 +95,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         github: GITHUB,
         oidc: undefined,
         smtp: SMTP,
+        githubApp: undefined,
         workspaceCreators: { kind: 'listed', logins: new Set(['Ada', 'grace-h']) },
         setupCompletedAt: finished,
       });
@@ -101,6 +104,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         github: GITHUB,
         oidc: undefined,
         smtp: SMTP,
+        githubApp: undefined,
         // Lower case, as a login is compared (D-169).
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace-h']) },
         setupCompletedAt: finished,
@@ -197,6 +201,7 @@ describe('integration: the server settings (D-179 §6)', () => {
           github: undefined,
           oidc: undefined,
           smtp: undefined,
+          githubApp: undefined,
           workspaceCreators: { kind: 'anyone' },
           setupCompletedAt: undefined,
           requireTwoFactor: false,
@@ -267,6 +272,7 @@ describe('integration: the server settings (D-179 §6)', () => {
       await saveSettings(db, cipher, clock, {
         github: GITHUB,
         smtp: SMTP,
+        githubApp: undefined,
         workspaceCreators: { kind: 'anyone' },
       });
       await saveSettings(db, cipher, clock, { signUp: 'open' });
@@ -275,6 +281,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         github: GITHUB,
         oidc: undefined,
         smtp: SMTP,
+        githubApp: undefined,
         workspaceCreators: { kind: 'anyone' },
       });
 
@@ -398,6 +405,7 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         github: GITHUB,
         oidc: undefined,
         smtp: { ...SMTP, allowPlaintext: true },
+        githubApp: undefined,
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace']) },
         setupCompletedAt: undefined,
         requireTwoFactor: false,
@@ -431,6 +439,7 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         oidc: undefined,
         // A plaintext permission with no relay is nothing to keep.
         smtp: undefined,
+        githubApp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
         requireTwoFactor: false,
@@ -710,6 +719,117 @@ describe('integration: the single sign-on settings (D-200)', () => {
       expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(config))).toBe('imported');
       expect((await readSettings(db, cipher)).oidc).toBeUndefined();
       expect(ignoredEnvironment(config).filter((name) => name.startsWith('OIDC_'))).toEqual([]);
+    });
+  });
+});
+
+describe('integration: the GitHub App in the settings (D-246)', () => {
+  const APP = {
+    appId: GITHUB_APP_STUB.appId,
+    slug: GITHUB_APP_STUB.slug,
+    clientId: GITHUB_APP_STUB.clientId,
+    clientSecret: GITHUB_APP_STUB.clientSecret,
+    privateKey: GITHUB_APP_STUB.privateKey.trim(),
+    webhookSecret: GITHUB_APP_STUB.webhookSecret,
+  };
+
+  test('its three secrets are sealed each to its own column, read back whole, and never in the view', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { githubApp: APP });
+      expect((await readSettings(db, cipher)).githubApp).toEqual(APP);
+      const row = await db
+        .selectFrom('server_settings')
+        .select([
+          'github_app_client_secret_encrypted as secret',
+          'github_app_private_key_encrypted as key',
+          'github_app_webhook_secret_encrypted as hook',
+        ])
+        .where('id', '=', true)
+        .executeTakeFirstOrThrow();
+      const dump = JSON.stringify(row);
+      for (const secret of [APP.clientSecret, APP.webhookSecret, 'PRIVATE KEY']) {
+        expect(dump).not.toContain(secret);
+        expect(Buffer.from(row.secret ?? '', 'base64').toString('latin1')).not.toContain(secret);
+      }
+      expect(
+        await failure(
+          cipher.open(
+            Buffer.from(row.hook ?? '', 'base64'),
+            'server_settings.github_app_client_secret_encrypted',
+          ),
+        ),
+      ).toBeInstanceOf(SealBroken);
+      const view = settingsView(await readSettings(db, cipher));
+      expect(JSON.stringify(view)).not.toContain(APP.clientSecret);
+      expect(view.githubApp?.privateKey).toEqual({ set: true });
+
+      await saveSettings(db, cipher, clock, { githubApp: null });
+      expect((await readSettings(db, cipher)).githubApp).toBeUndefined();
+    });
+  });
+
+  test('a key it could not sign with, or a slug that is not GitHub’s, is never kept', async () => {
+    await withRollback(async (db) => {
+      expect(
+        String(
+          await failure(
+            saveSettings(db, cipher, clock, { githubApp: { ...APP, privateKey: 'x' } }),
+          ),
+        ),
+      ).toContain('the private key is not a PEM private key');
+      expect(
+        String(
+          await failure(saveSettings(db, cipher, clock, { githubApp: { ...APP, slug: 'No' } })),
+        ),
+      ).toContain('slug');
+      expect(
+        String(await failure(saveSettings(db, cipher, clock, { githubApp: { ...APP, appId: 0 } }))),
+      ).toContain('id');
+      expect(
+        String(
+          await failure(
+            saveSettings(db, cipher, clock, { githubApp: { ...APP, webhookSecret: '' } }),
+          ),
+        ),
+      ).toContain('webhook secret');
+    });
+  });
+
+  test('a secret a rotated key cannot open is the App’s: all of it reads as unset, and needs entering again', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(
+        db,
+        credentialCipher('a-different-key-of-the-right-shape-0123456789abcdef'),
+        clock,
+        { githubApp: APP },
+      );
+      const booted = await readSettingsToBoot(db, cipher);
+      expect(booted.needsReentry).toEqual(['githubApp']);
+      expect(booted.settings.githubApp).toBeUndefined();
+    });
+  });
+
+  test('the environment seeds it once, and names it when it is set afterwards', async () => {
+    await withRollback(async (db) => {
+      await db.deleteFrom('server_settings').execute();
+      const config = testConfig({
+        GITHUB_APP_ID: APP.appId,
+        GITHUB_APP_SLUG: APP.slug,
+        GITHUB_APP_CLIENT_ID: APP.clientId,
+        GITHUB_APP_CLIENT_SECRET: APP.clientSecret,
+        GITHUB_APP_PRIVATE_KEY: APP.privateKey.replaceAll('\n', '\\n'),
+        GITHUB_APP_WEBHOOK_SECRET: APP.webhookSecret,
+      });
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(config))).toBe('imported');
+      expect((await readSettings(db, cipher)).githubApp).toEqual(APP);
+      expect(ignoredEnvironment(config).filter((name) => name.startsWith('GITHUB_APP_'))).toEqual([
+        'GITHUB_APP_ID',
+        'GITHUB_APP_SLUG',
+        'GITHUB_APP_CLIENT_ID',
+        'GITHUB_APP_CLIENT_SECRET',
+        'GITHUB_APP_PRIVATE_KEY',
+        'GITHUB_APP_WEBHOOK_SECRET',
+      ]);
     });
   });
 });
