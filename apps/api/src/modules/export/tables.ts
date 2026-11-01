@@ -307,6 +307,14 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   incoming_webhooks:
     'a channel’s incoming webhooks: each the digest of the secret its address carries, a credential, never exported; what they posted is in `messages`, under the name each posted with (D-245)',
+  github_app_installations:
+    'which installation of the server’s GitHub App the workspace connected: a connection to a credential the server holds, as the token is (D-246)',
+  github_user_authorizations:
+    'a person’s sealed GitHub App tokens: credentials, the person’s own, never exported (D-246)',
+  github_app_handshakes:
+    'digests of the state of a trip to GitHub and back, and its sealed verifier, for ten minutes: credentials (D-246)',
+  github_app_deliveries:
+    'an idempotency log of the GitHub App’s deliveries, nobody’s record (D-246)',
   notifications: 'each person’s inbox, their own state',
   missed_mail_letters:
     'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',
@@ -572,6 +580,12 @@ export const PERSONAL_EXCLUDED: Readonly<Record<Exclude<keyof Database, Personal
   github_repo_feeds: 'a channel’s feed and its sealed secret: the workspace’s',
   github_integrations: 'the workspace’s sealed GitHub token: a credential',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
+  github_app_installations: 'the workspace’s connection to the server’s GitHub App (D-246)',
+  github_user_authorizations:
+    'the person’s sealed GitHub App tokens: credentials, never exported (D-246)',
+  github_app_handshakes:
+    'digests and a sealed verifier of a trip to GitHub, ten minutes long: credentials',
+  github_app_deliveries: 'an idempotency log of the GitHub App’s deliveries, nobody’s record',
   workspace_invitations: 'a workspace’s links and their digests: the workspace’s, and credentials',
   link_previews: 'a cache of other sites’ pages',
   job_runs: 'the scheduler’s own record',
