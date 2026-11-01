@@ -62,8 +62,23 @@ const call = async (
   ).handle(new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)));
 
 /** GitHub, as the App meets it: one repository, and the outsider who authorized (D-246). */
-const GITHUB_APP = aGitHubAppStub({ id: 502, login: 'outsider-dev' });
+const GITHUB_APP = aGitHubAppStub({ id: 502, login: 'outsider-dev' }, { now: () => NOW.getTime() });
 GITHUB_APP.install(31, 'acme', [{ id: 77, fullName: 'acme/api', private: true }]);
+// An issue there already, for a thread to be pointed at (D-246 §3).
+GITHUB_APP.items.push({
+  id: 9001,
+  number: 1,
+  kind: 'issue',
+  repositoryId: 77,
+  title: 'An issue',
+  body: '',
+  state: 'open',
+  merged: false,
+  creator: 'octocat',
+  createdAt: '2026-10-14T11:00:00.000Z',
+  updatedAt: '2026-10-14T11:30:00.000Z',
+});
+
 const GITHUB = aGitHubStub(
   { id: 502, login: 'outsider-dev', name: null, email: 'v@example.test' },
   {},

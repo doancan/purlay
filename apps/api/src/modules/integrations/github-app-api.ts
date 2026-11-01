@@ -124,6 +124,16 @@ export interface GitHubAppApi {
     repository: string,
     issue: { readonly title: string; readonly body: string },
   ) => Promise<CreatedIssue | { readonly refused: 'no-access' | 'issues-disabled' | 'invalid' }>;
+  /**
+   * An issue or a pull request, as the installation reads it: its title, its state — merged for a pull request
+   * GitHub says was — and when GitHub last changed it; `'missing'` for GitHub's 404. The issues route is asked
+   * first, since it answers for both; a pull request is then asked for its own `merged`.
+   */
+  readonly item: (
+    token: string,
+    repository: string,
+    number: number,
+  ) => Promise<WorkOnGitHub | 'missing'>;
   /** The newest issues of a repository since an instant (a hundred at most), as the installation reads them. */
   readonly issuesSince: (
     token: string,
@@ -136,6 +146,14 @@ export interface RepositoryOnGitHub {
   readonly id: number;
   readonly fullName: string;
   readonly private: boolean;
+}
+
+export interface WorkOnGitHub {
+  readonly kind: 'issue' | 'pull';
+  readonly number: number;
+  readonly title: string;
+  readonly state: 'open' | 'closed' | 'merged';
+  readonly updatedAt: Date;
 }
 
 export interface IssueOnGitHub {
@@ -196,6 +214,11 @@ const IssueBody = Type.Object({
   state: Type.Union([Type.Literal('open'), Type.Literal('closed')]),
   updated_at: Type.String({ format: 'date-time' }),
   pull_request: Type.Optional(Type.Unknown()),
+});
+
+const PullBody = Type.Object({
+  merged: Type.Optional(Type.Boolean()),
+  merged_at: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 });
 
 const UserInstallationsBody = Type.Object({
@@ -450,6 +473,40 @@ export const githubAppApi = (caller: GitHubAppCaller, urls: GitHubAppUrls): GitH
       body: body.body ?? '',
       state: body.state,
       updatedAt: new Date(body.updated_at),
+    };
+  },
+  item: async (token, repository, number): Promise<WorkOnGitHub | 'missing'> => {
+    const response = await caller.call(`${urls.api}/repos/${repository}/issues/${String(number)}`, {
+      method: 'GET',
+      token,
+    });
+    if (response.status === 404 || response.status === 403 || response.status === 410) {
+      await response.body?.cancel();
+      return 'missing';
+    }
+    await ok(response, 'an issue');
+    const issue = await readChecked(response, IssueBody, 'an issue');
+    if (issue.pull_request === undefined) {
+      return {
+        kind: 'issue',
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        updatedAt: new Date(issue.updated_at),
+      };
+    }
+    const pulled = await caller.call(`${urls.api}/repos/${repository}/pulls/${String(number)}`, {
+      method: 'GET',
+      token,
+    });
+    await ok(pulled, 'a pull request');
+    const pull = await readChecked(pulled, PullBody, 'a pull request');
+    return {
+      kind: 'pull',
+      number: issue.number,
+      title: issue.title,
+      state: pull.merged === true || pull.merged_at != null ? 'merged' : issue.state,
+      updatedAt: new Date(issue.updated_at),
     };
   },
   issuesSince: async (token, repository, since): Promise<readonly IssueOnGitHub[]> => {

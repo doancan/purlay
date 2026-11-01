@@ -27,6 +27,9 @@ import { atomicallyOn } from '../../platform/transactions';
 import { recordAudit } from '../audit/audit';
 import type { GitHubAppSettings } from '../setup/settings';
 import { signedBy } from './webhook';
+import { finishOperation } from './github-issues';
+import { applyItemEvent, tell, type ItemEvent, type ThreadNotice } from './github-work-events';
+import type { EventBus } from '../../platform/events';
 
 export type AppOutcome = GitHubAppDeliveryAnswer['outcome'];
 
@@ -34,6 +37,7 @@ export interface AppDeliveryDependencies {
   readonly database: Executor;
   readonly clock: Clock;
   readonly log: Logger;
+  readonly bus: EventBus;
   readonly app: GitHubAppSettings | undefined;
 }
 
@@ -52,6 +56,44 @@ const InstallationEvent = Type.Object({
   action: Type.String({ maxLength: 64 }),
   installation: Type.Object({ id: Type.Integer({ minimum: 1 }) }),
 });
+
+/** What every event about an item names: the installation it came through and the repository. */
+const Where = {
+  installation: Type.Object({ id: Type.Integer({ minimum: 1 }) }),
+  repository: Type.Object({
+    id: Type.Integer({ minimum: 1 }),
+    full_name: Type.String({ minLength: 3, maxLength: 140 }),
+  }),
+};
+
+const IssueEvent = Type.Object({
+  action: Type.String({ maxLength: 64 }),
+  ...Where,
+  issue: Type.Object({
+    number: Type.Integer({ minimum: 1 }),
+    title: Type.String(),
+    body: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    state: Type.Union([Type.Literal('open'), Type.Literal('closed')]),
+    updated_at: Type.String({ format: 'date-time' }),
+    pull_request: Type.Optional(Type.Unknown()),
+  }),
+});
+
+const PullEvent = Type.Object({
+  action: Type.String({ maxLength: 64 }),
+  ...Where,
+  number: Type.Integer({ minimum: 1 }),
+  pull_request: Type.Object({
+    title: Type.String(),
+    state: Type.Union([Type.Literal('open'), Type.Literal('closed')]),
+    merged: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
+    updated_at: Type.String({ format: 'date-time' }),
+  }),
+});
+
+/** The actions that change what a thread shows of an item: its words, or open, closed and merged. */
+const SHOWN_ISSUE_ACTIONS: ReadonlySet<string> = new Set(['edited', 'closed', 'reopened']);
+const SHOWN_PULL_ACTIONS: ReadonlySet<string> = new Set(['edited', 'closed', 'reopened']);
 
 const AuthorizationEvent = Type.Object({
   action: Type.String({ maxLength: 64 }),
@@ -78,6 +120,14 @@ const invalid = (field: string, why: string): AppError =>
 
 /** What a delivery changes here, read from its body before anything is written; null is nothing. */
 type Change =
+  | { readonly kind: 'item'; readonly item: ItemEvent }
+  | {
+      /** An issue just made: its body may end in the marker of an operation whose answer was lost. */
+      readonly kind: 'opened';
+      readonly item: ItemEvent;
+      readonly repositoryName: string;
+      readonly body: string;
+    }
   | { readonly kind: 'removed'; readonly installationId: number }
   | { readonly kind: 'suspended'; readonly installationId: number; readonly suspended: boolean }
   | { readonly kind: 'revoked'; readonly githubUserId: number };
@@ -94,6 +144,51 @@ const changeOf = (event: string, body: unknown): Change | null => {
     }
     return null;
   }
+  if (event === 'issues') {
+    if (!Value.Check(IssueEvent, body)) throw invalid('body', 'is not an issues event');
+    // A pull request is an issue to this event too, and is told by its own.
+    if (body.issue.pull_request !== undefined) return null;
+    const item: ItemEvent = {
+      installationId: body.installation.id,
+      repositoryId: body.repository.id,
+      kind: 'issue',
+      number: body.issue.number,
+      title: body.issue.title,
+      state: body.issue.state,
+      updatedAt: new Date(body.issue.updated_at),
+    };
+    if (body.action === 'opened') {
+      return {
+        kind: 'opened',
+        item,
+        repositoryName: body.repository.full_name,
+        body: body.issue.body ?? '',
+      };
+    }
+    return SHOWN_ISSUE_ACTIONS.has(body.action) ? { kind: 'item', item } : null;
+  }
+  if (event === 'pull_request') {
+    if (!Value.Check(PullEvent, body)) throw invalid('body', 'is not a pull request event');
+    if (!SHOWN_PULL_ACTIONS.has(body.action)) return null;
+    return {
+      kind: 'item',
+      item: {
+        installationId: body.installation.id,
+        repositoryId: body.repository.id,
+        kind: 'pull',
+        number: body.number,
+        title: body.pull_request.title,
+        // Closed is merged only when GitHub says it was; null while it has not worked it out is closed.
+        state:
+          body.pull_request.state === 'open'
+            ? 'open'
+            : body.pull_request.merged === true
+              ? 'merged'
+              : 'closed',
+        updatedAt: new Date(body.pull_request.updated_at),
+      },
+    };
+  }
   if (event === 'github_app_authorization') {
     if (!Value.Check(AuthorizationEvent, body)) {
       throw invalid('body', 'is not an authorization event');
@@ -103,9 +198,18 @@ const changeOf = (event: string, body: unknown): Change | null => {
   return null;
 };
 
-/** A change applied, in the transaction that records its delivery. */
-const apply = async (transaction: Executor, clock: Clock, change: Change): Promise<void> => {
+/** A change applied, in the transaction that records its delivery; the threads that now have something to show. */
+const apply = async (
+  transaction: Executor,
+  clock: Clock,
+  change: Change,
+): Promise<readonly ThreadNotice[]> => {
   switch (change.kind) {
+    case 'item':
+      return await applyItemEvent(transaction, change.item);
+    case 'opened':
+      // Seen, and nothing yet to change: a link to it exists only if somebody made it from a thread.
+      return await applyItemEvent(transaction, change.item);
     case 'removed': {
       const removed = await transaction
         .deleteFrom('github_app_installations')
@@ -123,7 +227,7 @@ const apply = async (transaction: Executor, clock: Clock, change: Change): Promi
           metadata: { account: row.account_login },
         });
       }
-      return;
+      return [];
     }
     case 'suspended':
       await transaction
@@ -131,14 +235,49 @@ const apply = async (transaction: Executor, clock: Clock, change: Change): Promi
         .set({ suspended_at: change.suspended ? clock.now() : null })
         .where('installation_id', '=', String(change.installationId))
         .execute();
-      return;
+      return [];
     case 'revoked':
       await transaction
         .deleteFrom('github_user_authorizations')
         .where('github_user_id', '=', String(change.githubUserId))
         .execute();
-      return;
+      return [];
   }
+};
+
+/**
+ * An issue that has just been made, seen before the person's own answer came back: if its body ends in the
+ * marker of an operation still waiting on GitHub's answer, that operation is what it was (D-246 §4). After the
+ * delivery committed, so that nothing is told of a delivery that did not stay; a delivery lost between the two
+ * costs nothing, since sending the request again finds the issue by its marker.
+ */
+const completeByMarker = async (
+  dependencies: AppDeliveryDependencies,
+  change: Extract<Change, { kind: 'opened' }>,
+): Promise<void> => {
+  const marker = /<!-- purlay:[0-9a-f-]{36} -->\s*$/.exec(change.body)?.[0].trim();
+  if (marker === undefined) return;
+  const operation = await dependencies.database
+    .selectFrom('github_operations')
+    .selectAll()
+    .where('marker', '=', marker)
+    .where('repository_id', '=', String(change.item.repositoryId))
+    .where('status', 'in', ['pending', 'unknown'])
+    .executeTakeFirst();
+  if (operation?.actor_id == null) return;
+  const root = await dependencies.database
+    .selectFrom('messages')
+    .select('channel_id')
+    .where('id', '=', operation.root_id)
+    .executeTakeFirst();
+  if (root === undefined) return;
+  await finishOperation(dependencies, root.channel_id, operation.actor_id, operation, {
+    number: change.item.number,
+    title: change.item.title,
+    body: change.body,
+    state: change.item.state === 'open' ? 'open' : 'closed',
+    updatedAt: change.item.updatedAt,
+  });
 };
 
 export const receiveAppDelivery = async (
@@ -176,19 +315,27 @@ export const receiveAppDelivery = async (
   }
   const change = changeOf(event, body);
   const bodyDigest = createHash('sha256').update(delivery.body).digest('hex');
-  const outcome = await atomicallyOn(database)(async (transaction): Promise<AppOutcome> => {
-    // Either key taken is the same delivery: its id again, or its body under another id.
-    const recorded = await transaction
-      .insertInto('github_app_deliveries')
-      .values({ delivery_id: deliveryId, body_digest: bodyDigest, received_at: clock.now() })
-      .onConflict((conflict) => conflict.doNothing())
-      .returning('delivery_id')
-      .executeTakeFirst();
-    if (recorded === undefined) return 'duplicate';
-    if (change === null) return 'ignored';
-    await apply(transaction, clock, change);
-    return 'applied';
-  });
-  log.info('github app delivery', { ...line, outcome });
-  return outcome;
+  const done = await atomicallyOn(database)(
+    async (
+      transaction,
+    ): Promise<{ readonly outcome: AppOutcome; readonly notices: readonly ThreadNotice[] }> => {
+      // Either key taken is the same delivery: its id again, or its body under another id.
+      const recorded = await transaction
+        .insertInto('github_app_deliveries')
+        .values({ delivery_id: deliveryId, body_digest: bodyDigest, received_at: clock.now() })
+        .onConflict((conflict) => conflict.doNothing())
+        .returning('delivery_id')
+        .executeTakeFirst();
+      if (recorded === undefined) return { outcome: 'duplicate', notices: [] };
+      if (change === null) return { outcome: 'ignored', notices: [] };
+      return { outcome: 'applied', notices: await apply(transaction, clock, change) };
+    },
+  );
+  // Told once what was applied has committed, and never as a notification: a state shown, nothing more.
+  await tell(dependencies, done.notices);
+  if (done.outcome === 'applied' && change?.kind === 'opened') {
+    await completeByMarker(dependencies, change);
+  }
+  log.info('github app delivery', { ...line, outcome: done.outcome });
+  return done.outcome;
 };

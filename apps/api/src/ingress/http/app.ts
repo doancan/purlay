@@ -145,6 +145,7 @@ import {
   readServerSettings,
 } from './server';
 import {
+  linkGitHubWork,
   makeGitHubIssue,
   readGitHubRepositories,
   STATUS_OF_OUTCOME,
@@ -1029,6 +1030,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await readGitHubRepositories(githubIssues(), request, params.workspaceId),
     )
+    .post('/api/messages/:messageId/github-link', async ({ request, params, body, set }) => {
+      const { link, created } = await linkGitHubWork(
+        githubIssues(),
+        request,
+        params.messageId,
+        body,
+      );
+      set.status = created ? 201 : 200;
+      return link;
+    })
     .post('/api/messages/:messageId/github-issue', async ({ request, params, body, set }) => {
       const outcome = await makeGitHubIssue(githubIssues(), request, params.messageId, body);
       set.status = STATUS_OF_OUTCOME[outcome.status];
@@ -1515,7 +1526,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, server }) => {
         const outcome = await receiveAppWebhook(
           {
-            ...githubApp(),
+            ...githubIssues(),
             mayKnock: async (address) => await knocks.consume(address),
             inFlight: delivering,
             deadline: async (ms) => {
