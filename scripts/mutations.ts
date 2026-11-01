@@ -3641,9 +3641,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'counters-ask-the-inbox-again',
     why: 'one mention reads an open inbox twice, once for its frame and once for the count it moved',
     file: 'apps/web/src/data/cache.ts',
-    find: "  editChannels(client, channelId, (c) => ({ ...c, state }));\n};\n\n/** The caller's notification level",
+    find: '  editChannels(client, channelId, (c) => ({ ...c, state }));\n};\n\n/**\n * Every channel of a workspace',
     replace:
-      "  editChannels(client, channelId, (c) => ({ ...c, state }));\n  void client.invalidateQueries({ queryKey: ['notifications'] });\n};\n\n/** The caller's notification level",
+      "  editChannels(client, channelId, (c) => ({ ...c, state }));\n  void client.invalidateQueries({ queryKey: ['notifications'] });\n};\n\n/**\n * Every channel of a workspace",
     tests: ['apps/web/src/data/cache.test.ts'],
   },
   {
@@ -11119,5 +11119,48 @@ export const MUTATIONS: readonly Mutation[] = [
     replace:
       '  const closing = shared;\n  if (closing !== undefined) await closing.destroy();\n  shared = undefined;\n',
     tests: ['packages/db/src/harness.integration.test.ts'],
+  },
+  {
+    id: 'read-all-crosses-workspaces',
+    why: "marking every channel read reads the person's channels in their other workspaces too (D-238)",
+    file: 'apps/api/src/platform/channels.ts',
+    find: '  (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map((channel) =>',
+    replace: '  (await visible(executor, context.userId, {})).map((channel) =>',
+    tests: ['apps/api/src/modules/channels/read-state.integration.test.ts'],
+  },
+  {
+    id: 'read-all-reads-what-was-read',
+    why: 'marking every channel read moves and tells every channel, though nothing in it was unread (D-238)',
+    file: 'apps/api/src/modules/channels/read-state.ts',
+    find: "    .where('unread_count', '>', 0)\n",
+    replace: '',
+    tests: [
+      'apps/api/src/modules/channels/read-state.integration.test.ts',
+      'apps/api/src/ingress/http/read-all.integration.test.ts',
+    ],
+  },
+  {
+    id: 'read-all-tells-no-device',
+    why: "the person's other devices keep their badges after every channel is marked read (D-238)",
+    file: 'apps/api/src/ingress/http/channels.ts',
+    find: '    outcomes.map((outcome) =>\n      publication(',
+    replace: '    outcomes.filter(() => false).map((outcome) =>\n      publication(',
+    tests: ['apps/api/src/realtime/channel-state.integration.test.ts'],
+  },
+  {
+    id: 'read-all-key-heard-as-escape',
+    why: 'Shift+Esc reaches the composer, the panels and the editor as an Escape too, and closes what the person was in (D-238)',
+    file: 'apps/web/src/features/shell/global-keys.tsx',
+    find: "    document.addEventListener('keydown', onKeyDown, { capture: true });\n",
+    replace: "    document.addEventListener('keydown', onKeyDown);\n",
+    tests: ['apps/web/src/features/shell/global-keys.test.tsx'],
+  },
+  {
+    id: 'read-all-key-taken-from-a-dialog',
+    why: "Shift+Esc in a dialog or a menu marks every channel read instead of being the dialog's Escape (D-238)",
+    file: 'apps/web/src/features/shell/global-keys.tsx',
+    find: '      if (event.target instanceof Element && event.target.closest(TOPMOST) !== null) return;\n',
+    replace: '',
+    tests: ['apps/web/src/features/shell/global-keys.test.tsx'],
   },
 ];
