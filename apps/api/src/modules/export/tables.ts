@@ -59,6 +59,9 @@ export const COLUMNS: Columns = {
     retention_days: 'export',
     storage_quota_bytes: 'export',
     storage_used_bytes: 'export',
+    // The deletion's job (D-242): null in every workspace that can still be exported.
+    purge_started_at: 'omit',
+    purged_at: 'omit',
   },
   workspace_members: {
     id: 'export',
@@ -316,7 +319,7 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   server_settings:
     'the operator’s settings for the whole server, not a workspace’s; the GitHub secret and the relay’s address are credentials, which never leave (D-179)',
   server_audit_log:
-    'who changed which of the server’s own settings, and when: the operator’s trail, not a workspace’s, and never exported (D-179 §4.8)',
+    'who changed which of the server’s own settings, and when, and which deleted workspace was erased: the operator’s trail, not a workspace’s, and never exported (D-179 §4.8, D-242)',
   admin_email_verification:
     'the digest of the one link that verifies the setup administrator’s address: a credential, the server’s, never exported (D-179 §4.3)',
   invitation_passports:

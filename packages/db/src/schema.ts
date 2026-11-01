@@ -384,6 +384,7 @@ export interface ServerAuditLog {
   id: string;
   session_id: string | null;
   target_user_id: string | null;
+  target_workspace_id: string | null;
 }
 
 export interface ServerSettings {
@@ -535,6 +536,8 @@ export interface Workspaces {
   deleted_at: Timestamp | null;
   id: Generated<string>;
   name: string;
+  purge_started_at: Timestamp | null;
+  purged_at: Timestamp | null;
   retention_days: number | null;
   slug: string;
   storage_quota_bytes: Generated<Int8>;
