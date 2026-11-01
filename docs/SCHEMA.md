@@ -1406,6 +1406,12 @@ CREATE TABLE github_integrations (
     -- Encrypted at the application layer. Never logged, never returned by an API. (D-11)
     access_token_encrypted TEXT,
 
+    -- When GitHub first answered the token 401: no call is made with it until it is replaced, and
+    -- replacing or removing it clears this (D-23, amended).
+    token_invalid_at TIMESTAMPTZ,
+    -- X-OAuth-Scopes as GitHub gave it when the token was saved; NULL for a fine-grained token.
+    token_scopes    TEXT,
+
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -2485,6 +2491,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0074_incoming_webhooks.sql incoming_webhooks, and an incoming webhook's post among the kinds of messages_event_known: a channel's incoming webhooks  (D-245)
 0075_github_app.sql server_settings.github_app_*, github_app_installations, github_user_authorizations, github_app_handshakes, github_app_deliveries: the GitHub App, a workspace's installation, a person's own authorization  (D-246)
 0076_github_links.sql github_links, github_operations: what a thread points at on GitHub, and the bounded record that makes creating an issue recoverable  (D-246)
+0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
