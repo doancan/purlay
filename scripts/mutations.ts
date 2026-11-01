@@ -64,6 +64,8 @@ const GITHUB_APP = 'apps/api/src/modules/integrations/github-app.ts';
 const GITHUB_APP_WEBHOOK = 'apps/api/src/modules/integrations/github-app-webhook.ts';
 const GITHUB_APP_TESTS = 'apps/api/src/ingress/http/github-app.integration.test.ts';
 const GITHUB_ISSUES = 'apps/api/src/modules/integrations/github-issues.ts';
+const GITHUB_WORK_EVENTS = 'apps/api/src/modules/integrations/github-work-events.ts';
+const GITHUB_WORK_TESTS = 'apps/api/src/ingress/http/github-work.integration.test.ts';
 const GITHUB_ISSUES_TESTS = 'apps/api/src/ingress/http/github-issues.integration.test.ts';
 const OIDC = 'apps/api/src/modules/auth/oidc.ts';
 const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
@@ -11866,7 +11868,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'github-app-delivery-twice',
     why: 'a redelivered delivery is applied again (D-246, D-134 §5)',
     file: GITHUB_APP_WEBHOOK,
-    find: "    if (recorded === undefined) return 'duplicate';\n",
+    find: "      if (recorded === undefined) return { outcome: 'duplicate', notices: [] };\n",
     replace: '',
     tests: [GITHUB_APP_TESTS],
   },
@@ -11899,8 +11901,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'github-issue-without-membership',
     why: 'a person taken out of a channel makes an issue from its thread with the form they opened before (D-246 §2)',
     file: GITHUB_ISSUES,
-    find: '  await requireChannelMember(\n',
-    replace: '  await (async (..._ignored: unknown[]) => undefined)(\n',
+    find: "    'Join the channel to create an issue from it.',\n  );\n",
+    replace: "    'Join the channel to create an issue from it.',\n  ).then(() => undefined);\n",
     tests: [GITHUB_ISSUES_TESTS],
   },
   {
@@ -11958,5 +11960,61 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "    await dependencies.database\n      .deleteFrom('github_user_authorizations')\n      .where('user_id', '=', userId)\n      .execute();\n    return authorizationRequired();\n",
     replace: '    return authorizationRequired();\n',
     tests: [GITHUB_ISSUES_TESTS],
+  },
+  {
+    id: 'github-link-without-own-access',
+    why: 'a person points at an issue of a repository they cannot reach on GitHub, and reads its title (D-246 §3)',
+    file: GITHUB_ISSUES,
+    find: '    if (repository === undefined) return undefined;\n    const token = await installationTokenOf(',
+    replace: '    if (false) return undefined;\n    const token = await installationTokenOf(',
+    tests: [GITHUB_WORK_TESTS],
+  },
+  {
+    id: 'github-link-read-as-the-person',
+    why: 'what a thread shows of linked work is read with a person’s own token, so it is that person’s view of it (D-246 §1)',
+    file: GITHUB_ISSUES,
+    find: '    const token = await installationTokenOf(dependencies, installation.installationId);\n    const work =',
+    replace: '    const token = person.token;\n    const work =',
+    tests: [GITHUB_WORK_TESTS],
+  },
+  {
+    id: 'github-link-unlimited',
+    why: 'a thread points at as many things as anybody adds, and every page of messages carries them all (D-246 §3)',
+    file: GITHUB_ISSUES,
+    find: '    if (existing.length >= GITHUB_WORK_PER_THREAD_MAX) {\n',
+    replace: '    if (false) {\n',
+    tests: [GITHUB_WORK_TESTS],
+  },
+  {
+    id: 'github-event-out-of-order',
+    why: 'a delivery that arrives late moves a link back to what it was, and the thread says open of closed work (D-246 §3)',
+    file: GITHUB_WORK_EVENTS,
+    find: '    if (new Date(row.state_at).getTime() >= event.updatedAt.getTime()) continue;\n',
+    replace: '',
+    tests: [GITHUB_WORK_TESTS],
+  },
+  {
+    id: 'github-event-repeat-is-news',
+    why: 'the same state said again tells every open thread something changed that did not (D-246 §3)',
+    file: GITHUB_WORK_EVENTS,
+    find: '    if (row.title === title && row.state === event.state) continue;\n',
+    replace: '',
+    tests: [GITHUB_WORK_TESTS],
+  },
+  {
+    id: 'github-event-any-installation',
+    why: 'an event through one installation changes the links of workspaces that connected another (D-246 §3)',
+    file: GITHUB_WORK_EVENTS,
+    find: "        .where('installation_id', '=', String(event.installationId)),\n",
+    replace: "        .where('installation_id', 'is not', null),\n",
+    tests: [GITHUB_WORK_TESTS],
+  },
+  {
+    id: 'github-event-lost-answer-not-found',
+    why: 'an issue seen being opened with the marker of a lost answer is not that operation, and the person is made to look for it (D-246 §4)',
+    file: GITHUB_APP_WEBHOOK,
+    find: "  if (done.outcome === 'applied' && change?.kind === 'opened') {\n",
+    replace: '  if (false) {\n',
+    tests: [GITHUB_WORK_TESTS],
   },
 ];
