@@ -39,6 +39,7 @@ describe('the missed-mail letter', () => {
     expect(text).toContain('  Bora\nhttps://purlay.test/w/kokil/c/c1?message=m2');
     expect(text).toContain('  Someone: “code and bold”');
     expect(text).toContain('Open Purlay:\nhttps://purlay.test\n');
+    expect(text).not.toContain('more');
     expect(text.endsWith(`https://purlay.test/mail/stop#${'a'.repeat(64)}`)).toBe(true);
   });
 
@@ -87,5 +88,24 @@ describe('the missed-mail letter', () => {
     expect(subject).toBe('Purlay’da seni bekleyen mesajlar var');
     expect(text).toContain('Bir çalışma alanı\n#x — 1 mesaj');
     expect(text).toContain('Purlay’ı aç:');
+  });
+
+  test('past three messages in a conversation, the rest are counted, in English too', () => {
+    const messages = [1, 2, 3, 4, 5].map((n) => ({
+      id: `m${String(n)}`,
+      author: 'Ayşe',
+      content: `n${String(n)}`,
+    }));
+    const { text } = missedLetter(
+      head({
+        workspaces: [
+          { name: 'W', slug: 'w', conversations: [{ channelId: 'c', name: 'x', messages }] },
+        ],
+      }),
+    );
+    expect(text).toContain('#x — 5 messages');
+    expect(text).toContain('  and 2 more');
+    expect(text).not.toContain('“n2”');
+    expect(text).toContain('“n5”');
   });
 });

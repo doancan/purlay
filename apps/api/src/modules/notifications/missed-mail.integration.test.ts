@@ -214,6 +214,58 @@ describe('integration: what a letter is about', () => {
     });
   });
 
+  test('one letter for every workspace, by name, and in each the conversation written in last comes first', async () => {
+    await withRollback(async (db) => {
+      const beta = await aRoomForAda(db);
+      const ops = await db
+        .insertInto('channels')
+        .values({ workspace_id: beta.workspaceId, name: 'ops', type: 'public' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('channel_members')
+        .values([
+          { channel_id: ops.id, user_id: beta.ada },
+          { channel_id: ops.id, user_id: beta.bob },
+        ])
+        .execute();
+      const alpha = await aRoom(db, ['carol']);
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: alpha.workspaceId, user_id: beta.ada, role: 'member' })
+        .execute();
+      await db
+        .insertInto('channel_members')
+        .values({ channel_id: alpha.channelId, user_id: beta.ada })
+        .execute();
+      await db
+        .updateTable('workspaces')
+        .set({ name: 'Beta' })
+        .where('id', '=', beta.workspaceId)
+        .execute();
+      await db
+        .updateTable('workspaces')
+        .set({ name: 'Alpha' })
+        .where('id', '=', alpha.workspaceId)
+        .execute();
+
+      await told(db, beta, ago(2 * HOUR_MS), { content: 'older, in general' });
+      await told(db, { ...beta, channelId: ops.id }, ago(HOUR_MS), { content: 'newer, in ops' });
+      await told(db, { ...alpha, ada: beta.ada, bob: beta.bob }, ago(HOUR_MS), {
+        content: 'in the other workspace',
+      });
+      const postbox = aPostbox();
+      expect(await run(db, NOW, postbox.send)).toMatchObject({ letters: 1 });
+      const text = postbox.letters[0]?.text ?? '';
+      const at = (words: string): number => text.indexOf(words);
+      expect(at('Alpha')).toBeGreaterThan(-1);
+      expect(at('Alpha')).toBeLessThan(at('Beta'));
+      expect(at('Beta')).toBeLessThan(at('#ops — 1 message'));
+      // Beta's #general, after its #ops: Alpha has a #general of its own, earlier.
+      expect(at('#ops — 1 message')).toBeLessThan(text.lastIndexOf('#general — 1 message'));
+    });
+  });
+
   test('in the person’s language, with the newest three quoted and the rest counted', async () => {
     await withRollback(async (db) => {
       const room = await aRoomForAda(db);
