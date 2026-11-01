@@ -521,8 +521,9 @@ CREATE TABLE channels (
     -- Denormalized so the sidebar can order channels without touching `messages`.
     last_message_at TIMESTAMPTZ,
 
-    -- The channel's own count of its renames, raised in the statement that renames under the row
-    -- lock: `CHANNEL_UPDATED` carries it and a client drops an older one (0023, D-123).
+    -- The channel's own count of its renames and changes of who posts, raised in the statement that
+    -- makes one under the row lock: `CHANNEL_UPDATED` carries it and a client drops an older one
+    -- (0023, D-123, D-243).
     state_version INTEGER NOT NULL DEFAULT 0,
 
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -536,6 +537,10 @@ CREATE TABLE channels (
     -- says otherwise — is the workspace's window. The purge keeps the longer of the two (I-10). (0063)
     min_retention_days INTEGER,
     retain_forever     BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Only the workspace's owners and admins post a root here (D-243): an announcement channel. A
+    -- reply in a thread, an edit and a GitHub feed's event are not held to it. (0072)
+    only_admins_post   BOOLEAN NOT NULL DEFAULT FALSE,
 
     CONSTRAINT named_unless_dm CHECK (
         (type = 'direct_message' AND name IS NULL)
@@ -553,6 +558,11 @@ CREATE TABLE channels (
         (min_retention_days IS NULL OR min_retention_days >= 30)
         AND NOT (retain_forever AND min_retention_days IS NOT NULL)
         AND (type <> 'direct_message' OR (min_retention_days IS NULL AND NOT retain_forever))
+    ),
+
+    -- A direct message is its people, and nobody configures it (D-123, D-243).
+    CONSTRAINT channels_only_admins_post_not_dm CHECK (
+        type <> 'direct_message' OR NOT only_admins_post
     ),
 
     -- Two lower-case member ids, the first not above the second byte-wise, joined with ':'.
@@ -598,6 +608,9 @@ path, which is why it is in no index. (D-88)
 when it is set, and a workspace window lengthened past it later simply wins — the purge keeps the longer of the
 two, read on every batch. An archived channel keeps its setting, and the purge still applies it: archiving
 hides a channel, it does not change how long its history is kept (D-123).
+
+`only_admins_post` is an owner's or an admin's, set through `PATCH /api/channels/:channelId` (D-243). A send
+reads it by the channel's primary key, and only for a root: a reply never reads it.
 
 ### 5.2. `channel_members`
 
@@ -2229,6 +2242,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
 0070_personal_exports.sql personal_exports: a person's export of their own data, made in the background, downloaded once  (D-241)
 0071_workspace_deletion.sql workspaces.purge_started_at, workspaces.purged_at, server_audit_log.target_workspace_id: an owner deletes a workspace, a grace period to take it back, then its content erased  (D-242)
+0072_announcement_channels.sql channels.only_admins_post: only the workspace's owners and admins post a root in the channel  (D-243)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

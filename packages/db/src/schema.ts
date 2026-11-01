@@ -124,6 +124,7 @@ export interface Channels {
   last_message_at: Timestamp | null;
   min_retention_days: number | null;
   name: string | null;
+  only_admins_post: Generated<boolean>;
   retain_forever: Generated<boolean>;
   state_version: Generated<number>;
   topic: string | null;
