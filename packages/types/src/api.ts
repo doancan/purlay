@@ -819,6 +819,7 @@ export const AUDIT_ACTIONS = [
   'integration.issue_created',
   /** An existing issue or pull request linked to a thread: who, where, which — never its title (D-246 §3). */
   'integration.work_linked',
+  'integration.feed_secret_regenerated',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',

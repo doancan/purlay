@@ -249,7 +249,7 @@ import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
 import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
-import { connectFeed, disconnectFeed, listFeeds } from './feeds';
+import { connectFeed, disconnectFeed, listFeeds, regenerateFeedSecret } from './feeds';
 import {
   listIncomingWebhooks,
   makeIncomingWebhook,
@@ -1230,6 +1230,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return created;
     })
+    .post(
+      '/api/channels/:channelId/github-feeds/:feedId/secret',
+      async ({ request, params }) =>
+        await regenerateFeedSecret(
+          { ...dependencies, cipher },
+          request,
+          params.channelId,
+          params.feedId,
+        ),
+    )
     .delete('/api/channels/:channelId/github-feeds/:feedId', async ({ request, params, set }) => {
       await disconnectFeed(dependencies, request, params.channelId, params.feedId);
       set.status = 204;
