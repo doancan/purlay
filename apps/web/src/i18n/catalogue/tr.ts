@@ -450,6 +450,7 @@ export const tr = {
   'audit.kind.integration.app_disconnected': 'GitHub App bağlantısı kesildi',
   'audit.kind.integration.issue_created': 'Bir konuşmadan issue açıldı',
   'audit.kind.integration.work_linked': 'Bir konuşmaya GitHub işi bağlandı',
+  'audit.kind.integration.feed_secret_regenerated': 'Akış gizli anahtarı yenilendi',
   'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
   'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
   'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
@@ -503,6 +504,10 @@ export const tr = {
     '{actor}, bir konuşmadan {repository}#{number} issue’sunu açtı',
   'audit.action.integration.work_linked':
     '{actor}, {repository}#{number} işini bir konuşmaya bağladı',
+  'audit.action.integration.feed_secret_regenerated':
+    '{actor}, {repository} akışının gizli anahtarını yeniledi',
+  'audit.action.integration.feed_secret_regenerated_in':
+    '{actor}, {channel} kanalındaki {repository} akışının gizli anahtarını yeniledi',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
@@ -694,6 +699,11 @@ export const tr = {
     'GitHub tokenı {when} tarihinde reddetti: iptal edilmiş ya da süresi dolmuş. Sen değiştirene kadar bağlantılar düz bağlantı olarak kalır.',
   'github.broad':
     'Bu, repo yetkisi olan klasik bir token gibi görünüyor: sahibinin erişebildiği her depoyu okuyabilir ve yazabilir. Kartlar için seçili depolarda ince ayarlı, salt okunur bir token yeterli ve daha güvenlidir.',
+  'github.save': 'Tokenı kaydet',
+  'github.saved': 'Token kaydedildi.',
+  'github.saveFailed': 'Token kaydedilmedi.',
+  'github.disconnect': 'Bağlantıyı kes',
+  'github.disconnectFailed': 'GitHub bağlantısı kesilmedi.',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
@@ -1177,6 +1187,11 @@ export const tr = {
   'feeds.disconnectAsk':
     '{repository} bağlantısı kaldırılsın mı? Webhook’u çalışmayı bırakır, gizli anahtarı silinir.',
   'feeds.disconnectFailed': 'Deponun bağlantısı kaldırılamadı.',
+  'feeds.regenerate': 'Gizli anahtarı yenile',
+  'feeds.regenerateOne': 'Gizli anahtarı yenile: {repository}',
+  'feeds.regenerateAsk':
+    '{repository} gizli anahtarı yenilensin mi? Eski anahtar hemen geçersiz olur; webhook yenisini alana kadar GitHub’ın teslimatları reddedilir.',
+  'feeds.regenerateFailed': 'Gizli anahtar yenilenemedi.',
   'feeds.neverDelivered': 'Henüz teslimat yok',
   'feeds.lastDelivery': 'Son teslimat {when}',
   'feeds.failure.channel_archived': '{when} reddedildi: bu kanal arşivlendi.',
@@ -1191,9 +1206,11 @@ export const tr = {
   'feeds.setup.contentType': 'Content type',
   'feeds.setup.secret': 'Secret',
   'feeds.setup.copy': '{what} değerini kopyala',
-  'feeds.setup.once':
-    'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse depo bağlantısını kaldırıp yeniden bağlamak gerekir.',
+  'feeds.setup.once': 'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse akıştan yenile.',
   'feeds.setup.done': 'Tamam',
+  'feeds.setup.regeneratedTitle': 'GitHub’da {repository} webhook’una yeni gizli anahtarı ver',
+  'feeds.setup.regeneratedSteps':
+    'Deponun Settings → Webhooks ekranında webhook’u düzenle ve yeni gizli anahtarı yapıştır. Adres ve content type aynı kalır.',
 
   // ── Bir kanalın gelen webhook’ları (D-245) ──────────────────────────────
   'hooks.title': 'Gelen webhook’lar',
@@ -1688,6 +1705,7 @@ export const tr = {
   'failure.githubNotConnected':
     'Bu çalışma alanının GitHub kurulumu kullanımda değil. Bir sahip, Ayarlar → Entegrasyonlar’dan bağlayabilir.',
   'failure.githubAuthorization': 'Önce Purlay’in senin adına issue açmasına izin ver.',
+    'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için akıştan yenile.',
   'failure.incidentOpen': 'Bu kanalda zaten açık bir olay var. Onu değiştir ya da önce çöz.',
   'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',
   'failure.incidentRespondersLimit':
@@ -1965,6 +1983,7 @@ export const tr = {
   'settings.integrations.connected': 'Bağlı',
   'settings.integrations.notConnected': 'Bağlı değil',
   'settings.integrations.replace': 'Token’ı değiştir',
+  'settings.integrations.refused': 'Token reddedildi',
   'settings.audit.title': 'Denetim kaydı',
   'settings.data.title': 'Veri ve saklama',
   'settings.data.description':
@@ -1977,7 +1996,6 @@ export const tr = {
   'theme.label': 'Tema',
   'theme.system': 'Sistem',
   'theme.light': 'Açık',
-  'settings.integrations.refused': 'Token reddedildi',
   'theme.dark': 'Koyu',
   'theme.midnight': 'Gece yarısı',
   'language.label': 'Dil',

@@ -231,6 +231,17 @@ export const AuditPage = (): React.JSX.Element => {
           repository: entry.metadata['repository'] ?? '',
           number: entry.metadata['number'] ?? '',
         });
+      case 'integration.feed_secret_regenerated': {
+        const repository = entry.metadata['repository'] ?? '';
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        return name == null
+          ? t('audit.action.integration.feed_secret_regenerated', { actor, repository })
+          : t('audit.action.integration.feed_secret_regenerated_in', {
+              actor,
+              repository,
+              channel: `#${name}`,
+            });
+      }
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
