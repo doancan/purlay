@@ -24,8 +24,18 @@ type Scope = BoundFunctions<typeof queries>;
 
 type View = Awaited<ReturnType<typeof renderApp>>;
 
-const NOT_CONNECTED: GitHubIntegration = { configured: false, updatedAt: null };
-const CONNECTED: GitHubIntegration = { configured: true, updatedAt: WHEN };
+const NOT_CONNECTED: GitHubIntegration = {
+  configured: false,
+  updatedAt: null,
+  invalidSince: null,
+  broadScopes: false,
+};
+const CONNECTED: GitHubIntegration = {
+  configured: true,
+  updatedAt: WHEN,
+  invalidSince: null,
+  broadScopes: false,
+};
 
 const settle = async (): Promise<void> => {
   for (let turn = 0; turn < 4; turn++) {
@@ -163,6 +173,60 @@ describe('the GitHub connection', () => {
     await person().click(view.getByRole('button', { name: 'Disconnect' }));
     await settle();
     expect(view.getByRole('alert').textContent).toContain('GitHub was not disconnected.');
+  });
+
+  test('a token GitHub refused is said to the admin, with when, and a replacement is offered (#884)', async () => {
+    let status: GitHubIntegration = { ...CONNECTED, invalidSince: '2026-09-09T12:00:00.000Z' };
+    const view = await openPage({
+      githubIntegration: () => Promise.resolve(status),
+      setGitHubToken: () => {
+        status = CONNECTED;
+        return Promise.resolve();
+      },
+    });
+    const alert = main(view).getByRole('alert');
+    expect(alert.textContent).toMatch(/GitHub refused the token on .*revoked or has expired/);
+    expect(main(view).getByText('Token refused')).toBeDefined();
+    expect(main(view).queryByText('Connected')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('main'));
+
+    await person().type(view.getByLabelText('Token'), 'github_pat_new');
+    await person().click(view.getByRole('button', { name: 'Replace token' }));
+    await settle();
+    expect(main(view).queryByRole('alert')).toBeNull();
+    expect(main(view).getByText('Connected')).toBeDefined();
+  });
+
+  test('a classic token with repo is warned about, and a narrow one is not (#884)', async () => {
+    const broad = await openPage({
+      githubIntegration: () => Promise.resolve({ ...CONNECTED, broadScopes: true }),
+    });
+    expect(main(broad).getByText(/classic token with the repo scope/)).toBeDefined();
+    await expectNoAxeViolations(broad.getByRole('main'));
+    broad.unmount();
+    const narrow = await openPage({ githubIntegration: () => Promise.resolve(CONNECTED) });
+    expect(main(narrow).queryByText(/classic token/)).toBeNull();
+    // The help names what is asked for.
+    expect(main(narrow).getByText(/fine-grained personal access token, read-only/)).toBeDefined();
+  });
+
+  test('a token GitHub does not accept is said in the field; a GitHub that cannot be asked, in the form (#884)', async () => {
+    let answer: ApiError = new ApiError(400, 'VALIDATION_FAILED', 'token');
+    const view = await openPage({
+      githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+      setGitHubToken: () => Promise.reject(answer),
+    });
+    await person().type(view.getByLabelText('Token'), 'ghp_x');
+    await person().click(view.getByRole('button', { name: 'Save token' }));
+    await settle();
+    expect(view.getByText(/GitHub does not accept this token/)).toBeDefined();
+    expect(view.getByLabelText('Token').getAttribute('aria-invalid')).toBe('true');
+
+    answer = new ApiError(503, 'GITHUB_UNAVAILABLE', 'down');
+    await person().click(view.getByRole('button', { name: 'Save token' }));
+    await settle();
+    expect(view.getByRole('alert').textContent).toContain('The token was not saved.');
+    expect(view.getByRole('alert').textContent).toContain('GitHub could not be asked');
   });
 
   test('a status that will not load says why, with Retry; while it is read it is a status', async () => {

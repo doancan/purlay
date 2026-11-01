@@ -602,7 +602,7 @@ export const tr = {
   'github.notConnected': 'Bağlı değil: GitHub bağlantıları düz bağlantı olarak kalır.',
   'github.token': 'Token',
   'github.tokenHint':
-    'Ekibinin bağlantı verdiği depolarda okuma yetkisi olan, ince ayarlı bir kişisel erişim token’ı.',
+    'İnce ayarlı, salt okunur (Contents, Issues ve Pull requests: read) bir kişisel erişim token’ı; yalnızca ekibinin bağlantı verdiği seçili depolarla sınırlı. GitHub kaydederken doğrular.',
   'github.tokenShape': 'github_pat_…',
   'github.invalid': 'Token boşluksuz tek bir kelimedir: harf, rakam ve simgeler.',
   'github.save': 'Tokenı kaydet',
@@ -687,6 +687,13 @@ export const tr = {
   'githubIssue.draft.answer': 'Kabul edilen cevap',
   'githubIssue.draft.decision': 'Karar',
   'githubIssue.draft.source': 'Purlay’deki tartışma',
+  'github.rejected':
+    'GitHub bu tokenı kabul etmiyor. Tam kopyalandığını, süresinin dolmadığını ve iptal edilmediğini kontrol et.',
+  'github.unreachable': 'GitHub’a bu token şu an sorulamadı. Biraz sonra yeniden dene.',
+  'github.revoked':
+    'GitHub tokenı {when} tarihinde reddetti: iptal edilmiş ya da süresi dolmuş. Sen değiştirene kadar bağlantılar düz bağlantı olarak kalır.',
+  'github.broad':
+    'Bu, repo yetkisi olan klasik bir token gibi görünüyor: sahibinin erişebildiği her depoyu okuyabilir ve yazabilir. Kartlar için seçili depolarda ince ayarlı, salt okunur bir token yeterli ve daha güvenlidir.',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
@@ -1970,6 +1977,7 @@ export const tr = {
   'theme.label': 'Tema',
   'theme.system': 'Sistem',
   'theme.light': 'Açık',
+  'settings.integrations.refused': 'Token reddedildi',
   'theme.dark': 'Koyu',
   'theme.midnight': 'Gece yarısı',
   'language.label': 'Dil',
