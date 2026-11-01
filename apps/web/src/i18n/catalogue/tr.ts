@@ -408,6 +408,9 @@ export const tr = {
   'audit.goneChannel': 'artık olmayan bir kanal',
   'audit.unknown': '{actor}: {action}',
   'audit.action.audit.exported': '{actor} denetim kaydını indirdi',
+  'audit.action.workspace.deletion_requested':
+    '{actor} çalışma alanının {when} sonrasında silinmesini istedi',
+  'audit.action.workspace.deletion_cancelled': '{actor} çalışma alanının silinmesini geri aldı',
   'audit.filters': 'Kaydı daralt',
   'audit.filter.person': 'Kişi',
   'audit.filter.action': 'İşlem',
@@ -452,6 +455,8 @@ export const tr = {
   'audit.kind.retention.purged': 'Geçmiş temizlendi',
   'audit.kind.storage.quota_changed': 'Depolama kotası değişti',
   'audit.kind.audit.exported': 'Denetim kaydı indirildi',
+  'audit.kind.workspace.deletion_requested': 'Çalışma alanının silinmesi istendi',
+  'audit.kind.workspace.deletion_cancelled': 'Çalışma alanının silinmesi geri alındı',
   'audit.action.member.role_changed': '{actor}, {target} rolünü {from} yerine {to} yaptı',
   'audit.action.member.removed': '{actor}, {target} kişisini çıkardı',
   'audit.action.member.left': '{actor} çalışma alanından ayrıldı',
@@ -1511,6 +1516,8 @@ export const tr = {
     'Bir olaya müdahale edebilecek kişi sınırına ulaşıldı. Önce birini çıkar.',
   'failure.incidentPostmortemChanged':
     'Sen başladığından beri başka biri postmortemi kaydetti. Yazdığın duruyor: önce onunkini oku, sonra yeniden kaydet.',
+  'failure.deletionStarted':
+    'Çok geç: çalışma alanı silinmeye başladı, silme işlemi artık geri alınamaz.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

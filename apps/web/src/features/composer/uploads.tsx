@@ -261,6 +261,7 @@ const uploadRefusal = (
     case 'INVITATION_NOT_FOUND':
     case 'LAST_CHANNEL_MEMBER':
     case 'RETENTION_TOO_SHORT':
+    case 'WORKSPACE_DELETION_STARTED':
     case 'LAST_OWNER':
     case 'KNOWLEDGE_CONFLICT':
     case 'SAVED_SEARCH_NOT_FOUND':

@@ -227,6 +227,17 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishSessionsEnded',
     calledFrom: 'apps/api/src/modules/auth/better-auth.ts',
   },
+  // A workspace's deletion asked for (D-242): everyone watching any of its channels stops receiving it, on
+  // each channel's topic, and each member is told to read their workspaces again.
+  'apps/api/src/modules/workspaces/deletion.ts#askToDelete': {
+    publishes: 'publishWorkspaceClosed',
+    calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
+  },
+  // Taken back (D-242): it gives access back and takes none away; each member reads their workspaces again
+  // on WORKSPACE_UPDATED, which no revocation rule covers.
+  'apps/api/src/modules/workspaces/deletion.ts#takeBackDeletion': {
+    none: 'it restores access and revokes none: its members read their workspaces again on WORKSPACE_UPDATED (#870)',
+  },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',
   },

@@ -103,6 +103,8 @@ import {
   exportAuditTrail,
   removeWorkspaceMember,
   leaveWorkspaceMembership,
+  requestWorkspaceDeletion,
+  cancelWorkspaceDeletion,
   updateMemberRole,
   readMe,
   readWorkspace,
@@ -1030,6 +1032,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .delete('/api/workspaces/:workspaceId/membership', async ({ request, params, set }) => {
       await leaveWorkspaceMembership(sending, request, params.workspaceId);
+      set.status = 204;
+      return null;
+    })
+    .post(
+      '/api/workspaces/:workspaceId/deletion',
+      async ({ request, params, body }) =>
+        await requestWorkspaceDeletion(sending, request, params.workspaceId, body),
+    )
+    .delete('/api/workspaces/:workspaceId/deletion', async ({ request, params, set }) => {
+      await cancelWorkspaceDeletion(sending, request, params.workspaceId);
       set.status = 204;
       return null;
     })

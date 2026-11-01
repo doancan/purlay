@@ -85,6 +85,7 @@ describe('the single-value reads', () => {
           isServerAdmin: false,
           nameFromGitHub: false,
           mustEnrolTwoFactor: false,
+          scheduledDeletions: [],
         });
       },
       channels: (workspaceId) => {

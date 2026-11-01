@@ -33,6 +33,7 @@ export type FailureKey =
   | 'failure.slow'
   | 'failure.tooLarge'
   | 'failure.refused'
+  | 'failure.deletionStarted'
   | 'failure.savedLimit'
   | 'failure.pinsLimit'
   | 'failure.bookmarksLimit'
@@ -118,6 +119,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.incidentRespondersLimit';
     case 'INCIDENT_POSTMORTEM_CHANGED':
       return 'failure.incidentPostmortemChanged';
+    // A workspace's deletion taken back too late: the erasure has begun (D-242).
+    case 'WORKSPACE_DELETION_STARTED':
+      return 'failure.deletionStarted';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':

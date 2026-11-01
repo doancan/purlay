@@ -1325,6 +1325,7 @@ describe('is the session still there', () => {
       isServerAdmin: false,
       nameFromGitHub: false,
       mustEnrolTwoFactor: false,
+      scheduledDeletions: [],
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

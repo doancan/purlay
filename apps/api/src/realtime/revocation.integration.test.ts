@@ -298,6 +298,63 @@ describe('integration: a workspace renamed (D-124)', () => {
   });
 });
 
+describe('integration: a workspace whose deletion is asked for (D-242)', () => {
+  test('every member’s socket on another node stops its channels and is told; it stays open, and taken back it is told again', async () => {
+    const room = await aRoom();
+    const name = (
+      (await (
+        await http('GET', `/api/workspaces/${room.workspaceId}`, room.alice.cookie)
+      ).json()) as {
+        name: string;
+      }
+    ).name;
+    const bob = await connect(room.bob.cookie);
+    await subscribe(bob, room.channelId);
+    const before = await post(room.alice.cookie, room.channelId, 21);
+    await bob.until((frames) => created(frames).includes(before), 'the message before');
+
+    const asked = await http(
+      'POST',
+      `/api/workspaces/${room.workspaceId}/deletion`,
+      room.alice.cookie,
+      {
+        confirm: name,
+      },
+    );
+    expect(asked.status).toBe(200);
+    await bob.until(
+      (frames) =>
+        frames.some((f) => f.event === 'ACCESS_REVOKED') &&
+        frames.some((f) => f.event === 'WORKSPACE_UPDATED'),
+      'the notices of the deletion',
+    );
+    expect(bob.frames.find((f) => f.event === 'ACCESS_REVOKED')?.data).toEqual({
+      channelIds: [room.channelId],
+    });
+    expect(bob.frames.find((f) => f.event === 'WORKSPACE_UPDATED')?.data).toEqual({
+      workspaceId: room.workspaceId,
+    });
+    // Open, and the session good: it answers, and subscribing to the channel again is refused.
+    await settle(bob);
+    const id = messageId(new Date(NOW.getTime() + 22));
+    bob.send({
+      id,
+      op: 'SUBSCRIBE',
+      payload: { channels: [{ channelId: room.channelId, afterMessageId: null }] },
+    });
+    await bob.until((frames) => frames.some((f) => f.refId === id), 'the refused subscription');
+    expect(bob.frames.find((f) => f.refId === id)?.event).toBe('ERROR');
+
+    const updates = (): number => bob.frames.filter((f) => f.event === 'WORKSPACE_UPDATED').length;
+    expect(
+      (await http('DELETE', `/api/workspaces/${room.workspaceId}/deletion`, room.alice.cookie))
+        .status,
+    ).toBe(204);
+    await bob.until(() => updates() === 2, 'the notice that it is back');
+    await bob.close();
+  });
+});
+
 describe('integration: a membership that ends', () => {
   test('removing a member stops the channel on the socket, which stays open', async () => {
     const room = await aRoom();
