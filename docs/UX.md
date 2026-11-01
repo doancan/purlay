@@ -373,7 +373,8 @@ it. On a narrow window the navigation opens as the sidebar does.
   Then **Two-step verification** (D-236), for an account with a password only — other ways in say their
   provider keeps them: off, *Turn on* asks for the password, then shows the key as a QR code, as text and as
   an `otpauth://` link, and is on only after a right code from the app; the ten backup codes are shown once,
-  with **Copy**. On, *New backup codes* and *Turn off* each ask for the password. At sign-in, after a right
+  with **Copy**. On, *New backup codes* and *Turn off* each ask for the password — where the server requires it
+  (D-239), there is no *Turn off*, and the card says the server requires it. At sign-in, after a right
   password, the form asks for the app's code, or a backup code instead; a wrong code is one sentence, a spent
   or expired step says to start over, and a lock says for how long.
   Next, *Where you are signed in* (D-193): each live session, the one used last first — a Mac by the name it
@@ -986,6 +987,12 @@ that is read again after every change and never polled:
   failure is the wizard's, with the same reasons.
 - **Who can create an account** — *Only people who are invited* or *Anyone*, each with its one sentence,
   applied as it is chosen (*Saved. This applies from the next sign-up.*).
+- **How people sign in** (D-239) — *Two-step verification*: *Optional* or *Required* (anyone with a password
+  must turn it on before anything else, the administrator included); *Password sign-in*: *On* or *Off* (only
+  GitHub or single sign-on; *admin:reset-password* turns it back on). Each applies as it is chosen (*Saved. It
+  applies from the next request.*). With neither GitHub nor single sign-on connected, the row says to connect
+  one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
+  not offered: the dialog says why, and has no **Disconnect**.
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
@@ -1042,8 +1049,8 @@ GitHub button, *or*, the email field and **Send a sign-in link**, and at the foo
 **Create account***. Each way is offered only where the server connected it, so a GitHub-only server
 shows the one button and a mail-only server the field. A person who sent themselves a link is shown
 *Check your email*: the address, *the link is valid for fifteen minutes*, **Send again** and **Change
-address**. **The password is always offered** (R30), because the administrator the setup made has one on
-a server with mail and on one without: under the GitHub button the card has an email field, a password
+address**. **The password is offered** (R30) unless the server's administrator turned password sign-in off
+(D-239), because the administrator the setup made has one on a server with mail and on one without: under the GitHub button the card has an email field, a password
 field and **Sign in**, and — only where the server sends mail — **Email me a sign-in link instead**, which
 asks for a link to the address typed. The fields are named for a password manager (`username`,
 `current-password`). A wrong address, a wrong password and an account with no password get the one
@@ -1052,7 +1059,17 @@ for an address from this browser's network, or twenty for any addresses, in fift
 screen says *Too many attempts. Try again in N minutes.* from `Retry-After` — never that the account is
 locked, for it is not (D-179 §4); a server that did not answer is not blamed on the person. At the foot,
 where the policy is *open*, *No account yet? **Create an account*** (the sign-up screen); where it is
-*invite-only*, *Accounts are created by invitation.*, with no link.
+*invite-only*, *Accounts are created by invitation.*, with no link. With password sign-in off the card has no
+password form — GitHub, single sign-on and, where mail is sent, the link — and a password tried from a page
+opened before it went off is told *This server no longer signs in with a password.*
+
+**Turning on two-step verification first** (D-239). Where the server requires it, a person signed in whose
+account has a password and whose second step is off sees, at any address of the application, only a card on
+the navigation tone: *Turn on two-step verification* — *This server requires it of every account that signs in
+with a password. Turn it on to carry on: you stay signed in.* — then Sessions & account's own card, with no
+*Turn off*, and **Sign out**. Nothing of a workspace is drawn and no socket opens. Turned on, the backup codes
+are shown once, as on Settings; **Done** reads the identity again and the page the person asked for is drawn,
+on the same session, with no sign-in again.
 
 **Single sign-on** (D-200) is the first button where a provider is connected, *Continue with ⟨label⟩* — the
 operator's own label, shown as text, or *single sign-on* (*tek oturum açma*) — above GitHub's, as a secondary

@@ -160,6 +160,17 @@ ended by the server within about half a minute — the command has no way to tel
 the database every thirty seconds which sessions still exist — and the same is true of a session removed
 by SQL.
 
+**Locked out with password sign-in off** (D-239). Administration → Server can turn password sign-in off while
+GitHub or single sign-on serves, and refuses to disconnect the last of them while it is off. Should the provider
+still stop letting the administrator in — the provider down or misconfigured, its secret one a rotated
+`ENCRYPTION_KEY` cannot open, the administrator's account gone from it — the same command is the way back:
+`bun run admin:reset-password <address>` also **turns password sign-in on again**, says so in a line of its own
+(`Password sign-in is on again. Restart the server for it to take effect.`) and leaves a second row on the trail
+(`server.password_sign_in_changed`). **Restart the server** afterwards (`docker compose … restart api`): a running
+server reads its settings when it starts and when it changes them itself, not when another process writes them.
+Then sign in with the new password. Where the server requires two-step verification of a password account, the
+administrator is then asked to turn it on — with the reset it is off — before anything else.
+
 **The setup code** (D-179 §4). A server with no user is set up in the browser at `APP_URL/setup`, which
 asks first for a one-time code. The code is in the API's log, never anywhere else — not in the database
 (it keeps a digest), not in a response:
