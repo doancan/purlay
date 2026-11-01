@@ -94,6 +94,20 @@ export const isWebhookRequest = (request: Request): boolean =>
   request.method === 'POST' && WEBHOOK_PATH.test(new URL(request.url).pathname);
 
 /**
+ * An incoming webhook's address, `/api/webhooks/incoming/:webhookId/:secret` (D-245), however the router
+ * would still match it — repeated slashes, one at the end — with everything after the id: the secret.
+ */
+const INCOMING_WEBHOOK_SECRET = /^(\/+api\/+webhooks\/+incoming\/+[^/]*)\/.*$/;
+
+/**
+ * A path as a log line may name it: an incoming webhook's secret is its address's last segment, and the
+ * address is the credential (D-245), so what follows the id is written as `:secret`. Every other path is
+ * as it came.
+ */
+export const pathWithoutSecret = (path: string): string =>
+  path.replace(INCOMING_WEBHOOK_SECRET, '$1/:secret');
+
+/**
  * A delivery's body: JSON — GitHub's hook must be set to send `application/json`, not the form it
  * sends by default, which the setup says — with a `Content-Length`, at most `WEBHOOK_BODY_MAX_BYTES`,
  * so its size is judged before a byte of it is read.

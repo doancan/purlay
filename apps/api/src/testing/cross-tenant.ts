@@ -75,6 +75,8 @@ export interface Ids {
   readonly incidentId: string;
   /** A bookmark of the channel: what removing one acts on (D-218). */
   readonly bookmarkId: string;
+  /** An incoming webhook of the channel: what revoking one acts on (D-245). */
+  readonly webhookId: string;
   /** An owner's export of the workspace (D-140). */
   readonly exportId: string;
 }
@@ -101,6 +103,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'versionId') return ids.versionId;
     if (name === 'incidentId') return ids.incidentId;
     if (name === 'bookmarkId') return ids.bookmarkId;
+    if (name === 'webhookId') return ids.webhookId;
     if (name === 'exportId') return ids.exportId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
@@ -388,6 +391,19 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: CHANNEL,
   },
   'DELETE /api/channels/:channelId/github-feeds/:feedId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/incoming-webhooks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/incoming-webhooks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ name: 'Crossing' }),
+    visibility: { kind: 'channel', admin: true },
+  },
+  'DELETE /api/channels/:channelId/incoming-webhooks/:webhookId': {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: { kind: 'channel', admin: true },
   },
@@ -760,6 +776,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'names no workspace: the token is the capability, and admits only to its own, into no channel',
   'POST /api/webhooks/github/:feedId':
     'nobody is signed in: the feed’s secret is the capability, and posts only into its own channel (`webhook.integration.test.ts`)',
+  'POST /api/webhooks/incoming/:webhookId/:secret':
+    'nobody is signed in: the secret in the address is the capability, and posts only into its own hook’s channel (`incoming-webhooks.integration.test.ts`)',
 };
 
 /**

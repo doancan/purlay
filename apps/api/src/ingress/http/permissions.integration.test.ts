@@ -261,6 +261,29 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'list a channel’s incoming webhooks': async (world, as) =>
+    await call(world, 'GET', `/api/channels/${world.channelId}/incoming-webhooks`, as),
+  'make an incoming webhook': async (world, as) =>
+    await call(world, 'POST', `/api/channels/${world.channelId}/incoming-webhooks`, as, {
+      name: 'CI',
+    }),
+  'revoke an incoming webhook': async (world, as) => {
+    // Made by the owner first, so there is one to revoke whoever tries.
+    const made = await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/incoming-webhooks`,
+      world.people.owner,
+      { name: 'CI' },
+    );
+    const { webhook } = (await made.json()) as { webhook: { id: string } };
+    return await call(
+      world,
+      'DELETE',
+      `/api/channels/${world.channelId}/incoming-webhooks/${webhook.id}`,
+      as,
+    );
+  },
   'take somebody out of a public channel': async (world, as) =>
     await call(
       world,
@@ -340,6 +363,7 @@ describe('integration: every administrative write is on the trail, once', () => 
     'remove the GitHub token': 1,
     'disconnect a repository from a channel': 1,
     'take back the workspace’s deletion': 1,
+    'revoke an incoming webhook': 1,
   };
 
   /** Reads that are themselves administrative acts: taking the trail away is on it (D-222). */

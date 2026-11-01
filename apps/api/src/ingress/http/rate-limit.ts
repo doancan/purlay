@@ -69,6 +69,13 @@ export const WEBHOOK_BUDGET: RateBudget = { perSecond: 20, burst: 200 };
 export const WEBHOOK_FEED_BUDGET: RateBudget = { perSecond: 2, burst: 100 };
 
 /**
+ * Posts per incoming webhook, once its secret held (D-245): thirty at once — a deploy's steps, a burst of
+ * alerts — then one a second. Charged after the secret, so nobody but the hook's holder spends it; before
+ * it, the address is charged to `WEBHOOK_BUDGET`, which GitHub's deliveries share. Provisional (O-4).
+ */
+export const INCOMING_WEBHOOK_BUDGET: RateBudget = { perSecond: 1, burst: 30 };
+
+/**
  * The setup's routes per client (a /64 for IPv6), before anything is weighed (D-179 §4.1): thirty at
  * once, then one every thirty seconds — thirty in fifteen minutes. A wizard walked by one person asks a
  * few each step. The server's own lock on wrong codes can be kept shut by anybody who reaches the
