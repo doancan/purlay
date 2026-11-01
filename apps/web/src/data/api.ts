@@ -23,6 +23,9 @@ import {
   type SetQuietHoursRequest,
   GitHubAppRedirect,
   GitHubAppStatus,
+  GitHubIssueOutcome,
+  GitHubRepositoryList,
+  type CreateGitHubIssueRequest,
   MissedMailSetting,
   type SetMissedMailRequest,
   AuditPage,
@@ -466,6 +469,16 @@ export interface Api {
   readonly setMissedMail: (input: SetMissedMailRequest) => Promise<MissedMailSetting>;
   /** The GitHub App in a workspace: whether the server has one, its installation, the caller's own authorization (D-246). */
   readonly githubApp: (workspaceId: string, signal?: AbortSignal) => Promise<GitHubAppStatus>;
+  /** What the caller may choose when making an issue: the repositories both they and the App reach (D-246 §2). */
+  readonly githubRepositories: (
+    workspaceId: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubRepositoryList>;
+  /** Makes an issue from a thread, or says what became of the request with this id (D-246 §2, §4). */
+  readonly createGitHubIssue: (
+    messageId: string,
+    input: CreateGitHubIssueRequest,
+  ) => Promise<GitHubIssueOutcome>;
   /** An owner: where GitHub's installation screen is. */
   readonly startGitHubInstallation: (workspaceId: string) => Promise<GitHubAppRedirect>;
   readonly removeGitHubInstallation: (workspaceId: string) => Promise<void>;
@@ -1083,6 +1096,20 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/github-app`,
         GitHubAppStatus,
         options({}, signal),
+      ),
+    githubRepositories: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/github-repositories`,
+        GitHubRepositoryList,
+        options({}, signal),
+      ),
+    createGitHubIssue: (messageId, input) =>
+      http.request(
+        'POST',
+        `/api/messages/${at(messageId)}/github-issue`,
+        GitHubIssueOutcome,
+        options({ body: input }),
       ),
     startGitHubInstallation: (workspaceId) =>
       http.request(

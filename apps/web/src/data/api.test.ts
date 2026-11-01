@@ -552,6 +552,24 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('making an issue: the repositories read, the request sent whole and its outcome checked (D-246)', async () => {
+    const list = harness({ repositories: [{ id: 77, fullName: 'acme/api', private: true }] });
+    expect((await list.api.githubRepositories(ID)).repositories).toHaveLength(1);
+    const request = {
+      clientRequestId: ID,
+      repositoryId: 77,
+      title: 'Retry',
+      body: 'Why',
+      copyPrivateText: false,
+    };
+    const made = harness({ status: 'unknown' });
+    expect(await made.api.createGitHubIssue(ID, request)).toEqual({ status: 'unknown' });
+    expect([...list.calls, ...made.calls]).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/github-repositories`, body: undefined },
+      { method: 'POST', url: `/api/messages/${ID}/github-issue`, body: request },
+    ]);
+  });
+
   test('a channel’s repository feeds: listed, connected with its body, disconnected (D-134)', async () => {
     const feed = {
       id: ID,

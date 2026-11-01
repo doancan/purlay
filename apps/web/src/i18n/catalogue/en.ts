@@ -454,6 +454,7 @@ export const en = {
   'audit.kind.integration.webhook_revoked': 'Incoming webhook revoked',
   'audit.kind.integration.app_connected': 'GitHub App connected',
   'audit.kind.integration.app_disconnected': 'GitHub App disconnected',
+  'audit.kind.integration.issue_created': 'Issue created from a thread',
   'audit.kind.invitation.created': 'Invitation link made',
   'audit.kind.invitation.revoked': 'Invitation link revoked',
   'audit.kind.message.removed_by_moderator': 'Message deleted by a moderator',
@@ -499,6 +500,8 @@ export const en = {
   'audit.action.integration.app_disconnected':
     '{actor} disconnected the GitHub App installation of {account}',
   'audit.action.integration.app_removed': 'GitHub removed the App installation of {account}',
+  'audit.action.integration.issue_created':
+    '{actor} created issue {repository}#{number} from a thread',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
@@ -632,6 +635,44 @@ export const en = {
   'githubIssues.me.badgeOff': 'Off',
   'githubIssues.me.allow': 'Let Purlay create issues as me',
   'githubIssues.me.forget': 'Stop allowing',
+  'githubIssue.work.title': 'GitHub',
+  'githubIssue.work.create': 'Create GitHub issue…',
+  'githubIssue.dialog.title': 'Create a GitHub issue',
+  'githubIssue.dialog.description':
+    'Review exactly what will be sent, and where. Creating an issue does not resolve the question.',
+  'githubIssue.authorize.body':
+    'To create an issue as you, let Purlay write to GitHub as you. It is off until you choose, and reaches only repositories both you and the App can see.',
+  'githubIssue.authorize.action': 'Let Purlay create issues as me',
+  'githubIssue.repository.label': 'Repository',
+  'githubIssue.repository.private': '{name} (private)',
+  'githubIssue.repository.empty':
+    'There is no repository to choose: you and the App cannot both reach one.',
+  'githubIssue.repository.failed': 'The repositories could not be read.',
+  'githubIssue.title.label': 'Title',
+  'githubIssue.body.label': 'Description',
+  'githubIssue.copy.label':
+    'This conversation is not public. I choose to copy its words to GitHub.',
+  'githubIssue.review.heading': 'What will be created',
+  'githubIssue.review.destination': 'In {repository}, as {login}:',
+  'githubIssue.review.marker':
+    'The last line is a hidden marker. It lets Purlay find the issue again if GitHub’s answer is lost.',
+  'githubIssue.create': 'Create issue',
+  'githubIssue.done': 'Done',
+  'githubIssue.state.created': 'Created {repository}#{number}.',
+  'githubIssue.state.pending': 'The issue is being created. Check again in a moment.',
+  'githubIssue.state.unknown':
+    'GitHub did not answer, so it is not known whether the issue was made. Nothing will be created twice: check again.',
+  'githubIssue.state.checkAgain': 'Check again',
+  'githubIssue.state.tryAgain': 'Try again',
+  'githubIssue.state.refused.no-access':
+    'GitHub does not let you create issues in that repository.',
+  'githubIssue.state.refused.issues-disabled': 'Issues are turned off in that repository.',
+  'githubIssue.state.refused.invalid': 'GitHub refused that title or description.',
+  'githubIssue.state.refused.not-created':
+    'GitHub never showed an issue for this request. Nothing was created; you can start again.',
+  'githubIssue.draft.answer': 'Accepted answer',
+  'githubIssue.draft.decision': 'Decision',
+  'githubIssue.draft.source': 'Discussion in Purlay',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
@@ -1657,6 +1698,10 @@ export const en = {
     'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
   'failure.incomingWebhooksLimit':
     'That is as many incoming webhooks as a channel has. Revoke one first.',
+  'failure.githubUnavailable': 'GitHub did not answer. Nothing was changed. Try again in a minute.',
+  'failure.githubNotConnected':
+    'This workspace’s GitHub installation is not in use. An owner can connect it in Settings → Integrations.',
+  'failure.githubAuthorization': 'Let Purlay create issues as you first.',
   'failure.incidentOpen':
     'This channel already has an incident open. Change that one, or resolve it first.',
   'failure.incidentResolved': 'This incident is resolved. Declare a new one if it is back.',

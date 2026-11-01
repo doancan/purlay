@@ -1,4 +1,5 @@
 import { KnowledgePanel } from './knowledge-panel';
+import { GitHubWorkPanel } from './github-issue';
 /**
  * The thread panel (`UX.md` §4.2, D-122): one root's thread, on the right of the feed — a header
  * that names it, follows it (D-161) and closes it, the root, the replies under an "N replies" rule, and the box to
@@ -311,6 +312,17 @@ const ThreadPanelView = ({
               channels.data?.some(
                 (channel) => channel.id === channelId && channel.state !== null,
               ) ?? false
+            }
+          />
+          <GitHubWorkPanel
+            root={root}
+            member={
+              channels.data?.some(
+                (channel) => channel.id === channelId && channel.state !== null,
+              ) ?? false
+            }
+            channelIsPublic={
+              channels.data?.find((channel) => channel.id === channelId)?.type === 'public'
             }
           />
           {/* Wraps rather than widening the panel: on a narrow window the button takes a line of its own. */}
