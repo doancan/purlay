@@ -42,6 +42,7 @@ import { IconButton } from '../../ui/icon-button';
 import { Kbd, keyHintsClasses } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
+import { celebrate, hasPartyPopper } from '../../ui/celebrate';
 import {
   broadcastMention,
   continueList,
@@ -352,6 +353,7 @@ const Inner = ({
         item.status === 'ready' ? [item.attachment] : [],
       ),
     });
+    if (hasPartyPopper(content)) celebrate();
     uploads.clear();
     setWaiting(false);
     if (pasteToast.current !== null) dismiss(pasteToast.current);

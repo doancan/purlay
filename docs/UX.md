@@ -930,7 +930,10 @@ Decided here so Phase 0 does not invent one at random.
   on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, the
   inbox panel, a tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
   fades as the dialog opens like the palette; a toast rises into its corner (D-211). No message entry
-  animation — at conversational speed it reads as lag. Everything is instant under reduced motion.
+  animation — at conversational speed it reads as lag. The selected tab of a side-by-side group slides to
+  its new place in 200ms. The one longer motion is a celebration: sending 🎉 (in a message or as a
+  reaction) sets off a one-shot SVG firework show over the screen (about 3s, one of five shows, never looping, the token gate's single
+  exception). Everything is instant under reduced motion, and the firework is not drawn.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
   and an overlay. The interface is flat: regions are told apart by tone, and only what sits above
   something — an overlay, the hover controls, the composer, a card inside a message — has a shadow.

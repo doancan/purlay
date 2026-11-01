@@ -146,12 +146,13 @@ describe('the header', () => {
     expect(track.className).toContain('rounded-lg');
     expect(track.className).toContain('bg-surface-200');
     expect(track.querySelectorAll('a')).toHaveLength(2);
-    const raised = view.getByRole('link', { name: 'Feed' });
-    expect(raised.className).toContain('bg-surface-100');
-    expect(raised.className).toContain('shadow-card');
-    // The one that is not current is on the track, not raised.
-    expect(view.getByRole('link', { name: 'Open questions' }).className).not.toContain(
-      'bg-surface-100',
+    // The raised mark is one element that slides under the current view, never a class on the link.
+    const raised = track.querySelector('span[aria-hidden="true"]');
+    expect(raised?.className).toContain('bg-surface-100');
+    expect(raised?.className).toContain('shadow-card');
+    expect(view.getByRole('link', { name: 'Feed' }).getAttribute('aria-current')).toBe('page');
+    expect(view.getByRole('link', { name: 'Open questions' }).className).toContain(
+      'text-ink-muted',
     );
     // The glyph beside the name stands for a channel and says nothing a screen reader needs.
     expect(

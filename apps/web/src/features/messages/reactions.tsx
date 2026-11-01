@@ -28,6 +28,7 @@ import { Menu, MenuTile, MenuTiles } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { cn } from '../../ui/cn';
 import { Tooltip } from '../../ui/tooltip';
+import { celebrate, hasPartyPopper } from '../../ui/celebrate';
 import { useWorkspaceIfAny } from '../shell/workspace';
 
 /** The emoji offered, and the words that name each one. */
@@ -52,6 +53,7 @@ const useToggle = (message: Message, meId: string): ((emoji: string) => void) =>
   const describe = useDescribeFailure();
   return (emoji): void => {
     const mine = message.reactions.some((r) => r.emoji === emoji && r.userIds.includes(meId));
+    if (!mine && hasPartyPopper(emoji)) celebrate();
     (mine ? unreact(message, emoji) : react(message, emoji)).catch((failure: unknown) => {
       show({ message: `${t('message.reactionFailed')} ${describe(failure)}` });
     });
@@ -123,7 +125,7 @@ const Chip = ({
         className={cn(
           'inline-flex h-6 items-center gap-1 rounded-pill px-2 text-caption font-medium transition-colors duration-hover ease-standard',
           mine
-            ? 'bg-accent-subtle font-semibold text-accent-text'
+            ? 'bg-accent-subtle font-semibold text-ink'
             : 'bg-surface-200 text-ink-muted hover:bg-accent-subtle hover:text-accent-text',
         )}
       >

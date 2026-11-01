@@ -30,7 +30,7 @@ export const AdvancedFilters = ({
   };
   return (
     <details open={Object.keys(value).length > 0 || undefined} className="text-label text-ink">
-      <summary className="w-fit cursor-pointer rounded-sm py-1 text-accent-text">
+      <summary className="w-fit cursor-pointer rounded-sm py-1 text-ink-muted hover:text-ink">
         {t('search.filters')}
       </summary>
       <div className="mt-3 grid grid-cols-2 gap-3 max-narrow:grid-cols-1">

@@ -40,7 +40,7 @@ const variantClasses = {
   ghost: 'border-transparent text-ink-muted hover:bg-surface-200 hover:text-ink',
   danger: 'border-danger bg-danger text-on-status hover:brightness-90',
   dangerQuiet:
-    'border-transparent bg-danger-subtle text-danger-text hover:border-danger hover:bg-danger hover:text-on-status',
+    'border-transparent bg-danger-subtle text-danger-text hover:bg-danger hover:text-on-status',
 } as const;
 
 export type ButtonVariant = keyof typeof variantClasses;

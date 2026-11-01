@@ -51,6 +51,7 @@ import { typeChannelName } from './name-field';
 import { useLeaveRefusal } from './leave';
 import { LEVELS, useChooseLevel } from './notification-level-menu';
 import { Checkbox, Radio } from '../../ui/checkbox';
+import { SlideTrack } from '../../ui/slide-track';
 
 const sectionTitle = 'text-label font-semibold text-ink';
 
@@ -680,12 +681,14 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
           aria-hidden="true"
           className="absolute inset-x-0 bottom-0 border-b-hairline border-border-subtle"
         />
-        <div
-          ref={tabsRef}
+        <SlideTrack
+          trackRef={tabsRef}
+          memory="channel-details"
+          mark="underline"
           role="tablist"
           aria-label={t('details.tabs')}
           onKeyDown={move}
-          className="relative flex gap-5"
+          className="flex gap-5"
         >
           {tabs.map((each) => (
             <button
@@ -701,10 +704,8 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
                 setTab(each);
               }}
               className={cn(
-                'flex h-control items-center gap-2 border-b-marker text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
-                each === tab
-                  ? 'border-accent text-ink'
-                  : 'border-transparent text-ink-muted hover:text-ink',
+                'flex h-control items-center gap-2 text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
+                each === tab ? 'text-ink' : 'text-ink-muted hover:text-ink',
               )}
             >
               {t(`details.tab.${each}`)}
@@ -715,7 +716,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
               )}
             </button>
           ))}
-        </div>
+        </SlideTrack>
       </div>
       {tabs.map((each) => (
         <div
