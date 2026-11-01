@@ -1,6 +1,6 @@
 /**
  * General (D-124, D-146), an owner's or an admin's: the workspace's name, its address, its archived
- * channels (D-232), and the way to another workspace.
+ * channels (D-232), the way to another workspace, and — an owner's alone — deleting it (D-242).
  *
  * The address — the slug in every link already pasted — is shown, copied in one press, and does not
  * change with the name, so the page says so rather than leaving somebody to find out. Saved, the name
@@ -24,13 +24,14 @@ import { CreateWorkspace } from '../../shell/home';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 import { ArchivedChannelsCard } from './archived-channels';
+import { DeleteWorkspaceCard } from './delete-workspace';
 
 export const GeneralPage = (): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const { show } = useToast();
   const { copy } = useContentPorts();
-  const { workspace } = useWorkspace();
+  const { workspace, role } = useWorkspace();
   const { mayCreateWorkspace } = useSession();
   const { renameWorkspace } = useActions();
   // What was typed; until something is, the field shows the name as it is now, so a rename in
@@ -152,6 +153,8 @@ export const GeneralPage = (): React.JSX.Element => {
           </SettingsRow>
         </SettingsCard>
       )}
+      {/* An owner's alone (D-242): an admin manages the workspace, and does not end it. */}
+      {role === 'owner' && <DeleteWorkspaceCard />}
       <Dialog
         open={creating}
         onOpenChange={setCreating}

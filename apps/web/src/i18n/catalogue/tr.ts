@@ -768,6 +768,24 @@ export const tr = {
   'erase.signOut': 'Yeniden giriş için çıkış yap',
   'erase.lastOwner': 'Önce bu çalışma alanlarını başka bir sahibe devret: {workspaces}.',
   'erase.failed': 'Hesabın silinmedi.',
+  'deleteWorkspace.title': '{workspace} çalışma alanını sil',
+  'deleteWorkspace.entry': 'Çalışma alanını sil…',
+  'deleteWorkspace.hint':
+    'Herkes için hemen kaybolur. {days} gün sonra mesajları, dosyaları ve kanalları kalıcı olarak silinir; o zamana kadar herhangi bir sahip onu koruyabilir.',
+  'deleteWorkspace.body':
+    'Şimdi içindeki herkes için kaybolur. {days} gün sonra içindeki her mesaj, dosya, kanal, davet ve entegrasyon silinir ve bu geri alınamaz. O zamana kadar herhangi bir sahip onu koruyabilir.',
+  'deleteWorkspace.exportFirst':
+    'Bir kopyasını saklamak için silmeden önce dışa aktar ve dışa aktarımı indir.',
+  'deleteWorkspace.exportLink': 'Dışa aktarmaya git',
+  'deleteWorkspace.confirm': 'Onaylamak için çalışma alanının adını yaz: {workspace}',
+  'deleteWorkspace.mismatch': 'Bu, çalışma alanının adı değil.',
+  'deleteWorkspace.submit': 'Çalışma alanını sil',
+  'deleteWorkspace.failed': 'Çalışma alanı silinmedi.',
+  'scheduledDeletion.region': 'Silinmekte olan çalışma alanları',
+  'scheduledDeletion.notice':
+    '{workspace} siliniyor: içeriği {when} sonrasında kalıcı olarak silinecek.',
+  'scheduledDeletion.keep': '{workspace} çalışma alanını koru',
+  'scheduledDeletion.failed': 'Silme işlemi geri alınamadı.',
   'signIn.erased': 'Hesabın silindi.',
   'profile.localTime': 'yerel saatle {time}',
   'profile.zone': 'Saat dilimi',

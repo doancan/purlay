@@ -138,6 +138,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   setDeepWork: unexpected('setDeepWork'),
   deleteMessage: unexpected('deleteMessage'),
   eraseAccount: unexpected('eraseAccount'),
+  requestWorkspaceDeletion: unexpected('requestWorkspaceDeletion'),
+  cancelWorkspaceDeletion: unexpected('cancelWorkspaceDeletion'),
   mySignIn: () =>
     Promise.resolve({
       email: 'ada@example.test',

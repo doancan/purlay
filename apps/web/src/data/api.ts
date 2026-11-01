@@ -54,6 +54,7 @@ import {
   ChannelRetention,
   type ChannelRetentionFloor,
   StorageUsage,
+  WorkspaceDeletion,
   WorkspaceExport,
   AuthMethods,
   NativeAuthorizeResponse,
@@ -419,6 +420,13 @@ export interface Api {
   readonly requestMyExport: () => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
+  /** An owner asks for the workspace to be deleted, typing its name (D-242). */
+  readonly requestWorkspaceDeletion: (
+    workspaceId: string,
+    confirm: string,
+  ) => Promise<WorkspaceDeletion>;
+  /** Any owner takes a workspace's deletion back within its grace period (D-242). */
+  readonly cancelWorkspaceDeletion: (workspaceId: string) => Promise<void>;
   /** The ways the caller signs in: their address, and the GitHub account linked to it, if any (D-176, D-179 §5). */
   readonly mySignIn: (signal?: AbortSignal) => Promise<MySignIn>;
   /** Where the caller is signed in, the one used last first (D-193). */
@@ -993,6 +1001,15 @@ export const createApi = (http: Http): Api => {
       http.request('GET', '/api/me/exports', WorkspaceExports, options({}, signal)),
     requestMyExport: () => http.request('POST', '/api/me/exports', WorkspaceExport, options()),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
+    requestWorkspaceDeletion: (workspaceId, confirm) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/deletion`,
+        WorkspaceDeletion,
+        options({ body: { confirm } }),
+      ),
+    cancelWorkspaceDeletion: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/deletion`, options()),
     mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
     mySessions: (signal) =>
       http.request('GET', '/api/me/sessions', DeviceSessionList, options({}, signal)),
