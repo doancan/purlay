@@ -67,6 +67,11 @@ const LIVENESS = 'apps/api/src/realtime/liveness.ts';
 const LIVENESS_TESTS = 'apps/api/src/realtime/liveness.integration.test.ts';
 const CREATORS_TESTS = 'apps/api/src/ingress/http/workspace-creators.integration.test.ts';
 
+const HOOKS = 'apps/api/src/modules/integrations/incoming-webhooks.ts';
+const HOOKS_TESTS = 'apps/api/src/modules/integrations/incoming-webhooks.integration.test.ts';
+const HOOKS_RACE_TESTS =
+  'apps/api/src/modules/integrations/incoming-webhooks.concurrency.integration.test.ts';
+
 const SETUP = 'apps/api/src/modules/setup/setup.ts';
 const SETUP_TESTS = 'apps/api/src/modules/setup/setup.integration.test.ts';
 const SETUP_UNIT_TESTS = 'apps/api/src/modules/setup/setup.test.ts';
@@ -5904,8 +5909,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'auth-request-line-logs-the-library-path-as-sent',
     why: 'the request line, and a failure thrown under the library, are written with the path as sent: a reset link’s token reaches the log on every click',
     file: APP,
-    find: '    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : path;\n',
-    replace: '    route !== LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : path;\n',
+    find: '    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
+    replace: '    route !== LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
@@ -11374,5 +11379,101 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  if (before?.available !== true) return null;\n',
     replace: '  if (before === undefined) return null;\n',
     tests: ['apps/web/src/features/settings/pages/notifications.test.tsx'],
+  },
+  {
+    id: 'incoming-webhook-secret-unchecked',
+    why: 'anybody who knows a hook’s id posts into its channel, whatever secret they send',
+    file: HOOKS,
+    find: '  if (hook === undefined || !digestsEqual(presented, hook.secret_digest)) {\n',
+    replace: '  if (hook === undefined) {\n',
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-archived-channel-posts',
+    why: 'a hook keeps spending its bucket and posting into a channel nobody can see any more',
+    file: HOOKS,
+    find: "    .where('channels.deleted_at', 'is', null)\n    .where('workspaces.deleted_at', 'is', null)\n",
+    replace: "    .where('workspaces.deleted_at', 'is', null)\n",
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-deleted-workspace-posts',
+    why: 'a deleted workspace’s hooks post into it',
+    file: HOOKS,
+    find: "    .where('workspaces.deleted_at', 'is', null)\n",
+    replace: '',
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-revocation-raced',
+    why: 'a post that read the hook before its revocation committed posts after it',
+    file: HOOKS,
+    find: '    if (used === undefined) return null;\n',
+    replace: '',
+    tests: [HOOKS_RACE_TESTS],
+  },
+  {
+    id: 'incoming-webhook-bucket-skipped',
+    why: 'one hook floods its channel without limit',
+    file: HOOKS,
+    find: '  if (!(await mayPost(hook.id))) {\n',
+    replace: '  if (!(await mayPost(hook.id)) && false) {\n',
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-member-manages',
+    why: 'any member of a channel makes, lists and revokes its hooks',
+    file: HOOKS,
+    find: "    case 'admin':\n      return;\n    case 'member':\n      throw new AppError({\n        code: 'FORBIDDEN',\n        message: 'Only an owner or an admin manages a channel’s incoming webhooks.',\n      });\n",
+    replace: "    case 'admin':\n    case 'member':\n      return;\n",
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-cap-unlocked',
+    why: 'two admins making the last hook at once both read the count before either wrote: past the cap',
+    file: HOOKS,
+    find: '    .forNoKeyUpdate()\n',
+    replace: '',
+    tests: [HOOKS_RACE_TESTS],
+  },
+  {
+    id: 'incoming-webhook-cap-raised',
+    why: 'a channel holds one hook more than the contract’s list can carry',
+    file: HOOKS,
+    find: '  if (Number(count) >= INCOMING_WEBHOOKS_PER_CHANNEL_MAX) {\n',
+    replace: '  if (Number(count) > INCOMING_WEBHOOKS_PER_CHANNEL_MAX) {\n',
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-list-unscoped',
+    why: 'a channel’s hook list shows every channel’s and every workspace’s hooks',
+    file: HOOKS,
+    find: "        ? eb('incoming_webhooks.channel_id', '=', which.channelId)\n",
+    replace: "        ? eb('incoming_webhooks.channel_id', 'is not', null)\n",
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-revoke-unscoped',
+    why: 'an admin of one workspace revokes another workspace’s hook by its id',
+    file: HOOKS,
+    find: "    .where('id', '=', webhookId)\n    .where('channel_id', '=', context.channelId)\n",
+    replace: "    .where('id', '=', webhookId)\n",
+    tests: [HOOKS_TESTS],
+  },
+  {
+    id: 'incoming-webhook-knock-skipped',
+    why: 'one address guesses at hooks without limit, each guess a lookup',
+    file: 'apps/api/src/ingress/http/incoming-webhooks.ts',
+    find: '  if (!(await dependencies.mayKnock(address))) {\n',
+    replace: '  if (!(await dependencies.mayKnock(address)) && false) {\n',
+    tests: ['apps/api/src/ingress/http/incoming-webhooks.test.ts'],
+  },
+  {
+    id: 'incoming-webhook-secret-logged',
+    why: 'every request line writes a hook’s address, and with it the secret that posts as it',
+    file: 'apps/api/src/ingress/http/edge.ts',
+    find: "  path.replace(INCOMING_WEBHOOK_SECRET, '$1/:secret');\n",
+    replace: '  path;\n',
+    tests: ['apps/api/src/ingress/http/incoming-webhooks.integration.test.ts'],
   },
 ];
