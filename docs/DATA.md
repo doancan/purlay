@@ -72,7 +72,7 @@ is rotated out (§4).
 | `incident_updates` | Who changed an incident, and what | The incident's timeline (D-137) | With the incident |
 | `incident_responders` | Who responded, and who added them | The incident's responders (D-137 §3) | With the incident |
 | `audit_log` | Who did what in a workspace, from which session | The workspace's trail of who changed what (D-116) | For the life of the workspace; kept, under the anonymised person, after erasure (D-139 §5) |
-| `github_integrations` | Who connected GitHub; the sealed token | A workspace's GitHub access (D-23) | Until disconnected |
+| `github_integrations` | Who connected GitHub; the sealed token, when GitHub first refused it, and the scopes it had when saved | A workspace's GitHub access (D-23) | Until disconnected |
 | `github_repo_feeds` | Who connected a feed; its repository | Repository feeds (D-134) | Until removed |
 | `incoming_webhooks` | Who made a channel's incoming webhook, its name, and when it last posted; the SHA-256 of its secret, never the secret | Posting to a channel from CI and monitoring (D-245) | Until revoked; with the channel; who made it is named as the anonymised person after their erasure (D-139 §5). Never exported. What it posted is a message, kept as messages are |
 | `github_app_installations` | Who connected a workspace's installation of the GitHub App, by id; the GitHub account's login and kind; when it was connected and whether GitHub suspended it | The workspace's reach into its repositories through the App (D-246) | Until disconnected, by an owner or by GitHub's word that it was removed |
