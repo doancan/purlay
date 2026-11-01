@@ -27,3 +27,4 @@ export * from './quiet-hours';
 export * from './two-factor';
 export * from './missed-mail';
 export * from './github-app';
+export * from './github-issues';

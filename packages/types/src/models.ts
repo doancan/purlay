@@ -472,8 +472,28 @@ export const ThreadKnowledge = Type.Object({
 });
 export type ThreadKnowledge = Static<typeof ThreadKnowledge>;
 
+/**
+ * A root's GitHub work (D-246): an issue made from the thread or an issue or pull request somebody linked, with
+ * its title and state as GitHub last said them. A record the channel reads, never a permission; the address is
+ * built from its parts, never taken from GitHub's words.
+ */
+export const GITHUB_WORK_PER_THREAD_MAX = 20;
+export const GitHubWorkLink = Type.Object({
+  id: Uuid,
+  repository: Type.String({ minLength: 3, maxLength: 140 }),
+  kind: Type.Union([Type.Literal('issue'), Type.Literal('pull')]),
+  number: Type.Integer({ minimum: 1 }),
+  title: Type.String({ maxLength: 256 }),
+  state: Type.Union([Type.Literal('open'), Type.Literal('closed'), Type.Literal('merged')]),
+  origin: Type.Union([Type.Literal('created'), Type.Literal('linked')]),
+  url: Type.String({ pattern: '^https://[^\\s]+$', maxLength: 300 }),
+});
+export type GitHubWorkLink = Static<typeof GitHubWorkLink>;
+
 export const ThreadSummary = Type.Object({
   knowledge: Type.Optional(ThreadKnowledge),
+  /** Additive, absent when the root has none (D-246). */
+  githubWork: Type.Optional(Type.Array(GitHubWorkLink, { maxItems: GITHUB_WORK_PER_THREAD_MAX })),
   replyCount: Type.Integer({ minimum: 0 }),
   lastReplyAt: Type.Union([Timestamp, Type.Null()]),
   resolvedAt: Type.Union([Timestamp, Type.Null()]),
