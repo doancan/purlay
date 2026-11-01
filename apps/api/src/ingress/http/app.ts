@@ -149,6 +149,12 @@ import {
   readServerSettings,
 } from './server';
 import {
+  makeGitHubIssue,
+  readGitHubRepositories,
+  STATUS_OF_OUTCOME,
+  type GitHubIssueRouteDependencies,
+} from './github-issues';
+import {
   beginAuthorization,
   beginInstallation,
   endAuthorization,
@@ -513,6 +519,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     ),
     githubUrls,
   );
+  const githubIssues = (): GitHubIssueRouteDependencies => ({
+    ...githubApp(),
+    bus: sockets.bus,
+  });
   const githubApp = (): GitHubAppRouteDependencies => ({
     auth: dependencies.auth,
     database: dependencies.database,
@@ -1026,6 +1036,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.headers.location = await githubAppCallback(githubApp(), request);
       set.headers['cache-control'] = 'no-store';
       return '';
+    })
+    .get(
+      '/api/workspaces/:workspaceId/github-repositories',
+      async ({ request, params }) =>
+        await readGitHubRepositories(githubIssues(), request, params.workspaceId),
+    )
+    .post('/api/messages/:messageId/github-issue', async ({ request, params, body, set }) => {
+      const outcome = await makeGitHubIssue(githubIssues(), request, params.messageId, body);
+      set.status = STATUS_OF_OUTCOME[outcome.status];
+      return outcome;
     })
     .get(
       '/api/workspaces/:workspaceId/presence',

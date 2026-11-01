@@ -28,6 +28,11 @@ import {
   requestInit,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
+import { aGitHubStub } from '../../testing/github-stub';
+import { keepAuthorization } from '../../modules/integrations/github-app';
+import { credentialCipher } from '../../platform/crypto';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -46,9 +51,25 @@ const call = async (
   cookie: string,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock, storage: aMemoryStore() })).handle(
-    new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)),
-  );
+  await createApp(
+    testDependencies({
+      database: db,
+      clock,
+      storage: aMemoryStore(),
+      githubApp: () => GITHUB_APP_STUB,
+      githubAppFetch: GITHUB.appFetch,
+    }),
+  ).handle(new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)));
+
+/** GitHub, as the App meets it: one repository, and the outsider who authorized (D-246). */
+const GITHUB_APP = aGitHubAppStub({ id: 502, login: 'outsider-dev' });
+GITHUB_APP.install(31, 'acme', [{ id: 77, fullName: 'acme/api', private: true }]);
+const GITHUB = aGitHubStub(
+  { id: 502, login: 'outsider-dev', name: null, email: 'v@example.test' },
+  {},
+  undefined,
+  { app: GITHUB_APP },
+);
 
 const aUser = async (db: Executor, name: string): Promise<{ id: string; cookie: string }> => {
   const user = await aSignedInUser(db, clock, name);
@@ -218,6 +239,26 @@ const aWorld = async (db: Executor): Promise<World> => {
     }),
   );
   expect((await call(db, 'POST', `/api/channels/${visible}/join`, outsider.cookie)).ok).toBe(true);
+  // The workspace's installation of the App and the outsider's own authorization: what making an issue needs.
+  await db
+    .insertInto('github_app_installations')
+    .values({
+      id: crypto.randomUUID(),
+      workspace_id: workspaceId,
+      installation_id: '31',
+      account_login: 'acme',
+      account_type: 'Organization',
+      connected_by: owner.id,
+      connected_at: NOW,
+    })
+    .execute();
+  await keepAuthorization(
+    db,
+    { clock, cipher: credentialCipher(DEVELOPMENT_ENCRYPTION_KEY) },
+    outsider.id,
+    { id: 502, login: 'outsider-dev' },
+    GITHUB_APP.grantUser(),
+  );
 
   const seed = async (
     values: { type: 'public' | 'private' | 'direct_message' } & Record<string, unknown>,

@@ -194,7 +194,8 @@ export const GITHUB_DELIVERIES_KEPT_DAYS = 30;
 /**
  * Forgets the ids of deliveries older than `GITHUB_DELIVERIES_KEPT_DAYS` (D-134 §5): what makes a
  * redelivery post nothing, needed only while GitHub can still send one again — the feeds' and the GitHub
- * App's (D-246) — and, with them, the handshakes of trips to GitHub that were never brought back. Bounded by
+ * App's (D-246) — and, with them, the handshakes of trips to GitHub that were never brought back and the
+ * records of creating an issue (D-246 §4). Bounded by
  * the indexes on `received_at` and `expires_at`; idempotent, as every job is (D-30).
  */
 export const sweepGitHubDeliveries = async (dependencies: {
@@ -217,9 +218,17 @@ export const sweepGitHubDeliveries = async (dependencies: {
     .deleteFrom('github_app_handshakes')
     .where('expires_at', '<=', over)
     .executeTakeFirst();
+  // The record of creating an issue is as long as a lost answer can still be looked for (D-246 §4).
+  const operations = await dependencies.database
+    .deleteFrom('github_operations')
+    .where('updated_at', '<', before)
+    .executeTakeFirst();
   return {
     removed:
-      Number(feeds.numDeletedRows) + Number(app.numDeletedRows) + Number(trips.numDeletedRows),
+      Number(feeds.numDeletedRows) +
+      Number(app.numDeletedRows) +
+      Number(trips.numDeletedRows) +
+      Number(operations.numDeletedRows),
   };
 };
 

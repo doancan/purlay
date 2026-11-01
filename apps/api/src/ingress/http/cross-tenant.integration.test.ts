@@ -29,7 +29,11 @@ import {
   requestInit,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
-import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
+import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
+import { aGitHubStub } from '../../testing/github-stub';
+import { keepAuthorization } from '../../modules/integrations/github-app';
+import { credentialCipher } from '../../platform/crypto';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -43,6 +47,18 @@ afterAll(async () => {
 
 const clock = fixedClock(NOW);
 
+/** GitHub, as the App meets it: one organisation, one repository, and the person who authorized (D-246). */
+const GITHUB_APP = aGitHubAppStub({ id: 501, login: 'owner-dev' });
+GITHUB_APP.install(31, 'acme', [{ id: 77, fullName: 'acme/api', private: true }]);
+const GITHUB = aGitHubStub(
+  { id: 501, login: 'owner-dev', name: null, email: 'o@example.test' },
+  {},
+  undefined,
+  {
+    app: GITHUB_APP,
+  },
+);
+
 /** One store for the file, so what an owner uploads is there when they read it back. */
 const STORE = aMemoryStore();
 
@@ -54,7 +70,13 @@ const call = async (
   body?: unknown,
 ): Promise<Response> =>
   await createApp(
-    testDependencies({ database: db, clock, storage: STORE, githubApp: () => GITHUB_APP_STUB }),
+    testDependencies({
+      database: db,
+      clock,
+      storage: STORE,
+      githubApp: () => GITHUB_APP_STUB,
+      githubAppFetch: GITHUB.appFetch,
+    }),
   ).handle(new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)));
 
 const signedIn = async (db: Executor, name: string): Promise<string> =>
@@ -177,6 +199,26 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     .where('workspace_id', '=', workspaceId)
     .where('role', '=', 'owner')
     .executeTakeFirstOrThrow();
+  // The workspace's installation of the App, and its owner's own authorization: what making an issue needs.
+  await db
+    .insertInto('github_app_installations')
+    .values({
+      id: crypto.randomUUID(),
+      workspace_id: workspaceId,
+      installation_id: '31',
+      account_login: 'acme',
+      account_type: 'Organization',
+      connected_by: ownerId,
+      connected_at: NOW,
+    })
+    .execute();
+  await keepAuthorization(
+    db,
+    { clock, cipher: credentialCipher(DEVELOPMENT_ENCRYPTION_KEY) },
+    ownerId,
+    { id: 501, login: 'owner-dev' },
+    GITHUB_APP.grantUser(),
+  );
   const archive = `${workspacePrefix(workspaceId)}exports/${exportId}.tar`;
   await STORE.put(archive, new Uint8Array(1024), 'application/x-tar');
   await db
