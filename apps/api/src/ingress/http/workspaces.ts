@@ -15,6 +15,7 @@ import {
   AuditExportQuery,
   AuditQuery,
   CreateWorkspaceRequest,
+  DeleteWorkspaceRequest,
   SetGitHubTokenRequest,
   type GitHubIntegration,
   SetDeepWorkRequest,
@@ -25,13 +26,14 @@ import {
   type MeResponse,
   type Membership,
   type Workspace,
+  type WorkspaceDeletion,
   type WorkspaceMember,
   type RetentionSetting,
   type StorageUsage,
   SetRetentionRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { requireDeletionMembership, requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import {
   createWorkspace,
@@ -47,6 +49,7 @@ import {
   type WorkspaceCreators,
 } from '../../modules/workspaces/creators';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
+import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
 import { auditTrail } from '../../modules/audit/audit';
 import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
@@ -63,6 +66,7 @@ import {
   publishAccessRevoked,
   publishDeepWorkUpdated,
   publishAfterCommit,
+  publishWorkspaceClosed,
   publishWorkspaceUpdated,
   type EventBus,
 } from '../../platform/events';
@@ -265,6 +269,59 @@ export const leaveWorkspaceMembership = async (
     [
       publication('ACCESS_REVOKED', () =>
         publishAccessRevoked(bus, clock, caller.userId, channelIds),
+      ),
+    ],
+  ]);
+};
+
+/**
+ * `POST /api/workspaces/:workspaceId/deletion` — an owner asks for the workspace to be deleted, typing its
+ * name (D-242). After the commit every socket watching one of its channels stops receiving it, and each
+ * member is told to read their workspaces again, in which it is no longer. Asked again, the same answer.
+ */
+export const requestWorkspaceDeletion = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<WorkspaceDeletion> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireDeletionMembership(database, userId, workspaceId);
+  const { confirm } = validated(DeleteWorkspaceRequest, body);
+  const asked = await atomicallyOn(database)(
+    async (transaction) => await askToDelete(transaction, clock, context, confirm),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('ACCESS_REVOKED', () => publishWorkspaceClosed(bus, clock, asked.channelIds)),
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, asked.memberIds, workspaceId),
+      ),
+    ],
+  ]);
+  return asked.deletion;
+};
+
+/**
+ * `DELETE /api/workspaces/:workspaceId/deletion` — any owner takes the deletion back within its grace
+ * period (D-242). Each member is told to read their workspaces again, in which it is once more.
+ */
+export const cancelWorkspaceDeletion = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireDeletionMembership(database, userId, workspaceId);
+  const { memberIds } = await atomicallyOn(database)(
+    async (transaction) => await takeBackDeletion(transaction, clock, context),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, memberIds, workspaceId),
       ),
     ],
   ]);

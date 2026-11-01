@@ -35,6 +35,7 @@ import { createChannel } from '../channels/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
+import { scheduledDeletionsOf } from './deletion';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -200,6 +201,7 @@ export const meOf = async (
     mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
     isServerAdmin: user.is_server_admin,
     nameFromGitHub: isNameGitHubs(user),
+    scheduledDeletions: [...(await scheduledDeletionsOf(executor, userId))],
   };
 };
 

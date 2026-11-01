@@ -48,6 +48,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PUT /api/channels/:channelId/retention',
     allowed: { owner: true, admin: false, member: false },
   },
+  'ask for the workspace to be deleted': {
+    endpoint: 'POST /api/workspaces/:workspaceId/deletion',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'take back the workspace’s deletion': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/deletion',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'export the workspace': {
     endpoint: 'POST /api/workspaces/:workspaceId/exports',
     allowed: { owner: true, admin: false, member: false },

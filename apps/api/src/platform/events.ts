@@ -177,6 +177,26 @@ export const publishChannelRevoked = async (
   });
 };
 
+/**
+ * A workspace's deletion was asked for (D-242): everyone watching any of its channels, on any node, stops
+ * receiving it — on each channel's own topic, so a socket is reached whoever it belongs to, one frame a
+ * channel rather than one a member and channel. No reason, as for a removal from the whole workspace: the
+ * workspace itself is told to its members by `publishWorkspaceUpdated`.
+ */
+export const publishWorkspaceClosed = async (
+  bus: EventBus,
+  clock: Clock,
+  channelIds: readonly string[],
+): Promise<void> => {
+  for (const channelId of channelIds) {
+    await bus.publish(channelTopic(channelId), {
+      event: 'ACCESS_REVOKED',
+      data: { channelIds: [channelId] },
+      ts: clock.now().getTime(),
+    });
+  }
+};
+
 /** A channel's name or topic changed: everyone watching it hears both, at the row's version (D-123). */
 export const publishChannelUpdated = async (
   bus: EventBus,

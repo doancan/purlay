@@ -257,6 +257,16 @@ export const AuditPage = (): React.JSX.Element => {
       // A download of this very log (D-222): who took it; the filter is in the downloaded file's name.
       case 'audit.exported':
         return t('audit.action.audit.exported', { actor });
+      // An owner's, read once it was taken back: a workspace being deleted has no trail anybody opens (D-242).
+      case 'workspace.deletion_requested': {
+        const purgeAt = entry.metadata['purgeAt'];
+        return t('audit.action.workspace.deletion_requested', {
+          actor,
+          when: purgeAt === undefined ? '' : format.absolute(purgeAt),
+        });
+      }
+      case 'workspace.deletion_cancelled':
+        return t('audit.action.workspace.deletion_cancelled', { actor });
       case undefined:
         return t('audit.unknown', { actor, action: entry.action });
     }
