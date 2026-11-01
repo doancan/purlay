@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Workspaces** — An owner can delete a workspace from General, typing its name and offered an export first; it leaves everyone at once, any owner can keep it for seven days, and then its content is erased (D-242)
 - **Notifications** — Turn on email about direct messages and mentions left unread for fifteen minutes: one letter at most an hour, never in Deep Work or quiet hours, quoting only what you can still read, with a link that stops it without signing in (D-240)
 - **Channels** — Mark every channel read at once with Shift+Esc, from the command palette or the workspace menu; your other devices clear too, and an answer still waiting in a thread stays unread (D-238)
 - **Sign-in** — The server's administrator can require two-step verification of every account with a password (anyone without it is asked to turn it on before anything else) and, while GitHub or single sign-on works, turn password sign-in off; `admin:reset-password` turns it back on (D-239)
