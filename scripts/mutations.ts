@@ -60,6 +60,9 @@ const LIFECYCLE_TESTS = 'apps/api/src/lifecycle.test.ts';
 const GITHUB_ENDPOINT_TESTS = 'apps/api/src/ingress/http/github-endpoints.integration.test.ts';
 const SERVER_TESTS = 'apps/api/src/ingress/http/server.integration.test.ts';
 const SERVER_ADMIN = 'apps/api/src/modules/setup/server-admin.ts';
+const GITHUB_APP = 'apps/api/src/modules/integrations/github-app.ts';
+const GITHUB_APP_WEBHOOK = 'apps/api/src/modules/integrations/github-app-webhook.ts';
+const GITHUB_APP_TESTS = 'apps/api/src/ingress/http/github-app.integration.test.ts';
 const OIDC = 'apps/api/src/modules/auth/oidc.ts';
 const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
 const RESET_PASSWORD = 'apps/api/src/modules/setup/reset-password.ts';
@@ -11818,5 +11821,76 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "  path.replace(INCOMING_WEBHOOK_SECRET, '$1/:secret');\n",
     replace: '  path;\n',
     tests: ['apps/api/src/ingress/http/incoming-webhooks.integration.test.ts'],
+    id: 'github-app-callback-any-browser',
+    why: 'a trip comes back in somebody else’s browser and connects an installation, or a token, of the person who left (D-246)',
+    file: GITHUB_APP,
+    find: "  if (userId !== trip.user_id) return 'not-yours';\n",
+    replace: '',
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-installation-not-vouched',
+    why: 'the installation id in the query, which anybody can write, is believed without GitHub saying the person can reach it (D-246)',
+    file: GITHUB_APP,
+    find: '  if (!(await api.userInstallationIds(tokens.accessToken)).includes(installationId)) {\n',
+    replace: '  if (false) {\n',
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-state-never-expires',
+    why: 'a trip started yesterday still comes back and connects (D-246)',
+    file: GITHUB_APP,
+    find: "    .where('expires_at', '>', clock.now())\n",
+    replace: '',
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-installation-by-a-member',
+    why: 'a member starts an installation of the workspace’s GitHub App (D-246)',
+    file: GITHUB_APP,
+    find: "  if (context.role !== 'owner') {\n",
+    replace: '  if (false) {\n',
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-webhook-unsigned',
+    why: 'a delivery to the App’s address is believed without its signature, and anybody ends an installation (D-246)',
+    file: GITHUB_APP_WEBHOOK,
+    find: '  if (!signedBy(app.webhookSecret, delivery.body, delivery.signature)) {\n',
+    replace: '  if (false) {\n',
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-delivery-twice',
+    why: 'a redelivered delivery is applied again (D-246, D-134 §5)',
+    file: GITHUB_APP_WEBHOOK,
+    find: "    if (recorded === undefined) return 'duplicate';\n",
+    replace: '',
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-removal-kept-in-another-workspace',
+    why: 'an installation GitHub removed is let go in one workspace and kept in the others that connected it (D-246)',
+    file: GITHUB_APP_WEBHOOK,
+    find: "        .returning(['id', 'workspace_id', 'account_login'])\n        .execute();\n",
+    replace:
+      "        .returning(['id', 'workspace_id', 'account_login'])\n        .execute()\n        .then((rows) => rows.slice(0, 1));\n",
+    tests: [GITHUB_APP_TESTS],
+  },
+  {
+    id: 'github-app-key-unchecked',
+    why: 'a private key the server cannot sign with is kept, and every installation after it is refused by GitHub (D-246)',
+    file: SETTINGS,
+    find: '    const problem = githubAppKeyProblem(app.privateKey);\n',
+    replace: '    const problem = undefined as string | undefined;\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'github-app-tried-without-itself',
+    why: 'the App is kept after its client pair held, with a key GitHub never took or for another App (D-246)',
+    file: SERVER_ADMIN,
+    find: '  if (!itself.ok) return itself;\n',
+    replace: '',
+    tests: [SERVER_TESTS],
   },
 ];
