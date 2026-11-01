@@ -122,6 +122,7 @@ test('walks a fresh server from the code to its first workspace', async ({ brows
     email: true,
     oidc: null,
     signUp: 'invite-only',
+    password: true,
   });
   await expect(again.getByText('Accounts are created by invitation.')).toBeVisible();
   await again.getByLabel('Email address').fill('ayse@example.test');

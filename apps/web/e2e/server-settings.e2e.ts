@@ -125,6 +125,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
     email: false,
     oidc: null,
     signUp: 'open',
+    password: true,
   });
 
   // Only GitHub is connected: disconnecting it is the last way in, and says so before it asks.
