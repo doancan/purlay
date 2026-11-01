@@ -245,6 +245,29 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('a deletion asked for says when the content goes, and one taken back says so (D-242)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, { action: 'workspace.deletion_cancelled', targetType: 'workspace' }),
+            anEntry(1, {
+              action: 'workspace.deletion_requested',
+              targetType: 'workspace',
+              metadata: { purgeAt: '2026-11-08T09:00:00.000Z' },
+            }),
+            anEntry(0, { action: 'workspace.deletion_requested', targetType: 'workspace' }),
+          ]),
+        ),
+    });
+    const said = lines(view);
+    expect(said[0]).toBe(`${ME.displayName} took back the workspace’s deletion`);
+    expect(said[1]).toMatch(
+      new RegExp(`^${ME.displayName} asked for the workspace to be deleted after .*2026`),
+    );
+    expect(said[2]).toBe(`${ME.displayName} asked for the workspace to be deleted after `);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openPage({
       audit: () =>
