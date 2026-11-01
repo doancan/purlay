@@ -569,7 +569,7 @@ export const en = {
   'github.notConnected': 'Not connected: links to GitHub stay plain links.',
   'github.token': 'Token',
   'github.tokenHint':
-    'A fine-grained personal access token with read access to the repositories your team links to.',
+    'A fine-grained personal access token, read-only (Contents, Issues and Pull requests: read), limited to the selected repositories your team links to. GitHub checks it when you save.',
   'github.tokenShape': 'github_pat_…',
   'github.invalid': 'A token is one word of letters, digits and symbols, with no spaces.',
   'github.save': 'Save token',
@@ -577,6 +577,14 @@ export const en = {
   'github.saveFailed': 'The token was not saved.',
   'github.disconnect': 'Disconnect',
   'github.disconnectFailed': 'GitHub was not disconnected.',
+  'github.rejected':
+    'GitHub does not accept this token. Check that it was copied whole and has not expired or been revoked.',
+  'github.unreachable':
+    'GitHub could not be asked about this token just now. Try again in a moment.',
+  'github.revoked':
+    'GitHub refused the token on {when}: it was revoked or has expired. Links stay plain until you replace it.',
+  'github.broad':
+    'This looks like a classic token with the repo scope: it can read and write every repository its owner can. A fine-grained, read-only token on selected repositories is enough, and safer.',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
@@ -1836,6 +1844,7 @@ export const en = {
   'theme.label': 'Theme',
   'theme.system': 'System',
   'theme.light': 'Light',
+  'settings.integrations.refused': 'Token refused',
   'theme.dark': 'Dark',
   'theme.midnight': 'Midnight',
   'language.label': 'Language',

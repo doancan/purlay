@@ -511,7 +511,7 @@ describe('the endpoints', () => {
   });
 
   test('the GitHub token: its status read, the token sent in the body, and taken away (D-23)', async () => {
-    const status = { configured: true, updatedAt: WHEN };
+    const status = { configured: true, updatedAt: WHEN, invalidSince: null, broadScopes: false };
     const read = harness(status);
     expect(await read.api.githubIntegration(ID)).toEqual(status);
     const saved = harness(null);
