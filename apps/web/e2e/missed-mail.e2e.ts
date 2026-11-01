@@ -178,7 +178,8 @@ test('turned on in Notifications, one letter about a direct message, and its lin
   const reading = await stranger.newPage();
   await reading.goto(stop);
   await expect(reading.getByRole('heading', { name: 'Stop these emails?' })).toBeVisible();
-  expect(new URL(reading.url()).hash).toBe('');
+  // The token leaves the address bar once the page has read it.
+  await expect.poll(() => new URL(reading.url()).hash).toBe('');
   await reading.getByRole('button', { name: 'Stop these emails' }).click();
   await expect(
     reading.getByRole('heading', { name: 'You won’t get these emails any more' }),
