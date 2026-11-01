@@ -22,7 +22,7 @@ it processes no data.
 |---|---|---|
 | GitHub | The sign-in exchange; with a workspace's token, the API reads for an unfurl. A repository feed is GitHub sending events in, not the instance asking | Sign-in (D-11); a pasted pull request or issue link (D-23); a repository feed (D-134) |
 | GitHub's avatar host | Each reader's browser asks it for the avatars on the page, directly | Every page with a person's avatar, until avatars are served through the image proxy (`TODO(#110)` in `edge.ts`) |
-| The object store | Every attachment's bytes and its thumbnail; an owner's export archive | Each upload; each export (D-109, D-140). The operator's own store, or the one they chose (`CONFIG.md`) |
+| The object store | Every attachment's bytes and its thumbnail; an owner's export archive; a person's export of their own data | Each upload; each export (D-109, D-140, D-241). The operator's own store, or the one they chose (`CONFIG.md`) |
 | A browser's push service (Apple, Google, Mozilla) | An encrypted notice only the device can read: who and why, never what was written. The service sees its size and the device's address | Whatever the person's inbox would show — a mention, a direct message, a thread reply, a group or a channel at their notification level — to a device that subscribed (D-126, D-29) |
 | The SMTP relay | A sign-in link, to the address asked for; a letter about what a person missed — the workspace and conversation names, who wrote, and a short excerpt of each message they can still read — to their own address | Email sign-in, when `SMTP_URL` is set (D-138); at most hourly, only to a person who turned it on (D-240) |
 | An error tracker | The API's `error` lines, without anything on the never-logged list | Only when `ERROR_TRACKING_DSN` is set (D-96) |
@@ -77,10 +77,11 @@ is rotated out (§4).
 | `github_deliveries` | None: a delivery's id and its body's digest (D-231) | Telling a repeated webhook from a new one (D-134 §5) | `GITHUB_DELIVERIES_KEPT_DAYS` (`sweep:github-deliveries`) |
 | `link_previews` | A GitHub item's title and state, and its author's login and avatar address, per workspace | Unfurls (D-23) | Until each expires (`sweep:link-previews`) |
 | `workspace_exports` | Who asked for an export; the archive in the object store | An owner's export (D-140) | The archive until it is downloaded or `EXPORT_KEPT_HOURS` pass (`sweep:exports`); the row as the record that it was made |
+| `personal_exports` | Who asked for an export of their own data, and when; the archive in the object store, which holds their account, settings, the messages they wrote and the files they sent | A person's right of access and portability (D-241) | The archive until it is downloaded, `EXPORT_KEPT_HOURS` pass, or the account is erased, then taken by `sweep:exports` within the hour; the row, ids and times only, as the record that it was made |
 | `object_deletions` | None: storage keys waiting to be deleted | Files whose rows are gone, until the store lets them go (D-141) | Until the store deletes the object |
 | `job_runs` | None | When each scheduled job last ran (D-30) | Always one row per job |
 | `server_settings` | None of a person: who may sign up, the sign-in policy (D-239), the GitHub app's id and its sealed secret, the mail relay's sealed address (its password in it) and sender, and the GitHub logins listed as workspace creators (D-155) | The server's own settings, changed in the browser (D-179 §6) | One row for the life of the instance. Never exported; the secrets are never shown, only whether they are set. A listed login is a GitHub account's public name, removed by changing the setting — erasure does not reach it, as it does not reach the instance's configuration |
-| `server_audit_log` | Who changed which of the server's own settings, and when: the administrator's id and the session, never a value; for a suspension, also whose account (D-233) | Administration → Server (D-26, D-179 §4.8) | Append-only; the actor and the account are set to null if that account is erased. Never exported |
+| `server_audit_log` | Who changed which of the server's own settings, and when: the administrator's id and the session, never a value; for a suspension, also whose account (D-233); a person's request for and download of their own data, by their id (D-241) | Administration → Server (D-26, D-179 §4.8) | Append-only; the actor and the account are set to null if that account is erased. Never exported |
 | `setup_state` | None of a person: digests of the setup's one-time code and of the claim's token, never either one; the id of the browser that claimed setup; the administrator the setup made, by id; the wrong-code count and lock; the step reached; when a GitHub app and a relay were saved after a try that worked | Setting the server up in the browser (D-179 §4) | One row for the life of the instance. Never exported; the code and the token themselves are never stored — the code is shown only in the log of the start that issued it |
 | `admin_email_verification` | The setup administrator, by id, and the address the link was mailed to; the SHA-256 of the one link that verifies it, never the token; when it was issued | Verifying the administrator's address with a link of the wizard's own, not a magic link (D-179 §4.3) | At most one row, for at most a day: deleted when the link is followed or replaced, when it is tried past its day, by `sweep:email-sign-ins` once the day is over, and on erasure. Never exported |
 | `invitation_passports` | The SHA-256 of a cookie, or of a lower-cased address — never the cookie, never the address; which invitation link it was made from; when it expires and when it was spent | Letting a newcomer make an account on an invite-only server by an invitation link (D-179 §5) | An hour, once: swept a day past its expiry or its use, and an address's rows deleted on that person's erasure by the digest of the address read before the tombstone. Never exported |
@@ -114,7 +115,8 @@ is rotated out (§4).
 
 1. **A person erases their own account** in their account menu, typing their username; it needs a
    recent sign-in (D-139 §5). Their profile, email, GitHub link, sessions,
-   devices, sign-in links, saved messages and notifications go; what they wrote stays, shown as a
+   devices, sign-in links, saved messages and notifications go, and an export of their own data
+   can no longer be downloaded, its archive swept within the hour (D-241); what they wrote stays, shown as a
    "deleted user". The last live owner of a workspace with other live members must hand it over
    first (D-139 §6).
 2. **What they wrote is erased by the operator**, per workspace or in all of them:
@@ -131,6 +133,10 @@ is rotated out (§4).
    backups that need it are rotated out and `scripts/prune-wal.sh` has run; a bucket with versioning
    keeps an erased file's versions until its lifecycle rule expires them. A restore before then
    brings them back, and must be followed by the same erasure again. Say how long in your own records.
-5. **A copy for the person** before erasing, or on request: an owner's export of the workspace
-   (D-140), or the operator's `bun run export:workspace <slug> <directory>`, which also carries
-   members' addresses.
+5. **A copy for the person** before erasing, or on request: **the person exports their own data**
+   from Sessions & account (D-241) — their account, memberships and settings, everything they wrote
+   that stands, in every workspace, their reactions and saved items and the files they sent, one
+   archive downloaded once, each request and download on the server's trail
+   (`account.export_requested`, `account.export_downloaded`). Somebody who cannot sign in — a
+   suspended account among them — cannot; for them, an owner's export of the workspace (D-140), or the
+   operator's `bun run export:workspace <slug> <directory>`, which also carries members' addresses.

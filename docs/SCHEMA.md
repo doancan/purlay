@@ -1541,7 +1541,8 @@ is a workspace's, with its workspace required; the server's settings belong to n
 trail of their own, append-only on the same terms (I-9). It says who, which setting and when — the
 action names both (`server.github_connected`, `server.github_disconnected`, `server.smtp_connected`,
 `server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, `server.account_suspended` and
-`server.account_restored` (with `target_user_id`, whose account, D-233), and `server.admin_password_reset`, written by
+`server.account_restored` (with `target_user_id`, whose account, D-233), `account.export_requested` and
+`account.export_downloaded` (a person's export of their own data, the person as actor and `target_user_id`, D-241), and `server.admin_password_reset`, written by
 `bun run admin:reset-password` with the account itself as the actor and no session) — and never
 the value, a secret least of all. Written in the transaction that saves the setting
 (`modules/audit/server-audit.ts`), so a change that did not commit leaves no row and one that did
@@ -1651,6 +1652,51 @@ CREATE UNIQUE INDEX idx_workspace_exports_one_pending
 CREATE INDEX idx_workspace_exports_workspace ON workspace_exports (workspace_id, id DESC);
 CREATE INDEX idx_workspace_exports_requested_by
     ON workspace_exports (requested_by) WHERE requested_by IS NOT NULL;
+```
+
+### 9.3a. `personal_exports`
+
+A person's export of their own data (D-241): the same life as an owner's export of a workspace (§9.3),
+in a table of its own, so a person's export names no workspace and can never be listed or downloaded as
+one. The row is the record that it was made; its archive lives under the person's prefix in the store
+(`u/<id>/exports/`) until it is downloaded or expires, and `sweep:exports` takes it as it takes a
+workspace's. Erasure ends a person's exports — a ready one `expired`, one being made `failed` — and the
+sweep then takes their archives. Never exported itself.
+
+```sql
+CREATE TABLE personal_exports (
+    id             UUID PRIMARY KEY,
+    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- As workspace_exports: 'pending', 'ready', 'failed', 'downloaded', 'expired'.
+    status         TEXT NOT NULL,
+    storage_key    TEXT,
+    size_bytes     BIGINT,
+    failure        TEXT,
+    created_at     TIMESTAMPTZ NOT NULL,
+    finished_at    TIMESTAMPTZ,
+    heartbeat_at   TIMESTAMPTZ,
+    expires_at     TIMESTAMPTZ,
+    downloaded_at  TIMESTAMPTZ,
+
+    CONSTRAINT personal_exports_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT personal_exports_status
+        CHECK (status IN ('pending', 'ready', 'failed', 'downloaded', 'expired')),
+    CONSTRAINT personal_exports_ready
+        CHECK (status <> 'ready'
+               OR (storage_key IS NOT NULL AND size_bytes IS NOT NULL AND expires_at IS NOT NULL)),
+    CONSTRAINT personal_exports_pending
+        CHECK (status <> 'pending' OR storage_key IS NULL),
+    CONSTRAINT personal_exports_failure
+        CHECK ((status = 'failed') = (failure IS NOT NULL) AND (failure IS NULL OR failure ~ '^[A-Z_]{1,64}$'))
+);
+
+-- One export of a person in the making at a time.
+CREATE UNIQUE INDEX idx_personal_exports_one_pending
+    ON personal_exports (user_id) WHERE status = 'pending';
+
+-- The person's list, and the day's count, newest first.
+CREATE INDEX idx_personal_exports_user ON personal_exports (user_id, id DESC);
 ```
 
 ### 9.4. `object_deletions`
@@ -2161,6 +2207,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0067_two_factor.sql users.two_factor_enabled, two_factors: two-step verification for an account with a password, its key and backup codes sealed  (D-236)
 0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
 0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
+0070_personal_exports.sql personal_exports: a person's export of their own data, made in the background, downloaded once  (D-241)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

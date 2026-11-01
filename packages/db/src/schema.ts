@@ -308,6 +308,20 @@ export interface ObjectDeletions {
   storage_key: string;
 }
 
+export interface PersonalExports {
+  created_at: Timestamp;
+  downloaded_at: Timestamp | null;
+  expires_at: Timestamp | null;
+  failure: string | null;
+  finished_at: Timestamp | null;
+  heartbeat_at: Timestamp | null;
+  id: string;
+  size_bytes: Int8 | null;
+  status: string;
+  storage_key: string | null;
+  user_id: string;
+}
+
 export interface PinnedMessages {
   channel_id: string;
   message_id: string;
@@ -552,6 +566,7 @@ export interface DB {
   native_authorizations: NativeAuthorizations;
   notifications: Notifications;
   object_deletions: ObjectDeletions;
+  personal_exports: PersonalExports;
   pinned_messages: PinnedMessages;
   push_subscriptions: PushSubscriptions;
   rate_limits: RateLimits;
