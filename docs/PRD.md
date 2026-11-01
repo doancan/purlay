@@ -193,8 +193,10 @@ announcement channels, whose feed only owners and admins post in (D-243)
 opt-in email about direct messages and mentions left unread, at most one an hour (D-240) · a session lifetime
 policy: signed out after a time unused, and signed in again after a time at all (D-244)
 incoming webhooks: a channel's address that CI and monitoring post markdown to, quietly (D-245)
+a person's export of their own data (D-241) ·
+GitHub issues from conversations, built in the order below — step 1, connecting the GitHub App, is built (D-246)
 
-**Next proposal: GitHub issues from conversations (planned, not implemented).** Build on the
+**Next proposal: GitHub issues from conversations (D-246; step 1 built, steps 2–4 planned).** Build on the
 existing workspace credential, link previews, signed webhooks and delivery deduplication. The
 delivery order after questions, decisions and saved search is:
 
