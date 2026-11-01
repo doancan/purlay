@@ -44,6 +44,7 @@ import { useWorkspace } from '../shell/workspace';
 import { forgetChannel } from '../questions/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
+import { IncomingWebhooks } from './incoming-webhooks';
 import { ChannelRetentionSection } from './channel-retention';
 import { CHANNEL_NAME, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
@@ -591,7 +592,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   const [tab, setTab] = useState<Tab>('about');
   const tabsRef = useRef<HTMLDivElement>(null);
   const base = useId();
-  // Repository feeds are an owner's or an admin's to see and set up (D-134 §2).
+  // Repository feeds and incoming webhooks are an owner's or an admin's to see and set up (D-134 §2, D-245).
   const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
   const configures = (role === 'owner' || role === 'admin') && channel.type !== 'direct_message';
   const tabs: readonly Tab[] = configures
@@ -684,7 +685,13 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
             </>
           )}
           {each === 'members' && <Members channel={channel} />}
-          {each === 'integrations' && <GitHubFeeds channel={channel} />}
+          {each === 'integrations' && (
+            <>
+              <GitHubFeeds channel={channel} />
+              {/* An owner's or an admin's, as a feed is (D-245). */}
+              <IncomingWebhooks channel={channel} />
+            </>
+          )}
         </div>
       ))}
     </>

@@ -446,6 +446,8 @@ export const en = {
   'audit.kind.integration.token_removed': 'GitHub token removed',
   'audit.kind.integration.feed_created': 'Repository connected',
   'audit.kind.integration.feed_removed': 'Repository disconnected',
+  'audit.kind.integration.webhook_created': 'Incoming webhook made',
+  'audit.kind.integration.webhook_revoked': 'Incoming webhook revoked',
   'audit.kind.invitation.created': 'Invitation link made',
   'audit.kind.invitation.revoked': 'Invitation link revoked',
   'audit.kind.message.removed_by_moderator': 'Message deleted by a moderator',
@@ -476,6 +478,14 @@ export const en = {
   'audit.action.integration.feed_removed': '{actor} disconnected {repository} from a channel',
   'audit.action.integration.feed_created_in': '{actor} connected {repository} to {channel}',
   'audit.action.integration.feed_removed_from': '{actor} disconnected {repository} from {channel}',
+  'audit.action.integration.webhook_created':
+    '{actor} made the incoming webhook “{webhook}” in a channel',
+  'audit.action.integration.webhook_revoked':
+    '{actor} revoked the incoming webhook “{webhook}” in a channel',
+  'audit.action.integration.webhook_created_in':
+    '{actor} made the incoming webhook “{webhook}” in {channel}',
+  'audit.action.integration.webhook_revoked_from':
+    '{actor} revoked the incoming webhook “{webhook}” in {channel}',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
@@ -898,6 +908,7 @@ export const en = {
   'deferred.unavailable': 'That did not open. Check your connection and try again.',
   'viewer.unavailable': 'The image viewer did not open. Check your connection and try again.',
   'message.deleted': 'This message was deleted.',
+  'message.incomingWebhook': 'webhook',
   'message.edit': 'Edit',
   'message.delete': 'Delete',
   'saved.save': 'Save for later',
@@ -1050,6 +1061,34 @@ export const en = {
   'feeds.setup.once':
     'The secret is shown only now. Lost, it means disconnecting the repository and connecting it again.',
   'feeds.setup.done': 'Done',
+
+  // ── A channel's incoming webhooks (D-245) ───────────────────────────────
+  'hooks.title': 'Incoming webhooks',
+  'hooks.empty':
+    'No incoming webhook. Make one, and a CI job or a monitor can post a message here with its address.',
+  'hooks.name': 'Webhook name',
+  'hooks.nameHint': 'What its messages say they are from, such as CI or Alerts.',
+  'hooks.nameRequired': 'Give the webhook a name.',
+  'hooks.nameInvalid': 'Use a shorter name, of letters people can see.',
+  'hooks.make': 'Make webhook',
+  'hooks.makeFailed': 'Couldn’t make the webhook.',
+  'hooks.made': 'Made {when}',
+  'hooks.madeBy': 'Made by {who} {when}',
+  'hooks.neverUsed': 'Not used yet',
+  'hooks.lastUsed': 'Last posted {when}',
+  'hooks.revoke': 'Revoke',
+  'hooks.revokeOne': 'Revoke {name}',
+  'hooks.revokeAsk':
+    'Revoke {name}? Its address stops working at once. What it posted stays in the channel.',
+  'hooks.revokeFailed': 'Couldn’t revoke the webhook.',
+  'hooks.setup.title': 'The address of {name}',
+  'hooks.setup.steps':
+    'Post JSON to it with the content type application/json, such as {example}. The text is markdown.',
+  'hooks.setup.example': 'Deploy finished',
+  'hooks.setup.copy': 'Copy the address',
+  'hooks.setup.once':
+    'The address holds its secret and is shown only now. Lost, it means revoking the webhook and making another.',
+  'hooks.setup.done': 'Done',
 
   // ── A message's earlier versions (D-135) ────────────────────────────────
   'history.open': 'Edited — show what it said before',
@@ -1535,6 +1574,8 @@ export const en = {
     'That is as many repositories as a channel hears from. Disconnect one first.',
   'failure.githubFeedExists':
     'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
+  'failure.incomingWebhooksLimit':
+    'That is as many incoming webhooks as a channel has. Revoke one first.',
   'failure.incidentOpen':
     'This channel already has an incident open. Change that one, or resolve it first.',
   'failure.incidentResolved': 'This incident is resolved. Declare a new one if it is back.',

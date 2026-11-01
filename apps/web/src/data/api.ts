@@ -36,7 +36,9 @@ import {
   DeepWorkResponse,
   FilePage,
   CreatedGitHubFeed,
+  CreatedIncomingWebhook,
   GitHubFeedList,
+  IncomingWebhookList,
   GitHubIntegration,
   PinList,
   BookmarkList,
@@ -97,6 +99,7 @@ import {
   type PushSubscribeRequest,
   type SavedState,
   type CreateGitHubFeedRequest,
+  type CreateIncomingWebhookRequest,
   PresenceSnapshot,
   MessageVersionPage,
   MessageWindow,
@@ -157,6 +160,17 @@ export interface Api {
     input: CreateGitHubFeedRequest,
   ) => Promise<CreatedGitHubFeed>;
   readonly disconnectGitHubFeed: (channelId: string, feedId: string) => Promise<void>;
+  /** An owner's or an admin's: the incoming webhooks a channel has, never their secrets (D-245). */
+  readonly incomingWebhooks: (
+    channelId: string,
+    signal?: AbortSignal,
+  ) => Promise<IncomingWebhookList>;
+  /** Makes an incoming webhook: the hook, and the path with its secret — once. */
+  readonly createIncomingWebhook: (
+    channelId: string,
+    input: CreateIncomingWebhookRequest,
+  ) => Promise<CreatedIncomingWebhook>;
+  readonly revokeIncomingWebhook: (channelId: string, webhookId: string) => Promise<void>;
   readonly removeGitHubToken: (workspaceId: string) => Promise<void>;
   /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
   readonly unfurl: (
@@ -523,6 +537,26 @@ export const createApi = (http: Http): Api => {
       ),
     disconnectGitHubFeed: (channelId, feedId) =>
       http.send('DELETE', `/api/channels/${at(channelId)}/github-feeds/${at(feedId)}`, options()),
+    incomingWebhooks: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/incoming-webhooks`,
+        IncomingWebhookList,
+        options({}, signal),
+      ),
+    createIncomingWebhook: (channelId, input) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/incoming-webhooks`,
+        CreatedIncomingWebhook,
+        options({ body: input }),
+      ),
+    revokeIncomingWebhook: (channelId, webhookId) =>
+      http.send(
+        'DELETE',
+        `/api/channels/${at(channelId)}/incoming-webhooks/${at(webhookId)}`,
+        options(),
+      ),
     revokeInvitation: (workspaceId, invitationId) =>
       http.send(
         'DELETE',
