@@ -238,6 +238,14 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/workspaces/deletion.ts#takeBackDeletion': {
     none: 'it restores access and revokes none: its members read their workspaces again on WORKSPACE_UPDATED (#870)',
   },
+  // The erasure of a workspace whose deletion was asked for a grace period ago (D-242): its channels and
+  // memberships go, but nobody could reach them since the deletion was asked for, when every socket was told.
+  'apps/api/src/modules/workspaces/deletion-purge.ts#channelBatch': {
+    none: 'a job with no bus, deleting the channels of a workspace whose sockets were told when its deletion was asked for (#870)',
+  },
+  'apps/api/src/modules/workspaces/deletion-purge.ts#purgeWorkspaceContent': {
+    none: 'a job with no bus, deleting the memberships of a workspace whose sockets were told when its deletion was asked for (#870)',
+  },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',
   },

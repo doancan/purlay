@@ -7,6 +7,7 @@
  *   sweep:link-previews  the unfurl cache past its expiry (D-23)
  *   sweep:email-sign-ins  sign-in links and their counters a day past use (D-138, D-179)
  *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
+ *   purge:workspaces   the content of each workspace whose deletion's grace period is over (D-242)
  *   sweep:exports      exports nobody downloaded in time, and any whose making was cut off (D-140)
  *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)
  *   mail:missed        one letter to each person who asked, about what waited unread for them (D-240)
@@ -19,6 +20,7 @@
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { purgeRetention } from '../modules/retention/purge';
+import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
   reconcileStorage,
@@ -103,6 +105,8 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
     await sweepExports({ database, clock, log, storage: storeFor(config) }),
   'purge:retention': async () =>
     await purgeRetention({ database, clock, log, storage: storeFor(config) }),
+  'purge:workspaces': async () =>
+    await purgeWorkspaces({ database, clock, log, storage: storeFor(config) }),
   'sweep:deletions': async () =>
     await sweepObjectDeletions({
       database,
