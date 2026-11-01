@@ -978,6 +978,48 @@ describe('the endpoints', () => {
     expect(asked.calls[0]).toMatchObject({ method: 'POST', url: `/api/workspaces/${ID}/exports` });
   });
 
+  test('one’s own data (D-241): exports listed, and one asked for, in no workspace', async () => {
+    const one = {
+      id: '0199155c-6200-7b7f-8c11-0000000000f1',
+      status: 'pending' as const,
+      createdAt: '2026-10-14T10:00:00.000Z',
+      finishedAt: null,
+      expiresAt: null,
+      sizeBytes: null,
+      failure: null,
+    };
+    const listed = harness([one]);
+    expect(await listed.api.myExports()).toEqual([one]);
+    expect(listed.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/exports' });
+    const asked = harness(one);
+    expect(await asked.api.requestMyExport()).toEqual(one);
+    expect(asked.calls[0]).toMatchObject({ method: 'POST', url: '/api/me/exports' });
+  });
+
+  test('quiet hours and missed mail: read and set, as the person’s own (D-234, D-240)', async () => {
+    const quiet = {
+      quietHours: { from: 1320, to: 420, days: [1, 2] },
+      timeZone: 'Europe/Istanbul',
+    };
+    const readQuiet = harness(quiet);
+    expect(await readQuiet.api.quietHours()).toEqual(quiet);
+    expect(readQuiet.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/quiet-hours' });
+    const setQuiet = harness(quiet);
+    expect(await setQuiet.api.setQuietHours({ quietHours: quiet.quietHours })).toEqual(quiet);
+    expect(setQuiet.calls[0]).toMatchObject({ method: 'PUT', url: '/api/me/quiet-hours' });
+
+    const mail = { on: true, available: true };
+    const readMail = harness(mail);
+    expect(await readMail.api.missedMail()).toEqual(mail);
+    expect(readMail.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/missed-mail' });
+    const setMail = harness(mail);
+    expect(await setMail.api.setMissedMail({ on: true })).toEqual(mail);
+    expect(setMail.calls[0]).toMatchObject({ method: 'PUT', url: '/api/me/missed-mail' });
+    const stopped = harness(null);
+    await stopped.api.stopMissedMail('a'.repeat(64));
+    expect(stopped.calls[0]).toMatchObject({ method: 'POST', url: '/api/missed-mail/stop' });
+  });
+
   test('erasing one’s own account sends the username typed (D-139 §5)', async () => {
     const erased = harness(null);
     await erased.api.eraseAccount('alice');
