@@ -185,7 +185,8 @@ Web Push notifications · unified/split diff viewer for ` ```diff ` blocks · ma
 (D-27) · **operator compliance documentation** — data map, retention and erasure runbooks (D-28) ·
 online presence (ephemeral, D-7, D-120) · group conversations · saved items · pinned messages and a
 channel's files · profiles with a title, a time zone and a status · starred channels · incident
-channels (D-125) · every channel marked read at once (D-238)
+channels (D-125) · every channel marked read at once (D-238) · a sign-in policy: two-step
+verification required of a password, password sign-in off where GitHub or single sign-on serves (D-239)
 
 **Next proposal: GitHub issues from conversations (planned, not implemented).** Build on the
 existing workspace credential, link previews, signed webhooks and delivery deduplication. The
