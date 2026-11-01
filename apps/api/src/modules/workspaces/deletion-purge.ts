@@ -52,6 +52,11 @@ export const REMAINING_TABLES = [
   'incidents',
   'saved_searches',
   'github_integrations',
+  'github_app_installations',
+  'github_app_handshakes',
+  'github_links',
+  'github_operations',
+  'incoming_webhooks',
   'workspace_invitations',
 ] as const;
 
