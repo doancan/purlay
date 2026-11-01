@@ -8080,7 +8080,13 @@ nothing merged; its report is the record of every number below).
      the session ends, since every way Purlay ends one deletes the row too (D-116 §4, as amended).
    - *A `getUserInfo` override for GitHub* that takes only the primary **and** verified address, and
      makes the username from the login there — an override skips the library's own `mapProfileToUser`.
-     `github` is never in `trustedProviders` and `requireLocalEmailVerified` stays `true`. **The
+     `github` is never in `trustedProviders` and `requireLocalEmailVerified` stays `true`. **An account has
+     one GitHub identity, as it has one single sign-on identity (D-200 §3):** the library links a callback it does not
+     know to the account whose address matches, so a second GitHub id carrying that address — an address taken
+     over or recycled at GitHub — is refused where the `accounts` row is made (`identity_conflict`, shown as `failed`),
+     whether the account holds another `github` row or only a `github_id` that `recordGitHubSignIn` would overwrite;
+     the same write refuses it again under the row lock, for two callbacks at once. Only an account with no GitHub
+     identity is linked by its verified address. **The
      username is never a client's.** The field is declared `input: true` only because the library's
      OAuth callback drops the fields marked `input: false` from a provider's profile and then fails
      the sign-in for the missing one; so a value a client sends could reach it, and a
