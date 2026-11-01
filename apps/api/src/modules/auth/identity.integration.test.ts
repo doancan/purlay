@@ -275,6 +275,32 @@ describe('integration: what a GitHub sign-in through the library writes (D-179)'
     });
   });
 
+  test('refuses a GitHub id other than the one the account holds, and writes nothing (D-179 §3)', async () => {
+    await withRollback(async (db) => {
+      const first = await signedIn(db, {
+        id: 5151,
+        login: 'first',
+        name: 'First',
+        avatarUrl: null,
+      });
+      const refused = await recordGitHubSignIn(db, clock, {
+        userId: first.userId,
+        profile: { id: 5252, login: 'second', name: 'Second', avatarUrl: null },
+        made: false,
+      }).then(
+        () => 'written',
+        (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
+      );
+      expect(refused).toBe('FORBIDDEN');
+      const kept = await db
+        .selectFrom('users')
+        .select(['github_id', 'github_login'])
+        .where('id', '=', first.userId)
+        .executeTakeFirstOrThrow();
+      expect(kept).toEqual({ github_id: '5151', github_login: 'first' });
+    });
+  });
+
   test('refuses a sign-in for an account that does not exist, and writes nothing', async () => {
     await withRollback(async (db) => {
       const refused = await recordGitHubSignIn(db, clock, {

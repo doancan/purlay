@@ -780,14 +780,18 @@ export const admittedByPassport = async (
 };
 
 /**
- * Whom a provider's account may be added to (D-200 §3, §6), decided where the library makes the row:
+ * Whom a provider's account may be added to (D-200 §3, §6; D-179 §3), decided where the library makes the row:
  *
  * - **An account has one single sign-on identity.** The library links a callback it does not know to the
- *   account whose address matches, and never asks whether that account already has an identity at the
- *   provider: a new subject carrying a recycled or changed address would be added beside the old one and sign
- *   in as the person who left. The subject decides, not the address — a second subject is refused.
- * - **GitHub is not a way past it.** An account single sign-on is linked to is signed into by it alone, as an
- *   emailed link is refused it (`magic-link.ts`): GitHub is not linked to one by address.
+ *   account whose address matches, and never asks whether that account already has an identity at the provider:
+ *   a new subject carrying a recycled or changed address would be added beside the old one and sign in as the
+ *   person who left. The subject decides, not the address — a second subject is refused.
+ * - **So has it one GitHub identity**, by the same rule: a GitHub account is linked by its verified address
+ *   only to an account that has none, its `github_id` null. Another GitHub id — beside an `accounts` row or the
+ *   column `recordGitHubSignIn` would overwrite — is refused, or whoever takes over the address at GitHub
+ *   signs in as the person it was.
+ * - **GitHub is not a way past single sign-on.** An account single sign-on is linked to is signed into by it
+ *   alone, as an emailed link is refused it (`magic-link.ts`): GitHub is not linked to one by address.
  *
  * Thrown, so the callback answers a reason of the library's (`identity_conflict`) and nothing is written.
  */
@@ -805,13 +809,34 @@ const refusedIdentityConflict = async (
   const conflict =
     account.providerId === OIDC_PROVIDER_ID
       ? held.some((row) => row.account_id !== account.accountId)
-      : held.length > 0;
+      : held.length > 0 || (await holdsAnotherGitHubIdentity(database, account));
   if (conflict) {
     throw new APIError('FORBIDDEN', {
       code: 'identity_conflict',
       message: 'That account signs in another way.',
     });
   }
+};
+
+/** The account already has a GitHub identity, and it is not this one. */
+const holdsAnotherGitHubIdentity = async (
+  database: Executor,
+  account: { readonly userId: string; readonly accountId: string },
+): Promise<boolean> => {
+  const linked = await database
+    .selectFrom('accounts')
+    .select('account_id')
+    .where('user_id', '=', account.userId)
+    .where('provider_id', '=', 'github')
+    .execute();
+  if (linked.some((row) => row.account_id !== account.accountId)) return true;
+  const owner = await database
+    .selectFrom('users')
+    .select('github_id')
+    .where('id', '=', account.userId)
+    .executeTakeFirst();
+  const kept = owner?.github_id ?? null;
+  return kept !== null && kept !== account.accountId;
 };
 
 /** Refused as the provider's own switch refused: the callback maps it to `signup-closed`. */

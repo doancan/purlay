@@ -546,6 +546,112 @@ describe('integration: one verified address is one account (D-179 §5)', () => {
     expect(await sessionsOf(made.userId)).toEqual([]);
   });
 
+  describe('an account has one GitHub identity (D-179 §3)', () => {
+    const githubAccountsOf = async (userId: string): Promise<string[]> =>
+      (
+        await db
+          .selectFrom('accounts')
+          .select('account_id')
+          .where('user_id', '=', userId)
+          .where('provider_id', '=', 'github')
+          .execute()
+      ).map((row) => row.account_id);
+
+    const expectRefusedAsAnotherIdentity = async (
+      owner: { readonly userId: string; readonly github: GitHubAccount },
+      intruder: GitHubAccount,
+      email: string,
+    ): Promise<void> => {
+      const recording = aRecordingLogger();
+      const sessionsBefore = await sessionsOf(owner.userId);
+      expectSentBack(await signIn(aServer(intruder, { log: recording.log })), 'failed');
+      expect(recording.lines.some((line) => line['libraryError'] === 'identity_conflict')).toBe(
+        true,
+      );
+      // Nothing of the intruder was written, and no session of anybody's began.
+      expect(await githubAccountsOf(owner.userId)).toEqual([String(owner.github.id)]);
+      const [kept, ...others] = await usersWith(email);
+      expect(others).toEqual([]);
+      expect(kept).toMatchObject({
+        id: owner.userId,
+        github_id: String(owner.github.id),
+        github_login: owner.github.login,
+      });
+      expect(await sessionsOf(owner.userId)).toEqual(sessionsBefore);
+      const stranger = await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('account_id', '=', String(intruder.id))
+        .execute();
+      expect(stranger).toEqual([]);
+    };
+
+    test('a second GitHub account with the verified address of one GitHub made is refused, and the first is untouched', async () => {
+      const first = anAccount(`First-${unique()}`);
+      expect((await signIn(aServer(first))).headers.get('location')).toBe(ORIGIN);
+      const [owner] = await usersWith(first.email);
+      const second = anAccount(`Second-${unique()}`, { email: first.email });
+      await expectRefusedAsAnotherIdentity(
+        { userId: owner?.id ?? '', github: first },
+        second,
+        first.email,
+      );
+      // The first signs in still.
+      expect((await signIn(aServer(first))).headers.get('location')).toBe(ORIGIN);
+    });
+
+    test('and so is one that meets an account made by email and connected to a GitHub account', async () => {
+      const made = await aUserRow(db, 'connected');
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', made.userId)
+        .execute();
+      const first = anAccount(`Linked-${unique()}`, { email: made.email });
+      expect((await signIn(aServer(first))).headers.get('location')).toBe(ORIGIN);
+      const second = anAccount(`Intruder-${unique()}`, { email: made.email });
+      await expectRefusedAsAnotherIdentity(
+        { userId: made.userId, github: first },
+        second,
+        made.email,
+      );
+    });
+
+    test('and so is one met by an account whose GitHub id is kept though its account row is gone', async () => {
+      const first = anAccount(`Orphan-${unique()}`);
+      expect((await signIn(aServer(first))).headers.get('location')).toBe(ORIGIN);
+      const [owner] = await usersWith(first.email);
+      await db
+        .deleteFrom('accounts')
+        .where('user_id', '=', owner?.id ?? '')
+        .execute();
+      const second = anAccount(`Second-${unique()}`, { email: first.email });
+      const recording = aRecordingLogger();
+      expectSentBack(await signIn(aServer(second, { log: recording.log })), 'failed');
+      expect(await githubAccountsOf(owner?.id ?? '')).toEqual([]);
+      const [kept] = await usersWith(first.email);
+      expect(kept?.github_id).toBe(String(first.id));
+    });
+
+    test('a GitHub account that was renamed, or whose login another account held, still signs in as itself', async () => {
+      const made = await aUserRow(db, 'legit');
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', made.userId)
+        .execute();
+      const account = anAccount(`Legit-${unique()}`, { email: made.email });
+      expect((await signIn(aServer(account))).headers.get('location')).toBe(ORIGIN);
+      const renamed = { ...account, login: `Renamed-${unique()}` };
+      expect((await signIn(aServer(renamed))).headers.get('location')).toBe(ORIGIN);
+      // Another person takes the login it left (D-169): the account still signs in, and the login is theirs.
+      const successor = anAccount(renamed.login);
+      expect((await signIn(aServer(successor))).headers.get('location')).toBe(ORIGIN);
+      expect((await signIn(aServer(renamed))).headers.get('location')).toBe(ORIGIN);
+      expect(await githubAccountsOf(made.userId)).toEqual([String(account.id)]);
+    });
+  });
+
   test('never takes an address GitHub has not verified: sent back as email-required', async () => {
     const account = anAccount(undefined, {
       emails: [
