@@ -505,6 +505,17 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ following: true }),
     visibility: MESSAGE,
   },
+  'POST /api/messages/:messageId/github-issue': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+    body: () => ({
+      clientRequestId: crypto.randomUUID(),
+      repositoryId: 77,
+      title: 'The question, as an issue',
+      body: 'What was asked.',
+      copyPrivateText: false,
+    }),
+  },
   'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/workspaces/:workspaceId/unresolved': {
@@ -566,6 +577,13 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/workspaces/:workspaceId/github-app/installation': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
+  'GET /api/workspaces/:workspaceId/github-repositories': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'a person’s own repositories of the workspace’s installation (D-246)',
+    },
   },
   'PUT /api/workspaces/:workspaceId/integrations/github': {
     refusal: 'WORKSPACE_NOT_FOUND',

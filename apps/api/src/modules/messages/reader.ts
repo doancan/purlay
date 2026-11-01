@@ -23,6 +23,7 @@ import {
   type User,
 } from '@purlay/types';
 import { knowledgeFor } from './knowledge-reader';
+import { githubWorkFor } from '../integrations/github-work';
 import { attachmentSets, mentionSets, reactionSets } from './sets';
 
 /** What every query that returns messages selects. Kept beside `MessageRow` so they cannot drift. */
@@ -125,12 +126,18 @@ export const readSummary = async (
   columns: ThreadColumns,
   rootId: string,
 ): Promise<ThreadSummary> => {
-  const [people, knowledge] = await Promise.all([
+  const [people, knowledge, work] = await Promise.all([
     usersByIds(executor, columns.resolved_by === null ? [] : [columns.resolved_by]),
     knowledgeFor(executor, [rootId]),
+    githubWorkFor(executor, [rootId]),
   ]);
   const extra = knowledge.get(rootId);
-  return { ...summaryOf(columns, people), ...(extra === undefined ? {} : { knowledge: extra }) };
+  const github = work.get(rootId);
+  return {
+    ...summaryOf(columns, people),
+    ...(extra === undefined ? {} : { knowledge: extra }),
+    ...(github === undefined ? {} : { githubWork: [...github] }),
+  };
 };
 
 /** One message's row by id, with its sender; undefined when there is none. */
@@ -181,18 +188,18 @@ export const buildMessages = async (
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
   const resolvers = rows.flatMap((row) => (row.resolved_by === null ? [] : [row.resolved_by]));
-  const [reactions, mentions, attachments, people, knowledge] = await Promise.all([
+  const roots = rows.filter((row) => row.parent_id === null).map((row) => row.id);
+  const [reactions, mentions, attachments, people, knowledge, work] = await Promise.all([
     reactionSets(executor, ids),
     mentionSets(executor, ids),
     attachmentSets(executor, ids),
     usersByIds(executor, [...new Set(resolvers)]),
-    knowledgeFor(
-      executor,
-      rows.filter((row) => row.parent_id === null).map((row) => row.id),
-    ),
+    knowledgeFor(executor, roots),
+    githubWorkFor(executor, roots),
   ]);
   return rows.map((row): Message => {
     const extra = knowledge.get(row.id);
+    const github = work.get(row.id);
     return {
       id: row.id,
       channelId: row.channel_id,
@@ -205,7 +212,11 @@ export const buildMessages = async (
       // A reply has no summary of its own; a root always has one, with zero replies until it has some.
       thread:
         row.parent_id === null
-          ? { ...summaryOf(row, people), ...(extra === undefined ? {} : { knowledge: extra }) }
+          ? {
+              ...summaryOf(row, people),
+              ...(extra === undefined ? {} : { knowledge: extra }),
+              ...(github === undefined ? {} : { githubWork: [...github] }),
+            }
           : null,
       reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
       mentions: [...(mentions.get(row.id) ?? [])],

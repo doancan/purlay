@@ -102,7 +102,51 @@ export interface GitHubAppApi {
   readonly user: (token: string) => Promise<GitHubAccount>;
   /** The App's installations this person can reach, by id (their first hundred: an owner's are few). */
   readonly userInstallationIds: (token: string) => Promise<readonly number[]>;
+  /** A person's refresh token spent for new tokens; `'refused'` when GitHub will not (revoked, expired, spent). */
+  readonly refresh: (
+    client: { readonly clientId: string; readonly clientSecret: string },
+    refreshToken: string,
+  ) => Promise<UserTokens | 'refused'>;
+  /** The installation's own short-lived token, for what everybody shares (D-246 §1). */
+  readonly installationToken: (jwt: string, installationId: number) => Promise<string>;
+  /**
+   * The repositories of an installation this person's token reaches — both the person and the App can — a page
+   * at a time, `null` when there is no such page. The person's own token: what it cannot see is not listed.
+   */
+  readonly userRepositories: (
+    token: string,
+    installationId: number,
+    page: number,
+  ) => Promise<readonly RepositoryOnGitHub[] | null>;
+  /** An issue made, as the person: `refused` when GitHub says no to this request; anything unclear throws. */
+  readonly createIssue: (
+    token: string,
+    repository: string,
+    issue: { readonly title: string; readonly body: string },
+  ) => Promise<CreatedIssue | { readonly refused: 'no-access' | 'issues-disabled' | 'invalid' }>;
+  /** The newest issues of a repository since an instant (a hundred at most), as the installation reads them. */
+  readonly issuesSince: (
+    token: string,
+    repository: string,
+    since: Date,
+  ) => Promise<readonly IssueOnGitHub[]>;
 }
+
+export interface RepositoryOnGitHub {
+  readonly id: number;
+  readonly fullName: string;
+  readonly private: boolean;
+}
+
+export interface IssueOnGitHub {
+  readonly number: number;
+  readonly title: string;
+  readonly body: string;
+  readonly state: 'open' | 'closed';
+  readonly updatedAt: Date;
+}
+
+export type CreatedIssue = IssueOnGitHub;
 
 const Login = Type.String({ minLength: 1, maxLength: 39 });
 
@@ -132,6 +176,27 @@ const TokenBody = Type.Object({
 const TokenRefusal = Type.Object({ error: Type.String() });
 
 const UserBody = Type.Object({ id: Type.Integer({ minimum: 1 }), login: Login });
+
+const InstallationTokenBody = Type.Object({ token: Type.String({ minLength: 1 }) });
+
+const RepositoriesBody = Type.Object({
+  repositories: Type.Array(
+    Type.Object({
+      id: Type.Integer({ minimum: 1 }),
+      full_name: Type.String({ minLength: 3 }),
+      private: Type.Boolean(),
+    }),
+  ),
+});
+
+const IssueBody = Type.Object({
+  number: Type.Integer({ minimum: 1 }),
+  title: Type.String(),
+  body: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  state: Type.Union([Type.Literal('open'), Type.Literal('closed')]),
+  updated_at: Type.String({ format: 'date-time' }),
+  pull_request: Type.Optional(Type.Unknown()),
+});
 
 const UserInstallationsBody = Type.Object({
   installations: Type.Array(Type.Object({ id: Type.Integer({ minimum: 1 }) })),
@@ -306,6 +371,114 @@ export const githubAppApi = (caller: GitHubAppCaller, urls: GitHubAppUrls): GitH
     await ok(response, 'the person');
     const body = await readChecked(response, UserBody, 'the person');
     return { id: body.id, login: body.login };
+  },
+  refresh: async (client, refreshToken): Promise<UserTokens | 'refused'> =>
+    await tokenAnswer(
+      await caller.call(`${urls.web}/login/oauth/access_token`, {
+        method: 'POST',
+        accept: 'application/json',
+        body: {
+          client_id: client.clientId,
+          client_secret: client.clientSecret,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+        },
+      }),
+    ),
+  installationToken: async (jwt, installationId): Promise<string> => {
+    const response = await caller.call(
+      `${urls.api}/app/installations/${String(installationId)}/access_tokens`,
+      { method: 'POST', token: jwt, body: {} },
+    );
+    await ok(response, 'an installation token');
+    return (await readChecked(response, InstallationTokenBody, 'an installation token')).token;
+  },
+  userRepositories: async (
+    token,
+    installationId,
+    page,
+  ): Promise<readonly RepositoryOnGitHub[] | null> => {
+    const response = await caller.call(
+      `${urls.api}/user/installations/${String(installationId)}/repositories?per_page=100&page=${String(page)}`,
+      { method: 'GET', token },
+    );
+    // An installation the person cannot reach is no page at all.
+    if (response.status === 404 || response.status === 403) {
+      await response.body?.cancel();
+      return null;
+    }
+    await ok(response, 'the repositories');
+    const body = await readChecked(response, RepositoriesBody, 'the repositories');
+    return body.repositories.map((repository) => ({
+      id: repository.id,
+      fullName: repository.full_name,
+      private: repository.private,
+    }));
+  },
+  createIssue: async (
+    token,
+    repository,
+    issue,
+  ): Promise<CreatedIssue | { readonly refused: 'no-access' | 'issues-disabled' | 'invalid' }> => {
+    const response = await caller.call(`${urls.api}/repos/${repository}/issues`, {
+      method: 'POST',
+      token,
+      body: { title: issue.title, body: issue.body },
+    });
+    // GitHub's own words for "no": not found or forbidden is no access, gone is issues turned off, 422 is the text.
+    if (response.status === 404 || response.status === 403) {
+      await response.body?.cancel();
+      return { refused: 'no-access' };
+    }
+    if (response.status === 410) {
+      await response.body?.cancel();
+      return { refused: 'issues-disabled' };
+    }
+    if (response.status === 422 || response.status === 400) {
+      await response.body?.cancel();
+      return { refused: 'invalid' };
+    }
+    // Anything else that is not a creation is not clear: whether it was made is not known.
+    if (response.status !== 201) {
+      await response.body?.cancel();
+      throw new GitHubUnavailable(`GitHub answered a create with ${String(response.status)}`);
+    }
+    const body = await readChecked(response, IssueBody, 'a created issue');
+    return {
+      number: body.number,
+      title: body.title,
+      body: body.body ?? '',
+      state: body.state,
+      updatedAt: new Date(body.updated_at),
+    };
+  },
+  issuesSince: async (token, repository, since): Promise<readonly IssueOnGitHub[]> => {
+    const query = new URLSearchParams({
+      since: since.toISOString(),
+      state: 'all',
+      sort: 'created',
+      direction: 'desc',
+      per_page: '100',
+    });
+    const response = await caller.call(
+      `${urls.api}/repos/${repository}/issues?${query.toString()}`,
+      {
+        method: 'GET',
+        token,
+      },
+    );
+    await ok(response, 'the issues');
+    const body = await readChecked(response, Type.Array(IssueBody), 'the issues');
+    // A pull request is an issue to this list, and is not what was asked for.
+    return body
+      .filter((item) => item.pull_request === undefined)
+      .map((item) => ({
+        number: item.number,
+        title: item.title,
+        body: item.body ?? '',
+        state: item.state,
+        updatedAt: new Date(item.updated_at),
+      }));
   },
   userInstallationIds: async (token): Promise<readonly number[]> => {
     const response = await caller.call(`${urls.api}/user/installations?per_page=100`, {

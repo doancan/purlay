@@ -64,7 +64,7 @@ export interface GitHubAppDependencies {
 }
 
 /** Each sealed column, bound with the row it is on, so a value moved to another row or column does not open. */
-const sealedIn = (column: 'access' | 'refresh', id: string): string =>
+export const sealedIn = (column: 'access' | 'refresh', id: string): string =>
   `github_user_authorizations.${column}_token_encrypted:${id}`;
 
 const VERIFIER_IN = 'github_app_handshakes.verifier_encrypted:';
@@ -73,7 +73,7 @@ const noApp = (): AppError =>
   new AppError({ code: 'ROUTE_NOT_FOUND', message: 'There is no GitHub App on this server.' });
 
 /** The App, or the refusal that there is none: everything that starts a trip asks this first. */
-const requireApp = (app: GitHubAppSettings | undefined): GitHubAppSettings => {
+export const requireApp = (app: GitHubAppSettings | undefined): GitHubAppSettings => {
   if (app === undefined) throw noApp();
   return app;
 };
@@ -202,7 +202,7 @@ export const startAuthorization = async (
 };
 
 /** A person's tokens kept, under their row's lock: one row per person, the seal bound to it. */
-const keepAuthorization = async (
+export const keepAuthorization = async (
   executor: Executor,
   { clock, cipher }: Pick<GitHubAppDependencies, 'clock' | 'cipher'>,
   userId: string,
