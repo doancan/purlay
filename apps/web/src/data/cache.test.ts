@@ -9,8 +9,9 @@ import {
   QueryObserver,
   type InfiniteData,
 } from '@tanstack/react-query';
-import type { Channel, FilePage, Message, MessagePage, PinList } from '@purlay/types';
+import type { Channel, ChannelState, FilePage, Message, MessagePage, PinList } from '@purlay/types';
 import {
+  allChannelsRead,
   channelAdded,
   channelsRevoked,
   channelStarred,
@@ -395,6 +396,35 @@ describe('the channel list', () => {
       });
     }
     expect(client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(false);
+  });
+
+  test('every channel painted read, and put back only where nothing newer was heard (D-238)', () => {
+    const client = new QueryClient();
+    const waiting = (n: number): ChannelState => ({
+      lastReadMessageId: id(1),
+      unreadCount: n,
+      unreadMentionCount: 1,
+    });
+    client.setQueryData<Channel[]>(keys.channels(WS), [
+      channel({ id: id(60), state: waiting(2) }),
+      channel({ id: id(61), state: waiting(3) }),
+      channel({ id: id(62), state: null }),
+      channel({
+        id: id(63),
+        state: { lastReadMessageId: id(1), unreadCount: 0, unreadMentionCount: 0 },
+      }),
+    ]);
+    const states = (): unknown[] =>
+      (client.getQueryData<Channel[]>(keys.channels(WS)) ?? []).map((c) => c.state);
+
+    const putBack = allChannelsRead(client, WS);
+    const zero = { lastReadMessageId: id(1), unreadCount: 0, unreadMentionCount: 0 };
+    expect(states()).toEqual([zero, zero, null, zero]);
+
+    // A message arrived in the second meanwhile: its frame is newer than what was painted.
+    channelStateChanged(client, id(61), waiting(1));
+    putBack();
+    expect(states()).toEqual([waiting(2), waiting(1), null, zero]);
   });
 
   test('a channel is added once; with no list cached the list is asked for instead', () => {

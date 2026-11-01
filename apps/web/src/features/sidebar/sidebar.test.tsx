@@ -624,6 +624,9 @@ const workspacesIn = (view: View): [string, string | null][] =>
       item.getAttribute('aria-checked'),
     ]);
 
+/** Marking every channel read, with its key as the menu prints it off a Mac (D-238). */
+const READ_ALL = `${en['readAll.label']}Shift+Esc`;
+
 describe('the workspace menu', () => {
   const two = (): ReturnType<typeof aSession> => ({
     ...aSession(),
@@ -657,6 +660,7 @@ describe('the workspace menu', () => {
       'Create workspace…',
       'Invite people…',
       en['sidebar.workspace.copyLink'],
+      READ_ALL,
       en['workspace.settings.entry'],
     ]);
   });
@@ -678,7 +682,42 @@ describe('the workspace menu', () => {
       'Create workspace…',
       // Anyone may pass the workspace's address on: it opens only for somebody who is already in.
       en['sidebar.workspace.copyLink'],
+      READ_ALL,
     ]);
+  });
+
+  test('Mark all channels read clears every count and says so (D-238)', async () => {
+    const asked: string[] = [];
+    const waiting = { lastReadMessageId: null, unreadCount: 3, unreadMentionCount: 1 };
+    const view = await open(
+      aSignedInApi({
+        channels: () =>
+          Promise.resolve([
+            aChannel(IDS.api, 'api'),
+            aChannel(IDS.deploys, 'deploys', { state: waiting }),
+          ]),
+        markAllRead: (workspaceId) => {
+          asked.push(workspaceId);
+          return Promise.resolve({
+            data: [
+              {
+                channelId: IDS.deploys,
+                state: { ...waiting, unreadCount: 0, unreadMentionCount: 0 },
+              },
+            ],
+          });
+        },
+      }),
+    );
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
+    await person().click(view.getByRole('menuitem', { name: /^Mark all channels read/ }));
+    await settle();
+    expect(asked).toEqual([IDS.workspace]);
+    const deploys = view.world.client
+      .getQueryData<{ id: string; state: unknown }[]>(keys.channels(IDS.workspace))
+      ?.find((channel) => channel.id === IDS.deploys);
+    expect(deploys?.state).toEqual({ ...waiting, unreadCount: 0, unreadMentionCount: 0 });
+    expect(view.getByText('All channels are marked read.')).toBeDefined();
   });
 
   test('Workspace settings opens the General page, with a way Back', async () => {
@@ -707,6 +746,7 @@ describe('the workspace menu', () => {
       'Create workspace…',
       'Invite people…',
       en['sidebar.workspace.copyLink'],
+      READ_ALL,
       en['workspace.settings.entry'],
     ]);
     expect(places.filter((p) => p.glyph === undefined)).toEqual([]);
@@ -746,6 +786,7 @@ describe('the workspace menu', () => {
       'Create workspace…',
       'Invite people…',
       en['sidebar.workspace.copyLink'],
+      READ_ALL,
       en['workspace.settings.entry'],
     ]);
   });

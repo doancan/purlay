@@ -1,8 +1,9 @@
 /**
- * The workspace menu: which workspace this is, a way to another or to a new one, and — for an owner or
- * an admin — inviting people and the workspace's settings (D-110, D-124, D-146). Everything else an
- * owner or an admin does is a page of Settings, where it has room; the menu keeps the one thing done
- * from inside a conversation, inviting somebody, as a quick dialog. One door opens it: the workspace's
+ * The workspace menu: which workspace this is, a way to another or to a new one, marking every channel
+ * in it read (`Shift+Esc`, D-238), and — for an owner or an admin — inviting people and the workspace's
+ * settings (D-110, D-124, D-146). Everything else an owner or an admin does is a page of Settings,
+ * where it has room; the menu keeps the one thing done from inside a conversation, inviting somebody,
+ * as a quick dialog. One door opens it: the workspace's
  * mark and name at the top of the sidebar, with its chevron (D-206). A person is in one workspace at a
  * time (`UX.md` §2), so a tile on the rail beside it only drew the same workspace twice, a hand's width
  * apart; the rail is the places. Who is signed in, and signing out, are the account menu's at the
@@ -11,7 +12,7 @@
  * Switching is navigation to `/w/:slug`; the workspace the address names is the source of
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useDeferred } from '../../app/deferred-door';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
@@ -32,6 +33,8 @@ import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { useSession } from '../session/session';
 import { CreateWorkspace } from '../shell/home';
+import { useMarkAllRead } from '../shell/read-all';
+import { isMacPlatform, keyLabels } from '../shortcuts/platform';
 import { useWorkspace } from '../shell/workspace';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
@@ -46,6 +49,12 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   const [creating, setCreating] = useState(false);
   const { show } = useToast();
   const { copy } = useContentPorts();
+  const markAllRead = useMarkAllRead();
+  const readAllKeys = useMemo(() => {
+    const mac = isMacPlatform(navigator);
+    const labels = keyLabels(mac);
+    return [labels.shift, labels.escape].join(mac ? '' : '+');
+  }, []);
   /** The workspace's own address, whole: what a person pastes to somebody who already has an account. */
   const copyLink = (): void => {
     const link = new URL(href('workspace', { slug: workspace.slug }), window.location.origin).href;
@@ -162,6 +171,9 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         )}
         <MenuItem glyph="invite" onSelect={copyLink}>
           {t('sidebar.workspace.copyLink')}
+        </MenuItem>
+        <MenuItem glyph="confirm" shortcut={readAllKeys} onSelect={markAllRead}>
+          {t('readAll.label')}
         </MenuItem>
         {mayInvite && (
           <>

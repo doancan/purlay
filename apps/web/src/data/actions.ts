@@ -26,6 +26,7 @@ import type {
 } from '@purlay/types';
 import type { Api } from './api';
 import {
+  allChannelsRead,
   channelAdded,
   channelRenamed,
   channelStateChanged,
@@ -54,6 +55,11 @@ export interface Actions {
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
   /** "Mark unread from here" (D-212); the badge and the sidebar follow the server's answer. */
   readonly markUnread: (channelId: string, fromMessageId: string) => Promise<void>;
+  /**
+   * Every channel of the workspace read (D-238): the badges cleared at once, then each channel as the
+   * server answers it — a reply still waiting in a thread comes back (D-147); put back if refused.
+   */
+  readonly markAllRead: (workspaceId: string) => Promise<void>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   /** A new name or topic; the list shows what the server kept (D-123). */
@@ -195,6 +201,18 @@ export const createActions = (
     },
     markUnread: async (channelId, fromMessageId): Promise<void> => {
       channelStateChanged(client, channelId, await api.markUnread(channelId, fromMessageId));
+    },
+    markAllRead: async (workspaceId): Promise<void> => {
+      const putBack = allChannelsRead(client, workspaceId);
+      try {
+        const { data } = await api.markAllRead(workspaceId);
+        for (const { channelId, state } of data) channelStateChanged(client, channelId, state);
+      } catch (error) {
+        putBack();
+        throw error;
+      }
+      // The notifications of what the feed was read past are read too: the inbox says so.
+      readAgain(client, keys.notifications(workspaceId));
     },
     createChannel: async (workspaceId, input): Promise<Channel> => {
       const channel = await api.createChannel(workspaceId, input);

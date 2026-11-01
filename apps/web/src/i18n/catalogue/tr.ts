@@ -248,6 +248,9 @@ export const tr = {
   'rowMenu.label': '{name} için işlemler',
   'rowMenu.markRead': 'Okundu olarak işaretle',
   'rowMenu.readFailed': 'Okundu olarak işaretlenemedi.',
+  'readAll.label': 'Tüm kanalları okundu işaretle',
+  'readAll.done': 'Tüm kanallar okundu olarak işaretlendi.',
+  'readAll.failed': 'Kanallar okundu olarak işaretlenemedi.',
   'rowMenu.star': 'Yıldızla',
   'rowMenu.unstar': 'Yıldızı kaldır',
   'rowMenu.copyLink': 'Bağlantıyı kopyala',
@@ -1364,6 +1367,7 @@ export const tr = {
   'alerts.many': '{count} konuşma seni bekliyor',
   'alerts.waiting': 'Burada seni bekleyen bir şey var',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
+  'shortcuts.readAll': 'Tüm kanalları okundu işaretle',
 
   // ── Notification level (D-107) ─────────────────────────────────────────
   'level.label': 'Bana haber ver',
