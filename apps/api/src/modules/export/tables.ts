@@ -300,6 +300,8 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   push_subscriptions: 'a device’s keys, the person’s own',
   github_integrations: 'the sealed GitHub token: a credential never leaves',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
+  incoming_webhooks:
+    'a channel’s incoming webhooks: each the digest of the secret its address carries, a credential, never exported; what they posted is in `messages`, under the name each posted with (D-245)',
   notifications: 'each person’s inbox, their own state',
   missed_mail_letters:
     'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',

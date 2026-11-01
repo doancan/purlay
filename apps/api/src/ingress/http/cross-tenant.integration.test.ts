@@ -160,6 +160,14 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   });
   expect(bookmark.status).toBe(201);
   const { id: bookmarkId } = (await bookmark.json()) as { id: string };
+  // An incoming webhook to revoke (D-245).
+  const hook = await call(db, 'POST', `/api/channels/${channelId}/incoming-webhooks`, cookie, {
+    name: 'CI',
+  });
+  expect(hook.status).toBe(201);
+  const {
+    webhook: { id: webhookId },
+  } = (await hook.json()) as { webhook: { id: string } };
   // A ready export, its archive in the store: the one download its owner may make.
   const exportId = messageId(new Date(NOW.getTime() + 7));
   const { user_id: ownerId } = await db
@@ -195,6 +203,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     versionId: version.id,
     incidentId,
     bookmarkId,
+    webhookId,
     exportId,
   };
 };
@@ -211,6 +220,7 @@ const NEVER_EXISTED: Ids = {
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
   bookmarkId: '00000000-0000-4000-8000-000000000000',
+  webhookId: '00000000-0000-4000-8000-000000000000',
   exportId: '00000000-0000-4000-8000-000000000000',
 };
 
@@ -226,6 +236,7 @@ const NOT_A_UUID: Ids = {
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',
   bookmarkId: 'not-a-uuid',
+  webhookId: 'not-a-uuid',
   exportId: 'not-a-uuid',
 };
 

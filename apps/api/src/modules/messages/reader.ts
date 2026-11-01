@@ -15,8 +15,10 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
+import { Type } from '@sinclair/typebox';
 import {
   GitHubEvent,
+  IncomingWebhookName,
   type Message,
   type Reaction,
   type ThreadSummary,
@@ -147,11 +149,23 @@ export const readMessage = async (
 
 /**
  * Who wrote it, and what happened, from one row: a person's message has its sender and no event; an
- * event has no sender and, unless it is a tombstone, the event its metadata holds. A row that is
+ * event has no sender and, unless it is a tombstone, the event its metadata holds — a repository's, or the
+ * incoming webhook it was posted through (D-245). A row that is
  * neither — which `messages_sender_by_type` and the one writer of events make impossible — is said,
  * loudly, rather than drawn as somebody's message or as nothing.
  */
-const authorship = (row: MessageRow): Pick<Message, 'sender' | 'githubEvent'> => {
+/**
+ * What an incoming webhook's message holds as its metadata (D-245): the kind `messages_event_known` knows,
+ * and the name the hook posted under. Its one writer is `integrations/incoming-webhooks.ts`.
+ */
+const IncomingWebhookMetadata = Type.Object(
+  { kind: Type.Literal('incoming_webhook'), name: IncomingWebhookName },
+  { additionalProperties: false },
+);
+
+const authorship = (
+  row: MessageRow,
+): Pick<Message, 'sender' | 'githubEvent' | 'incomingWebhook'> => {
   if (row.message_type === 'text') {
     if (row.sender_id === null || row.username === null || row.display_name === null) {
       throw new Error(`message ${row.id} is a person's with no person`);
@@ -167,6 +181,9 @@ const authorship = (row: MessageRow): Pick<Message, 'sender' | 'githubEvent'> =>
     };
   }
   if (row.deleted_at !== null) return { sender: null, githubEvent: null };
+  if (Value.Check(IncomingWebhookMetadata, row.metadata)) {
+    return { sender: null, githubEvent: null, incomingWebhook: { name: row.metadata.name } };
+  }
   if (!Value.Check(GitHubEvent, row.metadata)) {
     throw new Error(`message ${row.id} is an event the contract cannot say`);
   }
