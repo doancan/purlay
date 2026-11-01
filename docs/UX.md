@@ -287,7 +287,9 @@ dialog opens with focus on itself, never on the name, so a key pressed on openin
 dialog opens with a field's text selected. **About**: the **name and topic**, editable by a member of
 the channel with **Save** (somebody who has not joined reads them and is told to join); the
 **notification level** as three choices, the current one said in words (the header's menu, painted
-first and put back on a refusal); for an owner only, **History** (D-225): the workspace's window and
+first and put back on a refusal); for an owner or an admin in the channel, **Posting** (D-243): *Only owners
+and admins can post*, a box saved as it is ticked and put back with the reason on a refusal, its hint saying that
+everybody can still reply in threads; for an owner only, **History** (D-225): the workspace's window and
 what this channel keeps, each in a sentence ("The workspace keeps history for 30 days. This channel keeps
 its messages and files for 1 year."), and *Keep this channel's history* — *As long as the workspace*,
 the windows longer than the workspace's, and *Forever*; never a shorter one. A choice that keeps less
@@ -529,6 +531,12 @@ place of the composer — *You are reading #name without being a member* and **J
 was already on its way when they left, or that reached the server some other way, is `failed` with
 the reason in words: they are not in the channel, and joining it is how to write there; Retry then
 sends it. Reacting, editing and resolving there are refused the same way, said as a toast.
+
+**An announcement channel's feed is its owners' and admins'** (D-243). For anybody else in it the composer's
+place says *Only owners and admins post in this channel. You can still reply in a thread.*; a thread's composer is
+there as in any channel. The header carries a megaphone beside the star, for everybody, named *Only owners and
+admins post here* to a screen reader. A send refused because the person's role changed under a stale screen is
+`failed` with the reason in words: only owners and admins post here, and a thread is the way to answer.
 
 The `sending` state is deliberately **not** dimmed to 50% opacity. Dimming implies "not real
 yet"; in an optimistic UI the message *is* real, and flickering opacity on every send is visual
