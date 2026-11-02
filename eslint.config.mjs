@@ -3,6 +3,7 @@
 import compat from 'eslint-plugin-compat';
 import { includeIgnoreFile } from '@eslint/compat';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import { existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import tseslint from 'typescript-eslint';
 
@@ -14,6 +15,30 @@ const NO_TRANSPORT_TYPES = {
   group: ['**/ingress/**', '**/realtime/**', 'elysia', 'elysia/*'],
   message:
     'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
+};
+
+// A module is a folder under `apps/api/src/features/` (D-250, `MODULES.md` §1), found here rather than
+// listed, so adding one cannot forget to be fenced. Each is held apart from the others below, and
+// `modules/` and `platform/` — the core — import none of them.
+const FEATURES_DIR = 'apps/api/src/features';
+const FEATURE_IDS = existsSync(FEATURES_DIR)
+  ? readdirSync(FEATURES_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+  : [];
+
+const NO_FEATURES = {
+  group: ['**/features/**'],
+  message:
+    'The core imports no module: modules and platform sit below the features, and a feature is reached through an event, a port or a capability. (D-250, MODULES.md §4)',
+};
+
+const NO_CREATE_DATABASE = {
+  name: '@purlay/db',
+  importNames: ['createDatabase'],
+  message:
+    'Take the executor as an argument instead. A service that opens its own connection cannot be tested inside a transaction. (D-46)',
 };
 
 // The two doors are peers: `ingress` composes `realtime`, never the other way,
@@ -468,7 +493,7 @@ export default defineConfig([
       'no-restricted-imports': [
         'error',
         {
-          patterns: [NO_TRANSPORT_TYPES],
+          patterns: [NO_TRANSPORT_TYPES, NO_FEATURES],
         },
       ],
     },
@@ -484,6 +509,7 @@ export default defineConfig([
               group: ['**/modules/**', '**/ingress/**', '**/realtime/**'],
               message: 'platform is the bottom layer; it imports from nothing above it.',
             },
+            NO_FEATURES,
           ],
         },
       ],
@@ -573,19 +599,41 @@ export default defineConfig([
       'no-restricted-imports': [
         'error',
         {
-          patterns: [NO_TRANSPORT_TYPES],
-          paths: [
-            {
-              name: '@purlay/db',
-              importNames: ['createDatabase'],
-              message:
-                'Take the executor as an argument instead. A service that opens its own connection cannot be tested inside a transaction. (D-46)',
-            },
-          ],
+          patterns: [NO_TRANSPORT_TYPES, NO_FEATURES],
+          paths: [NO_CREATE_DATABASE],
         },
       ],
     },
   },
+
+  // A feature: below the doors like a module, never importing another feature — its code or its tables'
+  // owner — and, like a module, taking its executor as an argument. One block for each, because the
+  // rule has to name the others. (D-250, MODULES.md §4)
+  ...FEATURE_IDS.map((id) => {
+    const others = FEATURE_IDS.filter((other) => other !== id);
+    return {
+      files: [`${FEATURES_DIR}/${id}/**/*.ts`],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              NO_TRANSPORT_TYPES,
+              ...(others.length === 0
+                ? []
+                : [
+                    {
+                      regex: String.raw`^(\.\./)+(${others.join('|')})(/|$)|(^|/)features/(${others.join('|')})(/|$)`,
+                      message: `The feature "${id}" imports no other feature (${others.join(', ')}): they meet through events, ports and capabilities. (D-250, MODULES.md §4)`,
+                    },
+                  ]),
+            ],
+            paths: [NO_CREATE_DATABASE],
+          },
+        ],
+      },
+    };
+  }),
 
   // The door that composes the other: realtime imports nothing from ingress. Its
   // tests may — they stand up a whole application to drive a real socket — and so
