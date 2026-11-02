@@ -22,7 +22,10 @@ move under `features/`. An id may not be a path segment the core owns (`auth`, `
 
 ## 2. The manifest
 
-`packages/module-kit` holds types and pure helpers only — no I/O, so it cannot pull the platform in. A module
+`apps/api/src/platform/module-kit/` holds the manifest type and the registry — pure, with no I/O and no
+environment, so a module can import it without pulling the platform in. It is a folder of `platform/`, not a
+package: a package would add itself to the production image, the lockfile, the licence check and the pull
+request rules for one consumer, and the lint keeps the folder as clean as a package would be. A module
 declares:
 
 - `id`, and `requires` (it will not start without them) and `optional` (used when present);
@@ -40,8 +43,9 @@ declares:
 
 ## 3. Boot
 
-1. Parse `MODULES`. Unset means every bundled module; empty means the core alone. An unknown or repeated id, a
-   missing requirement, a cycle, or an id the core owns stops the process before it listens.
+1. Parse `MODULES` (`module-kit`'s `resolve`). Unset means every bundled module; empty means the core alone. An
+   unknown or repeated id, an empty item, or a missing requirement stops the process before it listens; a
+   cycle, a reserved id or a repeated capability are caught earlier, when the build's registry is made.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
 3. Record this node's module set and release in the database. A node whose set differs from a live peer's
    refuses to serve (D-250 rule 8).
@@ -130,11 +134,14 @@ until then it is a stated intent and not a guarantee.
 
 | Rule | Held by | Built in |
 |---|---|---|
-| No import between modules | lint, generated per module, not copied (the existing blocks replace one another) | 1 |
+| No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |
+| The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
 | No read of another module's tables | typed query handle and a lint rule on table names | 5 |
 | No foreign key between modules | a schema test on the per-module `db:check` | 10 |
-| Core names no module | a test of `platform/` against the manifests | 9 |
-| Module id is not a core path segment | the registry, at boot, and its test | 1 |
+| The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
+| Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
+| A bundle has no cycle, repeat or double capability | the registry, and mutations in `scripts/mutations.ts` | 1 |
+| `MODULES` is valid | `resolve`, at boot | 3 |
 | Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
 | Disabled ⇒ no tables | the CI matrix, per cell | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
@@ -143,7 +150,7 @@ until then it is a stated intent and not a guarantee.
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
 | Shell chunk holds no module code | `budget:web` shape check | 11 |
-| This file lists the manifests | a test | 1 |
+| This file lists the manifests | a test | 3 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
 `modules/**`, `features/**`, `platform/**` or `packages/db/**` changes. It is the set of cells run, and the
@@ -162,9 +169,9 @@ Each step ships alone and can be reverted.
 
 | # | Step | Behaviour changes? |
 |---|---|---|
-| 1 | `module-kit` types, `MODULES` parsing, an empty registry, the import lint and its tests | no |
+| 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
 | 2 | Migrator learns sets and the legacy rename (after open question a); old and new schemas compared | no |
-| 3 | The server lists enabled modules; the web registry skeleton | no |
+| 3 | `MODULES` read at boot into the registry; the server lists enabled modules; the web registry skeleton | no |
 | 4 | Wire unions opened, with aliases | no |
 | 5 | The core ports, the domain bus, the typed query handle | no |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
