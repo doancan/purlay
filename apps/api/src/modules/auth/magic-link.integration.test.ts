@@ -43,7 +43,7 @@ describe('integration: asking for a link, as decided', () => {
       const outbox = aRecordingOutbox();
       const links = aTestAuth(db, {
         mailer: outbox,
-        settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+        settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'invite-only' },
       }).signInLinks;
       if (links === undefined) throw new Error('sign-in by link is not on');
       // What is left for after the answer, held here and not run until the test says.
@@ -91,7 +91,7 @@ describe('integration: a link asked for by the native application (D-191)', () =
     const outbox = aRecordingOutbox();
     const links = aTestAuth(db, {
       mailer: outbox,
-      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+      settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'invite-only' },
     }).signInLinks;
     if (links === undefined) throw new Error('sign-in by link is not on');
     const later: (() => Promise<void>)[] = [];
@@ -154,6 +154,7 @@ describe('integration: spending a link, as decided', () => {
       asked,
       signUp: 'open',
       oidc: false,
+      google: false,
       outbox: aRecordingOutbox(),
       issue: () => Promise.resolve(),
       spend: (token): Promise<readonly string[]> => {
@@ -229,6 +230,7 @@ describe('integration: an account single sign-on is linked to is signed into by 
               name: undefined,
             }
           : undefined,
+        google: undefined,
         signUp: 'invite-only',
       },
     }).signInLinks;
@@ -276,6 +278,7 @@ describe('integration: an account single sign-on is linked to is signed into by 
         asked: [],
         signUp: 'open',
         oidc: true,
+        google: false,
         outbox: aRecordingOutbox(),
         issue: () => Promise.resolve(),
         spend: (token): Promise<readonly string[]> => {

@@ -81,7 +81,7 @@ const linksOver = (
   const outbox = aRecordingOutbox();
   const links = aTestAuth(db, {
     mailer: outbox,
-    settings: { github: undefined, oidc: undefined, signUp: 'open' },
+    settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'open' },
   }).signInLinks;
   if (links === undefined) throw new Error('sign-in by link is not on');
   return { ...links, outbox };

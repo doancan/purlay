@@ -86,6 +86,7 @@ describe('the ways in', () => {
         settings: {
           github: undefined,
           oidc: { issuer: 'https://idp.example.test', clientId: 'id', clientSecret: 's', name },
+          google: undefined,
           signUp: 'invite-only',
         },
       });
@@ -113,6 +114,33 @@ describe('the ways in', () => {
     });
   });
 
+  test('Google is on when its client is connected, and asking connects to nobody (D-250)', async () => {
+    const stub = await anOidcStub({ sub: 's', email: 'a@gmail.com' });
+    const auth = aTestAuth(unconnectedDatabase(), {
+      settings: {
+        github: undefined,
+        oidc: undefined,
+        google: { clientId: 'id.apps.googleusercontent.com', clientSecret: 's' },
+        signUp: 'open',
+      },
+      fetch: stub.fetch,
+    });
+    const app = createApp(testDependencies({ database: unconnectedDatabase(), auth }));
+    const body: unknown = await (
+      await app.handle(new Request('https://purlay.test/api/auth/methods'))
+    ).json();
+    expect(Value.Check(AuthMethods, body)).toBe(true);
+    expect(body).toEqual({
+      github: false,
+      email: false,
+      oidc: null,
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    expect(stub.calls.urls).toEqual([]);
+  });
+
   test('asking which ways are on connects to nobody: the provider is asked nothing until somebody presses its button', async () => {
     const stub = await anOidcStub({ sub: 's', email: 'a@example.test' });
     const auth = aTestAuth(unconnectedDatabase(), {
@@ -124,6 +152,7 @@ describe('the ways in', () => {
           clientSecret: 'x',
           name: undefined,
         },
+        google: undefined,
         signUp: 'invite-only',
       },
       fetch: stub.fetch,
