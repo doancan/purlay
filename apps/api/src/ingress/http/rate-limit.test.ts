@@ -235,3 +235,20 @@ describe('rate limiting POST /api/native/token (D-191)', () => {
     expect(await admit(spend, '203.0.113.9')).not.toBeUndefined();
   });
 });
+
+describe('rate limiting POST /api/missed-mail/stop (D-240)', () => {
+  const stop = new Request('https://purlay.test/api/missed-mail/stop', { method: 'POST' });
+
+  test('public, so charged to the client as sign-in traffic before the token is looked at, address by address', async () => {
+    const admit = httpLimits({
+      auth: anAuthThatMustNotBeTouched(),
+      clock: fixedClock(NOW),
+      trustProxy: false,
+    });
+    for (let i = 0; i < AUTH_BUDGET.burst; i += 1) {
+      expect(await admit(stop, '203.0.113.9')).toBeUndefined();
+    }
+    expect(await admit(stop, '203.0.113.9')).toBe(retryAfterSeconds(AUTH_BUDGET));
+    expect(await admit(stop, '203.0.113.10')).toBeUndefined();
+  });
+});

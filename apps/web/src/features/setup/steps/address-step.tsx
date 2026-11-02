@@ -74,7 +74,7 @@ export const AddressStep = ({ state, done, onBack }: StepProps): React.JSX.Eleme
               className={cn(
                 'flex cursor-pointer items-start gap-3 rounded-md border-hairline p-3',
                 policy === option.value
-                  ? 'border-accent bg-accent-subtle'
+                  ? 'border-composer-edge bg-accent-subtle'
                   : 'border-border-subtle bg-surface-100 hover:bg-surface-050',
               )}
             >

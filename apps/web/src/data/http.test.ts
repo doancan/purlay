@@ -460,11 +460,57 @@ describe('a route of the sign-in library', () => {
     expect((await refused(answer(500, { nothing: true }))).code).toBe('MALFORMED');
   });
 
+  test('an answer that is read is held to its schema; a refusal is still the library’s (D-236)', async () => {
+    const schema = Type.Object({ backupCodes: Type.Array(Type.String()) });
+    const { client, seen } = http(() => answer(200, { backupCodes: ['aaaaa-bbbbb'] }));
+    expect(
+      await client.libraryRequest('/auth/two-factor/generate-backup-codes', schema, {
+        password: 'x',
+      }),
+    ).toEqual({ backupCodes: ['aaaaa-bbbbb'] });
+    expect(seen[0]?.url).toBe('/auth/two-factor/generate-backup-codes');
+    expect(seen[0]?.init.body).toBe('{"password":"x"}');
+
+    const odd = http(() => answer(200, { backupCodes: 'all of them' }));
+    const malformed = await odd.client
+      .libraryRequest('/auth/two-factor/generate-backup-codes', schema, {})
+      .catch((caught: unknown) => caught);
+    expect(malformed instanceof ApiError && malformed.code).toBe('MALFORMED');
+
+    const wrong = http(() => answer(400, { code: 'INVALID_PASSWORD', message: 'no' }));
+    const refusal = await wrong.client
+      .libraryRequest('/auth/two-factor/enable', schema, {})
+      .catch((caught: unknown) => caught);
+    expect(refusal instanceof LibraryFailure && refusal.code).toBe('INVALID_PASSWORD');
+  });
+
   test('no answer at all is NETWORK', async () => {
     const client = createHttp(() => Promise.reject(new Error('offline')));
     const failure = await client
       .library('/auth/sign-in/email', {})
       .catch((caught: unknown) => caught);
     expect(failure instanceof LibraryFailure && failure.code).toBe('NETWORK');
+  });
+});
+
+describe('text (D-210)', () => {
+  test('is a same-origin GET whose answer is read as text, Unicode and all', async () => {
+    const { client, seen } = http(() => new Response('Bölge,Adet\nİstanbul,12', { status: 200 }));
+    expect(await client.text('/api/attachments/a')).toBe('Bölge,Adet\nİstanbul,12');
+    expect(seen[0]?.url).toBe('/api/attachments/a');
+    expect(seen[0]?.init.method).toBe('GET');
+    expect(seen[0]?.init.credentials).toBe('same-origin');
+  });
+
+  test('a refusal is the API’s error, as for any request', async () => {
+    const { client } = http(() => answer(404, { error: { code: 'NOT_FOUND', message: 'gone' } }));
+    let caught: unknown;
+    try {
+      await client.text('/api/attachments/a');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(404);
   });
 });

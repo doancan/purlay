@@ -5,11 +5,15 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
-import type { Channel } from '@purlay/types';
+import type { Channel, ReadAllChannelsResponse } from '@purlay/types';
+import type { Api } from '../../data/api';
+import { ApiError } from '../../data/errors';
+import { keys } from '../../data/keys';
 import { installDom } from '../../testing/dom';
 import { IDS, aChannel, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
+import { Toaster } from '../../ui/toast';
 import { SessionGate } from '../session/session';
 import { GlobalKeys } from './global-keys';
 import { WorkspaceScopeProvider } from './workspace';
@@ -44,15 +48,17 @@ const mount = async (
   list: Channel[] = channels(),
   path = `/w/acme/c/${IDS.api}`,
   platform?: { platform: string },
+  api: Partial<Api> = {},
 ): Promise<{ view: Awaited<ReturnType<typeof renderApp>>; here: () => string }> => {
   const view = await renderApp(
     <SessionGate>
       <WorkspaceScopeProvider slug="acme" notFound={null}>
         <GlobalKeys {...(platform === undefined ? {} : { platform })} />
         <textarea aria-label="composer" />
+        <Toaster dismissLabel="Close" />
       </WorkspaceScopeProvider>
     </SessionGate>,
-    { api: aSignedInApi({ channels: () => Promise.resolve(list) }), path },
+    { api: aSignedInApi({ channels: () => Promise.resolve(list), ...api }), path },
   );
   await settle();
   return { view, here: () => view.world.history.stack.at(-1) ?? '' };
@@ -335,5 +341,166 @@ describe('events somebody else handled', () => {
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
     expect(here()).toBe(`/w/acme/c/${IDS.api}`);
+  });
+});
+
+describe('Shift+Esc (D-238)', () => {
+  const NEWEST = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
+
+  /** A request held open until the test answers it, counting how often it was made. */
+  const held = (): {
+    readonly api: Partial<Api>;
+    readonly asked: () => number;
+    readonly answer: (response: ReadAllChannelsResponse) => void;
+    readonly refuse: (error: unknown) => void;
+  } => {
+    let asked = 0;
+    let answer: (response: ReadAllChannelsResponse) => void = () => undefined;
+    let refuse: (error: unknown) => void = () => undefined;
+    return {
+      api: {
+        markAllRead: (workspaceId): Promise<ReadAllChannelsResponse> => {
+          expect(workspaceId).toBe(IDS.workspace);
+          asked += 1;
+          return new Promise<ReadAllChannelsResponse>((resolve, reject) => {
+            answer = resolve;
+            refuse = reject;
+          });
+        },
+      },
+      asked: () => asked,
+      answer: (response): void => {
+        answer(response);
+      },
+      refuse: (error): void => {
+        refuse(error);
+      },
+    };
+  };
+
+  const counts = (view: Awaited<ReturnType<typeof renderApp>>): Record<string, unknown> =>
+    Object.fromEntries<unknown>(
+      (view.world.client.getQueryData<Channel[]>(keys.channels(IDS.workspace)) ?? []).map((c) => [
+        c.name ?? c.id,
+        c.state === null ? null : [c.state.unreadCount, c.state.unreadMentionCount],
+      ]),
+    );
+
+  test('clears every badge at once, then each channel as the server answers, and says so', async () => {
+    const request = held();
+    const { view } = await mount(channels(), undefined, undefined, request.api);
+
+    expect(press({ key: 'Escape', shiftKey: true })).toBe(false);
+    await settle();
+
+    expect(request.asked()).toBe(1);
+    expect(counts(view)).toEqual({ api: [0, 0], deploys: [0, 0], incidents: [0, 0] });
+    // A reply still waiting in a thread of incidents stays unread (D-147): the answer says so.
+    request.answer({
+      data: [
+        {
+          channelId: IDS.deploys,
+          state: { lastReadMessageId: NEWEST, unreadCount: 0, unreadMentionCount: 0 },
+        },
+        {
+          channelId: IDS.incidents,
+          state: { lastReadMessageId: NEWEST, unreadCount: 1, unreadMentionCount: 1 },
+        },
+      ],
+    });
+    await settle();
+    expect(counts(view)).toEqual({ api: [0, 0], deploys: [0, 0], incidents: [1, 1] });
+    expect(await view.findByText('All channels are marked read.')).toBeDefined();
+  });
+
+  test('refused, puts the badges back and says why', async () => {
+    const request = held();
+    const { view } = await mount(channels(), undefined, undefined, request.api);
+    press({ key: 'Escape', shiftKey: true });
+    await settle();
+    expect(counts(view)).toEqual({ api: [0, 0], deploys: [0, 0], incidents: [0, 0] });
+
+    request.refuse(new ApiError(0, 'NETWORK', 'offline'));
+    await settle();
+
+    expect(counts(view)).toEqual({ api: [0, 0], deploys: [2, 0], incidents: [1, 0] });
+    expect(await view.findByText(/^The channels were not marked read\./u)).toBeDefined();
+  });
+
+  test('is taken before anything inside the page hears an Escape, the composer included', async () => {
+    const request = held();
+    const { view } = await mount(channels(), undefined, undefined, request.api);
+    const composer = view.getByLabelText('composer');
+    const heard: string[] = [];
+    composer.addEventListener('keydown', (event) => {
+      heard.push(event.key);
+    });
+    act(() => {
+      composer.focus();
+    });
+
+    expect(press({ key: 'Escape', shiftKey: true }, composer)).toBe(false);
+    await settle();
+
+    expect(request.asked()).toBe(1);
+    expect(heard).toEqual([]);
+    // A plain Escape is still the page's.
+    press({ key: 'Escape' }, composer);
+    expect(heard).toEqual(['Escape']);
+    expect(request.asked()).toBe(1);
+  });
+
+  test('held down, asks once', async () => {
+    const request = held();
+    await mount(channels(), undefined, undefined, request.api);
+    press({ key: 'Escape', shiftKey: true });
+    press({ key: 'Escape', shiftKey: true, repeat: true });
+    press({ key: 'Escape', shiftKey: true, repeat: true });
+    await settle();
+    expect(request.asked()).toBe(1);
+  });
+
+  test.each([
+    ['a dialog', 'dialog'],
+    ['an alert dialog', 'alertdialog'],
+    ['a menu', 'menu'],
+  ])('inside %s, is left to it', async (_what, role) => {
+    const request = held();
+    await mount(channels(), undefined, undefined, request.api);
+    const topmost = document.createElement('div');
+    topmost.setAttribute('role', role);
+    const inside = document.createElement('button');
+    topmost.append(inside);
+    document.body.append(topmost);
+
+    expect(press({ key: 'Escape', shiftKey: true }, inside)).toBe(true);
+    await settle();
+
+    expect(request.asked()).toBe(0);
+    topmost.remove();
+  });
+
+  test.each([
+    ['with Cmd', { metaKey: true }],
+    ['with Ctrl', { ctrlKey: true }],
+    ['with Alt', { altKey: true }],
+    ['while an IME is composing', { isComposing: true }],
+  ])('is not the chord %s', async (_why, more) => {
+    const request = held();
+    await mount(channels(), undefined, undefined, request.api);
+    expect(press({ key: 'Escape', shiftKey: true, ...more })).toBe(true);
+    await settle();
+    expect(request.asked()).toBe(0);
+  });
+
+  test('while the palette is open, is the palette’s', async () => {
+    const request = held();
+    const { view } = await mount(channels(), undefined, undefined, request.api);
+    press({ key: 'k', metaKey: true });
+    await settle();
+    expect(view.getByRole('dialog')).toBeDefined();
+    press({ key: 'Escape', shiftKey: true });
+    await settle();
+    expect(request.asked()).toBe(0);
   });
 });

@@ -7,8 +7,10 @@
  *   sweep:link-previews  the unfurl cache past its expiry (D-23)
  *   sweep:email-sign-ins  sign-in links and their counters a day past use (D-138, D-179)
  *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
+ *   purge:workspaces   the content of each workspace whose deletion's grace period is over (D-242)
  *   sweep:exports      exports nobody downloaded in time, and any whose making was cut off (D-140)
  *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)
+ *   mail:missed        one letter to each person who asked, about what waited unread for them (D-240)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
@@ -18,6 +20,7 @@
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { purgeRetention } from '../modules/retention/purge';
+import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
   reconcileStorage,
@@ -28,12 +31,17 @@ import {
   sweepOrphans,
 } from '../modules/jobs/jobs';
 import { jobReport, neverSucceeded } from '../modules/jobs/report';
+import { mailMissedMessages } from '../modules/notifications/missed-mail';
+import { readSettingsToBoot } from '../modules/setup/settings';
+import { credentialCipher } from '../platform/crypto';
+import { smtpMailer } from '../platform/mail';
 import { FIRST_RUN } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
+import { sendAuditLinesTo } from '../modules/audit/lines';
 import { errorTrackingFor } from '../platform/error-tracking';
 import { storeFor } from '../platform/storage';
 
@@ -47,8 +55,37 @@ const { tracker, log } = errorTrackingFor(
   createLogger({ level: config.LOG_LEVEL }),
   systemClock,
 );
+// Every entry this process writes to the trail is also a line of its log, ids only (D-222).
+sendAuditLinesTo(log);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 const clock = systemClock;
+
+/**
+ * The relay the server's settings name, as the API builds it (`runtimeServicesFrom`): read once a run, so a
+ * relay changed in Administration is the one the next run sends through. None set, none built.
+ */
+const missedMail = async (): Promise<Readonly<Record<string, number>>> => {
+  const { settings } = await readSettingsToBoot(database, credentialCipher(config.ENCRYPTION_KEY));
+  const mailer =
+    settings.smtp === undefined
+      ? undefined
+      : smtpMailer({
+          SMTP_URL: settings.smtp.smtpUrl,
+          MAIL_FROM: settings.smtp.from,
+          SMTP_ALLOW_PLAINTEXT: settings.smtp.allowPlaintext,
+        });
+  try {
+    return await mailMissedMessages({
+      database,
+      clock,
+      log,
+      send: mailer?.send,
+      appUrl: config.APP_URL,
+    });
+  } finally {
+    mailer?.close();
+  }
+};
 
 const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number>>>>> = {
   'sweep:orphans': async () =>
@@ -68,6 +105,8 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
     await sweepExports({ database, clock, log, storage: storeFor(config) }),
   'purge:retention': async () =>
     await purgeRetention({ database, clock, log, storage: storeFor(config) }),
+  'purge:workspaces': async () =>
+    await purgeWorkspaces({ database, clock, log, storage: storeFor(config) }),
   'sweep:deletions': async () =>
     await sweepObjectDeletions({
       database,
@@ -75,6 +114,7 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
       log,
       storage: storeFor(config),
     }),
+  'mail:missed': missedMail,
 };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>

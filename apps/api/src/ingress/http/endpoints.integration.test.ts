@@ -15,7 +15,13 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import type { TSchema } from '@sinclair/typebox';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { ENDPOINTS, messageId, type EndpointSpec } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { fixedClock } from '../../platform/clock';
@@ -43,11 +49,11 @@ beforeAll(async () => {
       config: testConfig({ APP_URL: origin }),
     }),
   );
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** What this test does not call, and where the answer is held to its schema instead. */
 const HELD_ELSEWHERE: Readonly<
@@ -80,6 +86,7 @@ interface Context {
   attachmentId: string;
   throwawayAttachmentId: string;
   nativeCode: string;
+  bookmarkId: string;
 }
 
 const ids = new Set<string>();
@@ -112,6 +119,8 @@ const STEPS: readonly Step[] = [
   { id: 'getClientInfo', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getAuthMethods', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getMe', spec: () => ({}), status: 200 },
+  // The check is off in this server's configuration, so the answer is the empty one; `releases.integration.test.ts` has the rest.
+  { id: 'getLatestRelease', spec: () => ({}), status: 200 },
 
   // ── Workspaces
   { id: 'listWorkspaces', spec: () => ({}), status: 200 },
@@ -228,6 +237,7 @@ const STEPS: readonly Step[] = [
     status: 200,
   },
   { id: 'listMessageVersions', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
+  { id: 'getMessage', as: 'bob', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   {
     id: 'putReaction',
     as: 'bob',
@@ -243,6 +253,28 @@ const STEPS: readonly Step[] = [
   { id: 'pinMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
   { id: 'listPins', spec: (c) => ({ params: { channelId: c.channelId } }), status: 200 },
   { id: 'unpinMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
+  {
+    id: 'addBookmark',
+    spec: (c) => ({
+      params: { channelId: c.channelId },
+      json: { url: 'https://docs.example.com/runbook', title: 'Runbook' },
+    }),
+    status: 201,
+    then: (c, body): void => {
+      c.bookmarkId = String(asRecord(body)['id']);
+    },
+  },
+  {
+    id: 'listBookmarks',
+    as: 'bob',
+    spec: (c) => ({ params: { channelId: c.channelId } }),
+    status: 200,
+  },
+  {
+    id: 'removeBookmark',
+    spec: (c) => ({ params: { channelId: c.channelId, bookmarkId: c.bookmarkId } }),
+    status: 204,
+  },
   {
     id: 'saveMessage',
     spec: (c) => ({ params: { messageId: c.rootId }, json: { state: 'in_progress' } }),
@@ -287,6 +319,39 @@ const STEPS: readonly Step[] = [
     status: 204,
   },
   { id: 'unsaveMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
+  {
+    id: 'setKnowledge',
+    spec: (c) => ({
+      params: { messageId: c.rootId },
+      json: {
+        version: 0,
+        isQuestion: true,
+        assigneeId: c.alice.userId,
+        acceptedAnswerId: c.replyId,
+        decisionNote: 'Keep the deployment window.',
+        decisionUrl: 'https://github.com/acme/api/issues/1',
+      },
+    }),
+    status: 200,
+  },
+  {
+    id: 'saveSearch',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, searchId: c.rootId },
+      json: { name: 'Open questions', query: { q: '', question: 'yes', status: 'open' } },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listSavedSearches',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  {
+    id: 'deleteSavedSearch',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId, searchId: c.rootId } }),
+    status: 204,
+  },
   { id: 'resolveThread', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   { id: 'reopenThread', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
   { id: 'getThreadFollow', spec: (c) => ({ params: { messageId: c.rootId } }), status: 200 },
@@ -303,6 +368,16 @@ const STEPS: readonly Step[] = [
   {
     id: 'markChannelRead',
     spec: (c) => ({ params: { channelId: c.channelId }, json: { lastReadMessageId: c.rootId } }),
+    status: 200,
+  },
+  {
+    id: 'markChannelUnread',
+    spec: (c) => ({ params: { channelId: c.channelId }, json: { fromMessageId: c.rootId } }),
+    status: 200,
+  },
+  {
+    id: 'markAllChannelsRead',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
     status: 200,
   },
 
@@ -478,6 +553,7 @@ const world = async (): Promise<Context> => {
     attachmentId: '',
     throwawayAttachmentId: '',
     nativeCode: '',
+    bookmarkId: '',
   };
 };
 

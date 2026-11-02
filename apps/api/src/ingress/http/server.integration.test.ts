@@ -10,9 +10,17 @@
  * policy and the creators take effect on the next request; every change is on the trail without its
  * value; no secret is in any answer or any line written; and a client is limited.
  */
+import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
 import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
+import {
+  GITHUB_APP_CALLBACK,
+  GITHUB_APP_WEBHOOK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type MeResponse,
@@ -37,6 +45,7 @@ import type { RateBudget } from '../../realtime/rate-limiter';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import { aGitHubPerson, signInWithGitHub } from '../../testing/github-sign-in';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS, type GitHubStub } from '../../testing/github-stub';
+import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import {
   anOidcStub,
@@ -69,6 +78,8 @@ const BAD_SECRET = 'not-the-secret-4417';
 
 const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
+// Every test's database, dropped after its connections have closed: up to 31 of them, which fitted the
+// five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   for (const stop of stops) await stop();
   await Promise.all(
@@ -77,7 +88,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 /** Every line the server writes, raw, as the operator's terminal would show it. */
 const recording = (): { log: Logger; lines: string[] } => {
@@ -117,7 +128,10 @@ const aServer = async (
   const cloned = await cloneIntegrationDatabase();
   clones.push(cloned.drop);
   const person = aGitHubPerson();
-  const github = aGitHubStub(person);
+  // The GitHub the server talks to also plays the App issues are written through (D-246).
+  const github = aGitHubStub(person, {}, GITHUB_STUB_CREDENTIALS, {
+    app: aGitHubAppStub({ id: person.id, login: person.login }),
+  });
   const served = github.serve(0);
   stops.push(served.stop);
   const { log, lines } = recording();
@@ -284,7 +298,13 @@ const ROUTES: readonly [method: 'GET' | 'POST' | 'DELETE', path: string, body: u
   ['DELETE', '/api/server/github', undefined],
   ['DELETE', '/api/server/smtp', undefined],
   ['DELETE', '/api/server/oidc', undefined],
+  ['POST', '/api/server/github-app', { ...GITHUB_APP_STUB }],
+  ['DELETE', '/api/server/github-app', undefined],
   ['POST', '/api/server/policy', { signUp: 'open' }],
+  ['POST', '/api/server/policy', { requireTwoFactor: true }],
+  ['POST', '/api/server/policy', { passwordSignIn: false }],
+  ['POST', '/api/server/policy', { sessionIdleTimeoutHours: 1 }],
+  ['POST', '/api/server/policy', { sessionMaxAgeDays: 1 }],
   ['POST', '/api/server/creators', { workspaceCreators: { kind: 'anyone' } }],
 ];
 
@@ -367,13 +387,22 @@ describe('integration: Administration → Server', () => {
         github: null,
         oidc: null,
         smtp: null,
+        githubApp: null,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: null,
+        requireTwoFactor: false,
+        passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       },
       needsReentry: [],
       appUrl: ORIGIN,
       githubCallbackUrl: `${ORIGIN}${SIGN_IN_CALLBACK}`,
       oidcCallbackUrl: `${ORIGIN}${OIDC_CALLBACK}`,
+      githubApp: {
+        callbackUrl: `${ORIGIN}${GITHUB_APP_CALLBACK}`,
+        webhookUrl: `${ORIGIN}${GITHUB_APP_WEBHOOK}`,
+      },
       channels: { github: false, email: false, oidc: false },
       adminEmail: server.admin.email,
     });
@@ -1061,5 +1090,442 @@ describe('integration: Administration → Server — single sign-on (D-200)', ()
     });
     expect(over.status).toBe(429);
     expect(Number(over.headers.get('retry-after'))).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('integration: Administration → Server — the sign-in policy (D-239)', () => {
+  const as = (server: Server): Call => ({ cookie: server.admin.cookie });
+  const refusalOf = async (response: Response): Promise<[number, unknown]> => [
+    response.status,
+    ((await response.json()) as { error: { details?: { reason?: unknown } } }).error.details
+      ?.reason,
+  ];
+  const methods = async (server: Server): Promise<{ password: boolean }> =>
+    (await (await call(server, 'GET', '/api/auth/methods')).json()) as { password: boolean };
+
+  test('each rule changes on its own, serves from the next request, and is on the trail without its value', async () => {
+    const server = await aServer();
+    await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+    const required = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { requireTwoFactor: true },
+    });
+    expect(required.status).toBe(204);
+    expect(server.holder.current()?.auth.signInPolicy).toEqual({
+      requireTwoFactor: true,
+      passwordSignIn: true,
+    });
+    const off = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { passwordSignIn: false },
+    });
+    expect(off.status).toBe(204);
+    // The other rule is left as it was: each change names one.
+    expect((await viewOf(server)).settings).toMatchObject({
+      signUp: 'invite-only',
+      requireTwoFactor: true,
+      passwordSignIn: false,
+    });
+    expect((await methods(server)).password).toBe(false);
+    expect(
+      (
+        await call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: true },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await methods(server)).password).toBe(true);
+    expect((await trail(server)).map((row) => row.action)).toEqual([
+      'server.github_connected',
+      'server.two_factor_requirement_changed',
+      'server.password_sign_in_changed',
+      'server.password_sign_in_changed',
+    ]);
+    for (const row of await trail(server)) expect(row.session).toBe(server.admin.sessionId);
+  });
+
+  test('passwords are turned off only while GitHub or single sign-on serves — the mail relay is not one of them', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+    const refused = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { passwordSignIn: false },
+    });
+    expect(await refusalOf(refused)).toEqual([409, 'no-provider']);
+    expect((await readSettings(server.db, cipher)).passwordSignIn).toBe(true);
+    expect((await methods(server)).password).toBe(true);
+    expect((await trail(server)).map((row) => row.action)).toEqual(['server.smtp_connected']);
+
+    const { body } = await aProvider();
+    await call(server, 'POST', '/api/server/oidc', { ...as(server), body });
+    expect(
+      (
+        await call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: false },
+        })
+      ).status,
+    ).toBe(204);
+  });
+
+  test('with passwords off the last of GitHub and single sign-on stays, confirmed or not; the relay and the other provider may go', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    const { body } = await aProvider();
+    await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+    await call(server, 'POST', '/api/server/oidc', { ...as(server), body });
+    await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+    await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { passwordSignIn: false },
+    });
+
+    expect((await call(server, 'DELETE', '/api/server/smtp', as(server))).status).toBe(204);
+    expect((await call(server, 'DELETE', '/api/server/oidc', as(server))).status).toBe(204);
+    for (const confirmLastChannel of [false, true]) {
+      const last = await call(server, 'DELETE', '/api/server/github', {
+        ...as(server),
+        body: { confirmLastChannel },
+      });
+      expect(await refusalOf(last)).toEqual([409, 'passwords-off']);
+    }
+    expect((await readSettings(server.db, cipher)).github).toBeDefined();
+    expect((await viewOf(server)).channels.github).toBe(true);
+  });
+
+  test('two administrators at once — one turning passwords off, one disconnecting the only provider — cannot both pass', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      // No workspace to make: its trail would read the session of the round before's request.
+      const server = await aServer({ noWorkspace: true });
+      const relay = await aRelay();
+      await server.db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', server.member.userId)
+        .execute();
+      await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+      await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+      const [off, gone] = await Promise.all([
+        call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: false },
+        }),
+        call(server, 'DELETE', '/api/server/github', {
+          cookie: server.member.cookie,
+          body: { confirmLastChannel: true },
+        }),
+      ]);
+      expect([off.status, gone.status].sort()).toEqual([204, 409]);
+      const settings = await readSettings(server.db, cipher);
+      // Whichever won, somebody can still sign in: a password, or GitHub.
+      expect(settings.passwordSignIn || settings.github !== undefined).toBe(true);
+      expect(settings.passwordSignIn).toBe(off.status !== 204);
+    }
+  });
+
+  test('two administrators changing two rules at once both keep, each on the trail', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ is_server_admin: true })
+      .where('id', '=', server.member.userId)
+      .execute();
+    await call(server, 'POST', '/api/server/github', { ...as(server), body: GITHUB_OK });
+    const answers = await Promise.all([
+      call(server, 'POST', '/api/server/policy', {
+        ...as(server),
+        body: { requireTwoFactor: true },
+      }),
+      call(server, 'POST', '/api/server/policy', {
+        cookie: server.member.cookie,
+        body: { passwordSignIn: false },
+      }),
+      call(server, 'POST', '/api/server/policy', { ...as(server), body: { signUp: 'open' } }),
+    ]);
+    expect(answers.map((answer) => answer.status)).toEqual([204, 204, 204]);
+    expect(await readSettings(server.db, cipher)).toMatchObject({
+      requireTwoFactor: true,
+      passwordSignIn: false,
+      signUp: 'open',
+    });
+    const actions = await server.db
+      .selectFrom('server_audit_log')
+      .select('action')
+      .where('action', 'in', [
+        'server.two_factor_requirement_changed',
+        'server.password_sign_in_changed',
+        'server.sign_up_changed',
+      ])
+      .execute();
+    expect(actions.map((row) => row.action).sort()).toEqual([
+      'server.password_sign_in_changed',
+      'server.sign_up_changed',
+      'server.two_factor_requirement_changed',
+    ]);
+  });
+
+  test('a body that is not one rule, of the right type, is refused before anything changes', async () => {
+    const server = await aServer();
+    for (const body of [
+      {},
+      { requireTwoFactor: 'yes' },
+      { passwordSignIn: 1 },
+      { requireTwoFactor: true, passwordSignIn: true },
+      { requireTwoFactor: true, extra: true },
+    ]) {
+      const refused = await call(server, 'POST', '/api/server/policy', { ...as(server), body });
+      expect([JSON.stringify(body), refused.status]).toEqual([JSON.stringify(body), 400]);
+    }
+    expect(await trail(server)).toEqual([]);
+  });
+});
+
+describe('integration: Administration → Server — how long a session lives (D-244)', () => {
+  const as = (server: Server): Call => ({ cookie: server.admin.cookie });
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  const travel = async (
+    server: Server,
+    sessionId: string,
+    times: { readonly createdAt?: Date; readonly lastUsedAt?: Date },
+  ): Promise<void> => {
+    await server.db
+      .updateTable('sessions')
+      .set({
+        ...(times.createdAt === undefined ? {} : { created_at: times.createdAt }),
+        ...(times.lastUsedAt === undefined ? {} : { last_used_at: times.lastUsedAt }),
+      })
+      .where('id', '=', sessionId)
+      .execute();
+  };
+  const ago = (ms: number): Date => new Date(Date.now() - ms);
+  const sessionLeft = async (server: Server, sessionId: string): Promise<boolean> =>
+    (await server.db
+      .selectFrom('sessions')
+      .select('id')
+      .where('id', '=', sessionId)
+      .executeTakeFirst()) !== undefined;
+
+  test('each rule applies from the next request to the sessions already open, and is on the trail without its value', async () => {
+    const server = await aServer();
+    // The control: unused for two hours and signed in eight days ago, both still sign in today.
+    await travel(server, server.member.sessionId, { lastUsedAt: ago(2 * HOUR) });
+    await travel(server, server.owner.sessionId, { createdAt: ago(8 * DAY) });
+    expect((await call(server, 'GET', '/api/me', { cookie: server.member.cookie })).status).toBe(
+      200,
+    );
+    expect((await call(server, 'GET', '/api/me', { cookie: server.owner.cookie })).status).toBe(
+      200,
+    );
+    // Those reads were use; the member is left unused for two hours again.
+    await travel(server, server.member.sessionId, { lastUsedAt: ago(2 * HOUR) });
+
+    const idle = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { sessionIdleTimeoutHours: 1 },
+    });
+    expect(idle.status).toBe(204);
+    expect(server.holder.current()?.auth.sessionLifetime).toEqual({
+      sessionIdleTimeoutHours: 1,
+      sessionMaxAgeDays: null,
+    });
+    expect((await call(server, 'GET', '/api/me', { cookie: server.member.cookie })).status).toBe(
+      401,
+    );
+    expect(await sessionLeft(server, server.member.sessionId)).toBe(false);
+    // The owner was used a moment ago: the idle timeout leaves it; the administrator's own session too.
+    expect((await call(server, 'GET', '/api/me', { cookie: server.owner.cookie })).status).toBe(
+      200,
+    );
+
+    const aged = await call(server, 'POST', '/api/server/policy', {
+      ...as(server),
+      body: { sessionMaxAgeDays: 7 },
+    });
+    expect(aged.status).toBe(204);
+    expect((await viewOf(server)).settings).toMatchObject({
+      sessionIdleTimeoutHours: 1,
+      sessionMaxAgeDays: 7,
+      // Each change names one rule: the others are as they were.
+      signUp: 'invite-only',
+      requireTwoFactor: false,
+      passwordSignIn: true,
+    });
+    expect((await call(server, 'GET', '/api/me', { cookie: server.owner.cookie })).status).toBe(
+      401,
+    );
+    expect(await sessionLeft(server, server.owner.sessionId)).toBe(false);
+
+    // Off again: a session neither rule would have kept signs in as before.
+    for (const body of [{ sessionIdleTimeoutHours: null }, { sessionMaxAgeDays: null }]) {
+      expect(
+        (await call(server, 'POST', '/api/server/policy', { ...as(server), body })).status,
+      ).toBe(204);
+    }
+    const kept = await aSignedInUser(server.db, systemClock, 'srv-kept');
+    await travel(server, kept.sessionId, { createdAt: ago(20 * DAY), lastUsedAt: ago(9 * DAY) });
+    expect((await call(server, 'GET', '/api/me', { cookie: kept.cookie })).status).toBe(200);
+    expect(await readSettings(server.db, cipher)).toMatchObject({
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
+    });
+
+    const session = server.admin.sessionId;
+    expect(await trail(server)).toEqual([
+      { action: 'server.session_idle_timeout_changed', actor: server.admin.userId, session },
+      { action: 'server.session_max_age_changed', actor: server.admin.userId, session },
+      { action: 'server.session_idle_timeout_changed', actor: server.admin.userId, session },
+      { action: 'server.session_max_age_changed', actor: server.admin.userId, session },
+    ]);
+  });
+
+  test('only a value the page offers is taken: anything else is refused before anything changes', async () => {
+    const server = await aServer();
+    for (const body of [
+      { sessionIdleTimeoutHours: 2 },
+      { sessionIdleTimeoutHours: 0 },
+      { sessionIdleTimeoutHours: -1 },
+      { sessionIdleTimeoutHours: '8' },
+      { sessionIdleTimeoutHours: 8.5 },
+      { sessionMaxAgeDays: 365 },
+      { sessionMaxAgeDays: 0 },
+      { sessionMaxAgeDays: 'yedi gün' },
+      { sessionIdleTimeoutHours: 1, sessionMaxAgeDays: 7 },
+      { sessionMaxAgeDays: 7, signUp: 'open' },
+    ]) {
+      const refused = await call(server, 'POST', '/api/server/policy', { ...as(server), body });
+      expect([JSON.stringify(body), refused.status]).toEqual([JSON.stringify(body), 400]);
+    }
+    expect(await trail(server)).toEqual([]);
+    expect(await readSettings(server.db, cipher)).toMatchObject({
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
+    });
+  });
+});
+
+describe('integration: Administration → Server — the GitHub App (D-246)', () => {
+  const ANOTHER_KEY = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  }).privateKey;
+
+  const tryApp = async (
+    server: Server,
+    over: Readonly<Record<string, unknown>> = {},
+  ): Promise<Response> =>
+    await call(server, 'POST', '/api/server/github-app', {
+      cookie: server.admin.cookie,
+      body: { ...GITHUB_APP_STUB, ...over },
+    });
+
+  test('tried as its client and as itself, kept only when both hold, and never shown again', async () => {
+    const server = await aServer();
+    for (const [over, reason] of [
+      [{ clientSecret: BAD_SECRET }, 'secret-rejected'],
+      [{ privateKey: ANOTHER_KEY }, 'key-rejected'],
+      [{ appId: 4243 }, 'app-mismatch'],
+      [{ slug: 'another-app' }, 'app-mismatch'],
+    ] as const) {
+      const answer = (await (await tryApp(server, over)).json()) as { ok: boolean; reason: string };
+      expect([answer.ok, answer.reason]).toEqual([false, reason]);
+    }
+    expect((await viewOf(server)).settings.githubApp).toBeNull();
+    expect(await trail(server)).toEqual([]);
+
+    const kept = await tryApp(server);
+    expect(await kept.json()).toEqual({ ok: true });
+    const view = await viewOf(server);
+    expect(view.settings.githubApp).toEqual({
+      appId: GITHUB_APP_STUB.appId,
+      slug: GITHUB_APP_STUB.slug,
+      clientId: GITHUB_APP_STUB.clientId,
+      clientSecret: { set: true },
+      privateKey: { set: true },
+      webhookSecret: { set: true },
+    });
+    expect(view.githubApp).toEqual({
+      callbackUrl: `${ORIGIN}/api/github-app/callback`,
+      webhookUrl: `${ORIGIN}/api/webhooks/github-app`,
+    });
+    // It serves at once: what the holder serves now is the App.
+    expect(server.holder.current()?.settings.githubApp?.appId).toBe(GITHUB_APP_STUB.appId);
+    const written = [JSON.stringify(view), ...server.lines].join('\n');
+    for (const secret of [
+      GITHUB_APP_STUB.clientSecret,
+      GITHUB_APP_STUB.webhookSecret,
+      'BEGIN RSA PRIVATE KEY',
+    ]) {
+      expect(written).not.toContain(secret);
+    }
+
+    expect(
+      (await call(server, 'DELETE', '/api/server/github-app', { cookie: server.admin.cookie }))
+        .status,
+    ).toBe(204);
+    expect((await viewOf(server)).settings.githubApp).toBeNull();
+    const again = await call(server, 'DELETE', '/api/server/github-app', {
+      cookie: server.admin.cookie,
+    });
+    expect(again.status).toBe(409);
+    expect((await trail(server)).map((entry) => entry.action)).toEqual([
+      'server.github_app_connected',
+      'server.github_app_disconnected',
+    ]);
+  });
+
+  test('a key this server could not sign with is refused as input, and GitHub is not asked', async () => {
+    const server = await aServer();
+    const asked = server.github.calls.urls.length;
+    const refused = await tryApp(server, { privateKey: '-----BEGIN NOTHING-----' });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        code: 'VALIDATION_FAILED',
+        details: { fields: { privateKey: 'is not a PEM private key' } },
+      },
+    });
+    expect(server.github.calls.urls.length).toBe(asked);
+  });
+});
+
+describe('integration: server runtime compatibility paths', () => {
+  test('integration: disconnect rejects malformed JSON before changing server settings', async () => {
+    const server = await aServer();
+    const before = await viewOf(server);
+    const response = await server.app.handle(
+      new Request(`${ORIGIN}/api/server/github`, {
+        method: 'DELETE',
+        headers: {
+          origin: ORIGIN,
+          cookie: server.admin.cookie,
+          'content-type': 'application/json',
+        },
+        body: '{broken',
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await viewOf(server)).toEqual(before);
+  });
+
+  test('integration: a Turkish administrator receives a Turkish relay test letter', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    await server.db
+      .updateTable('users')
+      .set({ locale: 'tr' })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const response = await call(server, 'POST', '/api/server/smtp', {
+      cookie: server.admin.cookie,
+      body: smtpBody(relay),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(relay.received[0]?.data).toContain('Purlay sunucundan bir deneme');
+    expect(relay.received[0]?.data).not.toContain('A test from your Purlay server');
   });
 });

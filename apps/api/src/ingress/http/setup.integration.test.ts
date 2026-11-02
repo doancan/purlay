@@ -10,7 +10,12 @@
  * server writes.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { SETUP_STEPS, type SetupState } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
 import { systemClock, type Clock } from '../../platform/clock';
@@ -51,6 +56,8 @@ const RELAY_PASS = 'relay-pass-7311';
 
 const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
+// Every wizard's database, dropped after its connections have closed (`dropDatabases`): one a test, forty-six
+// of them, which fitted the five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   for (const stop of stops) await stop();
   await Promise.all(
@@ -59,7 +66,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 /** A clock the test moves, from the wall clock: the setup code's hour is read from it. */
 const movable = (): Clock & { advance: (ms: number) => void } => {
@@ -396,6 +403,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
       email: false,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     const button = await call(wizard, 'GET', '/auth/github');
     expect(button.status).toBe(302);
@@ -421,6 +429,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
       email: true,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     let state = await stateOf(wizard, cookie);
     expect(state.admin).toEqual({ name: ADMIN.name, email: ADMIN.email, emailVerified: false });
@@ -1266,6 +1275,7 @@ describe('integration: the finish rule', () => {
       email: false,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     const cookie = await claimed(wizard);
     await passedTo(wizard, cookie, 'invite');
@@ -1309,6 +1319,7 @@ describe('integration: the finish rule', () => {
       email: true,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     const cookie = await claimed(wizard);
     await passedTo(wizard, cookie, 'invite');

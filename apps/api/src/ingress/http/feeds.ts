@@ -1,5 +1,5 @@
 /**
- * A channel's repository feeds through HTTP (#79, D-134): list, connect and disconnect, each an
+ * A channel's repository feeds through HTTP (#79, D-134): list, connect, regenerate the secret of, and disconnect, each an
  * owner's or an admin's in a channel they can see. Validate, call one service, answer.
  */
 import {
@@ -10,7 +10,12 @@ import {
 import { requireChannelById } from '../../platform/channels';
 import type { CredentialCipher } from '../../platform/crypto';
 import { atomicallyOn } from '../../platform/transactions';
-import { channelFeeds, createFeed, removeFeed } from '../../modules/integrations/feeds';
+import {
+  channelFeeds,
+  createFeed,
+  regenerateSecret,
+  removeFeed,
+} from '../../modules/integrations/feeds';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
 import { validated } from './validate';
@@ -40,6 +45,20 @@ export const connectFeed = async (
   return await atomicallyOn(database)(async (transaction) => {
     const context = await requireChannelById(transaction, userId, channelId);
     return await createFeed(transaction, clock, cipher, context, asked);
+  });
+};
+
+/** `POST /api/channels/:channelId/github-feeds/:feedId/secret` — the new secret, once. */
+export const regenerateFeedSecret = async (
+  { auth, database, clock, cipher }: FeedDependencies,
+  request: Request,
+  channelId: string,
+  feedId: string,
+): Promise<CreatedGitHubFeed> => {
+  const { userId } = await requireSession(auth, request);
+  return await atomicallyOn(database)(async (transaction) => {
+    const context = await requireChannelById(transaction, userId, channelId);
+    return await regenerateSecret(transaction, clock, cipher, context, feedId);
   });
 };
 

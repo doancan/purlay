@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { installDom } from '../../testing/dom';
-import { PUSH_WORKER_PATH, browserPushDevice, type PushDevice } from './device';
+import { PUSH_WORKER_PATH, browserPushDevice, mustInstallForPush, type PushDevice } from './device';
 
 installDom();
 
@@ -238,5 +238,19 @@ describe('a browser with push', () => {
     stop();
     send({ kind: 'push-open', url: '/w/acme/c/2' });
     expect(heard).toEqual(['/w/acme/c/1']);
+  });
+});
+
+describe('whether push waits for the Home Screen (D-230)', () => {
+  const browser = (standalone?: boolean): Navigator =>
+    (standalone === undefined ? {} : { standalone }) as unknown as Navigator;
+
+  test("iOS's Safari, not installed: it waits", () => {
+    expect(mustInstallForPush(browser(false))).toBe(true);
+  });
+
+  test('installed on iOS, or any other browser: it does not', () => {
+    expect(mustInstallForPush(browser(true))).toBe(false);
+    expect(mustInstallForPush(browser())).toBe(false);
   });
 });

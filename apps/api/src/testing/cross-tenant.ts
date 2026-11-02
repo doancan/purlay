@@ -73,6 +73,10 @@ export interface Ids {
   readonly versionId: string;
   /** An incident declared in the channel: what changing one, and its timeline, act on. */
   readonly incidentId: string;
+  /** A bookmark of the channel: what removing one acts on (D-218). */
+  readonly bookmarkId: string;
+  /** An incoming webhook of the channel: what revoking one acts on (D-245). */
+  readonly webhookId: string;
   /** An owner's export of the workspace (D-140). */
   readonly exportId: string;
 }
@@ -91,13 +95,15 @@ export const pathFor = (path: string, ids: Ids): string =>
   path.replace(/:(\w+)/g, (_whole, name: string) => {
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
-    if (name === 'messageId') return ids.messageId;
+    if (name === 'messageId' || name === 'searchId') return ids.messageId;
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
     if (name === 'feedId') return ids.feedId;
     if (name === 'versionId') return ids.versionId;
     if (name === 'incidentId') return ids.incidentId;
+    if (name === 'bookmarkId') return ids.bookmarkId;
+    if (name === 'webhookId') return ids.webhookId;
     if (name === 'exportId') return ids.exportId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
@@ -120,9 +126,9 @@ type Visibility =
   /**
    * `admin`: only an owner or an admin may use the endpoint, so the caller crossing the axis is made
    * an admin of the workspace first — the refusal is then for what they cannot see, never for what
-   * they are, and the control succeeds.
+   * they are, and the control succeeds. `owner`: the same, for an endpoint only an owner may use.
    */
-  | { readonly kind: 'channel'; readonly admin?: true }
+  | { readonly kind: 'channel'; readonly admin?: true; readonly owner?: true }
   /**
    * `author`: only the message's author may use the endpoint, so the control is a message the
    * caller wrote, and the hidden ones include messages they wrote in channels they cannot see.
@@ -171,6 +177,12 @@ export interface CrossTenantCase {
    * may not do (leave, I-2), so the control still proves the request succeeds.
    */
   readonly secondOwner?: true;
+  /**
+   * It acts on an archived channel alone — bringing one back (D-232) — so the channel the crossing names
+   * is archived first, and the control succeeds on it. On the visibility axis the archived public channel
+   * is the visible one; the private one and the direct message, archived too, stay hidden.
+   */
+  readonly archived?: true;
   readonly visibility: Visibility;
 }
 
@@ -238,7 +250,8 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: {
       kind: 'none',
-      reason: 'the workspace’s own setting; no channel is named or listed',
+      reason:
+        'the workspace’s own setting and a count of its channels that keep longer (D-225); no channel is named or listed',
     },
   },
   'GET /api/workspaces/:workspaceId/storage': {
@@ -272,6 +285,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide' },
   },
+  'GET /api/workspaces/:workspaceId/archived-channels': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'lists archived channels, which no live visibility reaches; a private one is listed only to its members, crossed in channel-settings.integration.test.ts (D-232)',
+    },
+  },
   'POST /api/workspaces/:workspaceId/channels': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ name: 'crossing' }),
@@ -285,6 +306,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'DELETE /api/channels/:channelId': {
     refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/restore': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    archived: true,
     visibility: { kind: 'channel', admin: true },
   },
   'POST /api/channels/:channelId/leave': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
@@ -345,7 +371,43 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ repository: 'acme/crossing', events: ['push'] }),
     visibility: { kind: 'channel', admin: true },
   },
+  'GET /api/channels/:channelId/retention': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', owner: true },
+  },
+  'PUT /api/channels/:channelId/retention': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ keepsAtLeast: 'forever' }),
+    visibility: { kind: 'channel', owner: true },
+  },
+  'GET /api/channels/:channelId/bookmarks': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'POST /api/channels/:channelId/bookmarks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ url: 'https://crossing.example/doc', title: 'Crossing' }),
+    visibility: CHANNEL,
+  },
+  'DELETE /api/channels/:channelId/bookmarks/:bookmarkId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
   'DELETE /api/channels/:channelId/github-feeds/:feedId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/incoming-webhooks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/incoming-webhooks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ name: 'Crossing' }),
+    visibility: { kind: 'channel', admin: true },
+  },
+  'DELETE /api/channels/:channelId/incoming-webhooks/:webhookId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/github-feeds/:feedId/secret': {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: { kind: 'channel', admin: true },
   },
@@ -372,10 +434,43 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: (_now, owner) => ({ lastReadMessageId: owner.messageId }),
     visibility: CHANNEL,
   },
+  'PUT /api/channels/:channelId/unread': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (_now, owner) => ({ fromMessageId: owner.messageId }),
+    visibility: CHANNEL,
+  },
   'POST /api/channels/:channelId/messages': {
     refusal: 'CHANNEL_NOT_FOUND',
     body: (now) => ({ id: messageId(now), content: 'crossing' }),
     visibility: CHANNEL,
+  },
+  'PUT /api/messages/:messageId/knowledge': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+    body: () => ({
+      version: 0,
+      isQuestion: true,
+      assigneeId: null,
+      acceptedAnswerId: null,
+      decisionNote: '',
+      decisionUrl: null,
+    }),
+  },
+  'GET /api/workspaces/:workspaceId/saved-searches': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'personal filters, never channel content' },
+  },
+  'PUT /api/workspaces/:workspaceId/saved-searches/:searchId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'stores the caller’s own filter, and validates any channel it names',
+    },
+    body: () => ({ name: 'Crossing', query: { q: 'crossing' } }),
+  },
+  'DELETE /api/workspaces/:workspaceId/saved-searches/:searchId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'removes the caller’s own filter only' },
   },
   'PUT /api/messages/:messageId/reactions/:emoji': {
     refusal: 'MESSAGE_NOT_FOUND',
@@ -416,6 +511,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ content: 'crossing' }),
     visibility: MESSAGE_BY_AUTHOR,
   },
+  'GET /api/messages/:messageId': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/messages/:messageId/around': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'PUT /api/messages/:messageId/thread/read': {
@@ -428,6 +524,22 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'MESSAGE_NOT_FOUND',
     body: () => ({ following: true }),
     visibility: MESSAGE,
+  },
+  'POST /api/messages/:messageId/github-link': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+    body: () => ({ url: 'https://github.com/acme/api/issues/1' }),
+  },
+  'POST /api/messages/:messageId/github-issue': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+    body: () => ({
+      clientRequestId: crypto.randomUUID(),
+      repositoryId: 77,
+      title: 'The question, as an issue',
+      body: 'What was asked.',
+      copyPrivateText: false,
+    }),
   },
   'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
@@ -479,6 +591,25 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'the workspace’s own credential, no channel' },
   },
+  'GET /api/workspaces/:workspaceId/github-app': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
+  'POST /api/workspaces/:workspaceId/github-app/installation': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
+  'DELETE /api/workspaces/:workspaceId/github-app/installation': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own installation, no channel (D-246)' },
+  },
+  'GET /api/workspaces/:workspaceId/github-repositories': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'a person’s own repositories of the workspace’s installation (D-246)',
+    },
+  },
   'PUT /api/workspaces/:workspaceId/integrations/github': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ token: 'ghp_crossing' }),
@@ -490,10 +621,22 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'GET /api/workspaces/:workspaceId/audit': {
     refusal: 'WORKSPACE_NOT_FOUND',
+    // Narrowed to one of its people (D-222): across the boundary the filter changes nothing.
+    alsoWith: { 'one of its people as the actor': 'actorId=:userId' },
     visibility: {
       kind: 'none',
       reason:
         'returns who did what and never anything written; a channel appears only as the id an admin created it under',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/audit/export': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    query: 'format=csv',
+    alsoWith: { 'one of its people as the actor': 'actorId=:userId' },
+    visibility: {
+      kind: 'none',
+      reason:
+        'the trail as a file (D-222): who did what by id and name, never anything written; a channel only as an id',
     },
   },
   'PATCH /api/workspaces/:workspaceId/members/:userId': {
@@ -520,6 +663,23 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       kind: 'none',
       reason:
         'the caller takes only themselves out; what they lose is every channel, told to their own sockets',
+    },
+  },
+  'POST /api/workspaces/:workspaceId/deletion': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    // The name the crossing's owner gave their workspace (`aTenant`): the control asks for it exactly.
+    body: () => ({ confirm: 'xt-theirs' }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'the workspace itself (D-242); its channels are named only to the sockets told they closed',
+    },
+  },
+  'DELETE /api/workspaces/:workspaceId/deletion': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace itself, taken back (D-242); no channel is named or listed',
     },
   },
   'GET /api/attachments/:attachmentId': {
@@ -574,6 +734,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },
   },
+  'PUT /api/workspaces/:workspaceId/read': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'moves only the caller’s own memberships, of channels `visibleChannelsIn` mints, and answers only those; an archived channel, one not joined and another workspace’s are asserted in `read-state.integration.test.ts`',
+    },
+  },
   'PUT /api/notifications/read': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: (_now, owner) => ({ workspaceId: owner.workspaceId }),
@@ -599,11 +767,27 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'GET /api/client':
     'nobody is signed in yet: what this server is and the oldest client it serves, the same for every caller (D-190)',
+  'GET /api/releases/latest':
+    'the newest release of Purlay on GitHub, the same for everyone signed in, and names no workspace and holds nothing of any (D-248)',
   'POST /api/native/authorize':
     'hands the caller’s own session to their own application and names no workspace; the code is bound to the caller and a secret only the application holds (D-191)',
   'POST /api/native/token':
     'nobody is signed in yet: the code and verifier name the person who authorised, whatever the caller claims (D-191)',
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
+  'GET /api/me/quiet-hours': 'reads the caller’s own quiet hours and names no workspace (D-234)',
+  'PUT /api/me/quiet-hours': 'sets the caller’s own quiet hours and names no workspace (D-234)',
+  'GET /api/me/missed-mail':
+    'reads whether the caller asked to be mailed about what they missed, and names no workspace (D-240)',
+  'PUT /api/me/missed-mail':
+    'turns the caller’s own missed-mail letters on or off, and names no workspace (D-240)',
+  'POST /api/missed-mail/stop':
+    'nobody need be signed in: the token in the body names the one person whose letters it stops, whoever opens it (D-240)',
+  'POST /api/me/exports':
+    'asks for an export of the caller’s own data and names no workspace; what it holds is bound to the caller, never to a workspace they name (D-241)',
+  'GET /api/me/exports':
+    'the caller’s own exports of their data, and names no workspace; nobody else’s is in it (D-241)',
+  'GET /api/me/exports/:exportId/download':
+    'one of the caller’s own exports, once; somebody else’s is the same 404 as one that is not there (D-241)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
   'GET /api/me/sign-in':
@@ -631,8 +815,18 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'nobody is signed in and no workspace is named: the token is the capability, and the passport it makes opens only a sign-up, never a workspace (`invitation-passport.integration.test.ts`)',
   'POST /api/invitations/accept':
     'names no workspace: the token is the capability, and admits only to its own, into no channel',
+  'POST /api/github-app/authorization':
+    'authorizes the caller’s own GitHub access and names no workspace; the token is bound to the caller and used only for their own writes (D-246 §2)',
+  'DELETE /api/github-app/authorization':
+    'forgets the caller’s own GitHub tokens and names no workspace; nobody else’s is touched (D-246 §2)',
+  'GET /api/github-app/callback':
+    'a browser GitHub sent back: the state in the query names the one person and workspace it was made for, spent on return, and the same browser must come back (`github-app.integration.test.ts`)',
+  'POST /api/webhooks/github-app':
+    'nobody is signed in: the App’s webhook secret is the capability, and it only ends access GitHub itself ended (`github-app.integration.test.ts`)',
   'POST /api/webhooks/github/:feedId':
     'nobody is signed in: the feed’s secret is the capability, and posts only into its own channel (`webhook.integration.test.ts`)',
+  'POST /api/webhooks/incoming/:webhookId/:secret':
+    'nobody is signed in: the secret in the address is the capability, and posts only into its own hook’s channel (`incoming-webhooks.integration.test.ts`)',
 };
 
 /**

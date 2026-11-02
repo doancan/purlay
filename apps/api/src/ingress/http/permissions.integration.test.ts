@@ -10,6 +10,7 @@ import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { PERMISSIONS } from '../../testing/permissions';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -38,7 +39,9 @@ const call = async (
   as: SignedInUser,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: world.db, clock })).handle(
+  await createApp(
+    testDependencies({ database: world.db, clock, githubApp: () => GITHUB_APP_STUB }),
+  ).handle(
     new Request(`https://purlay.test${path}`, {
       method,
       headers: {
@@ -126,6 +129,39 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/retention`, as, {
       retentionDays: 90,
     }),
+  'read how long a channel keeps its history': async (world, as) =>
+    await call(world, 'GET', `/api/channels/${world.channelId}/retention`, as),
+  'let a channel keep its history longer': async (world, as) =>
+    await call(world, 'PUT', `/api/channels/${world.channelId}/retention`, as, {
+      keepsAtLeast: 'forever',
+    }),
+  'ask for the workspace to be deleted': async (world, as) => {
+    const { name } = await world.db
+      .selectFrom('workspaces')
+      .select('name')
+      .where('id', '=', world.workspaceId)
+      .executeTakeFirstOrThrow();
+    return await call(world, 'POST', `/api/workspaces/${world.workspaceId}/deletion`, as, {
+      confirm: name,
+    });
+  },
+  'take back the workspace’s deletion': async (world, as) => {
+    // Asked for by the owner first, so each role is tried on a deletion there is to take back.
+    const { name } = await world.db
+      .selectFrom('workspaces')
+      .select('name')
+      .where('id', '=', world.workspaceId)
+      .executeTakeFirstOrThrow();
+    const asked = await call(
+      world,
+      'POST',
+      `/api/workspaces/${world.workspaceId}/deletion`,
+      world.people.owner,
+      { confirm: name },
+    );
+    expect(asked.status).toBe(200);
+    return await call(world, 'DELETE', `/api/workspaces/${world.workspaceId}/deletion`, as);
+  },
   'export the workspace': async (world, as) =>
     await call(world, 'POST', `/api/workspaces/${world.workspaceId}/exports`, as),
   'read the workspace’s exports': async (world, as) =>
@@ -158,6 +194,8 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
   },
   'read the audit trail': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit`, as),
+  'download the audit trail': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit/export?format=csv`, as),
   'see whether the GitHub token is set': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/integrations/github`, as),
   'set the GitHub token': async (world, as) =>
@@ -202,6 +240,29 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'start connecting a GitHub App installation': async (world, as) =>
+    await call(world, 'POST', `/api/workspaces/${world.workspaceId}/github-app/installation`, as),
+  'disconnect the GitHub App installation': async (world, as) => {
+    // Connected by the owner first (as the callback would have), so there is one to remove whoever tries.
+    await world.db
+      .insertInto('github_app_installations')
+      .values({
+        id: crypto.randomUUID(),
+        workspace_id: world.workspaceId,
+        installation_id: '31',
+        account_login: 'acme',
+        account_type: 'Organization',
+        connected_by: world.people.owner.userId,
+        connected_at: NOW,
+      })
+      .execute();
+    return await call(
+      world,
+      'DELETE',
+      `/api/workspaces/${world.workspaceId}/github-app/installation`,
+      as,
+    );
+  },
   'list a channel’s repository feeds': async (world, as) =>
     await call(world, 'GET', `/api/channels/${world.channelId}/github-feeds`, as),
   'connect a repository to a channel': async (world, as) =>
@@ -209,6 +270,23 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       repository: 'acme/permission',
       events: ['push'],
     }),
+  'regenerate a repository feed’s secret': async (world, as) => {
+    // Connected by the owner first, so there is a feed whoever tries.
+    const made = await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/github-feeds`,
+      world.people.owner,
+      { repository: 'acme/permission', events: ['push'] },
+    );
+    const { feed } = (await made.json()) as { feed: { id: string } };
+    return await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/github-feeds/${feed.id}/secret`,
+      as,
+    );
+  },
   'disconnect a repository from a channel': async (world, as) => {
     // Connected by the owner first, so there is one to disconnect whoever tries.
     const made = await call(
@@ -226,6 +304,29 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'list a channel’s incoming webhooks': async (world, as) =>
+    await call(world, 'GET', `/api/channels/${world.channelId}/incoming-webhooks`, as),
+  'make an incoming webhook': async (world, as) =>
+    await call(world, 'POST', `/api/channels/${world.channelId}/incoming-webhooks`, as, {
+      name: 'CI',
+    }),
+  'revoke an incoming webhook': async (world, as) => {
+    // Made by the owner first, so there is one to revoke whoever tries.
+    const made = await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/incoming-webhooks`,
+      world.people.owner,
+      { name: 'CI' },
+    );
+    const { webhook } = (await made.json()) as { webhook: { id: string } };
+    return await call(
+      world,
+      'DELETE',
+      `/api/channels/${world.channelId}/incoming-webhooks/${webhook.id}`,
+      as,
+    );
+  },
   'take somebody out of a public channel': async (world, as) =>
     await call(
       world,
@@ -235,8 +336,21 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     ),
   'read the workspace’s storage and quota': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/storage`, as),
+  'let only owners and admins post in a channel': async (world, as) =>
+    await call(world, 'PATCH', `/api/channels/${world.channelId}`, as, { onlyAdminsPost: true }),
   'archive a channel': async (world, as) =>
     await call(world, 'DELETE', `/api/channels/${world.channelId}`, as),
+  'see the archived channels': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/archived-channels`, as),
+  // Archived by the database, not the route: the set-up writes no row of the trail (D-232).
+  'bring an archived channel back': async (world, as) => {
+    await world.db
+      .updateTable('channels')
+      .set({ deleted_at: NOW })
+      .where('id', '=', world.channelId)
+      .execute();
+    return await call(world, 'POST', `/api/channels/${world.channelId}/restore`, as);
+  },
   'delete somebody else’s message': async (world, as) =>
     await call(world, 'DELETE', `/api/messages/${world.messageId}`, as),
 };
@@ -273,7 +387,8 @@ describe('integration: every role-gated action, as every role', () => {
 /**
  * D-26, I-9 as a mechanism (#69): every role-gated action that changes something writes exactly one
  * row of the workspace's trail — taken from the same table, so an administrative endpoint added
- * there is held to it without anybody remembering. A read writes none.
+ * there is held to it without anybody remembering. A read writes none — but a download of the trail
+ * itself, which is on it as `audit.exported` (D-222).
  */
 describe('integration: every administrative write is on the trail, once', () => {
   const rows = async (db: Executor, workspaceId: string): Promise<number> =>
@@ -290,10 +405,21 @@ describe('integration: every administrative write is on the trail, once', () => 
     'revoke an invitation link': 1,
     'remove the GitHub token': 1,
     'disconnect a repository from a channel': 1,
+    'take back the workspace’s deletion': 1,
+    'revoke an incoming webhook': 1,
+    'regenerate a repository feed’s secret': 1,
   };
 
+  /** Reads that are themselves administrative acts: taking the trail away is on it (D-222). */
+  const RECORDED_READS: ReadonlySet<string> = new Set(['download the audit trail']);
+  /** A write that changes nothing yet: GitHub's screen is where the change is made, and the callback records it. */
+  const CHANGES_NOTHING: ReadonlySet<string> = new Set([
+    'start connecting a GitHub App installation',
+  ]);
+
   for (const [name, entry] of Object.entries(PERMISSIONS)) {
-    const reads = entry.endpoint.startsWith('GET ');
+    const reads =
+      (entry.endpoint.startsWith('GET ') && !RECORDED_READS.has(name)) || CHANGES_NOTHING.has(name);
     test(`${name}: ${reads ? 'no row' : 'one row'}`, async () => {
       await withRollback(async (db) => {
         const world = await aWorld(db);

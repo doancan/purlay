@@ -39,8 +39,49 @@ The script is the RFC's Appendix A inputs run through `importKey` (JWK private, 
 `deriveBits` (ECDH, then HKDF for the IKM, the content-encryption key and the nonce), a padded record
 (`plaintext ‖ 0x02`), `encrypt` (AES-GCM), and the header `salt ‖ rs(4096) ‖ idlen ‖ keyid`.
 
-## What it does not show
+## What the original spike did not show
 
-Delivery through a real push service (FCM, Mozilla, Apple) — that needs a browser subscription and
-the network; the shapes above are what those services accept, and the browser test registers a real
-subscription in Chromium.
+The original spike did not check delivery through a real push service. The production check below
+covers FCM and Chrome; Mozilla and Apple delivery remain unmeasured here.
+
+## Production delivery evidence 2026-10-28
+
+For #796, the production transport was checked with Bun 1.4.3 and Chrome 156.0.8078.48 on macOS
+arm64. The server initially returned `publicKey: null`. A stable VAPID pair and subject were added
+to its private deployment configuration, and the API and scheduler were recreated and became
+healthy. The operator procedure is in [CONFIG.md](../CONFIG.md).
+
+An isolated persistent Chrome profile subscribed through the existing Settings switch. Its
+notification permission was granted for the test profile only. Chrome's background networking
+was enabled; an automation launch with it disabled did not receive the first test.
+
+With every Purlay page closed, a diagnostic payload was encrypted and signed on the production
+server using `encryptPush`, `freshParts`, `vapidSigningKey` and `vapidAuthorization`. Its only
+target was that isolated profile's subscription, matched by an endpoint fingerprint. The push
+service was FCM. The worker's real notification collection was then read while no Purlay page
+was open:
+
+```text
+GET /api/push/key: 200, publicKey present
+browser subscription: present
+POST to fcm.googleapis.com: 201
+Purlay tabs open: 0
+service workers: 1
+notifications with the diagnostic tag: 1
+title: Purlay bildirim testi
+body: Kapalı sekme Web Push teslimat testi.
+```
+
+The diagnostic notification was closed afterwards. No chat or inbox message was created, and no
+other subscription was targeted. Private keys, subscription endpoints and session values are
+omitted. This verifies the production encryption, signature, push-service and worker path;
+message eligibility is covered by the sender's integration tests. An OS banner still depends on
+the device's own notification settings.
+
+The notification fix also passed all four targeted Chromium end-to-end tests: the existing
+background mention and push-worker tests, channel/thread focus with all three channel levels,
+and a two-channel reconnect whose lazy notification chunk is delayed while one channel is read.
+Seven hand-written mutations were caught, with none surviving or stale. The added device test
+has keyboard and accessibility coverage and reports browser acceptance without claiming OS
+delivery. No runtime dependency, schema or wire-contract change was needed; no application
+budget, test timeout or assertion was loosened.

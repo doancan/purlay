@@ -33,8 +33,9 @@ import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import { createChannel } from '../channels/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
-import { asProfile, PROFILE_COLUMNS } from '../users/profile';
+import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
+import { scheduledDeletionsOf } from './deletion';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -166,7 +167,8 @@ export const meOf = async (
   clock: Clock,
   userId: string,
   creators: WorkspaceCreators,
-): Promise<MeResponse> => {
+  // Whether the person owes two-step verification is the sign-in policy's to say (D-239), not this module's.
+): Promise<Omit<MeResponse, 'mustEnrolTwoFactor'>> => {
   const user = await executor
     .selectFrom('users')
     .select([
@@ -179,6 +181,8 @@ export const meOf = async (
       'time_zone',
       'status_text',
       'is_server_admin',
+      'github_id',
+      'github_connected_at',
     ])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
@@ -196,6 +200,8 @@ export const meOf = async (
     memberships: [...(await membershipsOf(executor, clock, userId))],
     mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
     isServerAdmin: user.is_server_admin,
+    nameFromGitHub: isNameGitHubs(user),
+    scheduledDeletions: [...(await scheduledDeletionsOf(executor, userId))],
   };
 };
 

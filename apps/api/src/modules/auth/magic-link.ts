@@ -14,9 +14,13 @@
  *   (D-179 §4, measured) — the setup administrator's is such an account (Ruling R32). An address no
  *   account has gets a link where sign-up is open, and where it is invite-only only while a passport
  *   made from an invitation link lives for exactly that address (`invitation-passport.ts`, R51).
- * - **Five messages an hour for an address, twenty requests an hour from a client** (D-138 §7,
- *   provisional, O-4), counted in the database so a restart or a second process hands nothing back
- *   (D-179, Q9), each by one statement that cannot be raced.
+ * - **Twenty requests an hour from a client; five messages an hour for an address from one client, and
+ *   twenty for it from every client** (D-138 §7 as amended by D-231 §2, provisional, O-4), counted in the
+ *   database so a restart or a second process hands nothing back (D-179, Q9), each by one statement
+ *   that cannot be raced. The address is counted *with* the client, as a password is
+ *   (`password-attempts.ts`): a stranger asking for somebody's address spends the stranger's own five,
+ *   never the owner's. The address's own ceiling still bounds what a mailbox is sent, and counts only
+ *   what its client's five let through, so one client spends at most five of it.
  * - **A link is shown before it is spent** (D-138 §4): the library has no preview, so its row is read
  *   here, by the same digest it keeps, and nothing is spent until the person presses *Sign in*.
  */
@@ -32,12 +36,19 @@ import type { SignInLinks } from './better-auth';
 import { OIDC_PROVIDER_ID } from './oidc';
 import { githubLetter } from './sign-in-letters';
 
-/** How many messages an address may be sent in an hour (O-4: provisional). */
-export const SIGN_IN_LINKS_PER_HOUR = 5;
+/** How many messages an address may be sent in an hour at one client's asking (O-4: provisional). */
+export const SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT = 5;
+
+/**
+ * How many messages an address may be sent in an hour, whichever clients ask (D-231 §2): what keeps a
+ * mailbox from being flooded from many networks. Above the per-client five, so keeping its owner out
+ * takes four networks' worth of asking, not one client's six requests.
+ */
+export const SIGN_IN_LINKS_PER_ADDRESS = 20;
 
 /**
  * How many links one client address may ask for in an hour, whatever the addresses (D-138 §7): the
- * per-address limit stops one mailbox being flooded, this stops one client sending to many.
+ * per-address limits stop one mailbox being flooded, this stops one client sending to many.
  */
 export const SIGN_IN_REQUESTS_PER_HOUR = 20;
 
@@ -115,7 +126,10 @@ const fateOf = async (
 const counterKey = async (what: 'address' | 'client', value: string): Promise<string> =>
   `purlay:sign-in-link:${what}:${await tokenDigest(value)}`;
 
-/** The counter of an address's messages, which an erasure deletes with the rest of the person. */
+/**
+ * The counter of an address's messages, which an erasure deletes with the rest of the person — and the
+ * prefix of its counters from each client, which it deletes by.
+ */
 export const addressCounterKey = async (email: string): Promise<string> =>
   await counterKey('address', email);
 
@@ -137,7 +151,7 @@ export interface SignInLinkDependencies {
  * A link to the address, if one may be sent: counted, answered, and only then decided and handed to the
  * library to make and mail (`sendMagicLink`, in `better-auth.ts`). Returns nothing either way, so its
  * caller's answer cannot say which it was — neither in what it says nor in how long it takes; past
- * either limit nothing is made or sent, and the log says so without the address.
+ * any limit nothing is made or sent, and the log says so without the address.
  */
 export const requestSignInLink = async (
   { database, clock, log, appUrl, links, later }: SignInLinkDependencies,
@@ -152,7 +166,7 @@ export const requestSignInLink = async (
   }
   const email = signInAddress(input.email);
   const now = clock.now();
-  // Before the answer, only what is the same for every address: the two counts, each one statement.
+  // Before the answer, only what is the same for every address: the counts, each one statement.
   if (
     (await counted(database, await counterKey('client', client), now, HOUR_MS)).count >
     SIGN_IN_REQUESTS_PER_HOUR
@@ -162,10 +176,17 @@ export const requestSignInLink = async (
   }
   // Every request for an address counts, whatever it comes to: neither a link nor the word about
   // GitHub can flood a mailbox, and an address that gets nothing costs what one that gets a link does.
+  // First the address from this client, so a stranger's asking spends the stranger's count (D-231 §2).
+  const addressKey = await addressCounterKey(email);
   if (
-    (await counted(database, await addressCounterKey(email), now, HOUR_MS)).count >
-    SIGN_IN_LINKS_PER_HOUR
+    (await counted(database, `${addressKey}:client:${await tokenDigest(client)}`, now, HOUR_MS))
+      .count > SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT
   ) {
+    log.warn('sign-in link refused: the address has had its links from this client for the hour');
+    return;
+  }
+  // Then from every client: reached only past the count above, so one client spends five of it at most.
+  if ((await counted(database, addressKey, now, HOUR_MS)).count > SIGN_IN_LINKS_PER_ADDRESS) {
     log.warn('sign-in link refused: the address has had its links for the hour');
     return;
   }

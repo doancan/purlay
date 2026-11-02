@@ -21,6 +21,7 @@ import type Mail from 'nodemailer/lib/mailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import type { Config } from './config';
 import type { Logger } from './logging';
+import type { Counter } from './metrics';
 
 /** One message: to one address, in plain text and HTML. */
 export interface MailMessage {
@@ -74,7 +75,8 @@ export const transportOptions = (
   };
 };
 
-const escapeHtml = (value: string): string =>
+/** Text made safe inside HTML, attribute values included. */
+export const escapeHtml = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
@@ -140,7 +142,7 @@ export const smtpMailer = (
 const FLUSH_BOUND_MS = 2_000;
 
 /** A relay's error code, `EENVELOPE` and its like; nothing else of the error. */
-const codeOf = (error: unknown): string => {
+export const codeOf = (error: unknown): string => {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : 'unknown';
 };
@@ -209,12 +211,15 @@ export interface MailInFlight {
   readonly flush: (boundMs?: number) => Promise<void>;
   /** The set the outboxes add to; theirs to write, nobody else's. */
   readonly running: Set<Promise<void>>;
+  /** Where a letter the relay did not take is counted, whichever relay it was (D-221); absent, it is not. */
+  readonly failures?: Counter;
 }
 
-export const mailInFlight = (log: Logger): MailInFlight => {
+export const mailInFlight = (log: Logger, failures?: Counter): MailInFlight => {
   const running = new Set<Promise<void>>();
   return {
     running,
+    ...(failures === undefined ? {} : { failures }),
     flush: async (boundMs = FLUSH_BOUND_MS): Promise<void> => {
       await flushRunning(running, log, boundMs, LEFT_AT_SHUTDOWN);
     },
@@ -232,6 +237,7 @@ export const outbox = (send: SendMail, log: Logger, shared?: MailInFlight): Outb
         // Not the caller's to know: they were answered already, the same whatever happened. Said
         // here, by what it was for — never to whom, never what it said.
         .catch((error: unknown) => {
+          shared?.failures?.inc({});
           // The relay's code only: its words can quote the recipient back.
           log.error('mail could not be sent', {
             purpose,

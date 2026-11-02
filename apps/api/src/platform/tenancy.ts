@@ -85,3 +85,46 @@ export const requireWorkspaceMembership = async (
 
   return { workspaceId, userId, role: row.role, [tenancy]: true };
 };
+
+/** Not exported either: the deletion's own capability, apart from the workspace's. */
+const deletion: unique symbol = Symbol('DeletionContext');
+
+/**
+ * A membership as a workspace's deletion is asked for and taken back under (D-242). Not a
+ * `WorkspaceContext`: it is minted for a workspace the guard above refuses, and nothing else can be
+ * reached with it.
+ */
+export interface DeletionContext {
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly role: UserRole;
+  readonly [deletion]: true;
+}
+
+/**
+ * Verifies membership of a workspace that is live **or whose deletion was asked for** and is not yet
+ * erased — the one state the guard above refuses on purpose, since its owners must still be able to take
+ * it back, and a repeated request must answer as the first did (D-33). The deletion's two routes are its
+ * only callers. Once the erasure is done its memberships are gone with everything else, and this is the
+ * same `404` as any stranger's.
+ */
+export const requireDeletionMembership = async (
+  executor: Executor,
+  userId: string,
+  workspaceId: string,
+): Promise<DeletionContext> => {
+  if (!Value.Check(Uuid, workspaceId)) throw workspaceNotFound();
+
+  const row = await executor
+    .selectFrom('workspace_members')
+    .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
+    .select('workspace_members.role')
+    .where('workspace_members.workspace_id', '=', workspaceId)
+    .where('workspace_members.user_id', '=', userId)
+    .where('workspaces.purged_at', 'is', null)
+    .executeTakeFirst();
+
+  if (row === undefined) throw workspaceNotFound();
+
+  return { workspaceId, userId, role: row.role, [deletion]: true };
+};

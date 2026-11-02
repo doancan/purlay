@@ -71,4 +71,35 @@ test.describe('search', () => {
     await expect(page.getByText(`the rollback plan for ${word}`)).toBeVisible();
     await expect(page.getByText(`an unrelated note on ${word}`)).toHaveCount(0);
   });
+
+  test('operators typed with the words narrow the search, and a name nobody has is said (D-224)', async ({
+    page,
+    signIn,
+    room,
+    tenant,
+    api,
+  }) => {
+    const here = await room({ members: ['dogancan', 'carol'] });
+    const there = await room({ members: ['dogancan', 'carol'] });
+    const word = here.name;
+    await api('carol').say(here.id, `the rollback plan for ${word}`);
+    await api('carol').say(there.id, `an unrelated note on ${word}`);
+
+    await signIn();
+    await page.goto(`/w/${tenant.slug}/search`);
+    const field = page.getByRole('searchbox', { name: 'Search messages' });
+    await field.fill(`in:#${here.name} from:@carol ${word}`);
+    await field.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`in=${here.id}`));
+    await expect(page.getByText(`the rollback plan for ${word}`)).toBeVisible();
+    await expect(page.getByText(`an unrelated note on ${word}`)).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Where' })).toHaveValue(here.id);
+    await expect(field).toHaveValue(word);
+
+    await field.fill(`in:#nowhere-${word} ${word}`);
+    await field.press('Enter');
+    await expect(
+      page.getByText(`“in:#nowhere-${word}” was searched for as words`, { exact: false }),
+    ).toBeVisible();
+  });
 });

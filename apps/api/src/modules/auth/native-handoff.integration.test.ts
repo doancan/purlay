@@ -9,7 +9,12 @@
  */
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { tokenDigest } from '../../platform/tokens';
@@ -28,11 +33,11 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const NOW = new Date('2026-10-26T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -400,6 +405,28 @@ describe('integration: what is refused, and that every refusal is the same', () 
       .execute();
     const before = await sessionsOf(userId);
     expect(await exchange(code, verifier)).toBeUndefined();
+    expect(await sessionsOf(userId)).toBe(before);
+  });
+
+  test('a code whose person has since been suspended: refused, and said so (D-233)', async () => {
+    const reasons: string[] = [];
+    const { userId } = await aSignedInPerson();
+    const { verifier, challenge } = aVerifier();
+    const { code } = await authorize(userId, challenge);
+    await cloned.db
+      .updateTable('users')
+      .set({ suspended_at: NOW })
+      .where('id', '=', userId)
+      .execute();
+    const before = await sessionsOf(userId);
+    expect(
+      await exchangeNativeCode(cloned.db, clock, session, {
+        code,
+        verifier,
+        refused: (why) => reasons.push(why),
+      }),
+    ).toBeUndefined();
+    expect(reasons).toEqual(['suspended']);
     expect(await sessionsOf(userId)).toBe(before);
   });
 

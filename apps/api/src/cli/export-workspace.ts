@@ -13,10 +13,13 @@ import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { createLogger } from '../platform/logging';
+import { sendAuditLinesTo } from '../modules/audit/lines';
 import { storeFor } from '../platform/storage';
 
 const config = loadConfig(process.env);
 const log = createLogger({ level: config.LOG_LEVEL });
+// Every entry this process writes to the trail is also a line of its log, ids only (D-222).
+sendAuditLinesTo(log);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 
 try {

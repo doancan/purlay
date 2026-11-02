@@ -121,6 +121,31 @@ if (files !== null) {
   rmSync(files, { recursive: true, force: true });
   say(`attachments are kept in ${files}`);
 }
+// GitHub's API is not reachable from here either: a token saved on the Integrations page is checked
+// against this stand-in, which knows every token and says nothing of its scopes (D-23, amended).
+// It answers the newest release About asks for (D-248), a version far ahead of any this repository will
+// make so that About always has a newer one to name, and nothing else, so a card is a plain link here as
+// it was.
+const github = Bun.serve({
+  port: 0,
+  hostname: '127.0.0.1',
+  fetch: (request) => {
+    const path = new URL(request.url).pathname;
+    if (path === '/rate_limit' && request.headers.has('authorization')) {
+      return Response.json({ resources: {} });
+    }
+    if (path === '/repos/doancan/purlay/releases/latest') {
+      return Response.json({
+        tag_name: 'v99.0.0',
+        html_url: 'https://github.com/doancan/purlay/releases/tag/v99.0.0',
+        published_at: '2026-11-01T09:00:00Z',
+        draft: false,
+        prerelease: false,
+      });
+    }
+    return Response.json({ message: 'Not Found' }, { status: 404 });
+  },
+});
 say(`starting the API on :${String(apiPort)}…`);
 const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
@@ -133,6 +158,7 @@ const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], 
     DATABASE_URL: demoUrl,
     GITHUB_CLIENT_ID: 'demo',
     GITHUB_CLIENT_SECRET: 'demo',
+    GITHUB_API_URL: `http://127.0.0.1:${String(github.port)}`,
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
     // A sandbox: the browser tests' outsiders make workspaces of their own (D-124, D-155).
     WORKSPACE_CREATORS: '*',
@@ -158,6 +184,7 @@ const ready = async (): Promise<boolean> => {
 };
 if (!(await ready())) {
   api.kill();
+  await github.stop(true);
   throw new Error('the API did not become ready');
 }
 
@@ -179,6 +206,7 @@ say('  Ctrl-C stops everything. The database is thrown away on the next start.')
 
 const stop = async (): Promise<void> => {
   api.kill();
+  await github.stop(true);
   await front.stop(true);
   rmSync(directory, { recursive: true, force: true });
   process.exit(0);

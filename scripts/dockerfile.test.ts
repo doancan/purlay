@@ -55,6 +55,24 @@ describe('the Dockerfile', () => {
   test('is copied from explicit paths, never from the whole context', () => {
     expect(dockerfile).not.toMatch(/^COPY\s+\.\s/m);
   });
+
+  // The client bundles each release's notes with a glob over `docs/changelog` (D-248): a glob that finds no
+  // file is not an error, so a stage without them builds a client that says nothing after an update.
+  test('the client stage carries the release notes its bundle is made of, and the runtime stage does not', () => {
+    const stages = dockerfile.split(/^FROM\s/gm);
+    const client = stages.find((stage) => /\sAS client\b/.test(stage.split('\n')[0] ?? ''));
+    expect(client).toContain('COPY docs/changelog ./docs/changelog\n');
+    expect(client?.indexOf('COPY docs/changelog')).toBeLessThan(
+      client?.indexOf('RUN bun run --cwd apps/web build') ?? -1,
+    );
+    expect(stages.at(-1)).not.toContain('docs/changelog');
+  });
+
+  test('the context lets the release notes through, and only them of the documents', () => {
+    expect(dockerignore.split('\n')).toContain('docs');
+    expect(dockerignore.split('\n')).toContain('!docs/changelog');
+    expect(dockerignore.split('\n')).not.toContain('!docs');
+  });
 });
 
 /** Every workspace in the repository: each directory under `apps/` and `packages/` with a manifest. */

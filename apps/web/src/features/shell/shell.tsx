@@ -15,10 +15,12 @@ import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
 import { ConnectionBar } from './connection-bar';
+import { ReleaseNotesOnce } from '../about/release-notes-once';
 import { LostSends } from './lost-sends';
 import { ScreenBoundary } from './failure-boundary';
 import { UpdateBar } from './update-bar';
 import { DeepWorkBar, DeepWorkProvider } from './deep-work';
+import { ScheduledDeletions } from './scheduled-deletions';
 import { GlobalKeys } from './global-keys';
 import { NotFound } from './not-found';
 import { NavProvider } from './nav';
@@ -52,6 +54,7 @@ export const Shell = ({
                 <PresenceReader />
                 <AttentionReporter />
                 <LostSends />
+                <ReleaseNotesOnce />
                 <NavProvider>
                   <div className="flex h-screen bg-surface-100 text-ink">
                     <SidebarSlot />
@@ -59,6 +62,7 @@ export const Shell = ({
                       <ConnectionBar />
                       <UpdateBar />
                       <DeepWorkBar />
+                      <ScheduledDeletions />
                       <Main className="flex min-h-0 flex-1 flex-col">
                         <ScreenBoundary>{children}</ScreenBoundary>
                       </Main>

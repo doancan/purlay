@@ -126,6 +126,8 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),
     // The details an owner opens list the channel's repository feeds (D-134): none, unless a test says.
     githubFeeds: () => Promise.resolve([]),
+    // And its incoming webhooks beside them (D-245): none, unless a test says.
+    incomingWebhooks: () => Promise.resolve([]),
     ...(options.channels === undefined
       ? {}
       : { channels: (): Promise<Channel[]> => Promise.resolve(options.channels ?? []) }),

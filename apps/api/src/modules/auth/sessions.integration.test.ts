@@ -20,6 +20,8 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { makeSignature } from 'better-auth/crypto';
 import { fixedClock } from '../../platform/clock';
@@ -255,11 +257,11 @@ describe('integration: every way the library ends a session', () => {
   beforeAll(async () => {
     cloned = await cloneIntegrationDatabase();
     auth = aTestAuth(cloned.db, { baseUrl: ORIGIN });
-  });
+  }, CLONE_HOOK_MS);
 
   afterAll(async () => {
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   const signIn = async (email: string, password = PASSWORD): Promise<string> =>
     cookieFrom(await auth.passwordSignIn(email, password, new Headers()));

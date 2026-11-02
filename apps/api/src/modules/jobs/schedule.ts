@@ -10,13 +10,20 @@
  */
 import { DAY_MS, HOUR_MS, type Clock } from '../../platform/clock';
 
+/** A quarter of an hour: a quarter-hour slot's `minute` is its offset in each, 0 to 14. */
+const QUARTER_MS = 15 * 60 * 1000;
+
 export type Slot = { readonly job: string; readonly minute: number } & (
-  { readonly every: 'hour' } | { readonly every: 'day'; readonly hour: number }
+  | { readonly every: 'quarter-hour' }
+  | { readonly every: 'hour' }
+  | { readonly every: 'day'; readonly hour: number }
 );
 
 /** The jobs, at quiet times and apart, so a slow one does not overlap the next. */
 export const PLAN: readonly Slot[] = [
   { job: 'sweep:sessions', every: 'hour', minute: 15 },
+  // Before the night's other work, so what a deleted workspace held is not purged or counted again (D-242).
+  { job: 'purge:workspaces', every: 'day', hour: 2, minute: 0 },
   // Before the storage count is checked, so a night's purge is in what it checks (D-139 §2).
   { job: 'purge:retention', every: 'day', hour: 2, minute: 30 },
   { job: 'sweep:orphans', every: 'day', hour: 3, minute: 0 },
@@ -28,6 +35,9 @@ export const PLAN: readonly Slot[] = [
   { job: 'sweep:exports', every: 'hour', minute: 40 },
   // Hourly, so a file the store refused is tried again within the hour, not the next night (D-141).
   { job: 'sweep:deletions', every: 'hour', minute: 50 },
+  // Every quarter hour, at :07, :22, :37 and :52 — clear of every other slot — so a letter about what waited
+  // unread leaves within a quarter hour of its delay (D-240).
+  { job: 'mail:missed', every: 'quarter-hour', minute: 7 },
 ];
 
 /** The first instant after `after` at which the slot is due. */
@@ -36,7 +46,8 @@ export const nextRun = (slot: Slot, after: Date): Date => {
   candidate.setUTCSeconds(0, 0);
   candidate.setUTCMinutes(slot.minute);
   if (slot.every === 'day') candidate.setUTCHours(slot.hour);
-  const step = slot.every === 'hour' ? HOUR_MS : DAY_MS;
+  const step =
+    slot.every === 'quarter-hour' ? QUARTER_MS : slot.every === 'hour' ? HOUR_MS : DAY_MS;
   while (candidate.getTime() <= after.getTime()) candidate.setTime(candidate.getTime() + step);
   return candidate;
 };

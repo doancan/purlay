@@ -17,7 +17,7 @@ import {
 export const DELIVERIES_AT_ONCE = 8;
 
 /** How long a delivery's body may take to arrive: GitHub sends it at once; a trickle is not GitHub. */
-const DELIVERY_READ_MS = 10_000;
+export const DELIVERY_READ_MS = 10_000;
 
 export interface WebhookRouteDependencies extends WebhookDependencies {
   /** Whether this address may knock once more: its own bucket, before anything is looked up. */
@@ -31,8 +31,11 @@ export interface WebhookRouteDependencies extends WebhookDependencies {
 const busy = (): AppError =>
   new AppError({ code: 'RATE_LIMITED', message: 'Too many deliveries. Slow down.' });
 
-/** The body, or a refusal once the deadline passes first. */
-const readWithin = async (request: Request, deadline: Promise<void>): Promise<Uint8Array> => {
+/** The body, or a refusal once the deadline passes first: a feed's and the App's (D-246). */
+export const readWithin = async (
+  request: Request,
+  deadline: Promise<void>,
+): Promise<Uint8Array> => {
   const late = Symbol('late');
   const read = await Promise.race([request.arrayBuffer(), deadline.then(() => late)]);
   if (read === late) throw busy();

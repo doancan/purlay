@@ -49,7 +49,7 @@ import {
 import type { Api } from '../data/api';
 import {
   channelAdded,
-  channelRenamed,
+  channelUpdated,
   incidentChanged,
   channelStateChanged,
   channelsRevoked,
@@ -102,7 +102,7 @@ export interface PendingMessage {
   readonly attachments: readonly Attachment[];
 }
 
-export interface RealtimeState {
+interface RealtimeState {
   readonly status: ConnectionStatus;
   /**
    * The connection has been open at least once on this page. Kept here, where the status changes,
@@ -145,7 +145,7 @@ export interface RealtimeState {
   readonly lost: { readonly count: number; readonly seq: number } | null;
 }
 
-export interface Outgoing {
+interface Outgoing {
   readonly channelId: string;
   readonly content: string;
   readonly parentId?: string | undefined;
@@ -602,6 +602,7 @@ export const createEngine = (options: EngineOptions): Engine => {
             // A file sent, or its message deleted, in the gap is in no frame either (D-129).
             readAgain(client, keys.files(channelId));
             readAgain(client, keys.pins(channelId));
+            readAgain(client, keys.bookmarks(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(client, families.thread);
@@ -661,7 +662,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       case 'CHANNEL_UPDATED':
         if (isNewest('channel', frame.data.channelId, frame.version)) {
-          channelRenamed(client, frame.data.channelId, frame.data);
+          channelUpdated(client, frame.data.channelId, frame.data);
         }
         return;
       case 'CHANNEL_ADDED': {
@@ -705,6 +706,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'PINS_UPDATED':
         // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
         readAgain(client, keys.pins(frame.data.channelId));
+        return;
+      case 'BOOKMARKS_UPDATED':
+        // As pins (D-218): no state in the frame, the channel's bookmarks are read again.
+        readAgain(client, keys.bookmarks(frame.data.channelId));
         return;
       case 'INCIDENT_UPDATED':
         incidentChanged(client, frame.data.channelId);

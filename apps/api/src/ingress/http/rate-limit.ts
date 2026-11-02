@@ -69,6 +69,13 @@ export const WEBHOOK_BUDGET: RateBudget = { perSecond: 20, burst: 200 };
 export const WEBHOOK_FEED_BUDGET: RateBudget = { perSecond: 2, burst: 100 };
 
 /**
+ * Posts per incoming webhook, once its secret held (D-245): thirty at once — a deploy's steps, a burst of
+ * alerts — then one a second. Charged after the secret, so nobody but the hook's holder spends it; before
+ * it, the address is charged to `WEBHOOK_BUDGET`, which GitHub's deliveries share. Provisional (O-4).
+ */
+export const INCOMING_WEBHOOK_BUDGET: RateBudget = { perSecond: 1, burst: 30 };
+
+/**
  * The setup's routes per client (a /64 for IPv6), before anything is weighed (D-179 §4.1): thirty at
  * once, then one every thirty seconds — thirty in fifteen minutes. A wizard walked by one person asks a
  * few each step. The server's own lock on wrong codes can be kept shut by anybody who reaches the
@@ -98,6 +105,9 @@ const PASSPORT_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
  * client from guessing at codes. Provisional (O-4).
  */
 export const NATIVE_TOKEN_BUDGET: RateBudget = { perSecond: 1 / 90, burst: 10 };
+
+/** A missed-mail letter's stop link, opened without a session (D-240): charged to `AUTH_BUDGET`. */
+const MAIL_STOP_ROUTE = '/api/missed-mail/stop';
 
 /** The route that spends a native sign-in code, charged to `NATIVE_TOKEN_BUDGET`. */
 const NATIVE_TOKEN_ROUTE = '/api/native/token';
@@ -139,6 +149,9 @@ const SETUP_ROUTES: ReadonlyMap<string, 'auth' | 'setup' | 'setupSecrets'> = new
 const COSTLY_READS: ReadonlySet<string> = new Set([
   '/api/images',
   '/api/integrations/github/unfurl',
+  // The newest release is asked of GitHub once in six hours for everybody (D-248), but it is a call the
+  // server may make on a reader's behalf, so it is charged as one.
+  '/api/releases/latest',
 ]);
 
 /** The route that makes an invitation passport, charged to `PASSPORT_BUDGET`. */
@@ -259,6 +272,14 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
     // Asked by a client before anybody has signed in, as the sign-in screen asks the setup's status: it is
     // sign-in traffic, charged to the client's address (D-186).
     if (method === 'GET' && pathname === '/api/client') {
+      const address = clientAddress(peer, request.headers, trustProxy);
+      return (await auth.consume(limitKeyFor(address)))
+        ? undefined
+        : retryAfterSeconds(budgets.auth);
+    }
+
+    // Public, so charged to the client as sign-in traffic, before the link in the body is looked at (D-240).
+    if (method === 'POST' && pathname === MAIL_STOP_ROUTE) {
       const address = clientAddress(peer, request.headers, trustProxy);
       return (await auth.consume(limitKeyFor(address)))
         ? undefined

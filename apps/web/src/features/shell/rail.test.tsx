@@ -48,13 +48,18 @@ const root = (n: number): Message =>
   });
 
 describe('the rail', () => {
-  test('holds the switcher and the five places, each named, and Settings at its foot (D-146)', async () => {
+  test('holds the six places, each named, and Settings at its foot (D-146) — not the workspace (D-206)', async () => {
     const view = await open();
     const rail = within(places(view));
-    expect(rail.getByRole('button', { name: 'Switch workspace' })).toBeDefined();
+    // The workspace is drawn once, at the head of the sidebar; the rail is the places.
+    expect(rail.queryByRole('button', { name: /Switch workspace/ })).toBeNull();
     expect(
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
-    ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search', 'Saved', 'Settings']);
+    ).toEqual(['Channels', 'Open questions', 'Search', 'Saved', 'Drafts and sent', 'Settings']);
+    // The inbox opens its panel (D-208): a button, between Channels and Open questions.
+    expect(rail.getAllByRole('button').map((button) => button.textContent.trim())).toEqual([
+      'Inbox',
+    ]);
     // A link to a page, not a menu of its own.
     expect(rail.queryByRole('button', { name: 'Settings' })).toBeNull();
   });
@@ -70,7 +75,7 @@ describe('the rail', () => {
     const marked = (): string[] =>
       within(places(view))
         .getAllByRole('link')
-        .filter((link) => link.getAttribute('aria-current') === 'page')
+        .filter((link) => link.hasAttribute('aria-current'))
         .map((link) => link.textContent.trim().replace(/\d+$/, ''));
     expect(marked()).toEqual(['Settings']);
     await person().click(view.getByRole('link', { name: 'Preferences' }));
@@ -78,14 +83,20 @@ describe('the rail', () => {
     expect(marked()).toEqual(['Settings']);
   });
 
-  test('the workspace tile shows its initials and opens the switcher', async () => {
+  test('the workspace’s one door is its mark and name, outside the rail, and opens the switcher', async () => {
     const view = await open();
-    const tile = within(places(view)).getByRole('button', { name: 'Switch workspace' });
-    // The initials are what is seen; the name, read only by a screen reader, is what it does.
-    expect(tile.querySelector('[aria-hidden="true"]')?.textContent).toBe('AE');
-    await person().click(tile);
+    const doors = view.getAllByRole('button', { name: /Switch workspace/ });
+    expect(doors).toHaveLength(1);
+    const [door] = doors as [HTMLElement];
+    expect(places(view).contains(door)).toBe(false);
+    // The name is seen and heard first; the initials beside it are a picture, hidden from a screen reader.
+    expect(door.querySelector('[aria-hidden="true"]')?.textContent).toBe('AE');
+    expect(door.textContent).toContain('acme-eng');
+    await person().click(door);
+    expect(view.getByRole('menuitemradio', { name: 'acme-eng' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
     const items = view.getAllByRole('menuitem').map((item) => item.textContent);
-    expect(items).toContain('acme-eng');
     // Signing out is the person's, in the account menu, not the workspace's (D-124).
     expect(items).not.toContain('Sign out');
   });
@@ -96,16 +107,29 @@ describe('the rail', () => {
     ['/w/acme/questions', 'Open questions'],
     ['/w/acme/search', 'Search'],
     ['/w/acme/saved', 'Saved'],
+    ['/w/acme/drafts', 'Drafts and sent'],
   ])('on %s, %s is the current page and nothing else is', async (path, current) => {
     const view = await open(
       aSignedInApi({ saved: () => Promise.resolve({ data: [], nextCursor: null }) }),
       path,
     );
-    const marked = within(places(view))
-      .getAllByRole('link')
-      .filter((link) => link.getAttribute('aria-current') === 'page')
-      .map((link) => link.textContent.trim().replace(/\d+$/, ''));
+    // Links and the inbox's button alike: whichever says where the person is.
+    const marked = [...places(view).querySelectorAll('[aria-current]')].map((link) =>
+      link.textContent.trim().replace(/\d+$/, ''),
+    );
     expect(marked).toEqual([current]);
+  });
+
+  test('Channels marks a section, not a page: the open channel’s row is the page', async () => {
+    const view = await open();
+    expect(
+      within(places(view)).getByRole('link', { name: 'Channels' }).getAttribute('aria-current'),
+    ).toBe('true');
+    // In the navigation; the channel's own Feed tab is a page of the channel, and says so there.
+    const pages = [places(view), view.getByRole('complementary', { name: 'Workspace' })]
+      .flatMap((region) => [...region.querySelectorAll('[aria-current="page"]')])
+      .map((link) => link.textContent.trim());
+    expect(pages).toEqual(['api']);
   });
 
   test('Channels goes to the workspace, which opens the channel you were last in', async () => {
@@ -113,6 +137,15 @@ describe('the rail', () => {
     expect(within(places(view)).getByRole('link', { name: 'Channels' }).getAttribute('href')).toBe(
       '/w/acme',
     );
+  });
+
+  test('Channels takes you back to the channel you were last in, not the first in the list', async () => {
+    const view = await open(aSignedInApi(), `/w/acme/c/${IDS.deploys}`);
+    await person().click(within(places(view)).getByRole('link', { name: 'Saved' }));
+    await settle();
+    await person().click(within(places(view)).getByRole('link', { name: 'Channels' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
   });
 });
 
@@ -126,7 +159,7 @@ describe('the inbox', () => {
         channels: () => Promise.resolve([{ ...first, state: waiting }, ...rest]),
       }),
     );
-    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent).toContain(
+    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent).toContain(
       'unread',
     );
   });
@@ -147,7 +180,7 @@ describe('the inbox', () => {
       }),
     );
     // The same channels, out of Deep Work, carry the dot: the test above.
-    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
+    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent.trim()).toBe(
       'Inbox',
     );
   });
@@ -163,7 +196,7 @@ describe('the inbox', () => {
           ]),
       }),
     );
-    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
+    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent.trim()).toBe(
       'Inbox',
     );
   });
@@ -231,10 +264,10 @@ describe('the open questions', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab runs the tile, the five places and Settings, then the sidebar from the workspace’s name', async () => {
+  test('Tab runs the six places and Settings, then the sidebar from the workspace’s name', async () => {
     const view = await open();
     act(() => {
-      within(places(view)).getByRole('button', { name: 'Switch workspace' }).focus();
+      within(places(view)).getByRole('link', { name: 'Channels' }).focus();
     });
     const names: string[] = [];
     for (let step = 0; step < 9; step++) {
@@ -245,14 +278,15 @@ describe('the keyboard', () => {
       );
     }
     expect(names).toEqual([
-      'Channels',
       'Inbox',
       'Open questions',
       'Search',
       'Saved',
+      'Drafts and sent',
       'Settings',
-      // The tile's two letters come first in its text and are hidden from a screen reader, which hears the name.
-      'AEacme-eng',
+      // The mark's two letters come first in its text and are hidden from a screen reader, which hears
+      // the name and then what the button does; the card's line under the name is seen, not heard.
+      expect.stringMatching(/^AEacme-eng.* Switch workspace$/) as unknown as string,
       // Beside the name, before the jump field: the person's own arrangement of the column (D-195).
       'Sidebar options',
       expect.stringMatching(/^Jump to…/) as unknown as string,

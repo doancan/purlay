@@ -3,12 +3,16 @@
  * `@purlay/types`): read here as the person types, never written a second time — the hints are what
  * that function says of the password so far, and the server says it again.
  */
-import { PASSWORD_MAX_LENGTH, passwordProblem, type PasswordProblem } from '@purlay/types';
+import { DISPLAY_NAME_MAX, EMAIL_MAX, passwordProblem, type PasswordProblem } from '@purlay/types';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
-import { PASSWORD_PROBLEMS, PasswordRules } from '../../password/password-rules';
+import {
+  PASSWORD_FIELD_MAX,
+  PASSWORD_PROBLEMS,
+  PasswordRules,
+} from '../../password/password-rules';
 import { isSetupFailure } from '../client';
 import { useSetup } from '../context';
 import { Actions, FailureNote, Note, StepHeader, useHeadingFocusOnChange } from '../parts';
@@ -137,7 +141,7 @@ export const AdminStep = ({ state, onBack, onNext }: StepProps): React.JSX.Eleme
           label={t('setup.admin.name')}
           value={name}
           autoComplete="name"
-          maxLength={512}
+          maxLength={DISPLAY_NAME_MAX}
           {...(errors.name === undefined ? {} : { error: errors.name })}
           onChange={(event) => {
             setName(event.target.value);
@@ -150,7 +154,7 @@ export const AdminStep = ({ state, onBack, onNext }: StepProps): React.JSX.Eleme
           value={email}
           autoComplete="email"
           spellCheck={false}
-          maxLength={254}
+          maxLength={EMAIL_MAX}
           {...(errors.email === undefined ? {} : { error: errors.email })}
           onChange={(event) => {
             setEmail(event.target.value);
@@ -166,7 +170,7 @@ export const AdminStep = ({ state, onBack, onNext }: StepProps): React.JSX.Eleme
                 value={password}
                 autoComplete="new-password"
                 spellCheck={false}
-                maxLength={PASSWORD_MAX_LENGTH + 64}
+                maxLength={PASSWORD_FIELD_MAX}
                 {...(errors.password === undefined ? {} : { error: errors.password })}
                 onChange={(event) => {
                   setPassword(event.target.value);

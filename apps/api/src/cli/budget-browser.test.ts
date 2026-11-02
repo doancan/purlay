@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HISTORY_LENGTH, historyOf, judge, main, measured } from './budget-browser';
+import { HISTORY_LENGTH, historyOf, judge, main, measureAlone, measured } from './budget-browser';
 
 const folderWith = (files: Record<string, unknown>): string => {
   const folder = mkdtempSync(join(tmpdir(), 'purlay-budget-browser-'));
@@ -169,5 +169,187 @@ describe('the command', () => {
     expect(kept.history.at(-1)).toMatchObject({
       'channel switch, median': 140 + HISTORY_LENGTH + 2,
     });
+  });
+});
+
+describe('a regression, measured again alone (D-227)', () => {
+  const keptWith = async (channelSwitch: number): Promise<string> => {
+    const keep = join(mkdtempSync(join(tmpdir(), 'purlay-budget-keep-')), 'browser.json');
+    const run = {
+      'cold load, median of five': 400,
+      'keystroke to the document, median': 6,
+      'keystroke to the next frame, median': 18,
+      'channel switch, median': channelSwitch,
+    };
+    await Bun.write(keep, JSON.stringify({ history: [run, run, run] }));
+    return keep;
+  };
+  const slowerBy = (p50: number): Record<string, unknown> => ({
+    ...wide('chromium-dark'),
+    'channel-switch-chromium-dark.json': { p50 },
+  });
+  /** What the browser tests write when they are run again: these files, into the folder read. */
+  const measuringAgain =
+    (folder: string, files: Record<string, unknown> | null, code = 0) =>
+    (project: string): Promise<number> => {
+      expect(project).toBe('chromium-dark');
+      for (const [name, content] of Object.entries(files ?? {})) {
+        writeFileSync(join(folder, name), JSON.stringify(content));
+      }
+      return Promise.resolve(code);
+    };
+  const historyIn = async (keep: string): Promise<Record<string, number>[]> =>
+    (JSON.parse(await Bun.file(keep).text()) as { history: Record<string, number>[] }).history;
+
+  test('passes when the measurement taken again holds, and keeps that one rather than the first', async () => {
+    const keep = await keptWith(140);
+    const folder = folderWith(slowerBy(300));
+    const result = await main(
+      ['--project', 'chromium-dark', '--from', folder, '--keep', keep, '--remeasure'],
+      measuringAgain(folder, slowerBy(150)),
+    );
+    expect(result.code).toBe(0);
+    expect(result.lines).toEqual([
+      'cold load, median of five: 400.0 ms, was 400.0 ms',
+      'keystroke to the document, median: 6.0 ms, was 6.0 ms',
+      'keystroke to the next frame, median: 18.0 ms, was 18.0 ms',
+      'channel switch, median: 300.0 ms, was 140.0 ms — REGRESSED',
+      'first measurement regressed; measured again alone:',
+      'cold load, median of five: 400.0 ms, was 400.0 ms',
+      'keystroke to the document, median: 6.0 ms, was 6.0 ms',
+      'keystroke to the next frame, median: 18.0 ms, was 18.0 ms',
+      'channel switch, median: 150.0 ms, was 140.0 ms',
+    ]);
+    const history = await historyIn(keep);
+    expect(history).toHaveLength(4);
+    expect(history.at(-1)).toMatchObject({ 'channel switch, median': 150 });
+  });
+
+  test('fails a regression that repeats, and keeps nothing', async () => {
+    const keep = await keptWith(140);
+    const before = await Bun.file(keep).text();
+    const folder = folderWith(slowerBy(300));
+    const result = await main(
+      ['--project', 'chromium-dark', '--from', folder, '--keep', keep, '--remeasure'],
+      measuringAgain(folder, slowerBy(290)),
+    );
+    expect(result.code).toBe(1);
+    expect(result.lines.at(-1)).toBe('channel switch, median: 290.0 ms, was 140.0 ms — REGRESSED');
+    expect(await Bun.file(keep).text()).toBe(before);
+  });
+
+  test('fails when measuring again fails, rather than passing on the measurement it did not take', async () => {
+    const keep = await keptWith(140);
+    const before = await Bun.file(keep).text();
+    const folder = folderWith(slowerBy(300));
+    const result = await main(
+      ['--project', 'chromium-dark', '--from', folder, '--keep', keep, '--remeasure'],
+      measuringAgain(folder, slowerBy(150), 1),
+    );
+    expect(result.code).toBe(1);
+    expect(result.lines.at(-1)).toContain('measuring again failed (exit 1)');
+    expect(await Bun.file(keep).text()).toBe(before);
+  });
+
+  test('fails when measuring again wrote nothing, and does not read the first measurement twice', async () => {
+    const keep = await keptWith(140);
+    const folder = folderWith(slowerBy(300));
+    const result = await main(
+      ['--project', 'chromium-dark', '--from', folder, '--keep', keep, '--remeasure'],
+      measuringAgain(folder, null),
+    );
+    expect(result.code).toBe(1);
+    expect(result.lines.at(-1)).toContain('nothing was measured again');
+  });
+
+  test('fails a number that measuring again did not take, as the first judgement would', async () => {
+    const keep = await keptWith(140);
+    const folder = folderWith(slowerBy(300));
+    const withoutTheSwitch = Object.fromEntries(
+      Object.entries(slowerBy(150)).filter(([name]) => !name.startsWith('channel-switch')),
+    );
+    const result = await main(
+      ['--project', 'chromium-dark', '--from', folder, '--keep', keep, '--remeasure'],
+      measuringAgain(folder, withoutTheSwitch),
+    );
+    expect(result.code).toBe(1);
+    expect(result.lines.at(-1)).toBe(
+      'channel switch, median: not measured, was 140.0 ms — MISSING',
+    );
+  });
+
+  test('without --remeasure fails on the first regression, as before, and measures nothing again', async () => {
+    const keep = await keptWith(140);
+    const folder = folderWith(slowerBy(300));
+    let measuredAgain = false;
+    const result = await main(
+      ['--project', 'chromium-dark', '--from', folder, '--keep', keep],
+      () => {
+        measuredAgain = true;
+        return Promise.resolve(0);
+      },
+    );
+    expect(result.code).toBe(1);
+    expect(measuredAgain).toBe(false);
+    expect(result.lines.at(-1)).toBe('channel switch, median: 300.0 ms, was 140.0 ms — REGRESSED');
+  });
+
+  test('does not measure again a run that passed', async () => {
+    const keep = await keptWith(140);
+    let measuredAgain = false;
+    const result = await main(
+      [
+        '--project',
+        'chromium-dark',
+        '--from',
+        folderWith(slowerBy(150)),
+        '--keep',
+        keep,
+        '--remeasure',
+      ],
+      () => {
+        measuredAgain = true;
+        return Promise.resolve(0);
+      },
+    );
+    expect(result.code).toBe(0);
+    expect(measuredAgain).toBe(false);
+  });
+});
+
+test('malformed JSON and missing nested measurements are refused', async () => {
+  const folder = folderWith({ 'keystroke-to-paint-chromium-dark.json': { toDocument: null } });
+  const missing = await measured(folder, 'chromium-dark').then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(missing).toBeInstanceOf(Error);
+  writeFileSync(join(folder, 'keystroke-to-paint-chromium-dark.json'), '{broken');
+  const malformed = await measured(folder, 'chromium-dark').then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(malformed).toBeInstanceOf(SyntaxError);
+});
+
+describe('measuring again alone (D-227)', () => {
+  test('runs only the measuring tests of that project, on one worker, and answers their exit code', async () => {
+    const asked: { command: string[]; env: Record<string, string | undefined> }[] = [];
+    const code = await measureAlone('chromium-light', (command, options) => {
+      asked.push({ command, env: options.env });
+      return { exited: Promise.resolve(3) };
+    });
+    expect(code).toBe(3);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.command).toEqual([
+      'bun',
+      '--no-env-file',
+      'run',
+      'test:e2e',
+      '--',
+      '--workers=1',
+    ]);
+    expect(asked[0]?.env['PURLAY_E2E_PROJECT']).toBe('chromium-light');
+    expect(asked[0]?.env['PURLAY_E2E_PERFORMANCE']).toBe('only');
   });
 });

@@ -5,7 +5,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { messageId, type SearchQuery } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireChannelById, visibleChannelIds } from '../../platform/channels';
@@ -51,7 +51,7 @@ const search = async (
   room: Room,
   userId: string,
   q: string,
-  extra: { before?: string; limit?: number; channelId?: string; senderId?: string } = {},
+  extra: Omit<SearchQuery, 'q'> = {},
 ): Promise<{ contents: string[]; nextCursor: string | null }> => {
   const context = await requireWorkspaceMembership(db, userId, room.workspaceId);
   const page = await searchIn(db, context, await visibleChannelIds(db, context), {
@@ -79,6 +79,91 @@ const noBus: EventBus = {
 };
 
 describe('integration: what is found', () => {
+  test('filters work alone and intersect: dates, status, questions, code, files and exact repositories', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = member(room, 'alice');
+      const code = await post(db, room, 'alice', '```ts\nconst retry = 4;\n```');
+      const file = await post(db, room, 'alice', 'Attachment explanation');
+      const closed = await post(db, room, 'alice', 'Closed question');
+      const answer = await post(db, room, 'alice', 'Closed answer', closed.message.id);
+      const linked = await post(db, room, 'alice', 'https://github.com/acme/api/pull/42');
+      await db
+        .updateTable('messages')
+        .set({ is_question: true })
+        .where('id', 'in', [code.message.id, closed.message.id])
+        .execute();
+      await db
+        .updateTable('messages')
+        .set({ resolved_at: NOW, resolved_by: alice.userId })
+        .where('id', '=', closed.message.id)
+        .execute();
+      const attachmentId = nextId();
+      await db
+        .insertInto('attachments')
+        .values({
+          id: attachmentId,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          message_id: file.message.id,
+          uploader_id: alice.userId,
+          storage_key: `w/${room.workspaceId}/${attachmentId}`,
+          file_name: 'a.txt',
+          mime_type: 'text/plain',
+          size_bytes: '1',
+        })
+        .execute();
+      const find = async (filters: Omit<SearchQuery, 'q'>): Promise<string[]> =>
+        (await search(db, room, alice.userId, '', filters)).contents;
+      expect(await find({ kind: 'code' })).toEqual([code.message.content]);
+      expect(await find({ kind: 'file' })).toEqual([file.message.content]);
+      expect(await find({ status: 'resolved' })).toEqual([
+        answer.message.content,
+        closed.message.content,
+      ]);
+      expect(await find({ status: 'open', question: 'yes' })).toEqual([code.message.content]);
+      expect(await find({ repository: 'ACME/api' })).toEqual([linked.message.content]);
+      expect(await find({ repository: 'acme/ap' })).toEqual([]);
+      const foreignRoom = await aRoom(db, ['stranger']);
+      const foreign = await post(
+        db,
+        foreignRoom,
+        'stranger',
+        'https://github.com/acme/api/pull/99',
+      );
+      await post(db, foreignRoom, 'stranger', 'An unrelated answer', foreign.message.id);
+      expect(await find({ repository: 'acme/api' })).toEqual([linked.message.content]);
+      expect(await find({ status: 'open', question: 'yes' })).toEqual([code.message.content]);
+      await db
+        .updateTable('messages')
+        .set({ deleted_at: NOW })
+        .where('id', '=', linked.message.id)
+        .execute();
+      expect(await find({ repository: 'acme/api' })).toEqual([]);
+      expect(
+        await find({
+          kind: 'code',
+          since: NOW.toISOString(),
+          until: new Date(NOW.getTime() + 1).toISOString(),
+        }),
+      ).toEqual([code.message.content]);
+      expect(await find({ kind: 'code', until: NOW.toISOString() })).toEqual([]);
+      expect((await refusalOf(search(db, room, alice.userId, '', {}))).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+      expect(
+        (
+          await refusalOf(
+            search(db, room, alice.userId, '', {
+              since: NOW.toISOString(),
+              until: NOW.toISOString(),
+            }),
+          )
+        ).body.code,
+      ).toBe('VALIDATION_FAILED');
+    });
+  });
+
   test('the words inside a message, ignoring case, in roots and replies, newest first', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

@@ -1147,15 +1147,15 @@ describe('the feed is one Tab stop (D-168)', () => {
   const feedStops = (view: ChannelView): HTMLElement[] =>
     tabOrder().filter((stop) => view.getByRole('feed').contains(stop));
 
-  test('from the header, Tab reaches the newest row, and the next Tab leaves it: no control of another row is on the way', async () => {
+  test('from above the feed, Tab reaches the newest row, and the next Tab leaves it: no control of another row is on the way', async () => {
     const view = await mountChannel({ messages: page(busy()) });
     const [, , newest] = rowsOf(view) as [HTMLElement, HTMLElement, HTMLElement];
     // Nothing focused in the feed: one stop in it, the newest row.
     expect(feedStops(view)).toEqual([newest]);
-    // From the header's last control.
-    const header = view.getByRole('heading', { level: 1 }).closest('header');
-    const last = header === null ? undefined : tabOrder(header).at(-1);
-    if (last === undefined) throw new Error('the header has no control');
+    // From the last control above the feed: the bookmarks' Add, under the header (D-218).
+    const above = view.getByRole('navigation', { name: 'Bookmarks' });
+    const last = tabOrder(above).at(-1);
+    if (last === undefined) throw new Error('nothing above the feed has a control');
     act(() => {
       last.focus();
     });

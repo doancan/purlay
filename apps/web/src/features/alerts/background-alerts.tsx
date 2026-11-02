@@ -20,6 +20,7 @@ import { useRoute } from '../../router/router-provider';
 import { useNotices } from '../push/push';
 import { useSession } from '../session/session';
 import { useDeepWork } from '../shell/deep-work';
+import { useQuietHoursNow } from '../shell/quiet-hours';
 import { waitingCount } from '../shell/tab-title';
 import { useWorkspace } from '../shell/workspace';
 import { paintIcons } from './icon-badge';
@@ -27,7 +28,9 @@ import { badgeOf, isAway, planOf, risen, settled, tagOf, waitingOf, type Waiting
 
 export const BackgroundAlerts = (): null => {
   const notices = useNotices();
-  const quiet = useDeepWork().until !== null;
+  // Deep Work started by hand, or the person's quiet hours (D-234): the page is quiet in either.
+  const quietHours = useQuietHoursNow();
+  const quiet = useDeepWork().until !== null || quietHours;
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const channels = useChannels(workspace.id).data;
@@ -37,6 +40,14 @@ export const BackgroundAlerts = (): null => {
   const { navigate } = useRoute();
   // What the badges said when last looked at, in this workspace: the first look is not news.
   const seen = useRef<{ readonly workspaceId: string; readonly waiting: Waiting } | null>(null);
+  // An inbox request may outlive this device's opt-in, Deep Work or the shell itself.
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current += 1;
+    return (): void => {
+      generation.current += 1;
+    };
+  }, [workspace.id, user.id, notices, quiet]);
 
   const count = badgeOf(waitingCount(channels ?? []), quiet);
   const painted = useRef(0);
@@ -63,25 +74,45 @@ export const BackgroundAlerts = (): null => {
     if (before === null) return;
     // Read here or on another device: a notice still on screen no longer says something true.
     for (const id of settled(before, waiting)) notices?.close(tagOf(id));
-    const plan = planOf(risen(before, waiting), {
+    const rose = risen(before, waiting);
+    const plan = planOf(rose, {
       on: notices !== null,
       quiet,
       away: isAway(document),
     });
     if (plan.kind === 'none' || notices === null) return;
-    void import('./tell').then(({ tell }) =>
-      tell({
-        plan,
+    const version = generation.current;
+    void import('./tell').then(({ tell }) => {
+      const pending = rose.filter((id) => (seen.current?.waiting.get(id) ?? 0) > 0);
+      const current = planOf(pending, {
+        on: version === generation.current,
+        quiet,
+        away: isAway(document),
+      });
+      if (current.kind === 'none') return;
+      return tell({
+        plan: current,
         client,
         api,
         workspace,
         me: user.id,
         channels,
         t,
-        notices,
+        notices: {
+          ...notices,
+          show: (notice) => {
+            if (
+              version !== generation.current ||
+              !isAway(document) ||
+              pending.every((id) => (seen.current?.waiting.get(id) ?? 0) === 0)
+            )
+              return false;
+            return notices.show(notice);
+          },
+        },
         open: navigate,
-      }),
-    );
+      });
+    });
   }, [channels, workspace, notices, quiet, client, api, t, navigate, user.id]);
 
   return null;

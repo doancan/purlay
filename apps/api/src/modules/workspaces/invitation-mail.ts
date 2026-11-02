@@ -42,10 +42,10 @@ const NAME_MAX = 60;
 /**
  * Somebody else's words, made safe to quote in a letter: no line break to start a line of one's own,
  * no control or invisible character (a right-to-left override reorders what follows it), one space
- * between words, at most `NAME_MAX` characters, and no `://` for a mail client to make a link of.
- * Nothing left is `fallback`.
+ * between words, at most `max` characters (`NAME_MAX` for a name), and no `://` for a mail client to
+ * make a link of. Nothing left is `fallback`.
  */
-export const quotable = (name: string, fallback: string): string => {
+export const quotable = (name: string, fallback: string, max = NAME_MAX): string => {
   const plain = name
     .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
     .replace(/:\/\//g, ': ')
@@ -53,10 +53,10 @@ export const quotable = (name: string, fallback: string): string => {
     .trim();
   if (plain === '') return fallback;
   const letters = Array.from(plain);
-  return letters.length <= NAME_MAX
+  return letters.length <= max
     ? plain
     : `${letters
-        .slice(0, NAME_MAX - 1)
+        .slice(0, max - 1)
         .join('')
         .trimEnd()}…`;
 };

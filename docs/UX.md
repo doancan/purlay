@@ -31,16 +31,16 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118), the dark theme neutral black with a black navigation, and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size; what the person arranges about the sidebar is what it shows, not where things sit (D-195). Regions are separated by tone and one hairline, not by boxes (D-110).
 
 ```
  ┌────┬──────────────────┬────────────────────────────────────────────────┬─────────┐
  │    │                  │ # api  Backend API…     (Feed)(Questions 3) ⍟ │         │
- │ AE │ Acme Engineering │────────────────────────────────────────────────│ members │
+ │ ▢  │ AE Acme Eng…   ⌄ │────────────────────────────────────────────────│ members │
  │    │ ⌕ Search… ⌘K     │ Today ──────────────────────────────           │ (opt.)  │
- │ ▢  │ Channels         │ (SC) Sarah Chen  09:14                         │         │
+ │    │ Channels         │ (SC) Sarah Chen  09:14                         │         │
  │ ✉• │  # api           │      Here's the updated session hook…          │  200px  │
  │ ?3 │  # deploys    2  │      ┌ ts · 14 lines ──────────── Copy ┐       │         │
  │ ⌕  │ People           │      └─────────────────────────────────┘       │         │
@@ -49,19 +49,24 @@ for no benefit at this size; what the person arranges about the sidebar is what 
  └────┴──────────────────┴────────────────────────────────────────────────┴─────────┘
 ```
 
-- **Rail (56px)** — the workspace tile, a second door to the workspace menu; then channels, the
+- **Rail (56px)** — not the workspace, which heads the sidebar beside it (D-206); channels, the
   inbox (a dot while anything needs you — the same fact as the mention badges, D-106, so in Deep Work
   it is not drawn, as they are not, D-15), open
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
   messages you kept to come back to, in three tabs, In progress, Archived and Completed — chosen
   above the list as the inbox's All and Unread are (D-158) — each moved or let go from its row
-  (D-128). Every entry is a route
+  (D-128) — and **drafts and sent** (D-215): what the person started and has not sent, on this device,
+  each opening its composer, deleted with Undo, and what they sent, newest first. Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (264px)** — the workspace's tile and name with a chevron, inset and rounded as the rows are, which
-  opens the **workspace menu** (the workspaces to switch to, **Create workspace…**, and for an owner or an admin
-  **Invite people…** and **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
-  field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
+- **Sidebar (264px)** — the workspace's card (D-209): its mark, its name and, under it, your role and how many
+  are in it, framed, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
+  radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
+  channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
+  **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
+  field (the palette's door, `⌘K`), **All unreads** while a channel waits (D-216: each unread, unmuted channel's
+  new messages oldest first, a page each, Mark read reading what was shown, replies said to wait in their
+  threads), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
   (D-132) — the channels, by name so that a new message never moves a row (D-160), under a heading that carries **Browse channels** and **New channel**, always
 shown in the section's quiet tone with a tooltip each, never revealed only under a pointer — the **conversations** — groups of up to ten
@@ -69,9 +74,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   starts the conversation of exactly them (D-127) —
   each drawn with the faces of its first two people, the second overlapping the first, and "+N"
   for the rest, in the height of any row (D-167) —
-  then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
-  you are; Deep Work for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is
-  on, until when, the minutes left and its end; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  then the people, and your own row at the foot — your avatar with your online dot, the name over the
+  handle, and the up-and-down chevron — which opens the **account menu** (D-124, D-146, D-207): who
+  you are, as a card; **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
+  tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
   and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
@@ -184,8 +190,10 @@ back; what it covers is hidden from a screen reader and from Tab until it closes
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
 
-**The inbox** (D-106, D-153, D-162). What the person was told in this workspace, newest first, in one
-full-width column like the feed — the shape the open questions, search and saved share (D-158): **All** or **Unread** above it — Unread is asked of the server, so what waits is
+**The inbox** (D-106, D-153, D-162, D-208). What the person was told in this workspace, newest first, in one
+full-width column like the feed — the shape the open questions, search and saved share (D-158): a
+**category** — **All**, **Mentions**, **Direct**, **Threads** (replies and resolutions) — in the address
+(`?category=`), and **All** or **Unread** beside it, both asked of the server, so what waits is
 found however old — then **Today** and **Earlier**, each a card of rows. A row says who, why and where,
 with the message under it in two lines at most; unread is a dot at its edge and the line in full ink,
 read is muted. Opening a row takes the person to the message and reads it; **Mark read**, beside the
@@ -197,6 +205,14 @@ your thread* when the person started it, *replied in a thread you're in* when th
 **One thread's replies of one day are one row** (D-162), where the newest of them sits: *3 new replies
 in “…”*, the newest replier's avatar, who replied (*Alice, Bob and 1 other*), the newest one's time and
 words, unread while any of them is. Opening it, or its **Mark read**, reads every reply it gathers.
+
+**The inbox panel** (D-208). On a wide window the rail's Inbox opens a panel beside it rather than the
+page: the inbox's title and **Mark all read**, the four categories, the newest ten of the one chosen in
+rows a line shorter than the page's — the message in one line, **Mark read** as an icon — and **See all**
+at its foot, which opens the page on the same category. Opening a row reads it, closes the panel and goes
+to the message; the panel remembers its category while closed. It carries no count of its own (D-110).
+In a category, **Mark all read** reads the rows shown — "up to the newest" is the whole inbox's, and would
+read what the other categories hold. Below the narrow breakpoint the rail's Inbox is the link to the page.
 
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
@@ -255,6 +271,14 @@ owner is said as such.
 **The audit log** (D-26). **Audit log…** in the same menu, an owner's or an admin's, reads the trail
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
 Admin* — and when. An action newer than the client is said by its name, never dropped.
+Above it, a card narrows it (D-222): **Person** (Anyone, or one of the workspace's people, as search's
+picker), **Action** (Any action, or one in words), **From** and **To** — days in the reader's own zone,
+both included, the last one refused on its field when it comes before the first, and nothing asked
+until it is put right. Each choice is the page's address, so Back undoes it and a reload or a shared
+link keeps it; **Clear filters** appears once something narrows. Narrowed to nothing it says *No entry
+matches these filters*, not that nothing has happened. The card's foot downloads what the filter keeps —
+all of it, not only what is shown — as **CSV** or **NDJSON**, links the browser saves; the download is on
+the log itself. Two by two on a wide window; one under another, full width, on a narrow one.
 
 **Channel details** (D-123, D-154). Clicking a channel's name in its header opens a wide dialog
 (`size-dialog-lg`; on a narrow window a sheet that fills the screen) with three tabs, **About** chosen on
@@ -263,7 +287,15 @@ dialog opens with focus on itself, never on the name, so a key pressed on openin
 dialog opens with a field's text selected. **About**: the **name and topic**, editable by a member of
 the channel with **Save** (somebody who has not joined reads them and is told to join); the
 **notification level** as three choices, the current one said in words (the header's menu, painted
-first and put back on a refusal); and at the foot a **Danger zone** in the danger tone — **Leave
+first and put back on a refusal); for an owner or an admin in the channel, **Posting** (D-243): *Only owners
+and admins can post*, a box saved as it is ticked and put back with the reason on a refusal, its hint saying that
+everybody can still reply in threads; for an owner only, **History** (D-225): the workspace's window and
+what this channel keeps, each in a sentence ("The workspace keeps history for 30 days. This channel keeps
+its messages and files for 1 year."), and *Keep this channel's history* — *As long as the workspace*,
+the windows longer than the workspace's, and *Forever*; never a shorter one. A choice that keeps less
+than now says, before it is saved, what the next night deletes, and its button says it again in red; a
+refusal because the workspace now keeps longer is said in those words, and the setting is read again;
+and at the foot a **Danger zone** in the danger tone — **Leave
 channel** for a member and **Archive channel** for an owner or an admin, each row saying what it costs.
 Each of the two asks in place first; done, the person is taken to the workspace and told in a toast.
 The last member of a private channel is told to bring somebody in first or ask an admin to archive it.
@@ -281,6 +313,13 @@ one) or sees it as one not joined (a public one), and their sidebar loses it at 
 **Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
 the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
 **Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
+content type and the secret, each with Copy, the secret said to be shown only now, until **Done**; and under
+them its **Incoming webhooks** (D-245) — each with its name, who made it and when, and when it last posted,
+**Revoke** asking in place (what it posted stays), and a form to **Make webhook** with a name, which answers
+with the address and Copy, said to hold its secret and be shown only now, with an example of the JSON to post,
+until **Done**. What a hook posts is drawn as a person's markdown is, under the hook's name with the word
+*webhook* in the caption beside it, never grouped with the message above. A
+**Regenerate secret** and **Disconnect**, each asking in place (regenerating says the old secret stops working at once and deliveries are refused until the webhook has the new one, then shows the address, content type and new secret once, as connecting does), and a form to **Connect** one, which answers with the payload URL, the
 content type and the secret, each with Copy, the secret said to be shown only now, until **Done**. A
 half-typed name survives a look at another tab. A direct message between two has no details: its title is not a button. A group's title opens its
 details (D-127): its people, you first, and **New conversation with these people…**, which opens New
@@ -296,7 +335,11 @@ they left on another screen, is told which, instead of *not found*.
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
 too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*
 with **Disconnect**. The token is never shown again — the field empties once it is saved — and without
-one a link to GitHub stays a plain link, which the dialog says.
+one a link to GitHub stays a plain link, which the dialog says. The help asks for a fine-grained, read-only
+token on selected repositories; GitHub is asked about the token when it is saved, and one it refuses is
+said under the field (one it cannot be asked about, above the button). A saved classic token with `repo`
+is warned about, and a token GitHub later refuses (revoked, expired) shows *Token refused* with when, until
+it is replaced — on Settings → Integrations, to an owner or an admin.
 
 **Workspace settings** (D-124). **Workspace settings…** in the same menu, an owner's or an admin's,
 renames the workspace: a name field and **Save**, and a sentence saying the address stays `/w/<slug>`,
@@ -311,20 +354,71 @@ form leaves them — from `/` or from the menu — never on the welcome step, wh
 **Settings** (D-146). A page, `/w/<slug>/settings/<section>`, opened from the rail's gear, the
 account menu, the workspace menu's **Workspace settings** and the palette. The sidebar's place holds
 its navigation: **Back to <workspace>**, then **Account** — Profile, Preferences, Notifications,
-Keyboard shortcuts, Sessions & account — and, for an owner or an admin, **Workspace** — General,
+Keyboard shortcuts, Sessions & account, About — and, for an owner or an admin, **Workspace** — General,
 Members, Invitations, Integrations, Audit log, Data & retention. The current page is marked as the
 current channel is. Each page: a title, one sentence, then cards; a setting is a row with its label and
 a sentence on the left and its control on the right (stacked below 900px). The page is the main area's full width, from its left edge (D-177). A choice
 applies when it is made; a form of words has **Save** in its card, enabled once something changed, its outcome said beside
 it. On a narrow window the navigation opens as the sidebar does.
 
-- **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away.
+- **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away; and
+  the **Name**, with its own Save, where it is the person's — an account GitHub made shows GitHub's (D-235).
 - **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
 - **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126,
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
-  where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
+  where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29, D-107).
+  While on, **Test notification** requests a notice on this device. Its outcome says the browser
+  accepted the request, not that the operating system displayed it; a refusal explains where to check
+  permission and device settings. It does not send a chat message or change the channel preferences.
+  Then **Quiet hours** (D-234): off, or a start and an end — one earlier than the start runs past midnight, and
+  says so — and the days a window starts on, named in the reader's language, read on the clock of the profile's
+  time zone, which the card names; with no time zone on the profile it says so and leads to Profile.
+  **Email** (D-240), only where the server can send mail and the person's address is verified: one check box,
+  *Email me about direct messages and mentions I haven't read*, off until checked, applied when it is checked,
+  with a sentence saying when a letter goes (fifteen minutes unread, never in Deep Work or quiet hours, at most
+  one an hour). The letter ends with a link to `/mail/stop#…`, a page of its own that needs no sign-in: it asks
+  *Stop these emails?* and stops them only on its button, so a mail scanner that opens it changes nothing.
 - **Keyboard shortcuts** — the reference, as a page.
-- **Sessions & account** — first *How you sign in* (D-176, amended by D-179): the address and whether a
+- **About** (D-248), for everyone — two cards. **Version**: *This server runs* the version it says it runs, and
+  *Newest release*, with its number, the day it was published and **View release on GitHub** (another tab), or
+  *Unknown* where the server could not learn it; below, one sentence in a status line — *You are up to date.*
+  (also for a server ahead of the newest release, as a build between releases is), *Version 1.2.0 is available.*
+  in the warning tone, or *Could not check for a newer version…*, which says the server could not reach GitHub or
+  its administrator turned the check off — never drawn as an error, because a server that does not call out is
+  working as configured. A version that is not three numbers cannot be compared and says *could not check*. While
+  it loads the card is a skeleton; the version and the newest release come in one request, and a request that failed (a refusal, a lapsed session, no network) is an error with **Retry** (*Could not load the version*), told apart from *Unknown*, which is the server's deliberate answer that it could not check. While the version loads, or after it failed, the release-notes window does not open. **What's new**, only where the
+  build carries notes for the running version, opens the window below. **Open source**: the licence
+  (`AGPL-3.0-or-later`) and the repository, a link to GitHub in another tab.
+- **What's new in Purlay x.y.z** (D-248) — a window, once per version per browser. The first screen a signed-in person
+  opens after the server was updated shows, over it, the notes of the version the server now runs: its title
+  names the version, its description the day it was released, and under it the categories (*Added*, *Changed*,
+  *Deprecated*, *Removed*, *Fixed*, *Security*) each with its lines, each line drawn as the markdown it was written
+  in — the area bold, a name in code. Long notes scroll inside the window, which a keyboard reaches by a stop of its
+  own. Focus is held in it; **Got it**, the close button, **Esc** and a click on the scrim close it, and each
+  of them remembers the version in this browser (`purlay.releaseNotesSeen`), so a reload, a return or another screen
+  never opens it again for that version and the next version opens it once more — on a brand-new server as on
+  an old one, with no special case. It is not drawn over the setup, the sign-in or the native hand-off, which are
+  not the signed-in frame. It shows nothing, and never holds the app up, when the browser's storage cannot be read
+  (rather than at every load), when the build has no notes for the version, or when the notes do not load — a notes file that fails to load is not remembered as *none*: the next screen tries again. Another
+  browser, or a person who cleared their data, sees it once more. The notes are in English, as written; the frame
+  around them is in the person's language. **What's new** on About opens the same window by hand and remembers nothing.
+- **A thread's GitHub** (D-246) — under the decision, only where the workspace has an installation in use and for
+  a member of the channel: what the root points at (`acme/api#12 · Retry with jitter · Open`, a link built from its
+  parts, with its state — *Open*, *Closed* or *Merged*, kept current by GitHub's events and changing under the open
+  thread without a reload; nothing is announced or counted unread) and **Link an issue or pull request…**, which takes
+  its address on GitHub and says in one sentence that it does not exist or cannot be reached — and **Create GitHub
+  issue…**. The dialog first asks for the person's own authorization if there is none
+  (**Let Purlay create issues as me**, back to this thread), then offers the repositories both they and the App
+  reach, the title and the description — the question, its accepted answer, the decision and a link back, in the
+  person's language — and, for a conversation that is not public, a box to choose to copy its words. Below, the
+  **review**: the destination (*In acme/api, as ayse:*) and the exact text, down to the hidden marker line, before
+  **Create issue**. GitHub not answering says so and offers **Check again** — the same request, never a second issue
+  — with the words locked; a refusal is said in its own words and editing afterwards is a new request. Creating one
+  does not resolve the thread.
+- **Sessions & account** — a **Create issues as you** card (D-246) only where the server has a GitHub App:
+  off until the person chooses, *Not allowed. Purlay writes nothing to GitHub as you.*, with **Let Purlay create
+  issues as me** — GitHub's authorization screen, coming back to this page with the outcome in one line — and, once
+  allowed, *Allowed, as `login`* with **Stop allowing**. Never asked at sign-in. Also first *How you sign in* (D-176, amended by D-179): the address and whether a
   link sent to it signs in, and, only when GitHub is linked, a GitHub row with the login — read only,
   nothing to press. There is no **Connect GitHub**: one verified address is one account (D-179 §5), so a
   person who signs in with GitHub on an address they verified by link arrives in the account they have.
@@ -333,18 +427,51 @@ it. On a narrow window the navigation opens as the sidebar does.
   the new one is typed (the same `passwordProblem` the server runs, §11), and **Change password**. A
   success says *Your other sessions were signed out.* and keeps this one — the page stays on Settings, the session is the same row; if signing the others out failed after the password changed, it says so and points to *Sign out everywhere*; a wrong current password is one
   sentence, a refused new one is named by rule, and a wait is told in minutes.
+  Then **Two-step verification** (D-236), for an account with a password only — other ways in say their
+  provider keeps them: off, *Turn on* asks for the password, then shows the key as a QR code, as text and as
+  an `otpauth://` link, and is on only after a right code from the app; the ten backup codes are shown once,
+  with **Copy**. On, *New backup codes* and *Turn off* each ask for the password — where the server requires it
+  (D-239), there is no *Turn off*, and the card says the server requires it. At sign-in, after a right
+  password, the form asks for the app's code, or a backup code instead; a wrong code is one sentence, a spent
+  or expired step says to start over, and a lock says for how long.
+  Next, *Where you are signed in* (D-193): each live session, the one used last first — a Mac by the name it
+  sent (*Purlay for Mac* without one), any browser as *Web browser*, each with when it was signed in and, but
+  for this one, when it was last active. This one is marked *This device* and has no button; every other has
+  **Sign out**, which asks nothing, takes the row off at once and says it was signed out, or puts it back and
+  says why when refused; one already ended elsewhere stays gone, unsaid.
+  Next, **Your data** (D-241): what an export of the person's own data holds, in a sentence — their account,
+  the workspaces they are in, every message they wrote that stands, their reactions, saved items and files,
+  and nobody else's words — **Export my data**, and their exports, newest first, as an owner's export lists
+  them: being made, a link that works once, downloaded, expired, failed by its reason.
   Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
   to make somebody else an owner first) and *Erase my account…*, each asking first.
-- **General** — the workspace's name, its address (which stays), and *Create workspace…*.
+- **General** — the workspace's name, its address (which stays), the **archived channels** (D-232) — each with
+  when it was archived, a private one only to its members, and **Restore**; a name taken since says to rename the
+  other first — *Create workspace…*, and for an owner only a **Danger zone** with *Delete workspace…* (D-242).
+  Its dialog says the workspace leaves everyone at once and is erased after seven days unless an owner keeps
+  it, links to the export (Data & retention) for a copy first, and enables **Delete workspace** only once the
+  name is typed exactly; a refusal of the name is said under the field, any other above the buttons, and what
+  was typed stays. Done, the tab goes to the front door. Every owner of a workspace being deleted sees, under
+  the connection's bar in each workspace they still have — and on the front door when it was their last — one
+  danger-toned bar: *<workspace> is being deleted: its content is erased after <when>.* with **Keep
+  <workspace>**, which takes it back for everybody; a refusal (too late) is said in the bar. Its members see
+  nothing: it has left their sidebar, and a tab open on it shows *not found*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
-- **Integrations** — the GitHub connection, as below.
-- **Audit log** — the trail as a table, newest first, a page at a time.
+- **Integrations** — the GitHub connection, as below; and, only where the server has a GitHub App (D-246), a
+  **GitHub issues** card: *Not connected* or *Installed on acme since …* (*Suspended* when GitHub says so, with a
+  sentence that nothing is written to it), **Connect on GitHub** (or **Connect again**) — a full navigation to
+  GitHub's own screen, where the repositories are chosen — and **Disconnect**. How the trip ended is one line in
+  the card from `?github=` (*connected*, *expired*, *refused*, *not an installation you own*, *GitHub could not
+  be reached*). Not drawn where there is no App: nothing of issues exists then.
+- **Audit log** — the trail as a table, newest first, a page at a time, narrowed by person, action and days,
+  and downloaded as CSV or NDJSON (D-222).
 - **Data & retention** — the workspace's **storage**: a meter with what is used and the quota in words
   ("1.2 GB of 5 GB") and what is left, in the warning tone from nine tenths and the danger tone, with a
   sentence, once full; the quota is the server operator's to set and the card says so, with nothing to
-  change it (D-173) — then how long history is kept, and exports.
+  change it (D-173) — then how long history is kept, with how many channels keep theirs longer, when
+  any do (D-225), and exports.
 
 The sections below say what each does; where they say a dialog from the workspace menu, it is now the
 page of the same name.
@@ -377,11 +504,22 @@ page of the same name.
   GitHub has them — never their avatar, which is another host's image (#110). Up to five, in the order
   written. A link with no card — no token, nothing there, GitHub silent — stays a link, with nothing
   drawn and nothing said.
+- **A code reference is a link into the channel's repository** (D-223) when the channel has exactly one
+  GitHub feed: a path with a source extension — `src/retry.ts:14`, `apps/api/src/x.ts#L10-L20`, the
+  compiler's `src/x.ts(14,5)` — opens the file at that line on the default branch, a bare file name in
+  inline code (`` `retry.test.ts` ``) searches the repository for it, and a commit's SHA (7–40 hex, a
+  letter and a digit) opens the commit. In prose and inline code only, never in a fenced block, which is
+  code to read and copy. Drawn as any link is — underlined, so not by colour alone, opening in a new tab
+  and saying so to a screen reader, a stop for the keyboard. No feed, or several, and nothing is linked
+  that the words did not link.
 - **A link to a picture is the picture, under the words** — up to three, in the order written, each a
   link to the original, drawn through the API's proxy so the picture's host never sees who is reading
   (#110). One the proxy cannot show draws nothing; the link stays a link.
 - **A file sent with the message is under the words** (D-109 §6): an image as its thumbnail, in a box
-  shaped like it and kept before it loads; any other file as its name, its size and a download. An
+  shaped like it and kept before it loads; any other file as its name, its size and a download — and a
+  text file up to 512 kB (a CSV, Markdown, code by its extension) **Preview** beside it, read only when asked
+  and kept: a CSV's first fifty rows as a table and how many more, Markdown formatted, code coloured in its
+  language, in a box that scrolls, through the same renderer as a message (D-210). An
   image opens the **image viewer** (D-159): the picture over the whole window on the navigation's dark
   tone, fitted to it and never enlarged, with its name, who shared it, its size and when, **Download**,
   **Open original** in a new tab, and Close. Esc — whatever is focused —, the close button or a click
@@ -424,7 +562,8 @@ page of the same name.
   the message has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
-- **Reactions** sit below the content, above the thread affordance. A chip's tooltip says who:
+- **Reactions** sit below the content, above the thread affordance, as soft pills (D-209): no frame,
+  the accent's tint under the pointer, yours in it and heavier. A chip's tooltip says who:
   "You, Alice and Bob reacted with 👍"; past three, two names and how many others (D-150).
 - **Edited** and **Pinned** share one line under the words, apart from each other.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,
@@ -447,6 +586,12 @@ place of the composer — *You are reading #name without being a member* and **J
 was already on its way when they left, or that reached the server some other way, is `failed` with
 the reason in words: they are not in the channel, and joining it is how to write there; Retry then
 sends it. Reacting, editing and resolving there are refused the same way, said as a toast.
+
+**An announcement channel's feed is its owners' and admins'** (D-243). For anybody else in it the composer's
+place says *Only owners and admins post in this channel. You can still reply in a thread.*; a thread's composer is
+there as in any channel. The header carries a megaphone beside the star, for everybody, named *Only owners and
+admins post here* to a screen reader. A send refused because the person's role changed under a stale screen is
+`failed` with the reason in words: only owners and admins post here, and a thread is the way to answer.
 
 The `sending` state is deliberately **not** dimmed to 50% opacity. Dimming implies "not real
 yet"; in an optimistic UI the message *is* real, and flickering opacity on every send is visual
@@ -487,6 +632,26 @@ status a column away from the message it is about.
   └─╰──────────────────────────────────────╯────┘
 ```
 
+- **Bookmarks** sit in a row under a channel's header (D-218): the links its members keep at hand, each
+  opening in a new tab. A member adds one with **Add a bookmark** — an address (a bare domain is read as
+  `https://`) and a name, the site's own if left empty — and removes one with × on its chip, with **Undo** in
+  the toast. Someone who can see the channel but is not in it reads the row and changes nothing; with
+  nothing to read, they see no row at all.
+- **Forward…** is in a message's **More** menu for a member (D-217): choose a channel or a conversation you
+  are in, by name, add a note if you want, and it is sent there as your message ending in the original's
+  link. **A link to a message of this workspace is drawn as a card** under the words — who, where, when and the
+  start of it — for whoever may see the original, and as *This message is not available to you* for whoever
+  may not: forwarding a private message shares a link, never its words.
+- **Quote reply** is in a message's **More** menu for a member (D-213): the part of the message the person
+  selected, or all of it, goes into the composer it answers in — a reply's thread, a root's channel — as a
+  markdown quote with its author's name (never an `@`, so quoting does not notify) and a link back, after
+  what was already written, the caret under it, focused. A message over a thousand characters is quoted
+  to its start.
+- **Mark unread from here** is in a message's **More** menu for a member (D-212): the channel's read
+  position moves back to just before it (a reply marks its thread's root), the sidebar and the badge show
+  it at once, and the channel the person is looking at is not read again by being looked at — not at the
+  bottom, not when a new message arrives, not on leaving — until it is opened again. Refused, a toast
+  says so and the channel reads as before.
 - **One thread at a time.** Opening another replaces it. A channel opened again opens with no
   thread, unless its address names one (`?thread=`, from the open questions and the inbox), which
   opens even when its root is older than the feed's first page — or a reply's link does (§6).
@@ -548,7 +713,8 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 
 Plain textarea, GFM, no WYSIWYG (`PRD.md` §4.1). **A formatting row above the text** has a button for every
 construct the renderer draws — bold, italic, strike, link, bulleted list, numbered list, quote, inline code,
-code block — and a preview toggle at its end; under the text sit the mention, an emoji picker and the file
+code block, table (two columns and a row to fill in, its first heading selected, D-210) — and a preview toggle
+at its end; under the text sit the mention, an emoji picker and the file
 attach. Each button only *inserts markdown* that the keys below also produce (D-110, D-181). **A thread's
 box has the same row** (D-164, D-181): in the panel's width the key hints are not drawn (a screen reader
 still reads them) and Send is the icon alone.
@@ -584,9 +750,30 @@ words from what the server answered: larger than the limit, an image past the si
 image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
 too many files waiting, no connection, the server busy, file storage unavailable, the session ended, no
 longer having access to the workspace (D-164).
-Retry is there when trying again can be answered differently; Remove always. Pasting over ~12 lines of text is inserted as a fenced block
-automatically, with an undo toast — a paste that silently becomes a code block with no way back
-is worse than no help at all.
+Retry is there when trying again can be answered differently; Remove always. Pasting over 12 lines of text is inserted as a fenced block
+on lines of its own, unless the caret is already inside code or the pasted text is already a code block (D-205).
+The fence is longer than any inside the source; indentation and trailing blank lines survive copying.
+The undo toast removes automatic formatting while keeping the pasted text and subsequent edits. If the block
+has changed or cannot be identified uniquely, Undo keeps the current draft and explains why.
+Quote formatting preserves list markers, nested quotes and blank lines; applying it again removes one outer quote.
+Enter follows the renderer's fence rules, including tildes and longer fences, in both composers and message edits.
+**What a paste becomes** (D-210): a spreadsheet's rows or a CSV become a table;
+formatted text from a document, a page or a mail keeps its emphasis, links, lists, headings, quotes, code and
+tables as markdown (an editor's coloured code is plain words); a long paste of code is a block named in its
+language. A table or formatting says so with **Paste as text** one step away, a block of code with Undo, and
+either keeps later edits as above; inside code a paste is always the words as they are, and
+`Cmd/Ctrl+Shift+V` pastes the words as they are anywhere. A block always starts on a line of its own — after
+words on the same line a fence is not one.
+
+**Slash commands** (D-214). A `/` at the very start opens a list of commands, narrowed as letters are
+typed; arrows move, Tab (or Enter, until the command is whole) writes it out with a space for its words, Esc
+closes the list. Each is a door to what the product already does, painted, refused and put back as its
+button is: `/me` (the words in italics), `/shrug`, `/topic` (nothing after it clears it), `/mute`,
+`/unmute`, `/star`, `/unstar`, `/invite @name`, `/leave`, `/deepwork 30m|1h|2h|tomorrow|off`, `/search` (with
+the search field's operators, D-224).
+What is done is said in a toast; what is refused, under the box, with the words kept. An unknown `/word` is
+not sent and the line says which commands there are; `//` at the start sends a slash as words; with files
+attached, a line is words.
 
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
@@ -614,7 +801,12 @@ The hardest problem in the product, and the subject of O-5, closed by D-199.
   `channel_members.last_read_message_id`. It persists while the channel is open — it does not
   vanish the instant the messages are seen, because it is the reader's place-holder, not a
   notification.
-- **Marking read** happens when the bottom is reached, or on channel exit. Never on mere render.
+- **Marking read** happens when the bottom is reached with the page visible and its window focused,
+  or on channel exit for the messages the person already reached. A blur cancels a pending read;
+  returning to focus reads what is then in view. Never on mere render or from a visible window behind another.
+- **Mark all channels read** (`Shift+Esc`, D-238) reads every channel the person is in to its newest
+  message at once: the badges clear before the server answers and come back, with a toast, if it refuses;
+  a toast says it was done. An answer waiting in a thread keeps its channel's badge, as below.
 - **The feed reads the feed, not the threads** (D-147). Reading the channel to the bottom reads what
   the feed shows; an answer in a thread keeps waiting — on the badge, in the tab title, in the inbox —
   until its thread is open in the panel with the page in front of the person, which reads its replies
@@ -660,6 +852,7 @@ is read.
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
 | `Shift+F10` · `ContextMenu` | On a sidebar row: its context menu, under the row (D-165) |
 | `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; another while is the account menu's or the palette's |
+| `Shift+Esc` | Mark all channels read — every channel of the workspace the person is in, each to its newest message; an answer waiting in a thread still waits (D-147). Anywhere in the page, the composer included, but inside a dialog or a menu, whose Escape is its own; also **Mark all channels read** in the palette and the workspace menu (D-238) |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
 product; an invisible focus ring is a broken product, not a style choice. (`PRD.md` §5)
@@ -691,17 +884,27 @@ missing specified behaviour and does not merge.
 | Sign-up | n/a — a form, always | The button busy while it asks | On an *invite-only* server without an invitation, one sentence that an invitation is needed, with what to do; an address refused under the field; "switched off" or the failure above the button (D-179) |
 | A workspace with nobody else | "Only you are here for now" + **Invite people** | n/a — the sidebar's skeleton | A send that fails says *not sent* and keeps the link to copy (D-179) |
 | Invite people (dialog) | n/a — always the link, and the address field where the server sends mail | The send and the link buttons busy while they ask; the field is held | *Could not send the invitations* / *Could not make a link* above the link, the addresses kept; each address refused named with its reason (not an address, a daily limit, no mail on this server), the rest *asked of the mail server*, never *sent*; the link shown whatever happened |
+| GitHub issues (Settings → Integrations), Create issues as you (Sessions & account) | Not connected, and not allowed, each in one sentence; not drawn at all without a GitHub App | Not drawn until the status is known | A refusal beside the button; the status is not changed by a failure (D-246) |
 | Administration → Server (Settings → Server) | Each way in not connected says what that stops and offers to connect it; the two policies always have a value | Skeleton cards | A failed try as in the wizard, nothing kept and what was typed still there; the settings that could not be read, with Retry; a secret the key could not open, on its card; a setup still open, said in a sentence; anybody who is not the administrator is *not found* |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
 | Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191) |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
+| Your data (Sessions & account) | "You have not exported your data yet." | Skeleton in the card; one being made says so, and the list is read again until it is not | Retry in the card; one already being made is said, and the list read again; past the day's limit, how many a day; any other refusal beside the button. An account suspended or erased before it was made is said as such; the rest as an owner's export (D-241) |
 | How you sign in (Sessions & account) | n/a — always an address, and whether a link to it signs in; the GitHub row is there only when GitHub is linked, and is not offered otherwise | Skeleton in the card | Retry in the card (D-176, D-179) |
+| Where you are signed in (Sessions & account) | "You are not signed in anywhere else." under this device's row | Skeleton in the card | Retry in the card; a sign-out refused puts the row back and says why in a toast (D-193) |
+| Archived channels (General) | "No channel is archived." | Skeleton in the card | Retry in the card; a restore refused because the name is taken says to rename the other channel first (D-232) |
+| Quiet hours (Notifications) | Off, with the profile's zone named; without a zone, a link to Profile | Skeleton in the card | A save refused or failed is said beside Save, and what was set stays (D-234) |
+| Email (Notifications) | Not drawn where the server cannot send mail or the address is not verified | Not drawn until the server has said whether it can be offered | Whether it can be offered could not be read: said in the card, with Retry; a change refused is put back and said in a toast (D-240) |
+| Stop link (`/mail/stop`) | n/a — a link always asks, or says it is not complete | The button busy while it asks | "This link does not open" for one too old or unknown, with the way to Purlay; any other failure said above the button, which tries again (D-240) |
+| Accounts (Settings → Server) | "No account matches." | Skeleton rows | Retry in the card; a change refused is said in the card (D-233) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 | Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
+| Channel details: incoming webhooks | "No incoming webhook…" above the Make webhook form | Skeleton row | Retry; a make or a revoke refused is said above the form, a name refused on its field (D-245) |
+| Channel details: History (owner) | — (always a setting: the workspace's window until changed) | Skeleton row | Retry |
 | Edit history | "No earlier versions: they were not kept, or were removed." | Skeleton row | Retry; older versions that fail to come are said below the ones shown |
 
 **A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
@@ -747,8 +950,13 @@ Decided here so Phase 0 does not invent one at random.
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
 - **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread folds
-  on resolve (§4.3) and the reconnect bar slides. No message entry animation — at conversational
-  speed it reads as lag. Everything is instant under reduced motion.
+  on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, the
+  inbox panel, a tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
+  fades as the dialog opens like the palette; a toast rises into its corner (D-211). No message entry
+  animation — at conversational speed it reads as lag. The selected tab of a side-by-side group slides to
+  its new place in 200ms. The one longer motion is a celebration: sending 🎉 (in a message or as a
+  reaction) sets off a one-shot SVG firework show over the screen (about 3s, one of five shows, never looping, the token gate's single
+  exception). Everything is instant under reduced motion, and the firework is not drawn.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
   and an overlay. The interface is flat: regions are told apart by tone, and only what sits above
   something — an overlay, the hover controls, the composer, a card inside a message — has a shadow.
@@ -841,7 +1049,11 @@ and says that GitHub's page *"The redirect_uri MUST match the registered callbac
 afterwards. It is **the server administrator's alone** — `isServerAdmin` on `GET /api/me`, never a
 workspace role: an owner of a workspace is not offered it, and its address is *not found* for everybody
 else, as the server answers `404` to the same people. It has its own heading in the navigation, *Server*,
-under the account's and the workspace's, and is in the palette. Five cards, in this order, over one query
+under the account's and the workspace's, and is in the palette. Seven cards, in this order — the **GitHub App
+for issues** (D-246) is the fourth, after E-mail: its App ID, slug, Client ID and secret, the private key (a
+textarea) and the webhook secret, with the callback and webhook addresses to copy; tried as its client and then as
+itself before it is kept, with `key-rejected` and `app-mismatch` said in the wizard's three parts; its secrets
+never shown again; **Disconnect** asks once and says that links, the workspace token and feeds stay — over one query
 that is read again after every change and never polled:
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
@@ -867,9 +1079,27 @@ that is read again after every change and never polled:
   failure is the wizard's, with the same reasons.
 - **Who can create an account** — *Only people who are invited* or *Anyone*, each with its one sentence,
   applied as it is chosen (*Saved. This applies from the next sign-up.*).
+- **How people sign in** (D-239) — *Two-step verification*: *Optional* or *Required* (anyone with a password
+  must turn it on before anything else, the administrator included); *Password sign-in*: *On* or *Off* (only
+  GitHub or single sign-on; *admin:reset-password* turns it back on). Each applies as it is chosen (*Saved. It
+  applies from the next request.*). With neither GitHub nor single sign-on connected, the row says to connect
+  one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
+  not offered: the dialog says why, and has no **Disconnect**.
+- **How long a session lasts** (D-244) — two selects, each applied as it is chosen (*Saved. It applies from the
+  next request.*): *Sign out when unused for* — *Never*, *1 hour*, *8 hours*, *1 day*, *1 week* (using Purlay in
+  an open window counts; a window left open does not) — and *Sign in again after* — *Only the server's own
+  lifetime*, *1 day*, *1 week*, *30 days*, *90 days* (however much it is used; `SESSION_TTL_DAYS` still ends it
+  if sooner). Both apply to the browser and the Mac application, and to sessions already open from their next
+  request: a session they end is signed out as any other — the next action, or the open window's socket within
+  about half a minute, brings the sign-in screen.
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
+- **Accounts** (D-233) — a search by name, username or address over the server's accounts, each row with its
+  name, `@handle` and address, *Administers this server* where it does, and *Suspended* with its date where it
+  is. **Suspend** asks once more on the row, in words that say the person is signed out on every device and
+  cannot sign in until it is lifted; **Lift suspension** asks nothing. An administrator's row, the caller's
+  own among them, has no button.
 
 **Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
 remain — the page knows from which of GitHub, single sign-on and the mail server serve — it says so **before** the button
@@ -918,8 +1148,8 @@ GitHub button, *or*, the email field and **Send a sign-in link**, and at the foo
 **Create account***. Each way is offered only where the server connected it, so a GitHub-only server
 shows the one button and a mail-only server the field. A person who sent themselves a link is shown
 *Check your email*: the address, *the link is valid for fifteen minutes*, **Send again** and **Change
-address**. **The password is always offered** (R30), because the administrator the setup made has one on
-a server with mail and on one without: under the GitHub button the card has an email field, a password
+address**. **The password is offered** (R30) unless the server's administrator turned password sign-in off
+(D-239), because the administrator the setup made has one on a server with mail and on one without: under the GitHub button the card has an email field, a password
 field and **Sign in**, and — only where the server sends mail — **Email me a sign-in link instead**, which
 asks for a link to the address typed. The fields are named for a password manager (`username`,
 `current-password`). A wrong address, a wrong password and an account with no password get the one
@@ -928,7 +1158,17 @@ for an address from this browser's network, or twenty for any addresses, in fift
 screen says *Too many attempts. Try again in N minutes.* from `Retry-After` — never that the account is
 locked, for it is not (D-179 §4); a server that did not answer is not blamed on the person. At the foot,
 where the policy is *open*, *No account yet? **Create an account*** (the sign-up screen); where it is
-*invite-only*, *Accounts are created by invitation.*, with no link.
+*invite-only*, *Accounts are created by invitation.*, with no link. With password sign-in off the card has no
+password form — GitHub, single sign-on and, where mail is sent, the link — and a password tried from a page
+opened before it went off is told *This server no longer signs in with a password.*
+
+**Turning on two-step verification first** (D-239). Where the server requires it, a person signed in whose
+account has a password and whose second step is off sees, at any address of the application, only a card on
+the navigation tone: *Turn on two-step verification* — *This server requires it of every account that signs in
+with a password. Turn it on to carry on: you stay signed in.* — then Sessions & account's own card, with no
+*Turn off*, and **Sign out**. Nothing of a workspace is drawn and no socket opens. Turned on, the backup codes
+are shown once, as on Settings; **Done** reads the identity again and the page the person asked for is drawn,
+on the same session, with no sign-in again.
 
 **Single sign-on** (D-200) is the first button where a provider is connected, *Continue with ⟨label⟩* — the
 operator's own label, shown as text, or *single sign-on* (*tek oturum açma*) — above GitHub's, as a secondary
@@ -1016,3 +1256,12 @@ web is not the only place behaviour is specified. What is decided so far:
 - **What stays in the browser.** Setting a server up, workspace administration, the audit log, retention,
   exports and the GitHub feeds: the application opens the right page.
 - **Signing in** is §11's consent: the application has no sign-in form of its own.
+
+
+**Questions, decisions and search (D-204).** More → Mark as a question adds a root to open questions immediately. The thread's Question and decision section offers a current channel member an explicit editor: question checkbox, responsible channel member, selected live reply, decision note and optional reference. Visitors read it. Saving preserves the draft on failure; a stale edit shows the latest decision above the draft and requires reviewing that version before retry. Selecting an answer does not resolve the thread. A bounded answer preview links to its original message; deletion hides the preview and a deleted root hides its decision.
+
+Open questions keeps existing unresolved threads and adds explicitly marked roots with no answers. Show switches between all, unanswered and assigned to me; order switches newest/longest waiting. Filters persist in the URL; pagination preserves the chosen order. Rows show ownership and elapsed days. No assignment notification or reminder is sent.
+
+Search keeps words, channel and author in the URL and adds explicit status, question, content, date (whole days in the viewer's time zone, D-224) and repository controls. A filter can be used with no words. Results show selected-answer previews and decision notes with the original root. Saved searches opens a personal list with loading, retry and empty states; a named current search can be saved, revisited or removed, with pagination. Errors retain names and filters. Current visibility is always applied when running the search.
+
+**Search operators (D-224).** The field takes filters typed with the words: `in:#channel` or `in:@person`, `from:@person` or `from:me`, `has:code`, `has:file`, `is:open`, `is:resolved`, `is:question`, `repo:owner/name`, and `on:`, `before:` or `after:` a `YYYY-MM-DD` day in the viewer's time zone (`after:` starts the next day). Keys ignore case; anything not a known key is words, and `"exact words"` keeps what looks like a filter as words. On Enter — and on any change of a control, which searches with what the field holds — the operators become the controls' own filters and the address keeps those and the remaining words; the field then shows those words, quoting one that would read as a filter. What is typed wins over a control changed with it, and the last of a kind wins. An operator that names nobody, or has a value no filter takes, stays in the words, is searched for as words and is said under the field in a polite status — never silently dropped, never blocking. Too few characters, too many, or an end before the start are said in the field. A *Search operators* disclosure under the field lists them. `/search` and the palette's *Search messages for* read the same operators.

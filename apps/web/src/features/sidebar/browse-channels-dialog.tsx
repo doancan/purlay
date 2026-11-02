@@ -61,7 +61,9 @@ export const BrowseChannelsDialog = ({
   };
 
   const joinable = joinableChannels(channels.data ?? []);
-  const wanted = fold(query.trim());
+  // Only while the field is drawn: a list that shrank under it must not stay filtered by words
+  // the person can no longer see or clear.
+  const wanted = joinable.length > FINDABLE_FROM ? fold(query.trim()) : '';
   const shown =
     wanted === ''
       ? joinable

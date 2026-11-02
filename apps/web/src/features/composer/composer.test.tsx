@@ -17,6 +17,7 @@ import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { SessionGate } from '../session/session';
 import { WorkspaceScopeProvider } from '../shell/workspace';
+import { DeepWorkProvider } from '../shell/deep-work';
 import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Toaster } from '../../ui/toast';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -65,6 +66,10 @@ const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
     removeItem: (key): void => {
       items.delete(key);
     },
+    key: (index): string | null => [...items.keys()][index] ?? null,
+    get length(): number {
+      return items.size;
+    },
   };
 };
 
@@ -84,6 +89,8 @@ interface Options {
   readonly open?: boolean;
   /** A device with no pointer that hovers: a phone. */
   readonly touchOnly?: boolean;
+  /** Deep Work kept for the workspace, as the shell keeps it; absent, nothing keeps it. */
+  readonly deepWork?: boolean;
 }
 
 interface Mounted {
@@ -132,7 +139,13 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
                 touchOnly: () => options.touchOnly === true,
               }}
             >
-              <Holder />
+              {options.deepWork === true ? (
+                <DeepWorkProvider>
+                  <Holder />
+                </DeepWorkProvider>
+              ) : (
+                <Holder />
+              )}
             </ComposerPortsContext.Provider>
           </OutboxProvider>
           <Toaster dismissLabel="Close" />
@@ -552,14 +565,15 @@ describe('what is refused before it is sent, in words', () => {
 describe('pasting', () => {
   const thirteen = Array.from({ length: 13 }, (_, i) => `line ${String(i)}`).join('\n');
 
-  test('thirteen lines become a code block, said aloud, and Undo restores exactly what was there', async () => {
+  test('thirteen lines become a code block on its own line, and Undo keeps the pasted text', async () => {
     const { view, box, user } = await mount();
     await user.type(box(), 'before ');
     await user.paste(thirteen);
-    expect(box().value).toBe(`before \`\`\`\n${thirteen}\n\`\`\``);
+    // A fence opens a line or it is not one: after words, it starts on the next (D-210).
+    expect(box().value).toBe(`before \n\`\`\`\n${thirteen}\n\`\`\``);
     expect(view.getByText('Pasted text became a code block')).toBeDefined();
     await user.click(view.getByRole('button', { name: 'Undo' }));
-    expect(box().value).toBe('before ');
+    expect(box().value).toBe(`before ${thirteen}`);
     expectFocusOn(box());
   });
 
@@ -568,8 +582,48 @@ describe('pasting', () => {
     await user.type(box(), 'keep SELECT keep');
     box().setSelectionRange(5, 11);
     await user.paste(thirteen);
-    expect(box().value).toBe(`keep \`\`\`\n${thirteen}\n\`\`\` keep`);
-    expect(box().selectionStart).toBe(`keep \`\`\`\n${thirteen}\n\`\`\``.length);
+    expect(box().value).toBe(`keep \n\`\`\`\n${thirteen}\n\`\`\`\n keep`);
+    expect(box().selectionStart).toBe(`keep \n\`\`\`\n${thirteen}\n\`\`\`\n`.length);
+  });
+
+  test.each(['~~~ts\n', '```ts\n'])(
+    'a paste inside %j keeps the existing fence',
+    async (opening) => {
+      const { view, box, user } = await mount();
+      await user.type(box(), opening);
+      await user.paste(thirteen);
+      expect(box().value).toBe(opening + thirteen);
+      expect(view.queryByText('Pasted text became a code block')).toBeNull();
+    },
+  );
+
+  test('already fenced pasted code stays as supplied', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.paste(`\`\`\`ts\n${thirteen}\n\`\`\``);
+    expect(box().value).toBe(`\`\`\`ts\n${thirteen}\n\`\`\``);
+    expect(view.queryByText('Pasted text became a code block')).toBeNull();
+  });
+
+  test('Undo removes automatic formatting without erasing text added after the paste', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.paste(thirteen);
+    await user.type(box(), 'after');
+    await user.click(view.getByRole('button', { name: 'Undo' }));
+    expect(box().value).toBe(`${thirteen}after`);
+  });
+
+  test('Undo preserves a pasted block that has since been edited', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.paste(thirteen);
+    const edited = box().value.replace('line 0', 'my edit');
+    box().setSelectionRange(4, 10);
+    await press(user, 'my edit');
+    await user.click(view.getByRole('button', { name: 'Undo' }));
+    expect(box().value).toBe(edited);
+    expect(view.getByText('The pasted block changed. Your edits were kept.')).toBeDefined();
   });
 
   test('twelve lines are an ordinary paste, left to the browser, with no toast', async () => {
@@ -577,6 +631,69 @@ describe('pasting', () => {
     const twelve = thirteen.split('\n').slice(0, 12).join('\n');
     expect(fireEvent.paste(box(), { clipboardData: { getData: () => twelve } })).toBe(true);
     expect(view.queryByText('Pasted text became a code block')).toBeNull();
+  });
+
+  /** A paste as a browser makes one: the plain words, and what else the source put on the clipboard. */
+  const pasteOf = (target: HTMLElement, plain: string, html = ''): boolean =>
+    fireEvent.paste(target, {
+      clipboardData: {
+        files: [],
+        getData: (type: string) => (type === 'text/html' ? html : plain),
+      },
+    });
+
+  test('a spreadsheet’s rows become a table on lines of their own, and Paste as text undoes it (D-210)', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), 'Numbers:');
+    const rows = 'Region\tQ1\nİstanbul\t12';
+    act(() => {
+      pasteOf(box(), rows);
+    });
+    expect(box().value).toBe('Numbers:\n| Region | Q1 |\n| --- | --- |\n| İstanbul | 12 |');
+    expect(view.getByText('Pasted rows became a table')).toBeDefined();
+    await user.click(view.getByRole('button', { name: 'Paste as text' }));
+    expect(box().value).toBe(`Numbers:${rows}`);
+    expectFocusOn(box());
+  });
+
+  test('formatted text from a page keeps its emphasis and links, inline where the caret is', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), 'See ');
+    act(() => {
+      pasteOf(
+        box(),
+        'the PR now',
+        '<span>the <a href="https://example.com/pr/1">PR</a> <b>now</b></span>',
+      );
+    });
+    expect(box().value).toBe('See the [PR](https://example.com/pr/1) **now**');
+    expect(view.getByText('Pasted text kept its formatting')).toBeDefined();
+  });
+
+  test('Mod+Shift+V pastes the words as they are: no table, no formatting, no block', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    fireEvent.keyDown(box(), { key: 'V', metaKey: true, shiftKey: true });
+    expect(pasteOf(box(), 'a\tb\nc\td', '<b>a</b>')).toBe(true);
+    expect(view.queryByText('Pasted rows became a table')).toBeNull();
+    // Only that paste: the next one is read again.
+    act(() => {
+      pasteOf(box(), 'a\tb\nc\td');
+    });
+    expect(view.getByText('Pasted rows became a table')).toBeDefined();
+  });
+
+  test('a long paste of code is a block in its language, so it is coloured', async () => {
+    const { box } = await mount();
+    const code = [
+      'export interface Policy {',
+      ...Array.from({ length: 12 }, (_, n) => `  readonly a${String(n)}: number;`),
+      '}',
+    ].join('\n');
+    act(() => {
+      pasteOf(box(), code);
+    });
+    expect(box().value).toBe(`\`\`\`ts\n${code}\n\`\`\``);
   });
 
   test('a paste with no clipboard data is left to the browser; a pasted file is uploaded (#370)', async () => {
@@ -681,6 +798,10 @@ describe('drafts', () => {
       removeItem: () => {
         throw new Error('blocked');
       },
+      length: 0,
+      key: () => {
+        throw new Error('blocked');
+      },
     };
     for (const storage of [broken, null]) {
       const { box, sent, timers, user, view } = await mount({ storage });
@@ -779,6 +900,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     'Numbered list',
     'Quote',
     'Code block',
+    'Table',
   ] as const;
 
   test('is there, in the channel and in a thread alike, each button named and reachable by Tab', async () => {
@@ -2014,5 +2136,376 @@ describe('the preview (D-181)', () => {
     await user.click(view.getByRole('button', { name: 'Preview' }));
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['ready']);
+  });
+});
+
+describe('slash commands (D-214)', () => {
+  test('/me sends the words in italics; /shrug with its arm; neither leaves the command behind', async () => {
+    const { box, sent, user } = await mount();
+    await user.type(box(), '/me waves{Enter}');
+    await user.type(box(), '/shrug oh well{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['_waves_', 'oh well ¯\\\\\\_(ツ)\\_/¯']);
+    expect(box().value).toBe('');
+  });
+
+  test('an unknown command is not sent, and says which there are', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.type(box(), '/deploy now{Enter}');
+    expect(sent()).toEqual([]);
+    expect(view.getByText(/There is no \/deploy\./)).toBeDefined();
+    expect(box().value).toBe('/deploy now');
+  });
+
+  test('// at the start sends a slash as words', async () => {
+    const { box, sent, user } = await mount();
+    await user.type(box(), '//deploy now{Enter}');
+    expect(sent().map((frame) => frame.content)).toEqual(['/deploy now']);
+  });
+
+  test('/topic sets the topic through the channel’s edit, and says so', async () => {
+    const asked: unknown[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        updateChannel: (_id, input) => {
+          asked.push(input);
+          return Promise.resolve({ ...aChannel(IDS.api, 'api'), topic: 'Deploys' });
+        },
+      }),
+    });
+    await user.type(box(), '/topic Deploys{Enter}');
+    await settle();
+    expect(asked).toEqual([{ topic: 'Deploys' }]);
+    expect(view.getByText('Topic set')).toBeDefined();
+    expect(box().value).toBe('');
+  });
+
+  test('/mute sets the level to nothing, as the header’s menu does', async () => {
+    const levels: string[] = [];
+    const { box, user } = await mount({
+      api: aSignedInApi({
+        setNotificationLevel: (_id, level) => {
+          levels.push(level);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/mute{Enter}');
+    await settle();
+    expect(levels).toEqual(['none']);
+  });
+
+  test('/invite names somebody the workspace does not have, and nothing is asked', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/invite @nobody{Enter}');
+    await settle();
+    expect(view.getByText('Nobody in this workspace is @nobody.')).toBeDefined();
+    expect(box().value).toBe('/invite @nobody');
+  });
+
+  test('the list follows what is typed; arrows move, Tab completes', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/s');
+    const list = view.getByRole('listbox', { name: 'Commands' });
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((option) => option.querySelector('.font-mono')?.textContent),
+    ).toEqual(['/shrug', '/star', '/search']);
+    await user.keyboard('{ArrowDown}{Tab}');
+    expect(box().value).toBe('/star ');
+  });
+
+  test('Esc closes the list and leaves what was typed', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/t');
+    expect(view.getByRole('listbox', { name: 'Commands' })).toBeDefined();
+    await user.keyboard('{Escape}');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    expect(box().value).toBe('/t');
+  });
+
+  test('a draft that comes back as a command opens no list: only a `/` typed now does', async () => {
+    const { view, box, user } = await mount({ storage: drafted('/'), props: { autoFocus: true } });
+    expectFocusOn(box());
+    expect(box().value).toBe('/');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    await user.keyboard('t');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    await user.keyboard('{Backspace}{Backspace}/t');
+    expect(box().value).toBe('/t');
+    expect(view.getByRole('listbox', { name: 'Commands' })).toBeDefined();
+  });
+
+  test('Esc holds when the person leaves and comes back: the draft is kept, the list stays shut', async () => {
+    const storage = memory();
+    const first = await mount({ storage, props: { autoFocus: true } });
+    await first.user.type(first.box(), '/');
+    await first.user.keyboard('{Escape}');
+    first.view.unmount();
+    const second = await mount({ storage, props: { autoFocus: true } });
+    expect(second.box().value).toBe('/');
+    expect(second.view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+  });
+
+  test('/topic with nothing after it clears the topic', async () => {
+    const asked: unknown[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        updateChannel: (_id, input) => {
+          asked.push(input);
+          return Promise.resolve(aChannel(IDS.api, 'api'));
+        },
+      }),
+    });
+    await user.type(box(), '/topic{Enter}');
+    await settle();
+    expect(asked).toEqual([{ topic: null }]);
+    expect(view.getByText('Topic cleared')).toBeDefined();
+  });
+
+  test('a /topic the server refuses says why and keeps the command to try again', async () => {
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        updateChannel: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      }),
+    });
+    await user.type(box(), '/topic Deploys{Enter}');
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(view.queryByText('Topic set')).toBeNull();
+    expect(box().value).toBe('/topic Deploys');
+  });
+
+  test('/unmute brings the level back to mentions, and says so', async () => {
+    const levels: string[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        channels: () => Promise.resolve([aChannel(IDS.api, 'api', { notificationLevel: 'none' })]),
+        setNotificationLevel: (_id, level) => {
+          levels.push(level);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/unmute{Enter}');
+    await settle();
+    expect(levels).toEqual(['mentions']);
+    expect(view.getByText('Unmuted')).toBeDefined();
+    expect(box().value).toBe('');
+  });
+
+  test('/star and /unstar star the channel and let it go, as the header’s star does', async () => {
+    const stars: boolean[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        star: (_id, starred) => {
+          stars.push(starred);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/star{Enter}');
+    await settle();
+    expect(view.getByText('Starred')).toBeDefined();
+    await user.type(box(), '/unstar{Enter}');
+    await settle();
+    expect(view.getByText('Unstarred')).toBeDefined();
+    expect(stars).toEqual([true, false]);
+  });
+
+  test('in a channel the person has not joined, /mute, /star and /leave each say to join first and ask nothing', async () => {
+    const asked: string[] = [];
+    const api = aSignedInApi({
+      channels: () =>
+        Promise.resolve([aChannel(IDS.api, 'api', { state: null, notificationLevel: null })]),
+      setNotificationLevel: () => {
+        asked.push('level');
+        return Promise.resolve();
+      },
+      star: () => {
+        asked.push('star');
+        return Promise.resolve();
+      },
+      leaveChannel: () => {
+        asked.push('leave');
+        return Promise.resolve();
+      },
+    });
+    for (const command of ['/mute', '/star', '/leave']) {
+      const { view, box, user } = await mount({ api });
+      await user.type(box(), `${command}{Enter}`);
+      await settle();
+      expect(view.getByText('Join the channel first.')).toBeDefined();
+      expect(box().value).toBe(command);
+      view.unmount();
+    }
+    expect(asked).toEqual([]);
+  });
+
+  test('/invite @alice adds her to the channel by her id, and says so', async () => {
+    const added: [string, string][] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        addChannelMember: (channelId, userId) => {
+          added.push([channelId, userId]);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/invite @Alice{Enter}');
+    await settle();
+    expect(added).toEqual([[IDS.api, ALICE_USER.id]]);
+    expect(view.getByText('Alice was added')).toBeDefined();
+    expect(box().value).toBe('');
+  });
+
+  test('/invite with nobody named says how to name somebody', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/invite{Enter}');
+    await settle();
+    expect(view.getByText('Name who to add: /invite @name.')).toBeDefined();
+    expect(box().value).toBe('/invite');
+  });
+
+  test('an /invite the server refuses says why and keeps the command', async () => {
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        addChannelMember: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      }),
+    });
+    await user.type(box(), '/invite @bob{Enter}');
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(box().value).toBe('/invite @bob');
+  });
+
+  test('/leave leaves the channel and goes to the workspace, saying which channel was left', async () => {
+    const left: string[] = [];
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        leaveChannel: (channelId) => {
+          left.push(channelId);
+          return Promise.resolve();
+        },
+      }),
+    });
+    await user.type(box(), '/leave{Enter}');
+    await settle();
+    expect(left).toEqual([IDS.api]);
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme');
+    expect(view.getByText('You left #api.')).toBeDefined();
+  });
+
+  test('a /leave the server refuses stays where it is and says why', async () => {
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        leaveChannel: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      }),
+    });
+    const before = view.world.history.stack.length;
+    await user.type(box(), '/leave{Enter}');
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(view.world.history.stack).toHaveLength(before);
+    expect(box().value).toBe('/leave');
+  });
+
+  test('/deepwork 30m starts Deep Work and /deepwork off ends it, through the shell’s controls', async () => {
+    const asked: unknown[] = [];
+    const { view, box, user } = await mount({
+      deepWork: true,
+      api: aSignedInApi({
+        setDeepWork: (_workspaceId, input) => {
+          asked.push(input);
+          return Promise.resolve({ until: null });
+        },
+      }),
+    });
+    await user.type(box(), '/deepwork 30m{Enter}');
+    await settle();
+    expect(view.getByText('Deep Work started')).toBeDefined();
+    await user.type(box(), '/deepwork off{Enter}');
+    await settle();
+    expect(view.getByText('Deep Work ended')).toBeDefined();
+    const [started, ended] = asked as [{ active: boolean; until?: unknown }, unknown];
+    expect(started.active).toBe(true);
+    expect(typeof started.until).toBe('string');
+    expect(ended).toEqual({ active: false });
+    expect(asked).toHaveLength(2);
+  });
+
+  test('/deepwork for a length it does not know, or where nothing keeps Deep Work, says what it takes', async () => {
+    const kept = await mount({ deepWork: true });
+    await kept.user.type(kept.box(), '/deepwork forever{Enter}');
+    await settle();
+    expect(kept.view.getByText('Deep Work for 30m, 1h, 2h or tomorrow, or off.')).toBeDefined();
+    kept.view.unmount();
+
+    const unkept = await mount();
+    await unkept.user.type(unkept.box(), '/deepwork 1h{Enter}');
+    await settle();
+    expect(unkept.view.getByText('Deep Work for 30m, 1h, 2h or tomorrow, or off.')).toBeDefined();
+  });
+
+  test('/search with no words says what it takes, and goes nowhere', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search{Enter}');
+    await settle();
+    expect(view.getByText('Write what to search for after /search.')).toBeDefined();
+    expect(view.world.history.stack).toEqual(['/']);
+  });
+
+  test('/search goes to the workspace’s search with the words in its address', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search çay & deploy{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?${new URLSearchParams({ q: 'çay & deploy' }).toString()}`,
+    );
+    expect(box().value).toBe('');
+  });
+
+  test('/search reads its operators into the search’s filters, as the search field does (D-224)', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search in:#deploys from:@bob has:file is:open "is:open" çay{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?${new URLSearchParams({
+        q: 'is:open çay',
+        in: IDS.deploys,
+        from: IDS.bob,
+        kind: 'file',
+        status: 'open',
+      }).toString()}`,
+    );
+    expect(box().value).toBe('');
+  });
+
+  test('/search with a name nobody has still goes, the operator left in the words to be said there', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/search in:#nowhere deploy{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?${new URLSearchParams({ q: 'in:#nowhere deploy' }).toString()}`,
+    );
+  });
+
+  test('/search that the search would refuse is refused under the box, the words kept', async () => {
+    const backwards = await mount();
+    await backwards.user.type(
+      backwards.box(),
+      '/search deploy after:2026-10-05 before:2026-10-01{Enter}',
+    );
+    await settle();
+    expect(backwards.view.getByText('The end date must come after the start date.')).toBeDefined();
+    expect(backwards.view.world.history.stack).toEqual(['/']);
+    expect(backwards.box().value).toBe('/search deploy after:2026-10-05 before:2026-10-01');
+    backwards.view.unmount();
+
+    const short = await mount();
+    await short.user.type(short.box(), '/search in:#api ab{Enter}');
+    await settle();
+    expect(short.view.getByText('Type at least 3 characters.')).toBeDefined();
+    expect(short.view.world.history.stack).toEqual(['/']);
   });
 });

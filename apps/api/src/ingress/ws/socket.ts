@@ -41,6 +41,7 @@ import { AppError } from '../../platform/errors';
 import { refusalFor } from '../http/errors';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
+import type { ServerMetrics } from '../../platform/metrics';
 
 export interface SocketDependencies {
   readonly config: Pick<Config, 'APP_URL'>;
@@ -64,6 +65,8 @@ export interface SocketDependencies {
   readonly push?: PushSender | undefined;
   /** The grace's timers (D-136); a test passes its own so a grace passes without waiting. */
   readonly timers?: Timers | undefined;
+  /** Where a frame refused for the rate is counted (D-221); absent, it is not. */
+  readonly metrics?: Pick<ServerMetrics, 'rateLimited'> | undefined;
 }
 
 export interface ConnectionLimits {
@@ -170,7 +173,11 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     database,
     clock,
     log,
-    source: { sessions: hub.sessions, end: hub.deliver },
+    source: {
+      sessions: hub.sessions,
+      end: hub.deliver,
+      lifetime: () => dependencies.auth.sessionLifetime,
+    },
     ...(dependencies.liveness?.timers === undefined
       ? {}
       : { timers: dependencies.liveness.timers }),
@@ -297,6 +304,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   userWrites: dependencies.userWrites,
                   presence,
                   attention: dependencies.attention,
+                  sessionLifetime: () => dependencies.auth.sessionLifetime,
                   log,
                   push: dependencies.push,
                   // The real boundary. D-35: one transaction, published after it returns.
@@ -307,6 +315,12 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                 raw,
               );
             } finally {
+              // A frame or a send refused for the rate, counted as the HTTP door counts its 429s.
+              for (const reply of replies) {
+                if (reply.event === 'ERROR' && reply.data.code === 'RATE_LIMITED') {
+                  dependencies.metrics?.rateLimited.inc({ door: 'socket' });
+                }
+              }
               // Through the hub, so a replay burst is held to the same mark as the
               // bus's fan-out, and the live frames kept during a subscription follow.
               hub.reply(socket.id, replies);

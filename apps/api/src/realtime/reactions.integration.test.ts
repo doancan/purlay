@@ -7,7 +7,13 @@
  * the commit and the delivery race each other, which one transaction cannot show.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { messageId, ServerFrame } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
@@ -35,12 +41,12 @@ beforeAll(async () => {
     }),
   );
   server = `http://localhost:${String(app.listen(0))}`;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const react = async (
   method: 'PUT' | 'DELETE',

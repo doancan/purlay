@@ -11,9 +11,9 @@ it** for a flat price per workspace. Both are the same code — there is no paid
 held back from self-hosters, and there never will be. **Adding a teammate never costs more**, on
 either one.
 
-> **Status: pre-alpha, and not usable yet.** Work is in Phase 0; how far along it is lives on the
-> issue board, not here — see [Project status](#project-status). This README describes what is
-> being built, not what runs today.
+> **Status: pre-release.** v0.1.0 is the one published release, and the team runs the newest commit on
+> its own server. Which phase is where lives on the issue board, not here — see
+> [Project status](#project-status).
 
 ---
 
@@ -99,7 +99,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 203 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 248 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |

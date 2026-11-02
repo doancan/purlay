@@ -225,11 +225,11 @@ test.describe('a paste', () => {
     const lines = Array.from({ length: 30 }, (_, index) => `line ${String(index + 1)}`).join('\n');
     await box.fill('before ');
     await paste(box, lines);
-    await expect(box).toHaveValue(`before \`\`\`\n${lines}\n\`\`\``);
+    await expect(box).toHaveValue(`before \n\`\`\`\n${lines}\n\`\`\``);
     await expect(page.getByText('Pasted text became a code block')).toBeVisible();
 
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(box).toHaveValue('before ');
+    await expect(box).toHaveValue(`before ${lines}`);
     await expect(box).toBeFocused();
   });
 

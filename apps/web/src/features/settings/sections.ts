@@ -15,6 +15,7 @@ const SETTINGS_SECTIONS = [
   { id: 'notifications', group: 'account', glyph: 'notifications', for: 'everyone' },
   { id: 'shortcuts', group: 'account', glyph: 'shortcuts', for: 'everyone' },
   { id: 'account', group: 'account', glyph: 'lock', for: 'everyone' },
+  { id: 'about', group: 'account', glyph: 'info', for: 'everyone' },
   { id: 'general', group: 'workspace', glyph: 'settings', for: 'admins' },
   { id: 'members', group: 'workspace', glyph: 'people', for: 'admins' },
   { id: 'invitations', group: 'workspace', glyph: 'invite', for: 'admins' },

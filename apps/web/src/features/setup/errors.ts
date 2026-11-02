@@ -11,7 +11,8 @@ import type { PlainKey } from '../../i18n/types';
 import type { SetupFailure } from './client';
 
 /** The field a reason points at, outlined on the screen that has it. */
-type ProbeField = 'clientId' | 'clientSecret' | 'smtpUrl' | 'from' | 'admin' | 'issuer';
+type ProbeField =
+  'clientId' | 'clientSecret' | 'smtpUrl' | 'from' | 'admin' | 'issuer' | 'privateKey' | 'appId';
 
 /** How far a mail try got: the index of the line it stopped at, in `MAIL_STAGES`. */
 export type MailStage = 0 | 1 | 2 | 3;
@@ -91,6 +92,18 @@ export const REASONS: Record<ProbeReason, ReasonWords> = {
     fix: ['setup.reason.unexpected-reply.fix1', 'setup.reason.unexpected-reply.fix2'],
     field: 'smtpUrl',
     stoppedAt: 1,
+  },
+  'key-rejected': {
+    what: 'setup.reason.key-rejected.what',
+    fix: ['setup.reason.key-rejected.fix1', 'setup.reason.key-rejected.fix2'],
+    field: 'privateKey',
+    stoppedAt: null,
+  },
+  'app-mismatch': {
+    what: 'setup.reason.app-mismatch.what',
+    fix: ['setup.reason.app-mismatch.fix1', 'setup.reason.app-mismatch.fix2'],
+    field: 'appId',
+    stoppedAt: null,
   },
   'issuer-mismatch': {
     what: 'setup.reason.issuer-mismatch.what',

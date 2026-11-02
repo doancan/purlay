@@ -5,6 +5,13 @@
 // is only what it cannot see, and every line says why. The target is not zero
 // exemptions but zero nobody can find (CONTRIBUTING §6.5): this file is the whole
 // list. Nothing here is a file-by-file waiver for code that is simply dead.
+//
+// Knip itself is held at 6.41.0 (D-219: updates are the owner's). From 6.42.1 its Bun plugin reads
+// the root's `bun test apps packages scripts` as filters and matches them against each workspace's
+// own directory (#2165 upstream), so no test under apps/ or packages/ is an entry; 6.44.0 also stops
+// following root scripts into other workspaces (`bun run apps/api/src/cli/…`). Either way 500+ live
+// files read as unused. Bump it when `bun run knip` passes on the new version, not by listing here
+// what it should have found.
 {
   "$schema": "https://unpkg.com/knip@6.39.0/schema.json",
 
@@ -41,14 +48,7 @@
       ],
     },
     "apps/web": {
-      // The first exemption. The realtime client library and the browser clock
-      // that feeds it are finished and tested, and nothing imports them until the
-      // client store lands (#26). Listing them as entries keeps their exports
-      // out of the report until then; delete this array when #26 merges and
-      // knip will say which exports, if any, the store left unused.
-      "entry": ["src/realtime/*.ts", "src/system-clock.ts"],
-
-      // A second, different kind: a dependency named only by a *string*.
+      // A dependency named only by a *string*.
       // `testing/radix-preload.ts` calls `mock.module('@radix-ui/react-use-layout-effect')`,
       // which is how Radix portals mount in a test DOM that registers after Radix is
       // imported. Knip reads imports, not strings, so it sees a devDependency nothing

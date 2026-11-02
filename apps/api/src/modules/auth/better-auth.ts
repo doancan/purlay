@@ -30,6 +30,7 @@ import {
 import { APIError, createAuthMiddleware, isAPIError } from 'better-auth/api';
 import type { OAuthProvider } from '@better-auth/core/oauth2';
 import { magicLink } from 'better-auth/plugins/magic-link';
+import { twoFactor } from 'better-auth/plugins/two-factor';
 import type { GithubOptions, GithubProfile } from 'better-auth/social-providers';
 import { runWithTransaction } from '@better-auth/core/context';
 import {
@@ -41,12 +42,21 @@ import {
   passwordProblem,
   SIGN_IN_LINK_TTL_MINUTES,
   SIGN_IN_PATH,
+  TWO_FACTOR_CHALLENGE_MINUTES,
+  TWO_FACTOR_FAILURES_BEFORE_LOCK,
+  TWO_FACTOR_LOCK_MINUTES,
   type PasswordOwner,
 } from '@purlay/types';
 import { isTransaction, sessionTokenDigest, sessionTokenHashing, type Executor } from '@purlay/db';
 import { readCapped } from '../../platform/http-body';
 import type { Clock } from '../../platform/clock';
-import { INVITE_COOKIE, readCookie, SESSION_COOKIE, STATE_COOKIE } from '../../platform/cookies';
+import {
+  INVITE_COOKIE,
+  readCookie,
+  SESSION_COOKIE,
+  STATE_COOKIE,
+  TWO_FACTOR_COOKIE,
+} from '../../platform/cookies';
 import {
   publication,
   publishAfterCommit,
@@ -69,6 +79,14 @@ import {
 } from './identity';
 import { countAttempt, giveBack, type Attempt } from './password-attempts';
 import { revokeOtherSessionsById } from './revoke-other-sessions';
+import {
+  endLapsedSession,
+  lapsed,
+  lifetimeLimited,
+  NO_SESSION_LIFETIME,
+  type SessionLifetime,
+} from './session-lifetime';
+import { SESSION_CLOCK } from './sessions';
 import { linkLetter, type SignInLocale } from './sign-in-letters';
 import { heldTransaction, rememberingTransactions } from './sign-up-transaction';
 import { consumePassport, passportAllows } from '../workspaces/invitation-passport';
@@ -90,6 +108,19 @@ export interface AuthSettings {
   readonly signUp: 'invite-only' | 'open';
 }
 
+/**
+ * The server's sign-in policy (D-239), as its administrator set it: whether an account that signs in with a
+ * password must turn on two-step verification before anything else answers it, and whether a password signs
+ * in at all. The requirement asks nothing while passwords are off: the password is then no way in to protect.
+ */
+export interface SignInPolicy {
+  readonly requireTwoFactor: boolean;
+  readonly passwordSignIn: boolean;
+}
+
+/** Neither rule on: what every server was before D-239, and what a test's instance is unless it says. */
+const NO_SIGN_IN_POLICY: SignInPolicy = { requireTwoFactor: false, passwordSignIn: true };
+
 export interface AuthDependencies {
   readonly database: Executor;
   readonly baseUrl: string;
@@ -102,6 +133,15 @@ export interface AuthDependencies {
   readonly mailer?: Outbox | undefined;
   readonly log: Logger;
   readonly settings: AuthSettings;
+  /**
+   * The sign-in policy (D-239). The server always passes its settings' (`runtimeServicesFrom`); absent is
+   * neither rule on, which is what a test's instance needs unless it is about the policy.
+   */
+  readonly signInPolicy?: SignInPolicy | undefined;
+  /**
+   * How long a session lives (D-244). The server always passes its settings'; absent is neither rule on.
+   */
+  readonly sessionLifetime?: SessionLifetime | undefined;
   /**
    * Where GitHub is (`GITHUB_URL`, `GITHUB_API_URL`): github.com and its API, an Enterprise Server, or
    * a stand-in on this machine. The deployment's, never a setting (D-179).
@@ -211,6 +251,11 @@ interface SignInRound {
   keeping?: { readonly userId: string; readonly sessionId: string } | undefined;
   /** A password weighed in this request, counted until it proves not to have been a wrong guess. */
   attempt?: Attempt | undefined;
+  /**
+   * Turning two-step verification on or off (D-236): the id of the caller's session, which the library would
+   * replace with a new one. Kept, and the new one undone after the request, so the session stays the same row.
+   */
+  unrotated?: string | undefined;
 }
 
 /** Opened around every request the handler serves; nothing outside it can carry a GitHub sign-in. */
@@ -500,7 +545,15 @@ const personEnding = async (
 const callerSession = async (
   database: Executor,
   headers: Headers | undefined,
-): Promise<{ readonly id: string; readonly userId: string } | undefined> => {
+): Promise<
+  | {
+      readonly id: string;
+      readonly userId: string;
+      readonly createdAt: Date;
+      readonly lastUsedAt: Date;
+    }
+  | undefined
+> => {
   const cookie = readCookie(headers?.get('cookie') ?? null, SESSION_COOKIE);
   if (cookie === undefined) return undefined;
   let decoded: string;
@@ -512,10 +565,17 @@ const callerSession = async (
   const [raw = ''] = decoded.split('.');
   const row = await database
     .selectFrom('sessions as sessions_ended')
-    .select(['sessions_ended.id', 'sessions_ended.user_id'])
+    .select([
+      'sessions_ended.id',
+      'sessions_ended.user_id',
+      'sessions_ended.created_at',
+      'sessions_ended.last_used_at',
+    ])
     .where('sessions_ended.token_hash', '=', sessionTokenDigest(raw))
     .executeTakeFirst();
-  return row === undefined ? undefined : { id: row.id, userId: row.user_id };
+  return row === undefined
+    ? undefined
+    : { id: row.id, userId: row.user_id, createdAt: row.created_at, lastUsedAt: row.last_used_at };
 };
 
 /** Every session of the person, by the person: one indexed read, however many they hold. */
@@ -684,6 +744,12 @@ const CLOSED_PATHS = [
   '/update-session',
   '/delete-user/callback',
   '/list-accounts',
+  // Two-step verification's routes nothing of Purlay's reaches (D-236): the key is shown once, when it is
+  // made, and never read back — `/two-factor/get-totp-uri` would hand it to a stolen session for a password;
+  // codes by mail or message are not offered, so their two routes would only answer that they are not.
+  '/two-factor/get-totp-uri',
+  '/two-factor/send-otp',
+  '/two-factor/verify-otp',
 ];
 
 /** The route through which the library spends a link, as its hooks see it named. */
@@ -741,14 +807,18 @@ export const admittedByPassport = async (
 };
 
 /**
- * Whom a provider's account may be added to (D-200 §3, §6), decided where the library makes the row:
+ * Whom a provider's account may be added to (D-200 §3, §6; D-179 §3), decided where the library makes the row:
  *
  * - **An account has one single sign-on identity.** The library links a callback it does not know to the
- *   account whose address matches, and never asks whether that account already has an identity at the
- *   provider: a new subject carrying a recycled or changed address would be added beside the old one and sign
- *   in as the person who left. The subject decides, not the address — a second subject is refused.
- * - **GitHub is not a way past it.** An account single sign-on is linked to is signed into by it alone, as an
- *   emailed link is refused it (`magic-link.ts`): GitHub is not linked to one by address.
+ *   account whose address matches, and never asks whether that account already has an identity at the provider:
+ *   a new subject carrying a recycled or changed address would be added beside the old one and sign in as the
+ *   person who left. The subject decides, not the address — a second subject is refused.
+ * - **So has it one GitHub identity**, by the same rule: a GitHub account is linked by its verified address
+ *   only to an account that has none, its `github_id` null. Another GitHub id — beside an `accounts` row or the
+ *   column `recordGitHubSignIn` would overwrite — is refused, or whoever takes over the address at GitHub
+ *   signs in as the person it was.
+ * - **GitHub is not a way past single sign-on.** An account single sign-on is linked to is signed into by it
+ *   alone, as an emailed link is refused it (`magic-link.ts`): GitHub is not linked to one by address.
  *
  * Thrown, so the callback answers a reason of the library's (`identity_conflict`) and nothing is written.
  */
@@ -766,13 +836,34 @@ const refusedIdentityConflict = async (
   const conflict =
     account.providerId === OIDC_PROVIDER_ID
       ? held.some((row) => row.account_id !== account.accountId)
-      : held.length > 0;
+      : held.length > 0 || (await holdsAnotherGitHubIdentity(database, account));
   if (conflict) {
     throw new APIError('FORBIDDEN', {
       code: 'identity_conflict',
       message: 'That account signs in another way.',
     });
   }
+};
+
+/** The account already has a GitHub identity, and it is not this one. */
+const holdsAnotherGitHubIdentity = async (
+  database: Executor,
+  account: { readonly userId: string; readonly accountId: string },
+): Promise<boolean> => {
+  const linked = await database
+    .selectFrom('accounts')
+    .select('account_id')
+    .where('user_id', '=', account.userId)
+    .where('provider_id', '=', 'github')
+    .execute();
+  if (linked.some((row) => row.account_id !== account.accountId)) return true;
+  const owner = await database
+    .selectFrom('users')
+    .select('github_id')
+    .where('id', '=', account.userId)
+    .executeTakeFirst();
+  const kept = owner?.github_id ?? null;
+  return kept !== null && kept !== account.accountId;
 };
 
 /** Refused as the provider's own switch refused: the callback maps it to `signup-closed`. */
@@ -807,6 +898,34 @@ const CHANGE_PASSWORD = '/change-password';
 /** The code of the answer to a change of password whose other sessions could not be ended. */
 const OTHER_SESSIONS_NOT_ENDED = 'OTHER_SESSIONS_NOT_ENDED';
 const RESET_PASSWORD = '/reset-password';
+/** The code of the answer to a password sign-in where the server turned passwords off (D-239). */
+const PASSWORD_SIGN_IN_DISABLED = 'PASSWORD_SIGN_IN_DISABLED';
+
+/** Two-step verification's routes (D-236), as the library's hooks see them named. */
+const ENABLE_TWO_FACTOR = '/two-factor/enable';
+const DISABLE_TWO_FACTOR = '/two-factor/disable';
+const NEW_BACKUP_CODES = '/two-factor/generate-backup-codes';
+const VERIFY_CODE = '/two-factor/verify-totp';
+const VERIFY_BACKUP_CODE = '/two-factor/verify-backup-code';
+
+/**
+ * The routes that weigh the password of the person a session names: each attempt counted with the sign-in's
+ * wrong guesses for the same address and client (D-179 §4, D-236).
+ */
+const SESSION_PASSWORD_PATHS: ReadonlySet<string> = new Set([
+  CHANGE_PASSWORD,
+  ENABLE_TWO_FACTOR,
+  DISABLE_TWO_FACTOR,
+  NEW_BACKUP_CODES,
+]);
+
+/**
+ * The routes on which the library replaces the caller's session with a new one: the code that turns two-step
+ * verification on, and turning it off. Nothing here needs a new session — no session is cached in a cookie —
+ * and a new one would end the old: its sockets told the session ended, the devices push reaches through it
+ * gone with its row, its lifetime started again (D-60). So the old one is kept and the new one undone (D-236).
+ */
+const ROTATING_PATHS: ReadonlySet<string> = new Set([VERIFY_CODE, DISABLE_TWO_FACTOR]);
 
 /** What the library answers a wrong password with, on each route that weighs one: a guess, counted. */
 const WRONG_GUESSES: ReadonlySet<string> = new Set([
@@ -853,6 +972,28 @@ const refusedPassword = (password: unknown, owner: PasswordOwner): APIError | un
     message: 'Choose another password: that one is too easy to guess.',
     reason: problem,
   });
+};
+
+/**
+ * What a client does not choose about two-step verification (D-236), set here whatever it sent: a code from an
+ * authenticator app, never another method, under the server's own name (`issuer`); no device trusted to skip
+ * the step from then on (`trustDevice`); and no backup code spent without the session it was spent for
+ * (`disableSession`). A body that is not an object is left to the library's refusal.
+ */
+const twoFactorBody = (
+  path: string,
+  body: unknown,
+  issuer: string,
+): { context: { body: Record<string, unknown> } } | undefined => {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const sent = body as Readonly<Record<string, unknown>>;
+  // Each field set to a value: the library merges what a hook returns over the body, and skips an undefined.
+  if (path === ENABLE_TWO_FACTOR) return { context: { body: { ...sent, method: 'totp', issuer } } };
+  if (path === VERIFY_CODE) return { context: { body: { ...sent, trustDevice: false } } };
+  if (path === VERIFY_BACKUP_CODE) {
+    return { context: { body: { ...sent, trustDevice: false, disableSession: false } } };
+  }
+  return undefined;
 };
 
 /** A unique index refused a write: in a link's spend, a new account another spend made first. */
@@ -983,6 +1124,22 @@ export type Auth = ReturnType<typeof betterAuth> & {
    * client's address under `CLIENT_ADDRESS_HEADER`, as ingress sets it.
    */
   readonly passwordSignIn: (email: string, password: string, headers: Headers) => Promise<Response>;
+  /** The sign-in policy this instance was built with (D-239). */
+  readonly signInPolicy: SignInPolicy;
+  /**
+   * Whether the server holds this person back until they turn on two-step verification (D-239): the policy
+   * requires it, a password signs in, the account has one, and its second step is off. Read from the database
+   * each time, so turning it on lifts the hold from the next request, on the same session. No read at all
+   * where the policy asks nothing.
+   */
+  readonly owesTwoFactor: (userId: string) => Promise<boolean>;
+  /** How long a session lives on this instance (D-244). */
+  readonly sessionLifetime: SessionLifetime;
+  /**
+   * Ends a session this lifetime let lapse, if its row still says so, and tells the sockets it held (D-244).
+   * Nothing where it was ended already or used in between.
+   */
+  readonly endLapsedSession: (sessionId: string) => Promise<void>;
 };
 
 export const createAuth = (deps: AuthDependencies): Auth => {
@@ -990,6 +1147,10 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     throw new Error(`the auth secret must be at least ${String(SECRET_BYTES)} bytes`);
   }
   const { settings, log, mailer } = deps;
+  const policy = deps.signInPolicy ?? NO_SIGN_IN_POLICY;
+  const lifetime = deps.sessionLifetime ?? NO_SESSION_LIFETIME;
+  /** The requirement in force: on, and a password a way in for it to protect. */
+  const twoFactorRequired = policy.requireTwoFactor && policy.passwordSignIn;
   const get = deps.fetch ?? fetch;
   const endpoints = githubEndpoints(deps.githubUrls);
 
@@ -997,13 +1158,38 @@ export const createAuth = (deps: AuthDependencies): Auth => {
    * Every session the library ends, told to the sockets it holds once the end is committed, as our
    * own sign-out does (D-85, #194). Never thrown: the end is already written.
    */
-  const sessionsEnded = async (sessionIds: readonly string[]): Promise<void> => {
+  const sessionsEnded = async (
+    sessionIds: readonly string[],
+    reason: 'signed-out' | 'expired' = 'signed-out',
+  ): Promise<void> => {
     // One publication a session: one that fails is logged, and the rest are still told.
     await publishAfterCommit(log, [
       sessionIds.map((sessionId) =>
-        publication('SESSION_ENDED', () => publishSessionsEnded(deps.bus, deps.clock, [sessionId])),
+        publication('SESSION_ENDED', () =>
+          publishSessionsEnded(deps.bus, deps.clock, [sessionId], reason),
+        ),
       ),
     ]);
+  };
+
+  /** A session the lifetime let lapse, deleted while its row still says so, and told once (D-244). */
+  const endLapsed = async (sessionId: string): Promise<void> => {
+    if (await endLapsedSession(deps.database, lifetime, SESSION_CLOCK.now(), sessionId)) {
+      await sessionsEnded([sessionId], 'expired');
+    }
+  };
+
+  /**
+   * The library's own routes read the session themselves, not through `sessionFromHeaders`: a session the lifetime
+   * let lapse is ended here first, so the library finds none — a route that needs one answers its `401`, and a
+   * sign-in goes on as from a browser that holds nothing (D-244). One read, and only while a rule is on.
+   */
+  const lapsedCallerEnded = async (headers: Headers | undefined): Promise<void> => {
+    if (!lifetimeLimited(lifetime)) return;
+    const caller = await callerSession(deps.database, headers);
+    if (caller !== undefined && lapsed(lifetime, caller, SESSION_CLOCK.now())) {
+      await endLapsed(caller.id);
+    }
   };
 
   /**
@@ -1039,9 +1225,32 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   };
 
   /**
+   * After a route on which the library replaces the caller's session (`ROTATING_PATHS`, D-236): the caller's
+   * own was kept by the delete hook; the one the library made in its place is deleted by its row — nobody
+   * holds it, so nothing is told — and its cookie taken out of the answer, so the browser keeps the session it
+   * has. A delete that fails is thrown: the answer would otherwise sign the browser into a session it then
+   * loses.
+   */
+  const sessionUnrotated = async (
+    kept: string,
+    made: { readonly session: { readonly id: string } } | null,
+    answer: Headers | undefined,
+  ): Promise<void> => {
+    if (made === null || made.session.id === kept) return;
+    await deps.database.deleteFrom('sessions').where('id', '=', made.session.id).execute();
+    const cookies = answer?.getSetCookie() ?? [];
+    answer?.delete('set-cookie');
+    for (const line of cookies) {
+      if (!line.startsWith(`${SESSION_COOKIE}=`)) answer?.append('set-cookie', line);
+    }
+  };
+
+  /**
    * Before a route that weighs or sets a password (D-179 §4): a new one held to the policy, and an
    * attempt at the current one counted — refused with `429` and `Retry-After` past the throttle, before
-   * the library hashes anything. A change of password always ends the person's other sessions: the
+   * the library hashes anything. Turning two-step verification on or off and new backup codes weigh the
+   * session holder's password as a change does, and are counted with it (D-236). A change of password
+   * always ends the person's other sessions: the
    * library's `revokeOtherSessions`, set here whatever the client sent. Only through a round
    * (`answer`, `passwordSignIn`), which carries the attempt to the hook after; outside one it refuses,
    * so nothing weighs a password uncounted.
@@ -1052,7 +1261,11 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     body: unknown,
     weighing: SignInRound | undefined,
   ): Promise<{ context: { body: Record<string, unknown> } } | undefined> => {
-    if (path !== SIGN_IN_WITH_PASSWORD && path !== CHANGE_PASSWORD && path !== RESET_PASSWORD) {
+    if (
+      path !== SIGN_IN_WITH_PASSWORD &&
+      path !== RESET_PASSWORD &&
+      !SESSION_PASSWORD_PATHS.has(path)
+    ) {
       return undefined;
     }
     let address: string;
@@ -1102,6 +1315,29 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       : undefined;
   };
 
+  /**
+   * What the sign-in policy refuses of the library's routes (D-239), before anything is weighed or counted: a
+   * password sign-in where passwords are off — the same answer whatever the address, so it says nothing of any
+   * account — and turning two-step verification off where the server requires it.
+   */
+  const policyRefusal = (path: string): void => {
+    if (path === SIGN_IN_WITH_PASSWORD && !policy.passwordSignIn) {
+      throw new APIError('FORBIDDEN', {
+        code: PASSWORD_SIGN_IN_DISABLED,
+        message: 'This server does not sign in with a password.',
+      });
+    }
+    if (path === DISABLE_TWO_FACTOR && twoFactorRequired) {
+      throw new APIError('FORBIDDEN', {
+        code: 'TWO_FACTOR_REQUIRED',
+        message: 'This server requires two-step verification of an account with a password.',
+      });
+    }
+  };
+
+  /** The name an authenticator app files the key under (D-236): this server's, so two servers' keys differ. */
+  const issuer = `Purlay (${new URL(deps.baseUrl).host})`;
+
   // Built from the settings and connected to nothing: the provider is asked nothing until somebody presses the
   // button (D-200 §2). Unset, there is no provider, no plugin and no route.
   const oidcProvider =
@@ -1149,6 +1385,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         // The OAuth state's cookie, `__Host-` like the session's, so a sibling subdomain cannot
         // plant its own and sign the victim into the planter's account (#199, D-62).
         state: { name: STATE_COOKIE },
+        // The challenge a right password opens when the account asks for a second step (D-236).
+        two_factor: { name: TWO_FACTOR_COOKIE },
       },
       // The library's own check is asked by `schemaProblem`, not by this instance. The library runs it
       // the moment an instance is built and keeps a mismatch for the life of the process: a server
@@ -1196,6 +1434,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         // Read so the session seam can refuse a soft-deleted account (D-139 §5, ARCHITECTURE.md); never
         // written by the library, and never taken from a client.
         deletedAt: { type: 'date', required: false, input: false, fieldName: 'deleted_at' },
+        // Read so neither a sign-in nor the seam lets a suspended account in (D-233); written by the
+        // server's administrator alone (`modules/users/suspension.ts`), never by the library or a client.
+        suspendedAt: { type: 'date', required: false, input: false, fieldName: 'suspended_at' },
       },
     },
     session: {
@@ -1267,11 +1508,17 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       // between a person and signing out: a read of ours that fails is written down and the request
       // goes on, told by the library's own hooks alone.
       before: createAuthMiddleware(async (ctx) => {
+        policyRefusal(ctx.path);
+        await lapsedCallerEnded(ctx.headers);
         const round = signInRounds.getStore();
         const changed = await passwordWeighed(ctx.path, ctx.headers, ctx.body, round);
         if (round !== undefined && ctx.path === CHANGE_PASSWORD) {
           const caller = await callerSession(deps.database, ctx.headers);
           if (caller !== undefined) round.keeping = { userId: caller.userId, sessionId: caller.id };
+        }
+        if (round !== undefined && ROTATING_PATHS.has(ctx.path)) {
+          const caller = await callerSession(deps.database, ctx.headers);
+          if (caller !== undefined) round.unrotated = caller.id;
         }
         if (round !== undefined && ENDING_PATHS.has(ctx.path)) {
           try {
@@ -1283,7 +1530,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             log.warn('the sessions a sign-out ends could not be read first', { err: error });
           }
         }
-        return changed;
+        return changed ?? twoFactorBody(ctx.path, ctx.body, issuer);
       }),
       // … and every one of them gone after it, told — once its transaction has committed, as the
       // request is answered; one rolled back left its rows, and nothing is told. Read again by the
@@ -1313,6 +1560,11 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           round.keeping = undefined;
           if (!isAPIError(ctx.context.returned)) await endOtherSessions(keeping);
         }
+        const unrotated = round?.unrotated;
+        if (round !== undefined && unrotated !== undefined) {
+          round.unrotated = undefined;
+          await sessionUnrotated(unrotated, ctx.context.newSession, ctx.context.responseHeaders);
+        }
         const ending = round?.ending;
         if (ending === undefined) return;
         try {
@@ -1326,6 +1578,34 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     },
     plugins: [
       revokeOtherSessionsById(sessionsEnded),
+      // Two-step verification for an account with a password (D-236): a code from an authenticator app after
+      // the password, or a backup code. What a client may not choose is set by `twoFactorBody`; the routes
+      // that weigh a password are counted (`passwordWeighed`); the session is never replaced (`unrotated`).
+      twoFactor({
+        issuer,
+        schema: {
+          user: { fields: { twoFactorEnabled: 'two_factor_enabled' } },
+          twoFactor: {
+            modelName: 'two_factors',
+            fields: {
+              userId: 'user_id',
+              backupCodes: 'backup_codes',
+              failedVerificationCount: 'failed_verification_count',
+              lockedUntil: 'locked_until',
+            },
+          },
+        },
+        // Sealed under the server's derived secret, as the key is: a copy of the table spends no code.
+        backupCodeOptions: { storeBackupCodes: 'encrypted' },
+        // The library's own numbers, said here so a change of its defaults is not a change of ours: ten wrong
+        // codes in a row at sign-in, across challenges, lock the second step for fifteen minutes.
+        accountLockout: {
+          enabled: true,
+          maxFailedAttempts: TWO_FACTOR_FAILURES_BEFORE_LOCK,
+          durationSeconds: TWO_FACTOR_LOCK_MINUTES * 60,
+        },
+        twoFactorCookieMaxAge: TWO_FACTOR_CHALLENGE_MINUTES * 60,
+      }),
       // Sign-in by link, only where there is a relay to send one (D-138 §6). The library's link
       // (`url`, a `GET` to its own route with the token in the query) is never sent: Purlay's page
       // carries the token in its fragment, shows the address, and spends it only on *Sign in*.
@@ -1434,14 +1714,28 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             // Through the library's adapter of the moment, so a sign-up that makes the account and its
             // session in one transaction reads the account it has not committed yet.
             const adapter = await getCurrentAdapter((await instance.$context).adapter);
-            const owner = await adapter.findOne<{ deletedAt?: Date | null }>({
+            const owner = await adapter.findOne<{
+              deletedAt?: Date | null;
+              suspendedAt?: Date | null;
+            }>({
               model: 'user',
               where: [{ field: 'id', value: session.userId }],
-              select: ['deletedAt'],
+              select: ['deletedAt', 'suspendedAt'],
             });
-            // No account, or one erased: refused (returning false aborts the create).
-            if (owner === null) return false;
-            if (owner.deletedAt !== null && owner.deletedAt !== undefined) return false;
+            // No account, one erased, or one suspended (D-233): refused by every way in the library has —
+            // GitHub, a password, a link, single sign-on, the second step (D-236). Thrown as the 401 the
+            // library answers a refused create with, not `return false`: the second step reads a false as
+            // its own failure and answers 500 (#857).
+            const refused =
+              owner === null ||
+              (owner.deletedAt !== null && owner.deletedAt !== undefined) ||
+              (owner.suspendedAt !== null && owner.suspendedAt !== undefined);
+            if (refused) {
+              throw new APIError('UNAUTHORIZED', {
+                message: 'Failed to create session',
+                code: 'FAILED_TO_CREATE_SESSION',
+              });
+            }
             // A GitHub sign-in: the columns that are ours, written before its session exists.
             const profile = signInRounds.getStore()?.profile;
             if (profile !== undefined) {
@@ -1475,6 +1769,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         // library deletes, after its transaction commits and never for one rolled back (the library
         // queues these behind the commit; concepts/database).
         delete: {
+          // The caller's session the library would replace while turning two-step verification on or off
+          // (D-236): kept (returning false skips the delete), and the replacement undone after the request.
+          before: (session) => Promise.resolve(signInRounds.getStore()?.unrotated !== session.id),
           after: async (session) => {
             await sessionsEnded([session.id]);
           },
@@ -1612,6 +1909,22 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     github: settings.github !== undefined,
     oidc: settings.oidc === undefined ? undefined : { name: settings.oidc.name },
     signUp: settings.signUp,
+    signInPolicy: policy,
+    sessionLifetime: lifetime,
+    endLapsedSession: endLapsed,
+    owesTwoFactor: async (userId): Promise<boolean> => {
+      if (!twoFactorRequired) return false;
+      const owing = await deps.database
+        .selectFrom('users')
+        .innerJoin('accounts', 'accounts.user_id', 'users.id')
+        .select('users.id')
+        .where('users.id', '=', userId)
+        .where('users.two_factor_enabled', '=', false)
+        .where('accounts.provider_id', '=', 'credential')
+        .where('accounts.password', 'is not', null)
+        .executeTakeFirst();
+      return owing !== undefined;
+    },
     passwordSignIn: async (email, password, headers): Promise<Response> => {
       const round: SignInRound = { profile: undefined, made: false };
       return await signInRounds.run(

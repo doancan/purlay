@@ -66,6 +66,8 @@ export interface PushControls {
   readonly closedTab: boolean;
   readonly turnOn: () => void;
   readonly turnOff: () => void;
+  /** Requests a device test while on; the browser accepting it does not prove OS delivery. */
+  readonly test: (() => void) | null;
 }
 
 interface Notifications {
@@ -262,15 +264,42 @@ export const PushProvider = ({
     });
   }, [device, api, storage, failed]);
 
+  const test = useCallback((): void => {
+    if (notifier === null || status !== 'on') return;
+    if (notifier.permission() !== 'granted') {
+      storage?.removeItem(PUSH_OWNER_KEY);
+      setStatus(offOrBlocked(notifier));
+      show({ message: t('push.testBlocked') });
+      return;
+    }
+    try {
+      const accepted = notifier.show({
+        title: t('push.testTitle'),
+        body: t('push.testBody'),
+        tag: 'purlay:test',
+        onOpen: (): void => undefined,
+      });
+      show({ message: t(accepted ? 'push.testRequested' : 'push.testFailed') });
+    } catch {
+      show({ message: t('push.testFailed') });
+    }
+  }, [notifier, status, storage, show, t]);
+
   const value = useMemo(
     () => ({
       controls:
         status === null
           ? null
-          : { status, turnOn, turnOff, closedTab: device !== null && serverKey !== undefined },
+          : {
+              status,
+              turnOn,
+              turnOff,
+              test: status === 'on' && notifier !== null ? test : null,
+              closedTab: device !== null && serverKey !== undefined,
+            },
       notifier,
     }),
-    [status, turnOn, turnOff, notifier, device, serverKey],
+    [status, turnOn, turnOff, test, notifier, device, serverKey],
   );
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;
 };

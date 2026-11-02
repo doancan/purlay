@@ -7,7 +7,16 @@ import { describe, expect, test } from 'bun:test';
 import { aRecordingLogger } from '../testing/doubles';
 import { aRelay } from '../testing/relay';
 import { smtpUrlProblem } from './smtp-address';
-import { checkRelay, letter, outbox, smtpMailer, transportOptions, type MailMessage } from './mail';
+import {
+  checkRelay,
+  letter,
+  mailInFlight,
+  outbox,
+  smtpMailer,
+  transportOptions,
+  type MailMessage,
+} from './mail';
+import { createMetricsRegistry } from './metrics';
 
 const allow = { SMTP_ALLOW_PLAINTEXT: false };
 
@@ -105,6 +114,23 @@ describe('the outbox', () => {
     const written = JSON.stringify(lines);
     expect(written).not.toContain('alice@example.test');
     expect(written).not.toContain('secret-token');
+  });
+
+  /** Counted in the ledger every relay's outbox shares, so a relay replaced since the start still counts (D-221). */
+  test('a letter the relay did not take is counted once, whichever relay it went through; one it took is not', async () => {
+    const { log } = aRecordingLogger();
+    const registry = createMetricsRegistry();
+    const mailFailures = registry.counter('purlay_mail_failures_total', 'F.', []);
+    const sends = mailInFlight(log, mailFailures);
+    const refused = (): Promise<void> => Promise.reject(new Error('421 try later'));
+    const first = outbox(refused, log, sends);
+    const second = outbox(refused, log, sends);
+    const working = outbox(() => Promise.resolve(), log, sends);
+    first.post(letter_, 'sign-in');
+    second.post(letter_, 'invitation');
+    working.post(letter_, 'sign-in');
+    await sends.flush(1_000);
+    expect(registry.families()[0]?.samples.map((sample) => sample.value)).toEqual([2]);
   });
 
   test('flush waits no longer than its bound, and says how many it left', async () => {

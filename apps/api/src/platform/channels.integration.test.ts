@@ -11,12 +11,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { AppError } from './errors';
-import {
-  requireChannelById,
-  requireChannelVisibility,
-  requireMessageById,
-  visibleChannelIds,
-} from './channels';
+import { requireChannelById, requireMessageById, visibleChannelIds } from './channels';
 import { requireWorkspaceMembership } from './tenancy';
 
 afterAll(async () => {
@@ -84,9 +79,7 @@ describe('integration: channel visibility', () => {
       const userId = await addUser(db, 'ch-member');
       const workspaceId = await addWorkspace(db, 'ch-open', userId);
       const channelId = await addChannel(db, workspaceId, 'general');
-      const workspace = await requireWorkspaceMembership(db, userId, workspaceId);
-
-      const context = await requireChannelVisibility(db, workspace, channelId);
+      const context = await requireChannelById(db, userId, channelId);
       expect(context.channelId).toBe(channelId);
       expect(context.channelType).toBe('public');
       expect(context.workspaceId).toBe(workspaceId);
@@ -104,13 +97,9 @@ describe('integration: channel visibility', () => {
       const workspaceId = await addWorkspace(db, 'ch-private', insider, outsider);
       const channelId = await addChannel(db, workspaceId, 'secret', 'private', insider);
 
-      const forInsider = await requireWorkspaceMembership(db, insider, workspaceId);
-      expect((await requireChannelVisibility(db, forInsider, channelId)).channelType).toBe(
-        'private',
-      );
+      expect((await requireChannelById(db, insider, channelId)).channelType).toBe('private');
 
-      const forOutsider = await requireWorkspaceMembership(db, outsider, workspaceId);
-      const refusal = await refusalFrom(() => requireChannelVisibility(db, forOutsider, channelId));
+      const refusal = await refusalFrom(() => requireChannelById(db, outsider, channelId));
       expect(refusal.status).toBe(404);
       expect(refusal.body.code).toBe('CHANNEL_NOT_FOUND');
     });
@@ -130,20 +119,17 @@ describe('integration: channel visibility', () => {
         .where('id', '=', deleted)
         .execute();
 
-      const context = await requireWorkspaceMembership(db, outsider, mine);
       const answers = [
         // in another workspace
-        await refusalFrom(() => requireChannelVisibility(db, context, hidden)),
+        await refusalFrom(() => requireChannelById(db, outsider, hidden)),
         // soft-deleted
-        await refusalFrom(() => requireChannelVisibility(db, context, deleted)),
+        await refusalFrom(() => requireChannelById(db, outsider, deleted)),
         // never existed
         await refusalFrom(() =>
-          requireChannelVisibility(db, context, '00000000-0000-4000-8000-000000000000'),
+          requireChannelById(db, outsider, '00000000-0000-4000-8000-000000000000'),
         ),
         // not even a uuid — must not become a 500 on the cast
-        await refusalFrom(() =>
-          requireChannelVisibility(db, context, "'; DROP TABLE channels; --"),
-        ),
+        await refusalFrom(() => requireChannelById(db, outsider, "'; DROP TABLE channels; --")),
       ];
 
       const shapes = new Set(answers.map((answer) => JSON.stringify(answer.response)));

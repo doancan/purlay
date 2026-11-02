@@ -1,3 +1,4 @@
+import { putKnowledge, readSavedSearches, putSavedSearch, deleteSavedSearch } from './knowledge';
 /**
  * The HTTP surface.
  *
@@ -21,16 +22,24 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
-import { askForExport, downloadExport, readExports } from './exports';
+import {
+  askForExport,
+  askForMyExport,
+  downloadExport,
+  downloadMyExport,
+  readExports,
+  readMyExports,
+} from './exports';
 import { goneMessageReference } from '../../platform/gone-message';
 import { askForSignInLink, consumeSignIn, previewSignIn } from './magic-link';
 import { afterAnswer } from '../../platform/after-answer';
 import type { SignInLinkDependencies } from '../../modules/auth/magic-link';
 import { authMethods } from './auth-methods';
 import { clientInfo, clientPolicyOf } from './client-info';
+import { readLatestRelease } from './releases';
 import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
-import { Elysia, type HTTPHeaders } from 'elysia';
+import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
@@ -48,13 +57,20 @@ import {
   startSignIn,
   type AuthResponse,
 } from './auth';
+import { lift, readServerAccounts, suspend } from './accounts';
 import { endMySession, readMySessions } from './devices';
-import { AUTH_BASE_PATH, OIDC_CALLBACK, SIGN_IN_CALLBACK } from '@purlay/types';
+import {
+  AUTH_BASE_PATH,
+  GITHUB_APP_CALLBACK,
+  OIDC_CALLBACK,
+  SIGN_IN_CALLBACK,
+} from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
 import {
   GITHUB_CALL_BUDGET,
   httpLimits,
+  INCOMING_WEBHOOK_BUDGET,
   WEBHOOK_BUDGET,
   WEBHOOK_FEED_BUDGET,
   WRITE_BUDGET,
@@ -80,6 +96,7 @@ import {
   responseHeaders,
   DOCUMENT_HEADERS,
   clientTooOldResponse,
+  pathWithoutSecret,
 } from './edge';
 import { clientFileFor, isUnchanged, type Client } from './client';
 import { refusalFor } from './errors';
@@ -91,8 +108,11 @@ import {
   listWorkspaceMembers,
   readGitHubIntegration,
   readAuditTrail,
+  exportAuditTrail,
   removeWorkspaceMember,
   leaveWorkspaceMembership,
+  requestWorkspaceDeletion,
+  cancelWorkspaceDeletion,
   updateMemberRole,
   readMe,
   readWorkspace,
@@ -119,28 +139,61 @@ import {
   type SetupDependencies,
 } from './setup';
 import {
-  changeSignUpPolicy,
+  changeSignInPolicy,
   changeWorkspaceCreators,
   connectGitHubApp,
   connectOidcProvider,
   connectMailRelay,
+  connectIssuesApp,
   disconnectChannel,
+  disconnectIssuesApp,
   readServerSettings,
 } from './server';
 import {
+  linkGitHubWork,
+  makeGitHubIssue,
+  readGitHubRepositories,
+  STATUS_OF_OUTCOME,
+  type GitHubIssueRouteDependencies,
+} from './github-issues';
+import {
+  beginAuthorization,
+  beginInstallation,
+  endAuthorization,
+  endInstallation,
+  githubAppCallback,
+  readGitHubAppStatus,
+  receiveAppWebhook,
+  type GitHubAppRouteDependencies,
+} from './github-app';
+import {
+  githubAppApi,
+  githubAppCaller,
+  platformAppFetch,
+  type GitHubAppFetch,
+} from '../../modules/integrations/github-app-api';
+import { latestReleaseCheck } from '../../modules/integrations/latest-release';
+import type { GitHubAppSettings } from '../../modules/setup/settings';
+import {
   createWorkspaceChannel,
   joinPublicChannel,
+  listArchived,
   listChannels,
   openConversationWith,
   openDirectMessageWith,
+  readAllChannels,
   readChannel,
   readUpTo,
+  unreadFrom,
   setLevel,
   addChannelMember,
   archive,
   changeChannel,
+  readChannelRetentionSetting,
+  updateChannelRetentionSetting,
   leave,
   removeFromChannel,
+  restore,
   listChannelMembers,
 } from './channels';
 import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
@@ -150,6 +203,7 @@ import {
   readHistory,
   readChanges,
   readAround,
+  readOne,
   readThread,
   readThreadFollow,
   putThreadFollow,
@@ -161,12 +215,17 @@ import {
 } from './messages';
 import { changeReaction } from './reactions';
 import { readiness, recentReadiness, type Readiness } from '../../platform/readiness';
+import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
+import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
+import { PLAN } from '../../modules/jobs/schedule';
+import { EDGE_ROUTE, answerMetrics, methodLabel, routeLabel, statusLabel } from './metrics';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
-import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
+import { githubApi, inProcessPauses, type GitHubApi } from '../../modules/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
@@ -189,12 +248,21 @@ import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
+import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
+import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
 import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
 import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
-import { connectFeed, disconnectFeed, listFeeds } from './feeds';
+import { connectFeed, disconnectFeed, listFeeds, regenerateFeedSecret } from './feeds';
+import {
+  listIncomingWebhooks,
+  makeIncomingWebhook,
+  postIncomingWebhook,
+  revokeIncomingWebhook,
+} from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
+import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -233,8 +301,17 @@ export interface Dependencies {
    * (`exportQueue`). A test about something else makes none.
    */
   readonly exportRunner: (exportId: string) => void;
+  /** And a person's export of their own data, in the same queue (D-241). */
+  readonly personalExportRunner: (exportId: string) => void;
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
   readonly githubApi?: GitHubApi;
+  /**
+   * The GitHub App issues are written through (D-246), as this request reads it; absent, the settings' as the
+   * holder serves them (`settingsChange`), and without a holder, none. A test hands its own.
+   */
+  readonly githubApp?: () => GitHubAppSettings | undefined;
+  /** How the App's calls reach GitHub; absent, the platform's `fetch`. A test hands its stand-in's. */
+  readonly githubAppFetch?: GitHubAppFetch;
   /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
   readonly externalFetch?: ExternalFetch;
   readonly log: Logger;
@@ -271,6 +348,11 @@ export interface Dependencies {
    * (`readWorkspaceCreators`, D-179 §6). A test about something else lets anybody.
    */
   readonly workspaceCreators?: (executor: Executor) => Promise<WorkspaceCreators>;
+  /**
+   * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
+   * absent, the application keeps one of its own — a test reads it through `/metrics`.
+   */
+  readonly metrics?: ServerMetrics;
 }
 
 /**
@@ -305,6 +387,9 @@ export interface HttpApplication {
    */
   readonly settled: () => Promise<void>;
 }
+
+/** Paths asked every few seconds by a machine: their request lines are written at debug. */
+const POLLED: ReadonlySet<string> = new Set(['/health', '/health/ready', '/metrics']);
 
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
@@ -351,6 +436,16 @@ const SETUP_PATH = /^\/setup(?:\/|$)/;
 
 export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
+  const metrics = dependencies.metrics ?? serverMetrics();
+  /** One request's line on the page: never its path as sent, only the route it was registered as. */
+  const observe = (method: string, route: string | undefined, status: number): void => {
+    const started = currentRequest()?.startedAt;
+    if (started === undefined) return;
+    metrics.httpDuration.observe(
+      { method: methodLabel(method), route: routeLabel(route), status: statusLabel(status) },
+      (performance.now() - started) / 1000,
+    );
+  };
   /** `body` served by one instance of the library, the one current now; see `Dependencies.services`. */
   const within = async <T>(body: () => Promise<T>): Promise<T> =>
     dependencies.services === undefined ? await body() : await dependencies.services.within(body);
@@ -371,9 +466,25 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
-  const sockets = createSocketLifecycle({ ...dependencies, userWrites });
+  const sockets = createSocketLifecycle({ ...dependencies, userWrites, metrics });
+  metrics.registry.gauge(
+    'purlay_websocket_connections',
+    'WebSocket connections open on this process.',
+    () => sockets.held().connections,
+  );
+  // The jobs run in the scheduler's container: their record is read from the database per scrape.
+  const readJobs = jobMetrics({
+    read: async () => await readJobRuns(dependencies.database),
+    known: PLAN.map((slot) => slot.job),
+    log,
+  });
   // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
   const githubCalls = limiterFor('github-calls', GITHUB_CALL_BUDGET);
+  // Workspaces GitHub told to wait, and GitHub's API at the address the sign-in uses (D-23, amended).
+  const githubPauses = inProcessPauses();
+  const github =
+    dependencies.githubApi ??
+    githubApi(dependencies.config.GITHUB_API_URL, () => dependencies.clock.now().getTime());
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
@@ -400,12 +511,51 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     later: afterInvitationAnswers.run,
   });
   const feedPosts = limiterFor('webhook-feeds', WEBHOOK_FEED_BUDGET);
+  // Each incoming webhook's posts, once its secret held; before it, the address's knocks (D-245).
+  const hookPosts = limiterFor('incoming-webhooks', INCOMING_WEBHOOK_BUDGET);
   // Who may make a workspace: the setting as it is now, each time it is asked (D-155, D-179 §6).
   const creating = {
     ...dependencies,
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
   };
   const delivering = { count: 0 };
+  // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
+  const githubUrls = {
+    web: dependencies.config.GITHUB_URL,
+    api: dependencies.config.GITHUB_API_URL,
+  };
+  const appApi = githubAppApi(
+    githubAppCaller(dependencies.githubAppFetch ?? platformAppFetch, () =>
+      dependencies.clock.now(),
+    ),
+    githubUrls,
+  );
+  // One per application: what it has asked GitHub is kept for every caller (D-248).
+  const releases = latestReleaseCheck({
+    enabled: dependencies.config.UPDATE_CHECK,
+    apiUrl: dependencies.config.GITHUB_API_URL,
+    fetch: dependencies.githubAppFetch ?? platformAppFetch,
+    clock: dependencies.clock,
+    log,
+  });
+  const githubIssues = (): GitHubIssueRouteDependencies => ({
+    ...githubApp(),
+    bus: sockets.bus,
+  });
+  const githubApp = (): GitHubAppRouteDependencies => ({
+    auth: dependencies.auth,
+    database: dependencies.database,
+    clock: dependencies.clock,
+    log,
+    cipher,
+    app:
+      dependencies.githubApp === undefined
+        ? dependencies.settingsChange?.holder.current()?.settings.githubApp
+        : dependencies.githubApp(),
+    api: appApi,
+    urls: githubUrls,
+    appUrl: dependencies.config.APP_URL,
+  });
 
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
@@ -434,10 +584,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   /**
    * The path a log line names a request by: as sent, except under the library's routes, where it is
    * the route as the library's own table spells it (`Auth.routeOf`) — a reset's token travels in a
-   * path segment there, and nothing a caller wrote belongs in the log (D-179 §3).
+   * path segment there, and nothing a caller wrote belongs in the log (D-179 §3) — and an incoming
+   * webhook's, whose secret is its last segment (D-245).
    */
   const writtenPath = (route: string | undefined, path: string): string =>
-    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : path;
+    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
     // What an upload needs, and no more: every other body is bounded at the edge by its length,
@@ -472,9 +623,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       // paths can carry a token and are written as `/auth/*`.
       const turnedAway = (response: Response): Response => {
         const { pathname } = new URL(request.url);
+        observe(request.method, EDGE_ROUTE, response.status);
         log.info('request', {
           method: request.method,
-          path: pathname.startsWith('/auth/') ? '/auth/*' : pathname,
+          path: pathname.startsWith('/auth/') ? '/auth/*' : pathWithoutSecret(pathname),
           status: response.status,
           ms: Math.round(performance.now() - (currentRequest()?.startedAt ?? performance.now())),
         });
@@ -523,6 +675,13 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK) {
         return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
       }
+      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246).
+      if (path === GITHUB_APP_CALLBACK) {
+        if (refusal.status === 500) log.error('request failed', { err: error, path });
+        set.status = 302;
+        set.headers.location = '/?github=unavailable';
+        return '';
+      }
       const where = writtenPath(route, path);
       // The client is told INTERNAL and nothing else; the cause is written here.
       if (refusal.status === 500) log.error('request failed', { err: error, path: where });
@@ -534,6 +693,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           path: where,
         });
       }
+      if (refusal.body.error.code === 'RATE_LIMITED') metrics.rateLimited.inc({ door: 'http' });
       if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
         set.headers['retry-after'] = String(error.retryAfterSeconds);
       }
@@ -542,15 +702,22 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .onAfterResponse(({ request, path, route, set, responseValue }) => {
       const started = currentRequest()?.startedAt;
-      // A balancer and the container's own health check poll these every few seconds; at
-      // info they were most of the log. A probe that FAILS is not lost: readiness writes the
-      // reason at warn.
-      const write = path === '/health' || path === '/health/ready' ? log.debug : log.info;
+      // A balancer and the container's own health check poll these every few seconds, and a
+      // scraper `/metrics`; at info they were most of the log. A probe that FAILS is not lost:
+      // readiness writes the reason at warn.
+      const write = POLLED.has(path) ? log.debug : log.info;
+      // A handler that returns a `Response` (the library's routes) leaves `set.status` unset.
+      const status =
+        responseValue instanceof Response
+          ? responseValue.status
+          : typeof set.status === 'string'
+            ? StatusMap[set.status]
+            : (set.status ?? 200);
+      observe(request.method, route, status);
       write('request', {
         method: request.method,
         path: writtenPath(route, path),
-        // A handler that returns a `Response` (the library's routes) leaves `set.status` unset.
-        status: responseValue instanceof Response ? responseValue.status : set.status,
+        status,
         ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
       });
     })
@@ -569,6 +736,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       saidNotReady = answer;
       set.status = 503;
       return { status: 'not ready' } as const;
+    })
+    // For the operator's scraper alone (D-221): without `METRICS_TOKEN`, or without its token, it is
+    // the 404 of a path nothing serves.
+    .get('/metrics', async ({ request, set }) => {
+      const page = await answerMetrics(
+        { token: dependencies.config.METRICS_TOKEN, metrics, read: readJobs, log },
+        request,
+      );
+      set.headers['content-type'] = EXPOSITION_CONTENT_TYPE;
+      set.headers['cache-control'] = 'no-store';
+      return page;
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
@@ -700,6 +878,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return '';
     })
+    .post(
+      '/api/server/github-app',
+      async ({ request, body }) => await connectIssuesApp(setup, request, body),
+    )
+    .delete('/api/server/github-app', async ({ request, set }) => {
+      await disconnectIssuesApp(setup, request);
+      set.status = 204;
+      return '';
+    })
     .delete('/api/server/oidc', async ({ request, set }) => {
       await disconnectChannel(setup, request, 'oidc');
       set.status = 204;
@@ -711,7 +898,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return '';
     })
     .post('/api/server/policy', async ({ request, body, set }) => {
-      await changeSignUpPolicy(setup, request, body);
+      await changeSignInPolicy(setup, request, body);
       set.status = 204;
       return '';
     })
@@ -720,11 +907,42 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return '';
     })
+    .get(
+      '/api/server/accounts',
+      async ({ request }) =>
+        await readServerAccounts({ ...dependencies, bus: sockets.bus }, request),
+    )
+    .put('/api/server/accounts/:userId/suspension', async ({ request, params, set }) => {
+      await suspend({ ...dependencies, bus: sockets.bus }, request, params.userId);
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/server/accounts/:userId/suspension', async ({ request, params, set }) => {
+      await lift({ ...dependencies, bus: sockets.bus }, request, params.userId);
+      set.status = 204;
+      return '';
+    })
 
     .post('/api/me/erase', async ({ request, body, set }) =>
       respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
     )
+    .post('/api/me/exports', async ({ request, set }) => {
+      const asked = await askForMyExport(dependencies, request);
+      set.status = 202;
+      return asked;
+    })
+    .get('/api/me/exports', async ({ request }) => await readMyExports(dependencies, request))
+    .get('/api/me/exports/:exportId/download', async ({ request, params }) => {
+      const { body, headers } = await downloadMyExport(dependencies, request, params.exportId);
+      // Our own Response, as an owner's export's download is: a cancel must reach the archive's.
+      return new Response(body, { headers });
+    })
     .get('/api/me', async ({ request }) => await readMe(creating, request))
+    .get(
+      '/api/releases/latest',
+      async ({ request }) =>
+        await readLatestRelease({ auth: dependencies.auth, releases }, request),
+    )
     .get('/api/me/sign-in', async ({ request }) => await readMySignIn(dependencies, request))
     .get(
       '/api/me/sessions',
@@ -739,6 +957,28 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/me/profile',
       async ({ request, body }) => await updateMyProfile(sending, request, body),
     )
+    .get(
+      '/api/me/quiet-hours',
+      async ({ request }) => await readMyQuietHours(dependencies, request),
+    )
+    .put(
+      '/api/me/quiet-hours',
+      async ({ request, body }) => await setMyQuietHours(dependencies, request, body),
+    )
+    .get(
+      '/api/me/missed-mail',
+      async ({ request }) => await readMyMissedMail(dependencies, request),
+    )
+    .put(
+      '/api/me/missed-mail',
+      async ({ request, body }) => await setMyMissedMail(dependencies, request, body),
+    )
+    // Public: a letter's link, opened in whichever browser, signed in or not (D-240).
+    .post('/api/missed-mail/stop', async ({ body, set }) => {
+      await stopMissedMailByLink(dependencies, body);
+      set.status = 204;
+      return null;
+    })
     .put('/api/me/locale', async ({ request, body, set }) => {
       await setMyLocale(dependencies, request, body);
       set.status = 204;
@@ -781,13 +1021,67 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           {
             ...dependencies,
             cipher,
-            githubApi: dependencies.githubApi ?? githubApi(),
+            githubApi: github,
             githubCalls,
+            githubPauses,
           },
           request,
           body,
         ),
     )
+    .get(
+      '/api/workspaces/:workspaceId/github-app',
+      async ({ request, params }) =>
+        await readGitHubAppStatus(githubApp(), request, params.workspaceId),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/github-app/installation',
+      async ({ request, params }) =>
+        await beginInstallation(githubApp(), request, params.workspaceId),
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/github-app/installation',
+      async ({ request, params, set }) => {
+        await endInstallation(githubApp(), request, params.workspaceId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/github-app/authorization',
+      async ({ request, body }) => await beginAuthorization(githubApp(), request, body),
+    )
+    .delete('/api/github-app/authorization', async ({ request, set }) => {
+      await endAuthorization(githubApp(), request);
+      set.status = 204;
+      return null;
+    })
+    .get('/api/github-app/callback', async ({ request, set }) => {
+      set.status = 302;
+      set.headers.location = await githubAppCallback(githubApp(), request);
+      set.headers['cache-control'] = 'no-store';
+      return '';
+    })
+    .get(
+      '/api/workspaces/:workspaceId/github-repositories',
+      async ({ request, params }) =>
+        await readGitHubRepositories(githubIssues(), request, params.workspaceId),
+    )
+    .post('/api/messages/:messageId/github-link', async ({ request, params, body, set }) => {
+      const { link, created } = await linkGitHubWork(
+        githubIssues(),
+        request,
+        params.messageId,
+        body,
+      );
+      set.status = created ? 201 : 200;
+      return link;
+    })
+    .post('/api/messages/:messageId/github-issue', async ({ request, params, body, set }) => {
+      const outcome = await makeGitHubIssue(githubIssues(), request, params.messageId, body);
+      set.status = STATUS_OF_OUTCOME[outcome.status];
+      return outcome;
+    })
     .get(
       '/api/workspaces/:workspaceId/presence',
       async ({ request, params }) =>
@@ -801,7 +1095,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .put(
       '/api/workspaces/:workspaceId/integrations/github',
       async ({ request, params, body, set }) => {
-        await changeGitHubToken({ ...dependencies, cipher }, request, params.workspaceId, body);
+        await changeGitHubToken(
+          { ...dependencies, cipher, githubApi: github },
+          request,
+          params.workspaceId,
+          body,
+        );
         set.status = 204;
         return null;
       },
@@ -810,7 +1109,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/integrations/github',
       async ({ request, params, set }) => {
         await changeGitHubToken(
-          { ...dependencies, cipher },
+          { ...dependencies, cipher, githubApi: github },
           request,
           params.workspaceId,
           undefined,
@@ -891,6 +1190,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await readAuditTrail(dependencies, request, params.workspaceId),
     )
+    .get('/api/workspaces/:workspaceId/audit/export', async ({ request, params }) => {
+      const { body, headers } = await exportAuditTrail(dependencies, request, params.workspaceId);
+      // A Response of our own, as an export's download is: a bare stream Elysia would wrap, and a
+      // browser that goes away would cancel the wrapper, not the pages being read.
+      return new Response(body, { headers });
+    })
     .patch(
       '/api/workspaces/:workspaceId/members/:userId',
       async ({ request, params, body }) =>
@@ -903,6 +1208,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .delete('/api/workspaces/:workspaceId/membership', async ({ request, params, set }) => {
       await leaveWorkspaceMembership(sending, request, params.workspaceId);
+      set.status = 204;
+      return null;
+    })
+    .post(
+      '/api/workspaces/:workspaceId/deletion',
+      async ({ request, params, body }) =>
+        await requestWorkspaceDeletion(sending, request, params.workspaceId, body),
+    )
+    .delete('/api/workspaces/:workspaceId/deletion', async ({ request, params, set }) => {
+      await cancelWorkspaceDeletion(sending, request, params.workspaceId);
       set.status = 204;
       return null;
     })
@@ -965,11 +1280,65 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return created;
     })
+    .post(
+      '/api/channels/:channelId/github-feeds/:feedId/secret',
+      async ({ request, params }) =>
+        await regenerateFeedSecret(
+          { ...dependencies, cipher },
+          request,
+          params.channelId,
+          params.feedId,
+        ),
+    )
     .delete('/api/channels/:channelId/github-feeds/:feedId', async ({ request, params, set }) => {
       await disconnectFeed(dependencies, request, params.channelId, params.feedId);
       set.status = 204;
       return null;
     })
+    .get(
+      '/api/channels/:channelId/incoming-webhooks',
+      async ({ request, params }) =>
+        await listIncomingWebhooks(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/incoming-webhooks', async ({ request, params, body, set }) => {
+      const created = await makeIncomingWebhook(dependencies, request, params.channelId, body);
+      set.status = 201;
+      return created;
+    })
+    .delete(
+      '/api/channels/:channelId/incoming-webhooks/:webhookId',
+      async ({ request, params, set }) => {
+        await revokeIncomingWebhook(dependencies, request, params.channelId, params.webhookId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/webhooks/incoming/:webhookId/:secret',
+      async ({ request, params, body, set, server }) => {
+        const answer = await postIncomingWebhook(
+          {
+            database: dependencies.database,
+            clock: dependencies.clock,
+            bus: sockets.bus,
+            log: dependencies.log,
+            mayPost: async (webhookId) => await hookPosts.consume(webhookId),
+            mayKnock: async (address) => await knocks.consume(address),
+          },
+          params,
+          body,
+          limitKeyFor(
+            clientAddress(
+              peerOf(server, request),
+              request.headers,
+              dependencies.config.TRUST_PROXY,
+            ),
+          ),
+        );
+        set.status = 201;
+        return answer;
+      },
+    )
     .get(
       '/api/channels/:channelId/incident',
       async ({ request, params }) => await readIncident(dependencies, request, params.channelId),
@@ -1024,6 +1393,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) => await listPins(dependencies, request, params.channelId),
     )
     .get(
+      '/api/channels/:channelId/bookmarks',
+      async ({ request, params }) => await listBookmarks(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/bookmarks', async ({ request, params, body, set }) => {
+      const bookmark = await postBookmark(sending, request, params.channelId, body);
+      set.status = 201;
+      return bookmark;
+    })
+    .delete('/api/channels/:channelId/bookmarks/:bookmarkId', async ({ request, params, set }) => {
+      await deleteBookmark(sending, request, params.channelId, params.bookmarkId);
+      set.status = 204;
+      return null;
+    })
+    .get(
       '/api/messages/:messageId/versions',
       async ({ request, params }) => await listVersions(dependencies, request, params.messageId),
     )
@@ -1056,6 +1439,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/workspaces/:workspaceId/channels',
       async ({ request, params }) => await listChannels(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/archived-channels',
+      async ({ request, params }) => await listArchived(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/read',
+      async ({ request, params }) =>
+        await readAllChannels({ ...dependencies, bus: sockets.bus }, request, params.workspaceId),
     )
     .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
       set.status = 201;
@@ -1098,8 +1490,23 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await changeChannel(sending, request, params.channelId, body),
     )
+    .get(
+      '/api/channels/:channelId/retention',
+      async ({ request, params }) =>
+        await readChannelRetentionSetting(dependencies, request, params.channelId),
+    )
+    .put(
+      '/api/channels/:channelId/retention',
+      async ({ request, params, body }) =>
+        await updateChannelRetentionSetting(dependencies, request, params.channelId, body),
+    )
     .delete('/api/channels/:channelId', async ({ request, params, set }) => {
       await archive(sending, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/channels/:channelId/restore', async ({ request, params, set }) => {
+      await restore(sending, request, params.channelId);
       set.status = 204;
       return null;
     })
@@ -1122,6 +1529,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/read',
       async ({ request, params, body }) =>
         await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
+    )
+    .put(
+      '/api/channels/:channelId/unread',
+      async ({ request, params, body }) =>
+        await unreadFrom({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
     .put('/api/channels/:channelId/star', async ({ request, params, set }) => {
       await starChannel(sending, request, params.channelId, true);
@@ -1181,8 +1593,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         await editMessage(sending, request, params.messageId, body),
     )
     .get(
+      '/api/messages/:messageId',
+      async ({ request, params }) => await readOne(dependencies, request, params.messageId),
+    )
+    .get(
       '/api/messages/:messageId/around',
       async ({ request, params }) => await readAround(dependencies, request, params.messageId),
+    )
+    .put(
+      '/api/messages/:messageId/knowledge',
+      async ({ request, params, body }) =>
+        await putKnowledge(sending, request, params.messageId, body),
     )
     .get(
       '/api/messages/:messageId/thread',
@@ -1239,6 +1660,32 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       { parse: 'none' },
     )
     .post(
+      '/api/webhooks/github-app',
+      async ({ request, server }) => {
+        const outcome = await receiveAppWebhook(
+          {
+            ...githubIssues(),
+            mayKnock: async (address) => await knocks.consume(address),
+            inFlight: delivering,
+            deadline: async (ms) => {
+              await Bun.sleep(ms);
+            },
+          },
+          request,
+          limitKeyFor(
+            clientAddress(
+              peerOf(server, request),
+              request.headers,
+              dependencies.config.TRUST_PROXY,
+            ),
+          ),
+        );
+        return { outcome };
+      },
+      // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
+      { parse: 'none' },
+    )
+    .post(
       '/api/webhooks/github/:feedId',
       async ({ request, params, set, server }) => {
         const outcome = await receiveWebhook(
@@ -1281,24 +1728,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return body;
     })
     .get('/api/attachments/:attachmentId', async ({ request, params, set }) => {
-      const { body, headers } = await downloadAttachment(
+      const download = await downloadAttachment(
         dependencies,
         request,
         params.attachmentId,
         'original',
       );
-      Object.assign(set.headers, headers);
-      return body;
+      Object.assign(set.headers, download.headers);
+      set.status = download.status;
+      return download.status === 304 ? null : download.body;
     })
     .get('/api/attachments/:attachmentId/thumbnail', async ({ request, params, set }) => {
-      const { body, headers } = await downloadAttachment(
+      const download = await downloadAttachment(
         dependencies,
         request,
         params.attachmentId,
         'thumbnail',
       );
-      Object.assign(set.headers, headers);
-      return body;
+      Object.assign(set.headers, download.headers);
+      set.status = download.status;
+      return download.status === 304 ? null : download.body;
     })
     .delete('/api/attachments/:attachmentId', async ({ request, params, set }) => {
       await discardAttachment(
@@ -1309,6 +1758,24 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    .get(
+      '/api/workspaces/:workspaceId/saved-searches',
+      async ({ request, params }) =>
+        await readSavedSearches(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/saved-searches/:searchId',
+      async ({ request, params, body }) =>
+        await putSavedSearch(sending, request, params.workspaceId, params.searchId, body),
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/saved-searches/:searchId',
+      async ({ request, params, set }) => {
+        await deleteSavedSearch(sending, request, params.workspaceId, params.searchId);
+        set.status = 204;
+        return null;
+      },
+    )
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),

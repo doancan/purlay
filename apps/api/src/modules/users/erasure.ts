@@ -4,7 +4,8 @@
  * - **What is theirs goes.** The `users` columns that say who they are — the address to an
  *   unroutable placeholder, the name to `deleted-user-…`, the GitHub id and the profile cleared — every
  *   session revoked with its address and agent, the devices push reaches, the sign-in links waiting
- *   for the old address, what they saved and what they were told.
+ *   for the old address, what they saved and what they were told, and the exports of their own data they
+ *   asked for, archives and all (D-241).
  * - **What the team holds stays**, under the anonymised row: their messages, reactions, memberships,
  *   incident roles and the trail. Erasure never cascades (D-9); content erasure is another act.
  * - **Asked for on purpose.** Their username, typed, and a session signed in within the last minutes:
@@ -22,6 +23,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { recordAudit } from '../audit/audit';
 import { availableUsername } from '../auth/identity';
+import { endPersonalExports } from '../export/personal-requests';
 import { inviterMailKey } from '../workspaces/invitation-mail';
 import { addressCounterKey } from '../auth/magic-link';
 import { passportAddressDigest } from '../workspaces/invitation-passport';
@@ -90,10 +92,10 @@ export const eraseAccount = async (
     where value = ${person.id}
        or case when pg_input_is_valid(value, 'jsonb')
                then lower((value::jsonb) ->> 'email') end = ${person.email}`.execute(executor);
-  // And how many links the address was sent this hour, kept by its digest.
+  // And how many links the address was sent this hour, from whichever clients: kept under its digest.
   await executor
     .deleteFrom('rate_limits')
-    .where('key', '=', await addressCounterKey(person.email))
+    .where('key', 'like', `${await addressCounterKey(person.email)}%`)
     .execute();
   // And the passports an invitation made for the address (D-179 §5), kept by its digest: read here, before
   // the tombstone replaces the address, or nothing could find them.
@@ -200,6 +202,9 @@ export const eraseAccount = async (
       // server authority, which must not outlive the person (D-139 §5, D-179).
       email_verified: false,
       is_server_admin: false,
+      two_factor_enabled: false,
+      // Nothing is mailed to an erased account, and its address is gone (D-240).
+      missed_mail_since: null,
       deleted_at: now,
       updated_at: now,
     })
@@ -210,12 +215,19 @@ export const eraseAccount = async (
   await executor.deleteFrom('hidden_messages').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('message_reminders').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('scheduled_messages').where('user_id', '=', person.id).execute();
+  await executor.deleteFrom('saved_searches').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('saved_messages').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('thread_follows').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('notifications').where('user_id', '=', person.id).execute();
+  // And when they were last mailed about what they missed, with each letter's stop link (D-240).
+  await executor.deleteFrom('missed_mail_letters').where('user_id', '=', person.id).execute();
+  // A copy of their own data they asked for (D-241): no longer downloadable, its archive swept.
+  await endPersonalExports(executor, clock, person.id);
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
   // left behind, the pair would also hand a returning GitHub sign-in the erased account (D-38, D-179).
   await executor.deleteFrom('accounts').where('user_id', '=', person.id).execute();
+  // And the second step's sealed key and backup codes (D-236): a credential, with the password it guarded.
+  await executor.deleteFrom('two_factors').where('user_id', '=', person.id).execute();
   // A link that would verify the address they had as the setup's administrator (D-179 §4.3): the row
   // outlives a soft deletion, which its key's cascade does not see.
   await executor.deleteFrom('admin_email_verification').where('user_id', '=', person.id).execute();

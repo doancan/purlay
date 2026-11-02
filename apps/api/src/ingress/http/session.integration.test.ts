@@ -12,6 +12,8 @@ import {
   cloneIntegrationDatabase,
   withRollback,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import type { MeResponse } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
@@ -87,12 +89,12 @@ describe('integration: the two doors of a running server', () => {
       testDependencies({ database: cloned.db, clock, config: testConfig({ APP_URL: ORIGIN }) }),
     );
     server = `http://localhost:${String(app.listen(0))}`;
-  });
+  }, CLONE_HOOK_MS);
 
   afterAll(async () => {
     await app.stop(true);
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   const upgrade = async (cookie: string): Promise<Response> =>
     await fetch(`${server}/ws`, {

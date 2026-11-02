@@ -46,6 +46,12 @@ export const tombstoneRows = async (
       // The client draws the words, in the reader's language (D-41).
       content: '',
       metadata: {},
+      decision_note: '',
+      decision_url: null,
+      decision_updated_by: null,
+      accepted_answer_id: null,
+      question_assignee_id: null,
+      is_question: false,
       state_version: sql<number>`state_version + 1`,
     })
     .where('id', 'in', messageIds)

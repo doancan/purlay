@@ -63,6 +63,10 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   // the log at a start is the one place it is shown, under its own field, `setupCode`
   // (`modules/setup/setup.ts`).
   'claimToken',
+  // Two-step verification (D-236): the key as a link an app reads, and the backup codes, shown and sealed.
+  'totpURI',
+  'backupCodes',
+  'backup_codes',
 ]);
 
 const REDACTED = '[redacted]';

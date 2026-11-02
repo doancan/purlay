@@ -337,6 +337,52 @@ describe('integration: the delivery sweep (D-134 §5)', () => {
   });
 });
 
+describe('integration: the GitHub App’s sweep (D-246)', () => {
+  test('forgets its deliveries past the days kept and the trips that expired, and nothing live', async () => {
+    await withRollback(async (db) => {
+      const days = (n: number): Date => new Date(NOW.getTime() - n * 86_400_000);
+      const digest = (n: number): string => n.toString(16).padStart(64, '0');
+      await db
+        .insertInto('github_app_deliveries')
+        .values([
+          { delivery_id: 'app-old', body_digest: digest(1), received_at: days(31) },
+          { delivery_id: 'app-exactly', body_digest: digest(2), received_at: days(30) },
+          { delivery_id: 'app-new', body_digest: digest(3), received_at: days(1) },
+        ])
+        .execute();
+      const person = await aUserRow(db, 'sweeper');
+      await db
+        .insertInto('github_app_handshakes')
+        .values(
+          [-1, 0, 5].map((minutes, n) => ({
+            state_digest: digest(100 + n),
+            user_id: person.userId,
+            workspace_id: null,
+            purpose: 'authorize',
+            verifier_encrypted: 'sealed',
+            expires_at: new Date(NOW.getTime() + minutes * 60_000),
+          })),
+        )
+        .execute();
+      // The delivery past its days, and the two trips that were over at the instant of the sweep.
+      expect(await sweepGitHubDeliveries({ database: db, clock })).toEqual({ removed: 3 });
+      const deliveries = await db
+        .selectFrom('github_app_deliveries')
+        .select('delivery_id')
+        .where('received_at', '>=', days(40))
+        .orderBy('delivery_id')
+        .execute();
+      expect(deliveries.map((row) => row.delivery_id)).toEqual(['app-exactly', 'app-new']);
+      const trips = await db
+        .selectFrom('github_app_handshakes')
+        .select('state_digest')
+        .where('user_id', '=', person.userId)
+        .execute();
+      expect(trips).toEqual([{ state_digest: digest(102) }]);
+    });
+  });
+});
+
 describe('integration: the sign-in mail sweep', () => {
   test('takes every verification row expired more than a day ago, whatever its prefix, and counters a day closed; nothing live', async () => {
     await withRollback(async (db) => {

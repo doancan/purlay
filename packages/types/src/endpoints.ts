@@ -46,10 +46,15 @@ import {
   OpenConversationRequest,
   PageQuery,
   PinList,
+  BookmarkList,
+  ChannelBookmark,
+  AddBookmarkRequest,
   PresenceSnapshot,
   ReactionsResponse,
   ReadChannelRequest,
+  MarkUnreadRequest,
   ReadChannelResponse,
+  ReadAllChannelsResponse,
   ReadNotificationsRequest,
   ReadThreadRequest,
   SaveMessageRequest,
@@ -62,6 +67,10 @@ import {
   SavedIds,
   SavedPage,
   SavedQuery,
+  SetKnowledgeRequest,
+  SaveSearchRequest,
+  SavedSearch,
+  SavedSearchPage,
   SearchPage,
   SearchQuery,
   SendMessageRequest,
@@ -77,6 +86,7 @@ import {
   WorkspaceMemberList,
 } from './api';
 import { Attachment, Channel, Message, Workspace } from './models';
+import { LatestReleaseAnswer } from './releases';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -159,6 +169,15 @@ export const ENDPOINTS = [
     path: '/api/auth/methods',
     auth: 'none',
     responses: { 200: AuthMethods },
+  }),
+
+  // ── What this server runs, and what is newest
+  read({
+    id: 'getLatestRelease',
+    method: 'GET',
+    path: '/api/releases/latest',
+    auth: 'session',
+    responses: { 200: LatestReleaseAnswer },
   }),
 
   // ── The person, and their workspaces
@@ -283,6 +302,21 @@ export const ENDPOINTS = [
     responses: { 200: ReadChannelResponse },
   }),
   read({
+    id: 'markChannelUnread',
+    method: 'PUT',
+    path: '/api/channels/:channelId/unread',
+    auth: 'session',
+    body: MarkUnreadRequest,
+    responses: { 200: ReadChannelResponse },
+  }),
+  read({
+    id: 'markAllChannelsRead',
+    method: 'PUT',
+    path: '/api/workspaces/:workspaceId/read',
+    auth: 'session',
+    responses: { 200: ReadAllChannelsResponse },
+  }),
+  read({
     id: 'starChannel',
     method: 'PUT',
     path: '/api/channels/:channelId/star',
@@ -310,6 +344,28 @@ export const ENDPOINTS = [
     path: '/api/channels/:channelId/pins',
     auth: 'session',
     responses: { 200: PinList },
+  }),
+  read({
+    id: 'listBookmarks',
+    method: 'GET',
+    path: '/api/channels/:channelId/bookmarks',
+    auth: 'session',
+    responses: { 200: BookmarkList },
+  }),
+  read({
+    id: 'addBookmark',
+    method: 'POST',
+    path: '/api/channels/:channelId/bookmarks',
+    auth: 'session',
+    body: AddBookmarkRequest,
+    responses: { 201: ChannelBookmark },
+  }),
+  read({
+    id: 'removeBookmark',
+    method: 'DELETE',
+    path: '/api/channels/:channelId/bookmarks/:bookmarkId',
+    auth: 'session',
+    responses: { 204: null },
   }),
   read({
     id: 'listFiles',
@@ -346,6 +402,13 @@ export const ENDPOINTS = [
     responses: { 201: Message },
   }),
   read({
+    id: 'getMessage',
+    method: 'GET',
+    path: '/api/messages/:messageId',
+    auth: 'session',
+    responses: { 200: Message },
+  }),
+  read({
     id: 'getMessagesAround',
     method: 'GET',
     path: '/api/messages/:messageId/around',
@@ -374,6 +437,37 @@ export const ENDPOINTS = [
     auth: 'session',
     query: OlderPageQuery,
     responses: { 200: MessageVersionPage },
+  }),
+  read({
+    id: 'setKnowledge',
+    method: 'PUT',
+    path: '/api/messages/:messageId/knowledge',
+    auth: 'session',
+    body: SetKnowledgeRequest,
+    responses: { 200: Message },
+  }),
+  read({
+    id: 'listSavedSearches',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/saved-searches',
+    auth: 'session',
+    query: OlderPageQuery,
+    responses: { 200: SavedSearchPage },
+  }),
+  read({
+    id: 'saveSearch',
+    method: 'PUT',
+    path: '/api/workspaces/:workspaceId/saved-searches/:searchId',
+    auth: 'session',
+    body: SaveSearchRequest,
+    responses: { 200: SavedSearch },
+  }),
+  read({
+    id: 'deleteSavedSearch',
+    method: 'DELETE',
+    path: '/api/workspaces/:workspaceId/saved-searches/:searchId',
+    auth: 'session',
+    responses: { 204: null },
   }),
   read({
     id: 'getThread',

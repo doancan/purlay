@@ -1,10 +1,11 @@
 /**
  * Signing in with an address, under GitHub on the sign-in card.
  *
- * **The password** is always offered (`withPassword`): the setup's administrator has one, on a server
- * with or without mail (R30). It is the library's route, answered in one sentence that never says whether
+ * **The password** is offered (`withPassword`) unless the server's administrator turned password sign-in off
+ * (D-239): the setup's administrator has one, on a server with or without mail (R30). It is the library's route, answered in one sentence that never says whether
  * the address exists: a wrong address, a wrong password and an account with no password are the same
- * "wrong email or password". A wait is told in minutes, from `Retry-After`.
+ * "wrong email or password". A wait is told in minutes, from `Retry-After`. An account with two-step
+ * verification on is asked for its code after a right password (`SecondStepForm`, D-236).
  *
  * **A link by email** (D-138) is offered only where the server can send mail — as the form's only action
  * on the sign-up screen, and as the second action under the password on the sign-in screen. The answer
@@ -12,7 +13,7 @@
  * the address can use one. An invitation this tab holds rides in the link (§4), because the mail opens in
  * another tab, which has none; the invitation page's `beforeLink` asks for its passport first.
  */
-import { SIGN_IN_LINK_TTL_MINUTES } from '@purlay/types';
+import { EMAIL_MAX, SIGN_IN_LINK_TTL_MINUTES } from '@purlay/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '../../data/api-provider';
@@ -25,6 +26,8 @@ import { cn } from '../../ui/cn';
 import { TextField } from '../../ui/text-field';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
 import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
+import { PASSWORD_FIELD_MAX } from '../password/password-rules';
+import { SecondStepForm } from './second-step-form';
 
 interface Failure {
   readonly field: 'email' | 'form';
@@ -64,6 +67,8 @@ export const EmailSignInForm = ({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState<'password' | 'link' | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // The password was right and the account asks for a code (D-236): no session yet.
+  const [secondStep, setSecondStep] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   // Where focus goes when one view replaces the other: the sentence that was sent, or the field again.
   const said = useRef<HTMLParagraphElement>(null);
@@ -73,7 +78,7 @@ export const EmailSignInForm = ({
     if (!switched) return;
     if (sentTo === null) field.current?.focus();
     else said.current?.focus();
-  }, [sentTo, switched]);
+  }, [sentTo, switched, secondStep]);
 
   // The link-only form (sign-up) is nothing without mail; the password form is never nothing.
   if (!withPassword && !mail) return null;
@@ -99,6 +104,19 @@ export const EmailSignInForm = ({
     );
   }
 
+  if (secondStep) {
+    return (
+      <SecondStepForm
+        className={cn('flex w-full flex-col gap-3 text-left', ruled)}
+        onRestart={(words) => {
+          setSecondStep(false);
+          setFailure(words === null ? null : { field: 'form', message: words });
+          setSwitched(true);
+        }}
+      />
+    );
+  }
+
   const passwordFailure = (caught: unknown): string => {
     if (isLibraryFailure(caught)) {
       if (caught.status === 429) {
@@ -107,6 +125,11 @@ export const EmailSignInForm = ({
         });
       }
       if (caught.code === 'NETWORK') return t('signIn.password.unreachable');
+      // The administrator turned password sign-in off since this page asked how to sign in (D-239).
+      if (caught.code === 'PASSWORD_SIGN_IN_DISABLED') {
+        void client.invalidateQueries({ queryKey: keys.authMethods });
+        return t('signIn.password.off');
+      }
       // One sentence for an address nobody has, a wrong password and a password the address has none
       // of; a shape the library would not read is no more telling.
       if (caught.status === 401 || caught.status === 400) return t('signIn.password.wrong');
@@ -118,7 +141,13 @@ export const EmailSignInForm = ({
     setBusy('password');
     setFailure(null);
     try {
-      await api.signInWithPassword({ email: email.trim(), password });
+      const outcome = await api.signInWithPassword({ email: email.trim(), password });
+      if (outcome === 'second-step') {
+        setPassword('');
+        setBusy(null);
+        setSecondStep(true);
+        return;
+      }
       // The session is there now: the screen asks who it is, and a person who has one is sent on.
       await client.invalidateQueries({ queryKey: keys.me });
     } catch (caught) {
@@ -181,7 +210,7 @@ export const EmailSignInForm = ({
         type="email"
         value={email}
         required
-        maxLength={254}
+        maxLength={EMAIL_MAX}
         autoComplete={withPassword ? 'username' : 'email'}
         spellCheck={false}
         {...(failure?.field === 'email' ? { error: failure.message } : {})}
@@ -195,7 +224,7 @@ export const EmailSignInForm = ({
           type="password"
           value={password}
           required
-          maxLength={256}
+          maxLength={PASSWORD_FIELD_MAX}
           autoComplete="current-password"
           spellCheck={false}
           // The sentence below is about the pair, not about this field alone.

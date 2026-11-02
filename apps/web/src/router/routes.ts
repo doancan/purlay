@@ -1,3 +1,5 @@
+import { Value } from '@sinclair/typebox/value';
+import { SearchFilters } from '@purlay/types';
 /**
  * The routes, and the only place an address is spelled (D-98).
  *
@@ -24,6 +26,8 @@ const ROUTES = {
   // Making an account, where the server lets anybody (R51); by invitation it says so and points back.
   signUp: '/sign-up',
   invite: '/invite',
+  // A missed-mail letter's stop link (D-240); its token is in the fragment, as a sign-in link's.
+  mailStop: '/mail/stop',
   // The setup in the browser (D-179 §4); the address link's page keeps its token in the fragment.
   setup: '/setup',
   setupVerify: '/setup/verify',
@@ -34,6 +38,8 @@ const ROUTES = {
   inbox: '/w/:slug/inbox',
   search: '/w/:slug/search',
   saved: '/w/:slug/saved',
+  drafts: '/w/:slug/drafts',
+  unreads: '/w/:slug/unreads',
   welcome: '/w/:slug/welcome',
   // Settings are a page with a navigation of its own (D-146); the bare address opens Profile.
   settingsHome: '/w/:slug/settings',
@@ -169,11 +175,13 @@ export const searchHref = (
   words: string,
   channelId: string | null = null,
   authorId: string | null = null,
+  filters: SearchFilters = {},
 ): string => {
   const params = new URLSearchParams();
   if (words !== '') params.set(WORDS_PARAM, words);
   if (channelId !== null) params.set(CHANNEL_PARAM, channelId);
   if (authorId !== null) params.set(AUTHOR_PARAM, authorId);
+  for (const [name, value] of Object.entries(filters)) params.set(name, value);
   const query = params.toString();
   return query === '' ? href('search', { slug }) : `${href('search', { slug })}?${query}`;
 };
@@ -199,4 +207,15 @@ export const channelInSearch = (search: string): string | null => {
 export const authorInSearch = (search: string): string | null => {
   const named = new URLSearchParams(search).get(AUTHOR_PARAM);
   return named !== null && ID_SHAPE.test(named) ? named : null;
+};
+
+/** Only the declared filter vocabulary is restored; arbitrary URL input is never a query object. */
+export const searchFiltersIn = (search: string): SearchFilters => {
+  const params = new URLSearchParams(search);
+  const values: Record<string, string> = {};
+  for (const key of Object.keys(SearchFilters.properties)) {
+    const value = params.get(key);
+    if (value !== null && value !== '') values[key] = value;
+  }
+  return Value.Check(SearchFilters, values) ? values : {};
 };

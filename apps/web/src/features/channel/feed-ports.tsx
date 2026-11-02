@@ -1,11 +1,11 @@
 /**
  * What the feed reaches outside React for: observers, timers, the clock, the page's
- * visibility.
+ * visibility and window focus.
  *
  * The rules of `UX.md` §6 are about scrolling, and scrolling is the browser's. So the
  * browser's observers are *ports*: the feed asks to be told when its top sentinel comes
  * into view, when the content or the viewport changes size, when the page is hidden or
- * shown; a test hands it functions it fires by hand, and nothing in a component test waits
+ * shown or its window gains or loses focus; a test hands it functions it fires by hand, and nothing in a component test waits
  * for a layout engine that the test DOM does not have. The browser's own are the defaults.
  */
 import { createContext, useContext } from 'react';
@@ -21,7 +21,7 @@ export interface FeedPorts {
   readonly whenResized: (targets: readonly Element[], onResize: () => void) => () => void;
   /** Is the page in front of the person right now? */
   readonly pageVisible: () => boolean;
-  /** Calls back when the page is shown or hidden; returns how to stop. */
+  /** Calls back when visibility or window focus changes; returns how to stop. */
   readonly onPageVisibility: (listener: () => void) => () => void;
   readonly schedule: Schedule;
   readonly clock: Clock;
@@ -47,11 +47,15 @@ const browserPorts: FeedPorts = {
       observer.disconnect();
     };
   },
-  pageVisible: () => document.visibilityState === 'visible',
+  pageVisible: () => document.visibilityState === 'visible' && document.hasFocus(),
   onPageVisibility: (listener) => {
     document.addEventListener('visibilitychange', listener);
+    window.addEventListener('focus', listener);
+    window.addEventListener('blur', listener);
     return (): void => {
       document.removeEventListener('visibilitychange', listener);
+      window.removeEventListener('focus', listener);
+      window.removeEventListener('blur', listener);
     };
   },
   schedule: browserSchedule,

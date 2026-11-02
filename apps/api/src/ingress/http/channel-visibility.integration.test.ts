@@ -28,6 +28,11 @@ import {
   requestInit,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
+import { aGitHubStub } from '../../testing/github-stub';
+import { keepAuthorization } from '../../modules/integrations/github-app';
+import { credentialCipher } from '../../platform/crypto';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -46,9 +51,40 @@ const call = async (
   cookie: string,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock, storage: aMemoryStore() })).handle(
-    new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)),
-  );
+  await createApp(
+    testDependencies({
+      database: db,
+      clock,
+      storage: aMemoryStore(),
+      githubApp: () => GITHUB_APP_STUB,
+      githubAppFetch: GITHUB.appFetch,
+    }),
+  ).handle(new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)));
+
+/** GitHub, as the App meets it: one repository, and the outsider who authorized (D-246). */
+const GITHUB_APP = aGitHubAppStub({ id: 502, login: 'outsider-dev' }, { now: () => NOW.getTime() });
+GITHUB_APP.install(31, 'acme', [{ id: 77, fullName: 'acme/api', private: true }]);
+// An issue there already, for a thread to be pointed at (D-246 §3).
+GITHUB_APP.items.push({
+  id: 9001,
+  number: 1,
+  kind: 'issue',
+  repositoryId: 77,
+  title: 'An issue',
+  body: '',
+  state: 'open',
+  merged: false,
+  creator: 'octocat',
+  createdAt: '2026-10-14T11:00:00.000Z',
+  updatedAt: '2026-10-14T11:30:00.000Z',
+});
+
+const GITHUB = aGitHubStub(
+  { id: 502, login: 'outsider-dev', name: null, email: 'v@example.test' },
+  {},
+  undefined,
+  { app: GITHUB_APP },
+);
 
 const aUser = async (db: Executor, name: string): Promise<{ id: string; cookie: string }> => {
   const user = await aSignedInUser(db, clock, name);
@@ -124,6 +160,38 @@ const aFeed = async (db: Executor, workspaceId: string, channelId: string): Prom
   return id;
 };
 
+/** An incoming webhook of a channel, as a row: what revoking one names (D-245). */
+const aWebhook = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
+  const id = crypto.randomUUID();
+  await db
+    .insertInto('incoming_webhooks')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      name: 'Visible',
+      secret_digest: 'not compared here',
+      created_at: NOW,
+    })
+    .execute();
+  return id;
+};
+
+const aBookmark = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
+  const id = crypto.randomUUID();
+  await db
+    .insertInto('channel_bookmarks')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      url: 'https://example.test/visible',
+      title: 'Visible',
+    })
+    .execute();
+  return id;
+};
+
 interface World {
   readonly owner: string;
   readonly outsider: string;
@@ -136,6 +204,10 @@ interface World {
   readonly feed: string;
   /** A resolved incident in the visible channel: the control for changing one, and its timeline. */
   readonly incident: string;
+  /** A bookmark of the visible channel: the control for removing one (D-218). */
+  readonly bookmark: string;
+  /** An incoming webhook of the visible channel: the control for revoking one (D-245). */
+  readonly webhook: string;
   /** An earlier version of the outsider's own visible message: the control for removing one. */
   readonly version: string;
   /** Each one hidden from the outsider for a different reason. */
@@ -182,6 +254,26 @@ const aWorld = async (db: Executor): Promise<World> => {
     }),
   );
   expect((await call(db, 'POST', `/api/channels/${visible}/join`, outsider.cookie)).ok).toBe(true);
+  // The workspace's installation of the App and the outsider's own authorization: what making an issue needs.
+  await db
+    .insertInto('github_app_installations')
+    .values({
+      id: crypto.randomUUID(),
+      workspace_id: workspaceId,
+      installation_id: '31',
+      account_login: 'acme',
+      account_type: 'Organization',
+      connected_by: owner.id,
+      connected_at: NOW,
+    })
+    .execute();
+  await keepAuthorization(
+    db,
+    { clock, cipher: credentialCipher(DEVELOPMENT_ENCRYPTION_KEY) },
+    outsider.id,
+    { id: 502, login: 'outsider-dev' },
+    GITHUB_APP.grantUser(),
+  );
 
   const seed = async (
     values: { type: 'public' | 'private' | 'direct_message' } & Record<string, unknown>,
@@ -288,6 +380,8 @@ const aWorld = async (db: Executor): Promise<World> => {
     visible,
     feed: await aFeed(db, workspaceId, visible),
     incident: await anIncident(db, workspaceId, visible),
+    bookmark: await aBookmark(db, workspaceId, visible),
+    webhook: await aWebhook(db, workspaceId, visible),
     version: await aVersion(db, workspaceId, visible, threads.ownVisible),
     hidden,
     threads,
@@ -312,13 +406,26 @@ describe('integration: channel visibility', () => {
       test(`${key} answers 404 to a workspace member who cannot see the channel`, async () => {
         await withRollback(async (db) => {
           const world = await aWorld(db);
-          if (visibility.admin === true) {
+          if (visibility.admin === true || visibility.owner === true) {
             // What they are is not the question here; what they can see is.
             await db
               .updateTable('workspace_members')
-              .set({ role: 'admin' })
+              .set({ role: visibility.owner === true ? 'owner' : 'admin' })
               .where('workspace_id', '=', world.workspaceId)
               .where('user_id', '=', world.ids.userId)
+              .execute();
+          }
+          // An endpoint for archived channels (D-232): the visible public one and the hidden ones are
+          // archived, and the public one already archived is the outsider's to act on, not hidden.
+          const hidden: Readonly<Record<string, string>> =
+            crossing.archived === true
+              ? { private: world.hidden.private, 'direct message': world.hidden['direct message'] }
+              : world.hidden;
+          if (crossing.archived === true) {
+            await db
+              .updateTable('channels')
+              .set({ deleted_at: NOW })
+              .where('id', 'in', [world.visible, ...Object.values(hidden)])
               .execute();
           }
           const body = crossing.body?.(NOW, world.ids);
@@ -335,6 +442,8 @@ describe('integration: channel visibility', () => {
               feedId: world.feed,
               versionId: NEVER_EXISTED,
               incidentId: world.incident,
+              bookmarkId: world.bookmark,
+              webhookId: world.webhook,
               exportId: NEVER_EXISTED,
             });
 
@@ -343,7 +452,7 @@ describe('integration: channel visibility', () => {
           const refusal: unknown = await absent.json();
           expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
-          for (const [why, channelId] of Object.entries(world.hidden)) {
+          for (const [why, channelId] of Object.entries(hidden)) {
             const response = await call(db, method, at(channelId), world.outsider, body);
             expect({ why, status: response.status, body: await response.json() }).toEqual({
               why,
@@ -379,6 +488,8 @@ describe('integration: channel visibility', () => {
               // The outsider's own visible message's: the control of removing a version.
               versionId: world.version,
               incidentId: NEVER_EXISTED,
+              bookmarkId: NEVER_EXISTED,
+              webhookId: NEVER_EXISTED,
               exportId: NEVER_EXISTED,
             });
 
@@ -442,6 +553,8 @@ describe('integration: channel visibility', () => {
                 feedId: NEVER_EXISTED,
                 versionId: NEVER_EXISTED,
                 incidentId: NEVER_EXISTED,
+                bookmarkId: NEVER_EXISTED,
+                webhookId: NEVER_EXISTED,
                 exportId: NEVER_EXISTED,
               }),
               cookie,

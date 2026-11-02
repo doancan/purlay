@@ -1,3 +1,11 @@
+import {
+  SavedSearch,
+  SavedSearchPage,
+  type SaveSearchRequest,
+  type SetKnowledgeRequest,
+  type SearchQuery,
+  type UnresolvedQuery,
+} from '@purlay/types';
 /**
  * Every endpoint the client calls, typed by the contract and spelled once.
  *
@@ -9,8 +17,21 @@
  */
 import { Type, type Static } from '@sinclair/typebox';
 import {
+  ArchivedChannelList,
   Attachment,
+  QuietHoursSetting,
+  type SetQuietHoursRequest,
+  GitHubAppRedirect,
+  GitHubAppStatus,
+  GitHubIssueOutcome,
+  GitHubRepositoryList,
+  GitHubWorkLink,
+  type CreateGitHubIssueRequest,
+  type LinkGitHubWorkRequest,
+  MissedMailSetting,
+  type SetMissedMailRequest,
   AuditPage,
+  type AuditFilter,
   ChannelList,
   ChannelMemberList,
   Channel,
@@ -22,9 +43,14 @@ import {
   DeepWorkResponse,
   FilePage,
   CreatedGitHubFeed,
+  CreatedIncomingWebhook,
   GitHubFeedList,
+  IncomingWebhookList,
   GitHubIntegration,
   PinList,
+  BookmarkList,
+  ChannelBookmark,
+  type AddBookmarkRequest,
   Incident,
   IncidentResponse,
   IncidentUpdatePage,
@@ -34,12 +60,20 @@ import {
   InvitationPage,
   InvitationPreview,
   RetentionSetting,
+  ChannelRetention,
+  type ChannelRetentionFloor,
   StorageUsage,
+  WorkspaceDeletion,
   WorkspaceExport,
   AuthMethods,
   NativeAuthorizeResponse,
   type NativeAuthorizeRequest,
   MySignIn,
+  LatestReleaseAnswer,
+  DeviceSessionList,
+  PasswordSignInAnswer,
+  TwoFactorEnrolment,
+  BackupCodes,
   EmailSignInPreview,
   type EmailSignInRequest,
   NotificationPage,
@@ -49,6 +83,7 @@ import {
   SavedPage,
   ReactionsResponse,
   SearchPage,
+  ReadAllChannelsResponse,
   ReadChannelResponse,
   ThreadFollow,
   ThreadPage,
@@ -73,6 +108,7 @@ import {
   type PushSubscribeRequest,
   type SavedState,
   type CreateGitHubFeedRequest,
+  type CreateIncomingWebhookRequest,
   PresenceSnapshot,
   MessageVersionPage,
   MessageWindow,
@@ -133,6 +169,22 @@ export interface Api {
     input: CreateGitHubFeedRequest,
   ) => Promise<CreatedGitHubFeed>;
   readonly disconnectGitHubFeed: (channelId: string, feedId: string) => Promise<void>;
+  /** An owner's or an admin's: the incoming webhooks a channel has, never their secrets (D-245). */
+  readonly incomingWebhooks: (
+    channelId: string,
+    signal?: AbortSignal,
+  ) => Promise<IncomingWebhookList>;
+  /** Makes an incoming webhook: the hook, and the path with its secret — once. */
+  readonly createIncomingWebhook: (
+    channelId: string,
+    input: CreateIncomingWebhookRequest,
+  ) => Promise<CreatedIncomingWebhook>;
+  readonly revokeIncomingWebhook: (channelId: string, webhookId: string) => Promise<void>;
+  /** A new secret for the feed, same address; the old one stops working at once. Shown once (#884). */
+  readonly regenerateGitHubFeedSecret: (
+    channelId: string,
+    feedId: string,
+  ) => Promise<CreatedGitHubFeed>;
   readonly removeGitHubToken: (workspaceId: string) => Promise<void>;
   /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
   readonly unfurl: (
@@ -151,9 +203,10 @@ export interface Api {
   readonly removeMember: (workspaceId: string, userId: string) => Promise<void>;
   /** The caller leaves the workspace and its channels (D-152). */
   readonly leaveWorkspace: (workspaceId: string) => Promise<void>;
-  /** An owner's or an admin's: the administrative trail, newest first (D-26). */
+  /** An owner's or an admin's: the administrative trail, newest first, narrowed (D-26, D-222). */
   readonly audit: (
     workspaceId: string,
+    filter: AuditFilter,
     before?: string,
     signal?: AbortSignal,
   ) => Promise<AuditPage>;
@@ -165,6 +218,13 @@ export interface Api {
   readonly updateChannel: (channelId: string, input: UpdateChannelRequest) => Promise<Channel>;
   /** An owner's or an admin's: archived, for everyone (D-123). */
   readonly archiveChannel: (channelId: string) => Promise<void>;
+  /** An owner's or an admin's: the archived channels they may bring back (D-232). */
+  readonly archivedChannels: (
+    workspaceId: string,
+    signal?: AbortSignal,
+  ) => Promise<ArchivedChannelList>;
+  /** An owner's or an admin's: an archived channel brought back, as it was (D-232). */
+  readonly restoreChannel: (channelId: string) => Promise<void>;
   readonly leaveChannel: (channelId: string) => Promise<void>;
   /** Who is in the channel (D-123). */
   readonly channelMembers: (channelId: string, signal?: AbortSignal) => Promise<ChannelMemberList>;
@@ -197,6 +257,10 @@ export interface Api {
   /** The caller's own title, time zone and status line (D-131). */
   readonly updateProfile: (input: UpdateProfileRequest) => Promise<Profile>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
+  /** "Mark unread from here" (D-212): the position back to just before this message. */
+  readonly markUnread: (channelId: string, fromMessageId: string) => Promise<ReadChannelResponse>;
+  /** Every channel the caller is in, read to its newest message (D-238). */
+  readonly markAllRead: (workspaceId: string) => Promise<ReadAllChannelsResponse>;
   /** A workspace's members online now, for a member (D-136). */
   readonly presence: (workspaceId: string, signal?: AbortSignal) => Promise<PresenceSnapshot>;
   /** What a message said before each edit, newest first (D-135). */
@@ -241,6 +305,11 @@ export interface Api {
   /** Pins a message for its channel, or lets the pin go (D-130). */
   readonly pin: (messageId: string) => Promise<void>;
   readonly unpin: (messageId: string) => Promise<void>;
+  /** A channel's bookmarks, oldest first (D-218). */
+  readonly bookmarks: (channelId: string, signal?: AbortSignal) => Promise<BookmarkList>;
+  /** A member keeps a link at hand; the same address again answers the bookmark already there. */
+  readonly addBookmark: (channelId: string, input: AddBookmarkRequest) => Promise<ChannelBookmark>;
+  readonly removeBookmark: (channelId: string, bookmarkId: string) => Promise<void>;
   /** A channel's files, newest message first; older than `before`, a file's id (D-129). */
   readonly files: (channelId: string, before?: string, signal?: AbortSignal) => Promise<FilePage>;
 
@@ -249,6 +318,8 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<MessagePage>;
+  /** One message, for the card a link to it is drawn as (D-217); 404 when it is not the caller's to see. */
+  readonly message: (messageId: string, signal?: AbortSignal) => Promise<Message>;
   /** The feed around one message, for a link to it (D-149). */
   readonly messageWindow: (messageId: string, signal?: AbortSignal) => Promise<MessageWindow>;
   readonly send: (channelId: string, input: SendMessageRequest) => Promise<Message>;
@@ -264,12 +335,24 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<ThreadPage>;
+  readonly setKnowledge: (messageId: string, input: SetKnowledgeRequest) => Promise<Message>;
+  readonly savedSearches: (
+    workspaceId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<SavedSearchPage>;
+  readonly saveSearch: (
+    workspaceId: string,
+    id: string,
+    input: SaveSearchRequest,
+  ) => Promise<SavedSearch>;
+  readonly deleteSearch: (workspaceId: string, id: string) => Promise<void>;
   readonly resolve: (messageId: string) => Promise<Message>;
   readonly reopen: (messageId: string) => Promise<Message>;
   /** The open questions; with `channelId`, that channel's alone (a channel it cannot see is 404). */
   readonly unresolved: (
     workspaceId: string,
-    page?: PageQuery & { readonly channelId?: string | undefined },
+    page?: UnresolvedQuery,
     signal?: AbortSignal,
   ) => Promise<UnresolvedPage>;
   /** The caller's inbox in one workspace, newest first (D-106). */
@@ -282,6 +365,8 @@ export interface Api {
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
+  /** An attachment's bytes as text, read with the session, to be previewed (D-210). */
+  readonly attachmentText: (attachmentId: string, signal?: AbortSignal) => Promise<string>;
   /** Reads a thread up to and including a reply: its notifications for the caller (D-147). */
   readonly readThread: (rootId: string, lastReadMessageId: string) => Promise<void>;
   /** Whether the caller is told of new replies in this root's thread (D-161). */
@@ -291,12 +376,7 @@ export interface Api {
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
-    query: {
-      readonly q: string;
-      readonly channelId?: string | undefined;
-      readonly senderId?: string | undefined;
-      readonly before?: string | undefined;
-    },
+    query: Omit<SearchQuery, 'before'> & { readonly before?: string | undefined },
     signal?: AbortSignal,
   ) => Promise<SearchPage>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
@@ -307,6 +387,8 @@ export interface Api {
   /** Throws away one's own upload that was never sent (D-109 §5). */
   readonly discardAttachment: (attachmentId: string) => Promise<void>;
 
+  /** The version this server runs and the newest release as it could learn it; `latest` is null when it could not (D-248). */
+  readonly latestRelease: (signal?: AbortSignal) => Promise<LatestReleaseAnswer>;
   /** Which ways in this server offers: GitHub always, email when mail is configured (D-138 §6). */
   readonly authMethods: (signal?: AbortSignal) => Promise<AuthMethods>;
   /** Whether the server is open to setup, and the address it is configured for (D-179 §4). */
@@ -316,7 +398,24 @@ export interface Api {
   /** Asks for a sign-in link; `202` whatever the address (D-138 §1). */
   readonly requestEmailSignIn: (input: EmailSignInRequest) => Promise<void>;
   /** Password sign-in, the library's route; a refusal is a `LibraryFailure`. The session cookie is set. */
-  readonly signInWithPassword: (input: { email: string; password: string }) => Promise<void>;
+  /**
+   * The library's password sign-in: `signed-in` with the session cookie set, or `second-step` when the account
+   * asks for a code too (D-236) — no session yet, only the challenge's cookie. A refusal is a `LibraryFailure`.
+   */
+  readonly signInWithPassword: (input: {
+    email: string;
+    password: string;
+  }) => Promise<'signed-in' | 'second-step'>;
+  /** The second step of a password sign-in: a code from the app, or a backup code; sets the session (D-236). */
+  readonly verifySignInCode: (input: { code: string; kind: 'app' | 'backup' }) => Promise<void>;
+  /** Starts turning two-step verification on: the password, then the key and the backup codes (D-236). */
+  readonly startTwoFactor: (password: string) => Promise<TwoFactorEnrolment>;
+  /** Turns it on with the first right code from the app; the session stays the same (D-236). */
+  readonly confirmTwoFactor: (code: string) => Promise<void>;
+  /** Turns it off, with the password (D-236). */
+  readonly stopTwoFactor: (password: string) => Promise<void>;
+  /** New backup codes, with the password; the old ones are spent (D-236). */
+  readonly newBackupCodes: (password: string) => Promise<BackupCodes>;
   /** Change the caller's password, ending every other session; a refusal is a `LibraryFailure`. */
   readonly changePassword: (input: {
     currentPassword: string;
@@ -336,13 +435,33 @@ export interface Api {
     workspaceId: string,
     retentionDays: number | null,
   ) => Promise<RetentionSetting>;
+  /** How long a channel keeps its history beside its workspace's window; an owner's (D-225). */
+  readonly channelRetention: (channelId: string, signal?: AbortSignal) => Promise<ChannelRetention>;
+  readonly setChannelRetention: (
+    channelId: string,
+    keepsAtLeast: ChannelRetentionFloor,
+  ) => Promise<ChannelRetention>;
   /** An owner's exports of the workspace, newest first; and asking for one, made in the background (D-140). */
   readonly exports: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceExport[]>;
   readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
+  /** The caller's own exports of their data, newest first; and asking for one (D-241). */
+  readonly myExports: (signal?: AbortSignal) => Promise<WorkspaceExport[]>;
+  readonly requestMyExport: () => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
+  /** An owner asks for the workspace to be deleted, typing its name (D-242). */
+  readonly requestWorkspaceDeletion: (
+    workspaceId: string,
+    confirm: string,
+  ) => Promise<WorkspaceDeletion>;
+  /** Any owner takes a workspace's deletion back within its grace period (D-242). */
+  readonly cancelWorkspaceDeletion: (workspaceId: string) => Promise<void>;
   /** The ways the caller signs in: their address, and the GitHub account linked to it, if any (D-176, D-179 §5). */
   readonly mySignIn: (signal?: AbortSignal) => Promise<MySignIn>;
+  /** Where the caller is signed in, the one used last first (D-193). */
+  readonly mySessions: (signal?: AbortSignal) => Promise<DeviceSessionList>;
+  /** Ends one of the caller's sessions by its id; one already ended is `SESSION_NOT_FOUND` (D-193 §2). */
+  readonly endMySession: (sessionId: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -352,6 +471,37 @@ export interface Api {
   readonly unsubscribePush: (endpoint: string) => Promise<void>;
   /** The language the server writes this person's notifications in. */
   readonly setLocale: (locale: PushLocale) => Promise<void>;
+  /** The caller's quiet hours and the profile's time zone they are read in (D-234). */
+  readonly quietHours: (signal?: AbortSignal) => Promise<QuietHoursSetting>;
+  readonly setQuietHours: (input: SetQuietHoursRequest) => Promise<QuietHoursSetting>;
+  /** Whether the caller is emailed about what they missed, and whether it can be offered (D-240). */
+  readonly missedMail: (signal?: AbortSignal) => Promise<MissedMailSetting>;
+  readonly setMissedMail: (input: SetMissedMailRequest) => Promise<MissedMailSetting>;
+  /** The GitHub App in a workspace: whether the server has one, its installation, the caller's own authorization (D-246). */
+  readonly githubApp: (workspaceId: string, signal?: AbortSignal) => Promise<GitHubAppStatus>;
+  /** What the caller may choose when making an issue: the repositories both they and the App reach (D-246 §2). */
+  readonly githubRepositories: (
+    workspaceId: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubRepositoryList>;
+  /** Makes an issue from a thread, or says what became of the request with this id (D-246 §2, §4). */
+  readonly createGitHubIssue: (
+    messageId: string,
+    input: CreateGitHubIssueRequest,
+  ) => Promise<GitHubIssueOutcome>;
+  /** Points a thread at an issue or pull request that exists (D-246 §3). */
+  readonly linkGitHubWork: (
+    messageId: string,
+    input: LinkGitHubWorkRequest,
+  ) => Promise<GitHubWorkLink>;
+  /** An owner: where GitHub's installation screen is. */
+  readonly startGitHubInstallation: (workspaceId: string) => Promise<GitHubAppRedirect>;
+  readonly removeGitHubInstallation: (workspaceId: string) => Promise<void>;
+  /** The caller, to GitHub's screen for letting Purlay write as them, coming back to `returnTo`. */
+  readonly startGitHubAuthorization: (returnTo: string) => Promise<GitHubAppRedirect>;
+  readonly forgetGitHubAuthorization: () => Promise<void>;
+  /** A letter's stop link, spent without a session (D-240). */
+  readonly stopMissedMail: (token: string) => Promise<void>;
 }
 
 export const createApi = (http: Http): Api => {
@@ -434,8 +584,35 @@ export const createApi = (http: Http): Api => {
         CreatedGitHubFeed,
         options({ body: input }),
       ),
+    regenerateGitHubFeedSecret: (channelId, feedId) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/github-feeds/${at(feedId)}/secret`,
+        CreatedGitHubFeed,
+        options(),
+      ),
     disconnectGitHubFeed: (channelId, feedId) =>
       http.send('DELETE', `/api/channels/${at(channelId)}/github-feeds/${at(feedId)}`, options()),
+    incomingWebhooks: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/incoming-webhooks`,
+        IncomingWebhookList,
+        options({}, signal),
+      ),
+    createIncomingWebhook: (channelId, input) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/incoming-webhooks`,
+        CreatedIncomingWebhook,
+        options({ body: input }),
+      ),
+    revokeIncomingWebhook: (channelId, webhookId) =>
+      http.send(
+        'DELETE',
+        `/api/channels/${at(channelId)}/incoming-webhooks/${at(webhookId)}`,
+        options(),
+      ),
     revokeInvitation: (workspaceId, invitationId) =>
       http.send(
         'DELETE',
@@ -449,12 +626,12 @@ export const createApi = (http: Http): Api => {
         WorkspaceMember,
         options({ body: { role } }),
       ),
-    audit: (workspaceId, before, signal) =>
+    audit: (workspaceId, filter, before, signal) =>
       http.request(
         'GET',
         `/api/workspaces/${at(workspaceId)}/audit`,
         AuditPage,
-        options(before === undefined ? {} : { query: { before } }, signal),
+        options({ query: { ...filter, ...(before === undefined ? {} : { before }) } }, signal),
       ),
     removeMember: (workspaceId, userId) =>
       http.send('DELETE', `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`, options()),
@@ -485,6 +662,15 @@ export const createApi = (http: Http): Api => {
     updateChannel: (channelId, input) =>
       http.request('PATCH', `/api/channels/${at(channelId)}`, Channel, options({ body: input })),
     archiveChannel: (channelId) => http.send('DELETE', `/api/channels/${at(channelId)}`, options()),
+    archivedChannels: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/archived-channels`,
+        ArchivedChannelList,
+        options({}, signal),
+      ),
+    restoreChannel: (channelId) =>
+      http.send('POST', `/api/channels/${at(channelId)}/restore`, options()),
     leaveChannel: (channelId) =>
       http.send('POST', `/api/channels/${at(channelId)}/leave`, options()),
     channelMembers: (channelId, signal) =>
@@ -592,6 +778,22 @@ export const createApi = (http: Http): Api => {
       ),
     pin: (messageId) => http.send('PUT', `/api/messages/${at(messageId)}/pin`, options()),
     unpin: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}/pin`, options()),
+    bookmarks: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/bookmarks`,
+        BookmarkList,
+        options({}, signal),
+      ),
+    addBookmark: (channelId, input) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/bookmarks`,
+        ChannelBookmark,
+        options({ body: input }),
+      ),
+    removeBookmark: (channelId, bookmarkId) =>
+      http.send('DELETE', `/api/channels/${at(channelId)}/bookmarks/${at(bookmarkId)}`, options()),
     updateProfile: (input) =>
       http.request('PATCH', '/api/me/profile', Profile, options({ body: input })),
     files: (channelId, before, signal) =>
@@ -630,6 +832,20 @@ export const createApi = (http: Http): Api => {
         options({ body: { lastReadMessageId } }),
       ),
 
+    markUnread: (channelId, fromMessageId) =>
+      http.request(
+        'PUT',
+        `/api/channels/${at(channelId)}/unread`,
+        ReadChannelResponse,
+        options({ body: { fromMessageId } }),
+      ),
+    markAllRead: (workspaceId) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/read`,
+        ReadAllChannelsResponse,
+        options(),
+      ),
     messages: (channelId, page = {}, signal) =>
       http.request(
         'GET',
@@ -637,6 +853,8 @@ export const createApi = (http: Http): Api => {
         MessagePage,
         options({ query: { ...page } }, signal),
       ),
+    message: (messageId, signal) =>
+      http.request('GET', `/api/messages/${at(messageId)}`, Message, options({}, signal)),
     messageWindow: (messageId, signal) =>
       http.request(
         'GET',
@@ -669,6 +887,24 @@ export const createApi = (http: Http): Api => {
         ThreadPage,
         options({ query: { ...page } }, signal),
       ),
+    setKnowledge: (id, input) =>
+      http.request('PUT', `/api/messages/${at(id)}/knowledge`, Message, options({ body: input })),
+    savedSearches: (workspaceId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/saved-searches`,
+        SavedSearchPage,
+        options({ query: { before } }, signal),
+      ),
+    saveSearch: (workspaceId, id, input) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/saved-searches/${at(id)}`,
+        SavedSearch,
+        options({ body: input }),
+      ),
+    deleteSearch: (workspaceId, id) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/saved-searches/${at(id)}`, options()),
     resolve: (messageId) =>
       http.request('POST', `/api/messages/${at(messageId)}/resolve`, Message, options()),
     reopen: (messageId) =>
@@ -699,6 +935,8 @@ export const createApi = (http: Http): Api => {
           signal,
         ),
       ),
+    attachmentText: (attachmentId, signal) =>
+      http.text(`/api/attachments/${at(attachmentId)}`, options({}, signal)),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),
     readThread: (rootId, lastReadMessageId) =>
@@ -748,6 +986,8 @@ export const createApi = (http: Http): Api => {
     deleteMessage: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}`, options()),
     discardAttachment: (attachmentId) =>
       http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
+    latestRelease: (signal) =>
+      http.request('GET', '/api/releases/latest', LatestReleaseAnswer, options({}, signal)),
     authMethods: (signal) =>
       http.request('GET', '/api/auth/methods', AuthMethods, options({}, signal)),
     setupStatus: (signal) =>
@@ -760,7 +1000,22 @@ export const createApi = (http: Http): Api => {
         options({ body: input }),
       ),
     requestEmailSignIn: (input) => http.send('POST', '/auth/email', options({ body: input })),
-    signInWithPassword: (input) => http.library('/auth/sign-in/email', input),
+    signInWithPassword: async (input) =>
+      (await http.libraryRequest('/auth/sign-in/email', PasswordSignInAnswer, input))
+        .twoFactorRedirect === true
+        ? 'second-step'
+        : 'signed-in',
+    verifySignInCode: ({ code, kind }) =>
+      http.library(
+        kind === 'app' ? '/auth/two-factor/verify-totp' : '/auth/two-factor/verify-backup-code',
+        { code },
+      ),
+    startTwoFactor: (password) =>
+      http.libraryRequest('/auth/two-factor/enable', TwoFactorEnrolment, { password }),
+    confirmTwoFactor: (code) => http.library('/auth/two-factor/verify-totp', { code }),
+    stopTwoFactor: (password) => http.library('/auth/two-factor/disable', { password }),
+    newBackupCodes: (password) =>
+      http.libraryRequest('/auth/two-factor/generate-backup-codes', BackupCodes, { password }),
     changePassword: (input) =>
       http.library('/auth/change-password', { ...input, revokeOtherSessions: true }),
     openInvitationPassport: (input) =>
@@ -795,6 +1050,20 @@ export const createApi = (http: Http): Api => {
         RetentionSetting,
         options({ body: { retentionDays } }),
       ),
+    channelRetention: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/retention`,
+        ChannelRetention,
+        options({}, signal),
+      ),
+    setChannelRetention: (channelId, keepsAtLeast) =>
+      http.request(
+        'PUT',
+        `/api/channels/${at(channelId)}/retention`,
+        ChannelRetention,
+        options({ body: { keepsAtLeast } }),
+      ),
     exports: (workspaceId, signal) =>
       http.request(
         'GET',
@@ -809,8 +1078,24 @@ export const createApi = (http: Http): Api => {
         WorkspaceExport,
         options(),
       ),
+    myExports: (signal) =>
+      http.request('GET', '/api/me/exports', WorkspaceExports, options({}, signal)),
+    requestMyExport: () => http.request('POST', '/api/me/exports', WorkspaceExport, options()),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
+    requestWorkspaceDeletion: (workspaceId, confirm) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/deletion`,
+        WorkspaceDeletion,
+        options({ body: { confirm } }),
+      ),
+    cancelWorkspaceDeletion: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/deletion`, options()),
     mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
+    mySessions: (signal) =>
+      http.request('GET', '/api/me/sessions', DeviceSessionList, options({}, signal)),
+    endMySession: (sessionId) =>
+      http.send('DELETE', `/api/me/sessions/${at(sessionId)}`, options()),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),
@@ -819,5 +1104,61 @@ export const createApi = (http: Http): Api => {
     unsubscribePush: (endpoint) =>
       http.send('POST', '/api/push/subscriptions/remove', options({ body: { endpoint } })),
     setLocale: (locale) => http.send('PUT', '/api/me/locale', options({ body: { locale } })),
+    quietHours: (signal) =>
+      http.request('GET', '/api/me/quiet-hours', QuietHoursSetting, options({}, signal)),
+    setQuietHours: (input) =>
+      http.request('PUT', '/api/me/quiet-hours', QuietHoursSetting, options({ body: input })),
+    missedMail: (signal) =>
+      http.request('GET', '/api/me/missed-mail', MissedMailSetting, options({}, signal)),
+    setMissedMail: (input) =>
+      http.request('PUT', '/api/me/missed-mail', MissedMailSetting, options({ body: input })),
+    stopMissedMail: (token) =>
+      http.send('POST', '/api/missed-mail/stop', options({ body: { token } })),
+    githubApp: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/github-app`,
+        GitHubAppStatus,
+        options({}, signal),
+      ),
+    githubRepositories: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/github-repositories`,
+        GitHubRepositoryList,
+        options({}, signal),
+      ),
+    createGitHubIssue: (messageId, input) =>
+      http.request(
+        'POST',
+        `/api/messages/${at(messageId)}/github-issue`,
+        GitHubIssueOutcome,
+        options({ body: input }),
+      ),
+    linkGitHubWork: (messageId, input) =>
+      http.request(
+        'POST',
+        `/api/messages/${at(messageId)}/github-link`,
+        GitHubWorkLink,
+        options({ body: input }),
+      ),
+    startGitHubInstallation: (workspaceId) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/github-app/installation`,
+        GitHubAppRedirect,
+        options(),
+      ),
+    removeGitHubInstallation: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/github-app/installation`, options()),
+    startGitHubAuthorization: (returnTo) =>
+      http.request(
+        'POST',
+        '/api/github-app/authorization',
+        GitHubAppRedirect,
+        options({ body: { returnTo } }),
+      ),
+    forgetGitHubAuthorization: () =>
+      http.send('DELETE', '/api/github-app/authorization', options()),
   };
 };

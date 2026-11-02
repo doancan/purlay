@@ -1,6 +1,7 @@
 /**
  * Settings → Server (UX §11, D-179 §4.8): how this server lets people in, for its administrator alone.
- * Five cards — GitHub sign-in, single sign-on (D-200), e-mail, who may create an account, who may create a workspace — over one
+ * Six cards — GitHub sign-in, single sign-on (D-200), e-mail, who may create an account, how people sign in
+ * (D-239), who may create a workspace — over one
  * query that is read again after every change and never polled. Loading, a failed read with Retry, and
  * the page being gone (the server says *not found* to anybody who is not the administrator, a demotion
  * included) are each said.
@@ -15,7 +16,9 @@ import { SettingsPage } from '../page';
 import { SERVER_SETTINGS_KEY, useServerClient } from '../server-context';
 import { EmailCard, GitHubCard } from './server-channels';
 import { OidcCard } from './server-oidc';
-import { CreatorsCard, PolicyCard } from './server-policies';
+import { GitHubAppCard } from './server-github-app';
+import { AccountsCard } from './server-accounts';
+import { CreatorsCard, PolicyCard, SessionLifetimeCard, SignInPolicyCard } from './server-policies';
 
 export const ServerPage = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -53,8 +56,12 @@ export const ServerPage = (): React.JSX.Element => {
           <GitHubCard view={settings.data} />
           <OidcCard view={settings.data} />
           <EmailCard view={settings.data} />
+          <GitHubAppCard view={settings.data} />
           <PolicyCard view={settings.data} />
+          <SignInPolicyCard view={settings.data} />
+          <SessionLifetimeCard view={settings.data} />
           <CreatorsCard view={settings.data} />
+          <AccountsCard />
         </>
       )}
     </SettingsPage>

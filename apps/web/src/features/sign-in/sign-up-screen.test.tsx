@@ -51,7 +51,7 @@ describe('the sign-up screen', () => {
   test('open, with GitHub and mail: both ways, no password, and a way back to sign-in', async () => {
     const asked: EmailSignInRequest[] = [];
     const view = await visit(
-      { github: true, email: true, oidc: null, signUp: 'open' },
+      { github: true, email: true, oidc: null, signUp: 'open', password: true },
       'en',
       asked,
     );
@@ -67,12 +67,24 @@ describe('the sign-up screen', () => {
     await settle();
     expect(asked).toEqual([{ email: 'new@example.test', locale: 'en' }]);
     view.unmount();
-    const again = await visit({ github: true, email: true, oidc: null, signUp: 'open' });
+    const again = await visit({
+      github: true,
+      email: true,
+      oidc: null,
+      signUp: 'open',
+      password: true,
+    });
     expect(again.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
   });
 
   test('open with single sign-on: its button first, in the person’s language, and nothing says it is waiting for setup', async () => {
-    const view = await visit({ github: false, email: false, oidc: { name: null }, signUp: 'open' });
+    const view = await visit({
+      github: false,
+      email: false,
+      oidc: { name: null },
+      signUp: 'open',
+      password: true,
+    });
     expect(
       view.getByRole('link', { name: 'Continue with single sign-on' }).getAttribute('href'),
     ).toBe('/auth/oidc');
@@ -80,7 +92,7 @@ describe('the sign-up screen', () => {
     await expectNoAxeViolations(view.container);
     view.unmount();
     const tr = await visit(
-      { github: false, email: false, oidc: { name: null }, signUp: 'open' },
+      { github: false, email: false, oidc: { name: null }, signUp: 'open', password: true },
       'tr',
     );
     expect(tr.getByRole('link', { name: 'tek oturum açma ile devam et' })).toBeDefined();
@@ -90,19 +102,32 @@ describe('the sign-up screen', () => {
       email: true,
       oidc: { name: 'Acme SSO' },
       signUp: 'open',
+      password: true,
     });
     expect(named.getByRole('link', { name: 'Continue with Acme SSO' })).toBeDefined();
     expect(named.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
   });
 
   test('open without mail: GitHub only, and no form', async () => {
-    const view = await visit({ github: true, email: false, oidc: null, signUp: 'open' });
+    const view = await visit({
+      github: true,
+      email: false,
+      oidc: null,
+      signUp: 'open',
+      password: true,
+    });
     expect(view.queryByRole('link', { name: 'Continue with GitHub' })).not.toBeNull();
     expect(view.queryByRole('textbox')).toBeNull();
   });
 
   test('open with neither: says there is no way to sign up yet', async () => {
-    const view = await visit({ github: false, email: false, oidc: null, signUp: 'open' });
+    const view = await visit({
+      github: false,
+      email: false,
+      oidc: null,
+      signUp: 'open',
+      password: true,
+    });
     expect(
       view.queryByText('This server has no way to make an account connected yet.'),
     ).not.toBeNull();
@@ -125,7 +150,7 @@ describe('the sign-up screen', () => {
   ] as const) {
     test(`invite-only: the notice in ${locale}, with the sign-in link and no form or button`, async () => {
       const view = await visit(
-        { github: true, email: true, oidc: null, signUp: 'invite-only' },
+        { github: true, email: true, oidc: null, signUp: 'invite-only', password: true },
         locale,
       );
       expect(view.getByRole('heading', { level: 1, name: title })).toBeDefined();
@@ -149,7 +174,13 @@ describe('the sign-up screen, before the server has said what it offers', () => 
           calls += 1;
           return calls === 1
             ? Promise.reject(new ApiError(404, 'ROUTE_NOT_FOUND', 'no'))
-            : Promise.resolve({ github: true, email: false, oidc: null, signUp: 'open' });
+            : Promise.resolve({
+                github: true,
+                email: false,
+                oidc: null,
+                signUp: 'open',
+                password: true,
+              });
         },
       }),
     });
@@ -181,7 +212,13 @@ describe('the sign-up screen, before the server has said what it offers', () => 
       api: anApi({
         me: () => Promise.resolve(aSession()),
         authMethods: () =>
-          Promise.resolve({ github: true, email: true, oidc: null, signUp: 'open' }),
+          Promise.resolve({
+            github: true,
+            email: true,
+            oidc: null,
+            signUp: 'open',
+            password: true,
+          }),
       }),
     });
     await settle();

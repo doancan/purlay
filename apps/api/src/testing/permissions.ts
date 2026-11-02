@@ -40,6 +40,22 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PUT /api/workspaces/:workspaceId/retention',
     allowed: { owner: true, admin: false, member: false },
   },
+  'read how long a channel keeps its history': {
+    endpoint: 'GET /api/channels/:channelId/retention',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'let a channel keep its history longer': {
+    endpoint: 'PUT /api/channels/:channelId/retention',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'ask for the workspace to be deleted': {
+    endpoint: 'POST /api/workspaces/:workspaceId/deletion',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'take back the workspace’s deletion': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/deletion',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'export the workspace': {
     endpoint: 'POST /api/workspaces/:workspaceId/exports',
     allowed: { owner: true, admin: false, member: false },
@@ -56,6 +72,10 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },
   },
+  'download the audit trail': {
+    endpoint: 'GET /api/workspaces/:workspaceId/audit/export',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'see whether the GitHub token is set': {
     endpoint: 'GET /api/workspaces/:workspaceId/integrations/github',
     allowed: { owner: true, admin: true, member: false },
@@ -68,6 +88,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/workspaces/:workspaceId/integrations/github',
     allowed: { owner: true, admin: true, member: false },
   },
+  'start connecting a GitHub App installation': {
+    endpoint: 'POST /api/workspaces/:workspaceId/github-app/installation',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'disconnect the GitHub App installation': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/github-app/installation',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'list a channel’s repository feeds': {
     endpoint: 'GET /api/channels/:channelId/github-feeds',
     allowed: { owner: true, admin: true, member: false },
@@ -76,8 +104,24 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'POST /api/channels/:channelId/github-feeds',
     allowed: { owner: true, admin: true, member: false },
   },
+  'regenerate a repository feed’s secret': {
+    endpoint: 'POST /api/channels/:channelId/github-feeds/:feedId/secret',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'disconnect a repository from a channel': {
     endpoint: 'DELETE /api/channels/:channelId/github-feeds/:feedId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'list a channel’s incoming webhooks': {
+    endpoint: 'GET /api/channels/:channelId/incoming-webhooks',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'make an incoming webhook': {
+    endpoint: 'POST /api/channels/:channelId/incoming-webhooks',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'revoke an incoming webhook': {
+    endpoint: 'DELETE /api/channels/:channelId/incoming-webhooks/:webhookId',
     allowed: { owner: true, admin: true, member: false },
   },
   'make an invitation link': {
@@ -100,8 +144,20 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'GET /api/workspaces/:workspaceId/storage',
     allowed: { owner: true, admin: false, member: false },
   },
+  'let only owners and admins post in a channel': {
+    endpoint: 'PATCH /api/channels/:channelId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'archive a channel': {
     endpoint: 'DELETE /api/channels/:channelId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'see the archived channels': {
+    endpoint: 'GET /api/workspaces/:workspaceId/archived-channels',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'bring an archived channel back': {
+    endpoint: 'POST /api/channels/:channelId/restore',
     allowed: { owner: true, admin: true, member: false },
   },
   'delete somebody else’s message': {

@@ -19,7 +19,10 @@ import {
   type TUnion,
 } from '@sinclair/typebox';
 import {
+  DISPLAY_NAME_MAX,
   Channel,
+  DECISION_NOTE_MAX,
+  DecisionUrl,
   ChannelState,
   CurrentUser,
   Attachment,
@@ -28,6 +31,7 @@ import {
   GitHubLink,
   IncidentSeverity,
   IncidentStatus,
+  IncomingWebhookName,
   Membership,
   OpenIncidentStatus,
   PROFILE_STATUS_MAX,
@@ -46,6 +50,7 @@ import {
   Uuid,
 } from './models';
 import { PresenceChange } from './events';
+import { EMAIL_MAX } from './mailbox';
 import { REPLAY_OVERLAP_MS } from './message-id';
 
 /**
@@ -80,6 +85,13 @@ export type PageQuery = Static<typeof PageQuery>;
 
 // ── Identity ────────────────────────────────────────────────────────────────
 
+/**
+ * A workspace whose deletion was asked for, and when its content goes unless an owner takes it back
+ * (D-242): what asking answers, and what `GET /api/me` lists for its owners.
+ */
+export const WorkspaceDeletion = Type.Object({ workspace: Workspace, purgeAt: Timestamp });
+export type WorkspaceDeletion = Static<typeof WorkspaceDeletion>;
+
 /** `GET /api/me` — the caller, and the workspaces they belong to. */
 export const MeResponse = Type.Object({
   user: CurrentUser,
@@ -98,6 +110,25 @@ export const MeResponse = Type.Object({
    * client draws Settings → Server only for them. Read only; what it opens is the server's to refuse.
    */
   isServerAdmin: Type.Boolean(),
+  /**
+   * Whether the caller's name is GitHub's (D-235): an account GitHub made takes its name from GitHub at
+   * every sign-in, so the profile shows it and does not offer to change it. Every other account's name
+   * is its own to set (`displayName`, `PATCH /api/me/profile`).
+   */
+  nameFromGitHub: Type.Boolean(),
+  /**
+   * Whether the server holds the caller back until they turn on two-step verification (D-239): their account
+   * signs in with a password, the server requires the second step of such an account, and theirs is off. Every
+   * other route answers `403 TWO_FACTOR_REQUIRED` until it is on; the client shows nothing but the way to turn
+   * it on, and signing out.
+   */
+  mustEnrolTwoFactor: Type.Boolean(),
+  /**
+   * The workspaces the caller owns whose deletion was asked for and can still be taken back (D-242): gone
+   * from `memberships` and from everybody's screens, and listed here so an owner can say no in time.
+   * Empty for anybody who owns none.
+   */
+  scheduledDeletions: Type.Array(WorkspaceDeletion),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -106,10 +137,17 @@ export type MeResponse = Static<typeof MeResponse>;
 /** The longest workspace name, as `workspaces.name` holds it (`VARCHAR(64)`, migration 0003). */
 export const WORKSPACE_NAME_MAX = 64;
 
+/** The longest workspace address, as `workspaces.slug` holds it (`VARCHAR(64)`, migration 0003). */
+export const WORKSPACE_SLUG_MAX = 64;
+
 export const CreateWorkspaceRequest = FromClient({
   name: Type.String({ minLength: 1, maxLength: WORKSPACE_NAME_MAX, format: 'name' }),
   /** Lowercase, and an identifier rather than prose — hence `COLLATE "C"` (D-40). */
-  slug: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+  slug: Type.String({
+    minLength: 1,
+    maxLength: WORKSPACE_SLUG_MAX,
+    pattern: '^[a-z0-9][a-z0-9-]*$',
+  }),
 });
 export type CreateWorkspaceRequest = Static<typeof CreateWorkspaceRequest>;
 
@@ -129,6 +167,22 @@ export const UpdateWorkspaceRequest = FromClient({
 });
 export type UpdateWorkspaceRequest = Static<typeof UpdateWorkspaceRequest>;
 
+/**
+ * How long a workspace whose deletion was asked for waits before its content is erased (D-242): any owner
+ * can take it back until then. A week, so an owner away for a few days, or a deletion nobody else agreed
+ * to, is still in time — and short enough that a team that meant it is not kept waiting for the erasure.
+ */
+export const WORKSPACE_DELETION_GRACE_DAYS = 7;
+
+/**
+ * `POST /api/workspaces/:workspaceId/deletion` — an owner asks for the workspace to be deleted, typing its
+ * name (D-242): the one act here that ends in an erasure, so it is not made by a slip of the hand.
+ */
+export const DeleteWorkspaceRequest = FromClient({
+  confirm: Type.String({ maxLength: WORKSPACE_NAME_MAX }),
+});
+export type DeleteWorkspaceRequest = Static<typeof DeleteWorkspaceRequest>;
+
 /** The shortest window an owner may keep history for — the database's `retention_days_sane` (D-27). */
 export const RETENTION_DAYS_MIN = 30;
 /** The longest: a hundred years, past which a number is a typo, not a policy (D-139 §4). */
@@ -144,10 +198,45 @@ const RetentionDays = Type.Union([
  * `GET` and `PUT /api/workspaces/:workspaceId/retention` — an owner's to read and to set (D-139 §4).
  * Its own route: the `Workspace` shape is shown to people not yet in it, in an invitation's preview.
  */
-export const RetentionSetting = Type.Object({ retentionDays: RetentionDays });
+export const RetentionSetting = Type.Object({
+  retentionDays: RetentionDays,
+  /**
+   * How many channels keep their history longer than the workspace's window — forever, or a floor
+   * past it — archived and private ones included (D-225). A count, never which: the owner may not see
+   * them all (D-34), and each channel's own setting says how long.
+   */
+  channelsKeptLonger: Type.Integer({ minimum: 0 }),
+});
 export type RetentionSetting = Static<typeof RetentionSetting>;
 export const SetRetentionRequest = FromClient({ retentionDays: RetentionDays });
 export type SetRetentionRequest = Static<typeof SetRetentionRequest>;
+
+/**
+ * What a channel keeps beyond its workspace (D-225): `null` is the workspace's window, `'forever'` is
+ * everything, a number is at least that many whole days. Only ever longer: a number shorter than the
+ * workspace keeps now is refused (`409 RETENTION_TOO_SHORT`), and a workspace window lengthened past it
+ * later wins — what is kept is the longer of the two (`effectiveDays`).
+ */
+export const ChannelRetentionFloor = Type.Union([
+  Type.Null(),
+  Type.Literal('forever'),
+  Type.Integer({ minimum: RETENTION_DAYS_MIN, maximum: RETENTION_DAYS_MAX }),
+]);
+export type ChannelRetentionFloor = Static<typeof ChannelRetentionFloor>;
+
+/**
+ * `GET` and `PUT /api/channels/:channelId/retention` — an owner's, as the workspace's is (D-139 §4,
+ * D-225): the channel's own floor, the workspace's window beside it, and what the purge keeps — the
+ * longer of the two, `null` for everything.
+ */
+export const ChannelRetention = Type.Object({
+  keepsAtLeast: ChannelRetentionFloor,
+  workspaceDays: RetentionDays,
+  effectiveDays: RetentionDays,
+});
+export type ChannelRetention = Static<typeof ChannelRetention>;
+export const SetChannelRetentionRequest = FromClient({ keepsAtLeast: ChannelRetentionFloor });
+export type SetChannelRetentionRequest = Static<typeof SetChannelRetentionRequest>;
 
 /**
  * `GET /api/workspaces/:workspaceId/storage` — how much of its quota the workspace's files take, an
@@ -180,8 +269,11 @@ export type UpdateMemberRoleRequest = Static<typeof UpdateMemberRoleRequest>;
 
 // ── Channels ────────────────────────────────────────────────────────────────
 
+/** The longest channel name, as `channels.name` holds it (`VARCHAR(64)`). */
+export const CHANNEL_NAME_MAX = 64;
+
 /** A channel's name, as it is created and as it is renamed: one rule for both. */
-const ChannelName = Type.String({ minLength: 1, maxLength: 64, format: 'name' });
+const ChannelName = Type.String({ minLength: 1, maxLength: CHANNEL_NAME_MAX, format: 'name' });
 /** What a channel is for, in a line. */
 const ChannelTopic = Type.String({ format: 'plain-text' });
 
@@ -202,12 +294,14 @@ export type AddChannelMemberRequest = Static<typeof AddChannelMemberRequest>;
 
 /**
  * `PATCH /api/channels/:channelId` — a member of the channel renames it or sets what it is for
- * (D-123). Each field is optional and only what is sent changes; a `null` topic clears it. The answer
+ * (D-123); an owner or an admin among them also says whether only owners and admins post in its feed
+ * (D-243). Each field is optional and only what is sent changes; a `null` topic clears it. The answer
  * is the channel as the caller now sees it, and the room hears `CHANNEL_UPDATED`.
  */
 export const UpdateChannelRequest = FromClient({
   name: Type.Optional(ChannelName),
   topic: Type.Optional(Type.Union([ChannelTopic, Type.Null()])),
+  onlyAdminsPost: Type.Optional(Type.Boolean()),
 });
 export type UpdateChannelRequest = Static<typeof UpdateChannelRequest>;
 
@@ -324,6 +418,24 @@ export type MessageWindow = Static<typeof MessageWindow>;
 export const ChannelList = Type.Array(Channel);
 export type ChannelList = Static<typeof ChannelList>;
 
+/** How many archived channels the list answers, the most recently archived first (D-232). */
+export const ARCHIVED_CHANNELS_MAX = 200;
+
+/**
+ * An archived channel an owner or an admin may bring back (D-232): its name, whether it is private, and
+ * when it was archived. Nothing of what is in it.
+ */
+export const ArchivedChannel = Type.Object({
+  id: Uuid,
+  name: Type.String(),
+  type: Type.Union([Type.Literal('public'), Type.Literal('private')]),
+  archivedAt: Type.String({ format: 'date-time' }),
+});
+export type ArchivedChannel = Static<typeof ArchivedChannel>;
+
+export const ArchivedChannelList = Type.Array(ArchivedChannel);
+export type ArchivedChannelList = Static<typeof ArchivedChannelList>;
+
 /** The shortest search that a trigram index can answer; shorter would read every visible message. */
 export const SEARCH_QUERY_MIN = 3;
 export const SEARCH_QUERY_MAX = 200;
@@ -333,24 +445,58 @@ export const SEARCH_QUERY_MAX = 200;
  * the channels the caller can see, or in one of them, from anybody or from one person (D-10, D-34,
  * D-105, D-166). Newest first, keyset by `before`. `%`, `_` and `\` are themselves, not patterns.
  */
-export const SearchQuery = FromClient({
-  q: Type.String({
-    minLength: SEARCH_QUERY_MIN,
-    maxLength: SEARCH_QUERY_MAX,
-    format: 'plain-text',
-  }),
+export const SearchCriteria = FromClient({
+  q: Type.Union([
+    Type.Literal(''),
+    Type.String({ minLength: SEARCH_QUERY_MIN, maxLength: SEARCH_QUERY_MAX, format: 'plain-text' }),
+  ]),
   channelId: Type.Optional(Uuid),
-  /**
-   * Only what this person wrote (D-166). A filter, not a resource: somebody who never wrote in the
-   * caller's visible channels — another workspace's, or nobody at all — is an empty page, not a 404.
-   */
   senderId: Type.Optional(Uuid),
+  status: Type.Optional(Type.Union([Type.Literal('resolved'), Type.Literal('open')])),
+  question: Type.Optional(Type.Literal('yes')),
+  kind: Type.Optional(Type.Union([Type.Literal('code'), Type.Literal('file')])),
+  since: Type.Optional(Timestamp),
+  until: Type.Optional(Timestamp),
+  repository: Type.Optional(Type.String({ maxLength: 140, pattern: GITHUB_REPOSITORY_PATTERN })),
+});
+export type SearchCriteria = Static<typeof SearchCriteria>;
+export const SearchFilters = Type.Omit(SearchCriteria, ['q', 'channelId', 'senderId']);
+export type SearchFilters = Static<typeof SearchFilters>;
+export const SearchQuery = FromClient({
+  ...SearchCriteria.properties,
   before: Type.Optional(Uuid),
   limit: Type.Optional(
     Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
   ),
 });
 export type SearchQuery = Static<typeof SearchQuery>;
+
+export const SetKnowledgeRequest = FromClient({
+  version: Type.Integer({ minimum: 0 }),
+  isQuestion: Type.Boolean(),
+  assigneeId: Type.Union([Uuid, Type.Null()]),
+  acceptedAnswerId: Type.Union([Uuid, Type.Null()]),
+  decisionNote: Type.String({ maxLength: DECISION_NOTE_MAX, format: 'plain-text' }),
+  decisionUrl: Type.Union([DecisionUrl, Type.Null()]),
+});
+export type SetKnowledgeRequest = Static<typeof SetKnowledgeRequest>;
+
+export const SAVED_SEARCH_LIMIT = 50;
+export const SAVED_SEARCH_NAME_MAX = 80;
+export const SaveSearchRequest = FromClient({
+  name: Type.String({ minLength: 1, maxLength: SAVED_SEARCH_NAME_MAX, format: 'plain-text' }),
+  query: SearchCriteria,
+});
+export type SaveSearchRequest = Static<typeof SaveSearchRequest>;
+export const SavedSearch = Type.Object({
+  id: Uuid,
+  name: Type.String(),
+  query: SearchCriteria,
+  createdAt: Timestamp,
+});
+export type SavedSearch = Static<typeof SavedSearch>;
+export const SavedSearchPage = Page(SavedSearch);
+export type SavedSearchPage = Static<typeof SavedSearchPage>;
 
 export const SearchPage = Page(Message);
 export type SearchPage = Static<typeof SearchPage>;
@@ -372,7 +518,15 @@ export type UnresolvedPage = Static<typeof UnresolvedPage>;
  * and its narrowed view lists. A channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as search
  * answers it: narrowing never widens the visible set (D-34).
  */
+export const QuestionFilters = FromClient({
+  unanswered: Type.Optional(Type.Literal('yes')),
+  assigneeId: Type.Optional(Uuid),
+  order: Type.Optional(Type.Union([Type.Literal('oldest'), Type.Literal('newest')])),
+});
+export type QuestionFilters = Static<typeof QuestionFilters>;
+
 export const UnresolvedQuery = FromClient({
+  ...QuestionFilters.properties,
   channelId: Type.Optional(Uuid),
   before: Type.Optional(Uuid),
   after: Type.Optional(Uuid),
@@ -391,6 +545,26 @@ export const ReadChannelRequest = FromClient({ lastReadMessageId: Uuid });
 export type ReadChannelRequest = Static<typeof ReadChannelRequest>;
 export const ReadChannelResponse = ChannelState;
 export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
+
+/**
+ * `PUT /api/channels/:channelId/unread` — "mark unread from here" (D-212): the read position moves
+ * back to just before this message, so it and everything after it is unread again. The one way the
+ * position moves backwards; a reply marks its thread's root. Already unread from here or earlier, it
+ * changes nothing. The answer is the new state, as a read's is.
+ */
+export const MarkUnreadRequest = FromClient({ fromMessageId: Uuid });
+export type MarkUnreadRequest = Static<typeof MarkUnreadRequest>;
+
+/**
+ * `PUT /api/workspaces/:workspaceId/read` — every channel the caller is in, read to its newest message
+ * (D-238). No body. The answer is each channel that had anything unread, as its row now is — a reply
+ * whose notification still waits keeps counting (D-147) — so the client replaces what it painted.
+ * Bounded by the caller's memberships in one workspace, so not paged.
+ */
+export const ReadAllChannelsResponse = Type.Object({
+  data: Type.Array(Type.Object({ channelId: Uuid, state: ChannelState })),
+});
+export type ReadAllChannelsResponse = Static<typeof ReadAllChannelsResponse>;
 
 /**
  * `PUT /api/messages/:messageId/thread/read` — the newest reply the person has seen in the thread
@@ -552,15 +726,25 @@ export type NotificationPage = Static<typeof NotificationPage>;
  * `PUT /api/workspaces/:workspaceId/integrations/github` — the workspace's one GitHub token (D-11,
  * D-23): printable characters, no spaces. Sealed at rest, never logged, never returned.
  */
+export const GITHUB_TOKEN_MAX = 255;
 export const SetGitHubTokenRequest = FromClient({
-  token: Type.String({ minLength: 1, maxLength: 255, pattern: '^[\\x21-\\x7e]+$' }),
+  token: Type.String({ minLength: 1, maxLength: GITHUB_TOKEN_MAX, pattern: '^[\\x21-\\x7e]+$' }),
 });
 export type SetGitHubTokenRequest = Static<typeof SetGitHubTokenRequest>;
 
-/** `GET …/integrations/github` — whether a token is set, and since when. Never the token. */
+/**
+ * `GET …/integrations/github` — whether a token is set, and since when. Never the token.
+ *
+ * `invalidSince` is when GitHub first refused the token (`401`: revoked or expired): no call is made
+ * with it until it is replaced, and replacing or removing it clears this (D-23, amended; #884).
+ * `broadScopes` is whether the token, when saved, was a classic one with `repo` or a write scope —
+ * more than cards and feeds need, which is a fine-grained, read-only token on selected repositories.
+ */
 export const GitHubIntegration = Type.Object({
   configured: Type.Boolean(),
   updatedAt: Type.Union([Timestamp, Type.Null()]),
+  invalidSince: Type.Union([Timestamp, Type.Null()]),
+  broadScopes: Type.Boolean(),
 });
 export type GitHubIntegration = Static<typeof GitHubIntegration>;
 
@@ -620,25 +804,43 @@ export const AUDIT_ACTIONS = [
   'channel.created',
   'channel.renamed',
   'channel.archived',
+  'channel.restored',
   'channel.member_added',
   'channel.member_removed',
   'integration.token_set',
   'integration.token_removed',
   'integration.feed_created',
   'integration.feed_removed',
+  'integration.webhook_created',
+  'integration.webhook_revoked',
+  /** A workspace's GitHub App installation connected by an owner, or let go — by an owner or by GitHub (D-246). */
+  'integration.app_connected',
+  'integration.app_disconnected',
+  /** An issue made from a thread by a person: who, where, which — never its words (D-246 §2). */
+  'integration.issue_created',
+  /** An existing issue or pull request linked to a thread: who, where, which — never its title (D-246 §3). */
+  'integration.work_linked',
+  'integration.feed_secret_regenerated',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
   'workspace.renamed',
   'retention.changed',
+  'channel.retention_changed',
+  'channel.posting_changed',
   'account.erased',
   'content.erased',
   'workspace.export_requested',
   'workspace.exported',
   'retention.purged',
   'storage.quota_changed',
+  'audit.exported',
+  'workspace.deletion_requested',
+  'workspace.deletion_cancelled',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+/** One of the recorded actions, by name: what a filter on the trail names (D-222). */
+export const AuditActionName = Type.Union(AUDIT_ACTIONS.map((action) => Type.Literal(action)));
 
 /**
  * One administrative action: who, what, to whom, and for a change from what to what. Never anything
@@ -656,6 +858,64 @@ export const AuditEntry = Type.Object({
 export type AuditEntry = Static<typeof AuditEntry>;
 export const AuditPage = Page(AuditEntry);
 export type AuditPage = Static<typeof AuditPage>;
+
+/**
+ * What narrows the trail (D-222): who acted, which action, and when — `from` inclusive, `to` exclusive,
+ * each an instant (ISO 8601 with its zone). A day the reader picked in their own zone is turned into
+ * instants by the client; the server compares instants and nothing else.
+ */
+const AuditFilterProperties = {
+  actorId: Type.Optional(Uuid),
+  action: Type.Optional(AuditActionName),
+  from: Type.Optional(Timestamp),
+  to: Type.Optional(Timestamp),
+};
+export const AuditFilter = FromClient(AuditFilterProperties);
+export type AuditFilter = Static<typeof AuditFilter>;
+
+/** `GET /api/workspaces/:workspaceId/audit` — a page of the trail, narrowed (D-26, D-222). */
+export const AuditQuery = FromClient({
+  ...AuditFilterProperties,
+  before: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type AuditQuery = Static<typeof AuditQuery>;
+
+/** The files the trail is downloaded as (D-222): a spreadsheet's, and one JSON object a line. */
+export const AUDIT_EXPORT_FORMATS = ['csv', 'ndjson'] as const;
+export type AuditExportFormat = (typeof AUDIT_EXPORT_FORMATS)[number];
+
+/** `GET /api/workspaces/:workspaceId/audit/export` — the whole of the narrowed trail, as a file (D-222). */
+export const AuditExportQuery = FromClient({
+  ...AuditFilterProperties,
+  format: Type.Union(AUDIT_EXPORT_FORMATS.map((format) => Type.Literal(format))),
+});
+export type AuditExportQuery = Static<typeof AuditExportQuery>;
+
+/**
+ * One entry of a downloaded trail, newest first: a line of the NDJSON file, and — in this order, as its
+ * header names them — a row of the CSV, whose `metadata` cell is this object as JSON. Who acted is said
+ * by id and by name, since the file is read away from the people list that names them on the page; the
+ * actor's fields are null once nobody did it or they were erased (D-27).
+ */
+export const AuditExportLine = Type.Object({
+  id: Uuid,
+  createdAt: Timestamp,
+  action: Type.String({ minLength: 1, maxLength: 64 }),
+  actorId: Type.Union([Uuid, Type.Null()]),
+  actorUsername: Type.Union([Type.String(), Type.Null()]),
+  actorDisplayName: Type.Union([Type.String(), Type.Null()]),
+  targetType: Type.String({ minLength: 1, maxLength: 32 }),
+  targetId: Type.Union([Uuid, Type.Null()]),
+  metadata: Type.Record(Type.String(), Type.String()),
+});
+export type AuditExportLine = Static<typeof AuditExportLine>;
+/** The CSV's columns, in order: the line's own keys, so the two files cannot say different things. */
+export const AUDIT_EXPORT_COLUMNS = Object.keys(
+  AuditExportLine.properties,
+) as readonly (keyof AuditExportLine)[];
 
 /** The longest external image address the proxy reads (#110); a longer one is not a picture's. */
 export const EXTERNAL_IMAGE_URL_MAX = 2048;
@@ -702,7 +962,7 @@ export const INVITATION_EMAILS_PER_WORKSPACE_PER_DAY = 200;
  */
 export const CreateInvitationRequest = FromClient({
   emails: Type.Optional(
-    Type.Array(Type.String({ maxLength: 254 }), { maxItems: INVITATION_EMAILS_PER_REQUEST }),
+    Type.Array(Type.String({ maxLength: EMAIL_MAX }), { maxItems: INVITATION_EMAILS_PER_REQUEST }),
   ),
   locale: Type.Optional(SignInLocale),
 });
@@ -755,7 +1015,7 @@ export type InvitationTokenRequest = Static<typeof InvitationTokenRequest>;
  */
 export const InvitationPassportRequest = FromClient({
   token: InvitationToken,
-  email: Type.Optional(Type.String({ format: 'email', maxLength: 254 })),
+  email: Type.Optional(Type.String({ format: 'email', maxLength: EMAIL_MAX })),
 });
 export type InvitationPassportRequest = Static<typeof InvitationPassportRequest>;
 
@@ -1033,6 +1293,38 @@ export type PinnedMessage = Static<typeof PinnedMessage>;
 export const PinList = Type.Array(PinnedMessage, { maxItems: PINS_MAX });
 export type PinList = Static<typeof PinList>;
 
+// ── A channel's bookmarks (D-218) ───────────────────────────────────────────
+
+/** How many links a channel keeps at hand: a row of them under its header, not a directory. */
+export const BOOKMARKS_MAX = 20;
+/** The longest bookmark's name: what fits in a chip. */
+export const BOOKMARK_TITLE_MAX = 80;
+
+/** A web address a bookmark may hold: `http:` or `https:`, bounded; the server parses it as a URL too. */
+export const BookmarkUrl = Type.String({ pattern: '^https?://[^\\s]+$', maxLength: 2048 });
+
+/** A link kept at hand for a channel's members, with who added it — null once they are gone. */
+export const ChannelBookmark = Type.Object({
+  id: Uuid,
+  channelId: Uuid,
+  url: BookmarkUrl,
+  title: Type.String({ minLength: 1, maxLength: BOOKMARK_TITLE_MAX }),
+  addedBy: Type.Union([User, Type.Null()]),
+  addedAt: Timestamp,
+});
+export type ChannelBookmark = Static<typeof ChannelBookmark>;
+
+/** `GET /api/channels/:channelId/bookmarks` — oldest first, as they were added; bounded, not paged. */
+export const BookmarkList = Type.Array(ChannelBookmark, { maxItems: BOOKMARKS_MAX });
+export type BookmarkList = Static<typeof BookmarkList>;
+
+/** `POST /api/channels/:channelId/bookmarks` — a member's; the same address again is the same bookmark. */
+export const AddBookmarkRequest = FromClient({
+  url: BookmarkUrl,
+  title: Type.String({ minLength: 1, maxLength: BOOKMARK_TITLE_MAX }),
+});
+export type AddBookmarkRequest = Static<typeof AddBookmarkRequest>;
+
 // ── Profiles (#488, D-131) ──────────────────────────────────────────────────
 
 /**
@@ -1041,6 +1333,10 @@ export type PinList = Static<typeof PinList>;
  * zone must be one the server's runtime knows.
  */
 export const UpdateProfileRequest = FromClient({
+  /** The name shown for the person; refused for an account whose name is GitHub's (D-235). */
+  displayName: Type.Optional(
+    Type.String({ minLength: 1, maxLength: DISPLAY_NAME_MAX, format: 'name' }),
+  ),
   title: Type.Optional(
     Type.Union([
       Type.String({ minLength: 1, maxLength: PROFILE_TITLE_MAX, format: 'name' }),
@@ -1141,6 +1437,55 @@ export const WebhookAnswer = Type.Object({
   ]),
 });
 export type WebhookAnswer = Static<typeof WebhookAnswer>;
+
+// ── A channel's incoming webhooks (D-245) ───────────────────────────────────
+
+/** How many incoming webhooks one channel may have. */
+export const INCOMING_WEBHOOKS_PER_CHANNEL_MAX = 10;
+
+/** One incoming webhook, as its channel's list says it: never its secret, which is not kept. */
+export const IncomingWebhook = Type.Object({
+  id: Uuid,
+  channelId: Uuid,
+  name: IncomingWebhookName,
+  /** Who made it; null once that account is gone. */
+  createdBy: Type.Union([User, Type.Null()]),
+  createdAt: Timestamp,
+  /** When it last posted; null until it has. */
+  lastUsedAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type IncomingWebhook = Static<typeof IncomingWebhook>;
+
+/** `GET /api/channels/:channelId/incoming-webhooks` — an owner's or an admin's; oldest first, bounded. */
+export const IncomingWebhookList = Type.Array(IncomingWebhook, {
+  maxItems: INCOMING_WEBHOOKS_PER_CHANNEL_MAX,
+});
+export type IncomingWebhookList = Static<typeof IncomingWebhookList>;
+
+/** `POST /api/channels/:channelId/incoming-webhooks` — what its messages will say they are from. */
+export const CreateIncomingWebhookRequest = FromClient({ name: IncomingWebhookName });
+export type CreateIncomingWebhookRequest = Static<typeof CreateIncomingWebhookRequest>;
+
+/**
+ * The hook made, with the path a tool posts to on this server's origin: its id and its secret, in this
+ * answer only — the server keeps a digest of the secret and can never say it again (D-245).
+ */
+export const CreatedIncomingWebhook = Type.Object({
+  webhook: IncomingWebhook,
+  path: Type.String({ pattern: '^/api/webhooks/incoming/[0-9a-f-]{36}/[0-9a-f]{64}$' }),
+});
+export type CreatedIncomingWebhook = Static<typeof CreatedIncomingWebhook>;
+
+/**
+ * `POST /api/webhooks/incoming/:hookId/:secret` — the message, as markdown: Slack's `text`, and nothing
+ * else, so a field a tool expects to be drawn is refused rather than dropped without a word (D-245).
+ */
+export const IncomingWebhookPost = FromClient({ text: MessageContent });
+export type IncomingWebhookPost = Static<typeof IncomingWebhookPost>;
+
+/** What a post through an incoming webhook made: `201` and the message's id (D-245). */
+export const IncomingWebhookAnswer = Type.Object({ messageId: Uuid });
+export type IncomingWebhookAnswer = Static<typeof IncomingWebhookAnswer>;
 
 // ── A message's earlier versions (#82, D-135) ───────────────────────────────
 
@@ -1302,6 +1647,11 @@ export const AuthMethods = Type.Object({
   oidc: Type.Union([Type.Object({ name: Type.Union([Type.String(), Type.Null()]) }), Type.Null()]),
   /** Who may make an account: anybody, or only the holder of an invitation (R51). */
   signUp: Type.Union([Type.Literal('open'), Type.Literal('invite-only')]),
+  /**
+   * Whether an address and a password sign in here: `false` where the server's administrator turned password
+   * sign-in off (D-239), and the sign-in screen then draws no password form.
+   */
+  password: Type.Boolean(),
 });
 export type AuthMethods = Static<typeof AuthMethods>;
 
@@ -1406,7 +1756,7 @@ export type NativeTokenRequest = Static<typeof NativeTokenRequest>;
  * in the link's fragment, since the tab that holds it is not the one the mail opens (D-138 §4).
  */
 export const EmailSignInRequest = FromClient({
-  email: Type.String({ format: 'email', maxLength: 254 }),
+  email: Type.String({ format: 'email', maxLength: EMAIL_MAX }),
   locale: SignInLocale,
   invitation: Type.Optional(InvitationToken),
   /** The native application's challenge and state, carried in the link's fragment (D-191). */
@@ -1442,6 +1792,13 @@ export const MySignIn = Type.Object({
   ]),
   /** Whether the account is linked to the organisation's single sign-on (D-200); only ever the caller's own. */
   oidc: Type.Boolean(),
+  /** Whether a password sign-in asks for a code from an authenticator app too (D-236). */
+  twoFactor: Type.Boolean(),
+  /**
+   * Whether the server requires it of this account (D-239): it has a password, password sign-in is on, and the
+   * server's administrator asks the second step of every such account — so it cannot be turned off.
+   */
+  twoFactorRequired: Type.Boolean(),
 });
 export type MySignIn = Static<typeof MySignIn>;
 
@@ -1476,7 +1833,10 @@ export const DEVICE_SESSIONS_MAX = 100;
 // them, and a schema built at the top of a module stays in its bundle whether read or not.
 
 /** `POST /setup/claim` — the setup code from the server's log, as typed: any case, dashes or not. */
-export const SetupClaimRequest = FromClient({ code: Type.String({ minLength: 1, maxLength: 64 }) });
+export const SETUP_CLAIM_CODE_MAX = 64;
+export const SetupClaimRequest = FromClient({
+  code: Type.String({ minLength: 1, maxLength: SETUP_CLAIM_CODE_MAX }),
+});
 export type SetupClaimRequest = Static<typeof SetupClaimRequest>;
 
 /** `POST /setup/address` — the server's address (`APP_URL`), seen and confirmed (Ruling R35). */
@@ -1489,7 +1849,7 @@ export type SetupAddressRequest = Static<typeof SetupAddressRequest>;
  */
 export const SetupAdminRequest = FromClient({
   name: Type.String({ maxLength: 512 }),
-  email: Type.String({ maxLength: 254 }),
+  email: Type.String({ maxLength: EMAIL_MAX }),
   password: Type.String({ maxLength: 1024 }),
 });
 export type SetupAdminRequest = Static<typeof SetupAdminRequest>;
@@ -1507,10 +1867,18 @@ const Skipped = FromClient({ skip: Type.Literal(true) });
  * `POST /setup/github` — the OAuth app's pair, tried against GitHub; kept only when the try works and
  * `save` says to. Or the step skipped.
  */
+export const GITHUB_CLIENT_ID_MAX = 128;
+export const GITHUB_CLIENT_SECRET_MAX = 256;
+
+/** GitHub's OAuth app, as the setup and Settings → Server both send it. */
+const GitHubAppPair = {
+  clientId: Type.String({ minLength: 1, maxLength: GITHUB_CLIENT_ID_MAX }),
+  clientSecret: Type.String({ minLength: 1, maxLength: GITHUB_CLIENT_SECRET_MAX }),
+};
+
 export const SetupGitHubRequest = Type.Union([
   FromClient({
-    clientId: Type.String({ minLength: 1, maxLength: 128 }),
-    clientSecret: Type.String({ minLength: 1, maxLength: 256 }),
+    ...GitHubAppPair,
     save: Type.Optional(Type.Boolean()),
   }),
   Skipped,
@@ -1523,11 +1891,18 @@ export type SetupGitHubRequest = Static<typeof SetupGitHubRequest>;
  * try works and `save` says to. Or the step skipped. Or the letter sent again through the relay
  * already kept — which the client cannot name, since the relay's address is never shown to it again.
  */
+export const SMTP_URL_MAX = 2048;
+
+/** The relay and its sender, as the setup and Settings → Server both send them. */
+const SmtpRelay = {
+  smtpUrl: Type.String({ minLength: 1, maxLength: SMTP_URL_MAX }),
+  from: Type.String({ minLength: 1, maxLength: EMAIL_MAX }),
+  allowPlaintext: Type.Boolean(),
+};
+
 export const SetupSmtpRequest = Type.Union([
   FromClient({
-    smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
-    from: Type.String({ minLength: 1, maxLength: 254 }),
-    allowPlaintext: Type.Boolean(),
+    ...SmtpRelay,
     locale: SignInLocale,
     save: Type.Optional(Type.Boolean()),
   }),
@@ -1539,10 +1914,7 @@ export type SetupSmtpRequest = Static<typeof SetupSmtpRequest>;
 // ── Administration → Server (D-179 §4.8) ─────────────────────────────────────
 
 /** `POST /api/server/github` — GitHub's OAuth app, tried with these values and kept only if it works. */
-export const ServerGitHubRequest = FromClient({
-  clientId: Type.String({ minLength: 1, maxLength: 128 }),
-  clientSecret: Type.String({ minLength: 1, maxLength: 256 }),
-});
+export const ServerGitHubRequest = FromClient(GitHubAppPair);
 export type ServerGitHubRequest = Static<typeof ServerGitHubRequest>;
 
 /** The longest name a single sign-on button carries (D-200): one short line, never a sentence. */
@@ -1552,20 +1924,20 @@ export const OIDC_NAME_MAX = 40;
  * `POST /api/server/oidc` — the OpenID Connect provider (D-200), its discovery and its client tried with these
  * values and kept only if they work. `name` is the button's label; empty is the default.
  */
+export const OIDC_ISSUER_MAX = 512;
+export const OIDC_CLIENT_ID_MAX = 256;
+export const OIDC_CLIENT_SECRET_MAX = 1024;
+
 export const ServerOidcRequest = FromClient({
-  issuer: Type.String({ minLength: 1, maxLength: 512 }),
-  clientId: Type.String({ minLength: 1, maxLength: 256 }),
-  clientSecret: Type.String({ minLength: 1, maxLength: 1024 }),
+  issuer: Type.String({ minLength: 1, maxLength: OIDC_ISSUER_MAX }),
+  clientId: Type.String({ minLength: 1, maxLength: OIDC_CLIENT_ID_MAX }),
+  clientSecret: Type.String({ minLength: 1, maxLength: OIDC_CLIENT_SECRET_MAX }),
   name: Type.Optional(Type.String({ maxLength: OIDC_NAME_MAX })),
 });
 export type ServerOidcRequest = Static<typeof ServerOidcRequest>;
 
 /** `POST /api/server/smtp` — the relay, tried with a test letter to the caller, kept only if it works. */
-export const ServerSmtpRequest = FromClient({
-  smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
-  from: Type.String({ minLength: 1, maxLength: 254 }),
-  allowPlaintext: Type.Boolean(),
-});
+export const ServerSmtpRequest = FromClient(SmtpRelay);
 export type ServerSmtpRequest = Static<typeof ServerSmtpRequest>;
 
 /** `DELETE /api/server/github`, `/smtp` and `/oidc` — the body is optional; `confirmLastChannel` is the only field. */
@@ -1574,10 +1946,42 @@ export const ServerDisconnectRequest = FromClient({
 });
 export type ServerDisconnectRequest = Static<typeof ServerDisconnectRequest>;
 
-/** `POST /api/server/policy` — who may make an account. */
-export const ServerPolicyRequest = FromClient({
-  signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]),
-});
+/**
+ * How long a session may go unused before it is signed out, in hours, as a server's administrator may choose it
+ * (D-244): an hour, a working day, a day, a week. A fixed set, so the page offers exactly what the server takes.
+ */
+export const SESSION_IDLE_TIMEOUT_HOURS = [1, 8, 24, 168] as const;
+export type SessionIdleTimeoutHours = (typeof SESSION_IDLE_TIMEOUT_HOURS)[number];
+
+/** How long a session may live from its sign-in, in days, whatever its use (D-244). */
+export const SESSION_MAX_AGE_DAYS = [1, 7, 30, 90] as const;
+export type SessionMaxAgeDays = (typeof SESSION_MAX_AGE_DAYS)[number];
+
+/** One of the idle timeouts, or `null`: off, a session is never signed out for being unused (D-244). */
+export const SessionIdleTimeout = Type.Union([
+  ...SESSION_IDLE_TIMEOUT_HOURS.map((hours) => Type.Literal(hours)),
+  Type.Null(),
+]);
+
+/** One of the maximum ages, or `null`: off, a session lives as long as `SESSION_TTL_DAYS` (D-244). */
+export const SessionMaxAge = Type.Union([
+  ...SESSION_MAX_AGE_DAYS.map((days) => Type.Literal(days)),
+  Type.Null(),
+]);
+
+/**
+ * `POST /api/server/policy` — one of the server's rules about signing in, each changed on its own so two
+ * administrators changing two rules at once never undo each other: who may make an account; whether an account
+ * that signs in with a password must turn on two-step verification; whether a password signs in at all (D-239);
+ * how long a session may go unused, and how long it may live (D-244).
+ */
+export const ServerPolicyRequest = Type.Union([
+  FromClient({ signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]) }),
+  FromClient({ requireTwoFactor: Type.Boolean() }),
+  FromClient({ passwordSignIn: Type.Boolean() }),
+  FromClient({ sessionIdleTimeoutHours: SessionIdleTimeout }),
+  FromClient({ sessionMaxAgeDays: SessionMaxAge }),
+]);
 export type ServerPolicyRequest = Static<typeof ServerPolicyRequest>;
 
 /** The longest list of workspace creators the page takes, and a GitHub login's longest. */
@@ -1597,6 +2001,33 @@ export const ServerCreatorsRequest = FromClient({
   ]),
 });
 export type ServerCreatorsRequest = Static<typeof ServerCreatorsRequest>;
+
+/** How many accounts `GET /api/server/accounts` answers, and the longest search it takes (D-233). */
+export const SERVER_ACCOUNTS_MAX = 50;
+export const SERVER_ACCOUNT_SEARCH_MAX = 100;
+
+/** `GET /api/server/accounts?q=` — the words to find accounts by: name, username or address. */
+export const ServerAccountsQuery = FromClient({
+  q: Type.Optional(Type.String({ maxLength: SERVER_ACCOUNT_SEARCH_MAX })),
+});
+export type ServerAccountsQuery = Static<typeof ServerAccountsQuery>;
+
+/**
+ * An account as the server's administrator manages it (D-233): who it is, whether it administers the
+ * server, and whether it is suspended. Never a credential.
+ */
+export const ServerAccount = Type.Object({
+  id: Uuid,
+  username: Type.String(),
+  displayName: Type.String(),
+  email: Type.Union([Type.String(), Type.Null()]),
+  isServerAdmin: Type.Boolean(),
+  suspendedAt: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+});
+export type ServerAccount = Static<typeof ServerAccount>;
+
+export const ServerAccountList = Type.Array(ServerAccount);
+export type ServerAccountList = Static<typeof ServerAccountList>;
 
 /** `POST /setup/verify` — the token the administrator's link carried in its fragment. */
 export const SetupVerifyRequest = FromClient({

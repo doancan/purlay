@@ -45,6 +45,8 @@ export {
 } from './migrator';
 export {
   buildIntegrationTemplate,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   dropDatabases,

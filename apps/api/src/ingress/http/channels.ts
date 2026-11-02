@@ -15,10 +15,15 @@ import {
   OpenConversationRequest,
   CreateDirectMessageRequest,
   ReadChannelRequest,
+  MarkUnreadRequest,
+  SetChannelRetentionRequest,
   SetNotificationLevelRequest,
   UpdateChannelRequest,
+  type ArchivedChannel,
   type Channel,
+  type ChannelRetention,
   type ChannelMemberList,
+  type ReadAllChannelsResponse,
   type ReadChannelResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -29,6 +34,7 @@ import {
   publishAfterCommit,
   publishAccessRevoked,
   publishChannelAdded,
+  publishChannelsUpdated,
   publishChannelRevoked,
   publishChannelState,
   publishChannelUpdated,
@@ -45,13 +51,16 @@ import {
 } from '../../modules/channels/channels';
 import { openConversation, openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
-import { markRead } from '../../modules/channels/read-state';
+import { markAllRead, markRead, markUnread } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
+import { readChannelRetention, setChannelRetention } from '../../modules/channels/retention';
 import {
   archiveChannel,
+  archivedChannels,
   channelMembers,
   leaveChannel,
   removeChannelMember,
+  restoreChannel,
   updateChannel,
 } from '../../modules/channels/settings';
 import { requireSession } from './session';
@@ -170,6 +179,60 @@ export const readUpTo = async (
     ],
   ]);
   return outcome.state;
+};
+
+/**
+ * `PUT /api/channels/:channelId/unread` — "mark unread from here" (D-212). The caller's devices are
+ * told, from the row as it is, whether or not it moved, as a read tells them.
+ */
+export const unreadFrom = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<ReadChannelResponse> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(MarkUnreadRequest, body);
+  const outcome = await atomicallyOn(database)(
+    async (transaction) => await markUnread(transaction, context, input.fromMessageId),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(bus, clock, userId, channelId, outcome.state, outcome.version),
+      ),
+    ],
+  ]);
+  return outcome.state;
+};
+
+/**
+ * `PUT /api/workspaces/:workspaceId/read` — every channel the caller is in, read to its newest message
+ * (D-238). One transaction; after it commits, each channel answered is told to the caller's devices on
+ * their own topic, as a read of one channel tells them — whether or not it moved, so a repeat repairs a
+ * device that missed the first.
+ */
+export const readAllChannels = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<ReadAllChannelsResponse> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const outcomes = await atomicallyOn(database)(
+    async (transaction) => await markAllRead(transaction, clock, context),
+  );
+  await publishAfterCommit(log, [
+    outcomes.map((outcome) =>
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(bus, clock, userId, outcome.channelId, outcome.state, outcome.version),
+      ),
+    ),
+  ]);
+  return { data: outcomes.map(({ channelId, state }) => ({ channelId, state })) };
 };
 
 /**
@@ -325,6 +388,44 @@ export const archive = async (
 };
 
 /**
+ * `GET /api/workspaces/:workspaceId/archived-channels` — the archived channels this owner or admin may
+ * bring back, the most recently archived first (D-232).
+ */
+export const listArchived = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<readonly ArchivedChannel[]> => {
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  return await archivedChannels(database, context);
+};
+
+/**
+ * `POST /api/channels/:channelId/restore` — an owner or an admin brings an archived channel back
+ * (D-232). Each of its members reads their channels again, so it returns to their sidebars at once.
+ */
+export const restore = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const restored = await atomicallyOn(database)(
+    async (transaction) => await restoreChannel(transaction, clock, userId, channelId),
+  );
+  await publishAfterCommit(log, [
+    restored.memberIds.map((memberId) =>
+      publication('CHANNELS_UPDATED', () =>
+        publishChannelsUpdated(bus, clock, memberId, restored.workspaceId),
+      ),
+    ),
+  ]);
+};
+
+/**
  * `POST /api/channels/:channelId/leave` — out of the channel (D-123). The caller's own sockets stop
  * receiving it and are told they left; not being in it is the same `204`, and tells nobody.
  */
@@ -388,4 +489,39 @@ export const listChannelMembers = async (
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return [...(await channelMembers(database, context))];
+};
+
+/**
+ * `GET /api/channels/:channelId/retention` — how long the channel keeps its history beside its
+ * workspace's window, and what is kept: an owner's (D-225).
+ */
+export const readChannelRetentionSetting = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  channelId: string,
+): Promise<ChannelRetention> => {
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  return await readChannelRetention(database, context);
+};
+
+/**
+ * `PUT /api/channels/:channelId/retention` — an owner lets the channel keep its history longer than
+ * the workspace does, or follow it again (D-225). Nothing is told to any socket: only an owner reads it,
+ * as the workspace's window (D-139 §4).
+ */
+export const updateChannelRetentionSetting = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<ChannelRetention> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const { keepsAtLeast } = validated(SetChannelRetentionRequest, body);
+  return await atomicallyOn(database)(
+    async (transaction) => await setChannelRetention(transaction, clock, context, keepsAtLeast),
+  );
 };

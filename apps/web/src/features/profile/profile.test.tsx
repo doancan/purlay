@@ -400,3 +400,68 @@ describe('where people are picked', () => {
     view.unmount();
   });
 });
+
+describe('the name on Profile (D-235)', () => {
+  const openAs = async (nameFromGitHub: boolean, api: Partial<Api> = {}): Promise<View> => {
+    const view = await renderApp(<Outlet />, {
+      path: '/w/acme/settings/profile',
+      api: aSignedInApi({
+        me: () => Promise.resolve({ ...aSession(), profile: MINE, nameFromGitHub }),
+        ...api,
+      }),
+    });
+    await settle();
+    await view.findByRole('heading', { level: 1, name: 'Profile' });
+    return view;
+  };
+
+  test('an account GitHub made shows its name and offers nothing to change', async () => {
+    const view = await openAs(true);
+    expect(within(view.getByRole('main')).queryByRole('textbox', { name: 'Name' })).toBeNull();
+    expect(
+      view.getByText('Your name and picture come from GitHub and change there.'),
+    ).toBeDefined();
+    view.unmount();
+  });
+
+  test('any other account sets it: trimmed, saved on its own, and drawn at once', async () => {
+    const sent: UpdateProfileRequest[] = [];
+    const view = await openAs(false, {
+      updateProfile: (input) => {
+        sent.push(input);
+        return Promise.resolve(MINE);
+      },
+    });
+    const name = textbox(view, 'Name');
+    expect(
+      within(view.getByRole('main')).getByRole('button', { name: 'Save name' }),
+    ).toHaveProperty('disabled', true);
+    await person().clear(name);
+    await person().type(name, '  Ada Lovelace ');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save name' }));
+    await settle();
+    expect(sent).toEqual([{ displayName: 'Ada Lovelace' }]);
+    expect(within(view.getByRole('main')).getAllByText('Ada Lovelace').length).toBeGreaterThan(0);
+    expect(within(view.getByRole('main')).getAllByText('Saved.').length).toBeGreaterThan(0);
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
+  test('a name the server refuses is said under the field; any other failure beside Save', async () => {
+    let answer: ApiError = new ApiError(400, 'VALIDATION_FAILED', 'no', { displayName: 'bad' });
+    const view = await openAs(false, {
+      updateProfile: () => Promise.reject(answer),
+    });
+    const name = textbox(view, 'Name');
+    await person().clear(name);
+    await person().type(name, 'Ada');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save name' }));
+    await settle();
+    expect(view.getByText('That cannot be shown as written.')).toBeDefined();
+    answer = new ApiError(500, 'INTERNAL', 'no');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save name' }));
+    await settle();
+    expect(view.getByText(/^Your profile was not saved\./)).toBeDefined();
+    view.unmount();
+  });
+});

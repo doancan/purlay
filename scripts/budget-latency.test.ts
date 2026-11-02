@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { createServer } from 'node:net';
 import { main, report } from './budget-latency';
 
@@ -53,4 +53,18 @@ describe('the latency budget’s door', () => {
     expect(report({ line: null, code: 1 }, print)).toBe(1);
     expect(said).toEqual(['out: measured nothing', 'error: refused']);
   });
+});
+
+test('the default printer sends successful reports to stdout and refusals to stderr', () => {
+  const out = spyOn(console, 'log').mockImplementation(() => undefined);
+  const error = spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    expect(report({ line: 'measured', code: 0 })).toBe(0);
+    expect(report({ line: 'refused', code: 1 })).toBe(1);
+    expect(out.mock.calls).toEqual([['measured']]);
+    expect(error.mock.calls).toEqual([['refused']]);
+  } finally {
+    out.mockRestore();
+    error.mockRestore();
+  }
 });

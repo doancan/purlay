@@ -350,7 +350,8 @@ describe('the assembled bundle', () => {
       pairs: { foreground: string; minimum: number }[];
     };
     expect(pairs.pairs.length).toBeGreaterThan(20);
-    expect(pairs.pairs.every((pair) => pair.minimum === 3 || pair.minimum === 4.5)).toBe(true);
+    // 3 and 4.5 are WCAG's; 1.6 is the one named softer edge of a control (D-247).
+    expect(pairs.pairs.every((pair) => [1.6, 3, 4.5].includes(pair.minimum))).toBe(true);
   });
 
   test('is never assembled from a contract the generator is not taught: it throws, naming the keyword', () => {

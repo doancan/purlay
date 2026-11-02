@@ -19,6 +19,7 @@ import { useSession } from '../session/session';
 import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
 import { sectionsFor } from '../settings/sections';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
+import { useMarkAllRead } from '../shell/read-all';
 import { useWorkspace } from '../shell/workspace';
 import { displayName, inSidebarOrder } from './channels';
 import type { PaletteItem } from './rank';
@@ -31,6 +32,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const { setChoice } = useTheme();
   const { openDirectMessage } = useActions();
   const deepWork = useDeepWorkControls();
+  const markAllRead = useMarkAllRead();
   const channels = useChannels(workspace.id).data;
   const members = useMembers(workspace.id).data;
   const role = useWorkspaceRole();
@@ -58,6 +60,13 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     for (const view of [
       { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
       { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
+      { id: 'drafts', label: t('drafts.title'), glyph: 'edit', to: href('drafts', { slug }) },
+      {
+        id: 'unreads',
+        label: t('unreads.title'),
+        glyph: 'channels',
+        to: href('unreads', { slug }),
+      },
       { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
     ] as const) {
       items.push({
@@ -167,6 +176,15 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
       });
     }
 
+    // What `Shift+Esc` does (D-238), for a person who does not know the key.
+    items.push({
+      id: 'read-all',
+      group: 'settings',
+      label: t('readAll.label'),
+      glyph: 'confirm',
+      recency: '',
+      run: markAllRead,
+    });
     // Deep Work as the account menu offers it (D-124): the whiles to start it for, or its end.
     if (deepWork !== null && deepWork.until === null) {
       for (const choice of DEEP_WORK_CHOICES) {
@@ -229,6 +247,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     setLocale,
     openDirectMessage,
     deepWork,
+    markAllRead,
     role,
     serverAdmin,
   ]);

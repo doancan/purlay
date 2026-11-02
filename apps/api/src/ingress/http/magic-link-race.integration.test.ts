@@ -9,11 +9,17 @@
  * - Two new addresses wanting one name at once both sign in, under two names (D-138 §5).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { aRecordingLogger, aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
 import { installShutdown } from '../../lifecycle';
-import { SIGN_IN_LINKS_PER_HOUR } from '../../modules/auth/magic-link';
+import { SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT } from '../../modules/auth/magic-link';
 import { createApp } from './app';
 
 let cloned: ClonedDatabase;
@@ -28,11 +34,11 @@ beforeAll(async () => {
     create function hold_long() returns trigger language plpgsql as
     $$ begin perform pg_sleep(1); return new; end $$
   `.execute(cloned.db);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const APP = 'https://purlay.test';
 
@@ -107,21 +113,21 @@ describe('integration: sign-in links at the same instant', () => {
       async () =>
         await Promise.all(
           Array.from(
-            { length: SIGN_IN_LINKS_PER_HOUR + 2 },
+            { length: SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT + 2 },
             async () => await ask(app, { email, locale: 'en' }),
           ),
         ),
     );
     expect(answers.map((answer) => answer.status)).toEqual(
-      Array.from({ length: SIGN_IN_LINKS_PER_HOUR + 2 }, () => 202),
+      Array.from({ length: SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT + 2 }, () => 202),
     );
-    expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_HOUR);
+    expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT);
     const rows = await cloned.db
       .selectFrom('verifications')
       .select('id')
       .where('value', 'like', `%${email}%`)
       .execute();
-    expect(rows).toHaveLength(SIGN_IN_LINKS_PER_HOUR);
+    expect(rows).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT);
   });
 
   test('one link spent from two tabs at once signs in once', async () => {

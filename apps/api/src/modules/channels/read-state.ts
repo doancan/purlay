@@ -21,7 +21,8 @@ import { sql, type RawBuilder, type Transaction } from '@purlay/db';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
-import type { ChannelContext } from '../../platform/channels';
+import { visibleChannelsIn, type ChannelContext } from '../../platform/channels';
+import type { WorkspaceContext } from '../../platform/tenancy';
 
 /**
  * The notifications still waiting for a person in one channel, of the kinds that need them: what
@@ -168,6 +169,168 @@ export const markRead = async (
       // The lesser of the two, because a message that needs you is, first, one you
       // have not read (I-6). The notifications still unread are the ones past the
       // position and the replies behind it, which `unread` counts too.
+      unread_mention_count: sql<number>`least(
+        ${unread},
+        ${waitingNotifications(context.userId, context.channelId)}
+      )`,
+    })
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .returning(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
+    .executeTakeFirstOrThrow();
+
+  return {
+    moved: true,
+    version: updated.state_version,
+    state: {
+      lastReadMessageId: updated.last_read_message_id,
+      unreadCount: updated.unread_count,
+      unreadMentionCount: updated.unread_mention_count,
+    },
+  };
+};
+
+/** One channel "mark every channel read" answered for, and what became of it. */
+export interface ChannelReadOutcome extends ReadOutcome {
+  readonly channelId: string;
+}
+
+/**
+ * "Mark every channel read" (D-238): each channel of the workspace the caller is in and can see, with
+ * anything unread, is read to its newest message — a reply included, since replies count as unread
+ * too — by `markRead`, so the notifications it reads and the numbers it counts are a read's, and a
+ * reply whose notification still waits stays unread (D-147).
+ *
+ * **The memberships are locked first, in one order** — by channel, as the inbox's read takes them —
+ * so two of these at once, or one beside a read of one channel, take turns instead of each holding a
+ * row the other waits for. A channel with nothing unread is not touched and not answered; one whose
+ * only unread is a waiting reply is answered as it is, with nothing moved, so the client can put back
+ * what it painted.
+ */
+export const markAllRead = async (
+  executor: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+): Promise<readonly ChannelReadOutcome[]> => {
+  const visible = new Map(
+    (await visibleChannelsIn(executor, context)).map((channel) => [channel.channelId, channel]),
+  );
+  if (visible.size === 0) return [];
+  const waiting = await executor
+    .selectFrom('channel_members')
+    .select([
+      'channel_id',
+      'last_read_message_id',
+      'unread_count',
+      'unread_mention_count',
+      'state_version',
+    ])
+    .where('user_id', '=', context.userId)
+    .where('channel_id', 'in', [...visible.keys()])
+    // A mention is an unread message first (I-6, held by the table's check), so this is everything.
+    .where('unread_count', '>', 0)
+    .orderBy('channel_id')
+    .forUpdate()
+    .execute();
+
+  const outcomes: ChannelReadOutcome[] = [];
+  for (const member of waiting) {
+    const channel = visible.get(member.channel_id);
+    if (channel === undefined) continue;
+    const newest = await executor
+      .selectFrom('messages')
+      .select('id')
+      .where('channel_id', '=', member.channel_id)
+      .orderBy('id', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    // A count with no message left to read past has no position to move to: answered as it is.
+    const outcome: ReadOutcome =
+      newest === undefined
+        ? {
+            moved: false,
+            version: member.state_version,
+            state: {
+              lastReadMessageId: member.last_read_message_id,
+              unreadCount: member.unread_count,
+              unreadMentionCount: member.unread_mention_count,
+            },
+          }
+        : await markRead(executor, clock, channel, newest.id);
+    outcomes.push({ channelId: member.channel_id, ...outcome });
+  }
+  return outcomes;
+};
+
+/** Below every UUIDv7: counting "past the position" with no position counts the whole channel. */
+const BEFORE_EVERYTHING = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * "Mark unread from here" (D-212): the read position moves back to the newest message before this
+ * one, so it and everything after it is unread again — the one way the position moves backwards, and
+ * only when the person asks. A reply marks its thread's root: the feed is what the position reads
+ * (D-147). The counters are recounted from the rows, as a read's are, in the same locked turn.
+ *
+ * Already unread from here or earlier, nothing moves and nothing is published. Notifications are not
+ * touched: what the inbox has read stays read there (D-106), so the badge counts what still waits.
+ */
+export const markUnread = async (
+  executor: Transaction,
+  context: ChannelContext,
+  messageId: string,
+): Promise<ReadOutcome> => {
+  const member = await executor
+    .selectFrom('channel_members')
+    .select(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (member === undefined) {
+    throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
+  }
+
+  const target = await executor
+    .selectFrom('messages')
+    .select(['id', 'parent_id'])
+    .where('id', '=', messageId)
+    .where('channel_id', '=', context.channelId)
+    .executeTakeFirst();
+  if (target === undefined) {
+    throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+  }
+  const from = target.parent_id ?? target.id;
+
+  const unchanged = (): ReadOutcome => ({
+    moved: false,
+    version: member.state_version,
+    state: {
+      lastReadMessageId: member.last_read_message_id,
+      unreadCount: member.unread_count,
+      unreadMentionCount: member.unread_mention_count,
+    },
+  });
+  // Already unread from here: the position is before it, or there is none.
+  if (member.last_read_message_id === null || member.last_read_message_id < from) {
+    return unchanged();
+  }
+
+  const previous = await executor
+    .selectFrom('messages')
+    .select('id')
+    .where('channel_id', '=', context.channelId)
+    .where('id', '<', from)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  const position = previous?.id ?? null;
+  const unread = unreadMessages(context.userId, context.channelId, position ?? BEFORE_EVERYTHING);
+  const updated = await executor
+    .updateTable('channel_members')
+    .set({
+      last_read_message_id: position,
+      state_version: sql<number>`state_version + 1`,
+      unread_count: unread,
       unread_mention_count: sql<number>`least(
         ${unread},
         ${waitingNotifications(context.userId, context.channelId)}

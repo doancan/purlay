@@ -5,6 +5,7 @@
  * says so when it is the last way in. A secret is never shown; a secret the key could not open says so
  * on its card.
  */
+import { EMAIL_MAX, GITHUB_CLIENT_ID_MAX, GITHUB_CLIENT_SECRET_MAX } from '@purlay/types';
 import type { ProbeResult, ServerSettingsAnswer } from '@purlay/types';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
@@ -121,7 +122,7 @@ export const GitHubCard = ({
                 value={clientId}
                 autoComplete="off"
                 spellCheck={false}
-                maxLength={128}
+                maxLength={GITHUB_CLIENT_ID_MAX}
                 className="font-mono"
                 invalid={field === 'clientId'}
                 onChange={(event) => {
@@ -135,7 +136,7 @@ export const GitHubCard = ({
                 value={clientSecret}
                 autoComplete="off"
                 spellCheck={false}
-                maxLength={256}
+                maxLength={GITHUB_CLIENT_SECRET_MAX}
                 className="font-mono"
                 hint={t('settings.server.github.hint')}
                 invalid={field === 'clientSecret'}
@@ -324,7 +325,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
                 value={from}
                 autoComplete="off"
                 spellCheck={false}
-                maxLength={254}
+                maxLength={EMAIL_MAX}
                 invalid={field === 'from'}
                 onChange={(event) => {
                   setFrom(event.target.value);

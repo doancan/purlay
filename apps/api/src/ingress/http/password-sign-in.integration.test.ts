@@ -10,7 +10,14 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { hashPassword } from 'better-auth/crypto';
-import { cloneIntegrationDatabase, sql, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  sql,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { createApp, type HttpApplication } from './app';
 import { JSON_BODY_MAX_BYTES } from './edge';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -35,11 +42,11 @@ let db: Executor;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 beforeEach(async () => {
   await sql`delete from rate_limits`.execute(db);
@@ -589,6 +596,12 @@ describe('integration: every route of the library that takes a password is close
     '/verify-password': 'closed',
     '/delete-user': 'closed',
     '/request-password-reset': 'closed',
+    // Two-step verification (D-236): each weighs the session holder's password, counted as a change's is.
+    '/two-factor/enable': 'counted',
+    '/two-factor/disable': 'counted',
+    '/two-factor/generate-backup-codes': 'counted',
+    // The key is never read back.
+    '/two-factor/get-totp-uri': 'closed',
     // The library's API alone, no route; nothing of ours calls it (`better-auth.test.ts`).
     'api:setPassword': 'no-route',
   };

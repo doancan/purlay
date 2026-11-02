@@ -3,7 +3,12 @@
  * socket is told to come back, readiness says no, and nothing new is accepted.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { CLOSE_CODES, SIGN_IN_CALLBACK, messageId } from '@purlay/types';
 import type { GithubFetch } from '../modules/auth/better-auth';
 import { createApp, type HttpApplication } from '../ingress/http/app';
@@ -24,11 +29,11 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /**
  * A thing that waits until it is told to go, and says when it has started waiting.

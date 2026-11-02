@@ -9,8 +9,9 @@ import {
   QueryObserver,
   type InfiniteData,
 } from '@tanstack/react-query';
-import type { Channel, FilePage, Message, MessagePage, PinList } from '@purlay/types';
+import type { Channel, ChannelState, FilePage, Message, MessagePage, PinList } from '@purlay/types';
 import {
+  allChannelsRead,
   channelAdded,
   channelsRevoked,
   channelStarred,
@@ -63,6 +64,8 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   name: 'api',
   topic: null,
   incident: null,
+  codeRepository: null,
+  onlyAdminsPost: false,
   type: 'public',
   lastMessageAt: null,
   state,
@@ -90,6 +93,42 @@ const feed = (client: QueryClient): string[] =>
   (client.getQueryData<Pages>(keys.messages(CH))?.pages ?? []).flatMap((p) =>
     p.data.map((m) => m.id),
   );
+
+test('an edited or deleted accepted answer updates its root preview everywhere', () => {
+  const client = new QueryClient();
+  const root = message(1, {
+    thread: {
+      ...empty,
+      replyCount: 1,
+      knowledge: {
+        version: 1,
+        isQuestion: true,
+        assigneeId: null,
+        acceptedAnswer: { id: id(2), content: 'Old' },
+        decisionNote: 'Reason',
+        decisionUrl: null,
+      },
+    },
+  });
+  client.setQueryData(keys.messages(CH), pages([root]));
+  const revision = {
+    messageId: id(2),
+    channelId: CH,
+    parentId: id(1),
+    content: `${'x'.repeat(799)}🙂`,
+    editedAt: '2026-10-28T12:00:00Z',
+    deletedAt: null,
+    mentions: [],
+  };
+  messageRevised(client, revision);
+  const current = (): Message | undefined =>
+    client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0];
+  expect(current()?.thread?.knowledge?.acceptedAnswer?.content).toBe('x'.repeat(799));
+  messageRevised(client, { ...revision, deletedAt: '2026-10-28T12:00:00Z', content: '' });
+  expect(current()?.thread?.knowledge?.acceptedAnswer).toBeNull();
+  expect(current()?.thread?.knowledge?.decisionNote).toBe('Reason');
+  client.clear();
+});
 
 /**
  * A feed already on the screen and being read again (the subscription's answer, a reconnect, a
@@ -359,6 +398,35 @@ describe('the channel list', () => {
       });
     }
     expect(client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(false);
+  });
+
+  test('every channel painted read, and put back only where nothing newer was heard (D-238)', () => {
+    const client = new QueryClient();
+    const waiting = (n: number): ChannelState => ({
+      lastReadMessageId: id(1),
+      unreadCount: n,
+      unreadMentionCount: 1,
+    });
+    client.setQueryData<Channel[]>(keys.channels(WS), [
+      channel({ id: id(60), state: waiting(2) }),
+      channel({ id: id(61), state: waiting(3) }),
+      channel({ id: id(62), state: null }),
+      channel({
+        id: id(63),
+        state: { lastReadMessageId: id(1), unreadCount: 0, unreadMentionCount: 0 },
+      }),
+    ]);
+    const states = (): unknown[] =>
+      (client.getQueryData<Channel[]>(keys.channels(WS)) ?? []).map((c) => c.state);
+
+    const putBack = allChannelsRead(client, WS);
+    const zero = { lastReadMessageId: id(1), unreadCount: 0, unreadMentionCount: 0 };
+    expect(states()).toEqual([zero, zero, null, zero]);
+
+    // A message arrived in the second meanwhile: its frame is newer than what was painted.
+    channelStateChanged(client, id(61), waiting(1));
+    putBack();
+    expect(states()).toEqual([waiting(2), waiting(1), null, zero]);
   });
 
   test('a channel is added once; with no list cached the list is asked for instead', () => {

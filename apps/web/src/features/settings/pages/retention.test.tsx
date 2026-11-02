@@ -91,10 +91,10 @@ describe('how long the workspace keeps its history', () => {
   test('a shorter window is said in full, in red, before it is saved; then saved and said', async () => {
     const asked: [string, number | null][] = [];
     const view = await open({
-      retention: () => Promise.resolve({ retentionDays: null }),
+      retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
       setRetention: (workspaceId, retentionDays) => {
         asked.push([workspaceId, retentionDays]);
-        return Promise.resolve({ retentionDays });
+        return Promise.resolve({ retentionDays, channelsKeptLonger: 0 });
       },
     });
     const dialog = cardOf(view);
@@ -122,7 +122,7 @@ describe('how long the workspace keeps its history', () => {
 
   test('left without saving, nothing is saved, and coming back starts from what is held', async () => {
     const view = await open({
-      retention: () => Promise.resolve({ retentionDays: null }),
+      retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
       setRetention: () => {
         throw new Error('nothing should be saved');
       },
@@ -141,10 +141,10 @@ describe('how long the workspace keeps its history', () => {
   test('a longer window, or forever, deletes nothing and is said plainly', async () => {
     const asked: (number | null)[] = [];
     const view = await open({
-      retention: () => Promise.resolve({ retentionDays: 90 }),
+      retention: () => Promise.resolve({ retentionDays: 90, channelsKeptLonger: 0 }),
       setRetention: (_workspaceId, retentionDays) => {
         asked.push(retentionDays);
-        return Promise.resolve({ retentionDays });
+        return Promise.resolve({ retentionDays, channelsKeptLonger: 0 });
       },
     });
     const dialog = cardOf(view);
@@ -156,7 +156,9 @@ describe('how long the workspace keeps its history', () => {
   });
 
   test('a window set some other way is shown as itself, not as a neighbour', async () => {
-    const view = await open({ retention: () => Promise.resolve({ retentionDays: 45 }) });
+    const view = await open({
+      retention: () => Promise.resolve({ retentionDays: 45, channelsKeptLonger: 0 }),
+    });
     const dialog = cardOf(view);
     const select = within(dialog).getByLabelText<HTMLSelectElement>('Keep history');
     expect(select.value).toBe('45');
@@ -171,8 +173,35 @@ describe('how long the workspace keeps its history', () => {
     ]);
   });
 
+  test('channels that keep longer are counted beside the window, in either language; none, nothing said', async () => {
+    const counted = await open({
+      retention: () => Promise.resolve({ retentionDays: 30, channelsKeptLonger: 2 }),
+    });
+    expect(cardOf(counted).textContent).toContain(
+      '2 channels keep their history longer than this. Each one’s details say how long.',
+    );
+    counted.unmount();
+
+    const one = await open(
+      { retention: () => Promise.resolve({ retentionDays: 30, channelsKeptLonger: 1 }) },
+      'owner',
+      'tr',
+    );
+    expect(cardOf(one, 'Geçmiş').textContent).toContain(
+      '1 kanal geçmişini bundan daha uzun saklıyor.',
+    );
+    one.unmount();
+
+    const none = await open({
+      retention: () => Promise.resolve({ retentionDays: 30, channelsKeptLonger: 0 }),
+    });
+    expect(cardOf(none).textContent).not.toContain('longer than this');
+  });
+
   test('the windows offered are named as a person says them: forever, days, years', async () => {
-    const view = await open({ retention: () => Promise.resolve({ retentionDays: null }) });
+    const view = await open({
+      retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
+    });
     const select = within(cardOf(view)).getByLabelText<HTMLSelectElement>('Keep history');
     expect([...select.options].map((option) => [option.value, option.textContent])).toEqual([
       ['forever', 'Forever'],
@@ -190,7 +219,7 @@ describe('how long the workspace keeps its history', () => {
       retention: async () => {
         calls += 1;
         if (calls === 1) throw new ApiError(0, 'NETWORK', 'offline');
-        return await Promise.resolve({ retentionDays: null });
+        return await Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 });
       },
     });
     const dialog = cardOf(view);
@@ -206,7 +235,7 @@ describe('how long the workspace keeps its history', () => {
   test('a refusal is said, and the choice stays for another try — in Turkish too', async () => {
     const view = await open(
       {
-        retention: () => Promise.resolve({ retentionDays: null }),
+        retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
         setRetention: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'no')),
       },
       'owner',

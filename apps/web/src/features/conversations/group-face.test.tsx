@@ -152,11 +152,11 @@ describe('a group’s face in the sidebar', () => {
     expect(row.querySelector('[aria-label="muted"]')).not.toBeNull();
   });
 
-  test('on the row you are in, is cut out in the accent', async () => {
+  test('on the row you are in, is cut out in the selected tone (D-207)', async () => {
     const view = await open(aGroup([ALICE, BOB, CAROL]), { path: `/w/acme/c/${GROUP}` });
     const face = faceIn(rowOf(view));
     for (const piece of [...face.children].slice(1)) {
-      expect(classesOf(piece)).toContain('border-accent');
+      expect(classesOf(piece)).toContain('border-nav-selected');
       expect(classesOf(piece)).not.toContain('border-nav-surface');
     }
   });

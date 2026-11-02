@@ -8,7 +8,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { App } from './app/app';
+import { bundledReleaseNotes } from './features/about/release-notes-files';
 import { browserInvitationPorts, captureInvitation } from './features/invitations/pending';
+import { trackInputModality } from './ui/input-modality';
 import { browserNativePorts, captureNativeHandoff } from './features/native/pending';
 
 // Before anything routes or asks who is signed in: an invitation's token leaves the address now,
@@ -18,11 +20,13 @@ captureInvitation(window.location, browserInvitationPorts());
 // address bar as in a history, and must outlive the sign-in's round trip (D-191).
 captureNativeHandoff(window.location, browserNativePorts());
 
+trackInputModality(document);
+
 const root = document.getElementById('root');
 if (root === null) throw new Error('index.html has no #root to mount into');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <App ports={{ releaseNotes: bundledReleaseNotes }} />
   </StrictMode>,
 );

@@ -15,7 +15,7 @@
  * conversation yet has nothing waiting, so a folded section, or only what is unread, lists the ones who do.
  */
 import { useDescribeFailure } from '../../data/failure';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useDeferred } from '../../app/deferred-door';
 import { useActions } from '../../data/actions-provider';
 import { useChannels, useMembers } from '../../data/queries';
@@ -99,7 +99,11 @@ export const PeopleList = (): React.JSX.Element | null => {
   // whether a name has a conversation behind it, so waiting for it is waiting for both.
   const failed = members.isError || channels.isError;
   const waiting = members.isPending || channels.isPending;
-  const entries = people(members.data ?? [], channels.data ?? []);
+  // Every message moves the channels' cache; sorting every member again is only owed when they change.
+  const entries = useMemo(
+    () => people(members.data ?? [], channels.data ?? []),
+    [members.data, channels.data],
+  );
   const alone = entries.every((entry) => entry.user.id === me.id);
   const mayInvite = role === 'owner' || role === 'admin';
   const { preferences, change } = useSidebarPreferences();
@@ -156,7 +160,11 @@ export const PeopleList = (): React.JSX.Element | null => {
                 <>
                   {user.displayName}
                   {user.id === me.id ? (
-                    <span className="font-normal"> {t('sidebar.you')}</span>
+                    // A tag beside the name, not a second word of it: smaller and quieter, as Slack's is.
+                    <span className="font-normal text-caption text-nav-ink-muted">
+                      {' '}
+                      {t('sidebar.you')}
+                    </span>
                   ) : null}
                   <OnlineWords userId={user.id} meId={me.id} />
                 </>

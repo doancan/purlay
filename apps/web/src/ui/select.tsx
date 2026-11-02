@@ -17,7 +17,7 @@ export const Select = ({
   <span className={cn('relative inline-flex', className)}>
     <select
       {...rest}
-      className="h-control w-full cursor-pointer appearance-none rounded-md border-hairline border-border-strong bg-surface-100 pr-8 pl-3 text-label text-ink transition-colors duration-hover ease-standard hover:bg-surface-050 disabled:cursor-not-allowed disabled:text-ink-muted max-narrow:h-touch"
+      className="h-control w-full select-base cursor-pointer rounded-md border-hairline border-border-strong bg-surface-100 pr-8 pl-3 text-label text-ink transition-colors duration-hover ease-standard hover:bg-surface-050 disabled:cursor-not-allowed disabled:text-ink-muted max-narrow:h-touch"
     >
       {children}
     </select>

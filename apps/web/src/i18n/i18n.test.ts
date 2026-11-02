@@ -164,6 +164,14 @@ describe('timestamps', () => {
     expect(f.time(new Date('2026-10-10T14:28:00Z'), now)).toBe('12m ago');
   });
 
+  test('a date is a day in words with no time, in the person’s zone', () => {
+    expect(f.date('2026-10-10T14:32:00Z')).toBe('Oct 10, 2026');
+    expect(createFormatters('en', 'Pacific/Auckland').date('2026-10-10T14:32:00Z')).toBe(
+      'Oct 11, 2026',
+    );
+    expect(createFormatters('tr', 'UTC').date('2026-10-10T14:32:00Z')).toBe('10 Eki 2026');
+  });
+
   test('the absolute time is complete', () => {
     expect(f.absolute('2026-10-10T14:32:00Z')).toMatch(/^Oct 10, 2026.*2:32\sPM$/);
   });
@@ -178,6 +186,44 @@ describe('timestamps', () => {
   test('the person’s own time zone is used when none is named', () => {
     const own = createFormatters('en');
     expect(own.time(new Date(now.getTime() - 5 * 60_000), now)).toBe('5m ago');
+  });
+});
+
+describe('a day and its start, where the viewer is (D-224)', () => {
+  const at = (timeZone: string, day: string): string =>
+    createFormatters('en', timeZone).dayStart(day);
+
+  test('a day begins at its midnight there, said as the UTC instant', () => {
+    expect(at('UTC', '2026-10-31')).toBe('2026-10-31T00:00:00.000Z');
+    expect(at('Europe/Istanbul', '2026-10-01')).toBe('2026-09-30T21:00:00.000Z');
+    expect(at('Asia/Kolkata', '2026-01-01')).toBe('2025-12-31T18:30:00.000Z');
+    expect(at('Pacific/Kiritimati', '2026-01-01')).toBe('2025-12-31T10:00:00.000Z');
+  });
+
+  test('on the days the clocks change, and where a change skips midnight itself', () => {
+    expect(at('America/New_York', '2026-03-08')).toBe('2026-03-08T05:00:00.000Z');
+    expect(at('America/New_York', '2026-11-01')).toBe('2026-11-01T04:00:00.000Z');
+    // São Paulo went from 23:59:59 to 01:00 on 4 November 2018: the day began at one.
+    expect(at('America/Sao_Paulo', '2018-11-04')).toBe('2018-11-04T03:00:00.000Z');
+  });
+
+  test('takes the offset in force that day, on either side of a change of the clocks', () => {
+    // Summer time ends at 02:00 on 1 November 2026: the day before starts at -4, the day after at -5;
+    // it begins at 02:00 on 8 March 2026, so the day after starts at -4.
+    expect(at('America/New_York', '2026-10-31')).toBe('2026-10-31T04:00:00.000Z');
+    expect(at('America/New_York', '2026-11-02')).toBe('2026-11-02T05:00:00.000Z');
+    expect(at('America/New_York', '2026-03-09')).toBe('2026-03-09T04:00:00.000Z');
+    // Ahead of UTC, where the change is late at night: Sydney goes +10 to +11 on 4 October 2026.
+    expect(at('Australia/Sydney', '2026-10-04')).toBe('2026-10-03T14:00:00.000Z');
+    expect(at('Australia/Sydney', '2026-10-05')).toBe('2026-10-04T13:00:00.000Z');
+  });
+
+  test('the day an instant falls on there, which a day’s start reads back as', () => {
+    const istanbul = createFormatters('en', 'Europe/Istanbul');
+    expect(istanbul.isoDay('2026-09-30T21:00:00.000Z')).toBe('2026-10-01');
+    expect(istanbul.isoDay(new Date('2026-09-30T20:59:59.999Z'))).toBe('2026-09-30');
+    // A year still being typed in a date field (`0002`) is not read as 1902.
+    expect(istanbul.isoDay(istanbul.dayStart('0002-10-01'))).toBe('0002-10-01');
   });
 });
 
@@ -224,7 +270,12 @@ describe('numbers', () => {
   test('a size in bytes, kilobytes, megabytes or gigabytes, in each language’s way', () => {
     const en = createFormatters('en');
     const tr = createFormatters('tr');
-    expect(en.bytes(512)).toBe('512 byte');
+    // A count of bytes is a plural in English: nothing is "0 bytes", one is "1 byte" (Turkish has one form).
+    expect(en.bytes(0)).toBe('0 bytes');
+    expect(en.bytes(1)).toBe('1 byte');
+    expect(en.bytes(512)).toBe('512 bytes');
+    expect(tr.bytes(0)).toBe('0 bayt');
+    expect(tr.bytes(512)).toBe('512 bayt');
     expect(en.bytes(1536)).toBe('1.5 kB');
     expect(en.bytes(3 * 1024 * 1024)).toBe('3 MB');
     expect(tr.bytes(1536)).toBe('1,5 kB');

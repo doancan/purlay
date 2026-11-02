@@ -5,7 +5,7 @@
  * `v2` points at on the day it runs — including the day the owner's account is
  * taken over — with the repository's token in its environment. A full commit
  * SHA cannot be moved. The trailing `# vX.Y.Z` comment keeps it readable, and
- * Dependabot's github-actions ecosystem keeps proposing the next SHA.
+ * A new release arrives as an ordinary pull request (D-219).
  *
  * The same rule is the repository setting `sha_pinning_required`; this test is
  * the half that fails in the pull request, before the setting would fail the run.

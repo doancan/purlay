@@ -7,7 +7,13 @@
  * On a database of each test's own (`cloneIntegrationDatabase`), as the setup's other tests are.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, sql, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { credentialCipher } from '../../platform/crypto';
@@ -66,6 +72,8 @@ const blockedOn = async (db: Executor, statement: RegExp): Promise<void> => {
 };
 
 const clones: (() => Promise<void>)[] = [];
+// Every test's database, dropped after its connections have closed: up to 19 of them, which fitted the
+// five seconds a hook is given only on an idle machine (#797, D-228).
 afterAll(async () => {
   await Promise.all(
     clones.map(async (drop) => {
@@ -73,7 +81,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const APP_URL = 'https://chat.example.com';
 

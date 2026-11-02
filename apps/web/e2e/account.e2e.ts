@@ -52,6 +52,46 @@ test.describe('signing out everywhere', () => {
 });
 
 /**
+ * Where you are signed in (D-193), against the real API: the list names this browser and the other one,
+ * and signing the other out ends it there — told over its socket — while this one stays.
+ */
+test.describe('where you are signed in', () => {
+  test('lists both browsers, marks this one, and signs the other out alone', async ({
+    newcomer,
+  }) => {
+    // A person of this test alone: their sessions are the ones counted.
+    const person = await newcomer('signs-one-out');
+    const workspace = await workspaceFor(person);
+    const here = await person.page();
+    const there = await person.pageWithAnotherSession();
+    for (const page of [here, there]) {
+      await page.goto(`/w/${workspace.slug}`);
+      await shellReady(page);
+    }
+
+    await here.goto(`/w/${workspace.slug}/settings/account`);
+    const card = here.getByRole('region', { name: 'Where you are signed in' });
+    const rows = card.getByRole('list', { name: 'Signed-in devices' }).getByRole('listitem');
+    await expect(rows).toHaveCount(2);
+    const current = rows.filter({ hasText: 'This device' });
+    await expect(current).toHaveCount(1);
+    await expect(current.getByRole('button')).toHaveCount(0);
+    await expect(rows.filter({ hasText: 'Web browser' })).toHaveCount(2);
+
+    await card.getByRole('button', { name: 'Sign out' }).click();
+    await expect(rows).toHaveCount(1);
+    await expect(here.getByText('Web browser was signed out.')).toBeVisible();
+    await expect(card.getByText('You are not signed in anywhere else.')).toBeVisible();
+
+    // The other browser was told its session ended; this one is still signed in, read again.
+    await expect(there).toHaveURL(/\/sign-in\?reason=ended$/);
+    await here.reload();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.filter({ hasText: 'This device' })).toHaveCount(1);
+  });
+});
+
+/**
  * How you sign in (D-176, D-179 §5), against the real API: the card names the address and, where GitHub
  * is linked, the login — and offers nothing to press, since GitHub is linked by signing in with it.
  */

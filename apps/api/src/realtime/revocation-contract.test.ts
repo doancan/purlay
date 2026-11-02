@@ -116,6 +116,12 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishSessionsEnded',
     calledFrom: 'apps/api/src/ingress/http/devices.ts',
   },
+  // A session the server's lifetime policy ended, deleted as it is read; the instance announces the one it deleted
+  // (`endLapsed` in `better-auth.ts`, D-244).
+  'apps/api/src/modules/auth/session-lifetime.ts#endLapsedSession': {
+    publishes: 'publishSessionsEnded',
+    calledFrom: 'apps/api/src/modules/auth/better-auth.ts',
+  },
   // Sign out everywhere.
   'apps/api/src/modules/auth/sessions.ts#revokeAllSessions': {
     publishes: 'publishSessionsEnded',
@@ -125,6 +131,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   // read, not what they may see, so no socket's access is affected (D-99 §4, #25).
   'apps/api/src/modules/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
+  },
+  // "Mark unread from here" moves the same position back and recounts (D-212): what the person has read,
+  // not what they may see.
+  'apps/api/src/modules/channels/read-state.ts#markUnread': {
+    none: 'moves a read position back and recounts; nobody gains or loses sight of a channel (#25)',
   },
   // Deep Work is a member's own quiet; it changes what interrupts them, not what they may see
   // (D-108, #59).
@@ -190,6 +201,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishChannelRevoked',
     calledFrom: 'apps/api/src/ingress/http/channels.ts',
   },
+  // Brought back (D-232): it gives access back and takes none away. Its members are told on their own
+  // topics to read their channels again (`CHANNELS_UPDATED`), which no revocation rule covers.
+  'apps/api/src/modules/channels/settings.ts#restoreChannel': {
+    none: 'it restores access and revokes none: its members read their channels again on CHANNELS_UPDATED (#846)',
+  },
   // An account erased: its sessions revoked and the row soft-deleted in one transaction; the
   // ingress publishes after the commit (D-139 §5).
   'apps/api/src/modules/users/erasure.ts#eraseAccount': {
@@ -216,6 +232,25 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/auth/better-auth.ts#createAuth': {
     publishes: 'publishSessionsEnded',
     calledFrom: 'apps/api/src/modules/auth/better-auth.ts',
+  },
+  // A workspace's deletion asked for (D-242): everyone watching any of its channels stops receiving it, on
+  // each channel's topic, and each member is told to read their workspaces again.
+  'apps/api/src/modules/workspaces/deletion.ts#askToDelete': {
+    publishes: 'publishWorkspaceClosed',
+    calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
+  },
+  // Taken back (D-242): it gives access back and takes none away; each member reads their workspaces again
+  // on WORKSPACE_UPDATED, which no revocation rule covers.
+  'apps/api/src/modules/workspaces/deletion.ts#takeBackDeletion': {
+    none: 'it restores access and revokes none: its members read their workspaces again on WORKSPACE_UPDATED (#870)',
+  },
+  // The erasure of a workspace whose deletion was asked for a grace period ago (D-242): its channels and
+  // memberships go, but nobody could reach them since the deletion was asked for, when every socket was told.
+  'apps/api/src/modules/workspaces/deletion-purge.ts#channelBatch': {
+    none: 'a job with no bus, deleting the channels of a workspace whose sockets were told when its deletion was asked for (#870)',
+  },
+  'apps/api/src/modules/workspaces/deletion-purge.ts#purgeWorkspaceContent': {
+    none: 'a job with no bus, deleting the memberships of a workspace whose sockets were told when its deletion was asked for (#870)',
   },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',

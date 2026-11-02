@@ -8,7 +8,12 @@
  * this machine that records what it is told.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { createApp } from './app';
 import { systemClock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
@@ -32,11 +37,11 @@ let cloned: ClonedDatabase;
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 /** What the composition root builds, from what the database says now, with GitHub at `githubUrl`. */
 const servicesFromTheDatabase = async (githubUrl: string): Promise<RuntimeServices> =>
@@ -145,6 +150,7 @@ describe('integration: a server built from its settings', () => {
         email: true,
         oidc: null,
         signUp: 'open',
+        password: true,
       });
       services.mail?.post(
         { to: 'ada@example.test', subject: 'A letter', text: 'words', html: '<p>words</p>' },
@@ -172,6 +178,7 @@ describe('integration: a server built from its settings', () => {
       email: false,
       oidc: null,
       signUp: 'open',
+      password: true,
     });
   });
 
@@ -190,6 +197,7 @@ describe('integration: a server built from its settings', () => {
       email: false,
       oidc: null,
       signUp: 'open',
+      password: true,
     });
     const button = await app.handle(new Request(`${ORIGIN}/auth/github`));
     expect([button.status, button.headers.get('location')]).toEqual([404, null]);

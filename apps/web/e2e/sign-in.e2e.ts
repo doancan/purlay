@@ -38,6 +38,7 @@ test.describe('the sign-in screen', () => {
       email: false,
       oidc: null,
       signUp: 'invite-only',
+      password: true,
     });
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
     // The password is always offered; the link by email is not, with no mail.
@@ -56,7 +57,7 @@ test.describe('the sign-in screen', () => {
   }) => {
     await page.route('**/api/auth/methods', async (route) => {
       await route.fulfill({
-        json: { github: false, email: false, oidc: null, signUp: 'invite-only' },
+        json: { github: false, email: false, oidc: null, signUp: 'invite-only', password: true },
       });
     });
     await page.goto('/sign-in');

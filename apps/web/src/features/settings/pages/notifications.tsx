@@ -3,12 +3,14 @@
  * this device, and each channel's level.
  *
  * - **What interrupts you** is said first, in words (D-12, D-29): a mention, a direct message, a reply
- *   in a thread you are part of, your question resolved. Nothing else raises a badge.
+ *   in a thread you are part of, and every message in a channel set to that level (D-107).
+ * - **Quiet hours** are Deep Work every week, by themselves, on the profile's clock (D-234).
  * - **Deep Work** is started for a while, as from the account menu, and the server stops delivering
  *   (D-15, D-108); on, it says until when and offers its end.
  * - **This device** is the Web Push switch (D-126) where the browser and the server can send; where
  *   they cannot, the page says plainly that a closed tab hears nothing — PRD §4.5 owes that sentence
  *   and a missing switch alone does not say it.
+ * - **Email** about the direct messages and mentions left unread, where the server can send it (D-240).
  * - **Channels** lists every channel you are in with its level (D-107), changed here as from the
  *   channel's bell: painted at once, put back and said when refused.
  */
@@ -24,17 +26,20 @@ import { Button } from '../../../ui/button';
 import { Select } from '../../../ui/select';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
+import { mustInstallForPush } from '../../push/device';
 import { usePushControls } from '../../push/push';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../../shell/deep-work';
 import { useWorkspace } from '../../shell/workspace';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import { MissedMailCard } from './missed-mail-card';
+import { QuietHoursCard } from './quiet-hours-card';
 
 const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
 const INTERRUPTS = [
   { kind: 'mention', glyph: 'mention' },
   { kind: 'direct', glyph: 'person' },
   { kind: 'reply', glyph: 'reply' },
-  { kind: 'resolved', glyph: 'resolved' },
+  { kind: 'channel', glyph: 'channel' },
 ] as const satisfies readonly { readonly kind: string; readonly glyph: GlyphName }[];
 
 const WhatInterrupts = (): React.JSX.Element => {
@@ -109,12 +114,16 @@ const DeviceCard = (): React.JSX.Element => {
   const { t } = useI18n();
   const push = usePushControls();
   if (push === null) {
-    // A browser that can show nothing: said plainly, as PRD §4.5 owes.
+    // A browser that can show nothing: said plainly, as PRD §4.5 owes — and on an iPhone, what changes it.
     return (
       <SettingsCard title={t('push.label')} description={t('settings.notifications.deviceHint')}>
         <SettingsRow
           label={t('settings.notifications.away')}
-          description={t('settings.notifications.unsupported')}
+          description={t(
+            mustInstallForPush()
+              ? 'settings.notifications.installFirst'
+              : 'settings.notifications.unsupported',
+          )}
         >
           <span className="inline-flex items-center gap-2 text-label text-ink-muted">
             <Icon name="info" size="sm" />
@@ -142,7 +151,10 @@ const DeviceCard = (): React.JSX.Element => {
         }
       >
         {status === 'on' ? (
-          <Button onClick={push.turnOff}>{t('push.turnOff')}</Button>
+          <div className="flex flex-wrap gap-2">
+            {push.test !== null && <Button onClick={push.test}>{t('push.test')}</Button>}
+            <Button onClick={push.turnOff}>{t('push.turnOff')}</Button>
+          </div>
         ) : status === 'off' ? (
           <Button variant="primary" glyph="notifications" onClick={push.turnOn}>
             {t('push.turnOn')}
@@ -249,6 +261,8 @@ export const NotificationsPage = (): React.JSX.Element => {
       <WhatInterrupts />
       <DeepWorkCard />
       <DeviceCard />
+      <MissedMailCard />
+      <QuietHoursCard />
       <ChannelLevels />
     </SettingsPage>
   );

@@ -1,3 +1,4 @@
+import { knowledgeInput } from '../threads/knowledge-input';
 /**
  * What can be done with a message, on the bar its row shows (`UX.md` §3, D-150): React, the slot for
  * Reply, Save, Pin and More — the same square controls, each with its tip and its key.
@@ -6,7 +7,8 @@
  * hang from the left). So it never covers the name over a message, the words in it, or anything of the
  * row above — it does not reach above its own row at all.
  *
- * **More is on every message.** Copy text, Save and Pin again for whoever looks there, then Edit and
+ * **More is on every message.** Copy text, Mark unread from here for a member (D-212), Save and Pin
+ * again for whoever looks there, then Edit and
  * Delete on one's own; an owner or an admin may delete anybody's (`API.md`, D-103 §7), and is told
  * that doing so is on the audit trail. **Copy link** is first: the message's own address (D-149),
  * where a screen can say where it is (`useCopyMessageLink` is null outside a workspace).
@@ -15,6 +17,7 @@ import { useRef, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { useCopyMessageLink } from './message-link';
 import { useActions } from '../../data/actions-provider';
+import { useChannels } from '../../data/queries';
 import { useDescribeFailure } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
@@ -22,6 +25,11 @@ import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuItem, MenuSeparator } from '../../ui/menu';
+import { holdUnread, releaseUnread } from '../channel/use-mark-read';
+import { composerKey, focusComposer, quoteMarkdown, sendToComposer } from '../composer/quote';
+import { authorOf } from './author';
+import { messageUrl } from './message-link';
+import { ForwardDialog } from './forward-dialog';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { PinMenuItem, PinToggle } from '../pins/pin-toggle';
@@ -105,6 +113,43 @@ export const MessageActions = ({
   );
 };
 
+/**
+ * Quote reply (D-213): the part of the message the person selected, or all of it, into the composer it
+ * answers in — the thread's for a reply, the channel's for a root.
+ */
+const useQuoteReply = (): ((message: Message, selected: string | null) => boolean) => {
+  const { t } = useI18n();
+  const { show } = useToast();
+  const slug = useWorkspaceIfAny()?.workspace.slug ?? null;
+  return (message, selected) => {
+    const author = authorOf(message, t('user.erased')).displayName;
+    const link = slug === null ? null : messageUrl(window.location.origin, slug, message);
+    const sent = sendToComposer(
+      composerKey(message.channelId, message.parentId),
+      quoteMarkdown(selected ?? message.content, author, link),
+    );
+    // A reply quoted while its thread is closed has no composer to go to: say where to open it.
+    if (!sent) show({ message: t('message.quoteNowhere') });
+    return sent;
+  };
+};
+
+/**
+ * The words the person selected inside this message, or null when the selection is elsewhere. Read
+ * as the menu opens: choosing an item can move the selection before the item is told.
+ */
+const selectedIn = (messageId: string): string | null => {
+  const selection = window.getSelection();
+  if (selection === null || selection.isCollapsed) return null;
+  const inside = (node: Node | null): boolean =>
+    (node instanceof Element ? node : node?.parentElement)
+      ?.closest('[data-message-id]')
+      ?.getAttribute('data-message-id') === messageId;
+  if (!inside(selection.anchorNode) || !inside(selection.focusNode)) return null;
+  const words = selection.toString().trim();
+  return words === '' ? null : words;
+};
+
 const MoreMenu = ({
   message,
   mine,
@@ -117,15 +162,26 @@ const MoreMenu = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { remove } = useActions();
+  const actions = useActions();
+  const { remove, setKnowledge } = actions;
   const { show } = useToast();
   const { copy } = useContentPorts();
   const describe = useDescribeFailure();
   const { start } = useEditing();
   const copyLink = useCopyMessageLink();
-  const role = useWorkspaceIfAny()?.role;
+  const scope = useWorkspaceIfAny();
+  const role = scope?.role;
+  const channels = useChannels(scope?.workspace.id ?? '', scope !== null);
+  const member =
+    channels.data?.some((channel) => channel.id === message.channelId && channel.state !== null) ===
+    true;
   const moderating = !mine && (role === 'owner' || role === 'admin');
+  const quote = useQuoteReply();
+  // A quote puts focus in its composer; the menu must not take it back to its button as it closes.
+  const focusMoved = useRef(false);
+  const selected = useRef<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [forwarding, setForwarding] = useState(false);
 
   const confirm = (): void => {
     setAsking(false);
@@ -140,7 +196,19 @@ const MoreMenu = ({
         align="end"
         side="top"
         boundary={boundary}
-        onOpenChange={onOpenChange}
+        onOpenChange={(open) => {
+          if (open) {
+            focusMoved.current = false;
+            selected.current = selectedIn(message.id);
+          }
+          onOpenChange(open);
+        }}
+        returnFocus={() => {
+          if (!focusMoved.current) return true;
+          // Closed now: the quote's composer takes focus instead of the button (D-213).
+          focusComposer(composerKey(message.channelId, message.parentId));
+          return false;
+        }}
         // Edit needs nothing to put focus in its editor: the bar is not drawn while a message is
         // edited, so the menu has no button to give focus back to, and the editor takes it.
         trigger={<IconButton size="bar" glyph="more" label={t('message.more')} />}
@@ -170,6 +238,60 @@ const MoreMenu = ({
         >
           {t('message.copyText')}
         </MenuItem>
+        {member && message.parentId === null && message.deletedAt === null && (
+          <MenuItem
+            glyph="open-question"
+            onSelect={() => {
+              const input = knowledgeInput(message);
+              void setKnowledge(message, {
+                ...input,
+                isQuestion: !input.isQuestion,
+                assigneeId: null,
+              }).catch((failure: unknown) => show({ message: describe(failure) }));
+            }}
+          >
+            {t(
+              message.thread?.knowledge?.isQuestion === true
+                ? 'knowledge.unmark'
+                : 'knowledge.mark',
+            )}
+          </MenuItem>
+        )}
+        {member && message.deletedAt === null && (
+          <MenuItem
+            glyph="reply"
+            onSelect={() => {
+              setForwarding(true);
+            }}
+          >
+            {t('message.forward')}
+          </MenuItem>
+        )}
+        {member && message.deletedAt === null && (
+          <MenuItem
+            glyph="quote"
+            onSelect={() => {
+              focusMoved.current = quote(message, selected.current);
+            }}
+          >
+            {t('message.quoteReply')}
+          </MenuItem>
+        )}
+        {member && message.deletedAt === null && (
+          <MenuItem
+            glyph="notifications"
+            onSelect={() => {
+              // Held first, so a read already waiting for its pause cannot undo it (D-212).
+              holdUnread(actions, message.channelId);
+              actions.markUnread(message.channelId, message.id).catch((failure: unknown) => {
+                releaseUnread(actions, message.channelId);
+                show({ message: `${t('message.unreadFailed')} ${describe(failure)}` });
+              });
+            }}
+          >
+            {t('message.markUnread')}
+          </MenuItem>
+        )}
         <SaveMenuItem message={message} />
         <PinMenuItem message={message} />
         {(mine || moderating) && <MenuSeparator />}
@@ -196,6 +318,7 @@ const MoreMenu = ({
           </MenuItem>
         )}
       </Menu>
+      {member && <ForwardDialog message={message} open={forwarding} onOpenChange={setForwarding} />}
       <Dialog
         open={asking}
         onOpenChange={setAsking}

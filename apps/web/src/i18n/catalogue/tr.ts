@@ -14,6 +14,86 @@
 import type { Catalogue } from '../types';
 
 export const tr = {
+  'knowledge.title': 'Soru ve karar',
+  'knowledge.edit': 'Kararı düzenle',
+  'knowledge.accepted': 'Kabul edilen cevap',
+  'knowledge.source': 'Cevabın tamamını oku',
+  'knowledge.reference': 'İlgili bağlantı',
+  'knowledge.hint': 'Soruyu işaretle, cevabını seç ve gerekçesini burada sakla.',
+  'knowledge.question': 'Soru olarak takip et',
+  'knowledge.owner': 'Sorumlu kişi',
+  'knowledge.unassigned': 'Sorumlu yok',
+  'knowledge.answer': 'Seçili cevap',
+  'knowledge.noAnswer': 'Cevap seçilmedi',
+  'knowledge.fileAnswer': 'Dosya içeren cevap',
+  'knowledge.note': 'Karar notu',
+  'knowledge.save': 'Kararı kaydet',
+  'knowledge.conflict':
+    'Bu karar başka biri tarafından değiştirildi. Taslağın korundu. Yeniden kaydetmeden önce yukarıdaki güncel kararı incele.',
+  'knowledge.reviewed': 'Güncel sürümü inceledim',
+  'knowledge.mark': 'Soru olarak işaretle',
+  'knowledge.unmark': 'Soru işaretini kaldır',
+  'knowledge.unanswered': 'Yanıtsız',
+  'questions.filter': 'Göster',
+  'questions.filteredEmpty': 'Bu filtrelere uyan soru yok',
+  'questions.filteredHint': 'Yanıt bekleyen diğer konular için tüm açık soruları seçin.',
+  'questions.all': 'Tüm açık sorular',
+  'questions.mine': 'Bana atananlar',
+  'questions.sort': 'Sıralama',
+  'questions.oldest': 'En uzun bekleyen önce',
+  'questions.newest': 'En yeni önce',
+  'questions.waiting': '{days} gündür bekliyor',
+  'search.clear': 'Gelişmiş filtreleri temizle',
+  'search.filters': 'Gelişmiş filtreler',
+  'search.status': 'Konu durumu',
+  'search.anyStatus': 'Tüm durumlar',
+  'search.resolved': 'Çözüldü',
+  'search.open': 'Açık',
+  'search.kind': 'İçerik',
+  'search.anyKind': 'Tüm içerikler',
+  'search.code': 'Kod içeren',
+  'search.files': 'Dosya içeren',
+  'search.questions': 'Sorular',
+  'search.allMessages': 'Tüm mesajlar',
+  'search.onlyQuestions': 'Yalnızca işaretli sorular',
+  'search.repositoryError': 'acme/api gibi bir sahip/depo adı gir.',
+  'search.repository': 'GitHub deposu',
+  'search.since': 'Başlangıç tarihi',
+  'date.none': 'Bir gün seç',
+  'date.today': 'Bugün',
+  'date.clear': 'Temizle',
+  'date.previousMonth': 'Önceki ay',
+  'date.nextMonth': 'Sonraki ay',
+  'search.until': 'Bu tarihten önce',
+  'search.dateHint': 'Günler senin saat dilimine göre; bitiş tarihi dahil değildir.',
+  'search.saved': 'Kaydedilmiş aramalar',
+  'search.saveName': 'Aramanın adı',
+  'search.save': 'Bu aramayı kaydet',
+  'search.noSaved':
+    'Henüz kaydedilmiş arama yok. Filtreleri seçerek sık kullandığın bir aramayı kaydet.',
+  'search.removeNamed': '{name} aramasını kaldır',
+  'search.remove': 'Kaldır',
+  'search.run': 'Ara',
+  'search.tooLong': 'En fazla {max} karakter yaz.',
+  'search.rangeError': 'Bitiş tarihi başlangıç tarihinden sonra olmalı.',
+  'search.operators.title': 'Arama işleçleri',
+  'search.operators.intro':
+    'Bunları kelimelerinle birlikte yaz. Enter onları yukarıdaki filtrelere çevirir ve gerisini arar.',
+  'search.operators.in': 'Bir kanalda ya da biriyle doğrudan mesajda',
+  'search.operators.from': 'Birinin yazdıkları; kendi yazdıkların için from:me',
+  'search.operators.has': 'Kod içeren ya da dosya eki olan',
+  'search.operators.is': 'Açık ya da çözülmüş konular, ya da işaretli sorular',
+  'search.operators.repo': 'Bir GitHub deposundan söz eden',
+  'search.operators.dates':
+    'Bir günde, o günden önce ya da sonra: senin saat dilimindeki tam günler',
+  'search.operators.quote': 'Filtreye benzese de bu kelimeler, yazıldığı gibi',
+  'search.operators.unread.channel':
+    'Görebildiğin hiçbir kanalın adı “{value}” değil; bu yüzden “{token}” kelime olarak arandı.',
+  'search.operators.unread.person':
+    'Burada kullanıcı adı “{value}” olan kimse yok; bu yüzden “{token}” kelime olarak arandı.',
+  'search.operators.unread.value':
+    '“{token}” aramanın anladığı bir filtre değil; bu yüzden kelime olarak arandı.',
+
   // ── Ortak ───────────────────────────────────────────────────────────────
   'common.close': 'Kapat',
   'common.cancel': 'Vazgeç',
@@ -44,6 +124,10 @@ export const tr = {
   'app.failed.home': 'Ana sayfaya dön',
 
   // ── Giriş ───────────────────────────────────────────────────────────────
+  'enrolTwoFactor.title': 'İki adımlı doğrulamayı aç',
+  'enrolTwoFactor.lede':
+    'Bu sunucu parolayla giriş yapan her hesapta bunu zorunlu tutuyor. Devam etmek için aç; oturumun açık kalır.',
+  'enrolTwoFactor.signOut': 'Çıkış yap',
   'signIn.title': 'Purlay’e giriş yap',
   'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
@@ -115,7 +199,25 @@ export const tr = {
     other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden dene.',
   },
   'signIn.password.unreachable': 'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'signIn.password.off':
+    'Bu sunucu artık parolayla giriş kabul etmiyor. Yukarıdaki yollardan birini kullan.',
   'signIn.password.failed': 'Giriş tamamlanamadı. Biraz sonra yeniden dene.',
+  'signIn.code.form': 'İki adımlı doğrulama',
+  'signIn.code.appHint': 'Doğrulama uygulamandaki {digits} haneli kodu gir.',
+  'signIn.code.backupHint':
+    'Kaydettiğin yedek kodlardan birini gir. Her biri yalnızca bir kez işe yarar.',
+  'signIn.code.appLabel': 'Kod',
+  'signIn.code.backupLabel': 'Yedek kod',
+  'signIn.code.submit': 'Doğrula',
+  'signIn.code.useBackup': 'Bunun yerine yedek kod kullan',
+  'signIn.code.useApp': 'Uygulamadaki kodu kullan',
+  'signIn.code.restart': 'Baştan başla',
+  'signIn.code.wrong': 'Bu kod doğru değil. Yeniden dene.',
+  'signIn.code.expired':
+    'Parolanı yeniden gir: ya çok uzun sürdü ya da çok fazla yanlış kod girildi.',
+  'signIn.code.locked': {
+    other: 'Çok fazla yanlış kod girildi. {count} dakika sonra yeniden dene.',
+  },
   'signIn.createAccount.prompt': 'Hesabın yok mu?',
   'signIn.createAccount.action': 'Hesap oluştur',
   'signIn.byInvitation': 'Hesaplar davetle açılır.',
@@ -132,6 +234,7 @@ export const tr = {
   // ── Çalışma alanı ve kenar çubuğu ───────────────────────────────────────
   'sidebar.label': 'Çalışma alanı',
   'sidebar.switch': 'Çalışma alanını değiştir',
+  'sidebar.workspace.members': { other: '{count} üye' },
   'sidebar.questions': 'Açık sorular',
   'sidebar.starred': 'Yıldızlı',
   'sidebar.options': 'Kenar çubuğu seçenekleri',
@@ -156,6 +259,9 @@ export const tr = {
   'rowMenu.label': '{name} için işlemler',
   'rowMenu.markRead': 'Okundu olarak işaretle',
   'rowMenu.readFailed': 'Okundu olarak işaretlenemedi.',
+  'readAll.label': 'Tüm kanalları okundu işaretle',
+  'readAll.done': 'Tüm kanallar okundu olarak işaretlendi.',
+  'readAll.failed': 'Kanallar okundu olarak işaretlenemedi.',
   'rowMenu.star': 'Yıldızla',
   'rowMenu.unstar': 'Yıldızı kaldır',
   'rowMenu.copyLink': 'Bağlantıyı kopyala',
@@ -306,6 +412,64 @@ export const tr = {
   'audit.someoneElse': 'biri',
   'audit.goneChannel': 'artık olmayan bir kanal',
   'audit.unknown': '{actor}: {action}',
+  'audit.action.audit.exported': '{actor} denetim kaydını indirdi',
+  'audit.action.workspace.deletion_requested':
+    '{actor} çalışma alanının {when} sonrasında silinmesini istedi',
+  'audit.action.workspace.deletion_cancelled': '{actor} çalışma alanının silinmesini geri aldı',
+  'audit.filters': 'Kaydı daralt',
+  'audit.filter.person': 'Kişi',
+  'audit.filter.action': 'İşlem',
+  'audit.filter.anyAction': 'Her işlem',
+  'audit.filter.from': 'Başlangıç',
+  'audit.filter.to': 'Bitiş',
+  'audit.filter.dateHint': 'Günler sizin saat diliminizde; iki gün de dahildir.',
+  'audit.filter.backwards': 'Bu gün başlangıç gününden önce.',
+  'audit.filter.clear': 'Filtreleri temizle',
+  'audit.emptyFiltered': 'Bu filtrelere uyan kayıt yok.',
+  'audit.download': 'İndir',
+  'audit.download.description':
+    'Filtrelerin tuttuğu her kayıt, yalnızca gösterilenler değil, en yenisi önce. İndirme de kayda geçer.',
+  'audit.download.csv': 'CSV',
+  'audit.download.ndjson': 'NDJSON',
+  'audit.download.csvLabel': 'Filtrelenmiş kaydı CSV olarak indir',
+  'audit.download.ndjsonLabel': 'Filtrelenmiş kaydı NDJSON olarak indir',
+  'audit.kind.member.role_changed': 'Rol değişti',
+  'audit.kind.member.removed': 'Üye çıkarıldı',
+  'audit.kind.member.left': 'Üye ayrıldı',
+  'audit.kind.member.joined': 'Üye katıldı',
+  'audit.kind.channel.created': 'Kanal oluşturuldu',
+  'audit.kind.channel.renamed': 'Kanalın adı değişti',
+  'audit.kind.channel.archived': 'Kanal arşivlendi',
+  'audit.kind.channel.restored': 'Kanal geri alındı',
+  'audit.kind.channel.member_added': 'Kanala eklendi',
+  'audit.kind.channel.member_removed': 'Kanaldan çıkarıldı',
+  'audit.kind.channel.retention_changed': 'Kanalın saklama süresi değişti',
+  'audit.kind.channel.posting_changed': 'Kanala kimin yazacağı değişti',
+  'audit.kind.integration.token_set': 'GitHub tokenı ayarlandı',
+  'audit.kind.integration.token_removed': 'GitHub tokenı kaldırıldı',
+  'audit.kind.integration.feed_created': 'Depo bağlandı',
+  'audit.kind.integration.feed_removed': 'Deponun bağlantısı kesildi',
+  'audit.kind.integration.webhook_created': 'Gelen webhook oluşturuldu',
+  'audit.kind.integration.webhook_revoked': 'Gelen webhook iptal edildi',
+  'audit.kind.integration.app_connected': 'GitHub App bağlandı',
+  'audit.kind.integration.app_disconnected': 'GitHub App bağlantısı kesildi',
+  'audit.kind.integration.issue_created': 'Bir konuşmadan issue açıldı',
+  'audit.kind.integration.work_linked': 'Bir konuşmaya GitHub işi bağlandı',
+  'audit.kind.integration.feed_secret_regenerated': 'Akış gizli anahtarı yenilendi',
+  'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
+  'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
+  'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
+  'audit.kind.workspace.renamed': 'Çalışma alanının adı değişti',
+  'audit.kind.retention.changed': 'Saklama süresi değişti',
+  'audit.kind.account.erased': 'Hesap silindi',
+  'audit.kind.content.erased': 'Yazılanlar istek üzerine silindi',
+  'audit.kind.workspace.export_requested': 'Çalışma alanı dışa aktarımı istendi',
+  'audit.kind.workspace.exported': 'Çalışma alanı dışa aktarıldı',
+  'audit.kind.retention.purged': 'Geçmiş temizlendi',
+  'audit.kind.storage.quota_changed': 'Depolama kotası değişti',
+  'audit.kind.audit.exported': 'Denetim kaydı indirildi',
+  'audit.kind.workspace.deletion_requested': 'Çalışma alanının silinmesi istendi',
+  'audit.kind.workspace.deletion_cancelled': 'Çalışma alanının silinmesi geri alındı',
   'audit.action.member.role_changed': '{actor}, {target} rolünü {from} yerine {to} yaptı',
   'audit.action.member.removed': '{actor}, {target} kişisini çıkardı',
   'audit.action.member.left': '{actor} çalışma alanından ayrıldı',
@@ -313,6 +477,7 @@ export const tr = {
   'audit.action.channel.created': '{actor}, {channel} kanalını oluşturdu',
   'audit.action.channel.renamed': '{actor}, {from} kanalının adını {to} yaptı',
   'audit.action.channel.archived': '{actor}, {channel} kanalını arşivledi',
+  'audit.action.channel.restored': '{actor}, {channel} kanalını arşivden geri aldı',
   'audit.action.channel.member_added': '{actor}, {target} kişisini bir kanala ekledi',
   'audit.action.channel.member_added_to': '{actor}, {target} kişisini {channel} kanalına ekledi',
   'audit.action.channel.member_removed': '{actor}, {target} kişisini bir kanaldan çıkardı',
@@ -327,11 +492,45 @@ export const tr = {
     '{actor}, {repository} deposunu {channel} kanalına bağladı',
   'audit.action.integration.feed_removed_from':
     '{actor}, {repository} deposunun {channel} kanalına bağlantısını kaldırdı',
+  'audit.action.integration.webhook_created':
+    '{actor} bir kanalda “{webhook}” gelen webhook’unu oluşturdu',
+  'audit.action.integration.webhook_revoked':
+    '{actor} bir kanalda “{webhook}” gelen webhook’unu iptal etti',
+  'audit.action.integration.webhook_created_in':
+    '{actor}, {channel} kanalında “{webhook}” gelen webhook’unu oluşturdu',
+  'audit.action.integration.webhook_revoked_from':
+    '{actor}, {channel} kanalında “{webhook}” gelen webhook’unu iptal etti',
+  'audit.action.integration.app_connected':
+    '{actor}, {account} hesabının GitHub App kurulumunu bağladı',
+  'audit.action.integration.app_disconnected':
+    '{actor}, {account} hesabının GitHub App kurulumunun bağlantısını kesti',
+  'audit.action.integration.app_removed': 'GitHub, {account} hesabının App kurulumunu kaldırdı',
+  'audit.action.integration.issue_created':
+    '{actor}, bir konuşmadan {repository}#{number} issue’sunu açtı',
+  'audit.action.integration.work_linked':
+    '{actor}, {repository}#{number} işini bir konuşmaya bağladı',
+  'audit.action.integration.feed_secret_regenerated':
+    '{actor}, {repository} akışının gizli anahtarını yeniledi',
+  'audit.action.integration.feed_secret_regenerated_in':
+    '{actor}, {channel} kanalındaki {repository} akışının gizli anahtarını yeniledi',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
   'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
   'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
+  'audit.workspaceWindow': 'çalışma alanının süresi',
+  'audit.action.channel.retention_changed':
+    '{actor} bir kanalın geçmişini saklama süresini {from} yerine {to} yaptı',
+  'audit.action.channel.retention_changed_in':
+    '{actor}, {channel} kanalının geçmişini saklama süresini {from} yerine {to} yaptı',
+  'audit.action.channel.posting_admins':
+    '{actor} bir kanala yalnızca sahiplerin ve yöneticilerin yazmasına izin verdi',
+  'audit.action.channel.posting_admins_in':
+    '{actor}, {channel} kanalına yalnızca sahiplerin ve yöneticilerin yazmasına izin verdi',
+  'audit.action.channel.posting_everyone':
+    '{actor} bir kanala yeniden herkesin yazmasına izin verdi',
+  'audit.action.channel.posting_everyone_in':
+    '{actor}, {channel} kanalına yeniden herkesin yazmasına izin verdi',
   'audit.action.account.erased': 'Bir üye hesabını sildi',
   'audit.action.content.erased':
     'Bir üyenin yazdıkları istek üzerine silindi: {messages} mesaj, {files} dosya',
@@ -351,6 +550,23 @@ export const tr = {
     'Her gece {days} günden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterir.',
   'retention.failed': 'Ayar kaydedilmedi.',
   'retention.saved': 'Kaydedildi.',
+  'retention.channelsLonger': {
+    other:
+      '{count} kanal geçmişini bundan daha uzun saklıyor. Ne kadar sakladığı her kanalın ayrıntılarında yazar.',
+  },
+  'channelRetention.title': 'Geçmiş',
+  'channelRetention.workspace': 'Çalışma alanı geçmişi {kept} saklıyor.',
+  'channelRetention.workspaceForever': 'Çalışma alanı her şeyi saklıyor.',
+  'channelRetention.keeps': 'Bu kanal mesajlarını ve dosyalarını {kept} saklıyor.',
+  'channelRetention.keepsEverything': 'Bu kanal her şeyi saklıyor.',
+  'channelRetention.label': 'Bu kanalın geçmişini sakla',
+  'channelRetention.save': 'Geçmiş ayarını kaydet',
+  'channelRetention.followsWorkspace': 'Çalışma alanı kadar',
+  'channelRetention.warning':
+    'Bir sonraki gece, bu kanalda {kept} süresinden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterecek.',
+  'channelRetention.shorten': 'Yalnızca {kept} sakla',
+  'channelRetention.tooShort':
+    'Çalışma alanı geçmişi artık en az bu kadar saklıyor. Daha uzun bir süre ya da süresiz seç.',
   'storage.description':
     'Buraya gönderilen dosyalar ve gönderilmeyi bekleyenler çalışma alanının kotasından düşer. Kotayı sunucunun yöneticisi belirler.',
   'storage.label': 'Kullanılan depolama',
@@ -375,6 +591,16 @@ export const tr = {
   'export.failure.requesterGone': 'Hazırlanacağı sırada artık sahip değildin.',
   'export.inProgress': 'Bu çalışma alanının bir dışa aktarımı zaten hazırlanıyor.',
   'export.failed': 'Dışa aktarım istenemedi.',
+  'myData.title': 'Verilerin',
+  'myData.description':
+    'Bu sunucunun senin hakkında tuttuklarının tek bir arşivi: hesabın ve ayarların, üyesi olduğun çalışma alanları, silmediğin her mesajın — her çalışma alanında, ayrıldığın kanallar dahil — tepkilerin, kaydettiklerin ve gönderdiğin dosyalar. Başka hiç kimsenin sözleri içinde yer almaz. Arka planda hazırlanır ve bir gün içinde bir kez indirilebilir.',
+  'myData.request': 'Verilerimi dışa aktar',
+  'myData.empty': 'Verilerini henüz dışa aktarmadın.',
+  'myData.inProgress': 'Verilerinin bir dışa aktarımı zaten hazırlanıyor.',
+  'myData.requesterGone': 'Hazırlanacağı sırada hesabın artık kullanımda değildi.',
+  'myData.limited': {
+    other: 'Verilerini günde {count} kez dışa aktarabilirsin. Daha sonra tekrar dene.',
+  },
   'audit.action.storage.quota_changed': 'Depolama kotası {from} yerine {to} yapıldı',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',
@@ -386,7 +612,7 @@ export const tr = {
   'github.notConnected': 'Bağlı değil: GitHub bağlantıları düz bağlantı olarak kalır.',
   'github.token': 'Token',
   'github.tokenHint':
-    'Ekibinin bağlantı verdiği depolarda okuma yetkisi olan, ince ayarlı bir kişisel erişim token’ı.',
+    'İnce ayarlı, salt okunur (Contents, Issues ve Pull requests: read) bir kişisel erişim token’ı; yalnızca ekibinin bağlantı verdiği seçili depolarla sınırlı. GitHub kaydederken doğrular.',
   'github.tokenShape': 'github_pat_…',
   'github.invalid': 'Token boşluksuz tek bir kelimedir: harf, rakam ve simgeler.',
   'github.save': 'Tokenı kaydet',
@@ -394,6 +620,90 @@ export const tr = {
   'github.saveFailed': 'Token kaydedilmedi.',
   'github.disconnect': 'Bağlantıyı kes',
   'github.disconnectFailed': 'GitHub bağlantısı kesilmedi.',
+  'githubIssues.title': 'GitHub issue’ları',
+  'githubIssues.description':
+    'Bir konuşmadan issue açmak ve takip etmek için GitHub App’i bağla. Depoları GitHub’da sen seçersin; çalışma alanı tokenı ve depo akışları etkilenmez.',
+  'githubIssues.notInstalled': 'Henüz bağlı bir kurulum yok.',
+  'githubIssues.installed': '{account} hesabına {when} tarihinden beri kurulu.',
+  'githubIssues.suspendedBadge': 'Askıda',
+  'githubIssues.suspended':
+    'GitHub bu kurulumu askıya aldı. Kaldırılana kadar ona hiçbir şey yazılmaz.',
+  'githubIssues.connect': 'GitHub’da bağla',
+  'githubIssues.reconnect': 'Yeniden bağla',
+  'githubIssues.disconnect': 'Bağlantıyı kes',
+  'githubIssues.outcome.connected': 'Kurulum bağlandı.',
+  'githubIssues.outcome.authorized': 'Purlay artık senin adına issue açabilir.',
+  'githubIssues.outcome.expired':
+    'O GitHub yolculuğu çok uzun sürdü ya da zaten kullanıldı. Yeniden başla.',
+  'githubIssues.outcome.refused': 'GitHub işlemi tamamlamadı. Hiçbir şey bağlanmadı.',
+  'githubIssues.outcome.not-yours':
+    'Bu, burada sahibi olduğun bir kurulum değil ya da yolculuk senin değil.',
+  'githubIssues.outcome.unavailable': 'GitHub’a ulaşılamadı. Bir dakika sonra yeniden dene.',
+  'githubIssues.me.title': 'Senin adına issue aç',
+  'githubIssues.me.description':
+    'Sen açana kadar kapalıdır. Açarsan Purlay, kendi GitHub erişiminle, yalnızca hem senin hem App’in erişebildiği depolarda issue açar.',
+  'githubIssues.me.label': 'GitHub’a benim adıma yaz',
+  'githubIssues.me.off': 'İzin verilmedi. Purlay GitHub’a senin adına hiçbir şey yazmaz.',
+  'githubIssues.me.on': 'İzin verildi: {login}.',
+  'githubIssues.me.badgeOn': 'İzinli',
+  'githubIssues.me.badgeOff': 'Kapalı',
+  'githubIssues.me.allow': 'Purlay benim adıma issue açabilsin',
+  'githubIssues.me.forget': 'İzni kaldır',
+  'githubIssue.work.title': 'GitHub',
+  'githubIssue.work.create': 'GitHub issue’su oluştur…',
+  'githubIssue.work.link': 'Bir issue ya da pull request bağla…',
+  'githubIssue.link.title': 'Bir issue ya da pull request bağla',
+  'githubIssue.link.description':
+    'Bu konuşmayı GitHub’da zaten var olan bir işe bağla. GitHub’a hiçbir şey yazılmaz ve soru çözülmüş olmaz.',
+  'githubIssue.link.label': 'GitHub adresi',
+  'githubIssue.link.hint': 'https://github.com/sahip/depo/issues/12 ya da …/pull/12',
+  'githubIssue.link.action': 'Bağla',
+  'githubIssue.link.invalid': 'Bu, GitHub’daki bir issue ya da pull request adresi değil.',
+  'githubIssue.link.unreachable':
+    'GitHub’da, senin ve App’in birlikte ulaşabildiği böyle bir issue ya da pull request yok.',
+  'githubIssue.link.full': 'Bu konuşma zaten bağlanabilecek kadar çok GitHub işine işaret ediyor.',
+  'githubIssue.dialog.title': 'GitHub issue’su oluştur',
+  'githubIssue.dialog.description':
+    'Neyin nereye gönderileceğini tam olarak gözden geçir. Issue açmak soruyu çözülmüş yapmaz.',
+  'githubIssue.authorize.body':
+    'Senin adına issue açmak için Purlay’in GitHub’a senin adına yazmasına izin ver. Sen açana kadar kapalıdır ve yalnızca hem senin hem App’in görebildiği depolara ulaşır.',
+  'githubIssue.authorize.action': 'Purlay benim adıma issue açabilsin',
+  'githubIssue.repository.label': 'Depo',
+  'githubIssue.repository.private': '{name} (özel)',
+  'githubIssue.repository.empty':
+    'Seçilecek depo yok: sen ve App birlikte hiçbirine ulaşamıyorsunuz.',
+  'githubIssue.repository.failed': 'Depolar okunamadı.',
+  'githubIssue.title.label': 'Başlık',
+  'githubIssue.body.label': 'Açıklama',
+  'githubIssue.copy.label':
+    'Bu konuşma herkese açık değil. Sözlerinin GitHub’a kopyalanmasını seçiyorum.',
+  'githubIssue.review.heading': 'Oluşturulacak olan',
+  'githubIssue.review.destination': '{repository} deposunda, {login} olarak:',
+  'githubIssue.review.marker':
+    'Son satır görünmez bir işarettir. GitHub’ın yanıtı kaybolursa Purlay’in issue’yu yeniden bulmasını sağlar.',
+  'githubIssue.create': 'Issue oluştur',
+  'githubIssue.done': 'Bitti',
+  'githubIssue.state.created': '{repository}#{number} oluşturuldu.',
+  'githubIssue.state.pending': 'Issue oluşturuluyor. Biraz sonra yeniden bak.',
+  'githubIssue.state.unknown':
+    'GitHub yanıt vermedi; issue’nun açılıp açılmadığı bilinmiyor. Hiçbir şey iki kez oluşturulmaz: yeniden bak.',
+  'githubIssue.state.checkAgain': 'Yeniden bak',
+  'githubIssue.state.tryAgain': 'Yeniden dene',
+  'githubIssue.state.refused.no-access': 'GitHub, o depoda issue açmana izin vermiyor.',
+  'githubIssue.state.refused.issues-disabled': 'O depoda issue’lar kapalı.',
+  'githubIssue.state.refused.invalid': 'GitHub bu başlığı ya da açıklamayı reddetti.',
+  'githubIssue.state.refused.not-created':
+    'GitHub bu istek için hiçbir issue göstermedi. Hiçbir şey oluşturulmadı; yeniden başlayabilirsin.',
+  'githubIssue.draft.answer': 'Kabul edilen cevap',
+  'githubIssue.draft.decision': 'Karar',
+  'githubIssue.draft.source': 'Purlay’deki tartışma',
+  'github.rejected':
+    'GitHub bu tokenı kabul etmiyor. Tam kopyalandığını, süresinin dolmadığını ve iptal edilmediğini kontrol et.',
+  'github.unreachable': 'GitHub’a bu token şu an sorulamadı. Biraz sonra yeniden dene.',
+  'github.revoked':
+    'GitHub tokenı {when} tarihinde reddetti: iptal edilmiş ya da süresi dolmuş. Sen değiştirene kadar bağlantılar düz bağlantı olarak kalır.',
+  'github.broad':
+    'Bu, repo yetkisi olan klasik bir token gibi görünüyor: sahibinin erişebildiği her depoyu okuyabilir ve yazabilir. Kartlar için seçili depolarda ince ayarlı, salt okunur bir token yeterli ve daha güvenlidir.',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
@@ -493,6 +803,7 @@ export const tr = {
   'header.feed': 'Akış',
   'header.questions': 'Açık sorular',
   'header.noTopic': 'Henüz konu yok',
+  'header.announcement': 'Buraya yalnızca sahipler ve yöneticiler yazar',
 
   // ── Kanal ayrıntıları ───────────────────────────────────────────────────
   'details.title': '#{name} ayrıntıları',
@@ -509,6 +820,9 @@ export const tr = {
   'details.nobody': 'Bu kanalda kimse yok. Herkes katılabilir.',
   'details.you': 'sen',
   'details.notifications': 'Bildirimler',
+  'details.posting': 'Yazma',
+  'details.onlyAdminsPost': 'Yalnızca sahipler ve yöneticiler yazabilir',
+  'details.onlyAdminsPostHint': 'Kanaldaki herkes yine de thread’lere yanıt yazabilir.',
   'details.tabs': 'Kanal ayrıntıları',
   'details.tab.about': 'Hakkında',
   'details.tab.members': 'Üyeler',
@@ -560,6 +874,9 @@ export const tr = {
   'profile.zoneInvalid': 'Bu bildiğimiz bir saat dilimi değil.',
   'profile.wordsInvalid': 'Bu, yazıldığı gibi gösterilemez.',
   'profile.saveFailed': 'Profilin kaydedilmedi.',
+  'profile.nameLabel': 'Ad',
+  'profile.nameHint': 'Çalışma alanlarındaki herkese bu adla görünürsün.',
+  'profile.saveName': 'Adı kaydet',
   'profile.saved': 'Kaydedildi.',
   'profile.save': 'Kaydet',
   'profile.loading': 'Profil yükleniyor',
@@ -581,6 +898,24 @@ export const tr = {
   'erase.signOut': 'Yeniden giriş için çıkış yap',
   'erase.lastOwner': 'Önce bu çalışma alanlarını başka bir sahibe devret: {workspaces}.',
   'erase.failed': 'Hesabın silinmedi.',
+  'deleteWorkspace.title': '{workspace} çalışma alanını sil',
+  'deleteWorkspace.entry': 'Çalışma alanını sil…',
+  'deleteWorkspace.hint':
+    'Herkes için hemen kaybolur. {days} gün sonra mesajları, dosyaları ve kanalları kalıcı olarak silinir; o zamana kadar herhangi bir sahip onu koruyabilir.',
+  'deleteWorkspace.body':
+    'Şimdi içindeki herkes için kaybolur. {days} gün sonra içindeki her mesaj, dosya, kanal, davet ve entegrasyon silinir ve bu geri alınamaz. O zamana kadar herhangi bir sahip onu koruyabilir.',
+  'deleteWorkspace.exportFirst':
+    'Bir kopyasını saklamak için silmeden önce dışa aktar ve dışa aktarımı indir.',
+  'deleteWorkspace.exportLink': 'Dışa aktarmaya git',
+  'deleteWorkspace.confirm': 'Onaylamak için çalışma alanının adını yaz: {workspace}',
+  'deleteWorkspace.mismatch': 'Bu, çalışma alanının adı değil.',
+  'deleteWorkspace.submit': 'Çalışma alanını sil',
+  'deleteWorkspace.failed': 'Çalışma alanı silinmedi.',
+  'scheduledDeletion.region': 'Silinmekte olan çalışma alanları',
+  'scheduledDeletion.notice':
+    '{workspace} siliniyor: içeriği {when} sonrasında kalıcı olarak silinecek.',
+  'scheduledDeletion.keep': '{workspace} çalışma alanını koru',
+  'scheduledDeletion.failed': 'Silme işlemi geri alınamadı.',
   'signIn.erased': 'Hesabın silindi.',
   'profile.localTime': 'yerel saatle {time}',
   'profile.zone': 'Saat dilimi',
@@ -671,6 +1006,19 @@ export const tr = {
   'pins.by': '{name} sabitledi',
   'pins.byNobody': 'Sabitlendi',
   'pins.jump': 'Mesaja git',
+  'bookmarks.label': 'Yer imleri',
+  'bookmarks.add': 'Yer imi ekle',
+  'bookmarks.addBody':
+    '#{channel} kanalındaki herkesin el altında tuttuğu bir bağlantı; başlığın hemen altında durur.',
+  'bookmarks.url': 'Adres',
+  'bookmarks.name': 'Ad',
+  'bookmarks.nameHint': 'İsteğe bağlı; boş bırakılırsa sitenin adı kullanılır.',
+  'bookmarks.invalidUrl': 'https://docs.example.com gibi bir web adresi gir.',
+  'bookmarks.full': 'Bir kanalda en fazla {max} yer imi olabilir; önce birini kaldır.',
+  'bookmarks.addFailed': 'Yer imi eklenmedi.',
+  'bookmarks.removeOf': '{name} yer imini kaldır',
+  'bookmarks.removed': '{name} kaldırıldı.',
+  'bookmarks.removeFailed': 'Yer imi kaldırılmadı.',
   'files.title': 'Dosyalar',
   'files.open': 'Bu kanaldaki dosyalar',
   'files.close': 'Dosyaları kapat',
@@ -688,6 +1036,14 @@ export const tr = {
   'attachment.list': 'Ekler',
   'attachment.open': '{name} görüntüsünü aç',
   'attachment.download': 'İndir: {name}, {size}',
+  'attachment.preview.show': '{name} önizle',
+  'attachment.preview.hide': '{name} önizlemesini gizle',
+  'attachment.preview.label': '{name} önizlemesi',
+  'attachment.preview.loading': 'Dosya okunuyor',
+  'attachment.preview.failed': 'Dosya okunamadı.',
+  'attachment.preview.failedBody': 'Tekrar dene ya da indirip oku.',
+  'attachment.preview.rows': { other: 'Dosyada {count} satır daha var' },
+  'attachment.preview.cut': 'Dosya devam ediyor: tamamını okumak için indir',
   'attachment.failed': 'Görüntü yüklenmedi.',
   'viewer.previous': 'Önceki görüntü',
   'viewer.next': 'Sonraki görüntü',
@@ -699,6 +1055,7 @@ export const tr = {
   'deferred.unavailable': 'Açılmadı. Bağlantını kontrol edip tekrar dene.',
   'viewer.unavailable': 'Görüntüleyici açılmadı. Bağlantını kontrol edip tekrar dene.',
   'message.deleted': 'Bu mesaj silindi.',
+  'message.incomingWebhook': 'webhook',
   'message.edit': 'Düzenle',
   'message.delete': 'Sil',
   'saved.save': 'Sonrası için kaydet',
@@ -756,6 +1113,23 @@ export const tr = {
   'message.linkCopied': 'Bağlantı kopyalandı',
   'message.actions': 'Mesaj işlemleri',
   'message.copyText': 'Metni kopyala',
+  'message.quoteReply': 'Alıntıyla yanıtla',
+  'message.forward': 'İlet…',
+  'forward.title': 'Mesajı ilet',
+  'forward.body':
+    'Bir notla ilet. Orijinali göremeyen biri yalnızca mesajın kendisine açık olmadığını görür.',
+  'forward.find': 'Kanal ya da kişi bul',
+  'forward.to': 'Şuraya ilet',
+  'forward.none': 'Bu isimde üye olduğun bir yer yok.',
+  'forward.note': 'Not ekle (isteğe bağlı)',
+  'forward.send': 'İlet',
+  'forward.sent': 'İletildi',
+  'forward.open': 'Aç',
+  'forward.tooLong': 'Not göndermek için fazla uzun.',
+  'message.quoteNowhere': 'Alıntılamak için thread’ini aç.',
+  'messageCard.unavailable': 'Bu mesaj sana açık değil.',
+  'message.markUnread': 'Buradan itibaren okunmamış yap',
+  'message.unreadFailed': 'Okunmamış yapılamadı.',
   'message.mention': 'Senden bahsedildi',
   'message.newMarker': 'Yeni',
   'message.newMessages': {
@@ -813,6 +1187,11 @@ export const tr = {
   'feeds.disconnectAsk':
     '{repository} bağlantısı kaldırılsın mı? Webhook’u çalışmayı bırakır, gizli anahtarı silinir.',
   'feeds.disconnectFailed': 'Deponun bağlantısı kaldırılamadı.',
+  'feeds.regenerate': 'Gizli anahtarı yenile',
+  'feeds.regenerateOne': 'Gizli anahtarı yenile: {repository}',
+  'feeds.regenerateAsk':
+    '{repository} gizli anahtarı yenilensin mi? Eski anahtar hemen geçersiz olur; webhook yenisini alana kadar GitHub’ın teslimatları reddedilir.',
+  'feeds.regenerateFailed': 'Gizli anahtar yenilenemedi.',
   'feeds.neverDelivered': 'Henüz teslimat yok',
   'feeds.lastDelivery': 'Son teslimat {when}',
   'feeds.failure.channel_archived': '{when} reddedildi: bu kanal arşivlendi.',
@@ -827,9 +1206,39 @@ export const tr = {
   'feeds.setup.contentType': 'Content type',
   'feeds.setup.secret': 'Secret',
   'feeds.setup.copy': '{what} değerini kopyala',
-  'feeds.setup.once':
-    'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse depo bağlantısını kaldırıp yeniden bağlamak gerekir.',
+  'feeds.setup.once': 'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse akıştan yenile.',
   'feeds.setup.done': 'Tamam',
+  'feeds.setup.regeneratedTitle': 'GitHub’da {repository} webhook’una yeni gizli anahtarı ver',
+  'feeds.setup.regeneratedSteps':
+    'Deponun Settings → Webhooks ekranında webhook’u düzenle ve yeni gizli anahtarı yapıştır. Adres ve content type aynı kalır.',
+
+  // ── Bir kanalın gelen webhook’ları (D-245) ──────────────────────────────
+  'hooks.title': 'Gelen webhook’lar',
+  'hooks.empty':
+    'Gelen webhook yok. Bir tane oluştur; bir CI işi ya da izleme aracı adresiyle buraya mesaj gönderebilir.',
+  'hooks.name': 'Gönderen adı',
+  'hooks.nameHint': 'Mesajlarının kimden geldiği, örneğin CI ya da Uyarılar.',
+  'hooks.nameRequired': 'Webhook’a bir ad ver.',
+  'hooks.nameInvalid': 'Daha kısa, görünen harflerden oluşan bir ad kullan.',
+  'hooks.make': 'Webhook oluştur',
+  'hooks.makeFailed': 'Webhook oluşturulamadı.',
+  'hooks.made': '{when} oluşturuldu',
+  'hooks.madeBy': '{who} tarafından {when} oluşturuldu',
+  'hooks.neverUsed': 'Henüz kullanılmadı',
+  'hooks.lastUsed': 'Son gönderim {when}',
+  'hooks.revoke': 'İptal et',
+  'hooks.revokeOne': '{name} webhook’unu iptal et',
+  'hooks.revokeAsk':
+    '{name} iptal edilsin mi? Adresi hemen çalışmayı bırakır. Gönderdikleri kanalda kalır.',
+  'hooks.revokeFailed': 'Webhook iptal edilemedi.',
+  'hooks.setup.title': '{name} webhook’unun adresi',
+  'hooks.setup.steps':
+    'Bu adrese application/json içerik türüyle JSON gönder, örneğin {example}. Metin markdown’dır.',
+  'hooks.setup.example': 'Dağıtım bitti',
+  'hooks.setup.copy': 'Adresi kopyala',
+  'hooks.setup.once':
+    'Adres gizli anahtarını taşır ve yalnızca şimdi gösteriliyor. Kaybedilirse webhook’u iptal edip yenisini oluşturmak gerekir.',
+  'hooks.setup.done': 'Tamam',
 
   // ── Bir mesajın önceki sürümleri (D-135) ────────────────────────────────
   'history.open': 'Düzenlendi — önceki halini göster',
@@ -883,6 +1292,8 @@ export const tr = {
   'channel.join.notice': '#{name} kanalını üye olmadan okuyorsun.',
   'channel.join.action': 'Kanala katıl',
   'channel.join.failed': 'Kanala katılınamadı.',
+  'channel.announcement.notice':
+    'Bu kanala yalnızca sahipler ve yöneticiler yazar. Yine de bir thread’e yanıt yazabilirsin.',
   'message.reactWith': '{emoji} ile tepki ver',
   'message.quickReactions': 'Hızlı tepkiler',
   'message.reactionOf': {
@@ -962,6 +1373,7 @@ export const tr = {
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
   'composer.bold': 'Kalın',
   'composer.codeBlock': 'Kod bloğu',
+  'composer.table': 'Tablo',
   'composer.italic': 'İtalik',
   'composer.strike': 'Üstü çizili',
   'composer.inlineCode': 'Kod',
@@ -1020,6 +1432,41 @@ export const tr = {
   'composer.placeholder': 'Mesaj yaz: {channel}',
   'composer.send': 'Gönder',
   'composer.pasted': 'Yapıştırılan metin kod bloğuna dönüştü',
+  'composer.pasteChanged': 'Yapıştırılan blok değişti. Düzenlemelerin korundu.',
+  'composer.pasted.table': 'Yapıştırılan satırlar tabloya dönüştü',
+  'composer.pasted.formatted': 'Yapıştırılan metnin biçimi korundu',
+  'composer.pasted.asText': 'Düz metin olarak yapıştır',
+  'slash.listLabel': 'Komutlar',
+  'slash.hint.complete': 'tamamla',
+  'slash.hint.literal': 'başta yazılırsa eğik çizgiyi metin olarak gönderir',
+  'slash.unknown':
+    '/{name} diye bir komut yok. Komutlar: {all}. Eğik çizgiyi metin olarak göndermek için // ile başla.',
+  'slash.notMember': 'Önce kanala katıl.',
+  'slash.me.about': 'Ne yaptığını italik yaz',
+  'slash.me.usage': '/me’den sonra ne yaptığını yaz.',
+  'slash.shrug.about': 'Mesaja ¯\\_(ツ)_/¯ ekle',
+  'slash.topic.about': 'Kanalın konusunu belirle; boş bırakırsan temizlenir',
+  'slash.topic.set': 'Konu belirlendi',
+  'slash.topic.cleared': 'Konu temizlendi',
+  'slash.mute.about': 'Bu kanaldan hiçbir şey söyleme',
+  'slash.unmute.about': 'Burada senden bahsedilince yine söyle',
+  'slash.muted': 'Sessize alındı',
+  'slash.unmuted': 'Sessiz kaldırıldı',
+  'slash.star.about': 'Bu kanalı yıldızla',
+  'slash.unstar.about': 'Bu kanalın yıldızını kaldır',
+  'slash.starred': 'Yıldızlandı',
+  'slash.unstarred': 'Yıldız kaldırıldı',
+  'slash.invite.about': 'Workspace’ten birini ekle: /invite @isim',
+  'slash.invite.usage': 'Kimi ekleyeceğini yaz: /invite @isim.',
+  'slash.invite.nobody': 'Bu workspace’te @{handle} diye biri yok.',
+  'slash.invite.added': '{name} eklendi',
+  'slash.leave.about': 'Bu kanaldan ayrıl',
+  'slash.deepwork.about': 'Deep Work: 30m, 1h, 2h, tomorrow ya da off',
+  'slash.deepwork.usage': '30m, 1h, 2h ya da tomorrow için Deep Work, ya da off.',
+  'slash.deepwork.started': 'Deep Work başladı',
+  'slash.deepwork.ended': 'Deep Work bitti',
+  'slash.search.about': 'Workspace’te bu kelimeleri ara',
+  'slash.search.usage': '/search’ten sonra ne aradığını yaz.',
   'composer.tooLong': {
     other: 'Sınırı {count} karakter aşıyor.',
   },
@@ -1114,10 +1561,20 @@ export const tr = {
   'push.working': 'Bir saniye…',
   'push.blocked': 'Engellendi: tarayıcının site ayarlarından izin ver',
   'push.failed': 'Bu cihazdaki bildirimler değiştirilemedi.',
+  'push.test': 'Test bildirimi',
+  'push.testTitle': 'Purlay bildirimleri',
+  'push.testBody': 'Bu, Purlay’den gelen bir test bildirimidir.',
+  'push.testRequested':
+    'Test bildirimi istendi. Görünmüyorsa cihazının bildirim ayarlarını kontrol et.',
+  'push.testFailed':
+    'Tarayıcın test bildirimini gösteremedi. Sitenin bildirim iznini ve cihazının bildirim ayarlarını kontrol et.',
+  'push.testBlocked':
+    'Bildirim izni değişti. Tarayıcının site ayarlarından Purlay’e izin verip bildirimleri yeniden aç.',
   // Arka plandaki açık bir sekmenin söyledikleri (D-148).
   'alerts.many': '{count} konuşma seni bekliyor',
   'alerts.waiting': 'Burada seni bekleyen bir şey var',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
+  'shortcuts.readAll': 'Tüm kanalları okundu işaretle',
 
   // ── Notification level (D-107) ─────────────────────────────────────────
   'level.label': 'Bana haber ver',
@@ -1157,6 +1614,44 @@ export const tr = {
   'inbox.unreadEmpty.title': 'Hepsini gördün',
   'inbox.unreadEmpty.body': 'Seni bekleyen bir şey yok. Sana söylenen her şey Tümü altında.',
   'inbox.more': 'Daha fazla yükle',
+  'inbox.category.label': 'Kategori',
+  'inbox.category.all': 'Tümü',
+  'inbox.category.mentions': 'Bahsetmeler',
+  'inbox.category.direct': 'Doğrudan',
+  'inbox.category.threads': 'Thread’ler',
+  'inbox.category.empty.mentions': 'Senden bahsedilmedi',
+  'inbox.category.empty.direct': 'Doğrudan mesaj yok',
+  'inbox.category.empty.threads': 'Thread’lerinde yeni bir şey yok',
+  'inbox.category.empty.body': 'Sana söylenen diğer her şey Tümü altında.',
+  'inbox.panel.label': 'Gelen kutusu',
+  'inbox.panel.seeAll': 'Tümünü gör',
+  'drafts.title': 'Taslaklar ve gönderilenler',
+  'drafts.tabs': 'Göster',
+  'drafts.tab.drafts': 'Taslaklar',
+  'drafts.tab.sent': 'Gönderilenler',
+  'drafts.loading': 'Taslakların yükleniyor',
+  'drafts.inThread': 'bir thread’de',
+  'drafts.delete': 'Taslağı sil',
+  'drafts.deleted': 'Taslak silindi',
+  'drafts.empty.title': 'Taslak yok',
+  'drafts.empty.body': 'Yazmaya başlayıp göndermediklerin burada, bu cihazda bekler.',
+  'drafts.sent.loading': 'Gönderdiklerin yükleniyor',
+  'drafts.sent.error.title': 'Gönderdiklerin yüklenemedi',
+  'drafts.sent.error.body': 'Sunucu yanıt vermedi. Tekrar dene.',
+  'drafts.sent.empty.title': 'Henüz bir şey göndermedin',
+  'drafts.sent.empty.body': 'Bu workspace’teki mesajların burada, en yenisi önce listelenir.',
+  'drafts.sent.more': 'Daha fazla yükle',
+  'unreads.title': 'Tüm okunmamışlar',
+  'unreads.count': { other: '{count} yeni' },
+  'unreads.markRead': 'Okundu yap',
+  'unreads.readFailed': 'Okundu yapılamadı.',
+  'unreads.loading': 'Yeniler yükleniyor',
+  'unreads.failed': 'Buradaki yeniler yüklenemedi.',
+  'unreads.more': '{channel} kanalında devamı',
+  'unreads.inThreads': { other: 'Thread’lerde {count} yanıt bekliyor.' },
+  'unreads.open': 'Kanalı aç',
+  'unreads.empty.title': 'Hepsini okudun',
+  'unreads.empty.body': 'Üye olduğun her kanal okundu. Sessize alınanlar listelenmez.',
   'state.inbox.loading': 'Gelen kutun yükleniyor',
   'state.inbox.error.title': 'Gelen kutun yüklenemedi',
   'state.inbox.error.body': 'Sunucu yanıt vermedi. Yeniden dene.',
@@ -1184,9 +1679,12 @@ export const tr = {
   // ── Hatalar: her neden için bir cümle, bütün ekranlarda ortak ──────────
   'failure.network': 'Bağlantını kontrol edip tekrar dene.',
   'failure.session': 'Oturumun sona erdi. Devam etmek için tekrar giriş yap.',
+  'failure.twoFactor': 'Bu sunucu önce iki adımlı doğrulamayı açmanı istiyor.',
   'failure.reauthenticate':
     'Çıkış yapıp yeniden giriş yap, sonra tekrar dene: bu işlem yeni bir giriş ister.',
   'failure.notAMember': 'Bu kanalda değilsin. Buraya yazmak için katıl, sonra tekrar dene.',
+  'failure.onlyAdminsPost':
+    'Bu kanala yalnızca sahipler ve yöneticiler yazar. Bunun yerine bir thread’e yanıt yaz.',
   'failure.gone':
     'Bu artık kullanılamıyor. Kaldırılmış olabilir ya da erişimini kaybetmiş olabilirsin.',
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',
@@ -1196,16 +1694,26 @@ export const tr = {
     'Bir çalışma alanında saklanabilecek kayıtlı mesaj sınırına ulaştın. Önce bazılarını tamamla ya da kaldır.',
   'failure.pinsLimit':
     'Bir kanalda sabitlenebilecek mesaj sınırına ulaşıldı. Önce birinin sabitlemesini kaldır.',
+  'failure.bookmarksLimit': 'Bir kanal bu kadar yer imi tutabilir. Önce birini kaldır.',
   'failure.githubFeedsLimit':
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
+  'failure.incomingWebhooksLimit':
+    'Bir kanalda olabilecek gelen webhook sınırına ulaşıldı. Önce birini iptal et.',
+  'failure.githubUnavailable':
+    'GitHub yanıt vermedi. Hiçbir şey değişmedi. Bir dakika sonra yeniden dene.',
+  'failure.githubNotConnected':
+    'Bu çalışma alanının GitHub kurulumu kullanımda değil. Bir sahip, Ayarlar → Entegrasyonlar’dan bağlayabilir.',
+  'failure.githubAuthorization': 'Önce Purlay’in senin adına issue açmasına izin ver.',
   'failure.githubFeedExists':
-    'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için bağlantıyı kaldırıp yeniden bağla.',
+    'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için akıştan yenile.',
   'failure.incidentOpen': 'Bu kanalda zaten açık bir olay var. Onu değiştir ya da önce çöz.',
   'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',
   'failure.incidentRespondersLimit':
     'Bir olaya müdahale edebilecek kişi sınırına ulaşıldı. Önce birini çıkar.',
   'failure.incidentPostmortemChanged':
     'Sen başladığından beri başka biri postmortemi kaydetti. Yazdığın duruyor: önce onunkini oku, sonra yeniden kaydet.',
+  'failure.deletionStarted':
+    'Çok geç: çalışma alanı silinmeye başladı, silme işlemi artık geri alınamaz.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',
@@ -1227,6 +1735,7 @@ export const tr = {
   'settings.notifications.nav': 'Bildirimler',
   'settings.shortcuts.nav': 'Klavye kısayolları',
   'settings.account.nav': 'Oturumlar ve hesap',
+  'settings.about.nav': 'Hakkında',
   'settings.general.nav': 'Genel',
   'settings.members.nav': 'Üyeler',
   'settings.invitations.nav': 'Davetler',
@@ -1237,6 +1746,8 @@ export const tr = {
   'settings.profile.description': 'Birlikte çalıştığın kişiler seni nasıl görür.',
   'settings.profile.identity': 'Kimlik',
   'settings.profile.identityHint': 'Adın ve fotoğrafın GitHub’dan gelir; orada değişir.',
+  'settings.profile.identityHintOwn':
+    'Adını sen belirlersin; GitHub ile giriş yapana kadar fotoğrafın adından çizilir.',
   'settings.profile.who': 'Oturum açan',
   'settings.profile.about': 'Hakkında',
   'settings.profile.aboutHint': 'Profilinde ve kişi seçilen her yerde görünür.',
@@ -1256,7 +1767,43 @@ export const tr = {
   'settings.notifications.what.direct': 'Biri sana doğrudan yazdığında',
   'settings.notifications.what.reply':
     'Başlattığın ya da yanıtladığın bir thread’de biri yanıt verdiğinde',
-  'settings.notifications.what.resolved': 'Sorduğun bir soru çözüldüğünde',
+  'settings.notifications.what.channel': 'Her mesaj seçtiğin bir kanala biri yazdığında',
+  'quietHours.title': 'Sessiz saatler',
+  'quietHours.description':
+    'Her hafta seni hiçbir şeyin bölmediği saatler: gelenler saklanır ve sayılır, ama saatler bitene kadar hiçbir şey açılmaz ya da çalmaz — kendiliğinden Deep Work.',
+  'quietHours.needsZone': 'Sessiz saatler senin saatine göre okunur. Önce saat dilimini ayarla.',
+  'quietHours.setZone': 'Saat dilimini Profil’de ayarla',
+  'quietHours.on': 'Sessiz saatler',
+  'quietHours.zone': 'Saatler {timeZone} saat dilimine göre.',
+  'quietHours.between': 'Saatler',
+  'quietHours.from': 'Başlangıç',
+  'quietHours.to': 'bitiş',
+  'quietHours.overnight': 'Gece yarısını geçer, ertesi sabaha kadar sürer.',
+  'quietHours.days': 'Başladığı günler',
+  'quietHours.save': 'Kaydet',
+  'quietHours.saved': 'Kaydedildi.',
+  'quietHours.failed': 'Sessiz saatler kaydedilmedi.',
+  'missedMail.title': 'E-posta',
+  'missedMail.description':
+    'Purlay’dan ve cihazlarından uzaktayken: seni hâlâ bekleyenler hakkında, saatte en fazla bir e-posta.',
+  'missedMail.on': 'Okumadığım doğrudan mesajlar ve bahsetmeler için bana e-posta gönder',
+  'missedMail.hint':
+    'Biri 15 dakika okunmadan beklediğinde gönderilir — Deep Work’te ya da sessiz saatlerinde asla — ve yalnızca hâlâ okuyabildiğin mesajlardan alıntı yapar.',
+  'missedMail.failed': 'E-posta ayarı değiştirilmedi.',
+  'mailStop.title': 'Bu e-postalar dursun mu?',
+  'mailStop.body':
+    'Okumadığın doğrudan mesajlar ve bahsetmeler için artık e-posta almayacaksın. İstediğinde Ayarlar → Bildirimler’den yeniden açabilirsin.',
+  'mailStop.action': 'Bu e-postaları durdur',
+  'mailStop.done.title': 'Bu e-postaları artık almayacaksın',
+  'mailStop.done.body': 'İstediğin zaman Ayarlar → Bildirimler’den yeniden açabilirsin.',
+  'mailStop.refused.title': 'Bu bağlantı açılmıyor',
+  'mailStop.refused.body':
+    'Otuz günden eski bir e-postadan olabilir. E-postaları bunun yerine Ayarlar → Bildirimler’den kapat.',
+  'mailStop.missing.title': 'Bu bağlantı eksik',
+  'mailStop.missing.body':
+    'E-postadaki bağlantının tamamını aç ya da e-postaları Ayarlar → Bildirimler’den kapat.',
+  'mailStop.failed': 'E-postalar durdurulamadı.',
+  'mailStop.open': 'Purlay’ı aç',
   'settings.notifications.deepWorkHint':
     'Açıkken sana hiçbir şey iletilmez — ne burada ne cihazlarında. Süresi dolunca kendiliğinden biter.',
   'settings.notifications.deepWorkStart': 'Deep Work’ü başlat',
@@ -1275,6 +1822,8 @@ export const tr = {
     'Purlay arka planda bir sekmede açıkken bu cihazda haber almak için aç. Önce tarayıcın izin ister.',
   'settings.notifications.unsupported':
     'Bu tarayıcı bildirim gösteremiyor; bekleyenleri yalnızca sekmenin başlığı sayar.',
+  'settings.notifications.installFirst':
+    'iPhone ve iPad’de bildirimler yalnızca ana ekrandaki Purlay’e gelir: Paylaş’a, sonra Ana Ekrana Ekle’ye dokun ve oradan aç.',
   'settings.notifications.closedTabOff':
     'Bu sunucu kapalı sekmeye bildirim göndermiyor; Purlay kapalıyken hiçbir şey duymazsın. Haber almak için bir sekmede açık tut.',
   'settings.notifications.unavailable': 'Burada kullanılamıyor',
@@ -1313,9 +1862,64 @@ export const tr = {
   'settings.account.password.othersStay':
     'Parolan değişti ama diğer oturumların kapatılamadı. "Her yerden çıkış yap"ı kullan.',
   'settings.account.password.failed': 'Parola değiştirilmedi. Biraz sonra yeniden dene.',
+  'settings.account.twoFactor.title': 'İki adımlı doğrulama',
+  'settings.account.twoFactor.description':
+    'Parolandan sonra, giriş yaparken telefonundaki bir doğrulama uygulamasının kodu da istenir.',
+  'settings.account.twoFactor.otherWays':
+    'Parolanı korur. GitHub, çoklu oturum açma ya da e-postayla gelen bağlantıyla girişte o sağlayıcının kendi güvenliği geçerlidir.',
+  'settings.account.twoFactor.required':
+    'Bu sunucu parolası olan hesaplarda bunu zorunlu tutuyor; bu yüzden açık kalır.',
+  'settings.account.twoFactor.status': 'Durum',
+  'settings.account.twoFactor.on': 'Açık',
+  'settings.account.twoFactor.off': 'Kapalı',
+  'settings.account.twoFactor.start': 'Aç…',
+  'settings.account.twoFactor.stop': 'Kapat…',
+  'settings.account.twoFactor.newCodes': 'Yeni yedek kodlar…',
+  'settings.account.twoFactor.password': 'Parolan',
+  'settings.account.twoFactor.startHint': 'Sen olduğunu parolanla doğrula.',
+  'settings.account.twoFactor.stopHint':
+    'Parolanla doğrula. Bundan sonra yalnızca parolanla giriş yapabilirsin.',
+  'settings.account.twoFactor.newCodesHint':
+    'Parolanla doğrula. Eski yedek kodların artık işe yaramaz.',
+  'settings.account.twoFactor.continue': 'Devam et',
+  'settings.account.twoFactor.scan':
+    'Bu QR kodunu doğrulama uygulamanla tara ya da anahtarı elle gir. Sonra uygulamanın gösterdiği kodu yaz.',
+  'settings.account.twoFactor.qr': 'Doğrulama uygulaman için QR kodu',
+  'settings.account.twoFactor.key': 'Anahtar',
+  'settings.account.twoFactor.link': 'Bu cihazdaki doğrulama uygulamasında aç',
+  'settings.account.twoFactor.code': 'Uygulamadaki kod',
+  'settings.account.twoFactor.confirm': 'Aç',
+  'settings.account.twoFactor.codesTitle': 'Yedek kodlar',
+  'settings.account.twoFactor.codesHint':
+    'Telefonunu kaybedersen her kod bir kez giriş yapmanı sağlar. Yalnızca şimdi gösteriliyor: güvenli bir yere kopyala.',
+  'settings.account.twoFactor.copyCodes': 'Kodları kopyala',
+  'settings.account.twoFactor.done': 'Tamam',
+  'settings.account.twoFactor.onNow': 'İki adımlı doğrulama açık.',
+  'settings.account.twoFactor.offNow': 'İki adımlı doğrulama kapalı.',
+  'settings.account.twoFactor.wrongPassword': 'Bu, parolan değil.',
+  'settings.account.twoFactor.wrongCode': 'Bu kod doğru değil. Uygulamaya bakıp yeniden dene.',
+  'settings.account.twoFactor.tooMany': {
+    other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden dene.',
+  },
+  'settings.account.twoFactor.unreachable':
+    'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'settings.account.twoFactor.failed': 'Bu işlem tamamlanamadı. Biraz sonra yeniden dene.',
   'settings.account.sessions': 'Oturumlar',
   'settings.account.here': 'Bu cihaz',
   'settings.account.hereHint': 'Yalnızca bu tarayıcıda Purlay’den çık.',
+  'settings.devices.title': 'Oturum açık olan yerler',
+  'settings.devices.description':
+    'Hesabında oturumu açık her tarayıcı ve Mac; en son kullanılan en üstte. Kullanmadığın ya da tanımadığın birinin oturumunu kapat.',
+  'settings.devices.list': 'Oturumu açık cihazlar',
+  'settings.devices.browser': 'Web tarayıcısı',
+  'settings.devices.native': 'Purlay for Mac',
+  'settings.devices.current': 'Bu cihaz',
+  'settings.devices.signedIn': 'Oturum açılışı: {when}',
+  'settings.devices.lastUsed': 'Son etkinlik: {when}',
+  'settings.devices.none': 'Başka hiçbir yerde oturumun açık değil.',
+  'settings.devices.failed': 'Oturumunun açık olduğu yerler okunamadı.',
+  'settings.devices.signedOut': 'Oturum kapatıldı: {device}',
+  'settings.devices.signOutFailed': 'Oturum kapatılamadı: {device}',
   'settings.account.danger': 'Tehlikeli bölge',
   'settings.account.leave': '{workspace} alanından ayrıl',
   'settings.account.leaveEntry': 'Çalışma alanından ayrıl…',
@@ -1335,6 +1939,18 @@ export const tr = {
   'settings.general.address': 'Adres',
   'settings.general.addressHint':
     'Çalışma alanı yeniden adlandırılsa da değişmez; paylaşılmış bağlantılar çalışmaya devam eder.',
+  'settings.archived.title': 'Arşivlenmiş kanallar',
+  'settings.archived.description':
+    'Arşivlenen kanallar herkesten gizlenir; mesajları ve üyeleri saklanır. Geri aldığında kanal eskisi gibi döner.',
+  'settings.archived.none': 'Arşivlenmiş kanal yok.',
+  'settings.archived.row': '{channel}, {when} tarihinde arşivlendi',
+  'settings.archived.rowPrivate': '{channel} (özel), {when} tarihinde arşivlendi',
+  'settings.archived.restore': 'Geri al',
+  'settings.archived.restored': '{channel} geri geldi.',
+  'settings.archived.nameTaken':
+    'Artık başka bir kanalın adı {channel}. Önce onu yeniden adlandır, sonra bunu geri al.',
+  'settings.archived.failed': '{channel} geri alınamadı.',
+  'settings.archived.loadFailed': 'Arşivlenmiş kanallar yüklenemedi.',
   'settings.general.another': 'Başka bir çalışma alanı',
   'settings.general.anotherHint': 'Başka bir ekip için: kendi kişileri, kanalları ve ayarlarıyla.',
   'settings.members.title': 'Üyeler',
@@ -1368,6 +1984,7 @@ export const tr = {
   'settings.integrations.connected': 'Bağlı',
   'settings.integrations.notConnected': 'Bağlı değil',
   'settings.integrations.replace': 'Token’ı değiştir',
+  'settings.integrations.refused': 'Token reddedildi',
   'settings.audit.title': 'Denetim kaydı',
   'settings.data.title': 'Veri ve saklama',
   'settings.data.description':
@@ -1420,6 +2037,36 @@ export const tr = {
   'palette.view.feed': 'Akış',
   'palette.error': 'Açılamadı.',
   'palette.announce.channel': '{name} açıldı',
+
+  // ── Hakkında ve sürüm notları (D-248) ────────────────────────────────────
+  'about.title': 'Hakkında',
+  'about.description': 'Bu sunucunun çalıştırdığı sürüm ve daha yenisinin çıkıp çıkmadığı.',
+  'about.version.title': 'Sürüm',
+  'about.version.running': 'Bu sunucunun sürümü',
+  'about.version.latest': 'En yeni sürüm',
+  'about.version.published': '{date} tarihinde yayımlandı',
+  'about.version.open': 'Sürümü GitHub’da görüntüle',
+  'about.version.unknown': 'Bilinmiyor',
+  'about.status.current': 'Güncelsiniz.',
+  'about.status.newer': '{version} sürümü yayımlandı.',
+  'about.status.unknown':
+    'Daha yeni bir sürüm olup olmadığı denetlenemedi. Sunucu GitHub’a ulaşamadı ya da yöneticisi denetimi kapattı.',
+  'about.whatsNew': 'Yenilikler',
+  'about.whatsNew.description': 'Bu sunucunun çalıştırdığı sürümde neler değişti.',
+  'about.error.title': 'Sürüm bilgisi yüklenemedi',
+  'about.error.body': 'Bu sunucunun sürümü ve en yeni sürüm okunamadı.',
+  'about.source.title': 'Açık kaynak',
+  'about.source.licence': 'Lisans',
+  'about.source.repository': 'Kaynak kod',
+  'releaseNotes.title': 'Purlay {version} sürümündeki yenilikler',
+  'releaseNotes.description': '{date} tarihinde yayımlandı.',
+  'releaseNotes.close': 'Anladım',
+  'releaseNotes.category.Added': 'Eklenenler',
+  'releaseNotes.category.Changed': 'Değişenler',
+  'releaseNotes.category.Deprecated': 'Kullanımdan kalkacaklar',
+  'releaseNotes.category.Removed': 'Kaldırılanlar',
+  'releaseNotes.category.Fixed': 'Düzeltilenler',
+  'releaseNotes.category.Security': 'Güvenlik',
 
   // ── Klavye kısayolları (UX §7) ──────────────────────────────────────────
   'shortcuts.title': 'Klavye kısayolları',
@@ -1705,6 +2352,16 @@ export const tr = {
   'setup.reason.unexpected-reply.fix1': 'Bir dakika sonra yeniden dene.',
   'setup.reason.unexpected-reply.fix2':
     'Sürerse adresi kontrol et; aşağıdaki yanıt neyin cevap verdiğini söyler.',
+  'setup.reason.key-rejected.what': 'GitHub, bu özel anahtarın imzaladığını reddetti.',
+  'setup.reason.key-rejected.fix1':
+    'GitHub’da App’in sayfasında bir özel anahtar oluştur ve dosyanın tamamını buraya yapıştır.',
+  'setup.reason.key-rejected.fix2':
+    'GitHub’da iptal edilmiş bir anahtarın imzasına GitHub güvenmez.',
+  'setup.reason.app-mismatch.what': 'Bu özel anahtar başka bir GitHub App’e ait.',
+  'setup.reason.app-mismatch.fix1':
+    'App ID’yi, kısa adı (slug) ve Client ID’yi GitHub’da aynı App’in sayfasından kopyala.',
+  'setup.reason.app-mismatch.fix2':
+    'Aşağıdaki yanıt, anahtarın hangi App olarak imzaladığını söyler.',
   'setup.reason.issuer-mismatch.what':
     'Bu adres yanıt veriyor ama keşif belgesi başka bir yayıncı (issuer) adı bildiriyor.',
   'setup.reason.issuer-mismatch.fix1':
@@ -1793,6 +2450,33 @@ export const tr = {
   'settings.server.github.disconnectBody':
     'İnsanlar artık GitHub ile giriş yapamaz. Açık oturumlar açık kalır.',
   'settings.server.github.disconnected': 'GitHub’ın bağlantısı kesildi.',
+  'settings.server.githubApp.title': 'Issue’ler için GitHub App',
+  'settings.server.githubApp.description':
+    'Tek bir GitHub App, çalışma alanlarının bir konuşmadan issue açmasını ve takip etmesini sağlar. Giriş, yukarıdaki OAuth uygulamasıyla sürer.',
+  'settings.server.githubApp.empty':
+    'Bir App bağlanana kadar hiçbir çalışma alanında GitHub issue özelliği görünmez.',
+  'settings.server.githubApp.which': '{slug} · App {id}',
+  'settings.server.githubApp.callback': 'Geri çağrı adresi',
+  'settings.server.githubApp.callbackHint':
+    'Bunu App’in Callback URL alanına yapıştır ve “Request user authorization (OAuth) during installation” seçeneğini aç.',
+  'settings.server.githubApp.webhook': 'Webhook adresi',
+  'settings.server.githubApp.webhookHint':
+    'Bunu App’in Webhook URL alanına, application/json içerik türüyle yapıştır.',
+  'settings.server.githubApp.appIdLabel': 'App ID',
+  'settings.server.githubApp.slugLabel': 'App kısa adı',
+  'settings.server.githubApp.slugHint': 'github.com/apps/<kısa ad> adresinin son parçası.',
+  'settings.server.githubApp.keyLabel': 'Özel anahtar',
+  'settings.server.githubApp.keyHint':
+    'GitHub’ın ürettiği .pem dosyasının tamamını yapıştır. Şifreli saklanır ve bir daha gösterilmez.',
+  'settings.server.githubApp.webhookSecretLabel': 'Webhook gizli anahtarı',
+  'settings.server.githubApp.hint':
+    'Bir şey kaydedilmeden önce GitHub’a App sorulur: istemcisi ve anahtarının neyi imzaladığı.',
+  'settings.server.githubApp.connect': 'GitHub App’i bağla',
+  'settings.server.githubApp.saved': 'Kaydedildi. Çalışma alanları artık bir kurulum bağlayabilir.',
+  'settings.server.githubApp.disconnectTitle': 'GitHub App’in bağlantısı kesilsin mi?',
+  'settings.server.githubApp.disconnectBody':
+    'Artık issue açılmaz ve takip edilmez. Yapılmış bağlantılar, çalışma alanı tokenı ve depo akışları olduğu gibi kalır.',
+  'settings.server.githubApp.disconnected': 'GitHub App’in bağlantısı kesildi.',
   'settings.server.oidc.title': 'Tek oturum açma',
   'settings.server.oidc.description':
     'İnsanlar kuruluşunun OpenID Connect sağlayıcısıyla giriş yapar — Okta, Entra ID, Google Workspace, Keycloak, Authentik gibi.',
@@ -1849,6 +2533,51 @@ export const tr = {
   'settings.server.policy.open': 'Herkes',
   'settings.server.policy.open.body': 'Bu sunucuya ulaşabilen herkes hesap açabilir.',
   'settings.server.policy.saved': 'Kaydedildi. Bu bir sonraki kayıttan itibaren geçerli.',
+  'settings.server.accounts.title': 'Hesaplar',
+  'settings.server.accounts.description':
+    'Ayrılan birinin hesabını askıya al: her yerden çıkış yapılır ve giriş yapamaz; mesajları ve adı kalır. Askıyı kaldırınca eskisi gibi geri döner.',
+  'settings.server.accounts.find': 'Ad, kullanıcı adı veya adresle bul',
+  'settings.server.accounts.none': 'Eşleşen hesap yok.',
+  'settings.server.accounts.admin': 'Bu sunucunun yöneticisi',
+  'settings.server.accounts.suspendedOn': '{when} tarihinde askıya alındı',
+  'settings.server.accounts.suspend': 'Askıya al',
+  'settings.server.accounts.lift': 'Askıyı kaldır',
+  'settings.server.accounts.ask':
+    '{name} askıya alınsın mı? Bütün cihazlarda oturumu kapanır ve sen askıyı kaldırana kadar giriş yapamaz.',
+  'settings.server.signIn.title': 'Giriş yöntemi',
+  'settings.server.signIn.description':
+    'Parolayla giriş yapan hesaplar için kurallar. GitHub, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',
+  'settings.server.signIn.twoFactor': 'İki adımlı doğrulama',
+  'settings.server.signIn.twoFactor.off': 'İsteğe bağlı',
+  'settings.server.signIn.twoFactor.off.body': 'Parolası olan herkes kendisi karar verir.',
+  'settings.server.signIn.twoFactor.on': 'Zorunlu',
+  'settings.server.signIn.twoFactor.on.body':
+    'Parolası olan herkes, sen de dahil, başka bir şey yapmadan önce bunu açmalı.',
+  'settings.server.signIn.passwords': 'Parolayla giriş',
+  'settings.server.signIn.passwords.on': 'Açık',
+  'settings.server.signIn.passwords.on.body': 'E-posta adresi ve parolayla giriş yapılır.',
+  'settings.server.signIn.passwords.off': 'Kapalı',
+  'settings.server.signIn.passwords.off.body':
+    'Yalnızca GitHub ya da tek oturum açma. Bunlar çalışmazsa sunucu yöneticisi admin:reset-password ile parolaları yeniden açar.',
+  'settings.server.signIn.passwords.needsProvider':
+    'Önce GitHub’ı ya da tek oturum açmayı bağla: parolayla giriş ancak bunlardan biri çalışırken kapatılabilir.',
+  'settings.server.signIn.saved': 'Kaydedildi. Bir sonraki istekten itibaren geçerli.',
+  'settings.server.lifetime.title': 'Bir oturum ne kadar sürer',
+  'settings.server.lifetime.description':
+    'Bir süre kullanılmayan ya da ne yapılırsa yapılsın belli bir süreyi dolduran oturumları kapat; tarayıcıda da Mac uygulamasında da. Açık oturumlar bir sonraki isteklerinden itibaren buna uyar.',
+  'settings.server.lifetime.idle': 'Şu kadar kullanılmayınca oturumu kapat',
+  'settings.server.lifetime.idle.hint':
+    'Açık bir pencerede Purlay’i kullanmak sayılır; açık bırakılmış bir pencere sayılmaz.',
+  'settings.server.lifetime.idle.off': 'Hiçbir zaman',
+  'settings.server.lifetime.maxAge': 'Şu kadar sonra yeniden giriş istensin',
+  'settings.server.lifetime.maxAge.hint':
+    'Ne kadar kullanılırsa kullanılsın. Oturum, sunucunun kendi süresi (SESSION_TTL_DAYS) dolunca da kapanır; hangisi önce gelirse.',
+  'settings.server.lifetime.maxAge.off': 'Yalnızca sunucunun kendi süresi',
+  'settings.server.lifetime.hours': { other: '{count} saat' },
+  'settings.server.lifetime.days': { other: '{count} gün' },
+  'settings.server.lifetime.weeks': { other: '{count} hafta' },
+  'settings.server.passwordsOffLast':
+    'Parolayla giriş kapalı ve bu, GitHub ile tek oturum açmanın sonuncusu: kimse giriş yapamaz. Önce parolaları aç.',
   'settings.server.creators.title': 'Kimler çalışma alanı açabilir',
   'settings.server.creators.description':
     'Giriş açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',

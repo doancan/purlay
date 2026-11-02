@@ -11,7 +11,7 @@
  * A menu that does not arrive says so in a toast and nothing opens; the next try asks again.
  */
 import type { Channel } from '@purlay/types';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Deferred from '../../app/deferred';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useChannelTitle } from '../channel/channel-header';
@@ -99,6 +99,15 @@ export const useRowMenu = (
     if (press.current !== null) window.clearTimeout(press.current.timer);
     press.current = null;
   };
+
+  // A row that leaves under a finger (marked read elsewhere, while only unread rows show) must not
+  // open its menu half a second later on a hook that is gone.
+  useEffect(
+    () => (): void => {
+      if (press.current !== null) window.clearTimeout(press.current.timer);
+    },
+    [],
+  );
 
   const handlers: RowMenuHandlers = {
     onContextMenu: (event) => {

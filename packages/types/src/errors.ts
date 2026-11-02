@@ -48,10 +48,21 @@ export const ErrorCode = Type.Union([
   /** The one irreversible act needs a sign-in from the last minutes, not an old session (D-139 §5). */
   Type.Literal('REAUTHENTICATION_REQUIRED'),
   /**
+   * The server requires two-step verification of an account that signs in with a password, and the caller's
+   * has not turned it on (D-239): nothing but what turning it on needs answers until it has. Not a sign-out —
+   * the session stands, and the same session goes on once it is on.
+   */
+  Type.Literal('TWO_FACTOR_REQUIRED'),
+  /**
    * Writing in a channel the caller can see and is not in: a public channel they have not joined.
    * Joining it is the way on (D-156). Never for a channel they cannot see — that is its `404`.
    */
   Type.Literal('NOT_A_CHANNEL_MEMBER'),
+  /**
+   * A new message in an announcement channel's feed from somebody whose workspace role is `member`: only
+   * its owners and admins post there (D-243). A reply in one of its threads is still theirs to write.
+   */
+  Type.Literal('ONLY_ADMINS_POST'),
   // Absence, and everything a boundary turns into absence
   /** No such route. Distinct from a resource that does not exist, or is not yours. */
   Type.Literal('ROUTE_NOT_FOUND'),
@@ -66,6 +77,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('SCHEDULED_MESSAGE_NOT_FOUND'),
   Type.Literal('SCHEDULED_MESSAGE_SENT'),
   Type.Literal('SCHEDULED_MESSAGE_LIMIT'),
+  /** A bookmark that is not there, or in a channel the caller cannot see (D-218, D-34). */
+  Type.Literal('BOOKMARK_NOT_FOUND'),
   /** An earlier version of a message that is not there, or not this message's (D-135). */
   Type.Literal('MESSAGE_VERSION_NOT_FOUND'),
   /** An incident that is not there, or not this channel's (D-137). */
@@ -77,6 +90,9 @@ export const ErrorCode = Type.Union([
   Type.Literal('WORKSPACE_SLUG_TAKEN'),
   Type.Literal('CHANNEL_NAME_TAKEN'),
   Type.Literal('MESSAGE_ID_CONFLICT'),
+  Type.Literal('KNOWLEDGE_CONFLICT'),
+  Type.Literal('SAVED_SEARCH_NOT_FOUND'),
+  Type.Literal('SAVED_SEARCH_LIMIT'),
   /**
    * Resolving a message that cannot be resolved: a reply (only roots resolve), or a
    * root nobody has replied to (a resolved thread has at least one reply, I-8).
@@ -87,6 +103,17 @@ export const ErrorCode = Type.Union([
   Type.Literal('GITHUB_ACCOUNT_TAKEN'),
   /** The channel already has a feed from this repository (D-134 §1). */
   Type.Literal('GITHUB_FEED_EXISTS'),
+  /** This workspace has no usable GitHub App installation: none connected, or GitHub suspended it (D-246). */
+  Type.Literal('GITHUB_NOT_CONNECTED'),
+  /** The person has not let Purlay write as them, or GitHub no longer takes their authorization (D-246 §2). */
+  Type.Literal('GITHUB_AUTHORIZATION_REQUIRED'),
+  /**
+   * GitHub did not answer in time or answered what is not an answer — unreachable, failing, or not taking
+   * the calls for now; nothing was kept, and the request may be retried (D-246; D-23, amended, #884).
+   */
+  Type.Literal('GITHUB_UNAVAILABLE'),
+  /** A request id already used for other content: a retry of the same request is never this (D-246 §4). */
+  Type.Literal('GITHUB_REQUEST_CONFLICT'),
   /** Declaring an incident in a channel that has one open (D-137 §1). */
   Type.Literal('INCIDENT_OPEN'),
   /**
@@ -121,8 +148,12 @@ export const ErrorCode = Type.Union([
   Type.Literal('SAVED_LIMIT'),
   /** The channel already has as many pins as it may (D-130). */
   Type.Literal('PINS_LIMIT'),
+  /** The channel already keeps as many bookmarks as it may (D-218). */
+  Type.Literal('BOOKMARKS_LIMIT'),
   /** The channel already hears from as many repositories as it may (D-134). */
   Type.Literal('GITHUB_FEEDS_LIMIT'),
+  /** The channel already has as many incoming webhooks as it may (D-245). */
+  Type.Literal('INCOMING_WEBHOOKS_LIMIT'),
   /**
    * An attachment id already used for another upload — somebody else's, another workspace's, or
    * the same person's with other bytes. A retry of the same upload answers the attachment instead.
@@ -146,6 +177,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('NATIVE_CODE_NOT_FOUND'),
   /** A repository's feed that does not exist, or is in a channel the caller cannot see (D-134). */
   Type.Literal('GITHUB_FEED_NOT_FOUND'),
+  /**
+   * An incoming webhook that is not there — unknown, revoked, a wrong secret, its channel archived or its
+   * workspace deleted, or in a channel the caller cannot see: one answer for all (D-245).
+   */
+  Type.Literal('INCOMING_WEBHOOK_NOT_FOUND'),
   /** An external image the proxy will not or cannot show — one answer for every reason (#110). */
   Type.Literal('IMAGE_NOT_AVAILABLE'),
   Type.Literal('LAST_OWNER'),
@@ -154,6 +190,16 @@ export const ErrorCode = Type.Union([
    * refused rather than left unreachable. Bring somebody in first, or ask an admin to archive it (D-123).
    */
   Type.Literal('LAST_CHANNEL_MEMBER'),
+  /**
+   * A channel's floor shorter than the workspace keeps its history now: a channel keeps longer, never
+   * shorter (D-225). Forever, or a floor at least the workspace's window, is accepted.
+   */
+  Type.Literal('RETENTION_TOO_SHORT'),
+  /**
+   * Taking back a workspace's deletion once its erasure has begun (D-242): the grace period is over, and
+   * what has gone cannot come back.
+   */
+  Type.Literal('WORKSPACE_DELETION_STARTED'),
   /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
@@ -204,6 +250,11 @@ export const ErrorCode = Type.Union([
    * address changed since: one answer (D-179 §4.3).
    */
   Type.Literal('ADMIN_LINK_NOT_FOUND'),
+  /**
+   * A missed-mail letter's link that does not open — unknown, or its letter older than the link lasts: one
+   * answer (D-240).
+   */
+  Type.Literal('MAIL_LINK_NOT_FOUND'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -224,7 +275,9 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   FORBIDDEN: 403,
   REAUTHENTICATION_REQUIRED: 403,
+  TWO_FACTOR_REQUIRED: 403,
   NOT_A_CHANNEL_MEMBER: 403,
+  ONLY_ADMINS_POST: 403,
 
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
@@ -233,6 +286,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   SCHEDULED_MESSAGE_NOT_FOUND: 404,
   SCHEDULED_MESSAGE_SENT: 409,
   SCHEDULED_MESSAGE_LIMIT: 409,
+  BOOKMARK_NOT_FOUND: 404,
   MESSAGE_VERSION_NOT_FOUND: 404,
   INCIDENT_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,
@@ -240,6 +294,9 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,
   MESSAGE_ID_CONFLICT: 409,
+  KNOWLEDGE_CONFLICT: 409,
+  SAVED_SEARCH_NOT_FOUND: 404,
+  SAVED_SEARCH_LIMIT: 409,
   THREAD_NOT_RESOLVABLE: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
   GITHUB_ACCOUNT_TAKEN: 409,
@@ -255,7 +312,13 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   TOO_MANY_PENDING_UPLOADS: 409,
   SAVED_LIMIT: 409,
   PINS_LIMIT: 409,
+  BOOKMARKS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
+  INCOMING_WEBHOOKS_LIMIT: 409,
+  GITHUB_NOT_CONNECTED: 409,
+  GITHUB_AUTHORIZATION_REQUIRED: 409,
+  GITHUB_REQUEST_CONFLICT: 409,
+  GITHUB_UNAVAILABLE: 503,
   GITHUB_FEED_EXISTS: 409,
   INCIDENT_OPEN: 409,
   INCIDENT_ID_CONFLICT: 409,
@@ -272,9 +335,12 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   SIGN_IN_LINK_NOT_FOUND: 404,
   NATIVE_CODE_NOT_FOUND: 404,
   GITHUB_FEED_NOT_FOUND: 404,
+  INCOMING_WEBHOOK_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,
   LAST_CHANNEL_MEMBER: 409,
+  RETENTION_TOO_SHORT: 409,
+  WORKSPACE_DELETION_STARTED: 409,
   RATE_LIMITED: 429,
   SETUP_UNAVAILABLE: 404,
   SETUP_LOCKED: 429,
@@ -282,6 +348,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   SETTINGS_CHANGE_FAILED: 500,
   SERVER_CHANGE_REFUSED: 409,
   ADMIN_LINK_NOT_FOUND: 404,
+  MAIL_LINK_NOT_FOUND: 404,
 
   INTERNAL: 500,
   STORAGE_UNAVAILABLE: 503,
@@ -351,13 +418,18 @@ export type SettingsChangeFailedDetails = Static<typeof SettingsChangeFailedDeta
  * Why Administration → Server refused a change (`409 SERVER_CHANGE_REFUSED`): `last-channel` — it would
  * leave the administrator's password as the only way in, and `confirmLastChannel` was not said;
  * `not-connected` — there is nothing of that kind to disconnect; `setup-unfinished` — the setup in the
- * browser is still open, and its steps are the way to change settings until it is finished.
+ * browser is still open, and its steps are the way to change settings until it is finished;
+ * `no-provider` — password sign-in cannot be turned off while neither GitHub nor single sign-on is connected;
+ * `passwords-off` — password sign-in is off, and this is the last of GitHub and single sign-on: nobody could
+ * sign in, so no confirmation lets it go (D-239).
  */
 export const ServerChangeRefusedDetails = Type.Object({
   reason: Type.Union([
     Type.Literal('last-channel'),
     Type.Literal('not-connected'),
     Type.Literal('setup-unfinished'),
+    Type.Literal('no-provider'),
+    Type.Literal('passwords-off'),
   ]),
 });
 export type ServerChangeRefusedDetails = Static<typeof ServerChangeRefusedDetails>;

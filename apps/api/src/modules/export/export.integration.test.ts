@@ -75,6 +75,16 @@ const fill = async (
     .insertInto('pinned_messages')
     .values({ ...where, message_id: id, pinned_by: author.userId })
     .execute();
+  await db
+    .insertInto('channel_bookmarks')
+    .values({
+      id: messageId(next()),
+      ...where,
+      url: 'https://docs.example.com/runbook',
+      title: 'Runbook',
+      added_by: member(room, other).userId,
+    })
+    .execute();
   // Stored as an upload is, so its key is the one production writes — not one a test made up (#84).
   const fileId = messageId(next());
   await storeUpload(
@@ -132,6 +142,25 @@ const fill = async (
       events: ['push'],
       secret_encrypted: feedSecret,
       created_by: author.userId,
+    })
+    .execute();
+  // The GitHub work the root points at (D-246): the channel's own record, in the export.
+  await db
+    .insertInto('github_links')
+    .values({
+      id: messageId(next()),
+      ...where,
+      root_id: id,
+      repository_id: 77,
+      repository_full_name: 'acme/api',
+      kind: 'issue',
+      number: 12,
+      title: 'Retry with jitter',
+      state: 'open',
+      state_at: next(),
+      origin: 'created',
+      created_by: author.userId,
+      created_at: next(),
     })
     .execute();
   const tokenHash = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '');

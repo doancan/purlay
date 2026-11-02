@@ -427,6 +427,16 @@ export const PinsUpdatedFrame = Type.Object({
 });
 
 /**
+ * A channel's bookmarks changed (D-218): one added or removed, by anyone in it. On the channel's topic;
+ * it carries no bookmark, and a client reads them again, as it does pins.
+ */
+export const BookmarksUpdatedFrame = Type.Object({
+  event: Type.Literal('BOOKMARKS_UPDATED'),
+  data: Type.Object({ channelId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A channel's incident changed (D-137 §7): declared, moved, resolved — by anyone in it. On the
  * channel's topic; it carries no incident, and a client reads it again, so two changes heard in either
  * order leave the same banner.
@@ -449,9 +459,10 @@ export const MessageVersionsUpdatedFrame = Type.Object({
 });
 
 /**
- * A channel's name or topic changed (D-123). The whole of both, so a client replaces what it holds;
- * on the channel's topic, at the channel row's version, and a client drops one older than what it
- * has applied — two renames published from different requests can arrive in either order.
+ * A channel's name, topic or who posts in its feed changed (D-123, D-243). The whole of each, so a
+ * client replaces what it holds; on the channel's topic, at the channel row's version, and a client
+ * drops one older than what it has applied — two changes published from different requests can arrive
+ * in either order.
  */
 export const ChannelUpdatedFrame = Type.Object({
   event: Type.Literal('CHANNEL_UPDATED'),
@@ -460,6 +471,7 @@ export const ChannelUpdatedFrame = Type.Object({
       channelId: Uuid,
       name: Type.String({ maxLength: 64 }),
       topic: Type.Union([Type.String(), Type.Null()]),
+      onlyAdminsPost: Type.Boolean(),
     },
     { additionalProperties: false },
   ),
@@ -548,6 +560,7 @@ export const ServerFrame = Type.Union([
   MessageHiddenFrame,
   NotificationsUpdatedFrame,
   PinsUpdatedFrame,
+  BookmarksUpdatedFrame,
   IncidentUpdatedFrame,
   MessageVersionsUpdatedFrame,
   ChannelsUpdatedFrame,

@@ -19,8 +19,13 @@ const NOTHING_SET: ServerSettings = {
   github: undefined,
   oidc: undefined,
   smtp: undefined,
+  githubApp: undefined,
   workspaceCreators: { kind: 'first' },
   setupCompletedAt: undefined,
+  requireTwoFactor: false,
+  passwordSignIn: true,
+  sessionIdleTimeoutHours: null,
+  sessionMaxAgeDays: null,
 };
 
 const LETTER: MailMessage = { to: 'ada@example.test', subject: 's', text: 't', html: '<p>t</p>' };

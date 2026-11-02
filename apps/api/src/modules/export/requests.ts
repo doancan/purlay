@@ -48,17 +48,25 @@ import { writeTar } from './tar';
 const HEARTBEAT_MS = 60_000;
 const EXPORT_SILENT_MS = 10 * HEARTBEAT_MS;
 
+/**
+ * The tables an export's life is kept in: an owner's of a workspace, and a person's own (D-241). The
+ * same columns and the same states, so being alive, failing, letting go of an archive and the sweep are
+ * one code for both.
+ */
+export type ExportTable = 'workspace_exports' | 'personal_exports';
+const EXPORT_TABLES: readonly ExportTable[] = ['workspace_exports', 'personal_exports'];
+
 const ownersOnly = (): AppError =>
   new AppError({ code: 'FORBIDDEN', message: 'Only an owner exports the workspace.' });
 
-const notFound = (): AppError =>
+export const notFound = (): AppError =>
   new AppError({
     code: 'EXPORT_NOT_FOUND',
     message: 'That export is not there to download: it was downloaded already, or expired.',
   });
 
 /** An export's failure as the contract says it: a code it knows, or the export's own. */
-const failureOf = (error: unknown): ExportFailure => {
+export const failureOf = (error: unknown): ExportFailure => {
   const code = error instanceof AppError ? error.body.code : 'EXPORT_FAILED';
   return Value.Check(ExportFailure, code) ? code : 'EXPORT_FAILED';
 };
@@ -73,7 +81,7 @@ interface Row {
   readonly failure: string | null;
 }
 
-const COLUMNS = [
+export const COLUMNS = [
   'id',
   'status',
   'created_at',
@@ -101,7 +109,7 @@ const statusOf = (word: string): WorkspaceExport['status'] => {
 const iso = (value: Date | string | null): string | null =>
   value === null ? null : new Date(value).toISOString();
 
-const shown = (row: Row): WorkspaceExport => ({
+export const shown = (row: Row): WorkspaceExport => ({
   id: row.id,
   status: statusOf(row.status),
   createdAt: new Date(row.created_at).toISOString(),
@@ -197,13 +205,14 @@ export interface RunDependencies {
 }
 
 /** Marks an export failed, with a code; only while it is still being made. */
-const fail = async (
+export const fail = async (
   dependencies: RunDependencies,
+  table: ExportTable,
   exportId: string,
   failure: ExportFailure,
 ): Promise<void> => {
   await dependencies.database
-    .updateTable('workspace_exports')
+    .updateTable(table)
     .set({ status: 'failed', failure, finished_at: dependencies.clock.now() })
     .where('id', '=', exportId)
     .where('status', '=', 'pending')
@@ -215,10 +224,14 @@ const fail = async (
  * beat that cannot be written is logged and the run goes on — the next beat may land, and a run the
  * sweep does give up on finds its export no longer pending when it ends.
  */
-export const sayAlive = async (dependencies: RunDependencies, exportId: string): Promise<void> => {
+export const sayAlive = async (
+  dependencies: RunDependencies,
+  table: ExportTable,
+  exportId: string,
+): Promise<void> => {
   try {
     await dependencies.database
-      .updateTable('workspace_exports')
+      .updateTable(table)
       .set({ heartbeat_at: dependencies.clock.now() })
       .where('id', '=', exportId)
       .where('status', '=', 'pending')
@@ -226,6 +239,21 @@ export const sayAlive = async (dependencies: RunDependencies, exportId: string):
   } catch (error) {
     dependencies.log.warn('an export could not say it is alive', { exportId, err: error });
   }
+};
+
+/** Says a run is alive every `HEARTBEAT_MS` while it is made; answers what stops it. */
+export const beatWhileMade = (
+  dependencies: RunDependencies,
+  table: ExportTable,
+  exportId: string,
+): (() => void) => {
+  const beat = setInterval(() => {
+    // `sayAlive` never rejects: its own failure is its log line.
+    void sayAlive(dependencies, table, exportId);
+  }, HEARTBEAT_MS);
+  return (): void => {
+    clearInterval(beat);
+  };
 };
 
 /** The asker's membership now, or `null` once they are no member; any other failure is thrown. */
@@ -246,7 +274,7 @@ const membershipOf = async (
  * An archive stored for an export that then failed: it goes. One the store will not let go of is
  * logged — no row names it, so the sweep cannot — for the operator to remove by its key.
  */
-const removeArchive = async (
+export const removeArchive = async (
   dependencies: RunDependencies,
   exportId: string,
   key: string,
@@ -280,7 +308,7 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
     .executeTakeFirst();
   if (row === undefined) {
     log.warn('an export to make is no longer waiting', { exportId });
-    await fail(dependencies, exportId, 'EXPORT_FAILED');
+    await fail(dependencies, 'workspace_exports', exportId, 'EXPORT_FAILED');
     return;
   }
   // The owner as they are now: one demoted, gone, or erased since asking is not exported for.
@@ -299,16 +327,13 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
           .executeTakeFirst();
   if (context?.role !== 'owner' || live === undefined) {
     log.warn('an export’s owner is no longer one', { exportId, workspaceId: row.workspace_id });
-    await fail(dependencies, exportId, 'EXPORT_REQUESTER_GONE');
+    await fail(dependencies, 'workspace_exports', exportId, 'EXPORT_REQUESTER_GONE');
     return;
   }
   const owner = context.userId;
   const channelIds = await visibleChannelIds(database, context);
 
-  const beat = setInterval(() => {
-    // `sayAlive` never rejects: its own failure is its log line.
-    void sayAlive(dependencies, exportId);
-  }, HEARTBEAT_MS);
+  const stopBeating = beatWhileMade(dependencies, 'workspace_exports', exportId);
   const scratch = await mkdtemp(join(tmpdir(), 'purlay-export-'));
   const key = keyOf(row.workspace_id, exportId);
   let stored = false;
@@ -372,9 +397,9 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
   } catch (error) {
     log.error('export failed', { exportId, workspaceId: row.workspace_id, err: error });
     if (stored) await removeArchive(dependencies, exportId, key);
-    await fail(dependencies, exportId, failureOf(error));
+    await fail(dependencies, 'workspace_exports', exportId, failureOf(error));
   } finally {
-    clearInterval(beat);
+    stopBeating();
     await rm(scratch, { recursive: true, force: true });
   }
 };
@@ -383,32 +408,12 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
  * Makes an export asked for; never throws — what goes wrong is the row's `failure` and the log's line,
  * and a failure even to record that is the sweep's to find.
  */
-const runExport = async (dependencies: RunDependencies, exportId: string): Promise<void> => {
+export const runExport = async (dependencies: RunDependencies, exportId: string): Promise<void> => {
   try {
     await makeExport(dependencies, exportId);
   } catch (error) {
     dependencies.log.error('export could not be made or recorded', { exportId, err: error });
   }
-};
-
-/**
- * The process's exports, one at a time, in the order asked: each holds a snapshot transaction and a
- * scratch directory while it runs, and the chat comes first. `settled` is what shutdown may wait on.
- */
-export const exportQueue = (
-  dependencies: RunDependencies,
-): { readonly start: (exportId: string) => void; readonly settled: () => Promise<void> } => {
-  let tail: Promise<void> = Promise.resolve();
-  return {
-    start: (exportId): void => {
-      tail = tail.then(async () => {
-        await runExport(dependencies, exportId);
-      });
-    },
-    settled: async (): Promise<void> => {
-      await tail;
-    },
-  };
 };
 
 /**
@@ -440,20 +445,26 @@ export const claimDownload = async (
   return { key: claimed.storage_key, size: Number(claimed.size_bytes) };
 };
 
-/** The archive is gone from the store: the row lets go of its key. */
+/**
+ * The archive is gone from the store: the row lets go of its key — a workspace's export's or a
+ * person's, whichever names it (keys never repeat: each is under its own prefix and export id).
+ */
 export const forgetArchive = async (database: Executor, key: string): Promise<void> => {
-  await database
-    .updateTable('workspace_exports')
-    .set({ storage_key: null })
-    .where('storage_key', '=', key)
-    .where('status', '<>', 'ready')
-    .execute();
+  for (const table of EXPORT_TABLES) {
+    await database
+      .updateTable(table)
+      .set({ storage_key: null })
+      .where('storage_key', '=', key)
+      .where('status', '<>', 'ready')
+      .execute();
+  }
 };
 
 /**
- * `sweep:exports`: ready archives past their expiry claimed as expired — first, so a download cannot
- * claim one being taken — then every archive a row no longer needs (expired, downloaded, failed) taken
- * out of the store, one refusal not stopping the rest; and exports silent too long marked cut off.
+ * `sweep:exports`, for workspaces' exports and people's alike (D-241): ready archives past their expiry
+ * claimed as expired — first, so a download cannot claim one being taken — then every archive a row no
+ * longer needs (expired, downloaded, failed) taken out of the store, one refusal not stopping the rest;
+ * and exports silent too long marked cut off.
  */
 export const sweepExports = async (dependencies: {
   readonly database: Executor;
@@ -463,42 +474,47 @@ export const sweepExports = async (dependencies: {
 }): Promise<{ expired: number; removed: number; leftBehind: number; abandoned: number }> => {
   const { database, clock, storage, log } = dependencies;
   const now = clock.now();
-  const expired = await database
-    .updateTable('workspace_exports')
-    .set({ status: 'expired' })
-    .where('status', '=', 'ready')
-    .where('expires_at', '<=', now)
-    .returning('id')
-    .execute();
-  const spent = await database
-    .selectFrom('workspace_exports')
-    .select('storage_key')
-    .where('status', '<>', 'ready')
-    .where('status', '<>', 'pending')
-    .where('storage_key', 'is not', null)
-    .execute();
-  let removed = 0;
-  let leftBehind = 0;
-  for (const { storage_key: key } of spent) {
-    if (key === null) continue;
-    try {
-      await storage.delete(key);
-      await forgetArchive(database, key);
-      removed += 1;
-    } catch (error) {
-      leftBehind += 1;
-      log.error('an export’s archive could not be removed from storage', { err: error });
+  const counts = { expired: 0, removed: 0, leftBehind: 0, abandoned: 0 };
+  for (const table of EXPORT_TABLES) {
+    const expired = await database
+      .updateTable(table)
+      .set({ status: 'expired' })
+      .where('status', '=', 'ready')
+      .where('expires_at', '<=', now)
+      .returning('id')
+      .execute();
+    counts.expired += expired.length;
+    const spent = await database
+      .selectFrom(table)
+      .select('storage_key')
+      .where('status', '<>', 'ready')
+      .where('status', '<>', 'pending')
+      .where('storage_key', 'is not', null)
+      .execute();
+    for (const { storage_key: key } of spent) {
+      if (key === null) continue;
+      try {
+        await storage.delete(key);
+        await forgetArchive(database, key);
+        counts.removed += 1;
+      } catch (error) {
+        counts.leftBehind += 1;
+        log.error('an export’s archive could not be removed from storage', { err: error });
+      }
     }
+    const abandoned = await database
+      .updateTable(table)
+      .set({ status: 'failed', failure: 'EXPORT_ABANDONED', finished_at: now })
+      .where('status', '=', 'pending')
+      .where('heartbeat_at', '<', new Date(now.getTime() - EXPORT_SILENT_MS))
+      .returning('id')
+      .execute();
+    counts.abandoned += abandoned.length;
   }
-  const abandoned = await database
-    .updateTable('workspace_exports')
-    .set({ status: 'failed', failure: 'EXPORT_ABANDONED', finished_at: now })
-    .where('status', '=', 'pending')
-    .where('heartbeat_at', '<', new Date(now.getTime() - EXPORT_SILENT_MS))
-    .returning('id')
-    .execute();
-  if (leftBehind > 0) {
-    throw new Error(`${String(leftBehind)} export archive(s) could not be removed from storage`);
+  if (counts.leftBehind > 0) {
+    throw new Error(
+      `${String(counts.leftBehind)} export archive(s) could not be removed from storage`,
+    );
   }
-  return { expired: expired.length, removed, leftBehind, abandoned: abandoned.length };
+  return counts;
 };

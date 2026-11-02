@@ -50,6 +50,9 @@ interface ChannelRow {
   readonly key_people: readonly KeyPerson[];
   /** Its live members (D-167); null when nobody is in it, which the grouped join cannot say. */
   readonly member_count: string | number | null;
+  /** Its one GitHub feed's repository (D-223); null with none or several. */
+  readonly code_repository: string | null;
+  readonly only_admins_post: boolean;
 }
 
 interface KeyPerson {
@@ -126,6 +129,8 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
   peers: peersOf(row, userId),
   memberCount: Number(row.member_count ?? 0),
   incident: incidentOf(row),
+  codeRepository: row.code_repository,
+  onlyAdminsPost: row.only_admins_post,
 });
 
 /**
@@ -185,6 +190,7 @@ const readChannels = async (
       'channels.topic as topic',
       'channels.type as type',
       'channels.last_message_at as last_message_at',
+      'channels.only_admins_post as only_admins_post',
       'channel_members.user_id as member_user_id',
       'channel_members.last_read_message_id as last_read_message_id',
       'channel_members.unread_count as unread_count',
@@ -199,6 +205,13 @@ const readChannels = async (
       'users.avatar_url as peer_avatar_url',
       'users.deleted_at as peer_deleted_at',
       'member_counts.member_count as member_count',
+      // The repository its code references link to (D-223): its feed's when it has exactly one —
+      // several would be a guess. A scalar subquery on the feeds' (channel, repository) key, inside
+      // this one statement; a channel hears from a handful of repositories at most.
+      sql<string | null>`(
+        select case when count(*) = 1 then min(feed.repository_full_name) end
+        from github_repo_feeds as feed where feed.channel_id = channels.id
+      )`.as('code_repository'),
       // Its key's people in its order, in this one query: the key is its identity (D-127), and a
       // group of ten is ten primary-key reads, not a query per channel.
       sql<readonly KeyPerson[]>`coalesce((

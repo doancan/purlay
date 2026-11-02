@@ -15,6 +15,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type {
   Channel,
+  SetKnowledgeRequest,
   CreateChannelRequest,
   CreateWorkspaceRequest,
   MeResponse,
@@ -25,14 +26,16 @@ import type {
 } from '@purlay/types';
 import type { Api } from './api';
 import {
+  allChannelsRead,
   channelAdded,
-  channelRenamed,
+  channelUpdated,
   channelStateChanged,
   channelsRevoked,
   patchMessage,
   reactionsUpdated,
   threadUpdated,
   messageRevised,
+  readAgain,
 } from './cache';
 import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
@@ -46,9 +49,17 @@ export interface Actions {
   readonly edit: (message: Message, content: string) => Promise<void>;
   /** A tombstone at once, or gone if nobody answered it; read again if refused (D-103 §7). */
   readonly remove: (message: Message) => Promise<void>;
+  readonly setKnowledge: (message: Message, input: SetKnowledgeRequest) => Promise<void>;
   readonly resolve: (message: Message) => Promise<void>;
   readonly reopen: (message: Message) => Promise<void>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
+  /** "Mark unread from here" (D-212); the badge and the sidebar follow the server's answer. */
+  readonly markUnread: (channelId: string, fromMessageId: string) => Promise<void>;
+  /**
+   * Every channel of the workspace read (D-238): the badges cleared at once, then each channel as the
+   * server answers it — a reply still waiting in a thread comes back (D-147); put back if refused.
+   */
+  readonly markAllRead: (workspaceId: string) => Promise<void>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   /** A new name or topic; the list shows what the server kept (D-123). */
@@ -142,6 +153,43 @@ export const createActions = (
         throw error;
       }
     },
+    setKnowledge: async (message, input): Promise<void> => {
+      const previous = message.thread;
+      if (previous !== null)
+        threadUpdated(client, message.id, {
+          ...previous,
+          knowledge: {
+            version: input.version,
+            isQuestion: input.isQuestion,
+            assigneeId: input.assigneeId,
+            acceptedAnswer:
+              input.acceptedAnswerId === previous.knowledge?.acceptedAnswer?.id
+                ? previous.knowledge.acceptedAnswer
+                : null,
+            decisionNote: input.decisionNote,
+            decisionUrl: input.decisionUrl,
+          },
+        });
+      try {
+        const saved = await api.setKnowledge(message.id, input);
+        patchMessage(client, message.id, (current) =>
+          (current.thread?.knowledge?.version ?? 0) > (saved.thread?.knowledge?.version ?? 0)
+            ? current
+            : { ...current, thread: saved.thread },
+        );
+      } catch (error) {
+        patchMessage(client, message.id, (current) =>
+          (current.thread?.knowledge?.version ?? 0) > input.version
+            ? current
+            : { ...current, thread: previous },
+        );
+        void client.invalidateQueries({ queryKey: keys.messages(message.channelId) });
+        throw error;
+      } finally {
+        readAgain(client, ['unresolved']);
+        readAgain(client, ['search']);
+      }
+    },
     resolve: async (message): Promise<void> => {
       settled(await api.resolve(message.id));
     },
@@ -150,6 +198,21 @@ export const createActions = (
     },
     markRead: async (channelId, lastReadMessageId): Promise<void> => {
       channelStateChanged(client, channelId, await api.markRead(channelId, lastReadMessageId));
+    },
+    markUnread: async (channelId, fromMessageId): Promise<void> => {
+      channelStateChanged(client, channelId, await api.markUnread(channelId, fromMessageId));
+    },
+    markAllRead: async (workspaceId): Promise<void> => {
+      const putBack = allChannelsRead(client, workspaceId);
+      try {
+        const { data } = await api.markAllRead(workspaceId);
+        for (const { channelId, state } of data) channelStateChanged(client, channelId, state);
+      } catch (error) {
+        putBack();
+        throw error;
+      }
+      // The notifications of what the feed was read past are read too: the inbox says so.
+      readAgain(client, keys.notifications(workspaceId));
     },
     createChannel: async (workspaceId, input): Promise<Channel> => {
       const channel = await api.createChannel(workspaceId, input);
@@ -163,7 +226,11 @@ export const createActions = (
     },
     updateChannel: async (channelId, input): Promise<Channel> => {
       const channel = await api.updateChannel(channelId, input);
-      channelRenamed(client, channelId, { name: channel.name ?? '', topic: channel.topic });
+      channelUpdated(client, channelId, {
+        name: channel.name ?? '',
+        topic: channel.topic,
+        onlyAdminsPost: channel.onlyAdminsPost,
+      });
       // The answer carries no version: a rename that committed after this one may have been
       // painted by its frame first, and this would hide it. The list read again settles on the
       // server's (D-123 §6).

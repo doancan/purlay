@@ -29,6 +29,11 @@ import {
   requestInit,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
+import { aGitHubStub } from '../../testing/github-stub';
+import { keepAuthorization } from '../../modules/integrations/github-app';
+import { credentialCipher } from '../../platform/crypto';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -42,6 +47,33 @@ afterAll(async () => {
 
 const clock = fixedClock(NOW);
 
+/** GitHub, as the App meets it: one organisation, one repository, and the person who authorized (D-246). */
+const GITHUB_APP = aGitHubAppStub({ id: 501, login: 'owner-dev' }, { now: () => NOW.getTime() });
+GITHUB_APP.install(31, 'acme', [{ id: 77, fullName: 'acme/api', private: true }]);
+// An issue there already, for a thread to be pointed at (D-246 §3).
+GITHUB_APP.items.push({
+  id: 9001,
+  number: 1,
+  kind: 'issue',
+  repositoryId: 77,
+  title: 'An issue',
+  body: '',
+  state: 'open',
+  merged: false,
+  creator: 'octocat',
+  createdAt: '2026-10-14T11:00:00.000Z',
+  updatedAt: '2026-10-14T11:30:00.000Z',
+});
+
+const GITHUB = aGitHubStub(
+  { id: 501, login: 'owner-dev', name: null, email: 'o@example.test' },
+  {},
+  undefined,
+  {
+    app: GITHUB_APP,
+  },
+);
+
 /** One store for the file, so what an owner uploads is there when they read it back. */
 const STORE = aMemoryStore();
 
@@ -52,9 +84,15 @@ const call = async (
   cookie: string,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock, storage: STORE })).handle(
-    new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)),
-  );
+  await createApp(
+    testDependencies({
+      database: db,
+      clock,
+      storage: STORE,
+      githubApp: () => GITHUB_APP_STUB,
+      githubAppFetch: GITHUB.appFetch,
+    }),
+  ).handle(new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)));
 
 const signedIn = async (db: Executor, name: string): Promise<string> =>
   (await aSignedInUser(db, clock, name)).cookie;
@@ -153,6 +191,21 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       })
     ).status,
   ).toBe(200);
+  // A bookmark to remove (D-218).
+  const bookmark = await call(db, 'POST', `/api/channels/${channelId}/bookmarks`, cookie, {
+    url: 'https://example.test/runbook',
+    title: 'Runbook',
+  });
+  expect(bookmark.status).toBe(201);
+  const { id: bookmarkId } = (await bookmark.json()) as { id: string };
+  // An incoming webhook to revoke (D-245).
+  const hook = await call(db, 'POST', `/api/channels/${channelId}/incoming-webhooks`, cookie, {
+    name: 'CI',
+  });
+  expect(hook.status).toBe(201);
+  const {
+    webhook: { id: webhookId },
+  } = (await hook.json()) as { webhook: { id: string } };
   // A ready export, its archive in the store: the one download its owner may make.
   const exportId = messageId(new Date(NOW.getTime() + 7));
   const { user_id: ownerId } = await db
@@ -161,6 +214,26 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     .where('workspace_id', '=', workspaceId)
     .where('role', '=', 'owner')
     .executeTakeFirstOrThrow();
+  // The workspace's installation of the App, and its owner's own authorization: what making an issue needs.
+  await db
+    .insertInto('github_app_installations')
+    .values({
+      id: crypto.randomUUID(),
+      workspace_id: workspaceId,
+      installation_id: '31',
+      account_login: 'acme',
+      account_type: 'Organization',
+      connected_by: ownerId,
+      connected_at: NOW,
+    })
+    .execute();
+  await keepAuthorization(
+    db,
+    { clock, cipher: credentialCipher(DEVELOPMENT_ENCRYPTION_KEY) },
+    ownerId,
+    { id: 501, login: 'owner-dev' },
+    GITHUB_APP.grantUser(),
+  );
   const archive = `${workspacePrefix(workspaceId)}exports/${exportId}.tar`;
   await STORE.put(archive, new Uint8Array(1024), 'application/x-tar');
   await db
@@ -187,6 +260,8 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     feedId: connected.id,
     versionId: version.id,
     incidentId,
+    bookmarkId,
+    webhookId,
     exportId,
   };
 };
@@ -202,6 +277,8 @@ const NEVER_EXISTED: Ids = {
   feedId: '00000000-0000-4000-8000-000000000000',
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
+  bookmarkId: '00000000-0000-4000-8000-000000000000',
+  webhookId: '00000000-0000-4000-8000-000000000000',
   exportId: '00000000-0000-4000-8000-000000000000',
 };
 
@@ -216,6 +293,8 @@ const NOT_A_UUID: Ids = {
   feedId: 'not-a-uuid',
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',
+  bookmarkId: 'not-a-uuid',
+  webhookId: 'not-a-uuid',
   exportId: 'not-a-uuid',
 };
 
@@ -235,6 +314,10 @@ describe('integration: cross-tenant isolation', () => {
           const stranger = await signedIn(db, 'xt-stranger');
           const theirs = await aTenant(db, owner, 'xt-theirs');
           await aTenant(db, stranger, 'xt-own');
+          if (crossing.archived === true) {
+            const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
+            expect(archived.status).toBe(204);
+          }
           const body = crossing.body?.(NOW, {
             userId: ownerUser.userId,
             workspaceId: theirs.workspaceId,

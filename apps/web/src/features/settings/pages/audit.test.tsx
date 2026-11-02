@@ -3,7 +3,7 @@
  * in words — and an action this client does not know yet said by its name, never dropped.
  */
 import { describe, expect, test } from 'bun:test';
-import { act, within } from '@testing-library/react';
+import { act, fireEvent, waitFor, within } from '@testing-library/react';
 import type { AuditEntry, AuditPage, UserRole } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
@@ -13,6 +13,7 @@ import { installDom } from '../../../testing/dom';
 import { ALICE, BOB, IDS, ME, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
+import { dayShown, pickDay } from '../../../testing/date';
 
 installDom();
 
@@ -167,6 +168,58 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('a channel’s window changed is said in the reader’s words, the channel named only to a viewer who can see it (D-225)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'channel.retention_changed',
+              // A channel this viewer cannot see — private and not theirs — stays unnamed.
+              targetId: entryId(99),
+              metadata: { from: '400', to: 'workspace' },
+            }),
+            anEntry(1, {
+              action: 'channel.retention_changed',
+              metadata: { from: 'workspace', to: 'forever' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} changed how long a channel keeps its history from 400 days to the workspace’s window`,
+      `${ME.displayName} changed how long #api keeps its history from the workspace’s window to forever`,
+    ]);
+  });
+
+  test('who posts in a channel is said both ways, the channel named only to a viewer who can see it (D-243)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(3, {
+              action: 'channel.posting_changed',
+              targetId: entryId(99),
+              metadata: { from: 'everyone', to: 'admins' },
+            }),
+            anEntry(2, {
+              action: 'channel.posting_changed',
+              metadata: { from: 'admins', to: 'everyone' },
+            }),
+            anEntry(1, {
+              action: 'channel.posting_changed',
+              metadata: { from: 'everyone', to: 'admins' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} let only owners and admins post in a channel`,
+      `${ME.displayName} let everyone post in #api again`,
+      `${ME.displayName} let only owners and admins post in #api`,
+    ]);
+  });
+
   test('an account erased is said without naming the person who is gone (D-139 §5)', async () => {
     const view = await openPage({
       audit: () =>
@@ -219,6 +272,29 @@ describe('the audit log', () => {
       `${ME.displayName} exported the workspace, with 40 messages`,
       'The server’s operator exported the workspace, with 41 messages',
     ]);
+  });
+
+  test('a deletion asked for says when the content goes, and one taken back says so (D-242)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, { action: 'workspace.deletion_cancelled', targetType: 'workspace' }),
+            anEntry(1, {
+              action: 'workspace.deletion_requested',
+              targetType: 'workspace',
+              metadata: { purgeAt: '2026-11-08T09:00:00.000Z' },
+            }),
+            anEntry(0, { action: 'workspace.deletion_requested', targetType: 'workspace' }),
+          ]),
+        ),
+    });
+    const said = lines(view);
+    expect(said[0]).toBe(`${ME.displayName} took back the workspace’s deletion`);
+    expect(said[1]).toMatch(
+      new RegExp(`^${ME.displayName} asked for the workspace to be deleted after .*2026`),
+    );
+    expect(said[2]).toBe(`${ME.displayName} asked for the workspace to be deleted after `);
   });
 
   test('says each action in words, with the people and the channel named', async () => {
@@ -294,6 +370,109 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual([
       `${ME.displayName} disconnected acme/api from a channel`,
       `${ME.displayName} connected acme/api to a channel`,
+    ]);
+  });
+
+  test('a feed’s secret regenerated is said with the repository, and the channel only to a viewer who can see it (#884)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'integration.feed_secret_regenerated',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', channelId: IDS.api },
+            }),
+            anEntry(1, {
+              action: 'integration.feed_secret_regenerated',
+              targetType: 'integration',
+              metadata: { repository: 'acme/web', channelId: entryId(99) },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} regenerated the secret of the acme/api feed in #api`,
+      `${ME.displayName} regenerated the secret of the acme/web feed`,
+    ]);
+  });
+
+  test('an incoming webhook made and revoked is said with its name, and the channel only to a viewer who can see it (D-245)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(4, {
+              action: 'integration.webhook_revoked',
+              targetType: 'integration',
+              metadata: { name: 'CI', channelId: IDS.api },
+            }),
+            anEntry(3, {
+              action: 'integration.webhook_revoked',
+              targetType: 'integration',
+              metadata: { name: 'Nöbet', channelId: entryId(99) },
+            }),
+            anEntry(2, {
+              action: 'integration.webhook_created',
+              targetType: 'integration',
+              metadata: { name: 'CI', channelId: IDS.api },
+            }),
+            anEntry(1, {
+              action: 'integration.webhook_created',
+              targetType: 'integration',
+              metadata: { name: 'Nöbet', channelId: entryId(99) },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} revoked the incoming webhook “CI” in #api`,
+      `${ME.displayName} revoked the incoming webhook “Nöbet” in a channel`,
+      `${ME.displayName} made the incoming webhook “CI” in #api`,
+      `${ME.displayName} made the incoming webhook “Nöbet” in a channel`,
+    ]);
+  });
+
+  test('the GitHub App connected, let go by an owner or removed by GitHub, and an issue made or linked, are said by identifier alone (D-246)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(5, {
+              action: 'integration.app_connected',
+              targetType: 'integration',
+              metadata: { account: 'acme' },
+            }),
+            anEntry(4, {
+              action: 'integration.app_disconnected',
+              targetType: 'integration',
+              metadata: { account: 'acme' },
+            }),
+            anEntry(3, {
+              action: 'integration.app_disconnected',
+              actor: null,
+              targetType: 'integration',
+              metadata: { account: 'acme' },
+            }),
+            anEntry(2, {
+              action: 'integration.issue_created',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', issue: '12' },
+            }),
+            anEntry(1, {
+              action: 'integration.work_linked',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', number: '14' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} connected the GitHub App installation of acme`,
+      `${ME.displayName} disconnected the GitHub App installation of acme`,
+      'GitHub removed the App installation of acme',
+      `${ME.displayName} created issue acme/api#12 from a thread`,
+      `${ME.displayName} linked acme/api#14 to a thread`,
     ]);
   });
 
@@ -395,7 +574,7 @@ describe('the audit log', () => {
   test('reads older entries by the cursor it was given', async () => {
     const asked: (string | undefined)[] = [];
     const view = await openPage({
-      audit: (_workspace, before) => {
+      audit: (_workspace, _filter, before) => {
         asked.push(before);
         return Promise.resolve(
           before === undefined ? page([anEntry(2, {})], entryId(2)) : page([anEntry(1, {})]),
@@ -414,7 +593,7 @@ describe('the audit log', () => {
   test('an older page that fails says so with the reason, and Load older asks again', async () => {
     let older = 0;
     const view = await openPage({
-      audit: (_workspace, before) => {
+      audit: (_workspace, _filter, before) => {
         if (before === undefined) return Promise.resolve(page([anEntry(2, {})], entryId(2)));
         older += 1;
         return older === 1
@@ -454,5 +633,191 @@ describe('the audit log', () => {
     failed.unmount();
     const reading = await openPage({ audit: () => new Promise(() => undefined) });
     expect(reading.getByRole('main').querySelector('[role="status"]')).not.toBeNull();
+  });
+});
+
+/** The filter as the address carries it and the server is asked it (D-222). */
+describe('the audit log, narrowed and downloaded', () => {
+  const FILTERED = `/w/acme/settings/audit?actor=${ALICE.id}&action=member.removed&from=2026-10-01&to=2026-10-31`;
+
+  const openAt = async (path: string, api: Partial<Api>): Promise<View> => {
+    const view = await render(path, api);
+    await view.findByRole('heading', { level: 1, name: 'Audit log' });
+    await settle();
+    return view;
+  };
+
+  test('reads its filter from the address, asks the server for it in instants, and shows it chosen', async () => {
+    const asked: unknown[] = [];
+    const view = await openAt(FILTERED, {
+      audit: (_workspace, filter) => {
+        asked.push(filter);
+        return Promise.resolve(page([]));
+      },
+    });
+    // The test's zone is UTC: a day starts at its midnight, and the last day is in it whole.
+    expect(asked).toEqual([
+      {
+        actorId: ALICE.id,
+        action: 'member.removed',
+        from: '2026-10-01T00:00:00.000Z',
+        to: '2026-11-01T00:00:00.000Z',
+      },
+    ]);
+    const main = within(view.getByRole('main'));
+    expect(main.getByLabelText<HTMLSelectElement>('Action').value).toBe('member.removed');
+    expect(dayShown(main, 'From')).toContain('October 1, 2026');
+    expect(dayShown(main, 'To')).toContain('October 31, 2026');
+    expect(main.getByRole('button', { name: `Person ${ALICE.displayName}` })).toBeDefined();
+    // Narrowed to nothing is not "nothing has happened".
+    expect(main.getByText('No entry matches these filters.')).toBeDefined();
+    expect(main.queryByText('Nothing administrative has happened yet.')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('main'));
+  });
+
+  test('a filter chosen is a new address, so Back undoes it; Clear filters empties it', async () => {
+    const asked: unknown[] = [];
+    const view = await openAt('/w/acme/settings/audit', {
+      audit: (_workspace, filter) => {
+        asked.push(filter);
+        return Promise.resolve(page([anEntry(1, {})]));
+      },
+    });
+    const main = within(view.getByRole('main'));
+    expect(main.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+    await person().selectOptions(main.getByLabelText('Action'), 'Channel created');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/settings/audit?action=channel.created');
+    expect(asked.at(-1)).toEqual({ action: 'channel.created' });
+    const action = (): string => main.getByLabelText<HTMLSelectElement>('Action').value;
+    await act(async () => {
+      view.world.history.back();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(action()).toBe('');
+    await person().selectOptions(main.getByLabelText('Action'), 'Member left');
+    await settle();
+    expect(asked.at(-1)).toEqual({ action: 'member.left' });
+    await person().click(main.getByRole('button', { name: 'Clear filters' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/settings/audit');
+    expect(action()).toBe('');
+    // The whole trail again, as first read: every filter has its own page of the cache.
+    expect(asked).toEqual([{}, { action: 'channel.created' }, { action: 'member.left' }]);
+  });
+
+  test('a person picked and days typed are the address', async () => {
+    const asked: unknown[] = [];
+    const view = await openAt('/w/acme/settings/audit', {
+      audit: (_workspace, filter) => {
+        asked.push(filter);
+        return Promise.resolve(page([]));
+      },
+    });
+    const main = within(view.getByRole('main'));
+    await person().click(main.getByRole('button', { name: 'Person Anyone' }));
+    await person().click(await view.findByRole('menuitemradio', { name: ALICE.displayName }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/settings/audit?actor=${ALICE.id}`);
+    await pickDay(main, 'From', '2026-10-01');
+    await pickDay(main, 'To', '2026-10-02');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/settings/audit?actor=${ALICE.id}&from=2026-10-01&to=2026-10-02`,
+    );
+    expect(asked.at(-1)).toEqual({
+      actorId: ALICE.id,
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-10-03T00:00:00.000Z',
+    });
+    // The last day's field only lets a day from the first on be picked.
+    fireEvent.click(main.getByRole('button', { name: /^To/ }));
+    const grid = await waitFor(() => within(document.body).getByRole('grid'));
+    expect(within(grid).getByLabelText<HTMLButtonElement>('September 30, 2026').disabled).toBe(
+      true,
+    );
+    expect(within(grid).getByLabelText<HTMLButtonElement>('October 1, 2026').disabled).toBe(false);
+  });
+
+  test('older entries are asked for under the same filter', async () => {
+    const asked: [unknown, string | undefined][] = [];
+    const view = await openAt('/w/acme/settings/audit?action=channel.created', {
+      audit: (_workspace, filter, before) => {
+        asked.push([filter, before]);
+        return Promise.resolve(
+          before === undefined ? page([anEntry(2, {})], entryId(2)) : page([anEntry(1, {})]),
+        );
+      },
+    });
+    await person().click(
+      within(view.getByRole('main')).getByRole('button', { name: 'Load older' }),
+    );
+    await settle();
+    expect(asked).toEqual([
+      [{ action: 'channel.created' }, undefined],
+      [{ action: 'channel.created' }, entryId(2)],
+    ]);
+  });
+
+  test('a window that ends before it starts is said on its field, and nothing is asked or offered', async () => {
+    let asked = 0;
+    const view = await openAt('/w/acme/settings/audit?from=2026-10-31&to=2026-10-01', {
+      audit: () => {
+        asked += 1;
+        return Promise.resolve(page([]));
+      },
+    });
+    const main = within(view.getByRole('main'));
+    expect(asked).toBe(0);
+    expect(main.getByText('This day is before the first one.')).toBeDefined();
+    // Nothing is loading and nothing is said to be empty: there is no list until it is put right.
+    expect(view.getByRole('main').querySelector('[role="status"]')).toBeNull();
+    expect(main.queryByText('No entry matches these filters.')).toBeNull();
+    expect(main.queryByRole('link', { name: /Download the filtered log/ })).toBeNull();
+    const offered = main.getAllByRole('button', { name: /^(CSV|NDJSON)$/ });
+    expect(offered).toHaveLength(2);
+    expect(offered.every((button) => button.hasAttribute('disabled'))).toBe(true);
+  });
+
+  test('downloads under the same filter, as CSV or NDJSON, from links the browser saves', async () => {
+    const view = await openAt(FILTERED, { audit: () => Promise.resolve(page([])) });
+    const main = within(view.getByRole('main'));
+    const csv = main.getByRole('link', { name: 'Download the filtered log as CSV' });
+    const ndjson = main.getByRole('link', { name: 'Download the filtered log as NDJSON' });
+    expect(csv.hasAttribute('download')).toBe(true);
+    const [address = '', query = ''] = (csv.getAttribute('href') ?? '').split('?');
+    expect(address).toBe(`/api/workspaces/${IDS.workspace}/audit/export`);
+    expect(Object.fromEntries(new URLSearchParams(query))).toEqual({
+      actorId: ALICE.id,
+      action: 'member.removed',
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-11-01T00:00:00.000Z',
+      format: 'csv',
+    });
+    expect(ndjson.getAttribute('href')).toContain('format=ndjson');
+  });
+
+  test('a download of the log is on it, said in words', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(page([anEntry(1, { action: 'audit.exported', targetType: 'workspace' })])),
+    });
+    expect(lines(view)).toEqual([`${ME.displayName} downloaded the audit log`]);
+  });
+
+  test('in Turkish, the filters and the download say so', async () => {
+    const view = await renderApp(<Outlet />, {
+      path: '/w/acme/settings/audit?action=member.left',
+      locale: 'tr',
+      api: aSignedInApi({ audit: () => Promise.resolve(page([])) }),
+    });
+    await view.findByRole('heading', { level: 1, name: 'Denetim kaydı' });
+    await settle();
+    const main = within(view.getByRole('main'));
+    expect(main.getByLabelText<HTMLSelectElement>('İşlem').value).toBe('member.left');
+    expect(main.getByRole('option', { name: 'Üye ayrıldı' })).toBeDefined();
+    expect(main.getByText('Bu filtrelere uyan kayıt yok.')).toBeDefined();
+    expect(main.getByRole('link', { name: 'Filtrelenmiş kaydı CSV olarak indir' })).toBeDefined();
   });
 });

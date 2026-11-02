@@ -10,11 +10,8 @@
  * anybody; nothing here backtracks, so no input makes the composer hang (D-33's
  * reasoning about untrusted input holds on the client too).
  */
-import { BROADCAST_NAMES, parseMarkdown, proseNames } from '@purlay/markdown';
+import { BROADCAST_NAMES, endsInOpenCode, parseMarkdown, proseNames } from '@purlay/markdown';
 import { MESSAGE_CONTENT_MAX } from '@purlay/types';
-
-/** A line that opens or closes a fenced block: three or more backticks first on the line. */
-const FENCE_LINE = /^`{3,}/;
 
 /** How many lines a paste may have before it is made a code block (`UX.md` §5). */
 const PASTE_FENCE_AFTER_LINES = 12;
@@ -22,21 +19,8 @@ const PASTE_FENCE_AFTER_LINES = 12;
 /** The counter appears this close to the limit and not before: it is noise until it matters. */
 const COUNTER_FROM_REMAINING = 500;
 
-/**
- * Whether the caret is inside a fence that is open or being opened.
- *
- * Fence lines in the text *up to the caret*, counting the line the caret is on: an odd
- * number means a block is open. That is what makes "type ``` then Enter" open one —
- * the line being finished is itself a fence — and "type the closing ``` then Enter"
- * send it: the count is even again.
- */
-export const insideFence = (textBeforeCaret: string): boolean => {
-  let fences = 0;
-  for (const line of textBeforeCaret.split('\n')) {
-    if (FENCE_LINE.test(line)) fences += 1;
-  }
-  return fences % 2 === 1;
-};
+/** The renderer's own block grammar decides whether Enter continues code or sends. */
+export const insideFence = endsInOpenCode;
 
 /**
  * The broadcast mention the text contains, as typed, or null — read the way the server reads it:
@@ -73,14 +57,42 @@ export const isLongPaste = (pasted: string): boolean =>
  * the paste itself contains at the start of a line, so pasting a Markdown file with its
  * own fences cannot close the block early.
  */
-export const asCodeBlock = (pasted: string): string => {
+export const asCodeBlock = (pasted: string, language: string | null = null): string => {
   let longest = 2;
   for (const line of pasted.split('\n')) {
-    const run = /^`+/.exec(line)?.[0].length ?? 0;
+    const run = /^ {0,3}(`+)/.exec(line)?.[1]?.length ?? 0;
     if (run > longest) longest = run;
   }
   const fence = '`'.repeat(longest + 1);
-  return `${fence}\n${pasted.replace(/\n+$/, '')}\n${fence}`;
+  return `${fence}${language ?? ''}\n${pasted}\n${fence}`;
+};
+
+/**
+ * Markdown made one table cell: a pipe not yet escaped is, and an escape already there (`\|`, `\\`,
+ * `\*`) is kept whole, so a backslash before a pipe never ends the cell early.
+ */
+export const asTableCell = (markdown: string): string =>
+  markdown.replace(/\\[\s\S]|\|/g, (token) => (token === '|' ? '\\|' : token));
+
+/**
+ * A block put in place of the selection on lines of its own: a fence, a table or a list that follows
+ * words on the same line is not one — it becomes part of the paragraph (D-210). The caret lands after it.
+ */
+export const placeBlock = (
+  text: string,
+  selection: Selection,
+  block: string,
+): { readonly text: string; readonly caret: number; readonly start: number } => {
+  const before = text.slice(0, selection.start);
+  const after = text.slice(selection.end);
+  const lead = before === '' || before.endsWith('\n') ? '' : '\n';
+  const trail = after === '' || after.startsWith('\n') ? '' : '\n';
+  const start = before.length + lead.length;
+  return {
+    text: `${before}${lead}${block}${trail}${after}`,
+    caret: start + block.length + trail.length,
+    start,
+  };
 };
 
 /** Rows to show: as many as the lines, within the bounds that keep the composer a line and not a page. */
@@ -107,6 +119,7 @@ export type MarkdownKind =
   | 'numbers'
   | 'quote'
   | 'code'
+  | 'table'
   | 'mention';
 
 /** The text and the caret after a button or a key: one pure answer, shared by both. */
@@ -164,15 +177,15 @@ const ANY_MARKER = /^(?:[-*+] |\d+\. |> )/;
 /**
  * A marker on every line the selection touches — whole lines, whatever part of them is selected — or
  * taken off all of them when each already has it. A line with another kind of marker is changed to this
- * one, never stacked on it; a blank line takes none and is not counted in a numbering.
+ * one. Quotes keep the original markers and quote blank lines too, preserving lists and paragraphs.
  */
 const marked = (
   text: string,
   selection: Selection,
   kind: 'bullets' | 'numbers' | 'quote',
 ): Inserted => {
-  const first = text.lastIndexOf('\n', selection.start - 1) + 1;
-  const stop = text.indexOf('\n', selection.end);
+  const first = selection.start === 0 ? 0 : text.lastIndexOf('\n', selection.start - 1) + 1;
+  const stop = text.indexOf('\n', Math.max(selection.start, selection.end - 1));
   const last = stop === -1 ? text.length : stop;
   const lines = text.slice(first, last).split('\n');
   const named = lines.filter((line) => line !== '');
@@ -189,11 +202,12 @@ const marked = (
   const off = named.length > 0 && named.every((line) => LINE_MARKER[kind].test(line));
   let number = 0;
   const changed = lines.map((line) => {
+    if (kind === 'quote') return off ? line.replace(LINE_MARKER.quote, '') : `> ${line}`;
     if (line === '') return line;
     const bare = line.replace(ANY_MARKER, '');
     if (off) return bare;
     number += 1;
-    return `${kind === 'bullets' ? '- ' : kind === 'numbers' ? `${String(number)}. ` : '> '}${bare}`;
+    return `${kind === 'bullets' ? '- ' : `${String(number)}. `}${bare}`;
   });
   const block = changed.join('\n');
   const result = text.slice(0, first) + block + text.slice(last);
@@ -266,15 +280,37 @@ export const insertMarkdown = (
     const lead = before === '' || before.endsWith('\n') ? '' : '\n';
     // A closing fence with words after it is not one, and would swallow the rest of the message.
     const trail = after === '' || after.startsWith('\n') ? '' : '\n';
-    const open = `${lead}\`\`\`\n`;
+    const block = asCodeBlock(chosen);
+    const openLength = lead.length + block.indexOf('\n') + 1;
     return {
-      text: `${before}${open}${chosen}\n\`\`\`${trail}${after}`,
-      selection: { start: at + open.length, end: at + open.length + chosen.length },
+      text: `${before}${lead}${block}${trail}${after}`,
+      selection: { start: at + openLength, end: at + openLength + chosen.length },
     };
+  }
+  if (kind === 'table') {
+    // A table of two columns and one row to fill in, on lines of its own (D-210); the selection, if
+    // one line, is its first heading, and the first heading is what is selected to type over.
+    const first = chosen === '' || chosen.includes('\n') ? 'Column' : asTableCell(chosen);
+    const placed = placeBlock(text, selection, `| ${first} | Column |\n| --- | --- |\n|  |  |`);
+    const start = placed.start + 2;
+    return { text: placed.text, selection: { start, end: start + first.length } };
   }
   const lead = before === '' || /\s$/.test(before) ? '' : ' ';
   const caret = at + lead.length + 1;
   return { text: `${before}${lead}@${chosen}${after}`, selection: { start: caret, end: caret } };
+};
+
+/** Whether a paste is already one fenced block: it stays as supplied, never fenced again (D-205). */
+export const isCodeBlock = (pasted: string): boolean => {
+  const tree = parseMarkdown(pasted);
+  return tree?.children.length === 1 && tree.children[0]?.type === 'code';
+};
+
+/** Undo only an unchanged, uniquely identifiable insertion; never restore an old draft over later edits. */
+export const undoPaste = (text: string, formatted: string, pasted: string): Inserted | null => {
+  const start = text.indexOf(formatted);
+  if (start < 0 || text.includes(formatted, start + 1)) return null;
+  return insertText(text, { start, end: start + formatted.length }, pasted);
 };
 
 /** A list or a quote's own marker at the start of a line: its indent, its kind, and the text it takes. */

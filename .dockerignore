@@ -32,6 +32,8 @@ apps/web/test-results
 apps/web/playwright-report
 apps/web/playwright.config.ts
 docs
+# Except the release notes: the client carries each release's notes in its bundle (D-248).
+!docs/changelog
 scripts
 docker
 docker-compose*.yml

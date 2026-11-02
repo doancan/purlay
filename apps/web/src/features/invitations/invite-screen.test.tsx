@@ -210,13 +210,26 @@ describe('an invitation, opened by somebody who is not signed in', () => {
       locale,
       api: aSignedInApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-        authMethods: () => Promise.resolve({ ...methods, oidc: null, signUp: 'invite-only' }),
+        authMethods: () =>
+          Promise.resolve({ ...methods, oidc: null, signUp: 'invite-only', password: true }),
         ...api,
       }),
     });
     await settle();
     return view;
   };
+
+  test('an expired passport offers a working way home', async () => {
+    const view = await asSignedOut({
+      openInvitationPassport: () =>
+        Promise.reject(new ApiError(404, 'INVITATION_NOT_FOUND', 'gone')),
+    });
+    await person().click(view.getByRole('link', { name: 'Continue with GitHub' }));
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Go home' }));
+    expect(view.world.history.stack.at(-1)).toBe('/sign-in');
+    view.unmount();
+  });
 
   test('GitHub: the passport is asked for first, and only when it is given does the page leave', async () => {
     const order: string[] = [];
@@ -238,6 +251,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
   });
 
   test.each([
+    [new ApiError(400, 'VALIDATION_FAILED', 'invalid'), 'That is not an email address.'],
     [
       new ApiError(429, 'RATE_LIMITED', 'slow'),
       'This invitation is being opened a lot right now. Try again in a while.',
@@ -264,6 +278,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
           email: false,
           oidc: { name: 'Acme SSO' },
           signUp: 'invite-only',
+          password: true,
         }),
       ...api,
     });
@@ -311,6 +326,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
               email: true,
               oidc: { name: null },
               signUp: 'invite-only',
+              password: true,
             }),
         }),
       );

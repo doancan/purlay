@@ -57,6 +57,13 @@ export const clearedRetryCookie = (): string => `${RETRY_COOKIE}=; ${ATTRIBUTES}
  */
 export const INVITE_COOKIE = '__Host-purlay_invite';
 
+/**
+ * The second step of a password sign-in (D-236): the sign-in library's signed reference to the challenge a
+ * right password opened, for ten minutes, spent by the right code. `__Host-` like the session's, so a sibling
+ * subdomain cannot plant a challenge of its own.
+ */
+export const TWO_FACTOR_COOKIE = '__Host-purlay_two_factor';
+
 export const inviteCookie = (value: string, maxAgeSeconds: number): string =>
   `${INVITE_COOKIE}=${value}; ${ATTRIBUTES}; Max-Age=${String(maxAgeSeconds)}`;
 

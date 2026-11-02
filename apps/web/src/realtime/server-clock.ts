@@ -17,7 +17,7 @@
 import type { Clock } from './clock';
 
 /** What one PING/PONG exchange tells us. */
-export interface ClockSample {
+interface ClockSample {
   /** The local time when the `PING` left. */
   readonly sentAt: Date;
   /** The local time when its `PONG` arrived. */

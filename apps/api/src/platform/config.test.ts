@@ -5,7 +5,7 @@
  * needs it (`CONFIG.md`). These check that it does — and that it fails usefully,
  * naming every problem at once and never quoting a credential back.
  */
-import { createECDH } from 'node:crypto';
+import { createECDH, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { tlsFromEnvironment } from '@purlay/db';
@@ -63,6 +63,16 @@ describe('loading configuration', () => {
     const config = loadConfig(valid);
     expect(config.APP_URL).toBe('http://localhost:5173');
     expect(config.NODE_ENV).toBe('development');
+  });
+
+  test('UPDATE_CHECK is on unless it is turned off, and says which variable when it is garbled (D-248)', () => {
+    expect(loadConfig(valid).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: '' }).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: 'true' }).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: '1' }).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: 'false' }).UPDATE_CHECK).toBe(false);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: '0' }).UPDATE_CHECK).toBe(false);
+    expect(refusal({ ...valid, UPDATE_CHECK: 'sometimes' })).toContain('UPDATE_CHECK');
   });
 
   test('defaults are applied, so an unset optional is not a failure', () => {
@@ -606,6 +616,52 @@ describe('the shared Redis (D-201)', () => {
   });
 });
 
+describe('the metrics token (D-221)', () => {
+  const TOKEN = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+  test('is off when unset or empty, in production too: no page is served without it', () => {
+    expect(loadConfig(valid).METRICS_TOKEN).toBeUndefined();
+    expect(loadConfig({ ...valid, METRICS_TOKEN: '' }).METRICS_TOKEN).toBeUndefined();
+    expect(loadConfig(production).METRICS_TOKEN).toBeUndefined();
+  });
+
+  test('takes a token as `openssl rand` writes one, hex or base64, from 32 characters to 512', () => {
+    const base64 = Buffer.from(TOKEN, 'hex').toString('base64');
+    for (const METRICS_TOKEN of [
+      TOKEN,
+      base64,
+      'a'.repeat(32),
+      'a'.repeat(512),
+      'A1._~+/-'.repeat(4),
+    ]) {
+      expect(loadConfig({ ...valid, METRICS_TOKEN }).METRICS_TOKEN).toBe(METRICS_TOKEN);
+    }
+  });
+
+  test('refuses one short enough to guess, too long, or with what a header cannot carry in a bearer', () => {
+    for (const METRICS_TOKEN of [
+      'a'.repeat(31),
+      'a'.repeat(513),
+      `${'a'.repeat(32)} b`,
+      `${'a'.repeat(32)}"`,
+      'ş'.repeat(32),
+      `=${'a'.repeat(32)}`,
+    ]) {
+      expect({ METRICS_TOKEN, refused: refusal({ ...valid, METRICS_TOKEN }) }).toMatchObject({
+        refused: expect.stringContaining('METRICS_TOKEN') as unknown as string,
+      });
+    }
+  });
+
+  test('is a secret: a refusal names the variable and never quotes the token', () => {
+    const METRICS_TOKEN = `secret-metrics-${'x'.repeat(10)}`;
+    const message = refusal({ ...valid, METRICS_TOKEN });
+    expect(message).toContain('METRICS_TOKEN');
+    expect(message).toContain('(value withheld)');
+    expect(message).not.toContain('secret-metrics');
+  });
+});
+
 describe('GitHub sign-in is a setting, not a requirement (D-179, R38)', () => {
   const without = (environment: Record<string, string>): Record<string, string> =>
     Object.fromEntries(
@@ -877,5 +933,49 @@ describe('single sign-on is a setting, off while unset (D-200)', () => {
 
   test('a label with no provider is refused: it would be dropped at the first start without a word', () => {
     expect(refusal({ ...valid, OIDC_NAME: 'Acme' })).toContain('OIDC_NAME: set with OIDC_ISSUER');
+  });
+});
+
+describe('the GitHub App is a setting, off while unset (D-246)', () => {
+  const key = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  }).privateKey;
+  const app = {
+    GITHUB_APP_ID: '4242',
+    GITHUB_APP_SLUG: 'purlay-issues',
+    GITHUB_APP_CLIENT_ID: 'Iv23.purlay',
+    GITHUB_APP_CLIENT_SECRET: 'app-secret-value',
+    GITHUB_APP_PRIVATE_KEY: key.trim().replaceAll('\n', '\\n'),
+    GITHUB_APP_WEBHOOK_SECRET: 'hook-secret-value',
+  };
+
+  test('a server boots with none of it, in production too', () => {
+    expect(loadConfig(valid).GITHUB_APP_ID).toBeUndefined();
+    expect(() => loadConfig(production)).not.toThrow();
+  });
+
+  test('all six are read, the id as a number and the key with its line breaks written out', () => {
+    const config = loadConfig({ ...valid, ...app });
+    expect([config.GITHUB_APP_ID, config.GITHUB_APP_SLUG]).toEqual([4242, 'purlay-issues']);
+  });
+
+  test.each(Object.keys(app))('without %s alone it is refused, never quoting a secret', (left) => {
+    const partial = Object.fromEntries(Object.entries(app).filter(([name]) => name !== left));
+    const message = refusal({ ...valid, ...partial });
+    expect(message).toContain('set all six, or none');
+    for (const secret of ['app-secret-value', 'hook-secret-value', 'PRIVATE KEY']) {
+      expect(message).not.toContain(secret);
+    }
+  });
+
+  test('a key this server could not sign with is refused, and a slug that is not GitHub’s', () => {
+    expect(refusal({ ...valid, ...app, GITHUB_APP_PRIVATE_KEY: 'not a key' })).toContain(
+      'GITHUB_APP_PRIVATE_KEY: is not a PEM private key',
+    );
+    expect(refusal({ ...valid, ...app, GITHUB_APP_SLUG: 'Not A Slug' })).toContain(
+      'GITHUB_APP_SLUG',
+    );
   });
 });

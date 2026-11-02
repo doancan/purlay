@@ -21,6 +21,7 @@ import { createLogger, type Logger } from '../platform/logging';
 import { deriveAuthSecret, type Auth, type AuthSettings } from '../modules/auth/better-auth';
 import type { MailMessage, Outbox } from '../platform/mail';
 import { aTestAuth } from './signed-in';
+import { aGitHubApiThatOnlyChecksTokens } from './github-stub';
 import { inProcessBackplane } from '../realtime/bus';
 import { NO_LOG } from '../platform/events';
 import type { ObjectStore } from '../platform/storage';
@@ -114,6 +115,8 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   SMTP_ALLOW_PLAINTEXT: false,
   GITHUB_URL: GITHUB_URL_DEFAULT,
   GITHUB_API_URL: GITHUB_API_URL_DEFAULT,
+  // A test never asks GitHub which release is newest; the one about it says what it asks with.
+  UPDATE_CHECK: false,
   ...overrides,
 });
 
@@ -171,6 +174,7 @@ export const testDependencies = ({
   const backplane = overrides.backplane ?? inProcessBackplane();
   return {
     ...defaults(database, config),
+    githubApi: aGitHubApiThatOnlyChecksTokens,
     ...overrides,
     backplane,
     auth:
@@ -243,6 +247,7 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
   storage: aStoreThatMustNotBeTouched(),
   // An export asked for is made by nobody, unless the test is about exports and says so.
   exportRunner: (): void => undefined,
+  personalExportRunner: (): void => undefined,
   attention: nobodyActive,
   // Anybody may make a workspace, so a test makes the ones it needs; who may is the creators' own
   // tests' (D-155), which read the server's setting.

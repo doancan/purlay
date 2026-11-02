@@ -132,7 +132,7 @@ A thread opens in a **panel on the right of the feed**, and its root stays in th
 thread's live status, so a conversation never becomes a footnote nobody sees (D-122, which replaced
 threads expanding inline). A thread has a `Resolved` state, borrowed from GitHub PR review.
 Resolving closes it and keeps it searchable. A workspace-wide "open questions" view lists
-unresolved threads.
+unresolved threads. Explicitly marked questions appear before the first answer; owners, unanswered filters and oldest-first ordering expose waiting questions. A thread can keep a selected answer, decision note and reference, with versioned editing (D-204).
 
 **4.3 · Channels & DMs**
 Public and private channels · DMs, workspace-scoped (D-6) · a DM to yourself, which is also the
@@ -156,7 +156,7 @@ a question you asked is the thing you were waiting for, not an interruption.
 
 **4.6 · Navigation & search** (D-10)
 `Cmd/Ctrl+K` command palette over channels, DMs, people and settings · substring search scoped
-to a workspace, optionally to a channel and to who wrote it (D-166), keyset-paginated
+to a workspace, optionally to a channel and to who wrote it (D-166), keyset-paginated. Status, question, date, code/file and repository filters, selected-answer/decision text matching, and personal saved searches extend this (D-204)
 
 **4.7 · Administration** (D-26)
 An append-only audit log of administrative actions — role changes, membership changes,
@@ -185,7 +185,57 @@ Web Push notifications · unified/split diff viewer for ` ```diff ` blocks · ma
 (D-27) · **operator compliance documentation** — data map, retention and erasure runbooks (D-28) ·
 online presence (ephemeral, D-7, D-120) · group conversations · saved items · pinned messages and a
 channel's files · profiles with a title, a time zone and a status · starred channels · incident
-channels (D-125)
+channels (D-125) · every channel marked read at once (D-238) · a sign-in policy: two-step
+verification required of a password, password sign-in off where GitHub or single sign-on serves (D-239) ·
+opt-in email about direct messages and mentions left unread, at most one an hour (D-240) ·
+a person's export of their own data (D-241) · an owner deletes a workspace, with a week to take it back (D-242) ·
+announcement channels, whose feed only owners and admins post in (D-243) · a session lifetime
+policy: signed out after a time unused, and signed in again after a time at all (D-244) ·
+incoming webhooks: a channel's address that CI and monitoring post markdown to, quietly (D-245) ·
+GitHub issues from conversations, built in the order below — connecting the GitHub App, making an issue from a thread with the write recoverable, and linking and following existing issues and pull requests, are built (D-246) ·
+interface polish: keyboard-only focus rings on buttons, a calendar date field, sliding view marks, a firework for the party popper, softer control edges and styled select lists (D-247)
+
+**Next proposal: GitHub issues from conversations (D-246; built).** Build on the
+existing workspace credential, link previews, signed webhooks and delivery deduplication. The
+delivery order after questions, decisions and saved search is:
+
+1. **Connect a GitHub App.** An owner connects an installation and chooses repositories. Request
+   Issues write for issue creation and Pull requests read only when PR tracking is introduced.
+   A person's write uses an App user access token, limited to repositories both that person and
+   the App can access. Keep shared previews under the existing workspace visibility rule; never
+   use personal tokens to populate shared cards. Record this distinction from D-11 before
+   implementation. Seal refresh credentials, handle revocation and installation removal, and
+   retain existing read-only integrations during rollout.
+2. **Review and create an issue from a thread.** Offer a repository, editable title and body,
+   selected answer, decision note and Purlay source link. Show the exact text and destination
+   before the person presses Create; copying private-channel text is an explicit choice. Check
+   channel membership and GitHub access again at submission. Start with title/body; labels and
+   assignees follow once their additional user permissions have been handled. A successful issue
+   is linked back to the root. Selecting or creating an issue does not resolve the question.
+3. **Keep linked work current.** Link an existing issue or PR too. Route signed issue/PR events
+   into that thread, deduplicate delivery ids and coalesce repeated state updates. Show open,
+   closed and merged state, while keeping question resolution an explicit Purlay action. Respect
+   the existing notification preference and Deep Work behavior.
+4. **Make writes recoverable before enabling them.** Add shared contracts for connection status,
+   allowed repositories, create/link requests and pending/created/unknown/refused outcomes.
+   Persist workspace installations, sealed user authorizations, root-to-GitHub links and a
+   bounded operation record keyed by workspace, actor and client request id. Reusing an id with
+   different content is a conflict. After an ambiguous POST timeout, reconcile a unique operation
+   marker through GitHub reads/webhooks; do not blindly repeat creation. Obey Retry-After and
+   bound retries. Audit actor, repository and issue identifiers without bodies or secrets.
+
+Acceptance covers tenant/private-channel isolation, revoked access, simultaneous clicks, a lost
+create response, duplicate/out-of-order webhooks, rate limits and English/Turkish browser flows.
+Use API doubles and disposable test repositories. Roll out behind an installation capability;
+disabling writes preserves existing issue links and the read-only integration. This proposal
+creates no GitHub application, credentials or issues by itself.
+
+Permission and API behavior were checked on 2026-10-28 against GitHub's
+[App user token documentation](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app),
+[create issue contract](https://docs.github.com/en/rest/issues/issues#create-an-issue),
+[REST API guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api)
+and [webhook guidance](https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks).
+The delivery sequence and reconciliation protocol above are Purlay design proposals.
 
 ### Phase 2.5 — Cloud (v0.4.0)
 
@@ -203,7 +253,7 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 ### Phase 3 — Polish
 
 **native macOS client in Swift, in its own repository** (D-186) · **mobile as an installable
-progressive web application** — one client, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
+progressive web application** — one client, not a second codebase (D-51), installable since D-230 · multi-node scale-out via a Redis-backed event
 bus (D-7, D-25) · **OIDC single sign-on, built** (D-31, D-200)
 
 > **Native Swift exists for macOS only** (D-186, which supersedes D-51 here). Mobile stays an

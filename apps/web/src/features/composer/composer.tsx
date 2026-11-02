@@ -39,9 +39,10 @@ import { lastOwnMessage, useEditing } from '../messages/editing';
 import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
 import { IconButton } from '../../ui/icon-button';
-import { Kbd } from '../../ui/kbd';
+import { Kbd, keyHintsClasses } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
+import { celebrate, hasPartyPopper } from '../../ui/celebrate';
 import {
   broadcastMention,
   continueList,
@@ -50,8 +51,8 @@ import {
   insertMarkdown,
   insertText,
   insideFence,
-  isLongPaste,
-  asCodeBlock,
+  placeBlock,
+  undoPaste,
   rowsFor,
   trimEnd,
   typedWrap,
@@ -68,7 +69,13 @@ import { draftKey, readDraft, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { renderContent } from '../content/render-content';
+import { useCodeRepository } from '../../data/queries';
+import { useWorkspaceIfAny } from '../shell/workspace';
 import { duringComposition, useComposition } from './composition';
+import { convertPaste } from './paste';
+import { composerKey, useComposerInbox } from './quote';
+import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
+import { useSlashRunner } from './slash-run';
 import { EmojiPicker } from './emoji-picker';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -99,9 +106,12 @@ const Inner = ({
   const { t } = useI18n();
   const engine = useEngine();
   const toast = useToast();
+  const { dismiss } = toast;
   const client = useQueryClient();
   const session = useSession();
   const key = draftKey(session.user.id, channelId, parentId);
+  // The preview links code references as the sent message will (D-223).
+  const repository = useCodeRepository(useWorkspaceIfAny()?.workspace.id ?? null, channelId);
   const editing = useEditing();
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
@@ -126,6 +136,13 @@ const Inner = ({
   const composing = useComposition(field);
   const latest = useRef(text);
   latest.current = text;
+  const pasteToast = useRef<number | null>(null);
+  useEffect(
+    () => (): void => {
+      if (pasteToast.current !== null) dismiss(pasteToast.current);
+    },
+    [key, dismiss],
+  );
   // Held above the composer, per place, with a send asked for while they were still uploading: a
   // channel switch or a closed thread loses neither, and the send still goes when they land (D-171).
   const uploads = useUploads(key, () => latest.current);
@@ -143,6 +160,13 @@ const Inner = ({
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);
   const listId = useId();
+  const runSlash = useSlashRunner(channelId);
+  const [commandActive, setCommandActive] = useState(0);
+  // Esc shuts the commands until the `/` is gone. A draft that comes back as one starts shut: the
+  // person did not ask for the list on this visit, and on a phone it would cover the feed.
+  const [commandsDismissed, setCommandsDismissed] = useState(
+    () => slashQuery(text, text.length) !== null,
+  );
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
@@ -231,6 +255,24 @@ const Inner = ({
     if (mentionStart !== null) refreshCandidates();
   }, [mentionStart, refreshCandidates]);
   const current = Math.min(active, suggestions.length - 1);
+  // The commands, while a `/` and letters are all that is written before the caret (D-214).
+  const typedCommand = slashQuery(text, caretAt);
+  const slash = focused ? typedCommand : null;
+  const commands = slash !== null && !commandsDismissed ? commandsFor(slash) : [];
+  const commandsOpen = commands.length > 0;
+  const currentCommand = Math.min(commandActive, commands.length - 1);
+  // Shut until the `/` is gone from the text — not until focus leaves, which the mount also is.
+  useEffect(() => {
+    if (typedCommand === null) setCommandsDismissed(false);
+  }, [typedCommand]);
+  /** A command chosen from the list: written out with a space after it, for its words. */
+  const completeCommand = (name: SlashName): void => {
+    const written = `/${name} `;
+    const next = written + text.slice(caretAt);
+    inserted.current = { start: written.length, end: written.length };
+    setCaretAt(written.length);
+    change(next);
+  };
   const optionId = (index: number): string => `${listId}-option-${String(index)}`;
 
   /** Somebody chosen from the list: their handle replaces what was typed after the `@`. */
@@ -242,8 +284,40 @@ const Inner = ({
     change(next.text);
   };
 
-  const send = (): void => {
-    const content = trimEnd(text);
+  /** A command and its words, run through what it stands for; its answer said where it belongs. */
+  const runCommand = (name: SlashName, args: string): void => {
+    setError(null);
+    void runSlash(name, args).then((outcome) => {
+      if (outcome.kind === 'send') {
+        send(outcome.content);
+        return;
+      }
+      if (outcome.kind === 'refused') {
+        setError(outcome.reason);
+        return;
+      }
+      setText('');
+      writeDraft(ports.storage, key, '');
+      if (outcome.said !== '') toast.show({ message: outcome.said });
+    });
+  };
+
+  /** Sends what is written — or, from a command, the words it wrote (`/me`, `/shrug`). */
+  const send = (written?: string): void => {
+    const typed = written ?? trimEnd(text);
+    // A line that starts with `/` asks for a command (D-214) — unless files go with it, when it is words.
+    const line = written === undefined && uploads.items.length === 0 ? parseSlash(typed) : null;
+    if (line?.kind === 'unknown') {
+      setError(
+        t('slash.unknown', { name: line.name, all: SLASH_COMMANDS.map((c) => `/${c}`).join(' ') }),
+      );
+      return;
+    }
+    if (line?.kind === 'command') {
+      runCommand(line.name, line.args);
+      return;
+    }
+    const content = line?.kind === 'escaped' ? line.text : typed;
     if (content === '' && uploads.items.length === 0) return;
     // A file that did not upload is the person's to retry or remove: nothing goes without it.
     if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large')) {
@@ -279,8 +353,10 @@ const Inner = ({
         item.status === 'ready' ? [item.attachment] : [],
       ),
     });
+    if (hasPartyPopper(content)) celebrate();
     uploads.clear();
     setWaiting(false);
+    if (pasteToast.current !== null) dismiss(pasteToast.current);
     setText('');
     setError(null);
     // Gone from storage now, not a debounce from now: a reload right after sending must
@@ -291,6 +367,9 @@ const Inner = ({
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    // The platform's "paste as plain text": the paste that follows is taken as it is (D-210).
+    plainNext.current =
+      (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'v';
     if (
       event.key === 'ArrowUp' &&
       parentId === undefined &&
@@ -313,6 +392,29 @@ const Inner = ({
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
     // by the flag the composition events keep.
     if (duringComposition(event, composing)) return;
+    if (commandsOpen) {
+      const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setCommandActive((currentCommand + step + commands.length) % commands.length);
+        return;
+      }
+      // Tab completes; Enter completes too, unless the command is already whole and takes no words.
+      const whole = slash !== null && commands[currentCommand] === slash;
+      if ((event.key === 'Tab' || (event.key === 'Enter' && !whole)) && plain) {
+        event.preventDefault();
+        const chosen = commands[currentCommand];
+        if (chosen !== undefined) completeCommand(chosen);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setCommandsDismissed(true);
+        return;
+      }
+    }
     if (open && mention !== null) {
       const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -385,6 +487,23 @@ const Inner = ({
     if (waiting && !uploading) send();
   }, [waiting, uploading]);
 
+  // A quote sent here from a message's menu (D-213): after what is written, on lines of its own,
+  // the caret under it to answer.
+  useComposerInbox(
+    composerKey(channelId, parentId ?? null),
+    (markdown) => {
+      const gap = text === '' || text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
+      const next = `${text}${gap}${markdown}`;
+      caret.current = next.length;
+      change(next);
+    },
+    () => {
+      field.current?.focus();
+    },
+  );
+
+  /** Set by Mod+Shift+V, read by the paste it starts. */
+  const plainNext = useRef(false);
   const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
     // A pasted image or file is uploaded, not written into the box.
     const files = Array.from((event.clipboardData as DataTransfer | undefined)?.files ?? []);
@@ -394,21 +513,47 @@ const Inner = ({
       return;
     }
     // A paste with no clipboard data (some automation, some old engines) is just a paste.
-    const pasted = (event.clipboardData as DataTransfer | undefined)?.getData('text/plain') ?? '';
-    if (!isLongPaste(pasted)) return;
-    event.preventDefault();
+    const data = event.clipboardData as DataTransfer | undefined;
+    const pasted = data?.getData('text/plain') ?? '';
     const target = event.currentTarget;
-    const before = text;
-    const start = target.selectionStart;
-    const block = asCodeBlock(pasted);
-    caret.current = start + block.length;
-    change(text.slice(0, start) + block + text.slice(target.selectionEnd));
-    toast.show({
-      message: t('composer.pasted'),
-      actionLabel: t('common.undo'),
+    const selection = { start: target.selectionStart, end: target.selectionEnd };
+    // Mod+Shift+V asked for the words as they are (D-210), and inside code the words are what is
+    // written: nothing is turned into anything (D-205).
+    const plain = plainNext.current || insideFence(text.slice(0, selection.start));
+    plainNext.current = false;
+    const converted = plain ? null : convertPaste(pasted, data?.getData('text/html') ?? '');
+    if (converted === null) return;
+    event.preventDefault();
+    const placed = converted.block
+      ? placeBlock(text, selection, converted.markdown)
+      : {
+          text: text.slice(0, selection.start) + converted.markdown + text.slice(selection.end),
+          caret: selection.start + converted.markdown.length,
+        };
+    // What was put in, with the line breaks that set it apart: Undo finds it and puts the words back.
+    const block = placed.text.slice(selection.start, placed.caret);
+    caret.current = placed.caret;
+    change(placed.text);
+    if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
+    // A table or formatting is a guess about what was meant: the words as they were are one step away.
+    // Later edits are kept either way; a block that has itself been edited is left as it is (D-205).
+    pasteToast.current = toast.show({
+      message: t(
+        converted.kind === 'code'
+          ? 'composer.pasted'
+          : converted.kind === 'table'
+            ? 'composer.pasted.table'
+            : 'composer.pasted.formatted',
+      ),
+      actionLabel: t(converted.kind === 'code' ? 'common.undo' : 'composer.pasted.asText'),
       onAction: () => {
-        caret.current = start;
-        change(before);
+        const undone = undoPaste(latest.current, block, pasted);
+        if (undone === null) {
+          toast.show({ message: t('composer.pasteChanged') });
+          return;
+        }
+        caret.current = undone.selection.end;
+        change(undone.text);
         field.current?.focus();
       },
     });
@@ -493,11 +638,12 @@ const Inner = ({
     focused && !compact ? (
       // Each hint whole. Not drawn on a narrow window: a phone's keyboard has no Shift+Enter, and drawn
       // there they took a row of their own, so focusing the composer made it taller and moved what was
-      // above it — a pill moved between a press and its release, and the click missed (#654). They are
-      // still the field's description, which a screen reader reads.
+      // above it — a pill moved between a press and its release, and the click missed (#654). Nor where
+      // there is no keyboard to press them on. They are still the field's description, which a screen
+      // reader reads.
       <span
         id={hintsId}
-        className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden"
+        className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden touch-only:hidden"
       >
         {hints}
       </span>
@@ -518,7 +664,9 @@ const Inner = ({
   const sendButton = (
     <button
       type="button"
-      onClick={send}
+      onClick={() => {
+        send();
+      }}
       aria-disabled={empty && uploads.items.length === 0}
       aria-label={t('composer.send')}
       className={cn(
@@ -560,7 +708,9 @@ const Inner = ({
           className={cn(
             'relative flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
             // Drawn inward, over the card's own edge: outside it, the gap reads as a second border.
-            focused && 'outline-focus outline-focus-ring -outline-offset-focus',
+            // Its own edge, not the focus ring's: in the dark themes the ring's bright blue, held
+            // for as long as somebody types, is the brightest thing on the screen (D-207).
+            focused && 'outline-focus outline-composer-edge -outline-offset-focus',
           )}
         >
           {unknown !== null && (
@@ -585,6 +735,52 @@ const Inner = ({
                   {t('common.retry')}
                 </button>
               )}
+            </div>
+          )}
+          {commandsOpen && (
+            <div className="absolute bottom-full left-0 z-popover mb-2 w-full max-w-dialog overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
+              <div
+                id={`${listId}-commands`}
+                role="listbox"
+                aria-label={t('slash.listLabel')}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                className="max-h-palette-list overflow-y-auto p-1"
+              >
+                {commands.map((name, index) => (
+                  <div
+                    key={name}
+                    id={`${listId}-command-${name}`}
+                    role="option"
+                    aria-selected={index === currentCommand}
+                    onClick={() => {
+                      completeCommand(name);
+                    }}
+                    onPointerMove={() => {
+                      if (index !== currentCommand) setCommandActive(index);
+                    }}
+                    className={cn(
+                      'flex cursor-pointer items-baseline gap-3 rounded-md px-3 py-2',
+                      index === currentCommand && 'bg-accent-subtle',
+                    )}
+                  >
+                    <span className="shrink-0 font-mono text-label text-ink">/{name}</span>
+                    <span className="min-w-0 truncate text-label text-ink-muted">
+                      {t(`slash.${name}.about`)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className={keyHintsClasses}>
+                <span className="touch-only:hidden">
+                  <Kbd>Tab</Kbd> {t('slash.hint.complete')}
+                </span>
+                {/* What is typed, not a key: a finger writes it too, so it is shown everywhere. */}
+                <span>
+                  <code className="font-mono text-ink">//</code> {t('slash.hint.literal')}
+                </span>
+              </div>
             </div>
           )}
           {open && (
@@ -626,7 +822,7 @@ const Inner = ({
                   </div>
                 ))}
               </div>
-              <div className="flex gap-4 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted">
+              <div className={cn(keyHintsClasses, 'touch-only:hidden')}>
                 <span>
                   <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('mention.hint.move')}
                 </span>
@@ -693,17 +889,18 @@ const Inner = ({
                 'code-block',
                 chord(labels.mod, labels.alt, labels.shift, 'C'),
               )}
+              {tool(9, 'table', t('composer.table'), 'table')}
             </div>
             <IconButton
               label={t('composer.preview')}
               glyph="preview"
               shortcut={chord(labels.mod, labels.shift, 'P')}
               aria-pressed={previewing}
-              tabIndex={stopAt === 9 ? 0 : -1}
+              tabIndex={stopAt === 10 ? 0 : -1}
               onFocus={() => {
-                setStopAt(9);
+                setStopAt(10);
               }}
-              className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-accent-text"
+              className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-ink"
               onClick={togglePreview}
             />
           </div>
@@ -718,8 +915,14 @@ const Inner = ({
               aria-describedby={hintsId}
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-controls={open ? listId : undefined}
-              aria-activedescendant={open ? optionId(current) : undefined}
+              aria-controls={commandsOpen ? `${listId}-commands` : open ? listId : undefined}
+              aria-activedescendant={
+                commandsOpen
+                  ? `${listId}-command-${commands[currentCommand] ?? ''}`
+                  : open
+                    ? optionId(current)
+                    : undefined
+              }
               placeholder={t('composer.placeholder', { channel: channelName })}
               hidden={previewing}
               className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
@@ -741,7 +944,7 @@ const Inner = ({
                 {empty ? (
                   <p className="text-body text-ink-muted">{t('composer.previewEmpty')}</p>
                 ) : (
-                  renderContent(text)
+                  renderContent(text, { repository })
                 )}
               </div>
             )}
@@ -783,12 +986,12 @@ const Inner = ({
                 }}
               />
               {/* Between the buttons and the hints, and only where the hints are drawn: unfocused, in a
-                  thread, or on a phone it divided the buttons from nothing. */}
+                  thread, on a phone or where there is no keyboard it divided the buttons from nothing. */}
               {focused && !compact && (
                 <span
                   aria-hidden="true"
                   data-hints-divider=""
-                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden"
+                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden touch-only:hidden"
                 />
               )}
             </span>

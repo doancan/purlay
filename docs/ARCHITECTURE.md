@@ -548,6 +548,14 @@ not keep a live session. Ending a session deletes its row, so there is no "revok
 caller cannot learn from it whether a token was ever real or an account ever existed. `last_used_at`
 is refreshed at most once an hour rather than on every request. (D-60)
 
+**The server's lifetime policy** (D-244), off unless the server's administrator sets it: a session unused for
+the idle timeout, or as old as the maximum age since its sign-in, is ended where the session is read — the
+library's own hook, before every one of its endpoints, so our seam (`sessionFromHeaders`, through the library's
+`getSession`) and the library's routes alike find nothing and answer as signed out. Its row is deleted, only while
+it still says so, and its sockets are told. Judged from the row's own `created_at` and `last_used_at`, so a change
+of policy reaches the sessions already open. While a timeout is set `last_used_at` is refreshed every five minutes
+of use, and the socket's `ACTIVE` counts as use.
+
 **Signing in joins nothing.** A person enters a workspace by creating it or by an invitation link
 (D-115); Phase 0's open join (D-37) is retired, and its variable is refused at boot.
 
@@ -559,7 +567,8 @@ token-in-query-string path — query strings land in access logs.
 
 **After the handshake, a connection lives exactly as long as its session.** Signing out and signing
 out everywhere publish `SESSION_ENDED` on each ended session's topic; expiry is a timer set from
-`expires_at` when the socket opens. Either way the frame is delivered first and the connection is
+`expires_at` — or the server's maximum age, if sooner (D-244) — when the socket opens. A session the idle timeout
+ended, or a maximum age set after the socket opened, is found by the liveness sweep within about half a minute. Either way the frame is delivered first and the connection is
 then closed with `CLOSE_CODES.SESSION_ENDED`, so the client knows not to reconnect into a refusal.
 The session is **not** re-read per frame. (D-68)
 
@@ -640,6 +649,7 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 | Take somebody out of a channel they can see — an owner only an owner's (D-172) | ✅ | ✅ | — |
 | Take another member (role `member`) out of a private channel they are in (D-172) | ✅ | ✅ | ✅ |
 | See the workspace's storage and quota (D-173) | ✅ | — | — |
+| Let a channel they can see keep its history longer than the workspace (D-225) | ✅ | — | — |
 | Delete any message | ✅ | ✅ | — |
 | Edit / delete own message | ✅ | ✅ | ✅ |
 | Resolve a thread | ✅ | ✅ | ✅ |
@@ -748,6 +758,10 @@ stored representation. (D-36)
   pure parser (`parse-diff.ts`) into files, hunks and numbered lines, unified or split by the
   reader's choice, unified alone on a narrow window; counted, copied raw and clamped as a code block
   is. No highlighting inside it: the colour is the change.
+- A code reference in prose or inline code — a path with a source extension and an optional line, or a
+  commit's SHA — is linked into the channel's repository (`Channel.codeRepository`, its one GitHub feed's)
+  as it is drawn, by `codeLinksIn` in `@purlay/markdown` (D-223). Nothing is stored or fetched: the
+  address is built from the checked repository and the encoded path, and a fenced block is never linked.
 - A message nobody wrote — a repository's event (D-134 §6) — skips this pipeline: it is not parsed,
   so nothing in a title names anybody, and it is drawn from its `githubEvent`
   (`content/github-event.tsx`) as a sentence in the reader's language, every link built from the
@@ -816,7 +830,8 @@ The rules are D-109's; this is the path through the code.
    reconciled by `reconcile:storage`.
 
 Downloads are always brokered by the API so membership is actually checked; storage keys are
-never public URLs.
+never public URLs. A copy the browser kept is checked too: `private, no-cache` with a tag, so every use
+asks first, and the answer is `304` only after the same guard (D-231 §3).
 
 ---
 
@@ -834,10 +849,21 @@ it, however deep the call, without any signature taking it (D-47, D-71). A reque
 when its response has gone; a failure the client is told nothing about is written with its cause.
 Never logged: session tokens, `access_token_encrypted`, a feed's `secret_encrypted` and a delivery's signature (D-134), the server settings' GitHub client secret and relay address, read or sealed (D-179 §6), message content, email addresses, a device's
 push endpoint and keys (D-126), a profile's status line (D-131), a sign-in link, its token and its
-digest, and a mail's recipient and words — a relay's error is logged by its code alone (D-138 §8) — a list
+digest, two-step verification's key, its link and the backup codes (D-236), and a mail's recipient and words — a relay's error is logged by its code alone (D-138 §8) — a list
 in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
 written. A value interpolated into a message's text cannot be found that way, so a message is a
 constant and variables go in fields.
+Every entry written to either audit trail is also a line, `audit entry recorded`, carrying ids and fixed
+words only — the action, who acted, the workspace, the target, the ids in its metadata, when — never a name
+(D-222); the row stays the record (D-26).
+
+**Metrics** (D-221). `GET /metrics` is Prometheus's text format, off unless `METRICS_TOKEN` is set and a
+`404` like any unknown path to whoever does not hold it. One registry per process (`platform/metrics.ts`),
+made by the composition root and handed in like every other dependency; it is recorded into at the
+boundaries — the HTTP edge, the socket's rate refusals, the push sender, the mail ledger — and a module is
+handed a `Counter`, never the registry. Label values are words the code spells: a route as registered, never
+a path as sent; no id, address, name or content. The jobs run in another container, so their numbers are
+read from `job_runs` per scrape, bounded, and a read that fails leaves the rest of the page.
 
 **Executors are arguments.** Every service and repository takes its `Kysely<Database>` or
 `Transaction<Database>` as a parameter rather than reaching for a module-level handle. This is what
@@ -861,7 +887,7 @@ layering rule. (D-46)
 | Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |
 | Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) | Lint and `scripts/`; the rest is #130 |
 | Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) | With the audit log (#69) |
-| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); what a purged message added is taken back, its files' bytes once under two runs at once, and a reply racing it is `404` (D-139 §2); erasure never removes a message (I-11) | `modules/retention/purge*.integration.test.ts`, `ingress/http/retention-race*`, `modules/users/*erasure.integration.test.ts`, `ingress/http/erasure-race*` |
+| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window — its channel's, the longer of the workspace's and the channel's own (I-10, D-225); what a purged message added is taken back, its files' bytes once under two runs at once, and a reply racing it is `404` (D-139 §2); a channel's setting changed mid-run is the rule from the next batch, and a batch that fails writes nothing; erasure never removes a message (I-11) | `modules/retention/purge*.integration.test.ts`, `ingress/http/retention-race*`, `ingress/http/channel-retention*`, `modules/users/*erasure.integration.test.ts`, `ingress/http/erasure-race*` |
 | Export | An export holds exactly its workspace's rows — not one id of another's — every person they name and nobody else, a former member without their address, no secret, and one consistent snapshot; every table and column of the catalogue is decided on (D-140) | `modules/export/*.integration.test.ts`, `ingress/http/exports.integration.test.ts` (an owner's: once, the channels they can see, no address) |
 | **Accessibility** | **`axe` clean on every component and every screen. A violation is fixed, never waived (D-52)** | Before the first screen (#139) |
 | **Keyboard path** | **Every action reachable by mouse is reached by key, per screen (`UX.md` §7)** | With the screens (#139) |
@@ -922,7 +948,7 @@ the same way, through the same `errorTrackingFor` (#635).
 First installation and runner configuration are in [DEPLOY.md](DEPLOY.md).
 
 **Deploying is a script now** (D-185): on the team's server, a merge to `main` does steps 1 and 2 below by
-itself after the image workflow succeeds, pulls the published image by digest and tries it before the switch,
+itself once the commit's `ci` and image workflows have both succeeded (D-229), pulls the published image by digest and tries it before the switch,
 and checks in the end that the API and the scheduler run the published commit (`scripts/deploy.sh`, started by the `deploy` workflow on the server's runner). When
 that is not so, it goes back by steps 5 and 6. By hand, on any server with the same layout:
 `DEPLOY_ROOT=… IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>` from a checkout of that commit. The deployment directory
@@ -1023,3 +1049,6 @@ the node that accepted it, which is why the per-connection frame limiter stays i
 (D-201), and why a node that loses its Redis sends its sockets back to replay rather than leaving them
 silent. A node reports ready only after it has reached Redis once; a node that has, and loses it, serves
 on, degraded, and says so in its log.
+
+
+**Thread knowledge (D-204).** ThreadSummary optionally includes knowledge; old rows omit it. A message page hydrates root metadata and bounded live-answer previews in one batched join. Metadata writes advance both knowledge_version (editor concurrency) and state_version (event ordering), so the existing changed_at trigger includes them in reconnect replay. THREAD_UPDATED carries the additive summary. Answer revisions update previews in held client lists; deleted roots drop decision metadata. Saved searches are database-backed personal filters; no new event, scheduler or external service is introduced.

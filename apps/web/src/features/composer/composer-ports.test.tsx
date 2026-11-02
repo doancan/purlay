@@ -2,8 +2,9 @@
  * The browser's own storage, and what happens when the browser will not give it.
  */
 import { describe, expect, spyOn, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { installDom } from '../../testing/dom';
-import { browserPorts, isTouchOnly } from './composer-ports';
+import { browserPorts, isTouchOnly, TOUCH_ONLY_QUERY } from './composer-ports';
 
 installDom();
 
@@ -66,5 +67,10 @@ describe('a device that is only touch', () => {
     } finally {
       if (descriptor !== undefined) Object.defineProperty(window, 'matchMedia', descriptor);
     }
+  });
+
+  test('is the line the stylesheet hides a key at: one query, so a hint never names a key Enter is not', () => {
+    const stylesheet = readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+    expect(stylesheet).toContain(`@custom-variant touch-only (@media ${TOUCH_ONLY_QUERY});`);
   });
 });

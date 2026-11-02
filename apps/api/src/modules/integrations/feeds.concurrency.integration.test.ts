@@ -12,6 +12,8 @@ import {
   closeIntegrationDatabase,
   sql,
   type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { GITHUB_FEEDS_PER_CHANNEL_MAX } from '@purlay/types';
 import type { ChannelContext } from '../../platform/channels';
@@ -27,11 +29,11 @@ const cipher = credentialCipher(Buffer.alloc(32, 5).toString('base64'));
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 /** Whether a statement here is waiting on a lock, asked of the database until one is. */
 const waitingOnALock = async (): Promise<boolean> => {

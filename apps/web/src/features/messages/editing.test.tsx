@@ -9,7 +9,16 @@ import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { BOB, ME, aMessage, aSession } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  ME,
+  aChannel,
+  aMessage,
+  aSession,
+  someChannels,
+} from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { expectFocusOn } from '../../testing/focus';
 
@@ -47,13 +56,56 @@ const items = (view: ChannelView): string[] =>
   view.getAllByRole('menuitem').map((item) => item.textContent.replace(/E$/, ''));
 
 describe('the menu (D-150)', () => {
-  test("is on every message: Copy link, Copy text, Save and Pin on anybody's, Edit and Delete on one's own", async () => {
+  test('marking and unmarking a question paints its state; a failed change is explained', async () => {
+    const marked: boolean[] = [];
+    const view = await mountChannel({
+      messages: page([mine]),
+      api: {
+        ...asMember,
+        setKnowledge: (_id, input) => {
+          marked.push(input.isQuestion);
+          if (marked.length === 3)
+            return Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'Offline'));
+          return Promise.resolve({
+            ...mine,
+            thread: {
+              replyCount: 0,
+              lastReplyAt: null,
+              resolvedAt: null,
+              resolvedBy: null,
+              knowledge: { ...input, version: input.version + 1, acceptedAnswer: null },
+            },
+          });
+        },
+      },
+    });
+    open(view);
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: 'Mark as a question' }));
+    await settle();
+    expect(view.getByText('Unanswered')).toBeDefined();
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: 'Remove question mark' }));
+    await settle();
+    expect(marked).toEqual([true, false]);
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: 'Mark as a question' }));
+    await settle();
+    expect(view.getByText(/Something went wrong on our side/)).toBeDefined();
+    view.unmountAll();
+  });
+
+  test("is on every message: Copy link, Copy text, Quote reply, Mark unread, Save and Pin on anybody's, Edit and Delete on one's own", async () => {
     const view = await mountChannel({ messages: page([mine, theirs]), api: asMember });
     open(view);
     await openMenu(view, mine);
     expect(items(view)).toEqual([
       'Copy link',
       'Copy text',
+      'Mark as a question',
+      'Forward…',
+      'Quote reply',
+      'Mark unread from here',
       'Save for later',
       'Pin',
       'Edit',
@@ -62,7 +114,16 @@ describe('the menu (D-150)', () => {
     await expectNoAxeViolations(view.getByRole('menu'));
     await person().keyboard('{Escape}');
     await openMenu(view, theirs);
-    expect(items(view)).toEqual(['Copy link', 'Copy text', 'Save for later', 'Pin']);
+    expect(items(view)).toEqual([
+      'Copy link',
+      'Copy text',
+      'Mark as a question',
+      'Forward…',
+      'Quote reply',
+      'Mark unread from here',
+      'Save for later',
+      'Pin',
+    ]);
     view.unmountAll();
   });
 
@@ -317,6 +378,23 @@ describe('editing', () => {
       }
     });
 
+    test('on a phone the keys are not offered: no key to press them on, and what the edit keeps still said', async () => {
+      const spy = spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
+        matches: query === '(pointer: coarse) and (hover: none)',
+        addEventListener: (): void => undefined,
+        removeEventListener: (): void => undefined,
+      })) as unknown as typeof window.matchMedia);
+      try {
+        const { view } = await startEditing(mine, []);
+        expect(view.queryByText(/Shift\+Enter for a new line/)).toBeNull();
+        expect(view.queryByText(/to save/)).toBeNull();
+        expect(view.getByText(/stays in its history/)).toBeDefined();
+        view.unmountAll();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     test('the hint names the key that saves: Enter, and Ctrl+Enter inside a fence', async () => {
       const asked: string[] = [];
       const { box, view } = await startEditing(code, asked);
@@ -449,6 +527,106 @@ describe('deleting', () => {
     await person().click(within(rowOf(view, mine)).getByRole('button', { name: 'Daha fazla' }));
     await person().click(view.getByRole('menuitem', { name: /Sil/ }));
     expect(view.getByRole('dialog', { name: 'Bu mesaj silinsin mi?' })).toBeDefined();
+    view.unmountAll();
+  });
+});
+
+describe('forwarding (D-217)', () => {
+  test('sends the link on to the channel chosen, after the note, and says so', async () => {
+    const view = await mountChannel({ messages: page([theirs]), api: asMember });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const dialog = within(view.getByRole('dialog', { name: 'Forward message' }));
+    const send = dialog.getByRole('button', { name: 'Forward' });
+    expect(send.hasAttribute('disabled')).toBe(true);
+    await person().type(
+      dialog.getByRole('searchbox', { name: 'Find a channel or a person' }),
+      'dep',
+    );
+    await person().click(dialog.getByRole('radio', { name: /deploys/ }));
+    await person().type(dialog.getByRole('textbox', { name: 'Add a note (optional)' }), 'FYI');
+    await person().click(send);
+    const frames = view.world.sockets
+      .sent('MESSAGE_SEND')
+      .map((frame) => frame.payload as { channelId: string; content: string });
+    expect(frames.at(-1)?.channelId).toBe(IDS.deploys);
+    expect(frames.at(-1)?.content).toBe(
+      `FYI\n\n${window.location.origin}/w/acme/c/${IDS.api}?message=${theirs.id}`,
+    );
+    expect(view.getByText('Forwarded')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('Open, on what says it was forwarded, goes to the channel it was sent to', async () => {
+    const view = await mountChannel({ messages: page([theirs]), api: asMember });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const dialog = within(view.getByRole('dialog', { name: 'Forward message' }));
+    await person().click(dialog.getByRole('radio', { name: /deploys/ }));
+    await person().click(dialog.getByRole('button', { name: 'Forward' }));
+    await person().click(view.getByRole('button', { name: 'Open' }));
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
+    view.unmountAll();
+  });
+
+  test('a conversation is found by its person’s name, and the forward goes there', async () => {
+    const view = await mountChannel({
+      messages: page([theirs]),
+      channels: [
+        ...someChannels(),
+        aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE }),
+      ],
+      api: asMember,
+    });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const dialog = within(view.getByRole('dialog', { name: 'Forward message' }));
+    await person().type(
+      dialog.getByRole('searchbox', { name: 'Find a channel or a person' }),
+      'ali',
+    );
+    expect(dialog.getAllByRole('radio').map((radio) => radio.textContent)).toEqual([
+      ALICE.displayName,
+    ]);
+    await person().click(dialog.getByRole('radio', { name: ALICE.displayName }));
+    await person().click(dialog.getByRole('button', { name: 'Forward' }));
+    const frames = view.world.sockets
+      .sent('MESSAGE_SEND')
+      .map((frame) => frame.payload as { channelId: string });
+    expect(frames.at(-1)?.channelId).toBe(IDS.dm);
+    view.unmountAll();
+  });
+
+  test('closed unsent, it sends nothing and opens again with nothing chosen or written', async () => {
+    const view = await mountChannel({ messages: page([theirs]), api: asMember });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const first = within(view.getByRole('dialog', { name: 'Forward message' }));
+    await person().type(
+      first.getByRole('searchbox', { name: 'Find a channel or a person' }),
+      'dep',
+    );
+    await person().click(first.getByRole('radio', { name: /deploys/ }));
+    await person().type(first.getByRole('textbox', { name: 'Add a note (optional)' }), 'FYI');
+    await person().keyboard('{Escape}');
+    expect(view.queryByRole('dialog', { name: 'Forward message' })).toBeNull();
+    expect(view.world.sockets.sent('MESSAGE_SEND')).toEqual([]);
+
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: 'Forward…' }));
+    const again = within(view.getByRole('dialog', { name: 'Forward message' }));
+    expect(
+      again.getByRole<HTMLInputElement>('searchbox', { name: 'Find a channel or a person' }).value,
+    ).toBe('');
+    expect(
+      again.getByRole<HTMLInputElement>('textbox', { name: 'Add a note (optional)' }).value,
+    ).toBe('');
+    expect(again.queryByRole('radio', { checked: true })).toBeNull();
+    expect(again.getByRole('button', { name: 'Forward' }).hasAttribute('disabled')).toBe(true);
     view.unmountAll();
   });
 });

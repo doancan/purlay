@@ -114,6 +114,26 @@ CREATE TABLE users (
     -- installed. FALSE for everyone until the person who sets the server up is made one. (D-179, 0047)
     is_server_admin BOOLEAN NOT NULL DEFAULT FALSE,
 
+    -- Suspended by the server's administrator (D-233): the account starts and resolves no session, and keeps
+    -- its history and its name. NULL is an account in use. (0065)
+    suspended_at TIMESTAMPTZ,
+
+    -- Quiet hours (D-234): minutes after midnight on the profile's clock (`time_zone`), and the days a window
+    -- starts on, a bit each from Sunday (1) to Saturday (64). All NULL, or all set with two different ends
+    -- (`users_quiet_hours_whole`). `from` later than `to` runs past midnight. (0066)
+    quiet_from SMALLINT,
+    quiet_to   SMALLINT,
+    quiet_days SMALLINT,
+
+    -- Whether a password sign-in asks for a code from an authenticator app too (D-236): set by the sign-in
+    -- library once a first code was right, cleared when it is turned off, by the server's reset and by erasure.
+    -- Its key is in `two_factors`. (0067)
+    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- When the person asked to be emailed about the mentions and direct messages they leave unread (D-240);
+    -- NULL is off, as every account starts. Only what they were told since is ever mailed. (0069)
+    missed_mail_since TIMESTAMPTZ,
+
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
     email         TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -141,6 +161,15 @@ CREATE TABLE users (
     -- Soft delete, so authorship on historical messages survives. (D-22)
     deleted_at    TIMESTAMPTZ,
 
+    CONSTRAINT users_quiet_hours_whole CHECK (
+        (quiet_from IS NULL AND quiet_to IS NULL AND quiet_days IS NULL)
+        OR (
+            quiet_from BETWEEN 0 AND 1439
+            AND quiet_to BETWEEN 0 AND 1439
+            AND quiet_from <> quiet_to
+            AND quiet_days BETWEEN 1 AND 127
+        )
+    ),
     CONSTRAINT users_profile_not_blank CHECK (
         (title IS NULL OR btrim(title) <> '')
         AND (time_zone IS NULL OR btrim(time_zone) <> '')
@@ -200,7 +229,7 @@ CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS N
 
 `device_name` is the name the person's Mac gave itself, written when the native application's code is spent (D-191) and read only back to that person (D-193); it is bounded as the request is (`NATIVE_DEVICE_NAME_PATTERN`).
 
-`last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60)
+`last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60) Where the server signs out an unused session, at most every five minutes instead, and also when the page says the person is using it (the socket's `ACTIVE`), since it is then what the idle timeout is judged by; a session is ended when `last_used_at` plus the timeout, or `created_at` plus the maximum age, has passed, and its row is deleted (D-244).
 
 Expired rows are not kept: `purgeDeadSessions` removes them in bounded batches, called by the scheduler (#71), and with them any row from before D-179 that still carries `revoked_at`. (D-87)
 
@@ -261,12 +290,48 @@ Deleting a user deletes its `accounts`. No row of `verifications` is keyed by a 
 their id; the workspace's is `…:workspace:` and its id), which an erasure deletes. Both are short-lived: a sign-in link's `identifier` is `magic-link:` and its token's digest, and its
 `value` the address as JSON, which is how erasure finds it; a reset's `value` is the user's id. The
 library's `rate_limits` rows are a client address and a path; Purlay's own sign-in-link counters are
-`purlay:sign-in-link:address:` or `…:client:` and a digest, with `last_request` the moment the hour
-closes (D-179 §3), and an erasure deletes its address's. The wrong passwords counted against a client are
+`purlay:sign-in-link:client:<digest>`, `purlay:sign-in-link:address:<digest>` and, per client,
+`purlay:sign-in-link:address:<digest>:client:<digest>` (D-231 §2), with `last_request` the moment the hour
+closes (D-179 §3), and an erasure deletes every one under its address's prefix. The wrong passwords counted against a client are
 `purlay:password:address:<digest>:client:<digest>` and `purlay:password:client:<digest>`, the client being its network (an IPv4 address or an IPv6 /64), their window
 fifteen minutes (D-179 §4); an erasure deletes every one under its address's prefix. A password lives
 only in `accounts.password`, on the row whose `provider_id` is `credential` and whose `account_id` is the
 user's own id, as the library's scrypt (`<salt hex>:<key hex>`) — never the password itself.
+
+### 3.2.2. `two_factors`
+
+Two-step verification for an account with a password (D-236, 0067): the sign-in library's two-factor plugin
+keeps a row here per person who began to turn it on, under Purlay's names (`createAuth`).
+
+- **Sealed, never as shown.** `secret` is the authenticator app's key and `backup_codes` the unused backup
+  codes as JSON, each encrypted by the library under the server's derived secret (`deriveAuthSecret`). A copy of
+  the table signs nobody in.
+- **On only once a code was right.** `verified` is FALSE from the moment the key is made until the first right
+  code from the app, which also sets `users.two_factor_enabled`; a row that is not verified asks nothing of a
+  sign-in, and beginning again replaces its key.
+- **The lockout is the library's.** `failed_verification_count` counts wrong codes in a row at sign-in, across
+  challenges and kinds of code; at ten, `locked_until` is fifteen minutes on, and a right code resets both.
+- **One row a person** (`two_factors_user_key`), `ON DELETE CASCADE`; turning it off deletes the row, and so do
+  erasure and the server's `admin:reset-password`.
+
+The challenge a right password opens is a row of `verifications` (`2fa-` and a random id, its `value` the user's
+id, with a `2fa-attempts-` row beside it counting that challenge's codes), for ten minutes. Instance-wide; never
+exported.
+
+```sql
+CREATE TABLE two_factors (
+    id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    secret                     TEXT NOT NULL,
+    backup_codes               TEXT NOT NULL,
+    verified                   BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_verification_count  INTEGER NOT NULL DEFAULT 0,
+    locked_until               TIMESTAMPTZ,
+
+    CONSTRAINT two_factors_user_key UNIQUE (user_id),
+    CONSTRAINT two_factors_failures_counted CHECK (failed_verification_count >= 0)
+);
+```
 
 ### 3.3. `push_subscriptions` and `users.locale`
 
@@ -339,9 +404,22 @@ CREATE TABLE workspaces (
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- When an owner asked for it to be deleted: from then it is no workspace to anybody (the tenancy
+    -- guard refuses it), and NULL again if an owner takes it back within the grace period. (D-242)
     deleted_at  TIMESTAMPTZ,
+    -- When `purge:workspaces` claimed it, under the row's lock: past this, nobody can take it back. (0071)
+    purge_started_at TIMESTAMPTZ,
+    -- When its content was gone. The row stays, a tombstone with its name, for the trails that refer
+    -- to it (I-9). (0071)
+    purged_at   TIMESTAMPTZ,
 
     CONSTRAINT storage_used_non_negative CHECK (storage_used_bytes >= 0),
+
+    -- Claimed only once asked for, purged only once claimed. (0071)
+    CONSTRAINT workspaces_deletion_order CHECK (
+        (purge_started_at IS NULL OR deleted_at IS NOT NULL)
+        AND (purged_at IS NULL OR purge_started_at IS NOT NULL)
+    ),
 
     -- A floor, not a preference. A typo of `1` in a retention field would delete a
     -- team's memory overnight and no correct value is that small. (D-27)
@@ -443,8 +521,9 @@ CREATE TABLE channels (
     -- Denormalized so the sidebar can order channels without touching `messages`.
     last_message_at TIMESTAMPTZ,
 
-    -- The channel's own count of its renames, raised in the statement that renames under the row
-    -- lock: `CHANNEL_UPDATED` carries it and a client drops an older one (0023, D-123).
+    -- The channel's own count of its renames and changes of who posts, raised in the statement that
+    -- makes one under the row lock: `CHANNEL_UPDATED` carries it and a client drops an older one
+    -- (0023, D-123, D-243).
     state_version INTEGER NOT NULL DEFAULT 0,
 
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -452,12 +531,38 @@ CREATE TABLE channels (
     -- Archived (D-123): hidden from everyone, its messages and memberships kept, its name free.
     deleted_at   TIMESTAMPTZ,
 
+    -- How long the channel keeps its history when that is longer than its workspace does (D-225).
+    -- `min_retention_days`: at least this many whole days, whatever the workspace's window; NULL is no
+    -- floor of its own. `retain_forever`: everything. NULL and false — every channel until an owner
+    -- says otherwise — is the workspace's window. The purge keeps the longer of the two (I-10). (0063)
+    min_retention_days INTEGER,
+    retain_forever     BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Only the workspace's owners and admins post a root here (D-243): an announcement channel. A
+    -- reply in a thread, an edit and a GitHub feed's event are not held to it. (0072)
+    only_admins_post   BOOLEAN NOT NULL DEFAULT FALSE,
+
     CONSTRAINT named_unless_dm CHECK (
         (type = 'direct_message' AND name IS NULL)
         OR (type <> 'direct_message' AND name IS NOT NULL)
     ),
     CONSTRAINT dm_key_iff_dm CHECK (
         (type = 'direct_message') = (dm_key IS NOT NULL)
+    ),
+
+    -- The workspace's own floor (`retention_days_sane`); a number of days or forever, never both; and
+    -- none of it on a direct message, which nobody configures (D-225). "Never shorter than the
+    -- workspace" compares two rows and is not a CHECK: the service refuses it, and the purge takes the
+    -- longer window whatever is stored (I-10).
+    CONSTRAINT channels_retention_sane CHECK (
+        (min_retention_days IS NULL OR min_retention_days >= 30)
+        AND NOT (retain_forever AND min_retention_days IS NOT NULL)
+        AND (type <> 'direct_message' OR (min_retention_days IS NULL AND NOT retain_forever))
+    ),
+
+    -- A direct message is its people, and nobody configures it (D-123, D-243).
+    CONSTRAINT channels_only_admins_post_not_dm CHECK (
+        type <> 'direct_message' OR NOT only_admins_post
     ),
 
     -- Two lower-case member ids, the first not above the second byte-wise, joined with ':'.
@@ -497,6 +602,15 @@ CREATE INDEX idx_channels_created_by ON channels (created_by) WHERE created_by I
 `last_message_at` is only ever moved forward, and only by a send that is newer than the value it holds; a
 send that is not the newest writes nothing. It is the one column of this table that changes on the hot
 path, which is why it is in no index. (D-88)
+
+`min_retention_days` and `retain_forever` are an owner's, set through `PUT /api/channels/:channelId/retention`
+(D-225), and only ever lengthen what the channel keeps: a floor shorter than the workspace's window is refused
+when it is set, and a workspace window lengthened past it later simply wins — the purge keeps the longer of the
+two, read on every batch. An archived channel keeps its setting, and the purge still applies it: archiving
+hides a channel, it does not change how long its history is kept (D-123).
+
+`only_admins_post` is an owner's or an admin's, set through `PATCH /api/channels/:channelId` (D-243). A send
+reads it by the channel's primary key, and only for a root: a reply never reads it.
 
 ### 5.2. `channel_members`
 
@@ -576,7 +690,8 @@ CREATE TABLE messages (
     channel_id   UUID NOT NULL,
 
     -- RESTRICT, because users are soft-deleted and authorship must survive. (D-22)
-    -- NULL for a message nobody wrote: a repository's event (`messages_sender_by_type`, 0032, D-134).
+    -- NULL for a message nobody wrote: a repository's event (`messages_sender_by_type`, 0032, D-134), or an
+    -- incoming webhook's post (0074, D-245).
     sender_id    UUID REFERENCES users(id) ON DELETE RESTRICT,
 
     -- Threads are exactly two levels deep: a root message and its replies.
@@ -597,6 +712,19 @@ CREATE TABLE messages (
     -- The wedge: a thread can be closed, and stays searchable. (D-2)
     resolved_at  TIMESTAMPTZ,
     resolved_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    is_question BOOLEAN NOT NULL DEFAULT FALSE,
+    question_assignee_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    accepted_answer_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    decision_note TEXT NOT NULL DEFAULT '',
+    decision_url TEXT,
+    decision_updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    knowledge_version INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT messages_knowledge_root CHECK (parent_id IS NULL OR (NOT is_question AND question_assignee_id IS NULL AND accepted_answer_id IS NULL AND decision_note = '' AND decision_url IS NULL AND knowledge_version = 0)),
+    CONSTRAINT messages_decision_note_length CHECK (char_length(decision_note) <= 2000),
+    CONSTRAINT messages_decision_url_length CHECK (char_length(decision_url) <= 2048),
+    CONSTRAINT messages_knowledge_version CHECK (knowledge_version >= 0),
+    CONSTRAINT messages_question_assignee CHECK (question_assignee_id IS NULL OR is_question),
+    CONSTRAINT messages_answer_not_self CHECK (accepted_answer_id IS NULL OR accepted_answer_id <> id),
 
     content      TEXT NOT NULL,
     message_type message_type NOT NULL DEFAULT 'text',
@@ -618,11 +746,12 @@ CREATE TABLE messages (
 
     -- A person's message has its sender; an event has none. Added by 0032. (D-134 §6)
     CONSTRAINT messages_sender_by_type CHECK ((message_type = 'text') = (sender_id IS NOT NULL)),
-    -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032.
+    -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032;
+    -- 0074 adds an incoming webhook's post, `{ kind: 'incoming_webhook', name }` (D-245).
     CONSTRAINT messages_event_known CHECK (
         message_type = 'text'
         OR metadata = '{}'::jsonb
-        OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release')
+        OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release', 'incoming_webhook')
     ),
 
     -- Only root messages are resolvable; resolving a reply is meaningless.
@@ -716,6 +845,10 @@ CREATE INDEX idx_messages_unresolved
 CREATE INDEX idx_messages_changes     ON messages (channel_id, changed_at, id);
 CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
+CREATE INDEX idx_messages_questions ON messages (workspace_id, id) WHERE is_question AND resolved_at IS NULL AND deleted_at IS NULL;
+CREATE INDEX idx_messages_question_assignee ON messages (question_assignee_id, id) WHERE question_assignee_id IS NOT NULL;
+CREATE INDEX idx_messages_accepted_answer ON messages (accepted_answer_id) WHERE accepted_answer_id IS NOT NULL;
+CREATE INDEX idx_messages_decision_author ON messages (decision_updated_by) WHERE decision_updated_by IS NOT NULL;
 
 -- The retention purge's read: one workspace's messages older than its window, from the oldest
 -- (D-139 §1). By workspace alone, a night would walk the workspace's whole history once a batch.
@@ -1064,6 +1197,11 @@ CREATE TABLE notifications (
     read_at      TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    -- When a missed-mail letter took it, or passed it over for good — its message gone, its channel or
+    -- workspace no longer the person's (D-240). Set once, under the person's row lock: never mailed twice.
+    -- Put back to NULL only when the relay refused the letter. (0069)
+    mailed_at    TIMESTAMPTZ,
+
     UNIQUE (user_id, message_id, type),
 
     CONSTRAINT notifications_message_channel_fkey
@@ -1125,6 +1263,24 @@ CREATE INDEX idx_saved_messages_message   ON saved_messages (message_id, channel
 CREATE INDEX idx_saved_messages_channel   ON saved_messages (channel_id, workspace_id);
 CREATE INDEX idx_saved_messages_workspace ON saved_messages (workspace_id);
 ```
+
+**Saved searches (D-204).** At most 50 per person and workspace, serialized under the membership lock. The JSON is validated SearchCriteria, without pagination or cached results. Reads are owner-scoped; using a saved filter rechecks current channel visibility. Removed on account erasure and omitted from workspace exports.
+
+```sql
+CREATE TABLE saved_searches (
+    id            UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    query         JSONB NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT saved_searches_name CHECK (char_length(name) BETWEEN 1 AND 80),
+    CONSTRAINT saved_searches_query_object CHECK (jsonb_typeof(query) = 'object')
+);
+CREATE INDEX idx_saved_searches_owner ON saved_searches (workspace_id, user_id, id DESC);
+CREATE INDEX idx_saved_searches_user ON saved_searches (user_id);
+```
+
 
 Shown only from channels the person can see now, never a deleted message; at most `SAVED_MAX` shown
 in a workspace. A soft delete keeps the row (hidden); a retention purge cascades it. The account's
@@ -1198,6 +1354,40 @@ CREATE INDEX idx_thread_follows_workspace ON thread_follows (workspace_id);
 A soft delete keeps the row: a deleted root keeps its thread (D-103 §7), and so who follows it. A
 retention purge cascades it; the account's erasure deletes them, as it does a person's saves.
 
+### 7.8. `channel_bookmarks`
+
+A channel's bookmarks (D-218): links its members keep at hand — a document, a dashboard, a repository —
+shown under the channel's header. Read by whoever can see the channel, as its pins are; added and removed
+by its members.
+
+```sql
+CREATE TABLE channel_bookmarks (
+    id            UUID PRIMARY KEY,
+    channel_id    UUID NOT NULL,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- An http or https address; the service parses it as a browser would (`javascript:` is never kept).
+    url           TEXT NOT NULL CHECK (char_length(url) BETWEEN 1 AND 2048),
+    title         TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 80),
+    -- The bookmark is the channel's: it outlives the account of the person who added it.
+    added_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- The channel in this workspace. (I-4)
+    CONSTRAINT channel_bookmarks_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE,
+    -- The same address again is the same bookmark; the key also lists a channel's bookmarks.
+    CONSTRAINT channel_bookmarks_channel_url_key UNIQUE (channel_id, url)
+);
+
+CREATE INDEX idx_channel_bookmarks_workspace ON channel_bookmarks (workspace_id);
+CREATE INDEX idx_channel_bookmarks_added_by  ON channel_bookmarks (added_by);
+```
+
+At most `BOOKMARKS_MAX` a channel, counted under the channel's row lock, so two members adding the last
+one at once cannot both get in. Added twice, the first stays and nothing changes. The workspace export
+carries them (D-140).
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -1215,6 +1405,12 @@ CREATE TABLE github_integrations (
 
     -- Encrypted at the application layer. Never logged, never returned by an API. (D-11)
     access_token_encrypted TEXT,
+
+    -- When GitHub first answered the token 401: no call is made with it until it is replaced, and
+    -- replacing or removing it clears this (D-23, amended).
+    token_invalid_at TIMESTAMPTZ,
+    -- X-OAuth-Scopes as GitHub gave it when the token was saved; NULL for a fine-grained token.
+    token_scopes    TEXT,
 
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1298,15 +1494,230 @@ CREATE TABLE github_deliveries (
     feed_id      UUID NOT NULL REFERENCES github_repo_feeds(id) ON DELETE CASCADE,
     delivery_id  VARCHAR(64) COLLATE "C" NOT NULL,       -- X-GitHub-Delivery
     received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- swept after 30 days
-    PRIMARY KEY (feed_id, delivery_id)
+    body_digest  TEXT,                                   -- SHA-256 of the body as sent, hex (0064)
+    PRIMARY KEY (feed_id, delivery_id),
+    CONSTRAINT github_deliveries_body_is_a_digest CHECK (body_digest ~ '^[0-9a-f]{64}$')
 );
 
 CREATE INDEX idx_github_deliveries_received ON github_deliveries (received_at);
+CREATE UNIQUE INDEX github_deliveries_feed_body_key ON github_deliveries (feed_id, body_digest);
 ```
 
 > A feed is its channel's, in its channel's workspace (I-4), and goes with either. The secret is never
 > returned after the answer that made it and never logged (`ARCHITECTURE.md` §10). A delivery is
-> recorded in the transaction that posts it, so the same delivery again posts nothing.
+> recorded in the transaction that posts it, so the same delivery again posts nothing — by its id, or by its
+body's digest under an id made up, since GitHub signs the body and not the id (D-231 §1). A row recorded
+before 0064 has no digest; NULLs never collide, and the sweep forgets those rows with the rest.
+
+### 8.4. `incoming_webhooks`
+
+A channel's incoming webhooks (migration 0074, D-245): an address a CI job or a monitor posts a message to,
+under the hook's name, with no session. Made, listed and revoked by an owner or an admin, as a feed is.
+
+```sql
+CREATE TABLE incoming_webhooks (
+    id            UUID PRIMARY KEY,                   -- the address's first part
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id    UUID NOT NULL,
+    name          VARCHAR(80) NOT NULL,               -- what its messages say they are from
+    secret_digest TEXT COLLATE "C" NOT NULL,          -- SHA-256 of the address's secret, hex; never the secret
+    -- The hook is the channel's: it outlives the account of the person who made it.
+    created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL,
+    last_used_at  TIMESTAMPTZ,                        -- set by each post, under the row's lock
+
+    CONSTRAINT incoming_webhooks_name_length CHECK (char_length(name) BETWEEN 1 AND 80),
+    -- The channel in this workspace. (I-4)
+    CONSTRAINT incoming_webhooks_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_incoming_webhooks_channel ON incoming_webhooks (channel_id, created_at);
+CREATE INDEX idx_incoming_webhooks_workspace ON incoming_webhooks (workspace_id);
+CREATE INDEX idx_incoming_webhooks_created_by ON incoming_webhooks (created_by)
+    WHERE created_by IS NOT NULL;
+```
+
+> The secret is 32 random bytes, answered once inside the path and never stored (`platform/tokens.ts`); a post
+> digests what it was given and compares in constant time, so a copy of the database posts nothing. At most
+> `INCOMING_WEBHOOKS_PER_CHANNEL_MAX` a channel, counted under the channel's row lock. Revoking deletes the row:
+> a post racing it waits on the row lock its `last_used_at` takes, and finds nothing. What a hook posted is a
+> `system_event` whose metadata keeps the name it posted under (`messages_event_known`), so a hook revoked or
+> renamed since still names what it said. Never exported (D-245).
+
+### 8.4. The GitHub App (D-246)
+
+The server's App is a row of `server_settings` (§9.5). What belongs to a workspace or a person is here, read and
+written by `modules/integrations/github-app*.ts`.
+
+- **`github_app_installations`** — at most one installation per workspace, connected by an owner. GitHub's
+  `installation_id` is **not** unique: two workspaces of one organisation may both connect it, so it is indexed for
+  the deliveries that name it, not constrained. It goes with its workspace; `connected_by` outlives its person as
+  NULL. `suspended_at` is GitHub's word, kept as said.
+- **`github_user_authorizations`** — a person's own App user access token and its refresh token, **one per
+  person**, never a workspace's. Both sealed by the one cipher with the row's id and the column bound in
+  (D-39 §6); never logged, returned or exported. The expiries are GitHub's (an App whose tokens do not expire
+  leaves them NULL); an expiry belongs to a refresh token. `github_user_id` finds the row when GitHub says that
+  person revoked the App.
+- **`github_app_handshakes`** — a trip to GitHub and back, by the digest of its `state` (only the digest is kept),
+  ten minutes long and spent on return. An `install` is a workspace's and has no verifier; an `authorize` is a
+  person's and carries its PKCE verifier, sealed.
+- **`github_app_deliveries`** — each delivery to the App's one address, recorded in the transaction that applies it:
+  its id, and its body's digest, each unique, so a redelivery or a signed body under a made-up id applies nothing
+  (D-134 §5, D-231 §1). Swept after thirty days.
+
+```sql
+CREATE TABLE github_app_installations (
+    id              UUID PRIMARY KEY,
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    installation_id BIGINT NOT NULL,
+    account_login   VARCHAR(39) NOT NULL,
+    account_type    VARCHAR(16) NOT NULL,
+    suspended_at    TIMESTAMPTZ,
+    connected_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    connected_at    TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_app_installations_workspace_key UNIQUE (workspace_id),
+    CONSTRAINT github_app_installations_installation_positive CHECK (installation_id > 0),
+    CONSTRAINT github_app_installations_account_type_known
+        CHECK (account_type IN ('User', 'Organization'))
+);
+
+CREATE INDEX idx_github_app_installations_installation
+    ON github_app_installations (installation_id);
+CREATE INDEX idx_github_app_installations_connected_by
+    ON github_app_installations (connected_by) WHERE connected_by IS NOT NULL;
+
+CREATE TABLE github_user_authorizations (
+    id                      UUID PRIMARY KEY,
+    user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    github_user_id          BIGINT NOT NULL,
+    github_login            VARCHAR(39) NOT NULL,
+    access_token_encrypted  TEXT NOT NULL,
+    access_expires_at       TIMESTAMPTZ,
+    refresh_token_encrypted TEXT,
+    refresh_expires_at      TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ NOT NULL,
+    updated_at              TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_user_authorizations_user_key UNIQUE (user_id),
+    CONSTRAINT github_user_authorizations_github_user_positive CHECK (github_user_id > 0),
+    CONSTRAINT github_user_authorizations_refresh_expiry
+        CHECK (refresh_expires_at IS NULL OR refresh_token_encrypted IS NOT NULL)
+);
+
+CREATE INDEX idx_github_user_authorizations_github_user
+    ON github_user_authorizations (github_user_id);
+
+CREATE TABLE github_app_handshakes (
+    state_digest       TEXT COLLATE "C" PRIMARY KEY,
+    user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id       UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+    purpose            VARCHAR(16) NOT NULL,
+    verifier_encrypted TEXT,
+    return_to          VARCHAR(512),
+    expires_at         TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_app_handshakes_purpose_known CHECK (purpose IN ('install', 'authorize')),
+    CONSTRAINT github_app_handshakes_purpose_shape CHECK (
+        (purpose = 'install' AND workspace_id IS NOT NULL AND verifier_encrypted IS NULL)
+        OR (purpose = 'authorize' AND workspace_id IS NULL AND verifier_encrypted IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_github_app_handshakes_user ON github_app_handshakes (user_id);
+CREATE INDEX idx_github_app_handshakes_workspace
+    ON github_app_handshakes (workspace_id) WHERE workspace_id IS NOT NULL;
+CREATE INDEX idx_github_app_handshakes_expires ON github_app_handshakes (expires_at);
+
+CREATE TABLE github_app_deliveries (
+    delivery_id VARCHAR(64) COLLATE "C" PRIMARY KEY,
+    body_digest TEXT COLLATE "C" NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_app_deliveries_body_key UNIQUE (body_digest),
+    CONSTRAINT github_app_deliveries_body_is_a_digest CHECK (body_digest ~ '^[0-9a-f]{64}$')
+);
+
+CREATE INDEX idx_github_app_deliveries_received ON github_app_deliveries (received_at);
+```
+
+### 8.5. `github_links` and `github_operations` (D-246)
+
+- **`github_links`** — a root linked to an issue or a pull request, made from the thread or pointed at: the
+  repository by its number and its name, the title and state as GitHub last said them, and `state_at`, GitHub's own
+  instant, so a delivery that arrives out of order cannot move it back. Channel-scoped (the composite key every
+  channel row has), `ON DELETE CASCADE` from the root; exported with the workspace (D-140), never in a person's
+  own. A link outlives the installation that found it: a record, not a permission.
+- **`github_operations`** — the bounded record of one attempt to make an issue, keyed by workspace, actor and the
+  client's request id. `content_digest` is a SHA-256 of what was asked, never the words; `marker` is the line
+  the issue ends with, by which a lost answer is found again; `status` is `pending`, `created` (with its issue
+  number), `unknown` or `refused` (with a closed reason). Swept thirty days after its last change; never exported.
+
+```sql
+CREATE TABLE github_links (
+    id                   UUID PRIMARY KEY,
+    workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id           UUID NOT NULL,
+    root_id              UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    repository_id        BIGINT NOT NULL,
+    repository_full_name VARCHAR(140) NOT NULL,
+    kind                 VARCHAR(8) NOT NULL,
+    number               INTEGER NOT NULL,
+    title                VARCHAR(256) NOT NULL,
+    state                VARCHAR(8) NOT NULL,
+    state_at             TIMESTAMPTZ NOT NULL,
+    origin               VARCHAR(8) NOT NULL,
+    created_by           UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at           TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_links_root_item_key UNIQUE (root_id, repository_id, kind, number),
+    CONSTRAINT github_links_kind_known CHECK (kind IN ('issue', 'pull')),
+    CONSTRAINT github_links_state_known CHECK (state IN ('open', 'closed', 'merged')),
+    CONSTRAINT github_links_merged_is_a_pull CHECK (state <> 'merged' OR kind = 'pull'),
+    CONSTRAINT github_links_origin_known CHECK (origin IN ('created', 'linked')),
+    CONSTRAINT github_links_number_positive CHECK (number > 0),
+    CONSTRAINT github_links_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_github_links_workspace ON github_links (workspace_id);
+CREATE INDEX idx_github_links_channel ON github_links (channel_id);
+CREATE INDEX idx_github_links_created_by ON github_links (created_by) WHERE created_by IS NOT NULL;
+CREATE INDEX idx_github_links_item ON github_links (repository_id, kind, number);
+
+CREATE TABLE github_operations (
+    id                   UUID PRIMARY KEY,
+    workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    actor_id             UUID REFERENCES users(id) ON DELETE CASCADE,
+    client_request_id    UUID NOT NULL,
+    content_digest       TEXT COLLATE "C" NOT NULL,
+    root_id              UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    repository_id        BIGINT NOT NULL,
+    repository_full_name VARCHAR(140) NOT NULL,
+    marker               TEXT COLLATE "C" NOT NULL,
+    status               VARCHAR(8) NOT NULL,
+    reason               VARCHAR(32),
+    issue_number         INTEGER,
+    attempts             INTEGER NOT NULL DEFAULT 0,
+    created_at           TIMESTAMPTZ NOT NULL,
+    updated_at           TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT github_operations_request_key UNIQUE (workspace_id, actor_id, client_request_id),
+    CONSTRAINT github_operations_status_known
+        CHECK (status IN ('pending', 'created', 'unknown', 'refused')),
+    CONSTRAINT github_operations_digest_is_a_digest CHECK (content_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT github_operations_created_has_issue CHECK ((status = 'created') = (issue_number IS NOT NULL)),
+    CONSTRAINT github_operations_refused_has_reason CHECK ((status = 'refused') = (reason IS NOT NULL)),
+    CONSTRAINT github_operations_attempts_bounded CHECK (attempts BETWEEN 0 AND 20)
+);
+
+CREATE INDEX idx_github_operations_root ON github_operations (root_id);
+CREATE INDEX idx_github_operations_actor ON github_operations (actor_id) WHERE actor_id IS NOT NULL;
+CREATE INDEX idx_github_operations_updated ON github_operations (updated_at);
+CREATE INDEX idx_github_operations_marker ON github_operations (marker);
+```
 
 ---
 
@@ -1373,9 +1784,12 @@ The trail of changes to the server's own settings (Administration → Server, D-
 is a workspace's, with its workspace required; the server's settings belong to none, so they have a
 trail of their own, append-only on the same terms (I-9). It says who, which setting and when — the
 action names both (`server.github_connected`, `server.github_disconnected`, `server.smtp_connected`,
-`server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, and `server.admin_password_reset`, written by
-`bun run admin:reset-password` with the account itself as the actor and no session) — and never
-the value, a secret least of all. Written in the transaction that saves the setting
+`server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, `server.account_suspended` and
+`server.account_restored` (with `target_user_id`, whose account, D-233), `account.export_requested` and
+`account.export_downloaded` (a person's export of their own data, the person as actor and `target_user_id`, D-241), `server.admin_password_reset`, written by
+`bun run admin:reset-password` with the account itself as the actor and no session, and `server.workspace_purged`
+(with `target_workspace_id`, written by `purge:workspaces` with no actor once a deleted workspace's content is gone,
+D-242) — and never the value, a secret least of all. Written in the transaction that saves the setting
 (`modules/audit/server-audit.ts`), so a change that did not commit leaves no row and one that did
 cannot lack it. Append-only is held as `audit_log`'s is — by the sweep in
 `modules/audit/append-only.test.ts`, which covers both tables; neither has a trigger.
@@ -1386,6 +1800,12 @@ CREATE TABLE server_audit_log (
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action        VARCHAR(64) NOT NULL,
     session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
+    -- Whose account an entry is about (`server.account_suspended`, `server.account_restored`, D-233); NULL for
+    -- a setting. (0065)
+    target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- Which workspace an entry is about (`server.workspace_purged`, D-242); RESTRICT, as `audit_log`'s:
+    -- the record outlives what it describes. (0071)
+    target_workspace_id UUID REFERENCES workspaces(id) ON DELETE RESTRICT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT server_audit_log_id_is_uuidv7
@@ -1397,6 +1817,12 @@ CREATE INDEX idx_server_audit_log_actor ON server_audit_log (actor_user_id, id D
 
 CREATE INDEX idx_server_audit_log_session ON server_audit_log (session_id)
     WHERE session_id IS NOT NULL;
+
+CREATE INDEX idx_server_audit_log_target ON server_audit_log (target_user_id)
+    WHERE target_user_id IS NOT NULL;
+
+CREATE INDEX idx_server_audit_log_workspace ON server_audit_log (target_workspace_id)
+    WHERE target_workspace_id IS NOT NULL;
 ```
 
 ### 9.2. `job_runs`
@@ -1411,7 +1837,7 @@ require an instance-administrator role that does not exist and that D-3 delibera
 CREATE TABLE job_runs (
     -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions', 'sweep:github-deliveries',
     -- 'sweep:email-sign-ins', 'sweep:exports', 'sweep:deletions',
-    -- 'reconcile:storage', 'purge:retention'
+    -- 'reconcile:storage', 'purge:retention', 'purge:workspaces'
     job_name             VARCHAR(64) PRIMARY KEY,
 
     last_started_at      TIMESTAMPTZ,
@@ -1479,6 +1905,51 @@ CREATE INDEX idx_workspace_exports_requested_by
     ON workspace_exports (requested_by) WHERE requested_by IS NOT NULL;
 ```
 
+### 9.3a. `personal_exports`
+
+A person's export of their own data (D-241): the same life as an owner's export of a workspace (§9.3),
+in a table of its own, so a person's export names no workspace and can never be listed or downloaded as
+one. The row is the record that it was made; its archive lives under the person's prefix in the store
+(`u/<id>/exports/`) until it is downloaded or expires, and `sweep:exports` takes it as it takes a
+workspace's. Erasure ends a person's exports — a ready one `expired`, one being made `failed` — and the
+sweep then takes their archives. Never exported itself.
+
+```sql
+CREATE TABLE personal_exports (
+    id             UUID PRIMARY KEY,
+    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- As workspace_exports: 'pending', 'ready', 'failed', 'downloaded', 'expired'.
+    status         TEXT NOT NULL,
+    storage_key    TEXT,
+    size_bytes     BIGINT,
+    failure        TEXT,
+    created_at     TIMESTAMPTZ NOT NULL,
+    finished_at    TIMESTAMPTZ,
+    heartbeat_at   TIMESTAMPTZ,
+    expires_at     TIMESTAMPTZ,
+    downloaded_at  TIMESTAMPTZ,
+
+    CONSTRAINT personal_exports_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT personal_exports_status
+        CHECK (status IN ('pending', 'ready', 'failed', 'downloaded', 'expired')),
+    CONSTRAINT personal_exports_ready
+        CHECK (status <> 'ready'
+               OR (storage_key IS NOT NULL AND size_bytes IS NOT NULL AND expires_at IS NOT NULL)),
+    CONSTRAINT personal_exports_pending
+        CHECK (status <> 'pending' OR storage_key IS NULL),
+    CONSTRAINT personal_exports_failure
+        CHECK ((status = 'failed') = (failure IS NOT NULL) AND (failure IS NULL OR failure ~ '^[A-Z_]{1,64}$'))
+);
+
+-- One export of a person in the making at a time.
+CREATE UNIQUE INDEX idx_personal_exports_one_pending
+    ON personal_exports (user_id) WHERE status = 'pending';
+
+-- The person's list, and the day's count, newest first.
+CREATE INDEX idx_personal_exports_user ON personal_exports (user_id, id DESC);
+```
+
 ### 9.4. `object_deletions`
 
 Objects in the store whose rows are gone, until the store has let them go (D-141). A key is written in
@@ -1506,7 +1977,7 @@ CREATE TABLE object_deletions (
 ### 9.5. `server_settings`
 
 The operator's settings for the whole server (D-179 §6): who may sign up, GitHub's OAuth app, the mail
-relay, and who may make a workspace (D-155, D-169). They are in the database because a person changes
+relay, who may make a workspace (D-155, D-169), the sign-in policy (D-239) and how long a session lives (D-244). They are in the database because a person changes
 them in the browser; what the process needs before it can read a row — the database, `ENCRYPTION_KEY`,
 the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md`).
 
@@ -1524,6 +1995,18 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   written, never normalised: the id_token's `iss` must equal it byte for byte.
 - **Who may make a workspace** is D-155's rule as a kind — `first`, `anyone` or `listed` — and, for
   `listed`, the GitHub logins in lower case, at least one.
+- **The sign-in policy** (D-239, added by 0068): `require_two_factor` holds an account that signs in with a
+  password back until it turns on two-step verification, and `password_sign_in` is whether a password signs
+  in at all. Off is allowed only while GitHub or single sign-on is connected, and the last of them is not
+  disconnected while it is — a rule the application weighs inside the transaction that saves the change, not
+  a check here: a provider whose secret a rotated key cannot open is set in its columns and no way in, which
+  only the application can tell. `bun run admin:reset-password` turns passwords on again.
+- **How long a session lives** (D-244, added by 0073): `session_idle_timeout_hours` signs out a session unused for
+  that long, and `session_max_age_days` one that old since its sign-in, whatever its use; `NULL` is off, as every
+  server was before. Which values may be chosen is `@purlay/types`' (`SESSION_IDLE_TIMEOUT_HOURS`,
+  `SESSION_MAX_AGE_DAYS`); the check here refuses only what no policy could mean. Nothing is written into
+  `sessions` (§3.2): each session is judged from its own `created_at` and `last_used_at` when it is read, so a
+  change reaches the sessions already open.
 - `imported_from_env_at` is when the environment was copied in, **once**, on the first start; set, every
   later start leaves the row alone (`importFromEnvOnce`). `setup_completed_at` is when the setup in the
   browser was finished.
@@ -1552,6 +2035,19 @@ CREATE TABLE server_settings (
     oidc_client_id               TEXT,
     oidc_client_secret_encrypted TEXT,
     oidc_name                    TEXT,
+    -- The sign-in policy (D-239), added by 0068.
+    require_two_factor           BOOLEAN NOT NULL DEFAULT FALSE,
+    password_sign_in             BOOLEAN NOT NULL DEFAULT TRUE,
+    -- How long a session lives (D-244), added by 0073; NULL is off.
+    session_idle_timeout_hours   SMALLINT,
+    session_max_age_days         SMALLINT,
+    -- The GitHub App issues are written through (D-246), added by 0075; the three secrets sealed as the others.
+    github_app_id                       BIGINT,
+    github_app_slug                     TEXT,
+    github_app_client_id                TEXT,
+    github_app_client_secret_encrypted  TEXT,
+    github_app_private_key_encrypted    TEXT,
+    github_app_webhook_secret_encrypted TEXT,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -1570,7 +2066,17 @@ CREATE TABLE server_settings (
     CONSTRAINT server_settings_oidc_not_blank
         CHECK (oidc_issuer <> '' AND oidc_client_id <> '' AND oidc_name <> ''),
     CONSTRAINT server_settings_oidc_name_needs_provider
-        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL)
+        CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL),
+    CONSTRAINT server_settings_session_lifetime_positive
+        CHECK (session_idle_timeout_hours > 0 AND session_max_age_days > 0)
+    CONSTRAINT server_settings_github_app_whole
+        CHECK ((github_app_id IS NULL) = (github_app_slug IS NULL)
+               AND (github_app_id IS NULL) = (github_app_client_id IS NULL)
+               AND (github_app_id IS NULL) = (github_app_client_secret_encrypted IS NULL)
+               AND (github_app_id IS NULL) = (github_app_private_key_encrypted IS NULL)
+               AND (github_app_id IS NULL) = (github_app_webhook_secret_encrypted IS NULL)),
+    CONSTRAINT server_settings_github_app_shape
+        CHECK (github_app_id > 0 AND github_app_slug ~ '^[a-z0-9][a-z0-9-]{0,63}$' AND github_app_client_id <> '')
 );
 ```
 
@@ -1782,6 +2288,35 @@ CREATE INDEX idx_native_authorizations_user ON native_authorizations (user_id, e
 CREATE INDEX idx_native_authorizations_expiry ON native_authorizations (expires_at);
 ```
 
+### 9.10. `missed_mail_letters`
+
+Each letter the scheduled `mail:missed` sent a person about what they missed (D-240), read and written by
+`modules/notifications/missed-mail.ts`.
+
+- **The hour between two**: a person gets no letter while one of theirs has `sent_at` within the last hour, read
+  under their row's lock.
+- **The stop link is never stored**: `stop_digest` is the SHA-256 of the 64 hex digits the letter's link carries
+  (`platform/tokens.ts`), unique. Whoever opens it turns off the letters of `user_id`, and nobody else's.
+- **Thirty days**: the link opens while `sent_at` is within thirty days, and the job deletes the row after that.
+  A letter the relay refused is deleted at once, with its notifications given back.
+- **A person's own**: `user_id`, `ON DELETE CASCADE`; erasure deletes the person's rows.
+
+Instance-wide; never exported.
+
+```sql
+CREATE TABLE missed_mail_letters (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sent_at     TIMESTAMPTZ NOT NULL,
+    stop_digest TEXT COLLATE "C" NOT NULL,
+
+    CONSTRAINT missed_mail_letters_stop_digest_key UNIQUE (stop_digest)
+);
+
+-- The person's last letter, for the hour between two (D-240).
+CREATE INDEX idx_missed_mail_letters_user ON missed_mail_letters (user_id, sent_at DESC);
+```
+
 ---
 
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
@@ -1846,7 +2381,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
-| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
+| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window — its channel's window, which is the longer of the workspace's and the channel's own (`channels.retain_forever`, `channels.min_retention_days`), computed on every batch and never taken from a stored number (D-225). Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, no `github_login` and no `github_connected_at`, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5, D-176) | `modules/users/erasure.ts` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
@@ -1939,9 +2474,27 @@ file that leaves its transaction runs statement by statement and must be safe to
 0057_session_device_name.sql sessions.device_name: the name the native application gave the Mac a session was made for, which a device list shows  (D-193)
 0058_message_changed_at.sql messages.changed_at, stamped by a trigger on every update: when the server last wrote a message, which a client catching up asks by  (D-194)
 0059_server_settings_oidc.sql server_settings.oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_name: the single sign-on provider, a triple or nothing  (D-200)
-0062_scheduled_messages.sql durable personal scheduled messages, attachment reservations and due-row indexes
-0063_message_reminders.sql private pending reminders, due indexes and the reminder notification type
-0064_hidden_messages.sql account-scoped personal deletion markers and replay timestamps
+0060_question_knowledge.sql questions, accepted answers, decision notes and personal saved searches (D-204)
+0061_question_indexes.sql concurrent indexes for questions, assignees, accepted answers and decision authors (D-204)
+0062_channel_bookmarks.sql channel_bookmarks: links a channel's members keep at hand, under its header  (D-218)
+0063_channel_retention.sql channels.min_retention_days, channels.retain_forever: a channel keeps its history longer than its workspace, never shorter  (D-225)
+0064_github_delivery_bodies.sql github_deliveries.body_digest, unique per feed: a signed body sent again under a new delivery id posts nothing  (D-231 §1)
+0065_account_suspension.sql users.suspended_at, server_audit_log.target_user_id: the server's administrator suspends an account and lifts it  (D-233)
+0066_quiet_hours.sql users.quiet_from, users.quiet_to, users.quiet_days: a person's quiet hours, every week, on their profile's clock  (D-234)
+0067_two_factor.sql users.two_factor_enabled, two_factors: two-step verification for an account with a password, its key and backup codes sealed  (D-236)
+0068_sign_in_policy.sql server_settings.require_two_factor, password_sign_in: the sign-in policy, two-step verification required of a password and passwords off  (D-239)
+0069_missed_mail.sql users.missed_mail_since, notifications.mailed_at, missed_mail_letters: a letter about what a person missed, at most one an hour, and its stop link  (D-240)
+0070_personal_exports.sql personal_exports: a person's export of their own data, made in the background, downloaded once  (D-241)
+0071_workspace_deletion.sql workspaces.purge_started_at, workspaces.purged_at, server_audit_log.target_workspace_id: an owner deletes a workspace, a grace period to take it back, then its content erased  (D-242)
+0072_announcement_channels.sql channels.only_admins_post: only the workspace's owners and admins post a root in the channel  (D-243)
+0073_session_lifetime.sql server_settings.session_idle_timeout_hours, session_max_age_days: how long a session may go unused, and live  (D-244)
+0074_incoming_webhooks.sql incoming_webhooks, and an incoming webhook's post among the kinds of messages_event_known: a channel's incoming webhooks  (D-245)
+0075_github_app.sql server_settings.github_app_*, github_app_installations, github_user_authorizations, github_app_handshakes, github_app_deliveries: the GitHub App, a workspace's installation, a person's own authorization  (D-246)
+0076_github_links.sql github_links, github_operations: what a thread points at on GitHub, and the bounded record that makes creating an issue recoverable  (D-246)
+0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
+0078_scheduled_messages.sql durable personal scheduled messages, attachment reservations and due-row indexes
+0079_message_reminders.sql private pending reminders, due indexes and the reminder notification type
+0080_hidden_messages.sql account-scoped personal deletion markers and replay timestamps
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

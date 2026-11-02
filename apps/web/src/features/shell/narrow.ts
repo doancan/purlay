@@ -10,7 +10,7 @@
  *
  * The browser is an argument, so a test moves the line by hand.
  */
-import { createContext, useMemo, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useMemo, useSyncExternalStore } from 'react';
 
 /** The part of `MediaQueryList` this uses. */
 interface NarrowQuery {
@@ -34,13 +34,15 @@ const narrowWidth = (): string =>
 export const useNarrow = (port: NarrowPort = browserNarrow): boolean => {
   // One query per port for the life of the component: subscribing and reading both use it.
   const query = useMemo(() => port(narrowWidth()), [port]);
-  return useSyncExternalStore(
-    (listener) => {
+  // Stable while the query is, or React unsubscribes and subscribes again on every render.
+  const subscribe = useCallback(
+    (listener: () => void) => {
       query.addEventListener('change', listener);
       return (): void => {
         query.removeEventListener('change', listener);
       };
     },
-    () => query.matches,
+    [query],
   );
+  return useSyncExternalStore(subscribe, () => query.matches);
 };

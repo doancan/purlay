@@ -19,6 +19,7 @@ import { inProcessEventBus } from './bus';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { routeFrame } from './router';
+import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -64,6 +65,7 @@ const aNode = (
           bus,
           presence,
           attention: nobodyActive,
+          sessionLifetime: () => NO_SESSION_LIFETIME,
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           log: createLogger({ level: 'silent' }),

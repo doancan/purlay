@@ -76,17 +76,17 @@ describe('integration: how long a workspace keeps its history', () => {
       const { workspaceId, cookie, app } = await owner(db);
       expect(await call(app, 'GET', workspaceId, cookie)).toEqual({
         status: 200,
-        json: { retentionDays: null },
+        json: { retentionDays: null, channelsKeptLonger: 0 },
       });
       expect(await call(app, 'PUT', workspaceId, cookie, { retentionDays: 90 })).toEqual({
         status: 200,
-        json: { retentionDays: 90 },
+        json: { retentionDays: 90, channelsKeptLonger: 0 },
       });
       await call(app, 'PUT', workspaceId, cookie, { retentionDays: 90 });
       await call(app, 'PUT', workspaceId, cookie, { retentionDays: null });
       expect(await call(app, 'GET', workspaceId, cookie)).toEqual({
         status: 200,
-        json: { retentionDays: null },
+        json: { retentionDays: null, channelsKeptLonger: 0 },
       });
       // Both at the test's one instant, so their ids do not order them: compared as a set.
       const said = (trail: readonly unknown[]): string[] =>

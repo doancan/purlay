@@ -20,6 +20,7 @@ import { useSession } from '../session/session';
 import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
 import { FIRST_SECTION, sectionFor } from '../settings/sections';
 import { useDeepWork } from './deep-work';
+import { useQuietHoursNow } from './quiet-hours';
 import { useWorkspace } from './workspace';
 
 /** What needs the person across the workspace: the badges, added up. */
@@ -59,7 +60,9 @@ export const TabTitle = (): null => {
   const { user } = useSession();
   const { match } = useRoute();
   const channels = useChannels(workspace.id).data ?? [];
-  const quiet = useDeepWork().until !== null;
+  // Deep Work started by hand, or the person's quiet hours (D-234): the page is quiet in either.
+  const quietHours = useQuietHoursNow();
+  const quiet = useDeepWork().until !== null || quietHours;
   const role = useWorkspaceRole();
   const serverAdmin = useIsServerAdmin();
 

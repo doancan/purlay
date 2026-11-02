@@ -6,7 +6,7 @@
  * 390 × 844 is a phone held upright. The project's own viewport is irrelevant to these (each
  * `describe` sets its own), but the colour scheme is: every assertion runs in both themes.
  */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 
 /** The route of a screen, so a spec says what it means and not where it is. */
@@ -31,6 +31,31 @@ const horizontalOverflow = async (page: Page): Promise<number> =>
       widest = Math.max(widest, element.scrollWidth - element.clientWidth);
     }
     return widest;
+  });
+
+/**
+ * The hints under a list of suggestions (the command list's, the `@` list's), side by side where they
+ * fit and each on a line of its own where they do not: two hints beside each other may not wrap, or
+ * they are two narrow columns broken at odd places. Returns each pair that does.
+ */
+const hintsInColumns = async (hints: Locator): Promise<string[]> =>
+  await hints.evaluate((row) => {
+    const items = [...row.children]
+      .map((item) => ({
+        text: item.textContent.trim(),
+        box: item.getBoundingClientRect(),
+        line: Number.parseFloat(getComputedStyle(item).lineHeight),
+      }))
+      .filter((item) => item.box.width > 0);
+    const wraps = (item: (typeof items)[number]): boolean => item.box.height > item.line * 1.5;
+    const columns: string[] = [];
+    items.forEach((one, index) => {
+      for (const other of items.slice(index + 1)) {
+        const sameRow = one.box.top < other.box.bottom && other.box.top < one.box.bottom;
+        if (sameRow && (wraps(one) || wraps(other))) columns.push(`${one.text} | ${other.text}`);
+      }
+    });
+    return columns;
   });
 
 test.describe('at a phone width', () => {
@@ -309,6 +334,26 @@ test.describe('at a phone width', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
+  test('the command list’s hints are lines of words under it, not two narrow columns', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    // Found in an audit: at this width "Tab complete" and "// at the start sends a slash as words"
+    // were two columns side by side, each broken every word or two.
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    const box = page.getByRole('textbox', { name: /^Message/ });
+    await box.click();
+    await box.pressSequentially('/');
+    const list = page.getByRole('listbox', { name: 'Commands' });
+    await expect(list).toBeVisible();
+    const hints = list.locator('xpath=following-sibling::*[1]');
+    await expect(hints).toContainText('at the start sends a slash as words');
+    expect(await hintsInColumns(hints)).toEqual([]);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
   test.describe('the overlay', () => {
     test.beforeEach(async ({ page, signIn, world }) => {
       await signIn('bob');
@@ -402,6 +447,46 @@ test.describe('at a phone width', () => {
       );
       expect(small).toEqual([]);
     });
+  });
+});
+
+/**
+ * A phone in the hand: a finger, no pointer that hovers, no keyboard — `(pointer: coarse) and
+ * (hover: none)`, the line `isTouchOnly` draws. A key is not offered where there is none to press.
+ */
+test.describe('on a device that is only touch', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('the thread’s Resolve names no key', async ({ page, signIn, world }) => {
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    await page
+      .getByRole('button', { name: /^Open · \d+ repl/ })
+      .first()
+      .click();
+    const panel = page.getByRole('complementary', { name: /^Thread · / });
+    const resolve = panel.getByRole('button', { name: /^(Resolve|Reopen)/ });
+    await expect(resolve).toBeVisible();
+    expect((await resolve.innerText()).trim()).toMatch(/^(Resolve|Reopen)$/);
+  });
+
+  test('the command list says how to write a slash, and not which key completes', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    const box = page.getByRole('textbox', { name: /^Message/ });
+    await box.click();
+    await box.pressSequentially('/');
+    const list = page.getByRole('listbox', { name: 'Commands' });
+    await expect(list).toBeVisible();
+    const hints = list.locator('xpath=following-sibling::*[1]');
+    // A hint whose key is hidden is a word with nothing to say: "complete", alone.
+    expect((await hints.innerText()).replace(/\s+/g, ' ').trim()).toBe(
+      '// at the start sends a slash as words',
+    );
   });
 });
 

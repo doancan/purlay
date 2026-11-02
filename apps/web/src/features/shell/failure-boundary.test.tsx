@@ -74,7 +74,7 @@ describe('a screen that throws', () => {
     await settle();
     expect(view.getByRole('alert')).toBeDefined();
     broken = false;
-    await person().click(view.getByRole('link', { name: 'Inbox' }));
+    await person().click(view.getByRole('link', { name: 'Saved' }));
     await settle();
     expect(view.getByText('drawn')).toBeDefined();
   });

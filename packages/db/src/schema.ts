@@ -95,6 +95,16 @@ export interface AuditLog {
   workspace_id: string;
 }
 
+export interface ChannelBookmarks {
+  added_at: Generated<Timestamp>;
+  added_by: string | null;
+  channel_id: string;
+  id: string;
+  title: string;
+  url: string;
+  workspace_id: string;
+}
+
 export interface ChannelMembers {
   channel_id: string;
   id: Generated<string>;
@@ -115,7 +125,10 @@ export interface Channels {
   dm_key: string | null;
   id: Generated<string>;
   last_message_at: Timestamp | null;
+  min_retention_days: number | null;
   name: string | null;
+  only_admins_post: Generated<boolean>;
+  retain_forever: Generated<boolean>;
   state_version: Generated<number>;
   topic: string | null;
   type: Generated<ChannelType>;
@@ -123,7 +136,35 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface GithubAppDeliveries {
+  body_digest: string;
+  delivery_id: string;
+  received_at: Timestamp;
+}
+
+export interface GithubAppHandshakes {
+  expires_at: Timestamp;
+  purpose: string;
+  return_to: string | null;
+  state_digest: string;
+  user_id: string;
+  verifier_encrypted: string | null;
+  workspace_id: string | null;
+}
+
+export interface GithubAppInstallations {
+  account_login: string;
+  account_type: string;
+  connected_at: Timestamp;
+  connected_by: string | null;
+  id: string;
+  installation_id: Int8;
+  suspended_at: Timestamp | null;
+  workspace_id: string;
+}
+
 export interface GithubDeliveries {
+  body_digest: string | null;
   delivery_id: string;
   feed_id: string;
   received_at: Generated<Timestamp>;
@@ -135,7 +176,44 @@ export interface GithubIntegrations {
   created_by: string | null;
   id: string;
   installation_id: Int8 | null;
+  token_invalid_at: Timestamp | null;
+  token_scopes: string | null;
   updated_at: Generated<Timestamp>;
+  workspace_id: string;
+}
+
+export interface GithubLinks {
+  channel_id: string;
+  created_at: Timestamp;
+  created_by: string | null;
+  id: string;
+  kind: string;
+  number: number;
+  origin: string;
+  repository_full_name: string;
+  repository_id: Int8;
+  root_id: string;
+  state: string;
+  state_at: Timestamp;
+  title: string;
+  workspace_id: string;
+}
+
+export interface GithubOperations {
+  actor_id: string | null;
+  attempts: Generated<number>;
+  client_request_id: string;
+  content_digest: string;
+  created_at: Timestamp;
+  id: string;
+  issue_number: number | null;
+  marker: string;
+  reason: string | null;
+  repository_full_name: string;
+  repository_id: Int8;
+  root_id: string;
+  status: string;
+  updated_at: Timestamp;
   workspace_id: string;
 }
 
@@ -152,6 +230,19 @@ export interface GithubRepoFeeds {
   repository_id: Int8 | null;
   secret_encrypted: string;
   workspace_id: string;
+}
+
+export interface GithubUserAuthorizations {
+  access_expires_at: Timestamp | null;
+  access_token_encrypted: string;
+  created_at: Timestamp;
+  github_login: string;
+  github_user_id: Int8;
+  id: string;
+  refresh_expires_at: Timestamp | null;
+  refresh_token_encrypted: string | null;
+  updated_at: Timestamp;
+  user_id: string;
 }
 
 export interface HiddenMessages {
@@ -192,6 +283,17 @@ export interface IncidentUpdates {
   incident_id: string;
   kind: string;
   to_value: string;
+}
+
+export interface IncomingWebhooks {
+  channel_id: string;
+  created_at: Timestamp;
+  created_by: string | null;
+  id: string;
+  last_used_at: Timestamp | null;
+  name: string;
+  secret_digest: string;
+  workspace_id: string;
 }
 
 export interface InvitationPassports {
@@ -241,16 +343,23 @@ export interface MessageReminders {
 }
 
 export interface Messages {
+  accepted_answer_id: string | null;
   changed_at: Generated<Timestamp>;
   channel_id: string;
   content: string;
   created_at: Generated<Timestamp>;
+  decision_note: Generated<string>;
+  decision_updated_by: string | null;
+  decision_url: string | null;
   deleted_at: Timestamp | null;
   edited_at: Timestamp | null;
   id: string;
+  is_question: Generated<boolean>;
+  knowledge_version: Generated<number>;
   message_type: Generated<MessageType>;
   metadata: Generated<Json>;
   parent_id: string | null;
+  question_assignee_id: string | null;
   resolved_at: Timestamp | null;
   resolved_by: string | null;
   sender_id: string | null;
@@ -270,6 +379,13 @@ export interface MessageVersions {
   workspace_id: string;
 }
 
+export interface MissedMailLetters {
+  id: Generated<string>;
+  sent_at: Timestamp;
+  stop_digest: string;
+  user_id: string;
+}
+
 export interface NativeAuthorizations {
   challenge: string;
   code_digest: string;
@@ -285,6 +401,7 @@ export interface Notifications {
   channel_id: string;
   created_at: Generated<Timestamp>;
   id: Generated<string>;
+  mailed_at: Timestamp | null;
   message_id: string;
   read_at: Timestamp | null;
   suppressed_by_deep_work: Generated<boolean>;
@@ -299,6 +416,20 @@ export interface ObjectDeletions {
   enqueued_at: Generated<Timestamp>;
   last_attempt_at: Timestamp | null;
   storage_key: string;
+}
+
+export interface PersonalExports {
+  created_at: Timestamp;
+  downloaded_at: Timestamp | null;
+  expires_at: Timestamp | null;
+  failure: string | null;
+  finished_at: Timestamp | null;
+  heartbeat_at: Timestamp | null;
+  id: string;
+  size_bytes: Int8 | null;
+  status: string;
+  storage_key: string | null;
+  user_id: string;
 }
 
 export interface PinnedMessages {
@@ -347,6 +478,15 @@ export interface SavedMessages {
   workspace_id: string;
 }
 
+export interface SavedSearches {
+  created_at: Generated<Timestamp>;
+  id: string;
+  name: string;
+  query: Json;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface ScheduledMessages {
   channel_id: string;
   content: string;
@@ -369,10 +509,18 @@ export interface ServerAuditLog {
   created_at: Generated<Timestamp>;
   id: string;
   session_id: string | null;
+  target_user_id: string | null;
+  target_workspace_id: string | null;
 }
 
 export interface ServerSettings {
   created_at: Generated<Timestamp>;
+  github_app_client_id: string | null;
+  github_app_client_secret_encrypted: string | null;
+  github_app_id: Int8 | null;
+  github_app_private_key_encrypted: string | null;
+  github_app_slug: string | null;
+  github_app_webhook_secret_encrypted: string | null;
   github_client_id: string | null;
   github_client_secret_encrypted: string | null;
   id: Generated<boolean>;
@@ -382,6 +530,10 @@ export interface ServerSettings {
   oidc_client_secret_encrypted: string | null;
   oidc_issuer: string | null;
   oidc_name: string | null;
+  password_sign_in: Generated<boolean>;
+  require_two_factor: Generated<boolean>;
+  session_idle_timeout_hours: number | null;
+  session_max_age_days: number | null;
   setup_completed_at: Timestamp | null;
   sign_up: Generated<string>;
   smtp_allow_plaintext: Generated<boolean>;
@@ -430,6 +582,16 @@ export interface ThreadFollows {
   workspace_id: string;
 }
 
+export interface TwoFactors {
+  backup_codes: string;
+  failed_verification_count: Generated<number>;
+  id: Generated<string>;
+  locked_until: Timestamp | null;
+  secret: string;
+  user_id: string;
+  verified: Generated<boolean>;
+}
+
 export interface Users {
   avatar_url: string | null;
   created_at: Generated<Timestamp>;
@@ -444,9 +606,15 @@ export interface Users {
   is_server_admin: Generated<boolean>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;
+  missed_mail_since: Timestamp | null;
+  quiet_days: number | null;
+  quiet_from: number | null;
+  quiet_to: number | null;
   status_text: string | null;
+  suspended_at: Timestamp | null;
   time_zone: string | null;
   title: string | null;
+  two_factor_enabled: Generated<boolean>;
   updated_at: Generated<Timestamp>;
   username: string;
 }
@@ -502,6 +670,8 @@ export interface Workspaces {
   deleted_at: Timestamp | null;
   id: Generated<string>;
   name: string;
+  purge_started_at: Timestamp | null;
+  purged_at: Timestamp | null;
   retention_days: number | null;
   slug: string;
   storage_quota_bytes: Generated<Int8>;
@@ -514,15 +684,23 @@ export interface DB {
   admin_email_verification: AdminEmailVerification;
   attachments: Attachments;
   audit_log: AuditLog;
+  channel_bookmarks: ChannelBookmarks;
   channel_members: ChannelMembers;
   channels: Channels;
+  github_app_deliveries: GithubAppDeliveries;
+  github_app_handshakes: GithubAppHandshakes;
+  github_app_installations: GithubAppInstallations;
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
+  github_links: GithubLinks;
+  github_operations: GithubOperations;
   github_repo_feeds: GithubRepoFeeds;
   hidden_messages: HiddenMessages;
+  github_user_authorizations: GithubUserAuthorizations;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
+  incoming_webhooks: IncomingWebhooks;
   invitation_passports: InvitationPassports;
   job_runs: JobRuns;
   link_previews: LinkPreviews;
@@ -530,20 +708,24 @@ export interface DB {
   message_reminders: MessageReminders;
   message_versions: MessageVersions;
   messages: Messages;
+  missed_mail_letters: MissedMailLetters;
   native_authorizations: NativeAuthorizations;
   notifications: Notifications;
   object_deletions: ObjectDeletions;
+  personal_exports: PersonalExports;
   pinned_messages: PinnedMessages;
   push_subscriptions: PushSubscriptions;
   rate_limits: RateLimits;
   reactions: Reactions;
   saved_messages: SavedMessages;
   scheduled_messages: ScheduledMessages;
+  saved_searches: SavedSearches;
   server_audit_log: ServerAuditLog;
   server_settings: ServerSettings;
   sessions: Sessions;
   setup_state: SetupState;
   thread_follows: ThreadFollows;
+  two_factors: TwoFactors;
   users: Users;
   verifications: Verifications;
   workspace_exports: WorkspaceExports;

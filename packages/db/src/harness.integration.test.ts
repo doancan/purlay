@@ -154,6 +154,37 @@ describe('integration harness: dropping a database whose connections are still c
   });
 });
 
+/**
+ * Two test processes at once (D-228): `bun test --parallel` runs the preload in every worker, so two can
+ * build one template at the same moment, and one can clone it while another is still connected to it.
+ */
+describe('integration harness: two processes and one template', () => {
+  test('building the same new template twice at once makes it once, and both are told its name', async () => {
+    const scratch = `purlay_race_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    try {
+      const built = await Promise.all([
+        buildIntegrationTemplate(scratch),
+        buildIntegrationTemplate(scratch),
+      ]);
+      expect(built).toEqual([scratch, scratch]);
+    } finally {
+      await dropDatabases([scratch]);
+    }
+  });
+
+  test('a clone made while the template is being brought up to date waits for it, and is whole', async () => {
+    const [, cloned] = await Promise.all([buildIntegrationTemplate(), cloneIntegrationDatabase()]);
+    try {
+      const applied = await sql<{ n: string }>`select count(*) as n from kysely_migration`.execute(
+        cloned.db,
+      );
+      expect(Number(applied.rows[0]?.n)).toBeGreaterThan(1);
+    } finally {
+      await cloned.drop();
+    }
+  });
+});
+
 describe('integration harness cost', () => {
   const TEMPLATE_BUDGET_MS = 2_500;
   const CLONE_BUDGET_MS = 1_000;
@@ -228,8 +259,40 @@ describe('integration: the database the rollback harness uses directly', () => {
         await inspected.destroy();
       }
     } finally {
+      // Pool shutdown can finish before its socket closes; do not force-drop it mid-hang-up.
+      await backendsGone(name, 1_000);
       await sql`drop database if exists ${sql.id(name)} with (force)`.execute(control);
       await control.destroy();
     }
+  });
+});
+
+/**
+ * #797: a file's `afterAll` that ran out of time left the shared pool closing while the next file asked for
+ * it, and every query after that read "driver has already been destroyed". Whoever asks while a close is
+ * under way, or after it, is given a pool that works — never the one being destroyed.
+ */
+describe('integration harness: the shared pool while it is being closed (#797)', () => {
+  test('a close still under way hands the next caller a new pool, not the closing one', async () => {
+    const closing = integrationDatabase();
+    await sql`select 1`.execute(closing);
+    const closed = closeIntegrationDatabase();
+    const next = integrationDatabase();
+    expect(next).not.toBe(closing);
+    const { rows } = await sql<{ one: number }>`select 1 as one`.execute(next);
+    expect(rows).toEqual([{ one: 1 }]);
+    await closed;
+    // The close that was under way ended the old pool only.
+    expect(
+      (await sql<{ one: number }>`select 1 as one`.execute(integrationDatabase())).rows,
+    ).toEqual([{ one: 1 }]);
+  });
+
+  test('two closes at once end the pool once, and neither throws', async () => {
+    await sql`select 1`.execute(integrationDatabase());
+    await Promise.all([closeIntegrationDatabase(), closeIntegrationDatabase()]);
+    expect(
+      (await sql<{ one: number }>`select 1 as one`.execute(integrationDatabase())).rows,
+    ).toEqual([{ one: 1 }]);
   });
 });

@@ -8,7 +8,7 @@
  * (D-155). The same form is the workspace menu's **Create workspace…**, for a person who has one
  * already and may make another (D-124).
  */
-import { WORKSPACE_NAME_MAX } from '@purlay/types';
+import { WORKSPACE_NAME_MAX, WORKSPACE_SLUG_MAX } from '@purlay/types';
 import { useDescribeFailure } from '../../data/failure';
 import { useEffect, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
@@ -20,6 +20,7 @@ import { Button } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { LogoMark } from './notice';
+import { ScheduledDeletions } from './scheduled-deletions';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
@@ -132,7 +133,7 @@ export const CreateWorkspace = ({
         hint={t('workspace.create.slugHint')}
         value={address}
         required
-        maxLength={64}
+        maxLength={WORKSPACE_SLUG_MAX}
         autoComplete="off"
         spellCheck={false}
         {...(error?.field === 'slug' ? { error: error.message } : {})}
@@ -183,6 +184,8 @@ export const Home = (): React.JSX.Element | null => {
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
         <LogoMark />
+        {/* An owner whose last workspace is being deleted can still keep it from here (D-242). */}
+        <ScheduledDeletions />
         {mayCreateWorkspace ? (
           <>
             <section className="flex flex-col gap-2">

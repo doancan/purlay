@@ -124,6 +124,19 @@ export const publishPinsUpdated = async (
   });
 };
 
+/** A channel's bookmarks changed (D-218): everyone watching it reads them again. Nothing of them in it. */
+export const publishBookmarksUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  channelId: string,
+): Promise<void> => {
+  await bus.publish(channelTopic(channelId), {
+    event: 'BOOKMARKS_UPDATED',
+    data: { channelId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel's incident changed (D-137 §7): everyone watching it reads it again. Nothing of it in it. */
 export const publishIncidentUpdated = async (
   bus: EventBus,
@@ -164,16 +177,49 @@ export const publishChannelRevoked = async (
   });
 };
 
-/** A channel's name or topic changed: everyone watching it hears both, at the row's version (D-123). */
+/**
+ * A workspace's deletion was asked for (D-242): everyone watching any of its channels, on any node, stops
+ * receiving it — on each channel's own topic, so a socket is reached whoever it belongs to, one frame a
+ * channel rather than one a member and channel. No reason, as for a removal from the whole workspace: the
+ * workspace itself is told to its members by `publishWorkspaceUpdated`.
+ */
+export const publishWorkspaceClosed = async (
+  bus: EventBus,
+  clock: Clock,
+  channelIds: readonly string[],
+): Promise<void> => {
+  for (const channelId of channelIds) {
+    await bus.publish(channelTopic(channelId), {
+      event: 'ACCESS_REVOKED',
+      data: { channelIds: [channelId] },
+      ts: clock.now().getTime(),
+    });
+  }
+};
+
+/**
+ * A channel's name, topic or who posts in it changed: everyone watching it hears all three, at the
+ * row's version (D-123, D-243).
+ */
 export const publishChannelUpdated = async (
   bus: EventBus,
   clock: Clock,
-  data: { readonly channelId: string; readonly name: string; readonly topic: string | null },
+  data: {
+    readonly channelId: string;
+    readonly name: string;
+    readonly topic: string | null;
+    readonly onlyAdminsPost: boolean;
+  },
   version: number,
 ): Promise<void> => {
   await bus.publish(channelTopic(data.channelId), {
     event: 'CHANNEL_UPDATED',
-    data: { channelId: data.channelId, name: data.name, topic: data.topic },
+    data: {
+      channelId: data.channelId,
+      name: data.name,
+      topic: data.topic,
+      onlyAdminsPost: data.onlyAdminsPost,
+    },
     version,
     ts: clock.now().getTime(),
   });
@@ -182,17 +228,19 @@ export const publishChannelUpdated = async (
 /**
  * These sessions were signed out: every socket each holds, on any node, is told and
  * closed. Published after the revocation is written, so a socket is never closed
- * for a sign-out that did not happen (#194).
+ * for a sign-out that did not happen (#194). `expired` where the server's lifetime
+ * policy ended them (D-244).
  */
 export const publishSessionsEnded = async (
   bus: EventBus,
   clock: Clock,
   sessionIds: readonly string[],
+  reason: 'signed-out' | 'expired' = 'signed-out',
 ): Promise<void> => {
   for (const sessionId of sessionIds) {
     await bus.publish(sessionTopic(sessionId), {
       event: 'SESSION_ENDED',
-      data: { reason: 'signed-out' },
+      data: { reason },
       ts: clock.now().getTime(),
     });
   }

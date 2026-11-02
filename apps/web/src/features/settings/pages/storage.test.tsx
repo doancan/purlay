@@ -41,7 +41,7 @@ const open = async (api: Partial<Api>, locale: 'en' | 'tr' = 'en'): Promise<View
           memberships: session.memberships.map((m) => ({ ...m, role: 'owner' as const })),
         }),
       exports: () => Promise.resolve([]),
-      retention: () => Promise.resolve({ retentionDays: null }),
+      retention: () => Promise.resolve({ retentionDays: null, channelsKeptLonger: 0 }),
       ...api,
     }),
   });
@@ -106,7 +106,9 @@ describe('the storage card', () => {
     answer = (): Promise<StorageUsage> => Promise.resolve({ usedBytes: 512, quotaBytes: GB });
     await person().click(within(card).getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(within(card).getByRole('meter').getAttribute('aria-valuetext')).toBe('512 byte of 1 GB');
+    expect(within(card).getByRole('meter').getAttribute('aria-valuetext')).toBe(
+      '512 bytes of 1 GB',
+    );
     view.unmount();
 
     const slow = await open({ storage: () => new Promise<StorageUsage>(() => undefined) });

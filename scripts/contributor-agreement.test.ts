@@ -1,5 +1,5 @@
 /**
- * The contributor licence agreement's rule (#122, D-145): a maintainer and Dependabot need no
+ * The contributor licence agreement's rule (#122, D-145): a maintainer needs no
  * signature; anybody else has signed this version; nobody signs, or unsigns, for somebody else; and
  * the files it reads are what it says they are.
  */
@@ -31,10 +31,10 @@ const verdict = (
 };
 
 describe('who may be merged', () => {
-  test('a maintainer and Dependabot need no signature', () => {
+  test('a maintainer needs no signature, and no bot is excused (D-219)', () => {
     expect(verdict('doancan', [])).toBe('allowed: maintainer');
     expect(verdict('DoanCan', [])).toBe('allowed: maintainer');
-    expect(verdict('app/dependabot', [])).toBe('allowed: bot');
+    expect(verdict('app/dependabot', [])).toStartWith('refused');
   });
 
   test('somebody else has signed, on the base or in this pull request — this version', () => {

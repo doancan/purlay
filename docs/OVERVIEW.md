@@ -92,6 +92,8 @@ looking for the error codes to a file that does not have them.
 | What the supply chain is held to: pinned Actions, the audit gate, licences | `scripts/workflow-pins.test.ts`, `scripts/audit-gate.ts`, `scripts/licenses.ts` (D-91) |
 | The deployable image: bases, user, health check | `Dockerfile`, held by `scripts/dockerfile.test.ts` and `scripts/image-smoke.sh` (D-92) |
 | The production stack: what is published, what it needs | `docker-compose.production.yml`, held by `scripts/production-compose.integration.test.ts` (D-94) |
+| Which release is newest, and whether the check is on | `apps/api/src/modules/integrations/latest-release.ts` (cache, validation, single flight), `UPDATE_CHECK` in `platform/config.ts`, the route in `ingress/http/releases.ts`; the repository and the tag's shape are `packages/types/src/releases.ts` (D-248). The interface is `API.md` §2 (`/api/releases/latest`), the page `UX.md` §2, the variable `CONFIG.md` |
+| What a release's notes are, and when the window with them opens | The files `docs/changelog/v{x.y.z}.md`, read by `readReleaseNotes` in `packages/types/src/releases.ts` and bundled by `apps/web/src/features/about/release-notes-files.ts`; shown once per version per browser by `release-notes-once.tsx` (D-248). Judged by `scripts/changelog.ts`, held to the client's reading by `scripts/changelog.test.ts` |
 | What changed, and how an entry is written | `docs/changelog/changes.md` (its header is the rule), held by `scripts/changelog.test.ts` (D-185) |
 | How a merge reaches the server, and what a release is | `.github/workflows/deploy.yml`, `scripts/deploy.sh`, `scripts/release.ts` (starts `scripts/release-prepare.ts`), `scripts/release-publish.sh`, held by `scripts/deploy.test.ts`, `scripts/deploy-workflow.test.ts`, `scripts/release.test.ts` and `scripts/release-publish.test.ts` (D-185); the version is the root `package.json`'s |
 | What a backup is and how a restore is judged | `scripts/backup.sh`, `scripts/restore.sh`, `scripts/compare-databases.sh`, rehearsed by `scripts/restore-rehearsal.sh` (D-95); the bucket half is `scripts/bucket-copy.ts` and its manifest, `scripts/bucket-manifest.ts` |
@@ -148,10 +150,9 @@ browser, not a second codebase. (`DECISIONS.md` D-51, D-186)
 
 ## Current status
 
-**Phase 1 — MVP.** Phase 0, the walking skeleton, is behind it.
-
-Exit criterion: S-1 (`PRD.md` §3, D-197) — every Phase 1 capability works end to end in a browser, `bun run verify`
-passes and the deployed build is the newest commit.
+Each phase is the milestone of the same number on the issue board, and its exit criterion is in
+`PRD.md` §3–§4 (S-1 is D-197). Which phase is current is not written here either: this section once said
+"Phase 1" after Phase 2's milestone had closed.
 
 How much of it is done is deliberately not written here: a progress line is stale the moment a
 pull request merges, and a document that says "not started" about a repository with code in it

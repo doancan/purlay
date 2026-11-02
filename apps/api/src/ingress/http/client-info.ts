@@ -24,7 +24,7 @@ export const clientPolicyOf = (config: Config): ClientPolicy => ({
 
 export const clientInfo = (
   config: Config,
-  auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'signUp'>,
+  auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'signUp' | 'signInPolicy'>,
 ): ClientInfo => {
   const { macos } = clientPolicyOf(config);
   return {

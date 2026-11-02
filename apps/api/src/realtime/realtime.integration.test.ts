@@ -30,6 +30,7 @@ import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
 import { aTestAuth, aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
+import { NO_SESSION_LIFETIME, type SessionLifetime } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -145,6 +146,7 @@ describe('integration: the frame router', () => {
     bus = inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
     // A fresh bucket per call, so no test here is limited unless it means to be.
     limiter: RateLimiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+    lifetime: SessionLifetime = NO_SESSION_LIFETIME,
   ): Promise<readonly ServerFrame[]> =>
     await routeFrame(
       {
@@ -155,6 +157,7 @@ describe('integration: the frame router', () => {
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         presence: inMemoryPresenceRegistry(clock),
         attention,
+        sessionLifetime: () => lifetime,
         log: createLogger({ level: 'silent' }),
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
         // The production boundary: inside the harness's transaction it joins it.
@@ -208,6 +211,36 @@ describe('integration: the frame router', () => {
       });
       expect(replies).toEqual([]);
       expect(attention.active(alice.userId, workspaceId)).toBe(true);
+    });
+  });
+
+  test('ACTIVE is use of the session where the server signs out unused ones, and writes nothing where it does not (D-244)', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'rt-active-use');
+      const { workspaceId } = await aChannel(db, alice, 'rt-active-use-ws');
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
+      await db
+        .updateTable('sessions')
+        .set({ created_at: tenMinutesAgo, last_used_at: tenMinutesAgo })
+        .where('id', '=', alice.sessionId)
+        .execute();
+      const lastUsed = async (): Promise<Date> =>
+        (
+          await db
+            .selectFrom('sessions')
+            .select('last_used_at')
+            .where('id', '=', alice.sessionId)
+            .executeTakeFirstOrThrow()
+        ).last_used_at;
+      const active = { id: messageId(NOW), op: 'ACTIVE', payload: { workspaceId } };
+
+      expect(await route(db, alice, active)).toEqual([]);
+      expect(await lastUsed()).toEqual(tenMinutesAgo);
+
+      const before = Date.now();
+      const idle: SessionLifetime = { sessionIdleTimeoutHours: 1, sessionMaxAgeDays: null };
+      expect(await route(db, alice, active, undefined, undefined, idle)).toEqual([]);
+      expect((await lastUsed()).getTime()).toBeGreaterThanOrEqual(before - 1000);
     });
   });
 

@@ -90,3 +90,83 @@ describe('integration: PATCH /api/me/profile', () => {
     });
   });
 });
+
+describe('integration: the name, where it is the person’s own (D-235)', () => {
+  const app = (db: Parameters<typeof aTestAuth>[0]): ReturnType<typeof createApp> =>
+    createApp(testDependencies({ database: db, clock }));
+  const asOwner = async (
+    db: Parameters<typeof aTestAuth>[0],
+    userId: string,
+  ): Promise<(method: string, path: string, body?: unknown) => Promise<Response>> => {
+    const { token } = await aSession(db, clock, userId, 30);
+    return async (method, path, body) =>
+      await app(db).handle(
+        new Request(`https://purlay.test${path}`, {
+          method,
+          headers: {
+            cookie: `${SESSION_COOKIE}=${token}`,
+            ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+          },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        }),
+      );
+  };
+
+  test('an account a link made sets its name: /api/me says it is its own, and shows the new one', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const call = await asOwner(db, room.members['alice']?.userId ?? '');
+      const me = async (): Promise<{ user: { displayName: string }; nameFromGitHub: boolean }> =>
+        (await (await call('GET', '/api/me')).json()) as {
+          user: { displayName: string };
+          nameFromGitHub: boolean;
+        };
+      expect((await me()).nameFromGitHub).toBe(false);
+      expect(
+        (await call('PATCH', '/api/me/profile', { displayName: '  Ada Lovelace ' })).status,
+      ).toBe(200);
+      expect((await me()).user.displayName).toBe('Ada Lovelace');
+      // Nothing that cannot be shown, and never nothing at all.
+      for (const displayName of ['', 'Ada‮Lovelace', 'a'.repeat(129)]) {
+        expect((await call('PATCH', '/api/me/profile', { displayName })).status).toBe(400);
+      }
+    });
+  });
+
+  test('an account GitHub made keeps GitHub’s name: refused on displayName, unless it is the same', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['grace']);
+      const userId = room.members['grace']?.userId ?? '';
+      await db
+        .updateTable('users')
+        .set({ github_id: '583231', github_connected_at: null })
+        .where('id', '=', userId)
+        .execute();
+      const call = await asOwner(db, userId);
+      const me = (await (await call('GET', '/api/me')).json()) as {
+        user: { displayName: string };
+        nameFromGitHub: boolean;
+      };
+      expect(me.nameFromGitHub).toBe(true);
+      const refused = await call('PATCH', '/api/me/profile', { displayName: 'Somebody else' });
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toMatchObject({
+        error: { details: { fields: { displayName: 'comes from GitHub' } } },
+      });
+      // A client that sends the name it was shown changes nothing, and is not refused for it.
+      expect(
+        (await call('PATCH', '/api/me/profile', { displayName: me.user.displayName, title: 'CTO' }))
+          .status,
+      ).toBe(200);
+      // Connected to GitHub later, the account's name is its own again.
+      await db
+        .updateTable('users')
+        .set({ github_connected_at: clock.now() })
+        .where('id', '=', userId)
+        .execute();
+      expect((await call('PATCH', '/api/me/profile', { displayName: 'Grace H.' })).status).toBe(
+        200,
+      );
+    });
+  });
+});

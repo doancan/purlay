@@ -15,7 +15,7 @@
  */
 import { notHiddenBy } from './hidden';
 import { sql, type Executor } from '@purlay/db';
-import { PAGE_LIMIT, type Message, type MessagePage } from '@purlay/types';
+import { PAGE_LIMIT, type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import {
   requireChannelMember,
@@ -118,12 +118,12 @@ export const unresolvedIn = async (
   executor: Executor,
   context: WorkspaceContext,
   channelIds: readonly string[],
-  query: PageQuery = {},
+  query: UnresolvedQuery = {},
 ): Promise<MessagePage> => {
   refuseBothDirections(query);
   if (channelIds.length === 0) return { data: [], nextCursor: null };
   const limit = limitOf(query);
-  const forwards = query.after !== undefined;
+  const forwards = query.order === 'oldest' || query.after !== undefined;
 
   let statement = executor
     .selectFrom('messages')
@@ -133,14 +133,41 @@ export const unresolvedIn = async (
     .where('messages.channel_id', 'in', channelIds)
     .where('messages.parent_id', 'is', null)
     .where('messages.resolved_at', 'is', null)
-    .where('messages.thread_reply_count', '>', 0)
+    .where((eb) =>
+      eb.or([eb('messages.thread_reply_count', '>', 0), eb('messages.is_question', '=', true)]),
+    )
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .orderBy('messages.id', forwards ? 'asc' : 'desc')
     .limit(limit + 1);
-  if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
+  if (query.before !== undefined)
+    statement = statement.where('messages.id', query.order === 'oldest' ? '>' : '<', query.before);
   if (query.after !== undefined) statement = statement.where('messages.id', '>', query.after);
 
+  if (query.unanswered === 'yes')
+    statement = statement.where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('messages as reply')
+            .select('reply.id')
+            .whereRef('reply.parent_id', '=', 'messages.id')
+            .where('reply.deleted_at', 'is', null),
+        ),
+      ),
+    );
+  if (query.assigneeId !== undefined)
+    statement = statement
+      .where('messages.question_assignee_id', '=', query.assigneeId)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('channel_members')
+            .select('user_id')
+            .whereRef('channel_members.channel_id', '=', 'messages.channel_id')
+            .whereRef('channel_members.user_id', '=', 'messages.question_assignee_id'),
+        ),
+      );
   return await asPage(executor, await statement.execute(), limit, context.userId);
 };
 
@@ -247,7 +274,7 @@ export const setResolved = async (
       channelId: target.context.channelId,
       workspaceId: target.context.workspaceId,
       told,
-      summary: await readSummary(transaction, columns),
+      summary: await readSummary(transaction, columns, messageId),
       version: columns.state_version,
     };
   });
@@ -299,6 +326,8 @@ const notifyResolved = async (
       channel_id: target.context.channelId,
       message_id: target.messageId,
       type: 'thread_resolved',
+      // Told when it was closed, by the clock that stamped the resolution (D-106 §1).
+      created_at: now,
       suppressed_by_deep_work: (
         await inDeepWork(executor, target.context.workspaceId, [authorId], now)
       ).has(authorId),

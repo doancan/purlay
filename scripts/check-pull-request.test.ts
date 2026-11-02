@@ -51,8 +51,10 @@ describe('a pull request names its task', () => {
     ]);
   });
 
-  test('dependabot is the one author excused', () => {
-    expect(judge(aPull({ body: '', author: 'app/dependabot' }), labelled({}))).toEqual([]);
+  test('no author is excused, a bot included (D-219)', () => {
+    expect(judge(aPull({ body: '', author: 'app/dependabot' }), labelled({}))).toContainEqual(
+      expect.stringContaining('names no issue') as string,
+    );
   });
 });
 

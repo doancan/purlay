@@ -11,7 +11,7 @@ import { expectNoAxeViolations } from '../../testing/axe';
 import { expectFocusOn } from '../../testing/focus';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { IDS, aSession } from '../../testing/fixtures';
+import { IDS, aChannel, aMessage, aSession } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 
 installDom();
@@ -178,12 +178,111 @@ describe('a channel’s repositories, as an owner sees them', () => {
     view.unmountAll();
   });
 
-  test('disconnecting asks first; Cancel gives focus back; Disconnect removes it', async () => {
-    const removed: [string, string][] = [];
-    let listed = 0;
+  test('regenerating a secret asks first, then shows the new one once for the same webhook (#884)', async () => {
+    const NEW_SECRET = 'b'.repeat(64);
+    const regenerated: [string, string][] = [];
+    const copied: string[] = [];
+    const view = await mountChannel({
+      messages: page([]),
+      copy: (text) => {
+        copied.push(text);
+        return Promise.resolve();
+      },
+      api: {
+        githubFeeds: () => Promise.resolve([aFeed()]),
+        regenerateGitHubFeedSecret: (channelId, feedId) => {
+          regenerated.push([channelId, feedId]);
+          return Promise.resolve({
+            feed: aFeed(),
+            webhookPath: `/api/webhooks/github/${FEED_ID}`,
+            secret: NEW_SECRET,
+          });
+        },
+      },
+    });
+    const dialog = await openDetails(view);
+    const feeds = feedsOf(dialog);
+    await person().click(
+      within(feeds).getByRole('button', { name: 'Regenerate secret of acme/api' }),
+    );
+    const question = within(feeds).getByRole('group', {
+      name: /Regenerate the secret of acme\/api\?/,
+    });
+    expect(question.textContent).toContain('old secret stops working at once');
+    expectFocusOn(within(question).getByRole('button', { name: 'Cancel' }));
+    await person().click(within(question).getByRole('button', { name: 'Cancel' }));
+    expectFocusOn(within(feeds).getByRole('button', { name: 'Regenerate secret of acme/api' }));
+    expect(regenerated).toEqual([]);
+
+    await person().click(
+      within(feeds).getByRole('button', { name: 'Regenerate secret of acme/api' }),
+    );
+    await person().click(
+      within(
+        within(feeds).getByRole('group', { name: /Regenerate the secret of acme\/api\?/ }),
+      ).getByRole('button', { name: 'Regenerate secret' }),
+    );
+    await settle();
+    expect(regenerated).toEqual([[IDS.api, FEED_ID]]);
+    const setup = within(feeds).getByRole('region', {
+      name: /Give acme\/api’s webhook on GitHub its new secret/,
+    });
+    expect(within(setup).getByText(NEW_SECRET)).toBeDefined();
+    expect(
+      within(setup).getByText(`${window.location.origin}/api/webhooks/github/${FEED_ID}`),
+    ).toBeDefined();
+    await person().click(within(setup).getByRole('button', { name: 'Copy the Secret' }));
+    await settle();
+    expect(copied).toEqual([NEW_SECRET]);
+    // The feed is still listed, its question answered.
+    expect(within(feeds).getByText('acme/api')).toBeDefined();
+    expect(within(feeds).queryByRole('group', { name: /Regenerate/ })).toBeNull();
+    await expectNoAxeViolations(dialog);
+    await person().click(within(setup).getByRole('button', { name: 'Done' }));
+    expect(within(feeds).queryByText(NEW_SECRET)).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a regeneration that fails is said, the feed stays, and no secret is shown (#884)', async () => {
     const view = await mountChannel({
       messages: page([]),
       api: {
+        githubFeeds: () => Promise.resolve([aFeed()]),
+        regenerateGitHubFeedSecret: () => Promise.reject(new ApiError(0, 'NETWORK', 'down')),
+      },
+    });
+    const feeds = feedsOf(await openDetails(view));
+    await person().click(
+      within(feeds).getByRole('button', { name: 'Regenerate secret of acme/api' }),
+    );
+    await person().click(
+      within(
+        within(feeds).getByRole('group', { name: /Regenerate the secret of acme\/api\?/ }),
+      ).getByRole('button', { name: 'Regenerate secret' }),
+    );
+    await settle();
+    expect(within(feeds).getByRole('alert').textContent).toContain(
+      'Couldn’t regenerate the secret.',
+    );
+    expect(within(feeds).getByText('acme/api')).toBeDefined();
+    expect(within(feeds).queryByRole('region', { name: /new secret/ })).toBeNull();
+    view.unmountAll();
+  });
+
+  test('disconnecting asks first; Cancel gives focus back; Disconnect removes it', async () => {
+    const removed: [string, string][] = [];
+    let listed = 0;
+    let channelsRead = 0;
+    const view = await mountChannel({
+      messages: page([aMessage(1, { content: 'see src/a.ts:1' })]),
+      api: {
+        // The channel's one feed is the repository its code references link into (D-223), until it goes.
+        channels: () => {
+          channelsRead += 1;
+          return Promise.resolve([
+            aChannel(IDS.api, 'api', { codeRepository: channelsRead === 1 ? 'acme/api' : null }),
+          ]);
+        },
         githubFeeds: () => {
           listed += 1;
           return Promise.resolve(listed === 1 ? [aFeed()] : []);
@@ -194,6 +293,9 @@ describe('a channel’s repositories, as an owner sees them', () => {
         },
       },
     });
+    expect(view.container.querySelector('a[data-code-reference]')?.getAttribute('href')).toBe(
+      'https://github.com/acme/api/blob/HEAD/src/a.ts#L1',
+    );
     const feeds = feedsOf(await openDetails(view));
     const ask = within(feeds).getByRole('button', { name: 'Disconnect acme/api' });
     await person().click(ask);
@@ -213,6 +315,8 @@ describe('a channel’s repositories, as an owner sees them', () => {
     await settle();
     expect(removed).toEqual([[IDS.api, FEED_ID]]);
     expect(within(feeds).getByText(/No repository is connected/)).toBeDefined();
+    // The channel is read again, and its code references link nowhere now.
+    expect(view.container.querySelector('a[data-code-reference]')).toBeNull();
     view.unmountAll();
   });
 });

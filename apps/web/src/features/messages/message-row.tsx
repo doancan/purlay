@@ -26,12 +26,14 @@ import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
 import { failureKey, UNREACHED, type FailureCode } from '../../data/failure';
+import { useCodeRepository } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Delivery } from '../../realtime/engine';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { renderContent } from '../content/render-content';
 import { GitHubCards } from '../content/github-cards';
+import { MessageCards } from '../content/message-cards';
 import { GitHubEventCard } from '../content/github-event';
 import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
@@ -43,6 +45,7 @@ import { PinnedMark } from '../pins/pin-toggle';
 import { useActiveRow } from './active-row';
 import { MessageActions } from './message-actions';
 import { useRowStops } from './row-stops';
+import { useWorkspaceIfAny } from '../shell/workspace';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -104,6 +107,11 @@ const MessageRowView = ({
   children,
 }: MessageRowProps): React.JSX.Element => {
   const { t, format } = useI18n();
+  // Where its code references link (D-223): the channel's one feed repository, or none.
+  const repository = useCodeRepository(
+    useWorkspaceIfAny()?.workspace.id ?? null,
+    message.channelId,
+  );
   const mentionsMe = message.mentions.includes(meId);
   const mentioned = new Set(
     message.mentions.flatMap((id) => {
@@ -188,6 +196,13 @@ const MessageRowView = ({
         {!grouped && (
           <div className="mb-1 flex items-baseline gap-2">
             <span className="text-label font-semibold text-ink">{author.displayName}</span>
+            {/* Said in words beside the name, not a badge: a hook's name is whatever its admin chose,
+            and must not pass for a person's (D-245). */}
+            {message.incomingWebhook !== undefined && (
+              <span data-incoming-webhook="" className="text-caption text-ink-muted">
+                {t('message.incomingWebhook')}
+              </span>
+            )}
             {time}
             {sending}
           </div>
@@ -209,7 +224,11 @@ const MessageRowView = ({
           ) : event !== null ? (
             <GitHubEventCard event={event} />
           ) : (
-            renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
+            renderContent(message.content, {
+              mentioned,
+              me: members.get(meId)?.toLowerCase(),
+              repository,
+            })
           )}
           {/* What is known about the message — edited, pinned — on one line under its words, apart. */}
           <div className="mt-1 flex items-center gap-3 empty:hidden">
@@ -220,6 +239,7 @@ const MessageRowView = ({
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
         {/* An event's words are its own summary: nothing in them to unfurl (D-134 §6). */}
         {!deleted && event === null && <GitHubCards content={message.content} />}
+        {!deleted && event === null && <MessageCards content={message.content} />}
         {!deleted && event === null && <ImageLinks content={message.content} />}
         {!deleted && (
           <Attachments

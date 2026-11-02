@@ -19,7 +19,8 @@ import { Icon } from '../../components/icon';
 import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useWorkspace } from '../shell/workspace';
-import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from '../channel/channel-name';
+import { CHANNEL_NAME_MAX } from '@purlay/types';
+import { CHANNEL_NAME, finishedChannelName } from '../channel/channel-name';
 import { typeChannelName } from '../channel/name-field';
 import { Checkbox } from '../../ui/checkbox';
 

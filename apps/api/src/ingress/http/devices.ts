@@ -28,7 +28,16 @@ export const readMySessions = async (
   request: Request,
 ): Promise<DeviceSessionList> => {
   const { userId, sessionId } = await requireSession(dependencies.auth, request);
-  return { data: [...(await deviceSessions(dependencies.database, userId, sessionId))] };
+  return {
+    data: [
+      ...(await deviceSessions(
+        dependencies.database,
+        userId,
+        sessionId,
+        dependencies.auth.sessionLifetime,
+      )),
+    ],
+  };
 };
 
 /**

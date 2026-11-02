@@ -1,3 +1,4 @@
+import { ACCEPTED_ANSWER_PREVIEW_MAX } from '@purlay/types';
 /**
  * What the cache does when the world changes.
  *
@@ -261,6 +262,7 @@ export const threadUpdated = (
   // and which page it falls on; asking again is cheaper than reasoning about it. A view that failed
   // keeps its failure and its Retry (#540).
   readAgain(client, families.unresolved);
+  readAgain(client, ['search']);
 };
 
 /** A message's whole reaction set, replacing what was there. */
@@ -280,6 +282,30 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  if (revision.parentId !== null)
+    patchMessage(client, revision.parentId, (root) => {
+      const knowledge = root.thread?.knowledge;
+      if (root.thread === null || knowledge?.acceptedAnswer?.id !== id) return root;
+      return {
+        ...root,
+        thread: {
+          ...root.thread,
+          knowledge: {
+            ...knowledge,
+            acceptedAnswer:
+              revision.deletedAt === null
+                ? {
+                    id,
+                    content: revision.content
+                      .slice(0, ACCEPTED_ANSWER_PREVIEW_MAX)
+                      .replace(/[\uD800-\uDBFF]$/u, ''),
+                  }
+                : null,
+          },
+        },
+      };
+    });
+  readAgain(client, ['search']);
   // An edit adds a version, a delete takes them all: an open history is read again (D-135 §5).
   readAgain(client, keys.messageVersions(id));
   // A deleted message's files leave the list (D-129), and its pin the pins (D-130); whether it had
@@ -323,7 +349,21 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
                   deletedAt: revision.deletedAt,
                   mentions: [...revision.mentions],
                   // A removed event keeps nothing of what it said, as the server reads it (D-134 §6).
-                  ...(revision.deletedAt === null ? {} : { githubEvent: null }),
+                  ...(revision.deletedAt === null
+                    ? {}
+                    : {
+                        githubEvent: null,
+                        ...(m.thread === null
+                          ? {}
+                          : {
+                              thread: {
+                                replyCount: m.thread.replyCount,
+                                lastReplyAt: m.thread.lastReplyAt,
+                                resolvedAt: m.thread.resolvedAt,
+                                resolvedBy: m.thread.resolvedBy,
+                              },
+                            }),
+                      }),
                 }
               : m,
           ),
@@ -344,6 +384,33 @@ export const channelStateChanged = (
   state: ChannelState,
 ): void => {
   editChannels(client, channelId, (c) => ({ ...c, state }));
+};
+
+/**
+ * Every channel of a workspace with something unread, painted read before the server answers (D-238):
+ * the counts go to nothing, the position stays where it is until the answer says where it went.
+ * Answers how to put back what it painted — each channel only while it is still as painted, since a
+ * frame heard in between is newer than both.
+ */
+export const allChannelsRead = (client: QueryClient, workspaceId: string): (() => void) => {
+  const before = (client.getQueryData<Channel[]>(keys.channels(workspaceId)) ?? []).flatMap(
+    (channel) =>
+      channel.state !== null && channel.state.unreadCount > 0
+        ? [{ channelId: channel.id, state: channel.state }]
+        : [],
+  );
+  for (const { channelId, state } of before) {
+    channelStateChanged(client, channelId, { ...state, unreadCount: 0, unreadMentionCount: 0 });
+  }
+  return () => {
+    for (const { channelId, state } of before) {
+      editChannels(client, channelId, (c) =>
+        c.state?.unreadCount === 0 && c.state.lastReadMessageId === state.lastReadMessageId
+          ? { ...c, state }
+          : c,
+      );
+    }
+  };
 };
 
 /** The caller's notification level in a channel, as they chose it or as it was before a refusal. */
@@ -370,13 +437,21 @@ export const channelStarred = (
   );
 };
 
-/** A channel's name or topic changed (D-123): what every screen showing it reads from. */
-export const channelRenamed = (
+/**
+ * A channel's name, topic or who posts in it changed (D-123, D-243): what every screen showing it
+ * reads from.
+ */
+export const channelUpdated = (
   client: QueryClient,
   channelId: string,
-  named: { readonly name: string; readonly topic: string | null },
+  changed: Pick<Channel, 'topic' | 'onlyAdminsPost'> & { readonly name: string },
 ): void => {
-  editChannels(client, channelId, (c) => ({ ...c, name: named.name, topic: named.topic }));
+  editChannels(client, channelId, (c) => ({
+    ...c,
+    name: changed.name,
+    topic: changed.topic,
+    onlyAdminsPost: changed.onlyAdminsPost,
+  }));
 };
 
 /** The person's Deep Work in one workspace, as another tab or device set it (#526). */
@@ -422,6 +497,7 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
     client.removeQueries({ queryKey: keys.channelMembers(id) });
     client.removeQueries({ queryKey: keys.files(id) });
     client.removeQueries({ queryKey: keys.pins(id) });
+    client.removeQueries({ queryKey: keys.bookmarks(id) });
   }
   // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
   client.removeQueries({

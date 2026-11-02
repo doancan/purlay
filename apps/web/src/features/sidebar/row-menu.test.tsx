@@ -128,7 +128,7 @@ describe('opening it', () => {
     });
     await settle();
     expect(event.defaultPrevented).toBe(true);
-    expect(view.getByRole('menu', { name: 'Actions for #deploys' })).toBeDefined();
+    expect(await view.findByRole('menu', { name: 'Actions for #deploys' })).toBeDefined();
     await expectNoAxeViolations(view.getByRole('menu'));
     view.unmount();
   });
@@ -139,7 +139,7 @@ describe('opening it', () => {
     row.focus();
     await person().keyboard('{Shift>}{F10}{/Shift}');
     await settle();
-    const menu = view.getByRole('menu', { name: 'Actions for #deploys' });
+    const menu = await view.findByRole('menu', { name: 'Actions for #deploys' });
     expect(menu.contains(document.activeElement)).toBe(true);
     await person().keyboard('{Escape}');
     await settle();
@@ -156,7 +156,7 @@ describe('opening it', () => {
       fireEvent.keyDown(row, { key: 'ContextMenu' });
     });
     await settle();
-    expect(view.getByRole('menu')).toBeDefined();
+    expect(await view.findByRole('menu')).toBeDefined();
     expect(isMenuKey({ key: 'F10', shiftKey: false })).toBe(false);
     expect(isMenuKey({ key: 'a', shiftKey: true })).toBe(false);
     view.unmount();
@@ -168,7 +168,7 @@ describe('opening it', () => {
       fireEvent.contextMenu(rowOf(view, 'deploys'), { clientX: 0, clientY: 0 });
     });
     await settle();
-    expect(view.getByRole('menu')).toBeDefined();
+    expect(await view.findByRole('menu')).toBeDefined();
     view.unmount();
   });
 
@@ -183,7 +183,7 @@ describe('opening it', () => {
       await new Promise((resolve) => setTimeout(resolve, LONG_PRESS_MS + 50));
     });
     await settle();
-    expect(view.getByRole('menu', { name: 'Actions for #incidents' })).toBeDefined();
+    expect(await view.findByRole('menu', { name: 'Actions for #incidents' })).toBeDefined();
     act(() => {
       fireEvent.pointerUp(row, { pointerType: 'touch' });
       fireEvent.click(row);
@@ -267,7 +267,7 @@ describe('what it offers', () => {
   test('is said in Turkish when the interface is', async () => {
     const view = await open({ locale: 'tr' });
     await rightClick(rowOf(view, 'api'));
-    expect(view.getByRole('menu', { name: '#api için işlemler' })).toBeDefined();
+    expect(await view.findByRole('menu', { name: '#api için işlemler' })).toBeDefined();
     expect(items(view)).toEqual([
       'Okundu olarak işaretle',
       'Yıldızla',

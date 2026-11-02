@@ -9,6 +9,14 @@ import { ErrorCode } from './errors';
 /** Bumped when a reader of the old shape would misread the new. */
 export const EXPORT_FORMAT = 1;
 
+/** What an export says of the files it copied: the same for a workspace's and a person's (D-241). */
+const ExportBlobs = Type.Object({
+  count: Type.Integer({ minimum: 0 }),
+  bytes: Type.Integer({ minimum: 0 }),
+  removed: Type.Array(Type.String()),
+  missing: Type.Array(Type.String()),
+});
+
 export const ExportManifest = Type.Object({
   format: Type.Literal(EXPORT_FORMAT),
   exportedAt: Type.String({ format: 'date-time' }),
@@ -24,14 +32,25 @@ export const ExportManifest = Type.Object({
    * were copied and their bytes; those gone since the snapshot — removed by retention, an erasure or a
    * delete — and those the store did not have although the row is still there, which is a fault.
    */
-  blobs: Type.Object({
-    count: Type.Integer({ minimum: 0 }),
-    bytes: Type.Integer({ minimum: 0 }),
-    removed: Type.Array(Type.String()),
-    missing: Type.Array(Type.String()),
-  }),
+  blobs: ExportBlobs,
 });
 export type ExportManifest = Static<typeof ExportManifest>;
+
+/**
+ * A person's export of their own data (D-241): the same format as a workspace's — one NDJSON file per
+ * table, the files at `blobs/`, this manifest last — about one person, across every workspace.
+ */
+export const PersonalExportManifest = Type.Object({
+  format: Type.Literal(EXPORT_FORMAT),
+  exportedAt: Type.String({ format: 'date-time' }),
+  person: Type.Object({ id: Type.String(), username: Type.String() }),
+  schema: Type.String(),
+  scope: Type.Literal('person'),
+  tables: Type.Record(Type.String(), Type.Integer({ minimum: 0 })),
+  /** The files the person uploaded with the messages in the export, said as a workspace export's are. */
+  blobs: ExportBlobs,
+});
+export type PersonalExportManifest = Static<typeof PersonalExportManifest>;
 
 /** Where an owner's export stands (D-140): being made, ready to download once, or done with. */
 export const ExportStatus = Type.Union([
@@ -59,6 +78,7 @@ export type ExportFailure = Static<typeof ExportFailure>;
 /**
  * `POST` and `GET /api/workspaces/:workspaceId/exports` — an owner's export, as they see it: never where
  * the archive is kept. `sizeBytes` and `expiresAt` once it is ready; `failure` a code, once it failed.
+ * A person's export of their own data has the same shape, at `/api/me/exports` (D-241).
  */
 export const WorkspaceExport = Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -73,3 +93,9 @@ export type WorkspaceExport = Static<typeof WorkspaceExport>;
 
 /** How long a ready export waits to be downloaded before it is thrown away (D-140). */
 export const EXPORT_KEPT_HOURS = 24;
+
+/**
+ * How many exports of their own data a person may ask for in any 24 hours (D-241): each reads everything
+ * they ever wrote, and three leaves room for one that failed and one asked again.
+ */
+export const PERSONAL_EXPORTS_PER_DAY = 3;

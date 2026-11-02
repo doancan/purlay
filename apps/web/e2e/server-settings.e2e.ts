@@ -12,6 +12,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { skipReleaseNotes } from './support';
 
 interface Manifest {
   readonly origin: string;
@@ -65,6 +66,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   if (manifest === null) throw new Error('the server did not start');
   const { origin, code, github } = manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
 
   // The setup, finished through the API: the administrator ends up signed in.
   const send = async (path: string, data?: unknown): Promise<void> => {
@@ -125,6 +127,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
     email: false,
     oidc: null,
     signUp: 'open',
+    password: true,
   });
 
   // Only GitHub is connected: disconnecting it is the last way in, and says so before it asks.
@@ -135,10 +138,21 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(githubCard.getByText(`Client ID ${github.clientId}`)).toBeVisible();
 
+  // Accounts (D-233): the administrator is listed, said to administer the server, with no button —
+  // nobody suspends the administration; a search that matches nobody says so.
+  const accounts = page.getByRole('region', { name: 'Accounts' });
+  const adminRow = accounts.getByRole('listitem').filter({ hasText: 'Administers this server' });
+  await expect(adminRow).toHaveCount(1);
+  await expect(adminRow.getByRole('button')).toHaveCount(0);
+  await accounts.getByLabel('Find by name, username or address').fill('nobody-by-this-name');
+  await expect(accounts.getByText('No account matches.')).toBeVisible();
+
   // Anybody else is told the route does not exist.
   const stranger = await browser.newContext({ baseURL: origin });
+  await skipReleaseNotes(stranger);
   const refused = await stranger.request.get('/api/server/settings');
   expect(refused.status()).toBe(404);
+  expect((await stranger.request.get('/api/server/accounts')).status()).toBe(404);
   await stranger.close();
   await context.close();
 });

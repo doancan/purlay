@@ -7,6 +7,10 @@
  *
  * Seeing whether it is set, setting it and removing it are an owner's or an admin's (§7.4: the
  * GitHub integration is configured by them).
+ *
+ * Two things more are known of it, from GitHub (D-23, amended; #884): when GitHub first refused it
+ * (`token_invalid_at`, set by the unfurl, cleared by a replacement or a removal), and the scopes a
+ * classic token had when it was saved (`token_scopes`), which say whether it is broader than a card needs.
  */
 import type { Executor } from '@purlay/db';
 import type { GitHubIntegration } from '@purlay/types';
@@ -17,7 +21,7 @@ import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { recordAudit } from '../audit/audit';
 
-const mayConfigure = (context: WorkspaceContext): void => {
+export const mayConfigure = (context: WorkspaceContext): void => {
   if (context.role === 'member') {
     throw new AppError({
       code: 'FORBIDDEN',
@@ -26,6 +30,17 @@ const mayConfigure = (context: WorkspaceContext): void => {
   }
 };
 
+/**
+ * Whether a classic token's scopes are more than cards need: `repo`, or any scope that writes. A
+ * fine-grained token has no scopes to read (`null`) and is what is asked for. Whole names, since a
+ * prefix such as `repo:status` is read-only.
+ */
+export const broadScopes = (scopes: string | null): boolean =>
+  scopes
+    ?.split(',')
+    .map((scope) => scope.trim())
+    .some((scope) => /^(repo|workflow|delete_repo|(admin|write):.+)$/.test(scope)) ?? false;
+
 export const githubIntegrationOf = async (
   executor: Executor,
   context: WorkspaceContext,
@@ -33,21 +48,32 @@ export const githubIntegrationOf = async (
   mayConfigure(context);
   const row = await executor
     .selectFrom('github_integrations')
-    .select(['access_token_encrypted', 'updated_at'])
+    .select(['access_token_encrypted', 'updated_at', 'token_invalid_at', 'token_scopes'])
     .where('workspace_id', '=', context.workspaceId)
     .executeTakeFirst();
   return row?.access_token_encrypted == null
-    ? { configured: false, updatedAt: null }
-    : { configured: true, updatedAt: new Date(row.updated_at).toISOString() };
+    ? { configured: false, updatedAt: null, invalidSince: null, broadScopes: false }
+    : {
+        configured: true,
+        updatedAt: new Date(row.updated_at).toISOString(),
+        invalidSince:
+          row.token_invalid_at === null ? null : new Date(row.token_invalid_at).toISOString(),
+        broadScopes: broadScopes(row.token_scopes),
+      };
 };
 
-/** Inside the caller's transaction: the row is locked, so two admins setting it at once take turns. */
+/**
+ * Inside the caller's transaction: the row is locked, so two admins setting it at once take turns.
+ * `scopes` is what GitHub said of the token when it was checked (`TokenCheck`); a replacement clears
+ * what was known of the one before it.
+ */
 export const setGitHubToken = async (
   executor: Executor,
   clock: Clock,
   cipher: CredentialCipher,
   context: WorkspaceContext,
   token: string,
+  scopes: string | null = null,
 ): Promise<void> => {
   mayConfigure(context);
   const existing = await executor
@@ -65,14 +91,18 @@ export const setGitHubToken = async (
       id,
       workspace_id: context.workspaceId,
       access_token_encrypted: sealed,
+      token_scopes: scopes,
       created_by: context.userId,
       created_at: now,
       updated_at: now,
     })
     .onConflict((conflict) =>
-      conflict
-        .column('workspace_id')
-        .doUpdateSet({ access_token_encrypted: sealed, updated_at: now }),
+      conflict.column('workspace_id').doUpdateSet({
+        access_token_encrypted: sealed,
+        token_invalid_at: null,
+        token_scopes: scopes,
+        updated_at: now,
+      }),
     )
     .execute();
   await recordAudit(executor, clock, {
@@ -93,7 +123,12 @@ export const removeGitHubToken = async (
   mayConfigure(context);
   const removed = await executor
     .updateTable('github_integrations')
-    .set({ access_token_encrypted: null, updated_at: clock.now() })
+    .set({
+      access_token_encrypted: null,
+      token_invalid_at: null,
+      token_scopes: null,
+      updated_at: clock.now(),
+    })
     .where('workspace_id', '=', context.workspaceId)
     .where('access_token_encrypted', 'is not', null)
     .returning('id')

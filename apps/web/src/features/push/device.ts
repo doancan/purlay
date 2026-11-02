@@ -30,6 +30,13 @@ export interface PushDevice {
   readonly onOpen: (listener: (url: string) => void) => () => void;
 }
 
+/**
+ * Whether this is iOS's Safari with Purlay not on the Home Screen, where Web Push does not exist until it
+ * is (iOS 16.4+, D-230). `navigator.standalone` is iOS's alone: `false` there, absent everywhere else.
+ */
+export const mustInstallForPush = (browser: Navigator = navigator): boolean =>
+  (browser as Navigator & { readonly standalone?: boolean }).standalone === false;
+
 /** Where the build puts the worker: at the root, so its scope is the whole application. */
 export const PUSH_WORKER_PATH = '/push-worker.js';
 

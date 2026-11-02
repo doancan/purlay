@@ -52,6 +52,21 @@ if (only !== '' && !projects.some((definition) => definition.name === only)) {
 }
 const chosen = projects.filter((definition) => only === '' || definition.name === only);
 
+/**
+ * The files that write a measurement `budget:browser` judges, run apart from the rest (D-227):
+ * `PURLAY_E2E_PERFORMANCE=skip` runs every other file, `only` runs these alone — the pipeline runs them
+ * after the suite, on one worker, so no other test competes for the machine while they measure. Unset,
+ * everything runs, as it always has. A value that is neither refuses to run.
+ */
+const MEASURING = ['**/performance.e2e.ts', '**/feed-scale.e2e.ts'];
+const PERFORMANCE_MODES = ['', 'skip', 'only'];
+const performanceMode = process.env['PURLAY_E2E_PERFORMANCE'] ?? '';
+if (!PERFORMANCE_MODES.includes(performanceMode)) {
+  throw new Error(
+    `PURLAY_E2E_PERFORMANCE is ${performanceMode}; it takes skip or only, or nothing`,
+  );
+}
+
 // A harness uses its port for the web origin and the next one for the API: a hundred apart keeps clear of whatever else is listening nearby.
 const portOf = (index: number): number => BASE_PORT + index * 100;
 
@@ -103,7 +118,8 @@ const engineProject = (engine: keyof typeof ENGINES, index: number): Project => 
 export default defineConfig({
   testDir: './e2e',
   // Not `.spec.ts`: `bun test` discovers that name and would try to run Playwright's tests.
-  testMatch: '**/*.e2e.ts',
+  testMatch: performanceMode === 'only' ? MEASURING : '**/*.e2e.ts',
+  ...(performanceMode === 'skip' ? { testIgnore: MEASURING } : {}),
   // One folder per project, so a light screenshot is never compared with a dark one.
   // The platform is in the path: `system-ui` is a different face on every operating system, so a
   // baseline photographed on one is not a baseline for another. Each platform keeps its own, and

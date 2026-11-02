@@ -158,6 +158,7 @@ before adding" tenet (D-2) enforceable rather than aspirational.
 
 ---
 
+
 ## Part C — Technical Decisions
 
 ---
@@ -495,13 +496,43 @@ departed user is a profile-level operation, not a row deletion.
 removed Redis, and that cache cannot simply disappear — without it every paste of a popular PR
 link re-hits the GitHub API and burns the workspace's rate limit.
 
-**Decided:** a `link_previews` table keyed by URL hash, with `expires_at`. Reads are a primary
+**Decided:** a `link_previews` table keyed by a hash, with `expires_at`. Reads are a primary
 key lookup; expiry is enforced in the query and swept by a periodic job. This is slower than
-Redis and entirely fast enough at our scale.
+Redis and entirely fast enough at our scale. *Amended 2026-11-01 (#884):* the hash is not of the URL
+alone but of the workspace, the token's version and the URL (D-112 §1), and the five-minute card and
+hour-long negative are constants in `unfurl.ts` — no `UNFURL_*_TTL` variable exists, and `CONFIG.md`
+no longer lists one.
 
 **Also decided:** GitHub API credentials are **workspace-level**, not per-user. Unfurling with
 the viewer's own token would leak which private repositories a given member can see, based on
 whether the card renders. One workspace token means every member sees the same card or no card.
+
+**Amended 2026-11-01 (#884), after the integration's audit.** The token is a fine-grained, read-only
+personal access token on selected repositories, and the server now says what it learns of it:
+1. **It is checked when it is saved.** `GET /rate_limit` (no quota) at `GITHUB_API_URL` — the address the
+   sign-in uses, so one setting says where GitHub is — before anything is stored, outside the
+   transaction and after the caller's role is known. GitHub's `401` is `400` on the `token` field; a GitHub
+   that cannot say (unreachable, failing, rate limiting) is `503 GITHUB_UNAVAILABLE`; either saves
+   nothing and leaves the token that was there. The `X-OAuth-Scopes` header is kept
+   (`github_integrations.token_scopes`), and a classic token with `repo` or a write scope is shown to admins
+   as broader than cards need. A fine-grained token sends no header and is what is asked for.
+2. **A token GitHub refuses is shown, and not used.** A `401` on a card writes `token_invalid_at` on the
+   row it was read from (not on a replacement that landed while the call was out); Settings → Integrations
+   tells admins, `configured` stays true, no call is made with it and no card is served from the cache
+   until the token is replaced or removed, which clears it. It is a state, not a cache entry, because an
+   expired token stays expired however long a minute is.
+3. **A spent quota pauses the workspace.** A `403` or `429` that says when to come back — `Retry-After`,
+   or `x-ratelimit-remaining: 0` with `x-ratelimit-reset`; a bare `429` a minute — stops calls for that
+   workspace until then, at most an hour, and nothing is cached for the link. The pause is held in the
+   process, as the call budget is (D-81, D-25): a node that has not learned of it learns it from its first
+   refused call, so what sharing it would save is one request a node. A `5xx`, a network error, a plain
+   `403` (a repository's refusal, not the token's) and an answer that is not a card stay what they were:
+   no card for that link for a minute (D-112 §3).
+4. **Cards are for github.com links only** (`GitHubLink`); the requests go to `GITHUB_API_URL`. A GitHub
+   Enterprise Server's links are not cards, and the Enterprise setting is for sign-in.
+**Rejected:** conditional requests (`ETag`) — a `304` still spends the primary quota's request on a
+secondary-limit-sensitive path and the five-minute card already bounds it; no measurement asks. *A pause
+shared through the database* — nothing needs it before a second node (D-25).
 
 ---
 
@@ -780,6 +811,7 @@ reconciliation (invariant I-7). D-27 adds a fourth, and session expiry a fifth.
 purlay sweep:orphans        purlay sweep:link-previews    purlay sweep:sessions
 purlay reconcile:storage    purlay purge:retention        purlay export:workspace (D-140: an operator's command, not scheduled)
 purlay sweep:github-deliveries   (D-134 §5)   purlay sweep:email-sign-ins   (D-138)
+purlay mail:missed          (D-240: every quarter hour)
 ```
 
 **Why not an in-process timer**, which would be the simpler answer at one node: under D-25's
@@ -1419,6 +1451,9 @@ the operator owns the data, and phoning home would end that.
 **No metrics stack yet.** Logs, health checks and error tracking answer *is it up* and *what
 broke*. A time-series stack answers *how is it trending*, which nobody is asking until there are
 customers to trend. `CONTRIBUTING.md` §1.11 applies to us.
+
+*Amended 2026-10-31 by D-221:* the API serves a Prometheus page for the operator's own scraper, off until
+`METRICS_TOKEN` is set; nothing is sent anywhere, so the paragraph above on self-hosters still holds.
 
 **Incidents.** A written severity scale, a status-page update before a root-cause analysis, and a
 public post-incident note for anything customer-visible. Written now, while it is cheap and
@@ -4444,7 +4479,7 @@ test on any refusal the page reports.
   script stays refused.
 - **`img-src` adds `https://avatars.githubusercontent.com`.** Avatars are GitHub's, and the image proxy
   that would serve them from `'self'` is #110. The exception is marked `TODO(#110)` beside the policy and
-  is removed with it.
+  is removed with it. *(Removed by D-237: avatars are initials and fetch nothing, D-100.)*
 
 **Rejected: initials instead of avatars until #110.** A stricter policy bought by taking back D-100's
 identity for a source that is GitHub's own avatar host. **Rejected: a nonce for the style element.** The
@@ -4713,6 +4748,14 @@ whose question was closed without holding the root, and would ask on every reply
 and carrying the notification in the frame, which would be a second shape of it beside the page's,
 for a list the client reads whole anyway.
 
+**Amended 2026-10-31 — `created_at` is the server's clock, as the message's time is.** It was the
+database's `now()`, while the message, its resolution and every other stamp of a send come from the
+server's injected clock. Live the two agree to the millisecond; under a clock that is not the wall's —
+the demo seed plays two days of history (D-33) — every notification read as the moment of seeding, so
+the inbox gave all its rows one time beside a feed of many. Now the send, the edit that names somebody
+new and the resolution write the instant they already hold. §1's order and the accepted late-commit
+window are unchanged: the instant is still taken before the transaction commits.
+
 ### D-107. What each notification level is told
 
 `notification_level` has been in the schema since the start (`'mentions'` by default), and delivery
@@ -4825,7 +4868,8 @@ said, and what was shown with it). One guarding query, one refusal (`404 ATTACHM
 `requireMessageById` (#200). An attachment belongs to its message's workspace by a constraint, not by
 care (D-90). Downloads carry `nosniff`, `Cross-Origin-Resource-Policy: same-origin`, a sandboxing CSP,
 an RFC 6266 file name, and `Cache-Control: private, max-age=31536000, immutable`: the bytes behind an id
-never change, and the cache is the person's own.
+never change, and the cache is the person's own. *Amended 2026-10-31 by D-231 §3:* `private, no-cache` with
+a tag — a copy is used only after the server has said again that the reader may have it.
 
 **7 · A message may be its attachments alone.** A pasted screenshot needs no words; the words become
 optional only when there is at least one attachment, at most 10 per message.
@@ -5027,9 +5071,13 @@ instruction to decide and proceed, and open to their reversal.
 
 **Decided.**
 
-1. **The key is the workspace and the link** — the SHA-256 of the workspace id, a newline and the URL. A card is the
+1. **The key is the workspace, the token's version and the link** — the SHA-256 of the workspace id, a
+   newline, the integration row's `updated_at` as an ISO string, a newline and the URL. A card is the
    workspace's, fetched with its token; a negative is too, since a link missing for A's token may be
-   there for B's. The table stays unscoped by column; the scoping is in the key.
+   there for B's. The token's version is in it so nothing remembered under a replaced token is read under
+   the new one (the entries expire as every entry does). The table stays unscoped by column; the scoping
+   is in the key. (*Corrected 2026-11-01, #884:* the first text left the version out; the code had it
+   from #66.)
 2. **What is fetched is built from parts.** The request names a `GitHubLink` — github.com, an owner,
    a repository, `pull` or `issues`, a number — and the API address is made of those, so no address a
    person wrote is ever fetched. A repository named `.` or `..` is refused: resolved, it would step out
@@ -5039,6 +5087,9 @@ instruction to decide and proceed, and open to their reversal.
    so every render does not ask again, and a GitHub that recovers is asked within a minute.
 4. **A token that does not open** (`ENCRYPTION_KEY` changed) is logged at `error` and no card is
    drawn — never a token silently treated as absent, and never a 500 for a link.
+5. **GitHub refusing the token is not GitHub failing** (*added 2026-11-01, #884; see D-23*). A `401` marks
+   the token bad and stops the calls, a `403`/`429` that names a time pauses the workspace until it, and
+   neither is cached as a minute of "missing"; everything else in §3 is as it was.
 
 **Rejected: sharing public cards across workspaces** by caching a card unscoped when its repository is
 public. Whether a repository is public is itself something only a token can see, and a repository
@@ -6031,7 +6082,13 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
 3. **Each feed has its own secret**: 32 random bytes the server makes, sealed by the one cipher
    (D-39 §6) with the feed's id bound in, answered once with the payload address — the screen that
    shows them says the content type GitHub must send, `application/json` — and never again. A lost
-   secret is a feed removed and made again, which is what connecting it again is told. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
+   secret is regenerated: *amended 2026-11-01 (#884), where it was a feed removed and made again.*
+   `POST /api/channels/:channelId/github-feeds/:feedId/secret`, by an owner or an admin, makes a new
+   secret for the same feed — same id, same address — and answers it once as a feed's creation does; the
+   old one stops verifying at once, since the secret is read per delivery, and the deliveries GitHub sends
+   with it are refused (`401`, and a `warn` line) until the webhook there has the new one, which the
+   screen says before it asks. The trail records `integration.feed_secret_regenerated` with the repository
+   and the channel, never a secret. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
    found before the signature is checked, and a repository's name, unverified, names a feed in every
    workspace that has one.
 4. **A delivery is checked before it is read**: a feed that is not there is `404`; a body without a
@@ -6050,7 +6107,8 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
    days; the ids are kept thirty, a margin rather than a mirror, by a daily job (`sweep:github-deliveries`,
    D-30). A delivery that failed and was not redelivered in those days is lost — said on the feed (§8).
    Accepted: the two headers are not signed, so a signed body sent again with a new id posts again —
-   TLS is what stands between them.
+   TLS is what stands between them. *Amended 2026-10-31 by D-231 §1:* no longer accepted — the body's
+   digest is recorded beside the id, and a body a feed has posted is a duplicate under any id.
 6. **A feed's message has no author.** Its `sender` is null — `message_type = 'system_event'`, held by
    a `CHECK` that a person's message has a sender and an event has none — and it carries the event
    (`githubEvent`) as parts: repository, actor's login, and what happened, every field bounded, each
@@ -6070,6 +6128,11 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
    many for its bucket (0033) — are on the feed, and every delivery is one log line — feed, delivery,
    event, outcome, never the body. An archived channel's feeds, and a deleted workspace's, refuse
    their deliveries. A refusal before the signature is said in the log alone: anybody can cause one.
+   *Amended 2026-11-01 (#884):* a signature that does not hold is one `warn` line too — `github delivery`
+   with the feed and `outcome: bad_signature`, never the secret, the signature or the body — since a
+   secret pasted wrong at GitHub, or one regenerated and not yet updated there, is otherwise silent; it is
+   still not said on the feed, where anybody's could bury a real failure, and it is bounded by the
+   address bucket.
 
 **Rejected.** *The creator as the author* — every place that asks "is this mine?" would answer yes
 for an admin's every push: their bubble side, their edit shortcut, their unread count, a thread's
@@ -6299,7 +6362,8 @@ them.
    refusal to start, since a relay down for a minute should not take the chat with it — and the shutdown
    waits two seconds for mail on its way, then says how many it left.
 7. **Limits** (provisional, O-4): five links an hour for an address, twenty requests an hour from a
-   client address, and the `auth` budget at the edge; past them the answer is still `202` and nothing is
+   client address, and the `auth` budget at the edge (*amended 2026-10-31 by D-231 §2:* five for an
+   address from one client, twenty for it from every client); past them the answer is still `202` and nothing is
    sent, said in the log without the address. The count holds under requests at once — one per address
    at a time, behind a lock in the transaction (*amended 2026-10-21 by D-179:* each count is one
    statement on a counter in `rate_limits`, which takes its row, D-179 §3) — and an address is one
@@ -6722,6 +6786,12 @@ Slack's loop is a banner, a badge and a sound.
    has notifications, it asks the browser once, and where the browser has push and the server has keys
    it also subscribes. It is on while the person who turned it on is signed in here and the browser still
    allows it; a permission taken back turns it off on the next load. The page never asks on load.
+   **Amended 2026-10-28 (#796):** while on, a device test requests a browser notice, reporting only
+   that the browser accepted it, with permission/device-settings guidance on refusal. The test checks
+   permission again; a revocation turns the switch off before any request. It creates no message,
+   requires no new endpoint, and changes no channel preference. Both the feed and an open thread
+   count as read only while the page is visible **and its window is focused**; blur/focus are observed
+   alongside visibility, so an unread notice is not cleared while the person is in another window.
 5. **A dot on the favicon, and the app's badge.** While the title counts, the tab's icon is
    `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`, bound to the
    tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count
@@ -8073,7 +8143,13 @@ nothing merged; its report is the record of every number below).
      the session ends, since every way Purlay ends one deletes the row too (D-116 §4, as amended).
    - *A `getUserInfo` override for GitHub* that takes only the primary **and** verified address, and
      makes the username from the login there — an override skips the library's own `mapProfileToUser`.
-     `github` is never in `trustedProviders` and `requireLocalEmailVerified` stays `true`. **The
+     `github` is never in `trustedProviders` and `requireLocalEmailVerified` stays `true`. **An account has
+     one GitHub identity, as it has one single sign-on identity (D-200 §3):** the library links a callback it does not
+     know to the account whose address matches, so a second GitHub id carrying that address — an address taken
+     over or recycled at GitHub — is refused where the `accounts` row is made (`identity_conflict`, shown as `failed`),
+     whether the account holds another `github` row or only a `github_id` that `recordGitHubSignIn` would overwrite;
+     the same write refuses it again under the row lock, for two callbacks at once. Only an account with no GitHub
+     identity is linked by its verified address. **The
      username is never a client's.** The field is declared `input: true` only because the library's
      OAuth callback drops the fields marked `input: false` from a provider's profile and then fails
      the sign-in for the missing one; so a value a client sends could reach it, and a
@@ -10056,3 +10132,1797 @@ browser binaries: restoration can cost as much as downloading, and Linux system 
 need installing. [GitHub's job-dependency guidance](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs)
 explains why the final verdict needs `always()` after failed or skipped dependencies. These support
 the choices above; they do not establish a measured reduction in the whole pipeline's duration.
+
+### D-204. Questions keep their answers and decisions; search finds them
+
+**Context.** On 2026-10-28 the owner approved research proposals 1–3: accepted answers and decision notes, unanswered questions with ownership, and advanced search with saved searches. This explicitly expands the current phase (D-4); GitHub issue creation is planned separately.
+
+**Decision.** A root may be explicitly marked as a question before it has replies. Existing unresolved threads remain listed. Questions may name a channel member as owner; unanswered and assigned filters and oldest-first pagination expose waiting work. Assignment never sends a notification.
+
+A root may select one live reply from its own thread as its answer, and carry a short plain-text decision note and an optional HTTP(S) reference. Selecting an answer and resolving remain separate explicit actions. A versioned metadata write prevents two editors overwriting each other; an identical retry succeeds. Any current channel member may edit, as with resolution. Deleted roots expose none of these fields; a deleted selected answer exposes no copied content. Notes are included in workspace export and cleared with a root's deletion; operator content erasure also clears notes last written by the erased person.
+
+Search retains literal, case-folded matching and adds resolution/question, date, code/file, and repository filters. It also searches root decision notes and their live selected answers. Saved searches are personal, bounded, server-stored filters, never cached results, and every reuse applies current channel visibility. Dates are inclusive from/exclusive until UTC instants; before remains the UUID page cursor. Repository filters match owner/repo boundaries in GitHub links and repository events.
+
+Contracts expand additively: optional knowledge in ThreadSummary, defaulted message columns, new versioned metadata and saved-search endpoints. Existing resolve routes and old rows remain valid. Metadata updates advance message state_version and changed_at and publish THREAD_UPDATED after commit. No new runtime dependency, notification class, scheduler, AI, or task tracker.
+
+**Rejected.** Inferring questions from punctuation would classify ordinary conversation and miss questions without question marks. Implicitly resolving on answer selection would close discussion without the reader asking. Saving search results would outlive access revocation. Replacing the existing unresolved list would hide old work.
+
+**Reversal.** Revert application changes and retain additive columns/table; do not discard stored decisions or saved filters. The first three capabilities are delivered together as requested; later GitHub integration is a separate scope decision.
+
+### D-205. Quote and code formatting preserve the source
+
+**Context.** On 2026-10-29 the owner requested improvements to quoting and sharing code. Quote formatting removed list markers; fence counting disagreed with the renderer and could send unfinished code. Automatic paste formatting nested fences and its Undo replaced the entire draft.
+
+**Decision.** Quote formatting adds or removes one outer quote, retaining lists, nested quotes and quoted blank lines. Selections ending at a line start exclude that next line. Code formatting uses a fence longer than those in the source, including indented fences, and retains trailing blank lines. Automatic formatting only applies to long pastes outside existing code; already fenced pasted code stays as supplied. Inserted fences occupy their own lines.
+
+Undo removes the automatic formatting, keeping the pasted content and later surrounding edits. It only replaces an unchanged, unique insertion; otherwise it leaves the draft intact and explains that the block changed. A newer automatic paste replaces the previous Undo action; sending or leaving the composer dismisses it.
+
+The shared Markdown engine reports whether the caret ends inside an open fenced block by observing its actual fence tokens (D-101). No second grammar decides Enter in the composer or message editor. The nesting guard also applies here; ordinary text without fence characters skips parsing. Locally measured median block-read times were 0.32 ms for a short snippet, 9.06 ms for 15,004 characters of code and 22.46 ms for 10,012 characters of table rows. Long language labels truncate before copy and wrap controls, including inside quotes on narrow screens; copying still uses the complete raw source.
+
+**Rejected.** Restoring the pre-paste draft loses both pasted content and later edits. Counting delimiter lines cannot distinguish a shorter fence or invalid closing line. Adding a rich-text editor would replace the existing plain-text workflow to solve formatting bugs.
+
+**Reversal.** Revert the client helpers and rendering classes; messages remain plain Markdown strings and require no data migration or contract change.
+
+### D-206. The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black — amends D-110, D-184
+
+**Decided (the owner, 2026-10-30).** Signed in, the workspace was drawn twice a hand's width apart: its tile at
+the top of the rail and its tile and name at the top of the sidebar, two doors to the same menu. A person is
+in one workspace at a time (`UX.md` §2), so the rail's tile was never a column of workspaces to choose from,
+only an echo. And the dark theme's rail was pure black (`#000000`) beside a near-black sidebar and content,
+which the owner found too black.
+
+- **One door.** The workspace's mark (its initials on the accent), its name and the chevron head the sidebar
+  and open the workspace menu, as before; the rail no longer holds the workspace. The rail is the places —
+  channels, inbox, open questions, search, saved — and Settings at its foot, its first place level with the
+  sidebar's header row. The button is heard as the name and then what it does (*Acme Switch workspace*), so
+  what is seen starts what is heard. The prerendered frame drops the rail's accent square with it.
+- **Dark is layered dark greys** (in the manner of Apple's elevated dark surfaces and of VS Code's and
+  Discord's dark themes): window `#0e0e10`, rail `#131315`, sidebar `#171719`, content `#1a1a1d`, a hovered
+  message `#222225`, a hovered row or input `#29292d`, code `#131315`, hairlines `#2e2e33`, navigation hover
+  `#26262a` and hairline `#2a2a2e`. Each step is one visible layer: the navigation recedes, the conversation
+  comes forward, and no large surface is pure black, which smears on OLED panels and makes light text halo.
+  Text, accent and status colours are unchanged; every contrast pair still passes. Midnight and Light are
+  unchanged.
+
+**Considered and rejected.** Keeping both doors with different menus, as Slack does — it still draws the
+workspace twice for someone in one; removing the name from the sidebar instead — the column would have no
+title and the mark alone does not say which workspace; lifting only the rail — a grey rail beside a black
+sidebar and content is the two-palette mismatch D-183 removed.
+
+**Cost of reversing.** The tile's markup in `workspace-menu.tsx` and its place in `rail.tsx`, the skeleton's
+square, and ten dark values in `tokens.json`; generated files follow.
+
+### D-207. The account door reads as a menu, the menu opens with who you are, and "you are here" has one tone — amends D-124
+
+**Decided (the owner, 2026-10-30).** Measured against the account switchers of Linear, Vercel, GitHub and
+Slack, the sidebar's foot fell short in three ways, and the place you are was drawn two ways:
+
+- **The door.** Its trailing glyph was the sliders — the same glyph as **Sidebar options** beside the
+  workspace's name — so it read as a setting, not a menu. It is the up-and-down chevron the workspace's door
+  has, and the avatar carries your own online dot (D-136), as your row in People does; *online* is said to a
+  screen reader after the name.
+- **Who you are.** The menu opens with a card — the avatar, the name, the handle — as every one of those
+  apps does, so the menu says whose it is before what it offers.
+- **Deep Work's whiles are a submenu.** Four of the menu's seven items were the whiles; they are one item,
+  **Deep Work ▸**, which opens them (ArrowRight or Enter). While it is on, how long is left and **End Deep
+  Work** stay in the menu itself, one step away. The palette still offers every while directly.
+- **One selected tone.** The channel you are in was filled with the accent, the rail's current place with
+  the hover's grey, Settings' current section with the accent again. All three are now `nav-selected` — a
+  quiet tint of the accent's family, distinct from hover in every theme — with the text in `nav-ink` and
+  the glyph in `accent-text`. The loudest mark in the column is now a mention's badge, which is what needs
+  you, not the row you already know you are in. The light theme's `accent-subtle` was not reused: on the
+  light navigation it cannot be told from the column (1.02:1). Every pair drawn on it is in the contrast
+  gate (`pairs.ts`).
+
+- **The composer's edge.** Focused, the composer was framed in the focus ring's colour, which in the dark
+  themes is the bright `accent-text` — held for as long as somebody types, it was the brightest thing on
+  the screen. It has its own token, `composer-edge`: the focus ring's blue in the light theme, a calm
+  slate-blue in Dark and an indigo in Midnight, each in the contrast gate as a control's boundary. The
+  focus ring itself is unchanged everywhere else.
+
+**Considered and rejected.** Keeping the accent fill (Slack's) — it competes with the badges and, in the dark
+themes, is the brightest thing on the screen; the hover's grey for selection — hover and selection then
+cannot be told apart; a separate Deep Work button beside the account — one more control in the corner for
+something the palette and the menu both reach.
+
+**Cost of reversing.** One token in `tokens.json` and `pairs.ts`; four class strings (`channel-row.tsx`,
+`rail-item.tsx`, `settings-nav.tsx`, `group-face.tsx`); the trigger and the submenu in `account-menu.tsx`
+and `MenuSub` in `ui/menu.tsx`.
+
+### D-208. The inbox has categories and a panel, and reading in it is never painted back — builds on D-106, D-153, D-162
+
+**Decided (the owner, 2026-10-30).** The inbox was a page only, with All and Unread. The owner asked for
+the notifications to be split into categories, for a bounded view with a way to all of it, and for the
+live path to be hardened.
+
+- **Categories**, as server queries (D-153: never a filter over loaded pages): **All**, **Mentions**
+  (`mention`), **Direct** (`direct_message`), **Threads** (`thread_reply` and `thread_resolved`). They
+  are sent as the `types` the API already takes (D-106 #787), so no endpoint or schema changed. A
+  channel's every message (D-107) is the weakest reason and stays in All. The page keeps the category in
+  its address (`?category=`), so a reload, Back and the panel's See all agree.
+- **The panel.** The rail's Inbox opens, on a wide window, a popover of the newest ten of a category
+  (`PANEL_LIMIT`), and **See all** opens the page on the same category. It has no count (D-110). It is a
+  new UI primitive's first use: `@radix-ui/react-popover`, the Radix family the app already uses; every
+  package it needs was already in the lockfile at the same versions, so it adds only its own code.
+  Narrow, the rail lives in the navigation's overlay and the Inbox stays the link to the page.
+- **Live, and cheap.** The panel reads one page, so a `NOTIFICATIONS_UPDATED` frame costs one request of
+  ten rows while it is open and none while it is closed, where the page's infinite list reads every
+  page it has loaded again.
+- **Reading, hardened.** One module (`read.ts`) reads for the page and the panel and paints every cached
+  view of the inbox, both shapes. An answer already on its way when the person reads is cancelled before
+  the paint, and the paint is laid again when the server answers, so a frame's read-again that landed on
+  the server's old state cannot draw the row unread under the pointer. Reading by ids is sent in chunks
+  of the server's page limit, so a thread that gathered more replies than that is not refused. In a
+  category, Mark all read reads the rows shown, never "up to the newest", which is the whole inbox's.
+
+**Considered and rejected.** Counting per category (a second badge, D-110); filtering the loaded pages
+by type in the client (D-153); a panel on narrow windows (a popover over an overlay); a keyboard shortcut
+for the page (`Ctrl+Shift+I` opens the browser's developer tools on Windows and Linux).
+
+**Accepted, not yet.** The late-commit window D-106 accepted is unchanged: ordering the inbox by commit
+order needs a server key, not a client change.
+
+**Cost of reversing.** `inbox-panel.tsx` and the Inbox link's two shapes; the categories module and
+its strings; `useNotificationsPanel` and the keys' category segment; two size tokens. `read.ts` is worth
+keeping either way.
+
+### D-209. Reactions are soft pills, and the workspace's door is a card over a vertical list — amends D-150, D-206
+
+**Decided (the owner, 2026-10-30).** Two surfaces the owner found plain or hard-edged:
+
+- **Reactions.** A chip was a near-square box with a hairline frame, and yours a bright accent frame. It is a
+  pill, as Slack's, Discord's and Linear's are: no frame at rest, the surface's raised fill; under the
+  pointer the accent's tint — what a click would make it; yours in that tint, in the accent's text and the
+  heavier weight. The tooltip that says who is unchanged (D-150).
+- **The workspace's door** (D-206) is a card at the head of the sidebar: framed in the navigation's
+  hairline and lifted with the card's shadow, the workspace's mark, its name, and under it who the person
+  is in it and how many are — *Owner · 4 members* — seen and not heard, so the button's name stays the
+  workspace and what it does. Under the pointer its fill takes `nav-selected`, the accent's family; open,
+  its frame is the accent. That is the edges' grammar (D-188): hover changes the fill, never the line,
+  and an edge that says *selected* is the accent. The count is the People list's query, so no request is
+  added.
+- **The workspace menu lists the workspaces as radios** — each with its mark, the one the person is in
+  checked and in the accent, the others in their own tint — so a screen reader says which is current,
+  not only the eye.
+
+**Considered and rejected.** A coloured frame that changes on hover (D-188 refuses a line that changes
+with the pointer); opacity colours (`accent-text/40`) for the edge and the chip's ring — they build to a
+raw `color-mix`, outside the token vocabulary; a column of workspace tiles on the rail (D-206: a person is
+in one workspace at a time).
+
+**Cost of reversing.** Two class strings in `reactions.tsx`; the card and the radios in
+`workspace-menu.tsx`, and one string.
+
+### D-210. What a paste becomes, a table from the row, numbered code, and text files read in place — builds on D-110, D-133, D-181, D-188, D-205
+
+**Decided (the owner, 2026-10-30).** The owner asked for Markdown, CSV and styled code to be sent in the
+right shape, and for the editor to match the best of its peers. The box stays a plain textarea of markdown
+(D-110, D-181; WYSIWYG stays rejected, by the owner's choice): every change below is markdown the renderer
+already draws, put where the caret is.
+
+- **What a paste becomes** (`composer/paste.ts`, pure). Rows a spreadsheet copied (tabs) or a CSV (commas,
+  or semicolons where the comma is the decimal mark; quoted cells per RFC 4180) become a GFM table — same
+  width on every row, at least two columns and a header and a row, at most 200 rows, and comma cells short,
+  so prose with commas stays prose. A comma or semicolon that ends or starts a line is punctuation, not a
+  column (no header cell is blank), and words recognisably code are never a table — a paste of statements
+  ending in `;` became a two-column table before this was said. Formatted text (`text/html`) keeps its emphasis, links (web and mail
+  only), lists, headings (three levels, D-101), quotes, code and tables; an image is its alt text; Google
+  Docs' all-wrapping `<b style="font-weight:normal">` is not bold; an editor's coloured code has nothing to
+  keep and stays plain. The HTML is parsed into a document that is read, never shown, and a paste over
+  200 kB of HTML is taken as its plain words. A long paste of code is a block named in its language when
+  the language is clear (JSON by parsing, then what only that language looks like), so it is coloured and
+  a diff is drawn as one (D-133).
+- **One step back.** A table or formatting is a guess about what was meant: the toast offers **Paste as
+  text**. `Cmd/Ctrl+Shift+V` pastes the words as they are. A code block keeps its Undo. Both follow D-205,
+  which was decided alongside: the action finds the block it put in and puts the pasted words in its place,
+  keeping what was written after it, and leaves a block that was itself edited; a newer paste's toast
+  replaces the older one. Inside an open fence nothing is converted at all, and a paste that already is one
+  fenced block is kept as supplied.
+- **A block starts on its own line.** A long paste after words on the same line produced
+  ```` before ``` ```` — not a fence, so the code ran into the paragraph and an empty block followed it.
+  Blocks are now placed on lines of their own (`placeBlock`).
+- **A table from the formatting row**: two columns and a row to fill in, its first heading selected.
+- **Numbered code** from five lines on: each line beside its number, in a column not heard
+  (`aria-hidden`) and not selected (`select-none`), so a hand selection copies the code alone; Copy still
+  copies the raw text.
+- **Text files read in place.** A CSV, Markdown or code file (by extension) up to 512 kB has **Preview**
+  beside its download. It is read only when asked (`attachmentText`, with the session, cached for the
+  page — an attachment never changes) and drawn through the renderer: a CSV's first fifty rows as a table
+  and how many more, Markdown formatted, code coloured, the start of a long text with a note that the
+  file goes on.
+
+**Considered and rejected.** A WYSIWYG editor (the owner chose to stay with markdown); converting a paste
+without a way back; previewing every file as the feed loads (a feed of files would be a feed of
+downloads); rendering a file's HTML.
+
+**Cost of reversing.** `paste.ts` and its call in the composer; one kind and one button; the numbered
+lines in `code-block.tsx`; `attachment-preview.ts`, the preview in `attachments.tsx`, `Http.text` and
+`attachmentText`; one size token and the strings.
+
+### D-211. What opens from a control grows out of it, and leaves faster than it came — amends UX §9
+
+**Decided (the owner, 2026-10-30).** The owner asked for smooth, well-made transitions in the right places,
+without overdoing it. UX §9 keeps motion quiet and only the palette animated as it opened; menus, the
+inbox panel, tips and dialogs appeared and vanished in one frame, which read as abrupt beside the
+palette's open.
+
+- **A menu, a submenu, the inbox panel and a tip** open with `pop-in` — from 0.96 with a fade, in
+  `duration-overlay` (150ms) — from the origin Radix computes for the side they opened on, so each grows
+  out of the control that opened it; they close with `pop-out` in a new, shorter `duration-exit` (100ms):
+  what leaves does not need the eye.
+- **A dialog** opens as the palette does (`overlay-in`) over a backdrop that fades; both leave in
+  `duration-exit`.
+- **A toast** rises a little into its corner (`rise-in`): it arrives where the eye is not.
+- **Unchanged:** no message entry animation; hover and focus stay 120ms colour transitions.
+- **Reduced motion** sets every duration token to 0ms, the new one included, so each of these is
+  instant without any component remembering to check; Radix waits for a closing animation before it
+  removes the element, and a zero-length one ends at once.
+
+**Considered and rejected.** Animating message arrival, list reordering or the feed (reads as lag, and
+moves content under the reader, UX §1); springs and longer durations (more motion than a working tool
+wants); a motion library (CSS keyframes and the tokens already do it, with no runtime cost).
+
+**Cost of reversing.** Four keyframe pairs in `index.css`, one duration token, and the classes on the
+menu, tip, dialog, toast and panel.
+
+### D-212. "Mark unread from here" — the one way the read position moves backwards — amends D-99 §4
+
+**Decided (the owner, 2026-10-30).** The owner asked for the core features of Slack, Teams and Discord
+the product lacked; marking a message unread is the first. The read position only ever moved forward
+(D-99 §4), which is right for reading and leaves a person no way to say "come back to this".
+
+- **`PUT /api/channels/:channelId/unread` `{ fromMessageId }`**, a member's only. The position moves
+  back to the newest message before it, or to none; a reply marks its thread's root, since the position
+  reads the feed (D-147). Both counters are recounted from the rows in the same locked turn as a read's
+  (`markUnread` beside `markRead`), so they cannot disagree with them. Already unread from there or
+  earlier, nothing moves and no version is spent. The caller's devices are told by `CHANNEL_STATE`.
+- **Notifications are not touched.** What the inbox has read stays read there (D-106); the badge counts
+  what still waits, as it always has.
+- **The open channel is held.** Looking at a channel reads it (`use-mark-read.ts`), and the next message
+  to arrive at the bottom would read it straight past the mark. A channel marked unread is held for the
+  rest of the visit — nothing is sent at the bottom or on leaving — and reads as before when opened again.
+  The hold is set before the request, so a read already waiting for its pause cannot slip in; refused,
+  the hold is lifted and a toast says why.
+
+**Considered and rejected.** Letting `PUT …/read` move backwards (a stale device behind the others would
+then undo their reading: forward-only is what makes that request safe to repeat); re-opening the
+notifications of the messages marked (the inbox and the feed are read apart, D-106).
+
+**Cost of reversing.** One endpoint and `markUnread`; the menu item and the hold in `use-mark-read.ts`.
+
+### D-213. Quote reply: the words, whose they are and a link back — never a mention
+
+**Decided (the owner, 2026-10-30).** Second of the core features the owner asked for (Teams' and Discord's
+reply with a quote).
+
+- **More → Quote reply**, for a member: the part of the message the person had selected — read as the
+  menu opens, before choosing an item can move it — or all of it, into the composer it answers in: a
+  reply's thread, a root's channel. Every line behind `> `, then a line with the author's name and a
+  link to the message, then the
+  caret, focused once the menu has closed (`onCloseAutoFocus`; while open, or closing, it holds focus).
+- **Named, not mentioned.** The author is their display name, never `@username`: quoting somebody is not
+  calling them (D-12), and the link is how the reader finds the original.
+- **Bounded** to its first thousand characters, ended at a line: a quote points at the original.
+- **No new server surface**: the quote is markdown, sent as any message is. A composer is reached by its
+  key (`composerKey`), so the message's menu needs no handle on whichever composer is open; a reply whose
+  thread is closed has none, and a toast says to open it.
+
+**Considered and rejected.** A structured "reply to" reference stored with the message (a schema and a
+contract for what a markdown quote and a link already say); mentioning the author (a notification for
+being quoted).
+
+**Cost of reversing.** `quote.ts`, the composer's inbox, the menu item.
+
+### D-214. Slash commands, as doors to what the product already does
+
+**Decided (the owner, 2026-10-30).** Third of the core features the owner asked for (Slack's, Mattermost's
+and Discord's slash commands).
+
+- **The commands**: `/me`, `/shrug`, `/topic`, `/mute`, `/unmute`, `/star`, `/unstar`, `/invite @name`,
+  `/leave`, `/deepwork 30m|1h|2h|tomorrow|off`, `/search`. Each runs through what already does it — the
+  channel's edit, the header's level and star hooks, the Deep Work controls, the search address — so it
+  paints, is refused and is put back exactly as its button, and the server checks what it always checked.
+  No endpoint was added.
+- **The list** opens on a `/` at the very start and narrows as letters are typed; Tab, or Enter until the
+  command is whole, writes it out; Esc closes it. It is a listbox the box points at
+  (`aria-activedescendant`), as the mentions list is.
+- **Typos are not sent.** An unknown `/word` is far more often a slip than a message: it is refused under
+  the box, naming the commands. `//` at the start sends a slash as words; a line with files attached is
+  words, never a command.
+- **`/me` and `/shrug` write markdown**, escaped so the words stay words: `/me` in italics with its
+  underscores kept, `/shrug`'s backslash and underscores so the arm survives the renderer.
+
+**Considered and rejected.** Server-side commands or an integration registry (an app platform is a
+non-goal, PRD §6); sending an unknown command as text (a typo in a channel); commands with side effects
+the product does not otherwise have.
+
+**Cost of reversing.** `slash.ts`, `slash-run.ts`, the list in the composer, and the strings; two hooks
+take a channel that may not be known yet.
+
+### D-215. Drafts and sent: a place for what was started, and what went
+
+**Decided (the owner, 2026-10-30).** Fourth of the core features the owner asked for (Slack's "Drafts &
+sent").
+
+- **A place on the rail**, after Saved, and a view in the palette: two tabs over one column, in the shape
+  the list screens share (D-158).
+- **Drafts** are this device's: what the composers already keep in `localStorage` (D-41), listed from
+  the entries' names (`listDrafts`), so nothing is stored beside them; only this person's — the key
+  carries the user, so another person on the same browser is never listed (#694). Each says its channel
+  and whether it is a thread's, opens its composer (which reads it back), and is deleted with Undo. A
+  draft written in another tab arrives through the browser's `storage` event. One in a channel the person
+  can no longer see is left out: there is nowhere to open it.
+- **Sent** is search narrowed to the person — `senderId`, no words, which search already takes as a filter
+  that stands alone (D-105) — so what is listed is exactly what they may still see, by the server's one
+  rule, newest first, a page at a time. **No endpoint was added.**
+
+**Considered and rejected.** Keeping drafts on the server (a sync and a table for what is a convenience of
+one device, D-41); a new "my messages" endpoint (search already answers it, with the visibility it must
+have).
+
+**Cost of reversing.** `listDrafts`, the screen and its link, a route, a palette entry and the strings.
+
+### D-216. All unreads: what is new, everywhere, read only as far as it was seen
+
+**Decided (the owner, 2026-10-30).** Fifth of the core features the owner asked for (Slack's "Unreads").
+
+- **One screen** (`/w/:slug/unreads`), reached from a row at the head of the sidebar's lists — there only
+  while a channel waits, with no count of its own (D-110) — and from the palette.
+- **Which channels**: joined, unread, and not set to tell nothing (D-107: a quiet channel is not asking to
+  be caught up on), in the sidebar's order. The state is the channels' cache, so reading one anywhere
+  takes it off this screen.
+- **What is shown**: each channel's roots after its read position, oldest first — the feed's own `after`
+  page (D-8), twenty at a time, with "More in #channel" when more waits; a channel never read shows its
+  newest page. Mentions are drawn as the feed draws them.
+- **Mark read reads what was shown**, up to its newest root, and no further: nothing the person did not see
+  is marked read. Found end to end: a channel whose unread are replies — unread by D-147 although the feed
+  is read past them — showed a count and nothing under it; it now says the replies wait in their threads,
+  and opens the channel, since a reply is read in its thread.
+- **No endpoint was added.**
+
+**Considered and rejected.** Reading the whole channel from here (it would mark read what was not shown);
+listing muted channels; a numeric badge on the row (D-110).
+
+**Cost of reversing.** The screen, its row and the rule in `waiting.ts`, a route, a palette entry, a cache
+key and the strings.
+
+### D-217. Forwarding is a link, and a link to a message is a card only for whoever may read it
+
+**Decided (the owner, 2026-10-30).** Sixth of the core features the owner asked for (Slack's "Share message",
+Teams' forward).
+
+- **`GET /api/messages/:messageId`** returns one message, found by the rule every route that names a message
+  uses (`requireMessageById`): deleted, never sent, or in a channel the caller cannot see is the one
+  `404 MESSAGE_NOT_FOUND` (D-34), with nothing of the message in it. Covered by the cross-tenant suite.
+- **Forward…** sends, through the engine as the composer does, a message of the person's own: their note,
+  then the original's link on a line of its own. Nothing new is stored — no "forwarded from" column, no copy
+  of the words.
+- **A link to a message of this workspace** (this origin, `/w/<slug>/c/<channel>?message=` or `?thread=`) is
+  drawn as a card under the words — author, channel, time, the start of it — asked of that endpoint as the
+  reader. Whoever may not see the original sees *This message is not available to you* and nothing else, so
+  a private message forwarded into a public channel shares a link, never its words; checked end to end, in
+  the page and in the network answer. At most three cards; a card is a decoration of a link already there.
+
+**Considered and rejected.** Copying the words into the forward (it would leak a private channel to whoever
+can read the destination, and go stale when the original is edited or deleted); a stored reference with a
+schema of its own (a link and the visibility rule already say it).
+
+**Cost of reversing.** One endpoint and its handler; `message-cards.tsx`, `forward-dialog.tsx`, the menu
+item and the strings.
+
+### D-218. A channel keeps its links at hand, under its header
+
+**Decided (the owner, 2026-10-31).** Eighth of the core features the owner asked for (Slack's channel
+bookmarks, Teams' tabs).
+
+- **`channel_bookmarks`** (migration 0062): a link and its name, per channel, in the channel's workspace by
+  the composite key (I-4). The same address in a channel is one bookmark (`UNIQUE (channel_id, url)`): added
+  again, the first stays, by whom and as named, and nothing is published — a double click or a retry is not
+  a second chip. At most `BOOKMARKS_MAX` (20), counted under the channel's row lock (`FOR NO KEY UPDATE`, the
+  lock a send's own write takes), so two members adding the last one cannot both get in. `added_by` outlives
+  its person as null: the bookmark is the channel's. The workspace export carries them.
+- **Read by whoever can see the channel, changed by its members** — the rule pins have (D-130): a visible
+  non-member is `403 NOT_A_CHANNEL_MEMBER`; one in another channel, never there, or not a UUID is the one
+  `404 BOOKMARK_NOT_FOUND` (D-34). Both suites cover the routes.
+- **Only the web.** An address is `http:` or `https:` by the contract's pattern and parsed as a URL by the
+  service, so nothing a browser would run (`javascript:`, `data:`) is ever kept; the client reads a bare
+  domain as `https://`, as an address bar does, and names an unnamed bookmark after its site.
+- **`BOOKMARKS_UPDATED`** on the channel's topic, after commit and only when something changed; it carries
+  no bookmark and clients read the list again, as for pins. A removal changes nobody's sight of a channel,
+  so it is not in the revocation table (D-85).
+- **The bar** sits under the channel's header: chips that open in a new tab without the referrer, × on hover
+  or focus for a member, *Add a bookmark* at the end. A removal is taken off at once, with **Undo** in the
+  toast (the same address and name added back), and put back as the server has it if refused. For someone
+  who may not change it and has nothing to read, there is no row at all.
+
+**Considered and rejected.** Bookmarks as pinned messages (a link would need a message to live in, and
+lose its place to retention); folders and reordering (a row of twenty does not need them yet); fetching a
+title or icon from the site (an outbound request on every add, with its own SSRF guard — it belongs with
+link previews, not here).
+
+**Cost of reversing.** Migration 0062 (drop the table), the module and its three routes, one frame, the
+bar and its strings.
+
+### D-219. Dependabot opens no pull requests; updates are the owner's — amends D-20, D-86, D-91
+
+**Decided (the owner, 2026-10-31).** Dependabot opened pull requests on a schedule of its own and showed
+up among the repository's contributors; the owner wants every pull request to be one a person chose to
+open. So `.github/dependabot.yml` is removed — no version updates for Bun packages, the Docker bases or
+the actions — and the repository's automated security fixes are switched off. Its **alerts** stay on: they
+open nothing, and say only that an advisory touches a dependency.
+
+What it watched is now watched by a person, and each place that said "the bot proposes it" means that:
+
+- **The TypeScript 7 trigger (D-20)** — `typescript-eslint` supporting TypeScript ≥ 7.1 — is checked by
+  hand when the toolchain is updated.
+- **Image digests (D-86)** move only when the owner moves them; `scripts/environment.test.ts` still holds the
+  tag, the digest's version and `packageManager` equal, so a half-done bump fails.
+- **Action SHAs (D-91)** stay pinned and checked by `scripts/workflow-pins.test.ts`; a new release arrives
+  as an ordinary pull request, not a bot's.
+- **Advisories** are still found without a commit: `bun run audit:gate` runs weekly and blocks at high
+  severity, and CodeQL runs weekly with new queries.
+
+The `dependabot/` branch prefix and the bot's exemptions in `check-pull-request.ts` and
+`contributor-agreement.ts` stay while a pull request it opened is still open (#785), so that one can still
+be finished; they go with the last of them.
+
+**Amended 2026-10-31.** #785, the last, merged; the prefix and both exemptions are gone, and a pull request
+from the bot would now fail `check:pr`, `check:cla` and `check:branch` like anybody's without an issue,
+a signature or a named branch.
+
+**Considered and rejected.** Keeping the actions and Docker ecosystems monthly (still a bot's pull
+requests, which is what was asked against); keeping security-fix pull requests only (the same). Rewriting
+history to take the bot out of the contributors list (its eight commits are on main, and a force push to
+main is not worth a name in a list).
+
+**Cost of reversing.** Put `.github/dependabot.yml` back from history and switch automated security fixes
+on again.
+
+### D-220. Test files have their own globals
+
+**Context.** Bun 1.4.4 corrects coverage for previously unexercised branches. The runtime upgrade exposed missing failure/default-path tests, which are now exercised without lowering coverage floors. Full-suite runs also attributed another file's presence timers to the settings-swap leak probe and intermittently stalled a server-startup probe; those probes passed alone.
+
+**Decision.** The unit, integration, full-suite and mutation commands use Bun's native `--isolate`: each file receives fresh globals and module state, and leftover handles are closed between files. Tests remain sequential. Existing leak assertions, coverage floors and timeouts stay intact. The environment-policy test and `tests-share-file-globals` mutation enforce the full-suite runner's flag. Package scripts put roots before the flag so Knip can still discover the tests.
+
+**Rejected.** Shared globals let one file's browser adapters or asynchronous cleanup affect another file's assertions. A bespoke subprocess for the leak probe would isolate just one symptom and duplicate the runner's lifecycle support.
+
+**Reversal.** Remove the isolation flags and their policy check/mutation together; no production data, contracts or configuration change. Reproduce the full suite before reverting, since standalone test success does not establish independence.
+
+[Bun's isolation reference](https://bun.com/docs/test/parallel) describes the fresh-global lifecycle; [the 1.4.4 release notes](https://bun.com/blog/bun-v1.4.4#bun-test) describe the corrected coverage instrumentation.
+
+### D-221. A Prometheus page for the operator, off until it has a token — amends D-44
+
+**Decided (the owner, 2026-10-31).** D-44 said *no metrics stack yet*: logs, health checks and error tracking
+answer *is it up* and *what broke*, and nobody was asking *how is it trending*. Self-hosters now are, and they
+already run Prometheus beside everything else they host. So the API answers `GET /metrics` in Prometheus's text
+format (0.0.4) — and nothing about D-44's other half changes: **nothing leaves a self-hosted server**. The page is
+pulled by a scraper the operator runs; nobody is sent anything.
+
+- **Off by default, and absent to a stranger.** Without `METRICS_TOKEN` the page does not exist. With it, a request
+  must carry `Authorization: Bearer <token>`, compared in constant time over SHA-256 of both sides, so neither where
+  they differ nor the token's length can be timed. No token, a wrong one, another scheme: each is the `404
+  ROUTE_NOT_FOUND` of a path nothing serves, byte for byte, as the server's administration answers everybody but its
+  administrator and a resource in another workspace is `404` (`CONTRIBUTING.md` §1.2). A `401` would tell a stranger
+  that the page is there and worth guessing at. `/metrics` is one of the API's own prefixes, so with the client
+  served a path under it is still that `404`, never the client's shell. The operator is told of a refused scrape in
+  the log, at `info`, without what was sent. The token is at least 32 characters of a token's alphabet, refused at
+  boot otherwise and never quoted; no rate limit is put on the route, since a `429` there would itself say the
+  page exists.
+- **Defence in depth.** The production proxy answers `/metrics` and anything under it `404` itself
+  (`docker/Caddyfile`; measured: `/METRICS`, `/%6Detrics` and `//metrics` too), so a token that leaked is still no
+  use from the internet; a Prometheus on the stack's network scrapes `api:3001` (`CONFIG.md`, *Metrics for
+  Prometheus*).
+- **No dependency.** The format is a page of rules: HELP and TYPE, three escapes, `+Inf`/`-Inf`/`NaN`, cumulative
+  buckets. It is written in `platform/exposition.ts` and held by a strict reader in the tests that refuses what the
+  format does not allow.
+- **What is counted is what the code can see honestly, per process.** Uptime and resident memory; sockets open on
+  this process (several nodes are several targets, which Prometheus adds up — D-201 does not change that); each HTTP
+  request as one histogram by method, route **as registered** and status class, whose `_count` is the request
+  counter, so a second counter would be the same number twice; refusals for the rate at each door; pushes that did
+  not reach their service, by why (`refused`, `not_taken`, `error`, `dropped`); letters the relay did not take. Each
+  counter's series exist from the start at zero, so the first failure is a rate and not a new series.
+- **The jobs are read, not counted.** They run in the scheduler's container, one process per run, so nothing the API
+  holds in memory would ever see one. Their record is `job_runs`, what `jobs:status` reads: each planned job's last
+  success and its failures since are read per scrape, within two seconds. A record that cannot be read leaves the
+  rest of the page and says `purlay_jobs_status_readable 0`, logged once until it reads again. A count of every run
+  ever is kept nowhere, so the page does not invent one.
+- **No label is a person's.** Label values are words the code spells: a method (anything unregistered is `OTHER`),
+  a route as registered (`/*` for the catch-all, `(edge)` for a request refused before routing, `(unmatched)` for a
+  method no route takes), a status class, a door, a reason, a job's planned name. A thousand paths with ids,
+  addresses and names in them are one series and none of their words; a test signs a person in, has them write, and
+  finds none of their name, address, ids, workspace or words on the page.
+- **One registry per process**, made by the composition root and handed in like every other dependency
+  (`platform/metrics.ts`); a module is handed a `Counter`, never the registry. A name declared twice, a name or label
+  Prometheus could not read, a counter going down or an observation that is not a number is a defect, thrown.
+
+**Considered and rejected.** `prom-client` (a dependency and its own global default registry for a page of format);
+a `401` for a wrong token (it confirms the page to anybody who asks); serving the page on a second port (a second
+listener to configure and expose correctly, where one path, one token and the proxy's refusal already keep it in);
+counting job runs in the API (they are not the API's to see); the database pool's in-use and idle connections
+(`@purlay/db` hands out Kysely and keeps the pool inside it; widening that package's surface for two gauges is left
+for when somebody needs them); per-workspace or per-user series (cardinality, and a list of who is active).
+
+**Cost of reversing.** Remove the route, `METRICS_TOKEN` from the loader, the compose file and the example env file,
+the three new files and their tests, the counters handed to the push sender, the mail ledger and the socket, and the
+proxy's two lines. No data, contract or migration is involved; an operator's scraper starts seeing `404`.
+
+### D-222. The audit log is narrowed on the server and taken away as a file; each entry is also a log line — builds on D-26
+
+**Decided (the owner, 2026-10-31).** The Audit log page was a newest-first list with nothing to narrow it
+and no way to take it away; an owner answering "who removed that member in March" scrolled.
+
+- **Filters**: who acted (`actorId`), one action of `AUDIT_ACTIONS` (`action`), and a window, `from`
+  inclusive and `to` exclusive (`AuditQuery`, `GET …/audit`). Applied by the server inside the keyset:
+  `nextCursor` pages within the filter, never over pages a client happens to hold (as D-153). **The window
+  is instants, and only instants**: the client turns the days a person picked in their own zone into the
+  instants those days begin (the last day's end is the next day's start), the address keeps the days, and
+  the server compares UTC instants and nothing else. An instant is a range of ids, since an entry's id is
+  made from the instant that is its `created_at` — so a window stays on `idx_audit_log_workspace` however
+  long the trail. A window that is empty or backwards, or a moment the calendar does not have (`02-31`,
+  `24:00`, which `Date.parse` would roll forward), is `400 VALIDATION_FAILED` on its field.
+- **The filter lives in the page's address** (`?actor=&action=&from=&to=`), so a reload, Back and a
+  shared link come back to it; only its own vocabulary is read back.
+- **Download** (`GET …/audit/export?format=csv|ndjson` and the same filter): every entry the filter keeps,
+  as an attachment, **streamed** five hundred rows a query by keyset, each page read only when the reader
+  has taken the last — no upper bound on rows, one page of memory, no connection held between pages.
+  What is written while it is read is not in it. The first page is read before the answer, so a database
+  that fails at once is `500 INTERNAL`; one that fails later cuts the download off (a browser shows a
+  failed download), logged by where — never a file that ends as if whole.
+- **Who**: whoever reads the trail — an owner or an admin (§7.4), one rule (`requireTrailReader`) for both
+  routes. **The download is on the trail** as `audit.exported`, with the format and the filter, written
+  before the first byte: an export cut off was still an export; a refused one is refused before it is
+  recorded.
+- **CSV that a spreadsheet cannot run**: a cell starting with `=`, `+`, `-`, `@`, a tab or a carriage
+  return is prefixed with `'`; cells are quoted as RFC 4180 says; UTF-8 with a byte-order mark, so `ğüşİ`
+  open as themselves; CRLF. The columns are the NDJSON line's keys (`AuditExportLine`,
+  `AUDIT_EXPORT_COLUMNS`), so the two files cannot say different things; the actor is named there as well
+  as by id, since a file is read away from the people list.
+- **Every entry of either trail is also one line of the process's structured log** (`audit entry
+  recorded`): the trail, the entry, the action, who acted, the workspace, the target and the related ids
+  of its metadata, and when — ids and fixed words only, never a name, an address or what anybody wrote,
+  so the log stays free of personal data (`ARCHITECTURE.md` §10). Written as the row is, inside its
+  transaction: a line whose request then failed is a row rolled back, and the request id joins them.
+  Each process that opens the database hands its logger over as it starts; a test holds that each does,
+  or says why not (the break-glass password command, whose output is one line by contract, and the
+  demo's two).
+
+**Considered and rejected.** Filtering in the browser over the pages loaded (it answers about what was
+loaded, not about the trail). Filtering on `created_at` (a second index for what the id already orders).
+Taking the reader's zone on the server (a second time-zone authority; the page already formats in the
+reader's own). A cap on the rows a download holds (a trail longer than the cap would be cut where nobody
+can see; streaming bounds memory instead). Building the file in the background like a workspace export
+(D-140: a trail is small and its own owner's, and a queue is a moving part for what one request does).
+Copying the metadata into the log line (it holds workspace and channel names), and writing the line after
+commit (no hook for it exists; the request id already joins a line to its outcome). D-26's rejection of a
+trail kept only in logs stands: the row is the record, the line a copy for watching.
+
+**Cost of reversing.** The two query shapes fall back to `OlderPageQuery` (a client sending a filter
+would be refused); the export route, its module and the `audit.exported` action (rows of it stay, said by
+their name); `lines.ts` and the calls that hand it a logger; the page's filter card and its strings.
+
+### D-223. A code reference is a link into the channel's repository — its one GitHub feed's
+
+**Decided (the owner, 2026-10-31).** A path with a line (`src/retry.ts:14`) or a commit's SHA in a stack
+trace or a "see foo.ts:14" should be one click from the code. Which repository it means is the channel's
+GitHub feed's (D-134): with exactly one feed, that repository; with none, or several, no file is linked —
+choosing among several would be a guess. No new setting and no migration.
+
+- **Drawn, not stored.** The reference is found as the words are drawn (`codeLinksIn`, `@purlay/markdown`,
+  called by `render-content.tsx` in prose and inline code), from `Channel.codeRepository` — an additive field
+  of the channel the client already holds, read in the channel list's one statement by a scalar subquery on
+  the feeds' `(channel, repository)` key, null for a direct message. It is told to whoever can see the
+  channel, who already reads that feed's events in it. Nothing goes into the message's metadata: the
+  repository is the channel's now, not when the words were sent. The feed list (`GET …/github-feeds`) stays
+  an owner's or an admin's.
+- **What is a reference.** A path ending in a known source extension (`ts`, `py`, `go`, `md`, `yml`, …),
+  with an optional line: `:14`, `:14:7`, `:10-20`, `#L14`, `#L10-L20` and the compiler's `(14,5)`; a leading
+  `./` is dropped. It starts where nothing path-like precedes it — a letter, digit, `.`, `/`, `\`, `@`, `#`,
+  `:`, `~`, `$`, `%`, `+`, `-` or an invisible format character — so an absolute path, a URL's path, an
+  address and the tail of a longer word are never cut into a shorter reference; a first directory with a dot
+  in it is a host (`github.com/…`), and `node_modules` is not the repository's. A bare file name with no
+  directory is a reference with a line, or inside inline code; in prose alone (`Node.js`) it is a word. A
+  commit is 7–40 lower-case hex with at least one letter and one digit, standing alone: not a number, not
+  `decade`, not `#a1b2c3`, not a piece of a UUID or of a longer hash, not `owner/repo@sha`. A version
+  (`1.2.3:4`) and a time (`10:30`) have no extension. Covered case by case, Turkish text and punctuation
+  around a reference included, in `code-references.test.ts`, and timed linear over 16,000 characters.
+- **Where it goes.** A path opens `https://github.com/<owner>/<repo>/blob/HEAD/<path>#L<n>[-L<m>]`: GitHub
+  serves `HEAD` as the repository's default branch (checked on 2026-10-31: `blob/HEAD/README` answers `200`),
+  which the client cannot know without asking. It is the file as it is now, so a line written against an
+  older commit may have moved; a branch name would be as much a guess, and the commit is not known. A bare
+  name, whose directory is not known, opens GitHub's code search in the repository (`repo:<owner>/<repo>
+  path:<name>`), and loses its line. A SHA opens `/commit/<sha>`. A link to a full GitHub address, and
+  `owner/repo@sha`, are what they were.
+- **Never in a fenced block.** A fence is code to read and copy, numbered and coloured token by token; a link
+  inside it would take a click meant to select, and a trace pasted in one mostly holds absolute paths that
+  would link to the wrong place. Never inside a link's label either.
+- **Built, never taken.** The address is made from the repository, checked against
+  `GITHUB_REPOSITORY_PATTERN` (anything else links nothing), and the path, each segment encoded on its own;
+  a `.` or `..` segment never matches, so it cannot step out of the repository, and what is built must pass
+  `SafeHref.of` and be https on github.com under the repository, or it is a defect, thrown, and the body is
+  shown as typed. Nothing is fetched to check a reference: a link that ends at GitHub's 404 costs a click,
+  a request on render would cost every reader and tell GitHub who reads what.
+- **Drawn as a link** (`UX.md` §3, §9): underlined, not colour alone, in either theme; a new tab without the
+  referrer, said to a screen reader; a stop for the keyboard among the row's controls (D-168).
+- **When the feed changes.** The admin who connects or disconnects one reads the channel list again, and
+  their references follow at once; everybody else's follow the next time their channel list is read. A feed
+  changes rarely, and until then a reference opens the repository the channel had.
+
+**Considered and rejected.** Finding references on the server and storing them in the message's metadata
+(stale as soon as the feed changes, and a derivation every old row would lack); asking GitHub whether a file
+or commit exists (a request per reference per reader, under GitHub's limits); a per-channel repository
+setting (the owner chose the feed, which already says it); the first of several feeds (a guess); linking
+inside fenced code (above); a bare word with an extension in prose, and upper-case SHAs (too many words and
+numbers). One false positive is accepted: a repository named like a file in prose (`vercel/next.js`) is
+linked into the channel's repository, where GitHub answers 404.
+
+**Cost of reversing.** `code-references.ts` and its call in `render-content.tsx`, the hook beside
+`useChannels`, the line in `github-feeds.tsx`, and the field: `codeRepository` is additive, so removing it is
+a contract change an installed client may rely on — stop drawing first, then deprecate the field.
+
+### D-224. Search operators are typed filters, read on the client into the criteria search already takes — amends D-204
+
+**Decided (the owner, 2026-10-31).** Search had controls (Where, From, Advanced filters) and nothing could be
+typed; `/search` (D-214) took words only. Now `in:#api from:@alice has:code deploy` works from the keyboard.
+
+- **The operators are the existing filters, typed.** `in:#channel` (or `in:@person` for a direct message),
+  `from:@person` (or `from:me`), `has:code`, `has:file`, `is:open`, `is:resolved`, `is:question`,
+  `repo:owner/name`, `on:`, `before:` and `after:` a `YYYY-MM-DD` day. Each sets the field of `SearchCriteria`
+  its control sets; **no server filter and no endpoint were added**, and the server checks what it always
+  checked.
+- **Read on the client, into the structured request** (`features/search/operators.ts`, pure). The address,
+  the request and a saved search keep criteria and the words left, never the line typed, so a saved search
+  is still a filter that reapplies current visibility (D-204) and an old one still opens. Names resolve
+  against what the client already holds — the channel list, the workspace's people, the signed-in person —
+  folded as the `@` list folds them (#702). One reader serves the search field, `/search` and the palette.
+- **What is an operator.** A known key, a colon and a value, as one token; keys ignore case, every Turkish
+  i included (`İN:`). Anything else is words: `foo:bar`, a link, `10:30`. A phrase between two quotes is
+  words without its quotes, so `"is:open"` is searched for as written; a quote with no partner is a
+  character. The last operator of a kind wins, and what is typed wins over a control changed with it.
+- **Nothing typed vanishes.** An operator that cannot be read — a channel or person nobody here is called, a
+  value no filter takes, an empty value (`from:`) — stays in the words where it was typed, is searched for
+  as words, and is said under the field (a polite status), from the address alone, so a reload says it too.
+  It is not blocking: the search runs.
+- **When it is read.** On Enter, and on any change of a control, which searches with what the field holds;
+  the field then keeps the remaining words, an operator it still holds quoted so Enter again asks the same
+  thing. Too few characters, more than `SEARCH_QUERY_MAX`, or an end that does not follow the start are said
+  in the field (or under the composer, for `/search`) and not asked.
+- **Days are the viewer's.** `on:D` is D's start to the next day's, in the viewer's time zone, sent as UTC
+  instants; `before:D` ends at D's start; `after:D` starts at the next day's (as Slack reads it). A midnight
+  a clock change skips begins at the first moment of that day. **This amends D-204's UI**: the date
+  controls were UTC days and are now the viewer's, so a typed day and a picked one agree; the contract was
+  always instants and is unchanged.
+- **Discoverable** from a *Search operators* disclosure under the field — a native `<details>`, in both
+  languages.
+
+**Considered and rejected.** Parsing on the server (`q` would carry syntax, a saved search would store a
+string whose meaning changes with a rename, and names would be resolved twice); dropping an operator that
+cannot be read (the search would quietly widen); blocking the search on one (a typo should not stop the
+rest); turning operators into chips inside the field (a second editor for what the controls already show);
+UTC days for typed dates (`on:2026-10-31` in Istanbul would start at 03:00).
+
+**Cost of reversing.** `operators.ts`, `use-operators.ts`, the help and the notice, the three callers and
+the strings; the date controls back to UTC midnights. Nothing stored changes.
+
+### D-225. A channel may keep its history longer than its workspace, never shorter — amends D-27 §1, D-139
+
+**Decided (the owner, 2026-10-31).** Retention stays the workspace's window (D-27 §1), and a channel may
+keep its own history **longer** — a window past the workspace's, or forever — **never shorter**. So no
+setting here can cause more deletion than the workspace's window alone already would, and the tenet's
+default (D-2) is untouched: a workspace that keeps everything keeps everything in every channel.
+
+- **Stored as a floor, in two columns** (migration 0063): `channels.min_retention_days` — at least this
+  many whole days, `NULL` for none of its own — and `channels.retain_forever`. `channels_retention_sane`
+  holds the workspace's own floor of 30, never both at once, and neither on a direct message (which
+  nobody configures, D-123). `NULL`/`false`, every channel before this, is "as the workspace".
+- **What is kept is the longer of the two windows, computed by the purge on every batch**, never a stored
+  "effective" number: the candidate reads join each message's channel and leave out a channel kept
+  forever and what is inside a channel's floor, beside the workspace's `created_at < cutoff`. A workspace
+  window lengthened past a channel's floor afterwards wins; one shortened leaves the channel's; one set to
+  forever is not read at all. Days are 86,400 seconds, as `DAY_MS` counts the workspace's, so a clock
+  change does not move the edge. I-10 says this now.
+- **Only an owner sets it**, `PUT /api/channels/:channelId/retention` (`{ keepsAtLeast: null | "forever"
+  | days }`), and reads it — the rule the workspace's window has (D-139 §4): keeping a team's history past
+  the policy is the policy owner's call, and an admin who could not shorten it does not lengthen it
+  either. A floor shorter than the workspace keeps now, or any number while it keeps everything, is
+  `409 RETENTION_TOO_SHORT`, checked under the workspace row's `KEY SHARE` lock so its window cannot move
+  between the check and the commit. The same setting again is answered as set and writes nothing — even
+  after the workspace moved past it, so a retry of a change that succeeded succeeds (D-33). Every change is
+  on the trail as `channel.retention_changed`, `from`/`to` as `workspace`, `forever` or days, named to a
+  reader only when they can see the channel (#691). No frame: only an owner reads it.
+- **The workspace's setting counts the channels that keep longer** (`channelsKeptLonger`), archived and
+  private ones included, and Data & retention says so. A count, never which: listing them would return
+  channels to an owner who may not see them (D-34).
+- **Archived channels keep their setting**, and the purge still applies it; the export carries both
+  columns (D-140); content erasure (D-139 §7) is untouched — it tombstones whatever is kept.
+- **Concurrency and failure.** The setter shares no lock with the purge (the purge never locks a channel
+  row), so a change is answered at once and is the rule from the purge's next batch: a batch that already
+  read the old rule finishes by it, as if the change had come a moment later — and the only change that
+  could make that batch delete what the new rule keeps is a lengthening, whose worst case is the night it
+  was about to purge anyway. A batch that fails writes nothing; the trail says `incomplete`, and the next
+  run finishes by the same rule.
+- **Measured, no index added.** On 1,000,000 messages (10 workspaces of 20 channels, one kept forever and
+  one with a year's floor each), the roots' candidate read stays a range of `idx_messages_workspace_age`
+  with each row's channel found by its primary key: 1.5 ms for a batch with nothing kept ahead of it, and
+  21 ms with 9,082 kept rows older than the window ahead of it. **The dimension that grows** is the number
+  of messages older than the workspace's window that a channel keeps, times the batches in a night: a read
+  walks past them on each batch, linearly (about 2 s a batch at a million). A cursor carried from batch to
+  batch is the fix when a night's `job_runs` duration says so; not before.
+
+**Considered and rejected.** A sentinel for forever (`0` or `-1` days — a number meaning its opposite); one
+enum column with the days beside it (three states where two columns and a check do); storing the effective
+window (it would be wrong the moment the workspace's changed); shorter channel windows (the owner's rule:
+nothing here may delete more); an admin's call (D-139 §4 keeps the window an owner's); listing the channels
+that keep longer on the workspace's page (a workspace-wide read of channels the owner may not see); a frame
+on change (nobody but an owner reads it); a per-channel purge loop (one pass per channel is a query per
+channel; the join keeps it one read per batch).
+
+**Cost of reversing.** A migration dropping the two columns, the join in the purge's two candidate reads,
+the module and its two routes, the count, the section in channel details, its strings and the code. Undone,
+the next night purges every channel by the workspace's window: a channel set to keep longer loses what is
+past it, so reversing is a decision about data, not a cleanup.
+
+### D-226. `verify` judges the browser jobs too, and lets them skip only for a change they cannot see — amends D-203
+
+**Decided (the owner, 2026-10-31).** #821 merged with all four browser jobs red: the required checks were
+`verify`, `schema` and the rest, and the browser jobs were none of them, so auto-merge took the change and the
+deploy (D-185) put a dialog with two buttons named Save on the server for 25 minutes, until #823. The browser
+jobs are now part of the required verdict.
+
+- **`verify` needs `[static, schema, changes, browser]`** and judges each, as D-203 judges the first two: a failure,
+  a cancellation, a missing result or a missing job is a refusal, naming the job.
+- **A skip of the browser jobs passes only when `changes` succeeded and said `browser=false`**: a change they cannot
+  see (`bun run ci:changes`: documents, tooling) still merges without a browser run. A skip for any other reason —
+  `changes` failed, gave no answer, or said the change needs them — is a refusal, so the gate stays fail-closed.
+- **The matrix is one result.** `needs.browser.result` is the matrix's: one red project is a red `browser`.
+- **Branch protection is unchanged**: it already requires `verify`. A test binds the job's `needs:` to the gate's
+  list, and mutations prove each new rule is tested.
+
+**Considered and rejected.** *Requiring the four `browser (…)` checks in branch protection.* A job skipped by its
+`if:` reports one check named `browser`, not its matrix names, so every change the browser jobs rightly skip would
+wait forever for checks that never come. *Running the browser jobs on every change.* Four runners and some
+eight minutes for changes to documents, for nothing they could see.
+
+**Cost of reversing.** `needs:` back to `[static, schema]`, the list and the skip rule in `scripts/ci-gate.ts`, and
+their tests and mutations.
+
+### D-227. A budget regression is measured alone, and must happen twice — amends D-49
+
+**Decided (the owner, 2026-10-31).** Since D-226 the browser jobs are part of the required verdict, so a noisy
+budget now blocks a merge, and both noisy budgets were failing on noise. On main, identical code measured the
+browser's cold load anywhere from 86 to 178 ms across runs, and a re-run of a failed job on the same commit gave
+110.9 ms and passed; the API's fan-out p95 failed at 23.6 ms against 15.6 ms on a change that touched only the
+client's search. Two causes, two fixes:
+
+- **The browser measurements are taken alone.** `performance.e2e.ts` and `feed-scale.e2e.ts` — the files that
+  write what `budget:browser` judges — ran inside the fully parallel suite, so another test's worker competed for
+  the runner's two cores while they measured. `PURLAY_E2E_PERFORMANCE` (`playwright.config.ts`) now takes `skip`
+  (every other file) or `only` (those two); unset, everything runs as before, and any other value refuses to run.
+  Each project is two jobs side by side (`matrix.part`): the suite with `skip`, and on a runner of its own the
+  measurements with `only` on one worker, then the budget. Only the measuring part reads, judges and keeps it.
+- **A regression must happen twice.** A real slowdown shows again on an immediate re-measurement; a runner's bad
+  minute does not. `budget:browser -- --remeasure` (CI passes it) measures a regression again — the measuring
+  tests alone, one worker — and fails only if that regresses too; measuring again that exits non-zero or measures
+  nothing is a failure, never a pass, and the first run's files are removed first so they cannot be read twice.
+  `budget:latency` runs three more trials after a regression and judges them the same way. Each says both
+  judgements ("first measurement regressed; measured again…"). Only a passing run is kept — the second, when the
+  first regressed; `--record` keeps the run judged last, so the record and the verdict are the same measurement.
+  An interrupted trial is still an error, in either set.
+- **The budgets are not loosened** (D-48): the factor (1.5×, 2× under three runs), the 20 ms floor, the five-run
+  history and the lines the tests hold on a developer's machine are unchanged. A regression that repeats fails as
+  before; nothing is adopted that did not pass. This is not D-49's "retry until a pass": there is one more
+  measurement, never a loop, and both are printed.
+- **The cost is runner minutes, not the run's length.** The measurements run beside the suite on a runner of their
+  own: alone, on one worker, a wide project's took 3.6 minutes on a laptop (the two-thousand-message channel is 3.1
+  of them; the narrow projects do not run it), under the suite's own length, and the suite no longer carries them.
+  Four more runners a run, and a regression spends its part's minutes again; the 20-minute ceiling has room for both.
+
+**Considered and rejected.** *Widening the factor* — it would let a real 2× slowdown through to stop noise that a
+quieter measurement removes at its source. *More samples per run only* — the cold load is already a median of five
+and the latency a median of three processes; a bad minute on the runner moves every sample in it together, and
+more of them cost every run, where measuring again costs only a run that regressed. *Dropping the gate, or taking
+the browser jobs back out of `verify`* — D-49 and D-226: a budget nobody enforces is a hope. *Measuring every run
+twice* — it doubles the minutes of every run to settle the few that regressed. *Measuring after the suite, in the same job* — quiet,
+but it lengthened every wide project's job by the measurements' minutes. *Measuring again until a pass* — D-49's
+re-run habit, automated: with enough tries noise passes anything. One more measurement, after a regression only, is
+the bound: a slowdown real enough to repeat still fails.
+
+**Cost of reversing.** The switch in `playwright.config.ts`, the second test step and `--remeasure` in `ci.yml`,
+the re-measure in both commands, and their tests and mutations. Reversed, the measurements share the runner again
+and a noisy run blocks a merge until somebody re-runs it.
+
+### D-228. The whole suite runs two files at a time — amends D-220
+
+**Decided (the owner, 2026-10-31).** `schema` was the pipeline's long pole: 742 s of a 12½-minute run on
+2026-10-31, 686 s of it the one run of every test, file after file. D-220 kept the files sequential because Bun had
+no parallel runner yet; Bun 1.4.4 has one, `--parallel=N`, which runs files in worker processes and implies
+`--isolate`, so D-220's guarantee holds: each file has globals of its own.
+
+- **`bun run test:all` passes `--isolate --parallel=2`** (`WORKERS` in `scripts/test-all.ts`). Measured on the same
+  tree, coverage included: 256–269 s on six runs, two of them from no template at all as CI starts, against
+  about 475 s sequential, every test passing; on CI `schema` took 460 s against 742.
+- **Two, not one a core.** Four workers ran the suite in 148–155 s, but four files cloning the integration template
+  at once wait on each other in PostgreSQL past the five seconds a hook is given, and the harness's own cost test
+  failed with them. Two leave the database and Redis room on a four-core runner and failed nothing.
+- **The coverage floor still holds.** Bun judges `bunfig.toml`'s per-file floor on the merged report: a run that
+  passes every test but leaves a file under the floor still exits 1, checked in both modes before this change.
+- **What running side by side exposed was fixed where it was, not waited out** (D-48: no floor, budget or rule
+  moved):
+  - a sidebar menu test read the menu one turn after the right click; Radix opens it a little later under load,
+    so the first look in each case now waits for it;
+  - the Redis bus tests published before every node's SUBSCRIBE had reached Redis, and Redis keeps nothing for a
+    subscriber not there yet: nodes now trade probes in rounds until each hears every other;
+  - the bus order walk and the reconnection walk, whose own waits allow ten seconds and whose reconnection doubles
+    a 250 ms backoff, had the five seconds every test is given; they have thirty, with the reason beside them;
+  - every worker runs the preload, so on a fresh database two built the integration template at once and one
+    failed on a duplicate name, and a clone could start while another process was connected to the template:
+    building and cloning now hold an advisory lock on the template's name (`testing.ts`, tested by building one
+    new template twice at once);
+  - four files that clone a database a test drop up to forty-six in one `afterAll`, which fitted a hook's five
+    seconds only alone (#797): they have sixty, as migrate-on-start's cleanup already had;
+  - Playwright reads the `JEST_WORKER_ID` each worker is given as being inside Jest and lists nothing, so the
+    listing test leaves the worker's marks out of what Playwright inherits.
+- `environment.test.ts` holds both flags and the number.
+
+**Considered and rejected.** *One worker a core*: above. *Sharding `schema` over several runners* (`--shard`): the
+per-file floor needs the merged report, and merging coverage across jobs is machinery this does not need while one
+runner's cores are idle. *Running the integration files apart from the unit files*: the same merge problem.
+
+**Cost of reversing.** Drop `--parallel=…` and `WORKERS` from `scripts/test-all.ts` and their test; the test fixes
+stay, being right either way.
+
+### D-229. A commit deploys only after its own `ci` and `image` runs have both succeeded — amends D-185; closes #798
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** `deploy` started on a successful `image`
+run alone, and `image` does not wait for `ci`. On 2026-10-28 commit `8283c4a6` was live at 09:12 while its `ci`
+failed at 09:19: the server ran a commit the gate later refused. Merging is not the proof either; branch protection
+judges the pull request's head, and a rebased merge is a new commit that the push's own `ci` run judges.
+
+- **`deploy` listens to both workflows.** A new `gate` job asks GitHub for the commit's push run on `main` of
+  `ci.yml` and `image.yml`, newest first. Both completed and successful: the server job runs. One still running: the
+  gate succeeds with nothing to do, and that run's own completion starts the workflow again. Anything else — failed,
+  cancelled, timed out, or no run at all — fails the gate and the server is not touched.
+- **The gate runs on GitHub's runner, not the server's.** Reading runs needs `actions: read` and nothing the server
+  holds; the server's runner is reached only through `needs: gate`.
+- **A hand-started deploy is judged the same way and cannot wait.** A rollback names a commit that was a push's tip
+  and passed; a commit inside a rebased merge has no runs of its own and is refused, because it was never tested.
+
+**Considered and rejected.** Making `image` depend on `ci` (`image` must run on pull requests as a required check of
+its own, D-87, and chaining would lengthen every merge's road to the server by the image build). A `workflow_run` on
+`ci` alone (the image could still be building, and its digest is what the server pulls). Polling in the deploy job
+until both finish (it would hold the server's runner for minutes, and a wait loop is a timeout to tune).
+
+**Cost of the choice.** When both finish within the same few seconds, both completions find the other done and the
+commit deploys twice; `concurrency: deploy` runs them one after the other and a second deploy of the running commit
+is a backup and a restart, which `deploy.sh` already handles. **Cost of reversing.** Set `workflows: [image]` back
+and remove the `gate` job.
+
+### D-230. Purlay installs as an application: a manifest, pictures drawn from the favicon, and no offline copy — builds on D-51, D-126, D-148; closes #89
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** D-51 made mobile an installable web
+application, and iOS delivers Web Push only to a site added to the Home Screen (16.4+). Purlay had no manifest, so
+an iPhone could not install it and with Purlay closed heard nothing, whatever the person turned on.
+
+- **`public/manifest.webmanifest`** opens the whole origin (`/`) as a standalone application. Its colours are the
+  dark theme's `surface-100`, which the shell starts in; `index.html` also gives the browser's bar `surface-100`
+  for each colour scheme.
+- **The pictures are the favicon, drawn again.** `bun run icons` (`apps/web/scripts/app-icons.ts`) renders
+  `favicon.svg` at 192 and 512 as it is, and full-bleed at 512 (maskable) and 180 (`apple-touch-icon`), where the
+  launcher cuts its own shape; the glyph already lies inside the maskable safe zone. `src/app-icons.test.ts`
+  decodes each PNG and holds its colours to the accent tokens and its sizes to the manifest, so a changed favicon
+  or accent fails until they are drawn again.
+- **iOS's Safari outside the Home Screen says what to do.** Where the browser has no push and `navigator.standalone`
+  is `false` (iOS's alone), the notifications page says to add Purlay to the Home Screen instead of "this browser
+  cannot show notifications", which there is not the whole truth.
+- **No offline copy and no fetch handler.** The push worker (D-126) stays registered only when somebody turns
+  notifications on; installation needs neither in current Chrome and Safari (Chrome's installability check on the
+  built client reports no errors). A chat client with a stale cache shows a conversation that is not true.
+
+**Considered and rejected.** A service worker that caches the shell for offline use (a second copy of the client
+whose staleness must then be managed, for a product that is useless without the server). Hand-drawn PNG icons
+(a second source of the brand that drifts). `apple-mobile-web-app-capable` and the other pre-manifest iOS meta tags
+(iOS 16.4+ reads the manifest's `display`). An in-page install prompt (`beforeinstallprompt` is Chromium's alone,
+and the browser's own menu already offers it).
+
+**Cost of reversing.** Remove the manifest, the four PNGs and the two `<link>`s; the push worker is untouched.
+
+### D-231. Three gaps an audit found: a replayed delivery, a sign-in lockout, a year-long cached file — amends D-109, D-134, D-138
+
+**Decided (the owner, 2026-10-31).** Three low-severity findings, each closed where it was, none by a new
+moving part.
+
+1. **A delivery is posted once by its body as well as by its id** (amends D-134 §5). `X-GitHub-Delivery` is
+   not signed — the HMAC covers the body alone — so anybody who saw one signed delivery could send its body and
+   signature again under an id made up, and the channel got the event twice. D-134 §5 had accepted that; it is
+   closed now because closing it costs one column. `github_deliveries.body_digest` is the SHA-256 of the body as
+   sent, written in the transaction that posts it, unique per feed (migration 0064, `SCHEMA.md` §8.3); the insert
+   does nothing on either key, so the same id again and the same body under another id are both `duplicate`, and
+   two at once wait on each other's row as D-134 §5's id already did. Per feed, since the secret is: the same
+   bytes to another feed are that feed's. Remembered as long as the ids are — `GITHUB_DELIVERIES_KEPT_DAYS`, by
+   the same sweep — so a replay older than that posts again, as a redelivery that old would; GitHub redelivers
+   only three days back. Two genuine deliveries with byte-identical bodies are not a case GitHub makes: every
+   event carries what changed (a push's `after`, an issue's `updated_at`), and a redelivery has its first id.
+   The digest, never the body: a copy of the database holds no event that was not posted.
+2. **The sign-in link limit is per address *and client*, under a per-address ceiling** (amends D-138 §7). Five
+   links an hour per address, whoever asked, let anybody send six requests for somebody's address each hour and
+   keep them out of signing in by email. Now: twenty requests an hour from a client, as before; **five links an
+   hour for an address from one client** — a stranger spends their own five, never the owner's, as a wrong
+   password does (D-179 §4, `password-attempts.ts`), a client being its network (`limitKeyFor`); and **twenty
+   for an address from every client**, so a mailbox is still not flooded. The ceiling is counted only past the
+   client's five, so one client spends at most five of it. Still `202` whatever is decided, and nothing in the
+   answer or its time says which limit held (D-138 §1). The counters are `rate_limits` rows under the address's
+   digest — `…:address:<digest>` and `…:address:<digest>:client:<digest>` (`SCHEMA.md` §3.2) — and an erasure
+   deletes them all by that prefix. Residual, accepted: someone with four networks can still spend an address's
+   ceiling for the hour; that is a bar raised from one client to several, and the price of bounding a mailbox at
+   all. Provisional with the rest of O-4.
+3. **An attachment is the browser's to keep and the server's to allow, every time** (amends D-109 §6). A year's
+   `immutable` let a member removed from a channel — or from the workspace — open every file of it their browser
+   had kept. Downloads and thumbnails are now `Cache-Control: private, no-cache` with a tag (`"<id>-<variant>"`):
+   the browser keeps the copy and asks before using it; the server checks the session and the reader's access as
+   for any download, and only then answers `304` with nothing read from the store, or `404`. The bytes behind an id
+   never change, so the tag needs nothing stored. The cost is a round trip per use of a kept copy — one session
+   lookup and the one guarding query, no bytes — where there was none. **The image proxy keeps its day** (`private, max-age=86400`): its bytes are an
+   image public where it lives, there is no access to withdraw from it, and asking again would mean fetching it
+   from its server again through four slots a node.
+
+**Considered and rejected.** *Signing the delivery id ourselves*, or *GitHub's timestamp*: GitHub signs neither,
+and only the body is the sender's word. *Keeping deliveries' bodies*: the digest decides the same thing and holds
+nothing. *A per-address limit with a challenge (CAPTCHA) past it*: a new dependency and a page D-138 does not have.
+*A higher per-address limit alone*: it trades a lockout for a flood and fixes neither. *A short `max-age` on
+attachments*: a window in which a removed member still opens the file — shorter, still there — for a saving the
+`304` already makes. *`no-store`*: every view would download the bytes again, a cost the tag avoids. *The same
+policy on the image proxy*: above.
+
+**Cost of reversing.** §1: migration 0064 dropped in a new one and the insert's conflict narrowed back to the id.
+§2: the client's key dropped from the address's count. §3: the header and the `304` branch in
+`ingress/http/attachments.ts`. Each has its tests and mutations.
+
+### D-232. An archived channel can be brought back, by an owner or an admin, as it was — amends D-123; closes #846
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** D-123 made archiving a soft delete that
+keeps a channel's messages and memberships, but nothing could undo it: an archive by mistake — the common case —
+left the history unreachable except through an export. The data was always there; only the way back was missing.
+
+- **Who.** An owner or an admin, as archiving is. A member is `403`.
+- **What they see.** `GET /api/workspaces/:workspaceId/archived-channels` answers name, type and when, the most
+  recently archived first, at most `ARCHIVED_CHANNELS_MAX`: every public channel, and a private one only to a member
+  of it. A private channel stays unseen by those outside it, archived or not (D-104); to them, restoring it is
+  `404`, as any channel they cannot see.
+- **What it does.** `POST /api/channels/:channelId/restore` clears `deleted_at` under the row's lock: messages,
+  memberships, settings and feeds return as they were. Each member is sent `CHANNELS_UPDATED`, so it rejoins their
+  sidebars without a reload. It is on the trail as `channel.restored`, with the name.
+- **A name taken since is refused, not changed.** Archiving frees the name (`idx_channels_unique_name` holds live
+  channels), so another channel may hold it now; that is `409 CHANNEL_NAME_TAKEN`, and the admin renames one of the
+  two first. A restore that picked a new name on its own would bring back a channel nobody recognises.
+- **Where.** A card on General, the page owners and admins already have, rather than a page of its own.
+
+**Considered and rejected.** Restore under a new name in the same request (a second form for a rare case; renaming
+the other channel first is one step). Listing archived private channels to every admin (it would tell them names
+D-104 keeps from them; the audit trail's names are D-104's own, older trade). A time limit after which an archive
+cannot be restored (retention already decides what an archived channel keeps).
+
+**Cost of reversing.** Remove the two routes and the card; archived channels stay archived.
+
+### D-233. The server's administrator suspends an account, and lifts it — builds on D-139 §5, D-179 §4.8, D-193; closes #848
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** When somebody left, the only ways to keep
+them out were erasing their account (which tombstones their name in every conversation, D-139 §5) or removing them
+from each workspace, which left them signed in to the server with every session they had. A security review named it;
+a team offboarding a person needs it on the day they leave.
+
+- **The server's administrator's, on Administration → Server → Accounts.** Accounts are found by name, username or
+  address (words, never a pattern), at most `SERVER_ACCOUNTS_MAX`. A workspace's owner is not offered it: an account
+  is the server's, not a workspace's (D-179 §4.8).
+- **Suspended is `users.suspended_at`.** Set, every session of the account is deleted in the same transaction and
+  each socket is sent `SESSION_ENDED` after the commit. A suspended account starts no session by any way in — the
+  library's one session hook refuses it for GitHub, a password, a link and single sign-on alike — and the session
+  seam refuses one that slipped past; the native application's handoff refuses it too. Memberships, messages and the
+  name stay, so lifting it is the person as they were.
+- **Never an administrator.** The caller's own account and another administrator's are `403`: a server whose
+  administration suspended itself has no way back but the break-glass command. Demoting an administrator stays the
+  operator's.
+- **On the server's trail with whose account** (`server.account_suspended`, `server.account_restored`, in the new
+  `server_audit_log.target_user_id`). Suspending a suspended account, or lifting one that is not, writes nothing.
+- **A sign-in refused for a suspension says what any refused sign-in says.** Saying "suspended" would tell whoever
+  holds a password that it is right.
+
+**Considered and rejected.** The sign-in library's admin plugin and its ban (a second model of who administers the
+server beside `is_server_admin`, and its ban expiry and reason fields are features nobody asked for). Suspension per
+workspace (removing a member already exists; what was missing is keeping the person off the server). A reason or
+an expiry on the suspension (YAGNI: lifting it is one click). Suspending from the Members page (a workspace's page,
+for an act on the whole server).
+
+**Cost of reversing.** Drop the column in a new migration — which lifts every suspension at once — and remove the card
+and the three routes.
+
+### D-234. Quiet hours: Deep Work every week, by itself, on the person's own clock — builds on D-15, D-108, D-131, D-148; closes #851
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** Deep Work (D-15) is started by hand and ends
+by itself within hours; nothing kept the evenings and weekends quiet without starting it every day. A person who
+installs Purlay on a phone (D-230) is then woken by what arrives at 23:00.
+
+- **A window and its days.** `from` and `to` are minutes after midnight; `from` later than `to` runs past midnight,
+  and the night belongs to the day it began — Friday's evening holds through Saturday's morning; a Saturday chosen
+  for nothing starts no night. One pure function, `isQuietAt` in `@purlay/types`, decides it for the server and the
+  client alike.
+- **On the profile's clock.** The time zone a person set on their profile (D-131) is the one fact about where their
+  day is; quiet hours are read on it, and refused without one, never guessed from the server's clock. Changing the
+  profile's zone moves the window with it.
+- **Held back as Deep Work holds it.** `inDeepWork` answers yes for a person in either, so a notification is written
+  and counted as ever and marked `suppressed_by_deep_work`: no push reaches a device (D-126). The open page goes quiet
+  as Deep Work makes it — no notice, no count in the tab (D-148) — re-read at each minute's turn.
+- **Per person, not per workspace.** An evening is the person's in every workspace they are in; Deep Work stays per
+  workspace as D-15 made it.
+
+**Considered and rejected.** Several windows a day (a second form for a rare need; one window and Deep Work cover
+lunch and evenings). A window per workspace (an evening does not change with the workspace). Ending a window early
+from the menu (turn the setting off; Deep Work already has its own end). Treating quiet hours as a non-goal's
+"reminder" or "scheduling" (D-4): nothing is sent later; what arrives is held back exactly as Deep Work holds it.
+
+**Cost of reversing.** Drop the three columns in a new migration, the card and the two routes; `inDeepWork` returns to
+the membership's flag alone.
+
+### D-235. A name is the person's own to set, where it is not GitHub's — amends D-131; closes #853
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** D-131 kept the name and the picture as
+GitHub's, shown and never edited — written when every account came from GitHub. Since D-138 and D-200 an account
+can be made by an emailed link, by single sign-on or by the setup with a password; its name is made from its address
+(`ada-lovelace`) and nothing let the person change it, so a team of such accounts read each other by handles.
+
+- **Whose name it is.** An account GitHub made, and never connected otherwise (`github_id` set,
+  `github_connected_at` null), takes GitHub's name at every sign-in (`recordGitHubSignIn`), so its name stays
+  GitHub's: `GET /api/me` says `nameFromGitHub`, the profile shows the name and offers nothing to change, and a
+  different `displayName` is `400` on that field. A client that sends the name it was shown changes nothing and is
+  not refused. Every other account's name is its own: `displayName` on `PATCH /api/me/profile`, trimmed, held to the
+  `name` format and `DISPLAY_NAME_MAX` like any name, never empty.
+- **Heard as any profile change is** (D-131 §4): `WORKSPACE_UPDATED` to each workspace the person is in.
+- **The picture is not part of it.** An account without GitHub's picture is drawn from its name, as before; a
+  picture upload is a separate question about storage and moderation.
+
+**Considered and rejected.** Letting GitHub accounts edit too (the next sign-in would write GitHub's back, so the
+edit would last until then — a change that silently undoes itself). Stopping GitHub from writing the name (an account
+whose name GitHub changed would drift from it with nothing said). A separate route for the name (the profile's route
+already carries what the person says about themselves, and its frame).
+
+**Cost of reversing.** Drop `displayName` from the request and `nameFromGitHub` from `GET /api/me` — an additive field
+a client ignores — and remove the row from Profile; names already set stay.
+
+### D-236. Two-step verification for an account with a password: the library's TOTP, no trusted devices, the session never replaced — builds on D-179, D-60, D-85, D-233
+
+**Decided (the owner gave the decision to the maintainer, 2026-10-31).** Only the server's administrator has a
+password (D-179 §4), and it is the one account that changes the server; a password leaked from elsewhere was enough to
+be them. Better Auth's two-factor plugin (1.7.14) is installed, its table under Purlay's names (`two_factors`, 0067).
+
+- **An authenticator app, and only for a password.** A code from an app (RFC 6238, six digits, thirty seconds, one
+  period either side), or one of ten backup codes, each spent once. The card is drawn only for an account with a
+  password; GitHub, single sign-on and a link rely on their provider's own second step, and the card says so. Codes
+  by mail or message are not offered: a mailbox is what a link already signs in with.
+- **Turned on only by a right code.** The password first (counted with the sign-in's wrong guesses, as a change of
+  password is, D-179 §4), then the key as a QR code, as text and as an `otpauth://` link, and nothing asks for a code
+  at sign-in until one from the app was right (`skipVerificationOnEnable` stays off). The backup codes are shown
+  once, with a button that copies them. Turning it off and new backup codes take the password each time. The key is
+  never read back: `/two-factor/get-totp-uri` is closed.
+- **Sealed.** The key and the backup codes are encrypted by the library under the server's derived auth secret, never
+  kept as shown; erasure deletes the row, and nothing exports it. Rotating `ENCRYPTION_KEY` makes every key unreadable,
+  as it signs everyone out (`CONFIG.md`): the person turns it on again.
+- **No trusted devices.** A session already lasts `SESSION_TTL_DAYS` from sign-in and is never extended (D-60), so
+  the code is asked once a sign-in, rarely. A cookie that skips the step for thirty days — refreshed at each sign-in,
+  so for good — would be a second long-lived credential that signing out everywhere, a password reset and a
+  suspension do not revoke. `trustDevice` is overwritten to false whatever a client sends.
+- **The library's lockout, its numbers said.** Five wrong codes spend a challenge (the password again, which is
+  throttled); ten in a row across challenges lock the step for fifteen minutes, the right code included; the
+  challenge lasts ten minutes. The library also allows three requests to its two-factor routes from one client in ten
+  seconds. Locking needs the password, so nobody without it can lock the administrator out.
+- **What a right password reveals.** With the second step on, a right password answers "now the code" and a wrong one
+  `INVALID_EMAIL_OR_PASSWORD`: the answer says the password was right. That is inherent to asking for the code after
+  the password — asking for both at once would make every wrong code a guess at the password too, and the library has
+  no such flow. What it gives away is held where it is spent: password guesses are throttled by address and client
+  (D-179 §4), and the right password opens nothing without the code.
+- **The session is never replaced.** The library replaces the caller's session when the first code turns the step
+  on and when it is turned off — useful only to a cookie cache, which is off (D-60). Replaced, the old row's sockets
+  would be told it ended, the devices push reaches through it would go with it (D-126) and its lifetime would start
+  again. Purlay keeps the old row (its delete hook) and undoes the new one, cookie and all, after the request.
+- **A suspended or erased account gets no session through it.** The second step ends in the library's session
+  hook, which refuses either (D-233, D-139 §5); erasure also deletes the key and every challenge.
+- **The way back in.** `bun run admin:reset-password` — the server's break-glass for the administrator — turns the
+  step off with the reset, and says so: lost phone and lost codes are the same lost way in as a lost password.
+- **Issuer.** `Purlay (<host of APP_URL>)`, set whatever a client sends, so two servers' keys are told apart in an app.
+- **A QR code by a small dependency.** `lean-qr` 2.7.4 (MIT, no dependencies, under 4 kB compressed, released
+  2026-09): an encoder written here would be several hundred lines of Reed-Solomon and masking held to the coverage
+  floor for one picture. Only its modules are used, drawn as an SVG of the page's own, in the settings chunk, which is
+  loaded only when settings open.
+
+**Considered and rejected.** Trusting a device for thirty days (above). Codes by email (a mailbox is already a way
+in). A replay cache of spent codes (a code is good for about ninety seconds and only behind the right password, whose
+challenge a right code spends). Offering it to accounts without a password (their provider decides their second
+step; the library would ask them for a password they do not have).
+
+**Cost of reversing.** Remove the plugin, the card and the code step; drop `two_factors` and
+`users.two_factor_enabled` in a new migration — every account then signs in with its password alone.
+
+### D-237. Images are this origin's alone: the avatar host's exception goes — amends D-102; closes #850
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** D-102 let the page load images from
+`https://avatars.githubusercontent.com`, for avatars "until the image proxy serves them". But D-100, two decisions
+earlier, had already decided what an avatar is: initials on a tint chosen from the username, which "needs no image
+fetch". The web client has drawn exactly that ever since (`ui/avatar.tsx`); no element of it loads `avatarUrl`. The
+exception allowed a host nothing used — a hole in the policy kept for a plan that had been dropped, which #850 then
+proposed to fill with avatar mirroring.
+
+- **`img-src 'self'`.** What the page shows is the server's: attachments and their thumbnails, and another host's
+  picture through the image proxy (#110). A tag injected past every other defence cannot make a reader's browser call
+  GitHub, or anybody, with their address.
+- **Nothing is mirrored.** Copying every avatar into the object store would build storage, refresh and erasure for a
+  picture the product decided not to draw. `avatarUrl` stays in the contract, GitHub's address, for a client that
+  chooses to draw it; such a client fetches it on its own terms.
+- **Held where it was.** `serving-the-client.test.ts` states the whole policy, and the browser suite fails a run on
+  any `securitypolicyviolation` the page reports, so an image from another host is a red build.
+
+**Considered and rejected.** Mirroring avatars into the object store and serving them from `/api/avatars` (#850's
+proposal: a feature for a picture nobody draws). Routing them through `/api/images` (no cache, four fetches a node
+at a time: a members list would queue past it). Keeping the exception "in case" (a policy wider than its use is the
+gap D-102 exists to close).
+
+**Cost of reversing.** Put the host back in `img-src` beside the client change that draws GitHub's picture.
+
+
+### D-238. Every channel read at once: `Shift+Esc`, the palette and the workspace menu — builds on D-99 §4, D-147; closes #866
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** A person back from a week away opened thirty
+channels one by one: the only bulk read was the inbox's (D-106), which reads notifications and leaves the read positions
+where they were. Slack's `Shift+Esc` is the gesture people already know for this.
+
+- **`PUT /api/workspaces/:workspaceId/read`**, no body, any member. Each channel of the workspace the caller is in and can
+  see (`visibleChannelsIn`, so an archived channel's kept membership is not one) whose `unread_count` is above nothing is
+  read to its newest message — a reply included, since replies count as unread too — by `markRead`, the read of one
+  channel, in one transaction. The notifications it reads and the numbers it counts are therefore a read's, and nothing
+  else can disagree with them.
+- **A reply still waiting stays unread (D-147).** The position reads the feed; an answer whose notification waits is read
+  in its thread or the inbox. So a channel can come back with its count and its badge unchanged. That is intended: the
+  badge still means *something here needs you*. The answer lists every channel it considered, moved or not, so a client
+  that cleared every badge first puts back exactly those.
+- **One order for the locks.** The memberships are locked first, by channel id, as the inbox's read takes them, so two of
+  these at once (two tabs, a double press), or one beside a read of one channel, take turns rather than deadlock.
+- **Every device is told.** After the commit each channel answered is published as `CHANNEL_STATE` on the caller's own
+  topic, moved or not, as a read of one channel is (H-API 4): a repeat repairs a device that missed the first.
+- **Three doors to one command.** `Shift+Esc` anywhere in the signed-in page, taken in the capture phase because the
+  panels, the feed, the editor and the composer read Escape without asking about Shift; inside a dialog or a menu the key
+  is left to it, and a held key asks once. **Mark all channels read** in the palette and in the workspace menu, with the
+  key beside it. The badges clear at once and are put back, where nothing newer was heard, with a toast when refused; a
+  toast also says it was done, since a key that changes only badges would otherwise say nothing to a screen reader. Some
+  browsers give `Shift+Esc` a meaning of their own (a task manager); where the browser keeps the key, the other two doors
+  are the way.
+- **Bounded by memberships, not paged.** The work is a read per channel with something unread in one workspace — tens,
+  not thousands — inside one transaction, so the answer is a list of those channels and nothing more.
+
+**Considered and rejected.** One statement that moves every position at once (the counting, the notifications and the
+`state_version` rules of `markRead` written a second time, and two places to keep in step). Reading the waiting replies
+too (D-147 is what keeps an unanswered answer from vanishing; the inbox's own **Mark all read** reads those). A confirmation
+dialog (the gesture is meant to be quick; nothing is lost, every message stays and "mark unread" (D-212) puts any back).
+A key with no meaning in any browser (people bring `Shift+Esc` with them; the palette and the menu cover the rest).
+
+**Cost of reversing.** One route and `markAllRead`; the key, the palette row and the menu item.
+
+### D-239. The sign-in policy: two-step verification required of a password, and passwords turned off — builds on D-236, D-200, D-179 §4; closes #867
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** D-236 made two-step verification
+something each person with a password chooses; a server's administrator could not require it, and with single
+sign-on connected (D-200) could not stop a password from being a way in at all. Two rules join who may sign up on
+Administration → Server, each a column of `server_settings` (0068) and each changed on its own by
+`POST /api/server/policy`, so two administrators changing two rules at once never undo each other.
+
+- **Required of an account with a password — not of GitHub, single sign-on or a link.** What D-236 protects is the
+  password; an account without one is signed into by a provider that owns its second step, and **a link counts as
+  such a provider**: the mailbox is the factor, as D-236 already says in refusing codes by mail. An account is held
+  to the rule when it has a password (a `credential` row with a hash) and password sign-in is on — whichever way
+  this session was opened, since the password is a way in to it either way. With passwords off the rule asks
+  nothing: there is no password sign-in left to protect.
+- **Held back, not signed out.** Such an account with its second step off can still sign in with the password
+  (there is nothing to ask for yet), and then every `/api` route, the socket's upgrade and `/api/server/*` answer
+  `403 TWO_FACTOR_REQUIRED` — a code of its own, so a client tells it from a refusal of the resource — except what
+  turning it on needs: `GET /api/me` (`mustEnrolTwoFactor`), `GET /api/me/sign-in`, the library's enable and
+  verify routes and signing out. The hold is one seam, `requireSessionFromHeaders`, which every route reaches
+  through `requireSession`, and the guard of Administration → Server; a route added later is held back unless it
+  says it is part of the enrolment. It is read from the database on each request, so the first right code lifts it
+  from the next request, on the same session (D-236 keeps that session). The web client draws only the enrolment
+  card and **Sign out** while held back. While required, turning it off is refused (`403`, the library's shape).
+- **Passwords off only while GitHub or single sign-on serves.** Turning password sign-in off is refused
+  (`409 no-provider`) unless one of the two is connected and its secret opens; disconnecting the last of them while
+  it is off is refused whatever `confirmLastChannel` says (`409 passwords-off`). The mail relay does not count: the
+  setup's administrator's address may be one a link does not sign into (D-179 §4, R32), so a server with only a
+  relay could lock its administrator out. Both rules are weighed inside the transaction that saves the change, from
+  what it saved, under the row's lock: a policy change and a disconnect at once cannot both pass. Not a database
+  check: a provider whose secret a rotated key cannot open is a column set and no way in (D-179 §6).
+- **Off means off.** `/auth/sign-in/email` is `403 PASSWORD_SIGN_IN_DISABLED` for every address, before a password
+  is weighed or counted, so it says nothing of any account; `/api/auth/methods` says `password: false` and the
+  sign-in screen draws no password form.
+- **The way back is the server's.** `bun run admin:reset-password` — already the break-glass for the administrator
+  (D-179 §4, D-236) — turns password sign-in on again, on the trail, and says to restart the server, which reads
+  its settings when it starts or changes them itself. A provider that went down, a key rotated past its secret or
+  an administrator removed from the provider all end the same way: a password, a restart, and — where the rule
+  requires it — the second step turned on again.
+- **On the trail.** `server.two_factor_requirement_changed` and `server.password_sign_in_changed`, who and from
+  which session, never the value (D-26).
+
+**Considered and rejected.** Requiring the second step of every account (it would ask GitHub, single sign-on and
+link accounts for a password they do not have, D-236). Counting a link as a password (a mailbox is the factor a
+link already is). Signing a held-back person out instead of holding them (they could never turn it on). Letting
+the mail relay keep passwords off (it can leave the administrator with no way in). A `CHECK` in the database for
+the provider rule (it cannot tell a sealed secret that does not open, and would refuse `CONFIG.md`'s statement for
+recovering from a rotated key). A separate break-glass command for passwords (the one that sets the password is
+the one a locked-out administrator already reaches for).
+
+**Cost of reversing.** Drop the two columns in a new migration and the gate in `requireSessionFromHeaders`; every
+server then lets a password in, alone, as before.
+
+### D-240. Email about what a person missed: opt-in, one letter an hour, after fifteen minutes unread — builds on D-12, D-15, D-126, D-148, D-234; closes #868
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** A person whose tab is closed and whose
+device has no Web Push (D-126) — a desktop browser never subscribed, a phone that did not install the app (D-230) — is
+told nothing of a direct message until they open Purlay again. Email is the one channel every account already has.
+
+- **Off until the person turns it on.** "Email me about direct messages and mentions I haven't read", on
+  Notifications. Quiet is the product (D-12): a server never mails anybody who did not ask. Offered only where the
+  server has a mail relay and the person's address was verified; otherwise the card is not drawn and turning it on
+  is `400` on `on`. Off is never refused. Per person, as quiet hours are (D-234).
+- **From the moment it is turned on** (`users.missed_mail_since`): nothing told before is ever mailed, so turning it
+  on does not send a year of old mentions. On again while on keeps the first instant.
+- **A mention or a direct message** (`MISSED_MAIL_TYPES`), still unread, never mailed before. A thread reply and a
+  channel set to every message stay with the inbox and push: the setting says direct messages and mentions, and a
+  letter is a heavier interruption than a notice.
+- **Fifteen minutes unread** (`MISSED_MAIL_DELAY_MS`): long enough that somebody at their desk, or reached by a push,
+  has read it — a mail about what they read a minute ago is noise — and short enough that a direct message is not
+  the next morning's news. The job runs every quarter hour (a new `quarter-hour` slot in the plan, at :07, :22,
+  :37 and :52, clear of every other slot), so a letter leaves fifteen to thirty minutes after the message.
+- **One letter, at most one an hour** (`MISSED_MAIL_WINDOW_MS`): what waits in between goes in the next. The letter
+  counts each conversation's messages per workspace and quotes the newest three — who wrote and a plain excerpt of
+  140 characters — each with its own address in the app (D-149), then the app, why it came and the stop link. In
+  the person's language (D-41). Names and excerpts are other people's words: no line break, control or direction
+  character, no `://`, cut short; the subject is fixed text. A push carries who and never what (D-126 §2) because a
+  lock screen is not private; a letter goes to the person's own mailbox, which they asked for by name, and quotes
+  only what they can read — the issue's own terms.
+- **Quiet is kept.** A workspace where the person is in Deep Work, or every workspace in their quiet hours
+  (`inDeepWork`, D-15, D-234), is held: nothing of it is mailed now, and what is still unread when it ends is mailed
+  then — nothing lost, nothing interrupting.
+- **Only what they can still read, decided when the letter is written.** A workspace they are in, a channel the one
+  visibility rule shows them (D-34), a message not deleted. Anything else is passed over for good — marked, never
+  quoted — so it cannot hold a place in the next batch. An erased, suspended (D-233) or unverified account is never
+  mailed.
+- **Never twice** (`notifications.mailed_at`). Each person is taken in a transaction of their own under their row's
+  lock with `SKIP LOCKED`, so a second run passes them over; the hour and `mailed_at IS NULL` are read under it and
+  the rows are marked, memberships first as a read takes them, before the commit. The letter is sent after the
+  commit. If the relay refuses it, its rows are given back and its letter row deleted, and the run fails so
+  `jobs:status` says so; a process that dies between the commit and the send loses that letter rather than sending
+  it twice.
+- **The stop link needs no session.** `/mail/stop#<token>`: a random token of `platform/tokens.ts`, its digest alone
+  kept with the letter (`missed_mail_letters`), good for thirty days; the job deletes letters past that. Whoever opens
+  it turns off the letters of the person it was sent to, and nobody else's; the page asks before it does, so a mail
+  scanner that opens it stops nothing. `POST /api/missed-mail/stop` is charged to the client's address as sign-in
+  traffic. One refusal, `404 MAIL_LINK_NOT_FOUND`, for a token nobody was sent and one too old.
+- **Without a relay** the job takes nothing and succeeds: a relay added later mails what is still unread then. The job
+  reads the relay from the server's settings on each run (D-179 §6), as the API does.
+- **Erasure** clears the setting and deletes the letters (D-139 §5); the export leaves both out.
+
+**Considered and rejected.** On by default (every person mailed by a server they never asked — the opposite of
+D-12). A letter per message (the inbox's storm in a mailbox; the hour coalesces). A daily digest (a direct message a
+day late is not what the person who asked wants; once an hour already caps it). Mailing thread replies and
+every-message channels (the setting would say one thing and do another). A signed token instead of a stored digest
+(a second scheme beside the one every bearer secret uses, and nothing to sweep). A `List-Unsubscribe` header with a
+one-click `POST` (the relay is the operator's own and the volume is small; the link in the body is honoured by every
+client, and a header can follow without a new contract). Sending inside the transaction (a relay's twenty seconds
+under the person's lock, and a commit that fails after the send would mail it twice). Treating it as a non-goal's
+"reminder" (PRD §6): a reminder is something a person schedules for later; this is the same notification the inbox
+and push carry, by the one channel that reaches them when those two did not.
+
+**Cost of reversing.** Remove the card, the page, the three routes and the job's slot; drop
+`users.missed_mail_since`, `notifications.mailed_at` and `missed_mail_letters` in a new migration. Nobody is mailed
+again; nothing else reads them.
+
+### D-241. A person exports their own data, from their account, in the workspace export's format — builds on D-27, D-139 §5, D-140, D-233; closes #869
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** Erasure existed and access did not: only an
+owner could export, and only a whole workspace, so a person exercising a right of access or portability (KVKK, GDPR)
+depended on an owner or the operator. A person now asks for a copy of their own data in Sessions & account.
+
+- **What goes is decided column by column** (`PERSONAL_COLUMNS` in `modules/export/tables.ts`), typed over the
+  generated schema as the workspace's classification is, with every other table named and its reason given
+  (`PERSONAL_EXCLUDED`) and a test that binds both to the catalogue: a column or a table a migration adds does not
+  compile until somebody decides whether a person's own copy carries it. Their account's row, every field (none is a
+  secret: the password's hash, the second step's key and the sessions' tokens are other tables', and stay); their
+  memberships and what they set on each — the notification level, stars, Deep Work, threads followed; every message
+  they wrote and has not been deleted, in every workspace, **in channels and workspaces they have since left too** —
+  they wrote them; their reactions, saved items, saved searches and a channel's links they kept; and the files they
+  sent with those messages, byte for byte, as a workspace export carries them.
+- **Nothing of anybody else's.** No other person's row, words, name or address. A row of theirs names other things by
+  id — a message they reacted to or saved — and the workspaces and channels their rows name are written by id, name
+  and kind only, so the ids mean something. What is the thread's or the team's stays: who resolved it, who it was
+  assigned to, the decision someone noted, its replies; and so do the words an edit replaced and a deleted
+  message's, which are not offered back (D-9), mentions and notifications (the words are the others'), and the
+  workspace's trail.
+- **One format.** The workspace export's (D-140): one NDJSON file per table, each row as the database writes it, the
+  files at `blobs/`, a manifest last (`PersonalExportManifest`, `scope: 'person'`), read in one snapshot and archived
+  as one `.tar` by the same code. The archive lives under the person's prefix in the store (`u/<id>/`), never a
+  workspace's.
+- **The same life as an owner's export**, in a table of its own (`personal_exports`): made by the API in the
+  background in the process's one export queue, alive every minute, downloaded once, kept `EXPORT_KEPT_HOURS`, swept by
+  `sweep:exports` with the workspaces' exports. A table of its own, not `workspace_exports` with a null workspace: an
+  owner's list and download are bound to a workspace, and a person's export must not be able to appear in one.
+- **The caller's own, always.** Every statement is bound to the session's person; another person's export, one
+  downloaded, one expired and an id that is no id are the one `404 EXPORT_NOT_FOUND`. The download is bound to a
+  session of the person who asked — not a link that works for whoever holds it.
+- **One at a time a person, and three a day.** A second ask while one is made is `409 EXPORT_IN_PROGRESS`, checked
+  under the person's row lock (`FOR NO KEY UPDATE`, so their own sends are not held up) and held by a partial unique
+  index besides: two asks at once make one export. At most `PERSONAL_EXPORTS_PER_DAY` (3) in any 24 hours, counted
+  from the rows, so the limit survives a restart and holds across a cloud's nodes; past it `429 RATE_LIMITED` with
+  `Retry-After`. Each export reads everything a person ever wrote; three leaves room for one that failed.
+- **A suspended account is refused, by having no session** (D-233). An export asked for and not yet made when the
+  account is suspended or erased fails as `EXPORT_REQUESTER_GONE`: nobody could download it, and an archive of a
+  person nobody watches is the risk. A suspended person's access request is the operator's to answer (`DATA.md` §4),
+  as their erasure is.
+- **Erasure ends them** (D-139 §5): in its transaction a ready export becomes `expired` and one being made `failed`, so
+  neither can be downloaded, and `sweep:exports` takes their archives out of the store within the hour, as it takes
+  every archive a row no longer needs — not `object_deletions`, which holds a workspace's keys only (D-141 §4).
+- **On the server's trail.** `account.export_requested` and `account.export_downloaded`, with the person as actor and
+  account, in `server_audit_log` and its log line (D-222): the operator answers access requests (D-28), so the record
+  that one was asked for and taken is theirs, not a workspace's — a workspace's owners are not told that a member took
+  a copy of their own words.
+
+**Considered and rejected.** Sending the person to an owner's export (it holds what the owner can see, not what the
+person wrote, and is the owner's). Exporting every message of every channel the person can see (other people's words:
+that is the workspace export, an owner's). A second archive format, or JSON in one file (D-140's format already reads a
+page at a time and is published). Rows in `workspace_exports` with a null workspace (above). A tokenised download link
+that could be mailed (a credential that outlives the session that asked). One export a day (a failed one would block
+the person until tomorrow). Writing the requests to each workspace's audit log (the person's own act, about their own
+data, across workspaces).
+
+**Cost of reversing.** Remove the card and the three routes, and drop `personal_exports` in a new migration once no
+archive is left under `u/`.
+
+### D-242. An owner deletes a workspace: gone at once, kept for a week, then erased — builds on D-9, D-26, D-27, D-140, D-141; closes #870
+
+**Context.** Once made, a workspace could not be removed: the API reserved `DELETE /api/workspaces/:workspaceId` as
+"not built", and `workspaces.deleted_at` (0003) was honoured by the tenancy guard but written by nothing. A team that
+leaves, or a workspace made by mistake, stayed on the server with every message and file in it — personal data kept
+with no purpose (D-27, D-28), and nobody able to say so but the operator with SQL. Deleting is the one act here whose
+end is an erasure, so the questions are who, how surely, how reversibly, and what a crash half way leaves.
+
+**Decision.**
+1. **An owner asks, typing the workspace's name** (`POST /api/workspaces/:workspaceId/deletion`, `{ confirm }`). Not an
+   admin: an admin manages the workspace and does not end it, as an owner's row is an owner's to change (§7.4). The
+   name is compared exactly, both sides in one Unicode form (a keyboard composing `ğ` otherwise types a different
+   string). No recent sign-in is required, unlike erasing an account (D-139 §5): the grace period below is the safety
+   a fifteen-minute window would be, and it is reversible by every owner rather than by the one session.
+2. **Gone at once, for everybody.** Asking sets `deleted_at`, which the guard has always refused — every route is
+   `404`, every invitation link stops opening, a feed's delivery is refused, and the workspace leaves `memberships`.
+   After the commit each channel's topic is sent `ACCESS_REVOKED` (one frame a channel, not a member and a channel)
+   and each member `WORKSPACE_UPDATED`; sessions are untouched, since a person may be in other workspaces. *Not
+   read-only*: a workspace in which people can still read but not write invites a week of "why can't I post", and
+   keeps every route needing a second rule beside the guard; gone is the guard's one rule, already tested on every
+   endpoint.
+3. **A grace period of `WORKSPACE_DELETION_GRACE_DAYS`, seven days, any owner may take it back**
+   (`DELETE /api/workspaces/:workspaceId/deletion`). A week covers an owner away for a few days and a deletion the
+   other owners did not agree to, and is short enough that a team that meant it is not kept waiting for the erasure.
+   The owners see it in `GET /api/me`'s `scheduledDeletions` — a bar in every workspace they still have, and on the
+   front door when it was their last — the only place a deleted workspace appears. The two routes mint a
+   `DeletionContext`, not a `WorkspaceContext` (`platform/tenancy.ts`): it admits a workspace whose deletion was asked
+   for, and reaches nothing but the deletion. Asked twice is asked once (D-33): the same answer, nothing recorded;
+   taken back twice the same.
+4. **Then `purge:workspaces`, daily at 02:00**, claims every workspace past its grace period — `purge_started_at`,
+   under the row's lock, which taking it back waits on too, so the two never both win and a late owner is told
+   `409 WORKSPACE_DELETION_STARTED` — and empties it in bounded batches, each its own transaction: replies then roots
+   (500 a batch, by `idx_messages_workspace_age`), their files through `dropFiles` and the deletion queue (D-141),
+   uploads nobody sent, exports and their archives, channels (100 a batch, each taking its memberships, feeds,
+   incidents and bookmarks), then every other table that names it and its memberships last. The last transaction
+   sets `purged_at` only if no run already has, and writes the one line, so two runs or a run after a crash finish
+   the work and record it once. A test reads the catalogue and fails on a table that refers to a workspace and is
+   neither emptied nor a trail. Nothing is taken back or told on the way: nobody can reach the workspace, so no
+   counter needs keeping and no lock order is shared with a writer.
+5. **The row stays, a tombstone with its name and slug**: `audit_log` and `server_audit_log` refer to it and are never
+   deleted from (I-9). This is not the cascade CONTRIBUTING §1.7 forbids: soft deletion still never cascades — the
+   content goes by an explicit job, as D-9 allows ("only via an explicit operator-run purge"), after an owner asked
+   and a week passed. The slug stays taken; a team that wants it back asks the operator.
+6. **On both trails, never anything written.** The workspace's: `workspace.deletion_requested` with `purgeAt`, and
+   `workspace.deletion_cancelled` — read by its owners and admins once it is back. The server's:
+   `server.workspace_purged`, no actor (a job), `server_audit_log.target_workspace_id` naming it (0071).
+7. **The dialog offers an export first**: a link to Data & retention, where the owner exports (D-140) and downloads
+   before deleting. An export not downloaded is erased with the rest; one being made as the erasure starts finds its
+   row gone and removes its own archive.
+
+**Considered and rejected.** *`DELETE /api/workspaces/:workspaceId` with the name in the body* — a body on `DELETE` is
+dropped by some proxies, and the deletion is a thing with a life of its own (asked, taken back), so it is a resource.
+*Deleting at once* — one slip, or one owner against the others, and a team's history is gone with no way back.
+*Read-only during the grace period* — see §2. *A server administrator's list of workspaces being deleted* — nothing
+asked for it yet; the operator has the trail and the table. *Hard-deleting the workspace row* — the trails refer to
+it, and an audit trail that loses what it describes is no trail. *Relying on `ON DELETE CASCADE` from the workspace*
+— one statement over every row of a large workspace, with the files' keys lost.
+
+**Cost of reversing.** The two routes and the job can go in one change; a workspace whose deletion was asked for then
+simply stays gone (its `deleted_at` is 0003's), and taking one back would need SQL. What was erased is gone, which is
+the point.
+### D-243. Announcement channels: only owners and admins post in the feed, everybody replies — builds on D-111, D-123, D-156; closes #871
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** An `#announcements` channel fills with chatter:
+anybody in it may start a conversation in its feed, and what was announced scrolls away under the answers. A channel may
+now be marked so that **only the workspace's owners and admins post a root** there, while **everybody in it still replies
+in a thread**: the announcement stays in the feed, the conversation about it under it (D-122).
+
+- **One column, one rule** (0072): `channels.only_admins_post`, false for every channel before it, held off a direct
+  message by `channels_only_admins_post_not_dm`. No per-channel list of posters and no new role: the workspace's roles
+  (D-22) are who may speak for the team already.
+- **Said through the channel's settings**, `PATCH /api/channels/:channelId` with `onlyAdminsPost`, beside the name and the
+  topic (D-123): only an owner or an admin among the channel's members changes it (`403 FORBIDDEN` for a member, the role
+  read in the transaction, so a demotion that committed first is the answer); the same value again changes nothing and
+  tells nobody, whoever asks. A direct message or a group has none — the stranger's `404`, as for a rename. It is on the
+  trail as `channel.posting_changed` (`from`/`to` as `everyone` or `admins`), named only to a reader who can see the
+  channel (#691), and the room hears it in `CHANNEL_UPDATED`, at the channel row's version, with the name and the topic.
+- **Refused where every message is written.** `sendMessage` — the one write behind the socket's `MESSAGE_SEND` and
+  `POST /api/channels/:channelId/messages` (`ARCHITECTURE.md` §5.1) — refuses a root from somebody whose workspace role is
+  `member` with `403 ONLY_ADMINS_POST`, a code of its own so a client says *reply in a thread* rather than *not allowed*,
+  before anything is written. A reply never reads the rule. Editing one's own message is not a new message and is not held
+  to it (D-103). A GitHub feed's event (D-134) is the channel's own integration, written by its own path, and keeps
+  posting. Nothing else writes a message today: an incident's timeline and write-up are the incident's (D-137), not the
+  feed's, and there are no slash commands.
+- **A retry is answered.** A member's resend of a root they wrote before the channel became an announcement channel is
+  answered with that message, as any retry is (D-8, D-33); only a new one is refused.
+- **A demotion is the next send's answer.** The role is read in the send's transaction under the workspace row's
+  `KEY SHARE` lock — the one the message's foreign key takes anyway, taken before the role is read — which a role
+  change's `FOR UPDATE` waits on and waits for (D-111 §2). A demotion in flight makes the send wait and then refuses it; a
+  send in flight makes the demotion wait and is kept, since it was made by an admin. A change of the rule itself racing a
+  send is decided by which the send read: one that read the rule before it was turned on lands, as if it had come a
+  moment earlier.
+- **The screen says it before the server has to.** For a member who is not an owner or an admin the channel's composer is
+  replaced by a sentence saying who posts here and that a thread is still theirs; the thread's composer stays. The header
+  carries a megaphone, named for a screen reader, for everybody. Owners and admins who are in the channel find the box in
+  the channel's details, saved as it is ticked. A client whose role is stale meets the server's `ONLY_ADMINS_POST` as a
+  failed send with that sentence.
+
+**Consequences.** A root in any channel costs one more read, of the channel's row by its primary key; in an announcement
+channel, one more lock the insert would take anyway and a read of the sender's role. **An open tab built before this**
+receives `CHANNEL_UPDATED` with a field its closed shape does not have, reads it as malformed and reconnects once (D-82)
+— on a rename or a change of this rule, not otherwise; the native client ignores what it does not know (D-58).
+
+**Considered and rejected.** A new role or a per-channel list of who may post (a second permission system beside D-22,
+for a team of thirty). Refusing replies too (the announcement would lose its questions, and they would move to a DM
+nobody else sees). Letting any channel member set it (the point is that the team's admins decide who speaks for it).
+A route of its own (`PUT …/posting`): the channel's other settings are one `PATCH`, told by one frame. Hiding the
+composer only in the client (the server is the authority, CONTRIBUTING §1.2). Refusing after the insert (it would write
+and roll back on every refusal; the retry is answered by reading first).
+
+**Cost of reversing.** A migration dropping the column and its check, the guard in `sendMessage`, the field in the
+`PATCH`, the frame and `Channel`, the notice, the marker and the box, and their strings.
+### D-244. How long a session lives: signed out after a time unused, and after a time at all — builds on D-11, D-60, D-193, D-239; closes #872
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** A session lived `SESSION_TTL_DAYS` from
+its sign-in, used or not, and the device list (D-193) let a person end one place by hand; a server's administrator
+could not say *sign out a browser left unused* or *ask everybody to sign in again each week*. Two rules join the
+sign-in policy on Administration → Server, each a column of `server_settings` (0073) and each changed on its own by
+`POST /api/server/policy`, as D-239's are.
+
+- **A small fixed set, both off by default.** Unused for 1, 8, 24 or 168 hours; at most 1, 7, 30 or 90 days old.
+  The choices are `SESSION_IDLE_TIMEOUT_HOURS` and `SESSION_MAX_AGE_DAYS` in `@purlay/types`: the page offers
+  exactly them and the server refuses anything else with `400`. Off is `null`, and every session then lives as
+  before. The maximum age only shortens: `SESSION_TTL_DAYS` still ends a session that reaches it first.
+- **Judged where the session is read, from its own row.** The library's `before` hook runs ahead of every one of
+  its endpoints — our seam reads a session through its `getSession`, so every route of ours, the socket's upgrade
+  and the library's own routes (`/auth/change-password`, two-step verification) meet it in one place. A session
+  whose `last_used_at` is the timeout old, or whose `created_at` is the maximum age old, is deleted there and the
+  library finds none: the answer is the `401` of a signed-out request (D-60 — nothing says why). Nothing is written
+  into `sessions` when the policy changes, so a change reaches every session already open from its next request,
+  and turning a rule off gives back a session it had not ended. One indexed read a request, and only while a rule
+  is on.
+- **Use is a request, and the page saying the person is there.** Every request the session resolves for refreshes
+  `last_used_at`, as D-60 does, but every five minutes rather than every hour while a timeout is set; and the
+  socket's `ACTIVE` (D-143) — sent on the person's own input while the page is in front of them — refreshes it the
+  same way, since reading and writing over an open socket makes no request. A socket merely open is not use: a tab
+  left open overnight is what the timeout is for. A session therefore ends up to five minutes before the timeout
+  after its last use, never later. Use never revives a session the policy has already ended.
+- **Ended as every end is.** The row is deleted only while it still says it lapsed — a statement that judges it
+  again — so two requests at the instant end it once and a use that refreshed it in between keeps it; the sockets
+  it held are sent `SESSION_ENDED { reason: 'expired' }`. A socket whose session lapsed with nobody asking — idle,
+  or older than a maximum age set after it opened — is ended by the liveness sweep at its next check, within about
+  half a minute; a socket's own timer is set to the maximum age where that is sooner than `expires_at`. The device
+  list shows no session the policy ended, and the end it shows is the maximum age where that is sooner.
+- **The native application alike.** Its session is minted by the handoff (D-191) as a row like any other and read
+  through the same seam, so both rules apply to it; it signs in again by the browser as it does after a sign-out.
+- **On the trail.** `server.session_idle_timeout_changed` and `server.session_max_age_changed`, who and from which
+  session, never the value (D-26).
+
+**Considered and rejected.** Free input of hours and days (a number nobody can check against a reason; a small set
+covers what a team means). Better Auth's own `updateAge` (it slides `expires_at`, the absolute lifetime D-60 keeps
+fixed, and the cookie would no longer say when the session ends). Writing a deadline into each session when the
+policy changes (a write to every row, and a policy turned off could not give one back). Counting an open socket as
+use (an unattended tab would never time out). Writing `last_used_at` on every request (D-60's argument). Ending
+sessions the policy lapsed from a scheduled job (a session nobody presents harms nobody; `sweep:sessions` still
+removes it at `expires_at`). Exempting the native application (a Mac left unlocked is the case an idle timeout is
+for).
+
+**Cost of reversing.** Drop the two columns in a new migration, the hook's check and the five-minute refresh; every
+session then lives `SESSION_TTL_DAYS`, used or not, as before.
+### D-245. Incoming webhooks: a channel's address for CI and monitoring, its secret in the path — builds on D-12, D-34, D-134; closes #873
+
+**Decided (the owner gave the decision to the maintainer, 2026-11-01).** A team's CI and its monitors want to say
+"deploy finished" and "error rate up" where the team already talks. A repository's feed (D-134) speaks only for
+GitHub, signed GitHub's way; a CI job, Grafana or Alertmanager has nothing to sign with and knows only how to `POST`
+JSON to an address it was given.
+
+- **A channel's, made by an owner or an admin**, from a channel they can see, as a feed is (D-134 §2): listed with
+  its name, who made it, when, and when it last posted; revoked from the same list. A direct message has none. At
+  most `INCOMING_WEBHOOKS_PER_CHANNEL_MAX` (ten) a channel, counted under the channel's row lock. Each make and
+  revoke is a row of the audit trail (`integration.webhook_created`, `integration.webhook_revoked`) with the name
+  and the channel, never the secret.
+- **The secret is in the path**, `/api/webhooks/incoming/:webhookId/:secret`: 32 random bytes of `platform/tokens.ts`,
+  answered once inside the path, its SHA-256 alone kept (`incoming_webhooks.secret_digest`), so a copy of the
+  database posts nothing; a post digests what it was given before anything is looked up and compares in constant
+  time. Not a header: the tools this is for — Grafana's and Alertmanager's webhook, a CI step's `curl`, anything that
+  speaks Slack's incoming webhook — are configured with one address and nothing else. What an address in a path
+  costs, and what answers it: the server writes the path to no log (`pathWithoutSecret` in `edge.ts` writes
+  `…/:webhookId/:secret` on every request line, the edge's and the error handler's), the API sends
+  `Referrer-Policy: no-referrer`, and a hook is only ever `POST`ed, never opened in a browser. A reverse proxy's own
+  access log is the operator's, as it already is for every other request; a leaked address is a hook revoked and
+  made again, which is what the list is for.
+- **One answer for everything that is not a live hook**: an id nobody made, a wrong secret, a hook revoked, its
+  channel archived, its workspace deleted — `404 INCOMING_WEBHOOK_NOT_FOUND`, the same bytes, so the address says
+  nothing to whoever guesses at it. A revocation racing a post wins or waits: the post marks the hook used first,
+  under its row lock, and finds no row once the revocation commits.
+- **The body is Slack's `text`, and only it**: `{ "text": "…" }`, markdown, 1 to `MESSAGE_CONTENT_MAX` characters, as
+  `application/json` within the JSON bound every route has (D-80). Another field — Slack's `blocks`, `attachments`,
+  `username` — is a `400`, not dropped: a message drawn without the part the tool meant to be read is the silent
+  failure CONTRIBUTING §6.4 refuses. The server stores the text as written and renders nothing; the client draws it
+  as a person's markdown is drawn (`@purlay/markdown`, D-101), which never trusts HTML.
+- **What it posts is nobody's**, as a feed's event (D-134 §6): a root `system_event` with no sender, its metadata
+  `{ kind: 'incoming_webhook', name }` (`messages_event_known`, 0074), on the wire as `Message.incomingWebhook` —
+  the name it posted under, kept with the message so one revoked since still names what it said. The field is
+  optional, an addition (D-58): a client before it draws the message as one nobody wrote. The web client names it
+  by that name with the word *webhook* beside it, so a hook called after a person cannot pass for them. Nobody can
+  edit it; an admin may remove it, as any message (D-34). It arrives by the path a person's does (`publishArrival`).
+- **Quiet by default**: counted unread for every member, notifying nobody at any level and by no push — D-134 §7's
+  rule for a feed — and its text is never read for `@`, so an alert that quotes `@alice` names nobody (D-12). A hook
+  that could page people would be a way round the one rule this product is built on; a team that wants to be
+  interrupted by an alert has an on-call tool for it.
+- **Bounded on both sides of the secret**: each client address is charged to `WEBHOOK_BUDGET` before anything is
+  looked up, the bucket GitHub's deliveries already use; each hook has its own, `INCOMING_WEBHOOK_BUDGET` (thirty at
+  once, then one a second), charged once its secret held, so nobody but its holder spends it. Provisional (O-4).
+- **Not a bot platform** (PRD §6, no marketplace, no automation builder): a hook only posts into its one channel.
+  It reads nothing, answers nothing, and is not a member.
+- **Not idempotent.** The same post twice is two messages. An `Idempotency-Key` would need a table and a sweep for
+  a retry none of these tools sends; a CI step that retries a post it saw fail posts twice, which a reader sees.
+
+**Considered and rejected.** *The secret in an `Authorization` header* — safer in a proxy's log, and unusable by the
+tools the issue names, which take an address; accepting both would be two ways to authenticate one route for one
+benefit. *Sealing the secret, as a feed's is* (D-134 §3) — a feed needs its secret back to check an HMAC; a hook
+only compares, so a digest is enough and a stolen database opens nothing. *A bot user per hook* — D-134 rejected an
+author row for a feed: a member, a mention target and a search result nobody asked for. *Reusing `githubEvent`* — it
+is GitHub's event, in parts, and a hook's text is free markdown. *Parsing mentions* (above). *Accepting Slack's whole
+payload* — blocks and attachments are a second renderer.
+
+**Cost of reversing:** migration 0074 (the table, and the kind among `messages_event_known` — kept while any message
+has it), `Message.incomingWebhook`, three channel routes, the post route, its budget and the panel.
+### D-246. GitHub issues from conversations: one GitHub App, three kinds of token — builds on D-11, D-23, D-134, D-179, D-39 §6; closes #874
+
+**Context.** `PRD.md` §4 Phase 2 proposed creating and following GitHub issues from a thread and asked for the
+distinction from D-11 to be recorded before any code. D-11 and D-23 say what is true of sign-in and of the
+workspace's credential: a card is drawn with **one credential per workspace, never a member's**, since whether it
+renders would tell who can see a private repository. Writing an issue *as a person* needs the opposite — their
+own access — and neither is sign-in.
+
+**Decision.** *Built in the PRD's order; this entry is the whole design, and the pull request that builds each
+step says which.*
+
+1. **One GitHub App, three kinds of token, each for one thing and never for another's.**
+   - **Sign-in** stays the OAuth app (`read:user user:email`, D-38, D-179), untouched and never asked for more.
+   - **The installation's token** — minted from the App's private key — reads everything shared: link state,
+     what a thread shows of an issue, webhooks. It survives any person leaving, and is never a person's.
+   - **A person's own App user access token** exists only for **that person's writes** (creating an issue). It
+     expires (eight hours), has a sealed refresh token, and reaches only what both the person and the App can.
+   Shared previews and cards keep the rule of D-23: nothing a person's token reached is ever shown to the
+   channel. D-11's *identity* is not amended — sign-in is not a GitHub authorization to write — and D-23's
+   *workspace credential* is not replaced: the workspace token and the feeds keep working as they were.
+2. **Least privilege on the App**: Issues **write**, Pull requests **read**, Metadata **read**, Contents **none**,
+   no organisation-wide permission. Labels and assignees are out: they would need more, and nobody asked.
+3. **The App is a setting of the server's** (D-179 §6): its id, slug and client id in the clear; its client
+   secret, its private key and its webhook secret sealed by the one cipher (D-39 §6), each bound to its
+   column, all six or none (`0075`). Seeded once from `GITHUB_APP_*`, then changed in Administration → Server,
+   where it is **tried before it is kept** — the client pair at GitHub's token endpoint, then a JSON Web Token
+   its key signs (`GET /app`) — and kept only if both held and the App is the one named. It is not a way in:
+   disconnecting it needs no confirmation.
+4. **The capability is the App.** Without one, the feature is invisible and nothing changes: no card, no
+   route (`404 ROUTE_NOT_FOUND`), no address for deliveries, and `GET …/github-app` says `available: false`.
+   Disconnecting it later stops every write and leaves what exists — links, the workspace token, feeds.
+5. **An owner connects the installation** and chooses its repositories on GitHub's own screen. The trip's
+   `state` is a random token of which only the digest is kept, for ten minutes, spent as it is read. GitHub's
+   callback names an installation in its query, which anybody can write, so it is believed only when the
+   `code` GitHub sent with it (the App asks for authorization during installation), redeemed, belongs to a
+   person who GitHub says can reach that installation, who is the browser that left, and who is still the
+   workspace's owner. The code's token is then **dropped**, not kept: connecting is not the person's consent
+   to write as them.
+6. **A person's own authorization is a separate, explicit opt-in** — "Let Purlay create issues as me" on
+   Sessions & account, off until chosen, never asked at sign-in. PKCE `S256`, the verifier sealed in the
+   handshake; the access and refresh tokens sealed to their row and column. The person forgets it at any
+   time, and GitHub's `github_app_authorization` revocation forgets it too.
+7. **Revocation is believed from three places** — the person, GitHub's delivery to the App's one address, and
+   a `401` from GitHub — and **closes writes, keeps links**. An installation removed on GitHub is let go in
+   every workspace that connected it (GitHub's id is not unique to a workspace); a suspension is kept and
+   said, and used for nothing. Deliveries are signed by the App's webhook secret, applied once by id and by
+   body digest (D-231 §1), and swept after thirty days.
+8. **An issue is made from a thread by a review, and the write is recoverable before it is enabled** (the PRD's
+   second and fourth steps, built together). The thread offers a repository — only one GitHub lists for the person's
+   own token inside the installation, so one both they and the App reach — an editable title and body that start as
+   the question, its accepted answer, the decision note and a link back, and a review of the destination and the
+   exact text, marker line included, before **Create**. The words of a conversation that is not public are copied
+   only when the person ticks that they choose it. Title and body only. Channel membership, the installation, the
+   authorization and the repository are all checked again as it is sent. The issue is linked to the root
+   (`github_links`, shown in the thread and told by `THREAD_UPDATED`), and **does not resolve the question** nor
+   notify anybody.
+   - **One request, one issue.** The client's request id, with the workspace and the person, keys a bounded record
+     (`github_operations`, thirty days) claimed *before* GitHub is asked: a double click, a retry and a second tab
+     are one operation, and only the request that claimed it posts. The id with other content (a digest of it, never
+     the words) is `409 GITHUB_REQUEST_CONFLICT`.
+   - **A lost answer is found, never repeated.** GitHub not answering — a timeout, a `5xx`, a reply that is not an
+     answer — leaves the operation `unknown`. The same request sent again reads GitHub as the installation (which
+     survives the person) for the issue that ends in the marker, `<!-- purlay:<request id> -->`, which the review
+     showed. Not seen after fifteen minutes, or twenty looks, it is `refused` as `not-created` and may be started
+     again with a new id; a claimed operation never answered is taken as unknown after two minutes. It is never
+     posted a second time on a guess.
+   - **A limit is the client's to wait out.** GitHub's `Retry-After` (or its reset) comes back as `429` with the
+     same header and the claim is given back, so the same request goes through afterwards; nothing here sleeps or
+     retries on its own, so retries are bounded by the person and the twenty looks.
+   - **The person's token** is refreshed under its row's lock when it is within a minute of lapsing — a refresh token
+     is spent by the refresh that uses it — and forgotten when GitHub stops taking it (`409
+     GITHUB_AUTHORIZATION_REQUIRED`, asked for again in the dialog).
+   - **Audited by identifier**: who, which repository, which issue and channel — never a title or a body
+     (`integration.issue_created`). Links and operations are classified for the workspace's export (links
+     exported, operations not) and are not in a person's own.
+9. **Linked work is followed, quietly** (the PRD's third step). A member of the channel may also point a root at an
+   issue or pull request that exists, by its address. It is read with the **installation's** token — what a thread
+   shows is the workspace's, the same for everybody, and survives the person — while the person's own access still
+   decides whether they may point at it: the repository must be one GitHub lists for them inside the installation, and
+   one answer says it does not exist or may not be reached, so a private repository's titles cannot be had by
+   naming it. A thread holds at most twenty. The App's `issues` and `pull_request` events then keep each link's title
+   and state — open, closed, merged — current:
+   - **Deliveries are the feeds' kind** (D-134 §5, D-231 §1): signed by the App's secret, applied once by id and by
+     body digest, bounded and read within a deadline.
+   - **Out of order, and again, is nothing.** A link keeps GitHub's own `updated_at` for the item (`state_at`); an
+     older event is dropped, and one that says what the link already says only moves that instant — so repeated state
+     updates **coalesce** into the one a person sees, and the next older word is still judged by the newest.
+   - **Only the installation's workspaces.** A delivery changes the links of the workspaces that connected the
+     installation it came through, whatever repository it names.
+   - **Shown, never told.** A change is drawn on the root and sent to those with its thread open (`THREAD_UPDATED`); it
+     is no message and no unread, and notifies nobody, so the notification levels and Deep Work (D-12, D-15) hold by there
+     being nothing to hold. **Resolving the question stays a person's act** (D-204).
+   - **An issue seen being opened with the marker of an operation still waiting on GitHub's answer completes it**
+     (§8), so a lost answer is found by the webhook as well as by the reads.
+   - **A link outlives the installation**: removed on GitHub, the work stays on the thread, followed no more.
+
+**Rejected.** *Asking for the person's authorization at sign-in* — a sign-in that can write to repositories
+is a bigger grant than anybody agreed to, and most people never create an issue. *One person's token for
+shared cards* — D-23's reason, unchanged: whether a card renders would say what that person can see, and
+the card would vanish when they left. *A second GitHub App for sign-in* — D-179 built sign-in on the OAuth
+app and nothing here needs it moved. *The installation token for writes* — every issue would be by "Purlay",
+and any member could write anywhere the App can reach. *A GitHub OAuth app's `repo` scope for writes* — it
+reaches every repository the person can, private ones included, and cannot be limited to the App's.
+*Believing the installation id in the callback's query* — it is a number anybody can type. *Keeping the
+installation's authorization code's token* — it would make connecting also a consent nobody gave.
+
+**Cost of reversing.** Remove the cards, the routes and the App's address; drop the six columns and four
+tables of `0075` (`github_app_*`, `github_user_authorizations`). The workspace token, the feeds and sign-in
+never read them.
+
+### D-247. Interface polish: two gate exceptions, one native-first select — builds on D-97, D-211, D-207; closes #892
+
+**Context.** Using the product day to day showed seams in how it feels: a ring on a button the mouse had just pressed,
+a date field that was three spinning segments, a view switch that jumped and sat at a different place on each screen,
+light-blue chrome in the dark themes, hard black-looking control edges in the light theme, and a list of choices that
+opened as the operating system's own. Two of the fixes meet rules written to keep the interface quiet, so this records
+what was bent and why, instead of bending it silently.
+
+**Decision.**
+
+1. **A ring follows the keyboard, not the focus.** The page records whether a pointer or a key drove it last
+   (`ui/input-modality.ts`); after a pointer press, everything that is not a place to type loses its ring until the next
+   key. A text field keeps its ring either way. `:focus-visible` alone was not enough: focus the page *moves* (a menu
+   handing it back to its trigger) shows a ring the person never asked for.
+2. **One date field of our own** (`ui/date-field.tsx`): a labelled button and a popover month, keyboard-complete
+   (arrows, PageUp/PageDown, Home/End, Enter, Escape), `min`/`max` disabling days. The value is `YYYY-MM-DD` exactly as the
+   native input held it, so callers changed only the element. The weeks begin on Monday.
+3. **A view's mark slides** (`ui/slide-track.tsx`): the chosen segment says so in the markup and one mark moves under it
+   over `duration-slide` (200 ms). The mark is measured from the segment's own box, and a track on a new screen starts where
+   the last of its name stood. The views track is centred by giving both header sides the same room, so changing views
+   moves nothing but the mark.
+4. **Dark themes are neutral where they were blue.** The focus ring, the selected row and the selection tint are grays
+   in Dark and Midnight; links, mentions and the primary fill stay blue, as does the light theme.
+5. **A celebration is the one motion longer than 200 ms** (UX §9's cap is kept for everything else). Sending 🎉, in a
+   message or as a reaction, sets off one of five SVG firework shows (`ui/fireworks.tsx`), about three seconds, never
+   looping, never the same one twice running, not drawn under reduced motion. The token gate allows `duration-celebrate`
+   alone to run to four seconds. Only what the sender sent celebrates: a feed of other people's 🎉 stays a feed.
+6. **A control's edge in the light theme is a soft gray** (`border-strong`). Its contrast floor against the surfaces drops
+   from 3:1 to 1.6:1, for that token alone; a control still has its fill, its label and its focus ring (which keeps 3:1)
+   to say what it is. The dark themes keep their stronger edge.
+7. **A select is the platform's, drawn by the page where the platform lets it** (`appearance: base-select`): in Chromium
+   the list that opens is a card of rows like the menus; elsewhere it is the system's own list, still accessible and right on
+   a phone.
+
+**Consequences.** Two rules are weaker than they were, each by one named exception. A person with low vision loses some
+edge contrast on light-theme fields. A browser without `base-select` shows a different list for the same select.
+
+**Rejected.** *A hand-built listbox in place of the select* — every call site and test speaks the native element, and a
+custom one gives up the phone's wheel and the platform's keyboard for a look. *A light-theme edge kept at 3:1* — it is the
+black-looking line the edge was changed to stop. *Raising the whole motion cap* — it would make every transition a
+candidate for being slow; one named exception for an event is the smaller change. *A date library* — the grid is forty
+lines over `Intl`. *Celebrating other people's 🎉* — a busy channel would never be still.
+
+**Cost of reversing.** Remove the fireworks, the exception and the token; restore `border-strong` and its floor; swap the
+date field back for `<input type="date">`. Nothing is stored.
+
+
+### D-248. About, the newest release and the release notes: a server-side check, a per-browser window — builds on D-39, D-185, D-186, D-196
+
+**Context.** A person using a self-hosted server could not tell which version it ran, whether a newer one existed, or
+what an update had changed. The version was already public (`GET /api/client`, D-186, for native clients) and each release already had its
+notes (`docs/changelog/v{x.y.z}.md`, D-185); neither reached a screen.
+
+**Decision.**
+
+1. **Settings → About**, in the account group, for everyone (`UX.md` §2): the version the server runs, the newest
+   release on GitHub, one sentence that compares them, the notes of the running version, the licence and the repository.
+2. **The server asks GitHub, never the browser.** The page's policy allows only its own origin (D-39), so a browser
+   cannot ask, and should not be made able to: the address of every person who opened About would reach GitHub.
+   `GET /api/releases/latest` (`API.md` §2; any signed-in person) answers `{ current, latest: { version, url, publishedAt } | null }`,
+   `latest: null` meaning *could not check*, and `current` the version this server runs — always, also with the check off.
+   **The version comes from this route, not from `GET /api/client`.** The public route is charged to the client's
+   address with the sign-in traffic (D-186), and the web app asked it on every load of the signed-in frame and on About: a
+   shared address — an office, a proxy — spent the budget people sign in with, and the browser tests saw `429`. This route
+   needs a session and is charged per person, to the costly reads. `GET /api/client` stays for the native applications,
+   which ask it once before anybody has signed in, and no code of the browser's names it (a test holds that). The server makes one anonymous `GET {GITHUB_API_URL}/repos/doancan/purlay/releases/latest`
+   (`modules/integrations/latest-release.ts`), bounded as every call to GitHub is — a deadline, no redirect followed, the body
+   checked against a schema, never throwing to the caller — and accepts only a tag of three numbers behind a `v` and a page on
+   `https://github.com/`; a draft, a pre-release, a rate limit, a `5xx`, a redirect or anything else is `null` and one log line
+   without the body. The page must be exactly this repository's page of that tag
+   (`https://github.com/doancan/purlay/releases/tag/<tag>`), so a link is built, not believed. A good answer is kept six
+   hours, in memory, and callers arriving together share one call. **A failure does not take back what was learned:** when
+   the six hours lapse and GitHub does not answer, the last good answer is served on and GitHub is asked again after a
+   failure window of ten minutes — or, for a limit that names its wait, that wait, at most an hour. Only a server that has
+   never had a good answer says `null`. The body GitHub sends is read whole, bounded by nothing but what GitHub sends: a
+   cap would sit in the reader every call to GitHub shares, and a release body is a few kilobytes on a path that only
+   GitHub's own API reaches, over a deadline of ten seconds. Where it lives is the cache's: the cloud's several nodes each ask at most once in the window, which is a few calls
+   a day and needs no shared store (D-7).
+3. **An operator's switch, and what is sent.** `UPDATE_CHECK` (`CONFIG.md`, default on). Off, the server never calls GitHub for
+   it and the answer is `null`; About then says it could not check. The call goes only to GitHub's API, carries no cookie,
+   token, address, name, version or identifier of this instance, and so tells GitHub what any visitor to the public
+   repository's releases would: that some server asked. The path is not under `/api/server/`, which is Administration →
+   Server's, charged by client address before a session is looked at and an administrator's alone; this is a read for
+   everyone and is charged to the costly reads, per person, since it is a call the server may make on a reader's behalf.
+4. **The notes window is remembered per browser, in `localStorage`.** The first screen of the signed-in frame opens the
+   notes of the version the server runs when `purlay.releaseNotesSeen` is not that version, and closing it by any means
+   stores it. The key is the device's, not the person's: signing out does not forget it. Storage that cannot be read shows
+   nothing, not the window at every load.
+5. **The notes are in the build, one lazy chunk per release.** The client bundles `docs/changelog/v*.md` as raw text
+   (`import.meta.glob`, lazy), so none counts against the first load (D-196) and one is fetched only when the window is
+   to open; the image's client stage copies `docs/changelog` for it (`Dockerfile`, held by `scripts/dockerfile.test.ts`).
+   The lines are drawn by the renderer messages use, so a bold area and a name in code are what they were written as.
+   The shape of the notes — the categories and the heading — is read by `readReleaseNotes` in `@purlay/types`; the release
+   command judges the files with a list of its own (the scripts depend on no package, so a release can be cut from a bare
+   checkout), and `scripts/changelog.test.ts` holds the two to each other.
+
+**In the browser,** About and the window read both from one request; a failed request (a refusal, a lapsed session, no
+network) is an error with **Retry** in the card, told apart from the deliberate *could not check*, and is not retried on
+its own. While the version is unknown, or if it could not be read, no window opens. Notes whose
+chunk fails to load (after a redeploy, say) are neither shown nor remembered as *none*: the failure is noted on the page and
+the next screen that asks tries again.
+
+**Consequences.** A server with no way out, or whose operator turned the check off, shows *could not check* — a
+sentence, not an error. A server whose GitHub is an Enterprise Server shows it too: the page of a release must begin with
+`https://github.com/`. Another browser, or a person who cleared their data, sees the window once more. A release without
+its notes file shows no window. The notes are in English, as written.
+
+**Rejected.** *The browser asking GitHub* — blocked by D-39's policy, and loosening it for a cosmetic line would put a
+third party in every page's allowed list. *Fetching the notes from the release's body on GitHub* — it needs the network
+and a server that can reach GitHub to show what the running version did, and the body is the notes of the newest release,
+not of the one that runs; the files in the build work offline and are exactly the running version's. *A table for what a person has seen*
+— a migration and a row per person for a message that is cosmetic and once per version; the cost accepted is that another
+browser shows it once more. *Storing the dismissal only when storage works and showing the window otherwise* — a window that
+cannot be dismissed for good is worse than one that is missed. *`/api/server/release`* — see 3. *A setting in the database
+rather than a variable* — an operator who forbids outbound calls decides it before the server starts, and a variable is
+where every other outbound call is decided. *A shared cache for the nodes of the cloud* — D-7: a few calls a day per node
+are not a measurement that justifies one.
+
+**Cost of reversing.** Remove the route, the variable, the page, the window and the `COPY` line; delete
+`purlay.releaseNotesSeen` from nobody's browser — it is a leftover key a person can ignore. Nothing is stored on the server.

@@ -25,6 +25,7 @@ import { createSocketHub, type SocketHub } from './hub';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame, type RouterDependencies } from './router';
+import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -97,6 +98,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           presence: inMemoryPresenceRegistry(clock),
           attention: nobodyActive,
+          sessionLifetime: () => NO_SESSION_LIFETIME,
           log: createLogger({ level: 'silent' }),
           socket: hub,
           atomically: atomicallyOn(db),

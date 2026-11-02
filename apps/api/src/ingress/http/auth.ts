@@ -214,8 +214,8 @@ const FAILURE_FOR_LIBRARY_CODE: Readonly<
   unable_to_link_account: { failure: 'failed', level: 'error' },
   unable_to_create_user: { failure: 'failed', level: 'error' },
   unable_to_create_session: { failure: 'failed', level: 'error' },
-  // The account is another identity's: a second single sign-on subject on one address, or GitHub on an account
-  // single sign-on owns (D-200 §3, §6). Said as a failure, written down: it is how a recycled address is tried.
+  // The account is another identity's: a second single sign-on subject or a second GitHub id on one address, or
+  // GitHub on an account single sign-on owns (D-200 §3, §6; D-179 §3). Said as a failure, written down: it is how a recycled address is tried.
   identity_conflict: { failure: 'failed', level: 'warn' },
   internal_server_error: { failure: 'failed', level: 'error' },
 };
@@ -475,8 +475,8 @@ export const readMySignIn = async (
   dependencies: Pick<AuthDependencies, 'auth' | 'database'>,
   request: Request,
 ): Promise<MySignIn> => {
-  const { userId } = await requireSession(dependencies.auth, request);
-  return await mySignIn(dependencies.database, userId);
+  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  return await mySignIn(dependencies.database, userId, dependencies.auth.signInPolicy);
 };
 
 export const signOut = async (
@@ -493,7 +493,7 @@ export const signOutEverywhere = async (
   dependencies: SignOutDependencies,
   request: Request,
 ): Promise<AuthResponse> => {
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
   await signOutEverywhereOf(dependencies, userId);
   return { setCookie: [clearedSessionCookie()] };
 };

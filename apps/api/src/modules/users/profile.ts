@@ -1,5 +1,6 @@
 /**
- * A person's profile (#488, D-131): a title, the time zone their day is in, and a short status line.
+ * A person's profile (#488, D-131): a title, the time zone their day is in, and a short status line —
+ * and the name they are shown by, where it is not GitHub's (D-235).
  *
  * - **The person's own**: only they change it, through `/api/me`; the rest of a workspace reads it
  *   where they read the person — its members, which is where a conversation and a picker find them.
@@ -22,6 +23,16 @@ interface ProfileRow {
   readonly time_zone: string | null;
   readonly status_text: string | null;
 }
+
+/**
+ * Whether the person's name is GitHub's (D-235): an account GitHub made and never connected otherwise —
+ * the account `identity.ts#recordGitHubSignIn` writes GitHub's name onto at every sign-in. Any other
+ * account's name is its own.
+ */
+export const isNameGitHubs = (row: {
+  readonly github_id: string | null;
+  readonly github_connected_at: unknown;
+}): boolean => row.github_id !== null && row.github_connected_at === null;
 
 export const asProfile = (row: ProfileRow): Profile => ({
   title: row.title,
@@ -75,13 +86,29 @@ export const updateProfile = async (
   // Live only: a profile saved while the account was being erased must not write it back (D-139 §5).
   const before = await transaction
     .selectFrom('users')
-    .select(['title', 'time_zone', 'status_text'])
+    .select([
+      'title',
+      'time_zone',
+      'status_text',
+      'display_name',
+      'github_id',
+      'github_connected_at',
+    ])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
     .forNoKeyUpdate()
     .executeTakeFirst();
   if (before === undefined)
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  const name = input.displayName?.trim();
+  if (name !== undefined && name !== before.display_name && isNameGitHubs(before)) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'Your name comes from GitHub; change it there.',
+      details: { fields: { displayName: 'comes from GitHub' } },
+    });
+  }
+  const displayName = name === undefined || name === '' ? before.display_name : name;
   const after: ProfileRow = {
     title: input.title === undefined ? before.title : stored(input.title),
     time_zone: zone === undefined ? before.time_zone : zone,
@@ -90,11 +117,16 @@ export const updateProfile = async (
   if (
     after.title === before.title &&
     after.time_zone === before.time_zone &&
-    after.status_text === before.status_text
+    after.status_text === before.status_text &&
+    displayName === before.display_name
   ) {
     return { profile: asProfile(before), told: [] };
   }
-  await transaction.updateTable('users').set(after).where('id', '=', userId).execute();
+  await transaction
+    .updateTable('users')
+    .set({ ...after, display_name: displayName })
+    .where('id', '=', userId)
+    .execute();
   return { profile: asProfile(after), told: await workspacesOf(transaction, userId) };
 };
 

@@ -17,7 +17,16 @@ import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 // Side effect: registers the string formats. TypeBox rejects every value for a
 // format it does not know — valid ones included — so this is not optional.
-import { CONTRACT_VERSION, OIDC_NAME_MAX } from '@purlay/types';
+import {
+  CONTRACT_VERSION,
+  GITHUB_APP_CLIENT_ID_MAX,
+  GITHUB_APP_CLIENT_SECRET_MAX,
+  GITHUB_APP_PRIVATE_KEY_MAX,
+  GITHUB_APP_SLUG_PATTERN,
+  GITHUB_APP_WEBHOOK_SECRET_MAX,
+  OIDC_NAME_MAX,
+} from '@purlay/types';
+import { githubAppKeyProblem } from './github-app-key';
 import { oidcIssuerProblem, oidcNameProblem } from './oidc-address';
 import { smtpUrlProblem } from './smtp-address';
 
@@ -85,12 +94,33 @@ export const Environment = Type.Object({
   OIDC_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
   OIDC_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
   OIDC_NAME: Type.Optional(Type.String({ minLength: 1, maxLength: OIDC_NAME_MAX })),
+  /** A seed, as the GitHub app is (D-246): the GitHub App issues are written through — its id, its slug, its
+   *  client id and secret, its private key (PEM; `\n` written out is a line break) and its webhook secret.
+   *  All six or none. None is no App: nothing of issues is offered, and nothing changes. */
+  GITHUB_APP_ID: Type.Optional(Type.Integer({ minimum: 1, maximum: 9_999_999_999 })),
+  GITHUB_APP_SLUG: Type.Optional(Type.String({ pattern: GITHUB_APP_SLUG_PATTERN })),
+  GITHUB_APP_CLIENT_ID: Type.Optional(
+    Type.String({ minLength: 1, maxLength: GITHUB_APP_CLIENT_ID_MAX }),
+  ),
+  GITHUB_APP_CLIENT_SECRET: Type.Optional(
+    Type.String({ minLength: 1, maxLength: GITHUB_APP_CLIENT_SECRET_MAX }),
+  ),
+  GITHUB_APP_PRIVATE_KEY: Type.Optional(
+    Type.String({ minLength: 1, maxLength: GITHUB_APP_PRIVATE_KEY_MAX }),
+  ),
+  GITHUB_APP_WEBHOOK_SECRET: Type.Optional(
+    Type.String({ minLength: 1, maxLength: GITHUB_APP_WEBHOOK_SECRET_MAX }),
+  ),
   /** Where a GitHub sign-in is sent and its code redeemed: another for a GitHub Enterprise Server, or
    *  a stand-in on this machine for a run that cannot reach GitHub. Checked in `loadConfig`. */
   GITHUB_URL: Type.String({ minLength: 1, default: GITHUB_URL_DEFAULT }),
   /** GitHub's API, where a sign-in reads the person and their addresses: `…/api/v3` on an Enterprise
    *  Server. Checked as `GITHUB_URL` is. */
   GITHUB_API_URL: Type.String({ minLength: 1, default: GITHUB_API_URL_DEFAULT }),
+
+  /** Whether the server asks GitHub, at most once in six hours, which release of Purlay is newest, so that About
+   *  can say whether this one is (D-248). Off, it never calls GitHub for it. */
+  UPDATE_CHECK: Type.Boolean({ default: true }),
 
   /** 32 bytes, base64. The root secret; the OAuth state signing key is derived
    *  from it with domain separation rather than being a second variable (D-62).
@@ -149,6 +179,13 @@ export const Environment = Type.Object({
    *  every node-local implementation, which is all one node needs (D-7). A secret. */
   REDIS_URL: Type.Optional(Type.String({ pattern: '^rediss?://[^\\s]+$' })),
 
+  /** The bearer token Prometheus scrapes `/metrics` with (D-221). **Unset means off**: the page is
+   *  then no page, a `404` like any path nothing serves. At least 32 characters of a token's alphabet,
+   *  as `openssl rand -hex 32` writes one, so it cannot be guessed at a scrape's pace. A secret. */
+  METRICS_TOKEN: Type.Optional(
+    Type.String({ minLength: 32, maxLength: 512, pattern: '^[A-Za-z0-9._~+/-]+=*$' }),
+  ),
+
   /** The lowest an installed macOS client may be and still be served (D-186): the wire contract it was
    *  built against, and its version in semantic-version order. Either or both; none is no limit. A
    *  client below either is answered `426 CLIENT_TOO_OLD`, with the download address if one is set.
@@ -178,12 +215,16 @@ export type Config = Static<typeof Environment>;
 const SECRETS: ReadonlySet<string> = new Set([
   'GITHUB_CLIENT_SECRET',
   'OIDC_CLIENT_SECRET',
+  'GITHUB_APP_CLIENT_SECRET',
+  'GITHUB_APP_PRIVATE_KEY',
+  'GITHUB_APP_WEBHOOK_SECRET',
   'DATABASE_URL',
   'ENCRYPTION_KEY',
   'S3_SECRET_ACCESS_KEY',
   'VAPID_PRIVATE_KEY',
   'SMTP_URL',
   'REDIS_URL',
+  'METRICS_TOKEN',
 ]);
 
 /** The variables this application reads. `.env.example` is generated from it. */
@@ -324,6 +365,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   problems.push(...redisProblems(config));
   problems.push(...githubAppProblems(config));
   problems.push(...oidcProblems(config));
+  problems.push(...githubIssuesAppProblems(config));
   problems.push(...nativeClientProblems(config));
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {
@@ -477,6 +519,32 @@ const oidcProblems = (config: Config): string[] => {
     if (problem !== undefined) problems.push(`OIDC_NAME: ${problem}`);
   }
   return problems;
+};
+
+/**
+ * The GitHub App issues are written through (D-246): all six or none, and a key this server can sign with.
+ * Refused here, before the first start copies it into the settings. Never quotes a value.
+ */
+const githubIssuesAppProblems = (config: Config): string[] => {
+  const given = [
+    config.GITHUB_APP_ID,
+    config.GITHUB_APP_SLUG,
+    config.GITHUB_APP_CLIENT_ID,
+    config.GITHUB_APP_CLIENT_SECRET,
+    config.GITHUB_APP_PRIVATE_KEY,
+    config.GITHUB_APP_WEBHOOK_SECRET,
+  ];
+  if (given.every((value) => value === undefined)) return [];
+  if (given.some((value) => value === undefined)) {
+    return [
+      'GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_WEBHOOK_SECRET: set all six, or none',
+    ];
+  }
+  const problem =
+    config.GITHUB_APP_PRIVATE_KEY === undefined
+      ? undefined
+      : githubAppKeyProblem(config.GITHUB_APP_PRIVATE_KEY);
+  return problem === undefined ? [] : [`GITHUB_APP_PRIVATE_KEY: ${problem}`];
 };
 
 const vapidProblems = (publicKey: string, privateKey: string): string[] => {

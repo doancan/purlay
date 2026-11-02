@@ -83,6 +83,9 @@ describe('the single-value reads', () => {
           memberships: [],
           mayCreateWorkspace: true,
           isServerAdmin: false,
+          nameFromGitHub: false,
+          mustEnrolTwoFactor: false,
+          scheduledDeletions: [],
         });
       },
       channels: (workspaceId) => {

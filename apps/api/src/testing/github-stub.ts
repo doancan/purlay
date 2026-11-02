@@ -16,6 +16,9 @@
  * The API calls take only a token this stub issued, as `Authorization: Bearer`.
  */
 import type { GithubFetch } from '../modules/auth/better-auth';
+import type { GitHubAppFetch } from '../modules/integrations/github-app-api';
+import { answeredWithin, type GitHubAppStub } from './github-app-stub';
+import type { GitHubApi } from '../modules/integrations/unfurl';
 
 /** A GitHub account as GitHub's API describes it. */
 export interface GitHubPerson {
@@ -51,6 +54,8 @@ export interface GitHubStub {
   readonly authorize: (location: string) => Authorized;
   /** The token endpoint and the API, as a `fetch` the sign-in library is handed. */
   readonly fetch: GithubFetch;
+  /** The same, as the GitHub App's calls are made (D-246): its App's answers first, when it plays one. */
+  readonly appFetch: GitHubAppFetch;
   readonly calls: GitHubCalls;
   /** Every token request the stub refused, with GitHub's `error`, for a test to read. */
   readonly refusals: string[];
@@ -112,7 +117,11 @@ export const aGitHubStub = (
     readonly clientId: string;
     readonly clientSecret: string;
   } = GITHUB_STUB_CREDENTIALS,
-  options: { readonly now?: () => number } = {},
+  options: {
+    readonly now?: () => number;
+    /** A GitHub App this GitHub also plays (`github-app-stub.ts`), answered on the same addresses. */
+    readonly app?: GitHubAppStub;
+  } = {},
 ): GitHubStub => {
   const now = options.now ?? Date.now;
   const codes = new Map<
@@ -221,6 +230,10 @@ export const aGitHubStub = (
       headers: init.headers,
       ...(init.body === undefined ? {} : { body: init.body }),
     });
+    if (options.app !== undefined) {
+      const answered = await answeredWithin(options.app.handle(request), init.signal);
+      if (answered !== undefined) return answered;
+    }
     const { pathname } = new URL(url);
     if (pathname === TOKEN_PATH) {
       switch (behaviour.token ?? 'gives') {
@@ -248,6 +261,24 @@ export const aGitHubStub = (
       hostname,
       fetch: async (request) => {
         const { pathname, search } = new URL(request.url);
+        const app = options.app;
+        if (app !== undefined) {
+          // GitHub's installation screen, and its authorization screen for the App: the person presses the
+          // button at once, for the first installation they can reach.
+          if (pathname === `/apps/${app.credentials.slug}/installations/new`) {
+            const reachable = [...app.installations.values()].find((each) => each.reachable);
+            if (reachable === undefined) return new Response('no installation', { status: 404 });
+            return Response.redirect(app.installOnGitHub(request.url, reachable.id), 302);
+          }
+          if (
+            pathname === '/login/oauth/authorize' &&
+            new URL(request.url).searchParams.get('client_id') === app.credentials.clientId
+          ) {
+            return Response.redirect(app.authorizeOnGitHub(request.url), 302);
+          }
+          const answered = await app.handle(request);
+          if (answered !== undefined) return answered;
+        }
         if (pathname === '/login/oauth/authorize') {
           const { code, state, redirectUri } = authorize(`${AUTHORIZE_URL}${search}`);
           const back = new URL(redirectUri);
@@ -267,5 +298,109 @@ export const aGitHubStub = (
     };
   };
 
-  return { authorize, fetch, calls, refusals, presentedCodes, serve };
+  const appFetch: GitHubAppFetch = async (url, init) =>
+    await fetch(url, {
+      ...(init.method === 'POST' ? { method: 'POST' } : {}),
+      headers: init.headers,
+      ...(init.body === undefined ? {} : { body: init.body }),
+      redirect: 'manual',
+      signal: init.signal,
+    });
+
+  return { authorize, fetch, appFetch, calls, refusals, presentedCodes, serve };
+};
+
+/**
+ * GitHub's REST API for a workspace's token, served on a port (the sign-in's side is `aGitHubStub`): the
+ * calls the unfurl and the token check make, and what GitHub says when it is not well (#884).
+ *
+ * A call carries a bearer token this stub was told of (`accept`) or is `401 Bad credentials`, as
+ * GitHub answers a revoked one. `/rate_limit` answers `200` with `X-OAuth-Scopes` for a classic token
+ * and none for a fine-grained one; a repository's pull request or issue is one fixed item; `/graphql`
+ * is one fixed rollup. `answer` replaces answers — a `403` with `x-ratelimit-remaining: 0`, a `429` with
+ * `Retry-After`, a `503` — until it is given `null`. No call leaves the machine.
+ */
+export interface GitHubApiStub {
+  readonly url: string;
+  /** Every call, in order, with the token it carried. */
+  readonly requests: { readonly path: string; readonly token: string }[];
+  /** GitHub knows this token; `scopes` is its `X-OAuth-Scopes` (`null`: a fine-grained token sends none). */
+  readonly accept: (token: string, scopes?: string | null) => void;
+  /** GitHub no longer knows it: `401` from now on. */
+  readonly revoke: (token: string) => void;
+  /** Answers replaced by this one's, until `null`; where it gives `null` for a path, GitHub answers as usual. */
+  readonly answer: (response: ((path: string) => Response | null) | null) => void;
+  readonly stop: () => Promise<void>;
+}
+
+const STUB_PULL = {
+  title: 'Retry the socket with backoff',
+  state: 'open',
+  merged_at: null,
+  user: { login: 'octo', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
+};
+
+const STUB_CHECKS = {
+  data: {
+    repository: {
+      pullRequest: {
+        reviewDecision: 'APPROVED',
+        commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] },
+      },
+    },
+  },
+};
+
+export const aGitHubApiStub = (): GitHubApiStub => {
+  const known = new Map<string, string | null>();
+  const requests: { path: string; token: string }[] = [];
+  let replaced: ((path: string) => Response | null) | null = null;
+  const server = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    fetch: (request) => {
+      const { pathname } = new URL(request.url);
+      const token = (request.headers.get('authorization') ?? '').replace(/^Bearer /i, '');
+      requests.push({ path: pathname, token });
+      const instead = replaced?.(pathname) ?? null;
+      if (instead !== null) return instead;
+      if (!known.has(token)) return Response.json({ message: 'Bad credentials' }, { status: 401 });
+      if (pathname === '/rate_limit') {
+        const scopes = known.get(token) ?? null;
+        return Response.json(
+          { resources: {} },
+          { headers: scopes === null ? {} : { 'x-oauth-scopes': scopes } },
+        );
+      }
+      if (pathname === '/graphql') return Response.json(STUB_CHECKS);
+      if (/^\/repos\/[^/]+\/[^/]+\/(pulls|issues)\/\d+$/.test(pathname)) {
+        return Response.json(STUB_PULL);
+      }
+      return Response.json({ message: 'Not Found' }, { status: 404 });
+    },
+  });
+  return {
+    url: `http://127.0.0.1:${String(server.port)}`,
+    requests,
+    accept: (token, scopes = null): void => void known.set(token, scopes),
+    revoke: (token): void => void known.delete(token),
+    answer: (response): void => {
+      replaced = response;
+    },
+    stop: async (): Promise<void> => {
+      await server.stop(true);
+    },
+  };
+};
+
+/**
+ * The GitHub client for a test that saves a token and asks nothing else of GitHub: every token is
+ * good, and a card is a call a test did not mean to make.
+ */
+export const aGitHubApiThatOnlyChecksTokens: GitHubApi = {
+  item: () =>
+    Promise.reject(new Error('GitHub’s API was asked for an item by a test that does not unfurl')),
+  checks: () =>
+    Promise.reject(new Error('GitHub’s API was asked for checks by a test that does not unfurl')),
+  check: () => Promise.resolve({ scopes: null }),
 };

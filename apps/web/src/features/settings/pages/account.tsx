@@ -1,9 +1,17 @@
 /**
  * Sessions & account (D-146): how the person signs in, leaving, and ending the account.
  *
+ * *Two-step verification* (D-236) sits under the password it guards, for an account that has one.
+ *
  * *How you sign in* (D-176, D-179 §5) names the address and the GitHub account linked to it, and only
  * names them: GitHub is linked by signing in with it on an address that is verified, so there is
  * nothing here to press.
+ *
+ * *Where you are signed in* (D-193) lists each session and signs out any but this one; its own card
+ * says how (`devices-card.tsx`).
+ *
+ * *Your data* (D-241) is a copy of what the server holds about the person, asked for and downloaded once,
+ * as an owner's export of the workspace is (`export.tsx`) — just before the card that erases it.
  *
  * *Sign out everywhere* ends every session the person holds, this one with them (D-11); it asks first,
  * because it signs out devices that are not in front of them. *Erase my account* is the dialog it has
@@ -30,6 +38,10 @@ import { EraseAccountDialog } from '../../shell/erase-account-dialog';
 import { useSignOut } from '../../shell/sign-out';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
 import { ChangePasswordCard } from './change-password-card';
+import { DevicesCard } from './devices-card';
+import { MyDataCard } from './export';
+import { GitHubWriteCard } from './github-issues';
+import { TwoFactorCard } from './two-factor-card';
 
 const SignInCard = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -99,11 +111,21 @@ const SignInCard = (): React.JSX.Element => {
   );
 };
 
-/** Only an account that has a password has one to change; the card is not drawn for the others. */
+/**
+ * Only an account that has a password has one to change, or to guard with a second step (D-236); neither card
+ * is drawn for the others, whose provider guards their way in.
+ */
 const PasswordSection = (): React.JSX.Element | null => {
   const signIn = useMySignIn();
   return signIn.data?.hasPassword === true ? (
-    <ChangePasswordCard email={signIn.data.email} />
+    <>
+      <ChangePasswordCard email={signIn.data.email} />
+      <TwoFactorCard
+        email={signIn.data.email}
+        enabled={signIn.data.twoFactor}
+        required={signIn.data.twoFactorRequired}
+      />
+    </>
   ) : null;
 };
 
@@ -147,6 +169,7 @@ export const AccountPage = (): React.JSX.Element => {
     >
       <SignInCard />
       <PasswordSection />
+      <DevicesCard />
       <SettingsCard title={t('settings.account.sessions')}>
         <SettingsRow
           label={t('settings.account.here')}
@@ -175,6 +198,8 @@ export const AccountPage = (): React.JSX.Element => {
           </Button>
         </SettingsRow>
       </SettingsCard>
+      <GitHubWriteCard />
+      <MyDataCard />
       <SettingsCard title={t('settings.account.danger')} tone="danger">
         <SettingsRow
           label={t('settings.account.leave', { workspace: workspace.name })}

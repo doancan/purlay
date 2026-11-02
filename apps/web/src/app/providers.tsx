@@ -34,6 +34,10 @@ import { createQueryClient } from './query-client';
 import type { PushDevice } from '../features/push/device';
 import type { Notifier } from '../features/push/notifier';
 import { NotifierContext, PushDeviceContext } from '../features/push/push';
+import {
+  ReleaseNotesSourceProvider,
+  type ReleaseNotesSource,
+} from '../features/about/release-notes-source';
 
 export interface AppPorts {
   readonly theme?: ThemePorts;
@@ -51,6 +55,8 @@ export interface AppPorts {
   readonly push?: PushDevice | null;
   /** The page's own notices while it is in the background; the browser's when absent (D-148). */
   readonly notifier?: Notifier | null;
+  /** The release notes the build carries (D-248); none when absent, and nothing is then shown. */
+  readonly releaseNotes?: ReleaseNotesSource | null;
 }
 
 interface AppProvidersProps {
@@ -88,7 +94,9 @@ export const AppProviders = ({
                         >
                           <PushDeviceContext.Provider value={ports.push}>
                             <NotifierContext.Provider value={ports.notifier}>
-                              {children}
+                              <ReleaseNotesSourceProvider value={ports.releaseNotes ?? null}>
+                                {children}
+                              </ReleaseNotesSourceProvider>
                             </NotifierContext.Provider>
                           </PushDeviceContext.Provider>
                         </ToastProvider>

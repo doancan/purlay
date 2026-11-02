@@ -49,7 +49,7 @@ import type { Clock } from '../../platform/clock';
 import { DAY_MS } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { noteSession, type Logger } from '../../platform/logging';
-import { sessionFromHeaders } from '../auth/sessions';
+import { sessionFromHeaders, twoFactorRequired } from '../auth/sessions';
 import type { Auth } from '../auth/better-auth';
 import { atomicallyOn } from '../../platform/transactions';
 import { digestsEqual, randomSymbols, randomToken, tokenDigest } from '../../platform/tokens';
@@ -189,6 +189,9 @@ export const requireServerAdmin = async (
   if (owner === undefined || admin === undefined) {
     throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
   }
+  // The administrator too is held back until their second step is on, where the server requires it (D-239):
+  // asked only of the administrator, so everybody else is still the one answer above.
+  if (await auth.owesTwoFactor(owner.userId)) throw twoFactorRequired();
   noteSession(owner.sessionId);
   const minted: ServerAdminSession = { userId: admin.id, [serverAdmin]: true };
   return minted;

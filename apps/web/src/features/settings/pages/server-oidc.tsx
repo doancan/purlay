@@ -5,7 +5,14 @@
  * and disconnected after a question that says so when it is the last way in. The secret is never shown again,
  * and one the key could not open says so on the card.
  */
-import { OIDC_NAME_MAX, type ProbeResult, type ServerSettingsAnswer } from '@purlay/types';
+import {
+  OIDC_CLIENT_ID_MAX,
+  OIDC_CLIENT_SECRET_MAX,
+  OIDC_ISSUER_MAX,
+  OIDC_NAME_MAX,
+  type ProbeResult,
+  type ServerSettingsAnswer,
+} from '@purlay/types';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
@@ -122,7 +129,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                 type="url"
                 autoComplete="off"
                 spellCheck={false}
-                maxLength={512}
+                maxLength={OIDC_ISSUER_MAX}
                 className="font-mono"
                 invalid={field === 'issuer'}
                 onChange={(event) => {
@@ -135,7 +142,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                 value={clientId}
                 autoComplete="off"
                 spellCheck={false}
-                maxLength={256}
+                maxLength={OIDC_CLIENT_ID_MAX}
                 className="font-mono"
                 invalid={field === 'clientId'}
                 onChange={(event) => {
@@ -149,7 +156,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                 value={clientSecret}
                 autoComplete="off"
                 spellCheck={false}
-                maxLength={1024}
+                maxLength={OIDC_CLIENT_SECRET_MAX}
                 className="font-mono"
                 hint={t('settings.server.oidc.hint')}
                 invalid={field === 'clientSecret'}

@@ -136,7 +136,7 @@ export const useToast = (): UseToast => {
 };
 
 const toastClasses =
-  'pointer-events-auto flex max-w-toast items-center gap-3 rounded-2xl border-hairline border-border-subtle bg-surface-100 py-2 pl-3 pr-2 text-body text-ink shadow-float';
+  'pointer-events-auto flex max-w-toast items-center gap-3 rounded-2xl border-hairline border-border-subtle bg-surface-100 py-2 pl-3 pr-2 text-body text-ink shadow-float animate-rise-in';
 
 interface ToasterProps {
   /** The dismiss button's name, in the interface's language. */

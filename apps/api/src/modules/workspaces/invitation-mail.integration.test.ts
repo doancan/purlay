@@ -11,6 +11,8 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import {
   INVITATION_EMAILS_PER_INVITER_PER_DAY,
@@ -28,11 +30,11 @@ import { makeAndMailInvitation, type MailedInvitation } from './invitation-mail'
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const APP = 'https://purlay.test';
 

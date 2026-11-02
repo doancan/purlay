@@ -13,6 +13,9 @@ import type { KeyValueStorage } from '../../theme/theme';
 
 export interface DraftStorage extends KeyValueStorage {
   removeItem(key: string): void;
+  /** How many entries there are, and the name of each: what lists a person's drafts (D-215). */
+  readonly length: number;
+  key(index: number): string | null;
 }
 
 /**
@@ -47,4 +50,39 @@ export const writeDraft = (storage: DraftStorage | null, key: string, text: stri
     // Not remembered; the composer carries on.
     noteStorageFailure('draft-write');
   }
+};
+
+/** A draft found in storage: where it was being written, and what. */
+export interface Draft {
+  readonly key: string;
+  readonly channelId: string;
+  /** The thread's root, for a reply being written; null for the channel. */
+  readonly parentId: string | null;
+  readonly text: string;
+}
+
+/**
+ * Every draft of this person on this device (D-215): read from the entries' names, so nothing is kept
+ * apart from the drafts themselves. Another person's on the same browser are not theirs to list (#694).
+ * A storage that refuses is no drafts, said once, never an error on the screen.
+ */
+export const listDrafts = (storage: DraftStorage | null, userId: string): readonly Draft[] => {
+  if (storage === null) return [];
+  const prefix = `purlay.draft.${userId}.`;
+  const found: Draft[] = [];
+  try {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(prefix) !== true) continue;
+      const [channelId, parentId, extra] = key.slice(prefix.length).split('.');
+      if (channelId === undefined || channelId === '' || extra !== undefined) continue;
+      const text = storage.getItem(key) ?? '';
+      if (text.trim() === '') continue;
+      found.push({ key, channelId, parentId: parentId ?? null, text });
+    }
+  } catch {
+    noteStorageFailure('draft-read');
+    return [];
+  }
+  return found;
 };

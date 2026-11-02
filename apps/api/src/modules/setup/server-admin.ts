@@ -18,16 +18,23 @@
  *   way for other people to sign in would remain, unless the administrator says so
  *   (`confirmLastChannel`). The rule is weighed inside the swap's own transaction, under its lock, from
  *   what that transaction saved — two disconnects at once cannot both pass it.
+ * - **Never nobody's way in** (D-239). Password sign-in is turned off only while GitHub or single sign-on is
+ *   connected, and the last of them is not disconnected while it is off — no confirmation lets it go. Both
+ *   rules are weighed as the last way in is, inside the swap's transaction, from what that transaction saved:
+ *   two administrators at once, one turning passwords off and one disconnecting the provider, cannot both pass.
  * - **Every change is on the trail** (`server_audit_log`), written in the transaction that saves it:
  *   who, which setting, never the value.
  */
 import type { Executor, Transaction } from '@purlay/db';
 import {
+  GITHUB_APP_CALLBACK,
+  GITHUB_APP_WEBHOOK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type ProbeResult,
   type ServerSettingsAnswer,
   type ServerCreatorsRequest,
+  type ServerPolicyRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import {
@@ -54,8 +61,65 @@ import {
   type RuntimeServices,
   type SettingsChange,
 } from './runtime';
-import { readSettingsToBoot, settingsView, type SmtpSettings } from './settings';
+import {
+  readSettingsToBoot,
+  settingsView,
+  type GitHubAppSettings,
+  type ServerSettings,
+  type SmtpSettings,
+} from './settings';
 import { setupStatus, type ServerAdminSession } from './setup';
+import { probeAppKey } from './probes';
+import type { GitHubAppApi } from '../integrations/github-app-api';
+
+/**
+ * The GitHub App issues are written through (D-246 §1), tried as the OAuth app is — its client id and secret
+ * against GitHub's token endpoint (`probeGitHub`) — and then as itself: a token its private key signed must be
+ * one GitHub takes, for the App with the id, slug and client id given. Kept only if both held. Not a way in, so
+ * nothing the sign-in library is built from changes, and disconnecting it needs no confirmation.
+ */
+export const connectGitHubIssuesApp = async (
+  dependencies: ServerAdminDependencies & {
+    readonly github: Omit<GitHubProbeDependencies, 'timeoutMs'>;
+    readonly api: GitHubAppApi;
+  },
+  admin: ServerAdminSession,
+  candidate: GitHubAppSettings,
+): Promise<ProbeResult> => {
+  await afterTheSetup(dependencies.database);
+  const pair = await probeGitHub(admin, candidate, {
+    ...dependencies.github,
+    timeoutMs: GITHUB_PROBE_TIMEOUT_MS,
+  });
+  if (!pair.ok) return pair;
+  const itself = await probeAppKey(dependencies.api, dependencies.clock, candidate);
+  if (!itself.ok) return itself;
+  await applySettings(
+    dependencies.database,
+    { githubApp: candidate },
+    dependencies.change,
+    audited(dependencies, admin, 'server.github_app_connected'),
+  );
+  return itself;
+};
+
+/** The App let go: nothing more is written to GitHub; links and the workspace's token stay (D-246 §6). */
+export const disconnectGitHubIssuesApp = async (
+  dependencies: ServerAdminDependencies,
+  admin: ServerAdminSession,
+  current: RuntimeServices,
+): Promise<void> => {
+  await afterTheSetup(dependencies.database);
+  if (current.settings.githubApp === undefined && !current.needsReentry.includes('githubApp')) {
+    throw new ServerChangeRefused('not-connected');
+  }
+  await applySettings(
+    dependencies.database,
+    { githubApp: null },
+    dependencies.change,
+    audited(dependencies, admin, 'server.github_app_disconnected'),
+  );
+};
 
 /** What each way in being disconnected is called on the trail. */
 const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc', ServerAuditAction>> = {
@@ -65,13 +129,18 @@ const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc', ServerAuditActio
 };
 
 /** Why a change was refused beyond a failed swap (`409 SERVER_CHANGE_REFUSED`). */
-export type ServerChangeRefusal = 'last-channel' | 'not-connected' | 'setup-unfinished';
+export type ServerChangeRefusal =
+  'last-channel' | 'not-connected' | 'setup-unfinished' | 'no-provider' | 'passwords-off';
 
 const SENTENCES: Record<ServerChangeRefusal, string> = {
   'last-channel':
     'That would leave the administrator’s password as the only way to sign in. Say so to go ahead.',
   'not-connected': 'There is nothing of that kind connected.',
   'setup-unfinished': 'The setup is not finished yet; its steps change the settings until it is.',
+  'no-provider':
+    'Password sign-in can be turned off only while GitHub or single sign-on is connected.',
+  'passwords-off':
+    'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
 };
 
 export class ServerChangeRefused extends Error {
@@ -133,6 +202,10 @@ export const serverSettingsOf = async (
     appUrl,
     githubCallbackUrl: `${appUrl}${SIGN_IN_CALLBACK}`,
     oidcCallbackUrl: `${appUrl}${OIDC_CALLBACK}`,
+    githubApp: {
+      callbackUrl: `${appUrl}${GITHUB_APP_CALLBACK}`,
+      webhookUrl: `${appUrl}${GITHUB_APP_WEBHOOK}`,
+    },
     channels: {
       github: current.auth.github,
       email: current.mail !== undefined,
@@ -265,42 +338,75 @@ export const disconnect = async (
       { github: { github: null }, smtp: { smtp: null }, oidc: { oidc: null } }[channel],
       dependencies.change,
       async (transaction) => {
-        if (!confirmLastChannel) {
-          // What this transaction saved, under the swap's lock: the other way is still there, or not.
-          const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
-          if (
-            settings.github === undefined &&
-            settings.smtp === undefined &&
-            settings.oidc === undefined
-          ) {
-            throw new ServerChangeRefused('last-channel');
-          }
+        // What this transaction saved, under the swap's lock: the other way is still there, or not.
+        const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
+        if (channel !== 'smtp' && !settings.passwordSignIn && !hasProvider(settings)) {
+          throw new ServerChangeRefused('passwords-off');
+        }
+        if (
+          !confirmLastChannel &&
+          settings.github === undefined &&
+          settings.smtp === undefined &&
+          settings.oidc === undefined
+        ) {
+          throw new ServerChangeRefused('last-channel');
         }
         await record(transaction);
       },
     );
   } catch (error) {
-    // The swap wraps what its transaction threw; a refusal is the caller's, not a failed swap.
-    if (error instanceof SettingsChangeFailed && error.cause instanceof ServerChangeRefused) {
-      throw error.cause;
-    }
-    throw error;
+    throw refusalOf(error);
   }
 };
 
-/** Who may make an account, saved and served at once. */
+/** The swap wraps what its transaction threw; a refusal is the caller's, not a failed swap. */
+const refusalOf = (error: unknown): unknown =>
+  error instanceof SettingsChangeFailed && error.cause instanceof ServerChangeRefused
+    ? error.cause
+    : error;
+
+/**
+ * Whether a provider that is not the server's own signs people in: GitHub or single sign-on, read as the
+ * swap reads them — a secret the key cannot open is no way in (D-179 §6). Mail is not one: a link is the
+ * server's own relay, and the administrator's address may be one a link does not sign into (D-239).
+ */
+const hasProvider = (settings: ServerSettings): boolean =>
+  settings.github !== undefined || settings.oidc !== undefined;
+
+/** What a change of one rule of `POST /api/server/policy` is called on the trail. */
+const policyChanged = (change: ServerPolicyRequest): ServerAuditAction => {
+  if ('signUp' in change) return 'server.sign_up_changed';
+  if ('requireTwoFactor' in change) return 'server.two_factor_requirement_changed';
+  if ('passwordSignIn' in change) return 'server.password_sign_in_changed';
+  if ('sessionIdleTimeoutHours' in change) return 'server.session_idle_timeout_changed';
+  return 'server.session_max_age_changed';
+};
+
+/**
+ * One rule of the sign-in policy, saved and served at once: who may make an account, whether a password
+ * account must turn on two-step verification, whether a password signs in (D-239), how long a session may go
+ * unused and live (D-244). Each on its own trail's action. Password sign-in is turned off only while GitHub or
+ * single sign-on is connected, weighed in the swap's transaction from what it saved. A lifetime applies to the
+ * sessions already open from their next request: nothing else is written.
+ */
 export const changePolicy = async (
   dependencies: ServerAdminDependencies,
   admin: ServerAdminSession,
-  signUp: 'invite-only' | 'open',
+  change: ServerPolicyRequest,
 ): Promise<void> => {
   await afterTheSetup(dependencies.database);
-  await applySettings(
-    dependencies.database,
-    { signUp },
-    dependencies.change,
-    audited(dependencies, admin, 'server.sign_up_changed'),
-  );
+  const record = audited(dependencies, admin, policyChanged(change));
+  try {
+    await applySettings(dependencies.database, change, dependencies.change, async (transaction) => {
+      if ('passwordSignIn' in change && !change.passwordSignIn) {
+        const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
+        if (!hasProvider(settings)) throw new ServerChangeRefused('no-provider');
+      }
+      await record(transaction);
+    });
+  } catch (error) {
+    throw refusalOf(error);
+  }
 };
 
 /** Who may make a workspace, saved at once; the creating routes read it on every request. */

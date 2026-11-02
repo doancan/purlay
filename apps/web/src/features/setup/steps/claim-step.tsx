@@ -3,6 +3,7 @@
  * configured for **before** anything is sent — a code from another origin is refused as cross-site, and
  * a person told "wrong code" for that would retype a right one for ever.
  */
+import { SETUP_CLAIM_CODE_MAX } from '@purlay/types';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
@@ -106,7 +107,7 @@ export const ClaimStep = ({
             label={t('setup.claim.label')}
             value={code}
             required
-            maxLength={64}
+            maxLength={SETUP_CLAIM_CODE_MAX}
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}

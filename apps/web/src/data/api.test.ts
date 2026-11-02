@@ -5,7 +5,7 @@
  */
 import { NO_PROFILE } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
-import type { Attachment } from '@purlay/types';
+import type { Attachment, DeviceSession } from '@purlay/types';
 import { createApi, type Api } from './api';
 import { ApiError } from './errors';
 import { createHttp, type UploadRequest } from './http';
@@ -25,6 +25,8 @@ const channel = {
   notificationLevel: 'mentions',
   starred: false,
   incident: null,
+  codeRepository: null,
+  onlyAdminsPost: false,
   peer: null,
   peers: [],
   memberCount: 1,
@@ -66,6 +68,42 @@ const harness = (body: unknown): { api: Api; calls: Call[] } => {
 };
 
 describe('the endpoints', () => {
+  test('question metadata and personal searches use the shared contract at their own routes', async () => {
+    const knowledge = {
+      version: 0,
+      isQuestion: true,
+      assigneeId: null,
+      acceptedAnswerId: null,
+      decisionNote: 'Wait',
+      decisionUrl: null,
+    };
+    const write = harness(message);
+    await write.api.setKnowledge(ID, knowledge);
+    expect(write.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/messages/${ID}/knowledge`,
+      body: knowledge,
+    });
+    const input = {
+      name: 'Questions',
+      query: { q: '', question: 'yes' as const, status: 'open' as const },
+    };
+    const saved = { ...input, id: ID, createdAt: WHEN };
+    const save = harness(saved);
+    expect(await save.api.saveSearch(ID, ID, input)).toEqual(saved);
+    expect(save.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/workspaces/${ID}/saved-searches/${ID}`,
+      body: input,
+    });
+    const list = harness({ data: [saved], nextCursor: null });
+    expect((await list.api.savedSearches(ID, ID)).data).toEqual([saved]);
+    expect(list.calls[0]?.url).toBe(`/api/workspaces/${ID}/saved-searches?before=${ID}`);
+    const remove = harness(null);
+    await remove.api.deleteSearch(ID, ID);
+    expect(remove.calls[0]?.method).toBe('DELETE');
+    expect(remove.calls[0]?.url).toBe(`/api/workspaces/${ID}/saved-searches/${ID}`);
+  });
   test('identity and workspaces', async () => {
     const me = harness({
       user: { ...user, email: 'a@example.test' },
@@ -73,6 +111,9 @@ describe('the endpoints', () => {
       memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
       mayCreateWorkspace: false,
       isServerAdmin: false,
+      nameFromGitHub: false,
+      mustEnrolTwoFactor: false,
+      scheduledDeletions: [],
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
@@ -430,7 +471,7 @@ describe('the endpoints', () => {
     ]);
   });
 
-  test('the audit trail is read newest first, older pages by the cursor (D-26)', async () => {
+  test('the audit trail is read newest first, older pages by the cursor, narrowed by its filter (D-26, D-222)', async () => {
     const entry = {
       id: ID,
       actor: user,
@@ -441,11 +482,21 @@ describe('the endpoints', () => {
       createdAt: WHEN,
     };
     const read = harness({ data: [entry], nextCursor: null });
-    expect(await read.api.audit(ID)).toEqual({ data: [entry], nextCursor: null });
-    await read.api.audit(ID, ID);
+    expect(await read.api.audit(ID, {})).toEqual({ data: [entry], nextCursor: null });
+    await read.api.audit(ID, {}, ID);
+    await read.api.audit(
+      ID,
+      { actorId: ID, action: 'member.removed', from: '2026-10-01T00:00:00.000Z' },
+      ID,
+    );
     expect(read.calls).toEqual([
       { method: 'GET', url: `/api/workspaces/${ID}/audit`, body: undefined },
       { method: 'GET', url: `/api/workspaces/${ID}/audit?before=${ID}`, body: undefined },
+      {
+        method: 'GET',
+        url: `/api/workspaces/${ID}/audit?actorId=${ID}&action=member.removed&from=2026-10-01T00%3A00%3A00.000Z&before=${ID}`,
+        body: undefined,
+      },
     ]);
   });
 
@@ -462,7 +513,7 @@ describe('the endpoints', () => {
   });
 
   test('the GitHub token: its status read, the token sent in the body, and taken away (D-23)', async () => {
-    const status = { configured: true, updatedAt: WHEN };
+    const status = { configured: true, updatedAt: WHEN, invalidSince: null, broadScopes: false };
     const read = harness(status);
     expect(await read.api.githubIntegration(ID)).toEqual(status);
     const saved = harness(null);
@@ -477,6 +528,63 @@ describe('the endpoints', () => {
         body: { token: 'github_pat_x' },
       },
       { method: 'DELETE', url: `/api/workspaces/${ID}/integrations/github`, body: undefined },
+    ]);
+  });
+
+  test('the GitHub App: status read, each trip started at its own route, installation and authorization let go (D-246)', async () => {
+    const status = { available: true, installation: null, authorization: null };
+    const redirect = { url: 'https://github.example/x' };
+    const read = harness(status);
+    expect(await read.api.githubApp(ID)).toEqual(status);
+    const install = harness(redirect);
+    expect(await install.api.startGitHubInstallation(ID)).toEqual(redirect);
+    const authorize = harness(redirect);
+    expect(await authorize.api.startGitHubAuthorization('/w/acme')).toEqual(redirect);
+    const gone = harness(null);
+    await gone.api.removeGitHubInstallation(ID);
+    await gone.api.forgetGitHubAuthorization();
+    expect([...read.calls, ...install.calls, ...authorize.calls, ...gone.calls]).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/github-app`, body: undefined },
+      { method: 'POST', url: `/api/workspaces/${ID}/github-app/installation`, body: undefined },
+      { method: 'POST', url: '/api/github-app/authorization', body: { returnTo: '/w/acme' } },
+      { method: 'DELETE', url: `/api/workspaces/${ID}/github-app/installation`, body: undefined },
+      { method: 'DELETE', url: '/api/github-app/authorization', body: undefined },
+    ]);
+  });
+
+  test('making an issue: the repositories read, the request sent whole and its outcome checked (D-246)', async () => {
+    const list = harness({ repositories: [{ id: 77, fullName: 'acme/api', private: true }] });
+    expect((await list.api.githubRepositories(ID)).repositories).toHaveLength(1);
+    const request = {
+      clientRequestId: ID,
+      repositoryId: 77,
+      title: 'Retry',
+      body: 'Why',
+      copyPrivateText: false,
+    };
+    const made = harness({ status: 'unknown' });
+    expect(await made.api.createGitHubIssue(ID, request)).toEqual({ status: 'unknown' });
+    expect([...list.calls, ...made.calls]).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/github-repositories`, body: undefined },
+      { method: 'POST', url: `/api/messages/${ID}/github-issue`, body: request },
+    ]);
+  });
+
+  test('pointing a thread at work that exists: the address sent and the link read (D-246)', async () => {
+    const work = {
+      id: ID,
+      repository: 'acme/api',
+      kind: 'issue' as const,
+      number: 1,
+      title: 'Retry',
+      state: 'open' as const,
+      origin: 'linked' as const,
+      url: 'https://github.com/acme/api/issues/1',
+    };
+    const linked = harness(work);
+    expect(await linked.api.linkGitHubWork(ID, { url: work.url })).toEqual(work);
+    expect(linked.calls).toEqual([
+      { method: 'POST', url: `/api/messages/${ID}/github-link`, body: { url: work.url } },
     ]);
   });
 
@@ -499,7 +607,9 @@ describe('the endpoints', () => {
     ).toEqual(made);
     const remove = harness(null);
     await remove.api.disconnectGitHubFeed(ID, ID);
-    expect([...list.calls, ...connect.calls, ...remove.calls]).toEqual([
+    const regenerate = harness(made);
+    expect(await regenerate.api.regenerateGitHubFeedSecret(ID, ID)).toEqual(made);
+    expect([...list.calls, ...connect.calls, ...remove.calls, ...regenerate.calls]).toEqual([
       { method: 'GET', url: `/api/channels/${ID}/github-feeds`, body: undefined },
       {
         method: 'POST',
@@ -507,6 +617,7 @@ describe('the endpoints', () => {
         body: { repository: 'acme/api', events: ['push'] },
       },
       { method: 'DELETE', url: `/api/channels/${ID}/github-feeds/${ID}`, body: undefined },
+      { method: 'POST', url: `/api/channels/${ID}/github-feeds/${ID}/secret`, body: undefined },
     ]);
     // A secret that is not the contract's is never believed.
     const refused = await harness({ ...made, secret: 'short' })
@@ -582,6 +693,23 @@ describe('the endpoints', () => {
       { method: 'POST', url: `/api/channels/${ID}/leave` },
       { method: 'DELETE', url: `/api/channels/${ID}` },
       { method: 'GET', url: `/api/channels/${ID}/members` },
+    ]);
+  });
+
+  test('archived channels are read for the workspace and restored by the channel (D-232)', async () => {
+    const archived = {
+      id: ID,
+      name: 'old-launch',
+      type: 'public',
+      archivedAt: '2026-10-30T08:00:00.000Z',
+    };
+    const listed = harness([archived]);
+    expect(await listed.api.archivedChannels(ID)).toEqual([archived] as never);
+    const restored = harness(null);
+    await restored.api.restoreChannel(ID);
+    expect([...listed.calls, ...restored.calls]).toMatchObject([
+      { method: 'GET', url: `/api/workspaces/${ID}/archived-channels` },
+      { method: 'POST', url: `/api/channels/${ID}/restore` },
     ]);
   });
 
@@ -698,6 +826,8 @@ describe('the endpoints', () => {
       hasPassword: false,
       github: null,
       oidc: false,
+      twoFactor: false,
+      twoFactorRequired: false,
     });
     expect(await read.api.mySignIn()).toEqual({
       email: 'a@example.test',
@@ -705,8 +835,28 @@ describe('the endpoints', () => {
       hasPassword: false,
       github: null,
       oidc: false,
+      twoFactor: false,
+      twoFactorRequired: false,
     });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
+  });
+
+  test('where the caller is signed in, and ending one of those sessions by its id (D-193)', async () => {
+    const session: DeviceSession = {
+      id: ID,
+      kind: 'native',
+      name: 'Ada’s MacBook',
+      createdAt: '2026-09-09T08:00:00.000Z',
+      lastUsedAt: '2026-09-10T08:00:00.000Z',
+      expiresAt: '2026-10-09T08:00:00.000Z',
+      current: false,
+    };
+    const read = harness({ data: [session] });
+    expect(await read.api.mySessions()).toEqual({ data: [session] });
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sessions' });
+    const ended = harness(null);
+    await ended.api.endMySession(ID);
+    expect(ended.calls[0]).toMatchObject({ method: 'DELETE', url: `/api/me/sessions/${ID}` });
   });
 
   test('authorising the native application (D-191): the challenge and state go up, the fixed address comes back', async () => {
@@ -722,13 +872,35 @@ describe('the endpoints', () => {
     });
   });
 
+  test('the version this server runs and the newest release it learned of (D-248)', async () => {
+    const release = {
+      version: '1.3.0',
+      url: 'https://github.com/doancan/purlay/releases/tag/v1.3.0',
+      publishedAt: '2026-10-30T08:00:00.000Z',
+    };
+    const newest = harness({ current: '1.2.3', latest: release });
+    expect(await newest.api.latestRelease()).toEqual({ current: '1.2.3', latest: release });
+    expect(newest.calls[0]).toMatchObject({ method: 'GET', url: '/api/releases/latest' });
+    expect(await harness({ current: '1.2.3', latest: null }).api.latestRelease()).toEqual({
+      current: '1.2.3',
+      latest: null,
+    });
+  });
+
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
-    const methods = harness({ github: false, email: true, oidc: null, signUp: 'open' });
+    const methods = harness({
+      github: false,
+      email: true,
+      oidc: null,
+      signUp: 'open',
+      password: true,
+    });
     expect(await methods.api.authMethods()).toEqual({
       github: false,
       email: true,
       oidc: null,
       signUp: 'open',
+      password: true,
     });
     expect(methods.calls[0]).toMatchObject({ method: 'GET', url: '/api/auth/methods' });
 
@@ -756,7 +928,9 @@ describe('the endpoints', () => {
 
   test('passwords and the invitation passport (R30, R51)', async () => {
     const signedIn = harness({ token: 'unread' });
-    await signedIn.api.signInWithPassword({ email: 'a@example.test', password: 'pw' });
+    expect(await signedIn.api.signInWithPassword({ email: 'a@example.test', password: 'pw' })).toBe(
+      'signed-in',
+    );
     expect(signedIn.calls[0]).toEqual({
       method: 'POST',
       url: '/auth/sign-in/email',
@@ -782,16 +956,78 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('two-step verification (D-236): the library’s routes, and what each answer means', async () => {
+    const asked = harness({ twoFactorRedirect: true, twoFactorMethods: ['totp'] });
+    expect(await asked.api.signInWithPassword({ email: 'a@example.test', password: 'pw' })).toBe(
+      'second-step',
+    );
+
+    const verified = harness({ token: 'unread' });
+    await verified.api.verifySignInCode({ code: '123456', kind: 'app' });
+    await verified.api.verifySignInCode({ code: 'abcde-12345', kind: 'backup' });
+    expect(verified.calls.map((call) => [call.url, call.body])).toEqual([
+      ['/auth/two-factor/verify-totp', { code: '123456' }],
+      ['/auth/two-factor/verify-backup-code', { code: 'abcde-12345' }],
+    ]);
+
+    const enrolment = { totpURI: 'otpauth://totp/x?secret=AAAA', backupCodes: ['a-b'] };
+    const started = harness(enrolment);
+    expect(await started.api.startTwoFactor('pw')).toEqual(enrolment);
+    expect(started.calls[0]).toEqual({
+      method: 'POST',
+      url: '/auth/two-factor/enable',
+      body: { password: 'pw' },
+    });
+
+    const confirmed = harness({ token: 'unread' });
+    await confirmed.api.confirmTwoFactor('123456');
+    expect(confirmed.calls[0]).toMatchObject({
+      url: '/auth/two-factor/verify-totp',
+      body: { code: '123456' },
+    });
+
+    const stopped = harness({ status: true });
+    await stopped.api.stopTwoFactor('pw');
+    expect(stopped.calls[0]).toMatchObject({
+      url: '/auth/two-factor/disable',
+      body: { password: 'pw' },
+    });
+
+    const renewed = harness({ status: true, backupCodes: ['c-d'] });
+    expect((await renewed.api.newBackupCodes('pw')).backupCodes).toEqual(['c-d']);
+    expect(renewed.calls[0]).toMatchObject({
+      url: '/auth/two-factor/generate-backup-codes',
+      body: { password: 'pw' },
+    });
+  });
+
   test('how long a workspace keeps its history (D-139 §4): read, and set', async () => {
-    const read = harness({ retentionDays: null });
-    expect(await read.api.retention(ID)).toEqual({ retentionDays: null });
+    const read = harness({ retentionDays: null, channelsKeptLonger: 0 });
+    expect(await read.api.retention(ID)).toEqual({ retentionDays: null, channelsKeptLonger: 0 });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/retention` });
-    const set = harness({ retentionDays: 90 });
-    expect(await set.api.setRetention(ID, 90)).toEqual({ retentionDays: 90 });
+    const set = harness({ retentionDays: 90, channelsKeptLonger: 0 });
+    expect(await set.api.setRetention(ID, 90)).toEqual({
+      retentionDays: 90,
+      channelsKeptLonger: 0,
+    });
     expect(set.calls[0]).toEqual({
       method: 'PUT',
       url: `/api/workspaces/${ID}/retention`,
       body: { retentionDays: 90 },
+    });
+  });
+
+  test('how long a channel keeps its history (D-225): read, and set', async () => {
+    const answer = { keepsAtLeast: 'forever', workspaceDays: 30, effectiveDays: null } as const;
+    const read = harness(answer);
+    expect(await read.api.channelRetention(ID)).toEqual(answer);
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: `/api/channels/${ID}/retention` });
+    const set = harness(answer);
+    expect(await set.api.setChannelRetention(ID, 'forever')).toEqual(answer);
+    expect(set.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/channels/${ID}/retention`,
+      body: { keepsAtLeast: 'forever' },
     });
   });
 
@@ -819,6 +1055,48 @@ describe('the endpoints', () => {
     expect(asked.calls[0]).toMatchObject({ method: 'POST', url: `/api/workspaces/${ID}/exports` });
   });
 
+  test('one’s own data (D-241): exports listed, and one asked for, in no workspace', async () => {
+    const one = {
+      id: '0199155c-6200-7b7f-8c11-0000000000f1',
+      status: 'pending' as const,
+      createdAt: '2026-10-14T10:00:00.000Z',
+      finishedAt: null,
+      expiresAt: null,
+      sizeBytes: null,
+      failure: null,
+    };
+    const listed = harness([one]);
+    expect(await listed.api.myExports()).toEqual([one]);
+    expect(listed.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/exports' });
+    const asked = harness(one);
+    expect(await asked.api.requestMyExport()).toEqual(one);
+    expect(asked.calls[0]).toMatchObject({ method: 'POST', url: '/api/me/exports' });
+  });
+
+  test('quiet hours and missed mail: read and set, as the person’s own (D-234, D-240)', async () => {
+    const quiet = {
+      quietHours: { from: 1320, to: 420, days: [1, 2] },
+      timeZone: 'Europe/Istanbul',
+    };
+    const readQuiet = harness(quiet);
+    expect(await readQuiet.api.quietHours()).toEqual(quiet);
+    expect(readQuiet.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/quiet-hours' });
+    const setQuiet = harness(quiet);
+    expect(await setQuiet.api.setQuietHours({ quietHours: quiet.quietHours })).toEqual(quiet);
+    expect(setQuiet.calls[0]).toMatchObject({ method: 'PUT', url: '/api/me/quiet-hours' });
+
+    const mail = { on: true, available: true };
+    const readMail = harness(mail);
+    expect(await readMail.api.missedMail()).toEqual(mail);
+    expect(readMail.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/missed-mail' });
+    const setMail = harness(mail);
+    expect(await setMail.api.setMissedMail({ on: true })).toEqual(mail);
+    expect(setMail.calls[0]).toMatchObject({ method: 'PUT', url: '/api/me/missed-mail' });
+    const stopped = harness(null);
+    await stopped.api.stopMissedMail('a'.repeat(64));
+    expect(stopped.calls[0]).toMatchObject({ method: 'POST', url: '/api/missed-mail/stop' });
+  });
+
   test('erasing one’s own account sends the username typed (D-139 §5)', async () => {
     const erased = harness(null);
     await erased.api.eraseAccount('alice');
@@ -827,6 +1105,117 @@ describe('the endpoints', () => {
       url: '/api/me/erase',
       body: { confirm: 'alice' },
     });
+  });
+
+  test('a channel’s bookmarks: listed, one added with its address and title in the body, one let go by id (D-218)', async () => {
+    const bookmark = {
+      id: ID,
+      channelId: ID,
+      url: 'https://example.test/runbook',
+      title: 'Runbook',
+      addedBy: user,
+      addedAt: WHEN,
+    };
+    const list = harness([bookmark]);
+    expect(await list.api.bookmarks(ID)).toEqual([bookmark]);
+    expect(list.calls[0]).toMatchObject({ method: 'GET', url: `/api/channels/${ID}/bookmarks` });
+
+    const add = harness(bookmark);
+    const input = { url: 'https://example.test/runbook', title: 'Runbook' };
+    expect(await add.api.addBookmark(ID, input)).toEqual(bookmark);
+    expect(add.calls[0]).toEqual({
+      method: 'POST',
+      url: `/api/channels/${ID}/bookmarks`,
+      body: input,
+    });
+
+    const remove = harness(null);
+    await remove.api.removeBookmark(ID, ID);
+    expect(remove.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/channels/${ID}/bookmarks/${ID}`,
+    });
+  });
+
+  test('a bookmark list that breaks the contract is refused, not shown', async () => {
+    const broken = harness([{ id: ID, channelId: ID, url: 'not a link', title: '' }]);
+    const failure = await broken.api.bookmarks(ID).catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(ApiError);
+  });
+
+  test('marking unread names the message it is unread from, and reads the new position (D-212)', async () => {
+    const unread = harness({ ...state, lastReadMessageId: ID, unreadCount: 3 });
+    expect((await unread.api.markUnread(ID, 'm2')).unreadCount).toBe(3);
+    expect(unread.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/channels/${ID}/unread`,
+      body: { fromMessageId: 'm2' },
+    });
+  });
+
+  test('marking every channel read names the workspace, sends nothing, and reads the states (D-238)', async () => {
+    const all = harness({ data: [{ channelId: ID, state }] });
+    expect((await all.api.markAllRead(ID)).data).toEqual([{ channelId: ID, state }]);
+    expect(all.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/workspaces/${ID}/read`,
+      body: undefined,
+    });
+  });
+
+  test('one message, and the window of messages around it, are read by its id', async () => {
+    const one = harness(message);
+    expect((await one.api.message(ID)).content).toBe('hi');
+    expect(one.calls[0]).toMatchObject({ method: 'GET', url: `/api/messages/${ID}` });
+
+    const around = harness({
+      target: message,
+      data: [message],
+      olderCursor: null,
+      newerCursor: ID,
+    });
+    const window = await around.api.messageWindow(ID);
+    expect(window.target.id).toBe(ID);
+    expect(window.newerCursor).toBe(ID);
+    expect(around.calls[0]).toMatchObject({ method: 'GET', url: `/api/messages/${ID}/around` });
+  });
+
+  test('who is online in a workspace is read with the version everyone else is offline at (D-136)', async () => {
+    const snapshot = { online: [{ userId: ID, online: true, version: 4 }], version: 4 };
+    const presence = harness(snapshot);
+    expect(await presence.api.presence(ID)).toEqual(snapshot);
+    expect(presence.calls[0]).toMatchObject({
+      method: 'GET',
+      url: `/api/workspaces/${ID}/presence`,
+    });
+  });
+
+  test('leaving a workspace removes the caller’s own membership and reads no answer', async () => {
+    const leave = harness(null);
+    await leave.api.leaveWorkspace(ID);
+    expect(leave.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/workspaces/${ID}/membership`,
+    });
+  });
+
+  test('a text attachment is read as its words, not as JSON', async () => {
+    const calls: string[] = [];
+    const fetchFn = ((url: string) => {
+      calls.push(url);
+      return Promise.resolve(new Response('line one\nsatır iki', { status: 200 }));
+    }) as unknown as typeof fetch;
+    expect(await createApi(createHttp(fetchFn)).attachmentText(ID)).toBe('line one\nsatır iki');
+    expect(calls).toEqual([`/api/attachments/${ID}`]);
+  });
+
+  test('whether the server is still waiting to be set up, and where it lives', async () => {
+    const status = harness({ open: true, appUrl: 'https://purlay.example.test' });
+    expect(await status.api.setupStatus()).toEqual({
+      open: true,
+      appUrl: 'https://purlay.example.test',
+    });
+    expect(status.calls[0]).toMatchObject({ method: 'GET', url: '/setup/status' });
   });
 
   test('an abandoned read carries the signal', async () => {

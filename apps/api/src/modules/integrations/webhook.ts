@@ -4,15 +4,16 @@
  * Nobody is signed in: the feed's secret is the only credential. The feed is found by the id in the
  * address; the signature over the bytes as sent is checked in constant time before a byte of them is
  * believed; only then is the feed's own bucket charged — so a stranger who knows an address spends
- * nothing of it — and the body read. A delivery is posted once: its id is recorded in the transaction
- * that posts it, and the same id again posts nothing. The message is nobody's and is counted unread
+ * nothing of it — and the body read. A delivery is posted once: its id and its body's digest are
+ * recorded in the transaction that posts it, and the same id again — or the same signed body under an id
+ * made up, since the id is not signed (D-231 §1) — posts nothing. The message is nobody's and is counted unread
  * for everybody (D-134 §6–7); it arrives by the path a person's does (`publishArrival`).
  *
  * What fails after the signature held is said where the feed was set up — the reason and its time —
  * and answered so GitHub shows the delivery failed. Every delivery is one line of the log: feed,
- * delivery, event and outcome, never the body.
+ * delivery, event and outcome, never the body; a bad signature is one too, naming only the feed.
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
 import {
@@ -154,7 +155,13 @@ export const receiveDelivery = async (
     });
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
-  if (!signedBy(secret, delivery.body, delivery.signature)) throw unsigned();
+  if (!signedBy(secret, delivery.body, delivery.signature)) {
+    // Said to the operator and not on the feed (anybody may send one, D-134 §8): the feed and the
+    // outcome, never the secret, the signature or a byte of the body — the usual cause is a secret
+    // pasted wrong at GitHub, or one regenerated and not yet updated there (#884).
+    log.warn('github delivery', { feedId: feed.id, outcome: 'bad_signature' });
+    throw unsigned();
+  }
 
   const line = { feedId: feed.id, deliveryId: delivery.deliveryId, event: delivery.event };
   if (
@@ -265,11 +272,18 @@ export const receiveDelivery = async (
     return outcome;
   }
 
+  const bodyDigest = createHash('sha256').update(delivery.body).digest('hex');
   const posted = await atomicallyOn(database)(async (transaction) => {
+    // Either key taken is the same delivery: its id again, or its body under another id.
     const recorded = await transaction
       .insertInto('github_deliveries')
-      .values({ feed_id: feed.id, delivery_id: delivery.deliveryId ?? '', received_at: now })
-      .onConflict((conflict) => conflict.columns(['feed_id', 'delivery_id']).doNothing())
+      .values({
+        feed_id: feed.id,
+        delivery_id: delivery.deliveryId ?? '',
+        body_digest: bodyDigest,
+        received_at: now,
+      })
+      .onConflict((conflict) => conflict.doNothing())
       .returning('delivery_id')
       .executeTakeFirst();
     if (recorded === undefined) return null;

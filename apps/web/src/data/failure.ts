@@ -27,19 +27,27 @@ export type FailureKey =
   | 'failure.network'
   | 'failure.session'
   | 'failure.reauthenticate'
+  | 'failure.twoFactor'
   | 'failure.notAMember'
   | 'failure.gone'
   | 'failure.slow'
   | 'failure.tooLarge'
   | 'failure.refused'
+  | 'failure.deletionStarted'
   | 'failure.savedLimit'
   | 'failure.pinsLimit'
+  | 'failure.bookmarksLimit'
   | 'failure.githubFeedsLimit'
   | 'failure.githubFeedExists'
+  | 'failure.incomingWebhooksLimit'
+  | 'failure.githubUnavailable'
+  | 'failure.githubNotConnected'
+  | 'failure.githubAuthorization'
   | 'failure.incidentOpen'
   | 'failure.incidentResolved'
   | 'failure.incidentRespondersLimit'
   | 'failure.incidentPostmortemChanged'
+  | 'failure.onlyAdminsPost'
   | 'failure.generic';
 
 /**
@@ -65,15 +73,22 @@ export const failureKey = (code: FailureCode): FailureKey => {
     // Erasing an account wants a sign-in from the last minutes (D-139 §5).
     case 'REAUTHENTICATION_REQUIRED':
       return 'failure.reauthenticate';
+    // The server holds the person back until their second step is on (D-239).
+    case 'TWO_FACTOR_REQUIRED':
+      return 'failure.twoFactor';
     // Writing in a public channel the person has not joined: the way on is Join (D-156).
     case 'NOT_A_CHANNEL_MEMBER':
       return 'failure.notAMember';
+    // A new message in an announcement channel from a member: the way on is a thread (D-243).
+    case 'ONLY_ADMINS_POST':
+      return 'failure.onlyAdminsPost';
     case 'FORBIDDEN':
     case 'ROUTE_NOT_FOUND':
     case 'WORKSPACE_NOT_FOUND':
     case 'CHANNEL_NOT_FOUND':
     case 'SCHEDULED_MESSAGE_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
+    case 'BOOKMARK_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
@@ -83,6 +98,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'SIGN_IN_LINK_NOT_FOUND':
     case 'NATIVE_CODE_NOT_FOUND':
     case 'GITHUB_FEED_NOT_FOUND':
+    case 'INCOMING_WEBHOOK_NOT_FOUND':
     case 'INCIDENT_NOT_FOUND':
     case 'IMAGE_NOT_AVAILABLE':
       return 'failure.gone';
@@ -99,10 +115,20 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.savedLimit';
     case 'PINS_LIMIT':
       return 'failure.pinsLimit';
+    case 'BOOKMARKS_LIMIT':
+      return 'failure.bookmarksLimit';
     case 'GITHUB_FEEDS_LIMIT':
       return 'failure.githubFeedsLimit';
     case 'GITHUB_FEED_EXISTS':
       return 'failure.githubFeedExists';
+    case 'INCOMING_WEBHOOKS_LIMIT':
+      return 'failure.incomingWebhooksLimit';
+    case 'GITHUB_UNAVAILABLE':
+      return 'failure.githubUnavailable';
+    case 'GITHUB_NOT_CONNECTED':
+      return 'failure.githubNotConnected';
+    case 'GITHUB_AUTHORIZATION_REQUIRED':
+      return 'failure.githubAuthorization';
     case 'INCIDENT_OPEN':
       return 'failure.incidentOpen';
     case 'INCIDENT_RESOLVED':
@@ -111,6 +137,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.incidentRespondersLimit';
     case 'INCIDENT_POSTMORTEM_CHANGED':
       return 'failure.incidentPostmortemChanged';
+    // A workspace's deletion taken back too late: the erasure has begun (D-242).
+    case 'WORKSPACE_DELETION_STARTED':
+      return 'failure.deletionStarted';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':
@@ -118,6 +147,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'SCHEDULED_MESSAGE_SENT':
     case 'SCHEDULED_MESSAGE_LIMIT':
     case 'LAST_CHANNEL_MEMBER':
+    // Said in words of its own by the channel's retention form (D-225); anywhere else, refused.
+    case 'RETENTION_TOO_SHORT':
       return 'failure.refused';
     case 'VALIDATION_FAILED':
     case 'INVALID_MESSAGE_ID':
@@ -125,7 +156,11 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'THREAD_NOT_RESOLVABLE':
     case 'WORKSPACE_SLUG_TAKEN':
     case 'CHANNEL_NAME_TAKEN':
+    case 'KNOWLEDGE_CONFLICT':
+    case 'SAVED_SEARCH_NOT_FOUND':
+    case 'SAVED_SEARCH_LIMIT':
     case 'MESSAGE_ID_CONFLICT':
+    case 'GITHUB_REQUEST_CONFLICT':
     case 'INCIDENT_ID_CONFLICT':
     case 'ACCOUNT_EMAIL_CONFLICT':
     // A lost race on the GitHub id's index, said by the callback as `failed` (D-179).
@@ -142,6 +177,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'SETTINGS_CHANGE_FAILED':
     case 'SERVER_CHANGE_REFUSED':
     case 'ADMIN_LINK_NOT_FOUND':
+    // The stop page says it in words of its own (D-240).
+    case 'MAIL_LINK_NOT_FOUND':
     // Said to an installed client by its header, which the web client never sends (D-186).
     case 'CLIENT_TOO_OLD':
     // GitHub's answers, never a person's: no screen calls the webhook (D-134 §4).
@@ -157,7 +194,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
 /**
  * A 401 on an action is the session ending, not a reason to keep pressing the button: the
  * identity is asked for again, so the session gate takes over and the person is taken to
- * sign in.
+ * sign in. A `TWO_FACTOR_REQUIRED` is the same move: the identity read again says the person must
+ * turn on two-step verification, and the gate shows them only that (D-239).
  */
 const refreshSession = (client: QueryClient): void => {
   void client.invalidateQueries({ queryKey: keys.me });
@@ -170,7 +208,7 @@ export const useDescribeFailure = (): ((error: unknown) => string) => {
   return useCallback(
     (error: unknown): string => {
       const code = codeOf(error);
-      if (code === 'UNAUTHENTICATED') refreshSession(client);
+      if (code === 'UNAUTHENTICATED' || code === 'TWO_FACTOR_REQUIRED') refreshSession(client);
       return t(failureKey(code));
     },
     [t, client],

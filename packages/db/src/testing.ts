@@ -69,12 +69,13 @@ export const integrationDatabase = (): Kysely<DB> => {
  *
  * The body receives a `Transaction`, which is what a service would receive as
  * its executor — so a service that reaches for a database handle of its own
- * cannot be tested this way, which is the point (D-46).
+ * cannot be tested this way, which is the point (D-46). On the shared database by default; a file whose body
+ * takes locks a whole table's worth of other files would wait on — a migration's DDL — passes a clone (D-228).
  */
 export const withRollback = async (
   body: (executor: Transaction<DB>) => Promise<void>,
+  db: Kysely<DB> = integrationDatabase(),
 ): Promise<void> => {
-  const db = integrationDatabase();
   try {
     await db.transaction().execute(async (trx) => {
       await body(trx);
@@ -90,16 +91,18 @@ export const withRollback = async (
 /**
  * Closes the shared pool. Every integration file calls this in `afterAll`.
  *
- * That is safe because `integrationDatabase` reopens on demand: the runner works
- * through the files one at a time, so a file that closes the pool costs the next
- * one a reconnection and nothing else. Naming one file as "the last" would be a
- * fact nothing enforces, wrong the moment a file is added.
+ * That is safe because `integrationDatabase` reopens on demand: a file that closes the pool costs the next
+ * one a reconnection and nothing else. Naming one file as "the last" would be a fact nothing enforces,
+ * wrong the moment a file is added.
+ *
+ * **The pool is let go before it is ended** (#797): whoever asks while the end is still under way — the next
+ * file, after a hook that ran out of time — is given a new pool, never one being destroyed. Two closes at
+ * once each end what they let go, which is the pool once.
  */
 export const closeIntegrationDatabase = async (): Promise<void> => {
-  if (shared !== undefined) {
-    await shared.destroy();
-    shared = undefined;
-  }
+  const closing = shared;
+  shared = undefined;
+  if (closing !== undefined) await closing.destroy();
 };
 
 /** How long a drop waits for the connections of its database to finish closing before it forces them. */
@@ -171,6 +174,25 @@ export interface ClonedDatabase {
 }
 
 /**
+ * Runs `work` holding a lock on the template, kept by `admin`'s one connection (D-228). `bun test --parallel`
+ * runs the preload in every worker: without it two could both find no template and both create one, and a
+ * clone could start while another process is still connected to the template, which PostgreSQL refuses.
+ * The lock is the template's, by name, so a test's scratch template waits for nobody else's.
+ */
+const holdingTemplate = async (
+  admin: Kysely<unknown>,
+  template: string,
+  work: () => Promise<void>,
+): Promise<void> => {
+  await sql`select pg_advisory_lock(hashtext(${template}))`.execute(admin);
+  try {
+    await work();
+  } finally {
+    await sql`select pg_advisory_unlock(hashtext(${template}))`.execute(admin);
+  }
+};
+
+/**
  * Brings the template database into being and up to date, and returns its name.
  *
  * The expensive part of a clone, and the one that must not happen inside a hook: a
@@ -189,18 +211,22 @@ export const buildIntegrationTemplate = async (name?: string): Promise<string> =
   const template = name ?? `${new URL(source).pathname.slice(1)}_template`;
   const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
   try {
-    const exists = await sql`select 1 from pg_database where datname = ${template}`.execute(admin);
-    if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
+    await holdingTemplate(admin, template, async () => {
+      const exists = await sql`select 1 from pg_database where datname = ${template}`.execute(
+        admin,
+      );
+      if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
+      const templateDb = connect<unknown>(onDatabase(source, template), 1);
+      try {
+        const { error } = await migrateToLatest(templateDb);
+        if (error !== undefined)
+          throw new Error('migrating the test template failed', { cause: error });
+      } finally {
+        await templateDb.destroy();
+      }
+    });
   } finally {
     await admin.destroy();
-  }
-  const templateDb = connect<unknown>(onDatabase(source, template), 1);
-  try {
-    const { error } = await migrateToLatest(templateDb);
-    if (error !== undefined)
-      throw new Error('migrating the test template failed', { cause: error });
-  } finally {
-    await templateDb.destroy();
   }
   return template;
 };
@@ -260,6 +286,22 @@ export const prepareTemplateForRun = async (
 };
 
 /**
+ * The time a hook that clones gets: a clone is about a tenth of a second, but it waits its turn on the
+ * template's lock behind the other worker's clones, and on a loaded runner that queue passed the five
+ * seconds a hook has by default (main, 2026-10-31). What the hook waits for is the database, not the code
+ * under test, so the bound is the queue's, not a test's (D-228).
+ */
+export const CLONE_HOOK_MS = 30_000;
+
+/**
+ * The time a hook that drops clones gets (#797): a drop makes the server run a checkpoint and wait for it,
+ * which on a CI disk after a file's writes is seconds, and a file may drop dozens — past the five seconds
+ * a hook has by default, which failed files that had passed every test. The bound is the server's, not the
+ * code under test's.
+ */
+export const DROP_HOOK_MS = 60_000;
+
+/**
  * A database of this test file's own, cloned from a migrated template (D-46).
  *
  * For what one rolled-back transaction cannot do: commit on purpose, or let two
@@ -276,7 +318,9 @@ export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
 
   const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
   try {
-    await sql`create database ${sql.id(clone)} template ${sql.id(template)}`.execute(admin);
+    await holdingTemplate(admin, template, async () => {
+      await sql`create database ${sql.id(clone)} template ${sql.id(template)}`.execute(admin);
+    });
   } finally {
     await admin.destroy();
   }

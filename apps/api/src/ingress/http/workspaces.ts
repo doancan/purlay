@@ -12,8 +12,10 @@
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
+  AuditExportQuery,
+  AuditQuery,
   CreateWorkspaceRequest,
-  OlderPageQuery,
+  DeleteWorkspaceRequest,
   SetGitHubTokenRequest,
   type GitHubIntegration,
   SetDeepWorkRequest,
@@ -24,13 +26,14 @@ import {
   type MeResponse,
   type Membership,
   type Workspace,
+  type WorkspaceDeletion,
   type WorkspaceMember,
   type RetentionSetting,
   type StorageUsage,
   SetRetentionRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { requireDeletionMembership, requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import {
   createWorkspace,
@@ -46,14 +49,18 @@ import {
   type WorkspaceCreators,
 } from '../../modules/workspaces/creators';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
+import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
 import { auditTrail } from '../../modules/audit/audit';
+import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import { readStorage } from '../../modules/attachments/quota';
 import {
   githubIntegrationOf,
+  mayConfigure,
   removeGitHubToken,
   setGitHubToken,
 } from '../../modules/integrations/github';
+import { verifiedToken, type GitHubApi } from '../../modules/integrations/unfurl';
 import type { CredentialCipher } from '../../platform/crypto';
 import {
   NO_LOG,
@@ -61,6 +68,7 @@ import {
   publishAccessRevoked,
   publishDeepWorkUpdated,
   publishAfterCommit,
+  publishWorkspaceClosed,
   publishWorkspaceUpdated,
   type EventBus,
 } from '../../platform/events';
@@ -93,8 +101,9 @@ export const readMe = async (
   request: Request,
 ): Promise<MeResponse> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
-  return await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
+  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  const me = await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
+  return { ...me, mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId) };
 };
 
 export const listMyWorkspaces = async (
@@ -267,7 +276,60 @@ export const leaveWorkspaceMembership = async (
   ]);
 };
 
-/** `GET /api/workspaces/:workspaceId/audit` — the trail, newest first (D-26, #70). */
+/**
+ * `POST /api/workspaces/:workspaceId/deletion` — an owner asks for the workspace to be deleted, typing its
+ * name (D-242). After the commit every socket watching one of its channels stops receiving it, and each
+ * member is told to read their workspaces again, in which it is no longer. Asked again, the same answer.
+ */
+export const requestWorkspaceDeletion = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<WorkspaceDeletion> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireDeletionMembership(database, userId, workspaceId);
+  const { confirm } = validated(DeleteWorkspaceRequest, body);
+  const asked = await atomicallyOn(database)(
+    async (transaction) => await askToDelete(transaction, clock, context, confirm),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('ACCESS_REVOKED', () => publishWorkspaceClosed(bus, clock, asked.channelIds)),
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, asked.memberIds, workspaceId),
+      ),
+    ],
+  ]);
+  return asked.deletion;
+};
+
+/**
+ * `DELETE /api/workspaces/:workspaceId/deletion` — any owner takes the deletion back within its grace
+ * period (D-242). Each member is told to read their workspaces again, in which it is once more.
+ */
+export const cancelWorkspaceDeletion = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireDeletionMembership(database, userId, workspaceId);
+  const { memberIds } = await atomicallyOn(database)(
+    async (transaction) => await takeBackDeletion(transaction, clock, context),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, memberIds, workspaceId),
+      ),
+    ],
+  ]);
+};
+
+/** `GET /api/workspaces/:workspaceId/audit` — the trail, newest first, narrowed (D-26, #70, D-222). */
 export const readAuditTrail = async (
   dependencies: WorkspaceDependencies,
   request: Request,
@@ -276,8 +338,36 @@ export const readAuditTrail = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  const query = validated(AuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await auditTrail(database, context, query);
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/audit/export` — the narrowed trail as a CSV or NDJSON file, streamed
+ * (D-222). An attachment the browser saves, never a page it renders.
+ */
+export const exportAuditTrail = async (
+  dependencies: WorkspaceDependencies & { readonly log: Logger },
+  request: Request,
+  workspaceId: string,
+): Promise<{
+  readonly body: ReadableStream<Uint8Array>;
+  readonly headers: Record<string, string>;
+}> => {
+  const { database, clock, log } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const query = validated(AuditExportQuery, queryOf(new URL(request.url)));
+  const download = await exportTrail(database, clock, log, context, query);
+  return {
+    body: download.body,
+    headers: {
+      'content-type': download.contentType,
+      'content-disposition': `attachment; filename="${download.filename}"`,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  };
 };
 
 /** `GET /api/workspaces/:workspaceId/retention` — how long the history is kept; an owner's (D-139 §4). */
@@ -339,9 +429,18 @@ export const readGitHubIntegration = async (
   return await githubIntegrationOf(database, context);
 };
 
-/** `PUT` sets the workspace's token, sealed; `DELETE` removes it (D-11, D-39 §6). */
+/**
+ * `PUT` sets the workspace's token, sealed; `DELETE` removes it (D-11, D-39 §6). A token is asked of
+ * GitHub first, outside the transaction (no row is locked across a call to another server) and only
+ * after the caller's role is known, so a member cannot spend a request of this server's on a stranger's
+ * token.
+ */
 export const changeGitHubToken = async (
-  dependencies: WorkspaceDependencies & { readonly cipher: CredentialCipher },
+  dependencies: WorkspaceDependencies & {
+    readonly cipher: CredentialCipher;
+    readonly githubApi: GitHubApi;
+    readonly log: Logger;
+  },
   request: Request,
   workspaceId: string,
   body: unknown,
@@ -356,7 +455,9 @@ export const changeGitHubToken = async (
     return;
   }
   const { token } = validated(SetGitHubTokenRequest, body);
+  mayConfigure(context);
+  const { scopes } = await verifiedToken(dependencies.githubApi, dependencies.log, token);
   await atomicallyOn(database)(async (transaction) => {
-    await setGitHubToken(transaction, clock, cipher, context, token);
+    await setGitHubToken(transaction, clock, cipher, context, token, scopes);
   });
 };

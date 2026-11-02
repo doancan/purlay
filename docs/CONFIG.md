@@ -22,6 +22,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Only `http`/`https`; must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
 | `ERROR_TRACKING_DSN` | — | — | A Sentry-compatible DSN (Sentry, GlitchTip). **Unset means off, and nothing leaves the process.** When set, whatever is logged at `error` is also reported, cleaned exactly as the log is (D-96). A report gives up after five seconds, is never redirected, and carries no absolute path of the machine. Must be `https://` in production; a malformed value refuses to start. **No telemetry is ever collected from a self-hosted deployment** (D-44): there is no default |
+| `METRICS_TOKEN` | — | — | **Secret.** The bearer token a Prometheus scrapes `GET /metrics` with (D-221, `API.md` §8). **Unset means off**: `/metrics` is then the `404` of any path nothing serves, and so it is to a request without this token or with another — nobody who does not hold it can tell the page exists. 32 to 512 characters of a token's alphabet (`A–Z a–z 0–9 . _ ~ + / -`, then any `=`): `openssl rand -hex 32`. Compared in constant time. Nothing is pushed anywhere: a scraper the operator runs asks, and the page carries no name, address, id or word anybody wrote. See *Metrics for Prometheus* below |
 | `TRUST_PROXY` | — | `false` | Set `true` behind **exactly one** reverse proxy that sets `X-Forwarded-For`; the last entry is then the client (D-81). Without it the socket's peer address is the client and the header is ignored, because anyone can write it. It keys the sign-in rate limit and fills `sessions.ip_address`. Wrong either way hurts: `false` behind a proxy puts every user in one bucket; `true` with none lets a caller choose its own address |
 
 ## Database
@@ -56,8 +57,17 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `OIDC_CLIENT_ID` | — | unset | The client this server is registered as at the provider. A seed, as `OIDC_ISSUER`, and set with it. Register `APP_URL/auth/callback/oidc` as its redirect URI, with the authorization code flow and PKCE |
 | `OIDC_CLIENT_SECRET` | — | unset | **Secret.** Never logged. A seed, as `OIDC_ISSUER`, and set with it; kept encrypted in the settings, bound to its column |
 | `OIDC_NAME` | — | unset | What the sign-in button says after *Continue with*: at most 40 visible characters, plain text. A seed, only with the other three (alone it would be dropped at the first start without a word, so it refuses to start); unset says *single sign-on* in the person's language |
+| `GITHUB_APP_ID` | — | unset | The GitHub App issues are written through (D-246): its numeric id. **A seed**, read on the first start only, into the server's settings. **All six of this and the five below, or none**: one without the others refuses to start. **None is no App: nothing of GitHub issues is offered, no route answers and nothing changes.** Register the App with Issues write, Pull requests read, Metadata read, and **no** Contents or organisation permission; its Callback URL is `APP_URL/api/github-app/callback` with *Request user authorization (OAuth) during installation* on, and its Webhook URL is `APP_URL/api/webhooks/github-app` with content type `application/json`, subscribed to the **Issues** and **Pull request** events (installation and authorization events are sent to every App) |
+| `GITHUB_APP_SLUG` | — | unset | The App's slug, the last part of `github.com/apps/<slug>`: lower case letters, digits and hyphens |
+| `GITHUB_APP_CLIENT_ID` | — | unset | The App's client id (`Iv…`), which a person's authorization and the App's own token are issued for |
+| `GITHUB_APP_CLIENT_SECRET` | — | unset | **Secret.** Never logged. The App's client secret; kept encrypted in the settings, bound to its column |
+| `GITHUB_APP_PRIVATE_KEY` | — | unset | **Secret.** Never logged. The PEM private key GitHub generated (RSA, PKCS#1 or PKCS#8); `\n` written out is a line break, as an environment file needs. Refused at start unless this server can sign with it. Kept encrypted in the settings |
+| `GITHUB_APP_WEBHOOK_SECRET` | — | unset | **Secret.** Never logged. The secret GitHub signs the App's deliveries with; kept encrypted in the settings |
 | `GITHUB_URL` | — | `https://github.com` | Where a GitHub sign-in is sent to authorise and its code is redeemed (`/login/oauth/…`). Another only for a GitHub Enterprise Server, or for a stand-in for GitHub on this machine in a run that cannot reach the real one. `https://`, or `http://` to `localhost`, `127.0.0.1` or `[::1]` alone, in any environment; a path is kept, a trailing slash dropped, and credentials, a query or a fragment refused. A deployment's shape, not a setting: never in the browser (D-179) |
 | `GITHUB_API_URL` | — | `https://api.github.com` | GitHub's API, where a sign-in reads the person and their addresses (`/user`, `/user/emails`): `https://<host>/api/v3` on an Enterprise Server. Checked as `GITHUB_URL` is |
+| `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime. Administration → Server may sign sessions out sooner — after a time unused, or a maximum age — never later (D-244) |
+| `GITHUB_API_URL` | — | `https://api.github.com` | GitHub's API, where a sign-in reads the person and their addresses (`/user`, `/user/emails`) and where the workspace's token is checked and link cards are fetched (Limits, below): `https://<host>/api/v3` on an Enterprise Server, for sign-in only — cards are github.com links. Checked as `GITHUB_URL` is |
+| `UPDATE_CHECK` | — | `true` | Whether the server asks GitHub's API, at `GITHUB_API_URL`, which release of Purlay is newest, so that Settings → About can say whether this server runs it (D-248). One anonymous `GET` of the public repository's latest release, at most once in six hours (ten minutes after a failure) for everybody; it sends nothing of this instance — no address, name, version, count or identifier — and a person's browser is never sent to GitHub for it. `false` and the server never makes the call: About then says the newest version could not be checked. Needs no setting where the server can reach `api.github.com`; set `false` on a server with no route out, or whose operator allows no outbound calls but the ones they chose |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
 | `WORKSPACE_CREATORS` | — | unset | **A seed**, as `GITHUB_CLIENT_ID`. Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against the login GitHub last gave each account signed in with it — never its username here, which may carry a `-N` (D-169); an account made by an email link has no login, or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is first started if more than its first person should make workspaces; a malformed value refuses to start |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted` and the secrets of the server's settings (below). Rotating it invalidates stored integration tokens and those secrets |
@@ -83,6 +93,7 @@ its migrations are in.
 | A seed of the settings | Where it is changed after the first start |
 |---|---|
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the setup wizard's GitHub step, then Administration → Server; the secret is stored encrypted and never shown again |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET` | Administration → Server (there is no wizard step for it, D-246); the App is tried — its client at GitHub's token endpoint, then a token its key signs — before anything is kept; the three secrets are stored encrypted, each to its own column, and never shown again |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_NAME` | Administration → Server (there is no wizard step for it, D-200 §4); the provider is tried — discovery, its keys, the client's credentials — before anything is kept; the secret is stored encrypted and never shown again |
 | `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` | the wizard's email step, then Administration → Server; the address is stored encrypted, since it carries the relay's password, and shown only as its host — not even the user, which for some relays is the token |
 | `WORKSPACE_CREATORS` | Administration → Server; the rule is D-155's |
@@ -153,11 +164,22 @@ as in `printf '%s\n' "$NEW" | bun run …`. It is **never read from an argument 
 environment**, which the shell, the process table and the logs keep: a second argument is refused without
 being repeated. The password policy applies. It prints `Password changed for <email>` and nothing else of
 it, and **ends every session of that account** in the same transaction, so a session that was stolen dies
-with the old password. An administrator who came in only through GitHub is given a password by it. It leaves a row on the
+with the old password. **It also turns two-step verification off** for that account, and says so in a second line (D-236): it is the way back in for an administrator whose authenticator app and backup codes are both lost, who turns it on again with the new password. An administrator who came in only through GitHub is given a password by it. It leaves a row on the
 server's own trail (`server.admin_password_reset`). A connection the account holds open in a browser is
 ended by the server within about half a minute — the command has no way to tell it, so the server asks
 the database every thirty seconds which sessions still exist — and the same is true of a session removed
 by SQL.
+
+**Locked out with password sign-in off** (D-239). Administration → Server can turn password sign-in off while
+GitHub or single sign-on serves, and refuses to disconnect the last of them while it is off. Should the provider
+still stop letting the administrator in — the provider down or misconfigured, its secret one a rotated
+`ENCRYPTION_KEY` cannot open, the administrator's account gone from it — the same command is the way back:
+`bun run admin:reset-password <address>` also **turns password sign-in on again**, says so in a line of its own
+(`Password sign-in is on again. Restart the server for it to take effect.`) and leaves a second row on the trail
+(`server.password_sign_in_changed`). **Restart the server** afterwards (`docker compose … restart api`): a running
+server reads its settings when it starts and when it changes them itself, not when another process writes them.
+Then sign in with the new password. Where the server requires two-step verification of a password account, the
+administrator is then asked to turn it on — with the reset it is off — before anything else.
 
 **The setup code** (D-179 §4). A server with no user is set up in the browser at `APP_URL/setup`, which
 asks first for a one-time code. The code is in the API's log, never anywhere else — not in the database
@@ -272,6 +294,18 @@ without them. A filesystem store for the simplest self-host (D-16) is not built 
 Storage keys are opaque and never served as public URLs — downloads are brokered by the API so
 workspace membership is actually checked (`ARCHITECTURE.md` §9).
 
+**Enabling Web Push on an existing server.** Generate the pair with `bun run push:keys` (or the
+image command in `docker/production.env.example`), put both printed values and `VAPID_SUBJECT` in
+the actual deployment env file, and recreate the API and scheduler using the same Compose files
+and env file as the deployment. Keep the private key with the other secrets and retain the pair
+across updates: changing it requires devices to subscribe again. A subject of the deployment's
+HTTPS address is sufficient. Signed in, `GET /api/push/key` must now return a non-null public key.
+Each person still turns notifications on in **Settings → Notifications** on each device; server
+keys do not grant a browser permission. **Test notification** checks that device's browser notice,
+not the server-to-push-service path. Verify closed-tab delivery separately from another account,
+with the recipient's chosen channel level and Deep Work taken into account; inspect the API's
+`push refused` or `push not taken` logs if a subscribed device hears nothing.
+
 ## Interface
 
 | Variable | Required | Default | Notes |
@@ -315,13 +349,35 @@ is served.
 
 ## Limits
 
-Runtime-tunable limits. The **enforced** values live where they are enforced; these only
-configure what is not already a database constraint.
+No limit below is an environment variable: **the enforced values live where they are enforced**, in code or
+in a database constraint, and this section says where, so an operator is not left looking for a knob there is
+not. (An earlier draft listed `UNFURL_CACHE_TTL_SECONDS` and `UNFURL_NEGATIVE_TTL_SECONDS`; neither was ever
+read, and they are gone: D-23, amended.)
 
-| Variable | Required | Default | Notes |
-|---|---|---|---|
-| `UNFURL_CACHE_TTL_SECONDS` | — | `300` | Positive cache (`ARCHITECTURE.md` §8.3) |
-| `UNFURL_NEGATIVE_TTL_SECONDS` | — | `3600` | Negative cache — without it one dead link re-hits the GitHub API forever |
+**GitHub link cards and feeds** (D-23, D-112, D-134):
+
+| What | Value | Where |
+|---|---|---|
+| A card is kept | 5 minutes, for the workspace whose token fetched it | `CARD_TTL_MS` in `modules/integrations/unfurl.ts` |
+| A link GitHub says is not there is kept | 1 hour | `NEGATIVE_TTL_MS`, same file |
+| GitHub failing (`5xx`, a network error, an answer that is not a card, a plain `403`) is held off | 1 minute, for that link | `UNAVAILABLE_TTL_MS`, same file |
+| Calls to GitHub per workspace | 100 at once, then 1 a second, whoever asks; spent, a link is a plain link and nothing is cached | `GITHUB_CALL_BUDGET` in `ingress/http/rate-limit.ts` |
+| GitHub says to wait (`403`/`429` with `Retry-After`, or `x-ratelimit-remaining: 0` with `x-ratelimit-reset`; a bare `429` waits a minute) | the workspace makes no call until then, at most an hour; kept in the process, so each node learns it from its first refused call (D-25) | `refusalOf` and `inProcessPauses` in `unfurl.ts` |
+| GitHub says the token is bad (`401`) | no call is made with it until an admin replaces or removes it; Settings → Integrations says so | `github_integrations.token_invalid_at` |
+| Deliveries to a webhook | per client address 200 at once then 20 a second, before anything is looked up; per feed 100 at once then 2 a second, after its signature held; a body at most 1 MiB | `WEBHOOK_BUDGET`, `WEBHOOK_FEED_BUDGET` in `rate-limit.ts`, `WEBHOOK_BODY_MAX_BYTES` in `edge.ts` |
+
+**The workspace's GitHub token is a fine-grained, read-only personal access token on selected repositories**
+(Contents, Issues and Pull requests: *Read-only*; nothing else), set by an owner or an admin in Settings →
+Integrations. Cards and feeds read titles, states, authors, checks and reviews and write nothing, and a token
+that can write is a larger loss if the database is ever read. Purlay asks GitHub whether it accepts the token
+when it is saved (`GET /rate_limit`, which costs no quota) and refuses one that is not accepted; a classic
+token with the `repo` scope is accepted, and Settings → Integrations warns that it is broader than needed. An
+instance that cannot reach GitHub refuses to save a token (`503 GITHUB_UNAVAILABLE`) rather than keep one unseen.
+
+**Cards are for github.com links only** — the contract's `GitHubLink` is `https://github.com/<owner>/<repo>/pull|issues/<n>` —
+and the requests for them go to `GITHUB_API_URL`, the address a sign-in uses, so one setting says where GitHub is.
+A GitHub Enterprise Server's links are not recognised as cards (unsupported), and pointing `GITHUB_API_URL` at one
+asks its API about github.com links, which it does not have; run Enterprise Server for sign-in only.
 
 > **HTTP limits are not configurable here either, and the writes' budget is the socket's (D-81, D-198).** Sign-in: 30
 > requests per client address at once, then one every two seconds. Writes: 10 a second with a burst
@@ -415,7 +471,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
 `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), all optional. `docker compose`
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), `UPDATE_CHECK` (on unless `false`), and to the API alone `METRICS_TOKEN` (metrics, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack
 fails on any variable the API reads that is neither passed nor named there with the reason it is
@@ -502,7 +558,10 @@ must be your address, not Cloudflare's.
 
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
 (D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
-nightly, in UTC. When it starts it first runs, once, each job that has never succeeded (`jobs:first`), so a
+nightly, in UTC; and every quarter hour `mail:missed`, the letters to people who asked to be emailed about what
+they left unread (D-240), sent through the relay the server's settings name — read on each run with
+`ENCRYPTION_KEY`, as the API reads it, so the scheduler reaches the relay as the API does. Without a relay it
+sends nothing and succeeds. When it starts it first runs, once, each job that has never succeeded (`jobs:first`), so a
 new deployment is proven, and its status is clean, from its first minute (D-30). Every run is
 recorded; to see when each last succeeded, and whether one is overdue or has never run:
 
@@ -516,6 +575,47 @@ It exits non-zero when a job is overdue or has failed since it last succeeded, a
 container as `unhealthy` in `docker ps` and to anything that watches container health. Unhealthy is a
 signal, not a restart — the jobs are tried again on their own schedule. A job that fails is also logged
 at `error`, and so reported to `ERROR_TRACKING_DSN` like the API's errors.
+
+**Metrics for Prometheus** (D-221). Off until `METRICS_TOKEN` is set in `production.env`; the stack passes it
+to the API alone. The page is the API process's own — the time it has run and its memory, the sockets open on
+it, each HTTP request by method, the route as registered (`/api/channels/:channelId`, never the path as sent),
+status class and duration, what was refused for the rate at each door, pushes and letters that did not
+reach their service — and the scheduled jobs' record as `jobs:status` reads it: when each last succeeded
+and how often it has failed since. The proxy never passes `/metrics` from the internet (`docker/Caddyfile`
+answers it `404` itself), so the scraper sits on the stack's network and asks `api:3001`, in a Compose file
+the server keeps beside its env file (`COMPOSE_OVERRIDES`, as for a proxy of your own):
+
+```yaml
+services:
+  prometheus:
+    image: prom/prometheus@sha256:…               # pinned by digest, as the stack pins its own
+    command: ['--config.file=/etc/prometheus/prometheus.yml']
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./metrics-token:/etc/prometheus/metrics-token:ro   # the token alone, mode 0600
+      - prometheus:/prometheus
+volumes:
+  prometheus:
+```
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: purlay
+    scrape_interval: 15s
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics-token
+    static_configs:
+      - targets: ['api:3001']
+```
+
+A scraper elsewhere reaches the API on the private address published as under *Behind a proxy of your own*,
+never through the public origin. A scrape refused for its token is the same `404` as one with the feature
+off, and the API's log says `a request for metrics was refused` at `info`. A database that cannot be read
+leaves the rest of the page and says `purlay_jobs_status_readable 0` — alert on it, and on
+`time() - purlay_job_last_success_timestamp_seconds > 172800`, the age past which `jobs:status` calls a job
+overdue. With several API nodes each is its own target; Prometheus adds them up.
 
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
 never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run

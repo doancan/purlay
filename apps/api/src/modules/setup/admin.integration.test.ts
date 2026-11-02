@@ -14,6 +14,7 @@ import {
   sessionTokenDigest,
   sql,
   type Executor,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import {
   DEVELOPMENT_ENCRYPTION_KEY,
@@ -49,7 +50,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const BASE = 'https://purlay.example.com';
 const silent = createLogger({ level: 'silent' });
@@ -351,6 +352,8 @@ describe('integration: the setup’s administrator (D-179 §4.3)', () => {
       [{ name: 'a'.repeat(129) }, { reason: 'invalid-name' }],
       [{ name: 'Ada\u0000Lovelace' }, { reason: 'invalid-name' }],
       [{ name: 'Ada‮Lovelace' }, { reason: 'invalid-name' }],
+      [{ name: 'Ada\u2066Lovelace' }, { reason: 'invalid-name' }],
+      [{ name: 'Ada\u2028Lovelace' }, { reason: 'invalid-name' }],
       [{ password: 'too short' }, { reason: 'weak-password', problem: 'too-short' }],
       [{ password: 'x'.repeat(129) }, { reason: 'weak-password', problem: 'too-long' }],
       [{ password: 'ada@example.com!!' }, { reason: 'weak-password', problem: 'contains-email' }],
@@ -375,6 +378,20 @@ describe('integration: the setup’s administrator (D-179 §4.3)', () => {
       ...ADA,
       name: 'é'.repeat(128),
     });
+  });
+
+  test("takes a name a workspace could take: a right-to-left one with its direction mark (the 'name' format's rule)", async () => {
+    const { db, session, auth } = await aClaimedServer();
+    const made = await createAdmin({ database: db, auth, clock: systemClock }, session, {
+      ...ADA,
+      name: '\u200Fעדה לאבלייס',
+    });
+    const row = await db
+      .selectFrom('users')
+      .select('display_name')
+      .where('id', '=', made.userId)
+      .executeTakeFirstOrThrow();
+    expect(row.display_name).toBe('\u200Fעדה לאבלייס');
   });
 
   test('an address an account already has is refused as email-taken, and nothing is made', async () => {

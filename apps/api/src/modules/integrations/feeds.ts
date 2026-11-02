@@ -4,8 +4,8 @@
  * not a way round it (D-123 §2). A direct message has none, and is answered as no channel at all.
  *
  * Each feed's secret is made here, sealed by the one cipher with the feed's id bound in (D-39 §6),
- * and handed back in the answer that made it, never again. What the audit trail records is the
- * repository, never the secret.
+ * and handed back in the answer that made it, never again; a lost one is made again, the feed keeping
+ * its address (#884). What the audit trail records is the repository, never the secret.
  */
 import { Value } from '@sinclair/typebox/value';
 import type { Executor, Transaction } from '@purlay/db';
@@ -59,6 +59,11 @@ interface FeedRow {
   readonly last_failure: string | null;
   readonly last_failure_at: Date | string | null;
 }
+
+const newSecret = (): string =>
+  Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');
+
+const webhookPathOf = (feedId: string): string => `/api/webhooks/github/${feedId}`;
 
 const iso = (at: Date | string): string => new Date(at).toISOString();
 
@@ -146,10 +151,10 @@ export const createFeed = async (
   if (existing.some((row) => row.repository_full_name === repository)) {
     throw new AppError({
       code: 'GITHUB_FEED_EXISTS',
-      // The secret was shown once, when it was connected: a lost one is a feed disconnected and
-      // connected again (D-134 §3) — said here, since a retry after a lost answer lands here.
+      // The secret was shown once, when it was connected: a lost one is regenerated (D-134 §3,
+      // amended; #884) — said here, since a retry after a lost answer lands here.
       message:
-        'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
+        'This channel already hears from that repository. To get a new secret, regenerate it from the feed.',
     });
   }
   if (existing.length >= GITHUB_FEEDS_PER_CHANNEL_MAX) {
@@ -159,7 +164,7 @@ export const createFeed = async (
     });
   }
   const id = crypto.randomUUID();
-  const secret = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');
+  const secret = newSecret();
   const sealed = Buffer.from(await cipher.seal(secret, id)).toString('base64');
   const row = await transaction
     .insertInto('github_repo_feeds')
@@ -184,7 +189,50 @@ export const createFeed = async (
     // Where, as well as what: the audit log names the channel to whoever can see it (#691).
     metadata: { repository, channelId: context.channelId },
   });
-  return { feed: feedOf(row), webhookPath: `/api/webhooks/github/${id}`, secret };
+  return { feed: feedOf(row), webhookPath: webhookPathOf(id), secret };
+};
+
+/**
+ * `POST /api/channels/:channelId/github-feeds/:feedId/secret` — a new secret for the feed, which keeps
+ * its id and its address: the one before stops verifying at once (the webhook reads the secret per
+ * delivery), and the new one is shown in this answer only, as it was when the feed was made. The feed's
+ * row is locked, so two admins regenerating at once take turns and each answer's secret is the one kept
+ * at its end. The audit trail names the repository and the channel, never a secret.
+ */
+export const regenerateSecret = async (
+  transaction: Transaction,
+  clock: Clock,
+  cipher: CredentialCipher,
+  context: ChannelContext,
+  feedId: string,
+): Promise<CreatedGitHubFeed> => {
+  await mayConfigure(transaction, context);
+  if (!Value.Check(Uuid, feedId)) throw feedNotFound();
+  const locked = await transaction
+    .selectFrom('github_repo_feeds')
+    .select('id')
+    .where('id', '=', feedId)
+    .where('channel_id', '=', context.channelId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (locked === undefined) throw feedNotFound();
+  const secret = newSecret();
+  const sealed = Buffer.from(await cipher.seal(secret, feedId)).toString('base64');
+  const row = await transaction
+    .updateTable('github_repo_feeds')
+    .set({ secret_encrypted: sealed })
+    .where('id', '=', feedId)
+    .returning(COLUMNS)
+    .executeTakeFirstOrThrow();
+  await recordAudit(transaction, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'integration.feed_secret_regenerated',
+    targetType: 'integration',
+    targetId: feedId,
+    metadata: { repository: row.repository_full_name, channelId: context.channelId },
+  });
+  return { feed: feedOf(row), webhookPath: webhookPathOf(feedId), secret };
 };
 
 /** `DELETE /api/channels/:channelId/github-feeds/:feedId` — disconnected; its secret goes with it. */

@@ -147,6 +147,8 @@ describe('what is on offer before anything is typed', () => {
       'Open questions',
       'Inbox',
       'Saved',
+      'Drafts and sent',
+      'All unreads',
       'Search',
       'Feed' + 'api',
       'api',
@@ -164,12 +166,15 @@ describe('what is on offer before anything is typed', () => {
       'Notifications',
       'Keyboard shortcuts',
       'Sessions & account',
+      'About',
       'General',
       'Members',
       'Invitations',
       'Integrations',
       'Audit log',
       'Data & retention',
+      // What Shift+Esc does (D-238).
+      'Mark all channels read',
       'Theme: System',
       'Theme: Light',
       'Theme: Dark',
@@ -257,6 +262,14 @@ describe('typing', () => {
     await person().keyboard('{Enter}');
     await settle();
     expect(here()).toBe('/w/acme/search?q=zzz');
+  });
+
+  test('the search row reads operators as the search field does (D-224)', async () => {
+    const { input, here } = await mount();
+    await person().type(input(), 'in:#api from:@bob deploy');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe(`/w/acme/search?q=deploy&in=${IDS.api}&from=${IDS.bob}`);
   });
 
   test('announces how many results there are, once something is typed', async () => {
@@ -531,6 +544,23 @@ describe('what each kind of item does', () => {
     for (const page of ['General', 'Members', 'Invitations', 'Audit log', 'Data & retention']) {
       expect(offered).not.toContain(page);
     }
+  });
+
+  test('every channel is marked read, and the palette closes (D-238)', async () => {
+    const asked: string[] = [];
+    const { input, closed } = await mount(
+      apiWith({
+        markAllRead: (workspaceId) => {
+          asked.push(workspaceId);
+          return Promise.resolve({ data: [] });
+        },
+      }),
+    );
+    await person().type(input(), 'mark all');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(asked).toEqual([IDS.workspace]);
+    expect(closed()).toEqual([false]);
   });
 
   test('a theme is applied at once, and the palette closes', async () => {

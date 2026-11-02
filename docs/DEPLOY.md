@@ -78,7 +78,9 @@ directory and removed after deployment.
 For each push to `main`:
 
 1. `image` builds once, tests the published digest and gives it the full commit tag.
-2. Only a successful `image` run from a push to this repository's `main` can trigger deployment.
+2. Deployment starts when both the `ci` run and the `image` run of that push have succeeded
+   (D-229). Whichever finishes second starts it; a failed, cancelled or missing run of either stops
+   it before the server is touched.
 3. `deploy` checks out that run's exact commit, pulls its image, resolves the digest, checks the
    revision label and smoke-tests it. A missing image or failed check leaves the live site alone.
 4. Immediately before switching, it backs up the database and attachments. It records the digest
@@ -94,8 +96,9 @@ Retain the previous image when managing that cache.
 ## Manual updates and recovery
 
 For an ordinary retry, use **Actions → deploy → Run workflow** from `main`, optionally supplying a
-full commit hash on `main` whose image has already been published. A manual run never publishes a
-GitHub Release. Automatic runs deploy the successful image run's commit, rather than whatever
+full commit hash on `main` that was the tip of a push, whose `ci` and `image` runs both succeeded. A
+commit inside a rebased merge has no runs of its own and is refused. A manual run never publishes a
+GitHub Release. Automatic runs deploy the commit of the run that started them, rather than whatever
 happens to be the latest `main` when the runner starts.
 
 A manual deploy of an older commit does **not** undo database migrations. To recover from an

@@ -71,7 +71,7 @@ describe('notifications', () => {
       'Somebody mentions you with @',
       'Somebody writes to you directly',
       'Somebody replies in a thread you started or replied in',
-      'A question you asked is resolved',
+      'Somebody writes in a channel you set to Every message',
     ]);
     await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();
@@ -183,6 +183,154 @@ describe('notifications', () => {
     if (card.queryByRole('button') !== null) {
       expect(card.getByText(/while Purlay is open in a background tab/)).toBeDefined();
     }
+    view.unmount();
+  });
+
+  test('on an iPhone outside the Home Screen, it says how to be told there (D-230)', async () => {
+    Object.defineProperty(navigator, 'standalone', { value: false, configurable: true });
+    try {
+      const view = await open();
+      const card = within(view.getByRole('region', { name: 'Notifications on this device' }));
+      expect(card.getByText(/tap Share, then Add to Home Screen/)).toBeDefined();
+      expect(card.queryByText(/cannot show notifications/)).toBeNull();
+      view.unmount();
+    } finally {
+      Reflect.deleteProperty(navigator, 'standalone');
+    }
+  });
+});
+
+describe('quiet hours (D-234)', () => {
+  const card = (view: View): Scope => within(view.getByRole('region', { name: 'Quiet hours' }));
+  const EVENINGS = { from: 19 * 60, to: 9 * 60, days: [1, 2, 3, 4, 5] };
+
+  test('with no time zone on the profile, it says so and leads there', async () => {
+    const view = await open();
+    expect(
+      card(view).getByText('Quiet hours are read on your own clock. Set your time zone first.'),
+    ).toBeDefined();
+    expect(
+      card(view).getByRole('link', { name: 'Set your time zone in Profile' }).getAttribute('href'),
+    ).toBe('/w/acme/settings/profile');
+    view.unmount();
+  });
+
+  test('turned on, it offers weekday evenings, says it runs past midnight, and saves what is shown', async () => {
+    const sent: unknown[] = [];
+    const view = await open({
+      quietHours: () => Promise.resolve({ quietHours: null, timeZone: 'Europe/Istanbul' }),
+      setQuietHours: (input) => {
+        sent.push(input);
+        return Promise.resolve({ quietHours: input.quietHours, timeZone: 'Europe/Istanbul' });
+      },
+    });
+    expect(card(view).getByText('Times are in Europe/Istanbul.')).toBeDefined();
+    await person().click(card(view).getByRole('checkbox', { name: 'Quiet hours' }));
+    expect(card(view).getByText('Runs past midnight, into the next morning.')).toBeDefined();
+    expect(card(view).getByLabelText<HTMLInputElement>('From').value).toBe('19:00');
+    expect(card(view).getByLabelText<HTMLInputElement>('to').value).toBe('09:00');
+    // Typed over: what is not yet a whole time changes nothing; a whole one is kept.
+    await person().clear(card(view).getByLabelText('From'));
+    await person().type(card(view).getByLabelText('From'), '20:30');
+    await person().clear(card(view).getByLabelText('to'));
+    await person().type(card(view).getByLabelText('to'), '06:15');
+    await person().click(card(view).getByRole('checkbox', { name: 'Friday' }));
+    await person().click(card(view).getByRole('checkbox', { name: 'Sunday' }));
+    await person().click(card(view).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(sent).toEqual([
+      { quietHours: { from: 20 * 60 + 30, to: 6 * 60 + 15, days: [0, 1, 2, 3, 4] } },
+    ]);
+    expect(card(view).getByText('Saved.')).toBeDefined();
+    await expectNoAxeViolations(view.getByRole('region', { name: 'Quiet hours' }));
+    view.unmount();
+  });
+
+  test('turned off is saved as none; no day chosen cannot be saved; a refusal is said', async () => {
+    const sent: unknown[] = [];
+    const view = await open({
+      quietHours: () => Promise.resolve({ quietHours: EVENINGS, timeZone: 'UTC' }),
+      setQuietHours: (input) => {
+        sent.push(input);
+        return Promise.reject(new ApiError(500, 'INTERNAL', 'no'));
+      },
+    });
+    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']) {
+      await person().click(card(view).getByRole('checkbox', { name: day }));
+    }
+    expect(card(view).getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
+    await person().click(card(view).getByRole('checkbox', { name: 'Quiet hours' }));
+    await person().click(card(view).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(sent).toEqual([{ quietHours: null }]);
+    expect(card(view).getByText(/^Quiet hours were not saved\./)).toBeDefined();
+    view.unmount();
+  });
+});
+
+describe('email about what was missed (D-240)', () => {
+  const EMAIL = 'Email me about direct messages and mentions I haven’t read';
+
+  test('not offered where the server cannot send it', async () => {
+    const view = await open();
+    expect(view.queryByRole('region', { name: 'Email' })).toBeNull();
+    expect(view.queryByRole('checkbox', { name: EMAIL })).toBeNull();
+    view.unmount();
+  });
+
+  test('offered off; turned on at once and kept as the server answers; turned off again', async () => {
+    const sent: unknown[] = [];
+    const view = await open({
+      missedMail: () => Promise.resolve({ on: false, available: true }),
+      setMissedMail: (input) => {
+        sent.push(input);
+        return Promise.resolve({ on: input.on, available: true });
+      },
+    });
+    const card = within(view.getByRole('region', { name: 'Email' }));
+    expect(card.getByText(/never during Deep Work or your quiet hours/)).toBeDefined();
+    const box = (): HTMLInputElement =>
+      card.getByRole<HTMLInputElement>('checkbox', { name: EMAIL });
+    expect(box().checked).toBe(false);
+    await person().click(box());
+    expect(box().checked).toBe(true);
+    await settle();
+    await person().click(box());
+    await settle();
+    expect(box().checked).toBe(false);
+    expect(sent).toEqual([{ on: true }, { on: false }]);
+    await expectNoAxeViolations(view.getByRole('region', { name: 'Email' }));
+    view.unmount();
+  });
+
+  test('a refusal puts it back and says so', async () => {
+    const view = await open({
+      missedMail: () => Promise.resolve({ on: false, available: true }),
+      setMissedMail: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+    });
+    const box = (): HTMLInputElement =>
+      main(view).getByRole<HTMLInputElement>('checkbox', { name: EMAIL });
+    await person().click(box());
+    await settle();
+    expect(box().checked).toBe(false);
+    expect(view.getByText(/^Email was not changed\./)).toBeDefined();
+    view.unmount();
+  });
+
+  test('when whether it can be offered could not be read, it says so and asks again', async () => {
+    let asked = 0;
+    const view = await open({
+      missedMail: () => {
+        asked += 1;
+        return asked === 1
+          ? Promise.reject(new ApiError(500, 'INTERNAL', 'no'))
+          : Promise.resolve({ on: true, available: true });
+      },
+    });
+    const card = await view.findByRole('region', { name: 'Email' });
+    await person().click(within(card).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(main(view).getByRole<HTMLInputElement>('checkbox', { name: EMAIL }).checked).toBe(true);
     view.unmount();
   });
 });

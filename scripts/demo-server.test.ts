@@ -36,6 +36,11 @@ const fakeApi = Bun.serve<{ cookie: string | null; origin: string | null }>({
       sockets.push({ cookie: socket.data.cookie, origin: socket.data.origin, got: [] });
     },
     message: (socket, message) => {
+      // The API ending a socket of its own accord, as it does for a revoked session (4401).
+      if (String(message) === 'end-4401') {
+        socket.close(4401, 'signed out');
+        return;
+      }
       sockets.at(-1)?.got.push(String(message));
       socket.send(`echo:${String(message)}`);
     },
@@ -163,6 +168,19 @@ describe('the socket', () => {
       got: ['hello'],
     });
     socket.close();
+  });
+
+  test('a close from the API reaches the browser with its code', async () => {
+    const socket = new WebSocket(`ws://localhost:${String(front.port)}/ws`);
+    const closed = new Promise<number>((resolve) => {
+      socket.addEventListener('close', (event) => {
+        resolve(event.code);
+      });
+    });
+    socket.addEventListener('open', () => {
+      socket.send('end-4401');
+    });
+    expect(await closed).toBe(4401);
   });
 
   test('a plain request to /ws is told it needs an upgrade', async () => {

@@ -1,7 +1,8 @@
 /**
  * An owner's export of their workspace, over HTTP (D-140 §1): asked for (`202`, made in the background
  * by this process), listed, and downloaded once. The archive streams from the store to the browser and
- * leaves the store once it has been served whole.
+ * leaves the store once it has been served whole. A person's export of their own data (D-241) is asked
+ * for, listed and downloaded the same way, under `/api/me`.
  */
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
@@ -18,6 +19,11 @@ import {
   listExports,
   requestExport,
 } from '../../modules/export/requests';
+import {
+  claimPersonalDownload,
+  listPersonalExports,
+  requestPersonalExport,
+} from '../../modules/export/personal-requests';
 import { requireSession } from './session';
 
 export interface ExportDependencies {
@@ -29,6 +35,8 @@ export interface ExportDependencies {
   readonly storage: ObjectStore;
   /** Starts making an export once its request has committed: the process's queue (`exportQueue`). */
   readonly exportRunner: (exportId: string) => void;
+  /** And a person's export of their own data, in the same queue (D-241). */
+  readonly personalExportRunner: (exportId: string) => void;
 }
 
 /** `POST /api/workspaces/:workspaceId/exports` — asked for; its making starts once this commits. */
@@ -74,12 +82,77 @@ export const downloadExport = async (
   readonly body: ReadableStream<Uint8Array>;
   readonly headers: Record<string, string>;
 }> => {
-  const { database, clock, log, storage } = dependencies;
+  const { database, clock } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const { key, size } = await atomicallyOn(database)(
+  const claimed = await atomicallyOn(database)(
     async (transaction) => await claimDownload(transaction, clock, context, exportId),
   );
+  const workspace = await database
+    .selectFrom('workspaces')
+    .select('slug')
+    .where('id', '=', workspaceId)
+    .executeTakeFirstOrThrow();
+  return await serveOnce(dependencies, exportId, claimed, `${workspace.slug}-export`);
+};
+
+/**
+ * `POST /api/me/exports` — the caller asks for an export of their own data (D-241); its making starts
+ * once this commits.
+ */
+export const askForMyExport = async (
+  dependencies: ExportDependencies,
+  request: Request,
+): Promise<WorkspaceExport> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const asked = await atomicallyOn(database)(
+    async (transaction) => await requestPersonalExport(transaction, clock, userId),
+  );
+  dependencies.personalExportRunner(asked.id);
+  return asked;
+};
+
+/** `GET /api/me/exports` — the caller's own newest ten. */
+export const readMyExports = async (
+  dependencies: ExportDependencies,
+  request: Request,
+): Promise<WorkspaceExport[]> => {
+  const { userId } = await requireSession(dependencies.auth, request);
+  return await listPersonalExports(dependencies.database, userId);
+};
+
+/** `GET /api/me/exports/:exportId/download` — once, by the person who asked, in a session of theirs. */
+export const downloadMyExport = async (
+  dependencies: ExportDependencies,
+  request: Request,
+  exportId: string,
+): Promise<{
+  readonly body: ReadableStream<Uint8Array>;
+  readonly headers: Record<string, string>;
+}> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  const claimed = await atomicallyOn(database)(
+    async (transaction) => await claimPersonalDownload(transaction, clock, userId, exportId),
+  );
+  return await serveOnce(dependencies, exportId, claimed, 'purlay-data');
+};
+
+/**
+ * Serves a claimed archive once: streamed from the store to the browser, and taken out of the store
+ * when the download ends, whole, cut off or failed.
+ */
+const serveOnce = async (
+  dependencies: ExportDependencies,
+  exportId: string,
+  { key, size }: { readonly key: string; readonly size: number },
+  stem: string,
+): Promise<{
+  readonly body: ReadableStream<Uint8Array>;
+  readonly headers: Record<string, string>;
+}> => {
+  const { database, clock, log, storage } = dependencies;
   // The archive goes when this download ends, however it ends: it was spent at the claim.
   const done = async (): Promise<void> => {
     try {
@@ -102,12 +175,7 @@ export const downloadExport = async (
     // Claimed while its archive is gone: our failure, loud, never "not found" (as an attachment's).
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
-  const workspace = await database
-    .selectFrom('workspaces')
-    .select('slug')
-    .where('id', '=', workspaceId)
-    .executeTakeFirstOrThrow();
-  const name = `${workspace.slug}-export-${clock.now().toISOString().slice(0, 10)}.tar`;
+  const name = `${stem}-${clock.now().toISOString().slice(0, 10)}.tar`;
   const reader = stored.body.getReader();
   const served = new ReadableStream<Uint8Array>({
     pull: async (controller): Promise<void> => {

@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
-import type { Channel, MeResponse, Notification } from '@purlay/types';
+import type { Channel, MeResponse, Notification, QuietHours } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { keys } from '../../data/keys';
 import { settle } from '../../testing/channel-harness';
@@ -24,6 +24,7 @@ import {
   someChannels,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
+import { person } from '../../testing/user';
 import type { Notice, Notifier } from '../push/notifier';
 import { PUSH_OWNER_KEY } from '../push/push';
 
@@ -99,19 +100,24 @@ const open = async ({
   owner = IDS.me,
   inbox = [mention()],
   me = aSession(),
+  path = `/w/acme/c/${IDS.api}`,
+  quietHours = null,
 }: {
   notifier?: FakeNotifier;
   owner?: string | null;
-  inbox?: Notification[];
+  inbox?: Notification[] | Promise<Notification[]>;
   me?: MeResponse;
+  path?: string;
+  quietHours?: QuietHours | null;
 } = {}): Promise<Awaited<ReturnType<typeof renderApp>>> => {
   const view = await renderApp(<Outlet />, {
-    path: `/w/acme/c/${IDS.api}`,
+    path,
     notifier: notifier.notifier,
     api: aSignedInApi({
       me: () => Promise.resolve(me),
       channels: () => Promise.resolve(withBadge({})),
-      notifications: () => Promise.resolve({ data: inbox, nextCursor: null }),
+      notifications: async () => ({ data: await inbox, nextCursor: null }),
+      quietHours: () => Promise.resolve({ quietHours, timeZone: 'UTC' }),
     }),
   });
   if (owner !== null) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
@@ -193,6 +199,71 @@ describe('a tab in the background', () => {
     view.unmount();
   });
 
+  for (const change of ['focus', 'read', 'quiet', 'off', 'unmount'] as const) {
+    test(`a delayed inbox cannot show an obsolete notice after ${change}`, async () => {
+      let release: (inbox: Notification[]) => void = () => undefined;
+      const inbox = new Promise<Notification[]>((resolve) => {
+        release = resolve;
+      });
+      const fake = aNotifier();
+      const view = await open({
+        notifier: fake,
+        inbox,
+        ...(change === 'off' ? { path: '/w/acme/settings/notifications' } : {}),
+      });
+      await rise(view, { [IDS.deploys]: 1 });
+      expect(fake.shown).toEqual([]);
+      if (change === 'focus') focused = true;
+      if (change === 'read') await rise(view, { [IDS.deploys]: 0 });
+      if (change === 'quiet') {
+        const me = aSession();
+        act(() => {
+          view.world.client.setQueryData(keys.me, {
+            ...me,
+            memberships: me.memberships.map((m) => ({
+              ...m,
+              deepWorkUntil: '2026-09-09T13:00:00.000Z',
+            })),
+          });
+        });
+        await settle();
+      }
+      if (change === 'off') {
+        await person().click(view.getByRole('button', { name: 'Turn off' }));
+        await settle();
+      }
+      if (change === 'unmount') view.unmount();
+      release([mention()]);
+      await settle();
+      expect(fake.shown).toEqual([]);
+      if (change !== 'unmount') view.unmount();
+    });
+  }
+
+  test('an unrelated badge update does not discard a pending notice that is still needed', async () => {
+    let release: (inbox: Notification[]) => void = () => undefined;
+    const inbox = new Promise<Notification[]>((resolve) => {
+      release = resolve;
+    });
+    const fake = aNotifier();
+    const view = await open({ notifier: fake, inbox });
+    await rise(view, { [IDS.deploys]: 1 });
+    act(() => {
+      view.world.client.setQueryData(
+        keys.channels(IDS.workspace),
+        withBadge({ [IDS.deploys]: 1 }).map((channel) =>
+          channel.id === IDS.api ? { ...channel, name: 'api-renamed' } : channel,
+        ),
+      );
+    });
+    await settle();
+    expect(view.getByRole('link', { name: /api-renamed/ })).toBeDefined();
+    release([mention()]);
+    await settle();
+    expect(fake.shown.map((n) => n.body)).toEqual(['Alice mentioned you']);
+    view.unmount();
+  });
+
   test('what was already waiting when the page opened is not news', async () => {
     const fake = aNotifier();
     const view = await renderApp(<Outlet />, {
@@ -203,6 +274,17 @@ describe('a tab in the background', () => {
     view.world.storage.setItem(PUSH_OWNER_KEY, IDS.me);
     await settle();
     expect(fake.shown).toEqual([]);
+    view.unmount();
+  });
+
+  test('outside the person’s quiet hours, as ever (D-234)', async () => {
+    const fake = aNotifier();
+    const view = await open({
+      notifier: fake,
+      quietHours: { from: 20 * 60, to: 7 * 60, days: [0, 1, 2, 3, 4, 5, 6] },
+    });
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(fake.shown).toHaveLength(1);
     view.unmount();
   });
 
@@ -233,6 +315,17 @@ describe('nothing is said', () => {
     };
     const fake = aNotifier();
     const view = await open({ notifier: fake, me: quiet });
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(fake.shown).toEqual([]);
+    view.unmount();
+  });
+
+  // The test's clock reads Wednesday 2026-09-09, 12:00 UTC: a window around it, on a profile in UTC.
+  const around = (): QuietHours => ({ from: 11 * 60, to: 13 * 60, days: [3] });
+
+  test('in the person’s quiet hours (D-234)', async () => {
+    const fake = aNotifier();
+    const view = await open({ notifier: fake, quietHours: around() });
     await rise(view, { [IDS.deploys]: 1 });
     expect(fake.shown).toEqual([]);
     view.unmount();
@@ -272,4 +365,22 @@ describe('nothing is said', () => {
     expect(fake.shown.map((n) => n.body)).toEqual(['Something here needs you']);
     view.unmount();
   });
+});
+
+test('an inbox request that fails still offers the conversation without claiming a reason', async () => {
+  let reject: (error: Error) => void = () => undefined;
+  const inbox = new Promise<Notification[]>((_resolve, refuse) => {
+    reject = refuse;
+  });
+  const fake = aNotifier();
+  const view = await open({ notifier: fake, inbox });
+  await rise(view, { [IDS.deploys]: 1 });
+  reject(new Error('inbox unavailable'));
+  await settle();
+  expect(fake.shown[0]?.body).toBe('Something here needs you');
+  act(() => {
+    fake.shown[0]?.onOpen();
+  });
+  expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
+  view.unmount();
 });

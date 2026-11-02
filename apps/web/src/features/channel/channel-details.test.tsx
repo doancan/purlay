@@ -80,6 +80,26 @@ describe('its tabs', () => {
     view.unmountAll();
   });
 
+  test('every button in an owner’s About says what it does: no two share a name', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+        channelRetention: () =>
+          Promise.resolve({ keepsAtLeast: null, workspaceDays: 30, effectiveDays: 30 }),
+      },
+    });
+    const dialog = await openDetails(view);
+    const about = within(dialog).getByRole('tabpanel', { name: 'About' });
+    // The history section (D-225) has drawn its own form beside the name and the topic's.
+    await within(about).findByRole('button', { name: 'Save history setting' });
+    const names = within(about)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label') ?? button.textContent.trim());
+    expect(names.filter((name, at) => names.indexOf(name) !== at)).toEqual([]);
+    view.unmountAll();
+  });
+
   test('a member who is not an owner or an admin has no Integrations tab', async () => {
     const view = await mountChannel({
       messages: page([]),

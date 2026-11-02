@@ -49,7 +49,7 @@ export default defineConfig({
     // this exists to remove, one path at a time — `/health` was missing and
     // answered with the client's HTML.
     proxy: Object.fromEntries(
-      ['/auth', '/api', '/ws', '/health', '/setup'].map((prefix) => [
+      ['/auth', '/api', '/ws', '/health', '/metrics', '/setup'].map((prefix) => [
         prefix,
         {
           target: `http://localhost:${String(process.env['PORT'] ?? 3001)}`,

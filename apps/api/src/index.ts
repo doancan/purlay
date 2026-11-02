@@ -11,7 +11,7 @@
 import { deliverReminders } from './modules/reminders/delivery';
 import { deliverScheduled } from './modules/scheduled/delivery';
 import { timedDeliveryLoop } from './modules/scheduled/loop';
-import { exportQueue } from './modules/export/requests';
+import { exportQueue } from './modules/export/queue';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -38,6 +38,7 @@ import { bunRedisClient, connectRedis } from './platform/redis';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
+import { sendAuditLinesTo } from './modules/audit/lines';
 import { errorTrackingFor, reportUrgently } from './platform/error-tracking';
 import {
   closeAfterDrain,
@@ -51,6 +52,7 @@ import { storeFor } from './platform/storage';
 import { inMemoryAttention } from './platform/attention';
 import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
+import { serverMetrics } from './platform/metrics';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -59,6 +61,8 @@ const plainLog = createLogger({ level: config.LOG_LEVEL });
 // to start, here, rather than failing quietly at the first error. Everything logged
 // at `error` below is also reported, cleaned the way the log is.
 const { tracker: errorTracker, log } = errorTrackingFor(config, plainLog, systemClock);
+// Every entry this process writes to the trail is also a line of its log, ids only (D-222).
+sendAuditLinesTo(log);
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.
@@ -83,6 +87,15 @@ const connection = databaseConnection(config, log);
 
 const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
 
+// What this process counts for `/metrics` (D-221): one registry, handed to everything that records.
+// Kept whether or not METRICS_TOKEN is set — counting is cheap; without it the page is never served.
+const metrics = serverMetrics();
+log.info(
+  config.METRICS_TOKEN === undefined
+    ? 'metrics are off: METRICS_TOKEN is unset'
+    : 'metrics are served at /metrics',
+);
+
 // Who is in front of a workspace's page now: heard by the sockets, asked by the push sender (D-143).
 const attention = inMemoryAttention(systemClock);
 
@@ -97,6 +110,7 @@ const push =
         clock: systemClock,
         log,
         attention,
+        failures: metrics.pushFailures,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
         post: async (url, headers, body) =>
           await postExternal(url, headers, body, {
@@ -152,7 +166,7 @@ const runtimeBase: RuntimeBase = {
 // with a stand-in that answers every use as a busy server, and readiness says why; after, a change of
 // the settings swaps a new instance and relay in without a restart, each request served by the pair
 // it started on (D-179 §4).
-const services = runtimeServicesHolder(log);
+const services = runtimeServicesHolder(log, metrics.mailFailures);
 /** The pair the settings make: at the start, and again for every change of them (`applySettings`). */
 const servicesFor = (
   settings: ServerSettings,
@@ -204,7 +218,9 @@ const app = createApp({
   database,
   storage,
   exportRunner: exports.start,
+  personalExportRunner: exports.startPersonal,
   attention,
+  metrics,
   ...(client === undefined ? {} : { client }),
   ...(push === undefined ? {} : { push }),
 });

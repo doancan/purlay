@@ -17,6 +17,13 @@
 @import '@purlay/tokens/theme.css';
 @import 'tailwindcss/utilities.css' layer(utilities);
 
+/*
+ * A device that is only touch: its pointer is a finger and nothing on it hovers — a phone, a tablet
+ * with nothing attached. The same line `isTouchOnly` draws for the composer's Enter (D-188), so a key
+ * is not offered where Enter has stopped sending; `composer-ports.test.tsx` holds the two to one query.
+ */
+@custom-variant touch-only (@media (pointer: coarse) and (hover: none));
+
 @layer base {
   html {
     background-color: var(--surface-100);
@@ -38,6 +45,23 @@
    */
   .border-hairline:focus-visible {
     outline-offset: calc(var(--size-focus-offset) * -1);
+  }
+
+  /*
+   * After a click the ring stays off everything that is not a place to type (`ui/input-modality.ts`):
+   * a button the mouse pressed, or that focus returned to, is not asking where the keyboard is.
+   */
+  :root[data-pointer]
+    :focus-visible:not(
+      input,
+      textarea,
+      select,
+      [contenteditable],
+      [role='textbox'],
+      [role='searchbox'],
+      [role='combobox']
+    ) {
+    outline: none;
   }
 
   /*
@@ -75,6 +99,82 @@
 
 @utility animate-overlay-in {
   animation: overlay-in var(--duration-overlay) var(--easing-standard);
+}
+
+/*
+ * What opens from a control — a menu, a submenu, a popover, a tip — grows out of where it was opened
+ * from, and leaves a little faster than it came (D-211). The origin is the one Radix computes for the
+ * side it opened on, so a menu under a button grows down from the button and a panel beside the rail
+ * grows out of the rail. Lengths are tokens: 0ms under reduced motion. A closing animation is waited
+ * for by Radix before the element goes, so it is never cut off.
+ */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@utility animate-pop-in {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(
+      --radix-popover-content-transform-origin,
+      var(--radix-tooltip-content-transform-origin, center)
+    )
+  );
+  animation: pop-in var(--duration-overlay) var(--easing-standard);
+}
+
+@utility animate-pop-out {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(
+      --radix-popover-content-transform-origin,
+      var(--radix-tooltip-content-transform-origin, center)
+    )
+  );
+  animation: pop-out var(--duration-exit) var(--easing-standard) forwards;
+}
+
+/* A dialog's backdrop fades in and out; the dialog itself opens as the palette does (overlay-in). */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in var(--duration-overlay) var(--easing-standard);
+}
+
+@utility animate-fade-out {
+  animation: fade-out var(--duration-exit) var(--easing-standard) forwards;
+}
+
+/* A toast rises into its corner: it arrives where the eye is not, so it moves, a little, to be seen. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+}
+
+@utility animate-rise-in {
+  animation: rise-in var(--duration-overlay) var(--easing-standard);
 }
 
 /*
@@ -127,6 +227,147 @@
 
 @utility animate-nudge {
   animation: nudge var(--duration-nudge) var(--easing-standard);
+}
+
+/*
+ * The party popper's firework (`ui/fireworks.tsx`): a rocket's trail draws upward, then its burst opens
+ * from the centre and fades. One show, no loop; its length is `duration-celebrate` (0ms under reduced motion).
+ */
+@keyframes firework-rocket {
+  from {
+    transform: scaleY(0);
+    opacity: 1;
+  }
+  35% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+
+@keyframes firework-burst {
+  from {
+    opacity: 0;
+    transform: scale(0.08);
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* The sparks sink as they go out, slowly, which is what makes a burst hang rather than pop. */
+@keyframes firework-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(var(--sink, 1) * var(--space-1)));
+  }
+}
+
+@utility animate-firework-rocket {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  opacity: 0;
+  animation: firework-rocket calc(var(--duration-celebrate) * 0.3) var(--easing-standard) both;
+}
+
+@utility animate-firework-burst {
+  transform-origin: 0 0;
+  opacity: 0;
+  animation: firework-burst calc(var(--duration-celebrate) * 0.46) var(--easing-standard) both;
+}
+
+@utility animate-firework-fall {
+  animation: firework-fall calc(var(--duration-celebrate) * 0.55) linear both;
+}
+
+/*
+ * A select, drawn in the product's tokens where the browser can: `appearance: base-select` lets the page
+ * style the list that opens (Chromium), so it is a card of rows like the menus, not the system's list.
+ * Elsewhere the same select is the platform's own — still accessible and right on a phone. Its arrow is
+ * the icon set's chevron (`ui/select.tsx`), so the browser's is hidden.
+ */
+@utility select-base {
+  appearance: none;
+
+  @supports (appearance: base-select) {
+    appearance: base-select;
+    display: flex;
+    align-items: center;
+
+    &::picker-icon {
+      display: none;
+    }
+
+    &::picker(select) {
+      appearance: base-select;
+      box-sizing: border-box;
+      min-width: anchor-size(width);
+      margin-block: var(--space-1);
+      padding: var(--space-1);
+      border: var(--stroke-hairline) solid var(--border-subtle);
+      border-radius: var(--radius-2xl);
+      background: var(--surface-100);
+      box-shadow: var(--shadow-float);
+    }
+
+    & option {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      color: var(--ink);
+      font-family: var(--text-label-family);
+      font-size: var(--text-label-size);
+      font-weight: var(--weight-normal);
+      cursor: pointer;
+    }
+
+    & option:hover,
+    & option:focus-visible {
+      background: var(--surface-200);
+      outline: none;
+    }
+
+    & option:checked {
+      font-weight: var(--weight-semibold);
+    }
+
+    & option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+    }
+  }
+}
+
+/* A segmented control's selected mark slides to the segment now chosen (`ui/slide-track.tsx`). */
+@utility slide-mark {
+  transition-property: transform, width, height, opacity;
+  transition-duration: var(--duration-slide);
+  transition-timing-function: var(--easing-standard);
+
+  &[data-instant] {
+    transition-property: none;
+  }
+}
+
+/* A firework's rays and sparks: a line of the marker's weight at any window size. */
+@utility firework-line {
+  stroke-width: var(--stroke-marker);
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
 }
 
 /*

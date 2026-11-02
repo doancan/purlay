@@ -32,7 +32,32 @@ export const readRetention = async (
     .where('id', '=', context.workspaceId)
     .where('deleted_at', 'is', null)
     .executeTakeFirstOrThrow();
-  return { retentionDays: row.retention_days };
+  return {
+    retentionDays: row.retention_days,
+    channelsKeptLonger: await channelsKeptLonger(executor, context, row.retention_days),
+  };
+};
+
+/**
+ * How many of the workspace's channels keep longer than its window (D-225): forever, or a floor past it.
+ * Archived and private ones count — the purge keeps their history too. A workspace that keeps everything
+ * has none: nothing is longer than forever.
+ */
+const channelsKeptLonger = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  retentionDays: number | null,
+): Promise<number> => {
+  if (retentionDays === null) return 0;
+  const row = await executor
+    .selectFrom('channels')
+    .select((eb) => eb.fn.countAll<string>().as('count'))
+    .where('workspace_id', '=', context.workspaceId)
+    .where((eb) =>
+      eb.or([eb('retain_forever', '=', true), eb('min_retention_days', '>', retentionDays)]),
+    )
+    .executeTakeFirstOrThrow();
+  return Number(row.count);
 };
 
 /**
@@ -55,7 +80,11 @@ export const setRetention = async (
     .executeTakeFirstOrThrow();
   const now = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
   if (now.role !== 'owner') throw ownersOnly();
-  if (before.retention_days === retentionDays) return { retentionDays };
+  const answer = async (): Promise<RetentionSetting> => ({
+    retentionDays,
+    channelsKeptLonger: await channelsKeptLonger(executor, context, retentionDays),
+  });
+  if (before.retention_days === retentionDays) return await answer();
   await executor
     .updateTable('workspaces')
     .set({ retention_days: retentionDays, updated_at: clock.now() })
@@ -69,5 +98,5 @@ export const setRetention = async (
     targetId: context.workspaceId,
     metadata: { from: said(before.retention_days), to: said(retentionDays) },
   });
-  return { retentionDays };
+  return await answer();
 };

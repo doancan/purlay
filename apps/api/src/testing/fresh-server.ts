@@ -19,6 +19,7 @@ import { mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SQL } from 'bun';
+import { aGitHubAppStub, GITHUB_APP_STUB } from './github-app-stub';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from './github-stub';
 import { anOidcStub, OIDC_STUB_CREDENTIALS } from './oidc-stub';
 import { aScriptedRelay } from './smtp-relay';
@@ -85,10 +86,16 @@ await admin.unsafe(`create database ${databaseName}`);
 await admin.close();
 await run(['bun', '--no-env-file', 'run', 'db:migrate'], { DATABASE_URL: databaseUrl });
 
+// The GitHub App issues are written through (D-246), played by the same GitHub: one organisation with one
+// repository, which the spec's person can reach, installed on from GitHub's screen by pressing nothing.
+const githubApp = aGitHubAppStub({ id: 1, login: 'ayse' });
+githubApp.install(31, 'acme', [{ id: 77, fullName: 'acme/api', private: true }]);
+githubApp.callbackUrl = `${origin}/api/github-app/callback`;
 const github = aGitHubStub(
   { id: 1, login: 'ayse', name: 'Ayse', email: 'ayse@example.test' },
   {},
   GITHUB_STUB_CREDENTIALS,
+  { app: githubApp },
 );
 const githubServed = github.serve(port + 2);
 // The organisation's single sign-on provider (D-200), strict as a provider is, for the spec that connects it.
@@ -170,6 +177,7 @@ const manifest = {
   database: databaseUrl,
   code,
   github: { ...GITHUB_STUB_CREDENTIALS, url: githubServed.url },
+  githubApp: GITHUB_APP_STUB,
   oidc: { ...OIDC_STUB_CREDENTIALS, issuer: oidcServed.url },
   relay: { port: relay.port },
   mailbox,

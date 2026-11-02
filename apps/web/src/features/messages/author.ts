@@ -1,6 +1,7 @@
 /**
  * Who a message is by, asked in one place (D-134 §6). A person's message has its sender; a message a
- * repository's feed posted has none, and is GitHub's. Every screen that names an author, and every
+ * repository's feed posted has none, and is GitHub's; one an incoming webhook posted has none either, and
+ * is the hook's, by its name (D-245). Every screen that names an author, and every
  * rule that asks "is this mine?" — the edit shortcut, grouping, the new
  * divider, following the bottom, typing — asks here, so an event is nobody's and never yours.
  */
@@ -21,9 +22,15 @@ const GITHUB: Author = { displayName: 'GitHub', username: 'github' };
  * language — under the name and the handle alike (D-139 §5); the tint still comes from the reserved
  * name, so each such person keeps a colour of their own.
  */
-export const authorOf = (message: Pick<Message, 'sender'>, erased: string): Author =>
+export const authorOf = (
+  message: Pick<Message, 'sender' | 'incomingWebhook'>,
+  erased: string,
+): Author =>
   message.sender === null
-    ? GITHUB
+    ? message.incomingWebhook === undefined
+      ? GITHUB
+      : // An incoming webhook's message is the hook's, by the name it posted under (D-245).
+        { displayName: message.incomingWebhook.name, username: message.incomingWebhook.name }
     : isErased(message.sender)
       ? { displayName: erased, username: erased }
       : { displayName: message.sender.displayName, username: message.sender.username };

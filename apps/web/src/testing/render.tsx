@@ -17,6 +17,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { act, render, type RenderResult } from '@testing-library/react';
 import type { Api } from '../data/api';
+import type { ClientStorage } from '../data/browser-storage';
+import type { ReleaseNotesSource } from '../features/about/release-notes-source';
 import { AppProviders } from '../app/providers';
 import { createQueryClient } from '../app/query-client';
 import { en } from '../i18n/catalogue/en';
@@ -41,6 +43,10 @@ export interface WorldOptions {
   readonly push?: PushDevice | null;
   /** The page's own notices (D-148). Absent, the browser has none. */
   readonly notifier?: Notifier | null;
+  /** The release notes the build carries (D-248). Absent, the build carries none. */
+  readonly releaseNotes?: ReleaseNotesSource | null;
+  /** What the browser keeps, instead of the empty one the world makes: a throwing store, or `null` for none. */
+  readonly storage?: ClientStorage | null;
 }
 
 export const renderApp = async (
@@ -53,6 +59,8 @@ export const renderApp = async (
     api = anApi(),
     push = null,
     notifier = null,
+    releaseNotes = null,
+    storage,
   }: WorldOptions = {},
 ): Promise<RenderResult & { readonly world: ReturnType<typeof makeWorld> }> => {
   const world = makeWorld({ locale, path, dark, ...(theme === undefined ? {} : { theme }) });
@@ -71,7 +79,8 @@ export const renderApp = async (
         schedule: world.timers.schedule,
         queryClient: world.client,
         api,
-        storage: world.storage,
+        storage: storage === undefined ? world.storage : storage,
+        releaseNotes,
         push,
         notifier,
         realtime: {

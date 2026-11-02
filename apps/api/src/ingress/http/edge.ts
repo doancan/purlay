@@ -85,13 +85,27 @@ export const isUploadRequest = (request: Request): boolean =>
  * one segment for the id, never wider than the route. Its body is GitHub's JSON, held to its own
  * bound rather than the client's, since a push of twenty commits is longer than any message.
  */
-const WEBHOOK_PATH = /^\/api\/webhooks\/github\/[^/]+$/;
+const WEBHOOK_PATH = /^\/api\/webhooks\/(?:github\/[^/]+|github-app)$/;
 
 /** How long a delivery may be. GitHub's own cap is far larger; a longer push is refused and shown failed there. */
 export const WEBHOOK_BODY_MAX_BYTES = 1024 * 1024;
 
 export const isWebhookRequest = (request: Request): boolean =>
   request.method === 'POST' && WEBHOOK_PATH.test(new URL(request.url).pathname);
+
+/**
+ * An incoming webhook's address, `/api/webhooks/incoming/:webhookId/:secret` (D-245), however the router
+ * would still match it — repeated slashes, one at the end — with everything after the id: the secret.
+ */
+const INCOMING_WEBHOOK_SECRET = /^(\/+api\/+webhooks\/+incoming\/+[^/]*)\/.*$/;
+
+/**
+ * A path as a log line may name it: an incoming webhook's secret is its address's last segment, and the
+ * address is the credential (D-245), so what follows the id is written as `:secret`. Every other path is
+ * as it came.
+ */
+export const pathWithoutSecret = (path: string): string =>
+  path.replace(INCOMING_WEBHOOK_SECRET, '$1/:secret');
 
 /**
  * A delivery's body: JSON — GitHub's hook must be set to send `application/json`, not the form it
@@ -195,17 +209,17 @@ export const responseHeaders = (appUrl: string): Record<string, string> => ({
  * response: an API answer loads nothing, a document loads the client from its own origin.
  *
  * No inline script and no `eval`: the build emits files, and `theme-init.js` is one so it
- * needs no hash. Two exceptions, each D-102's: inline **style**, because the dialog
- * primitive's scroll lock writes a `<style>` element (D-52), and GitHub's avatar host,
- * until avatars come through the image proxy. `connect-src 'self'` covers the socket, a
- * same-origin `wss:` under CSP Level 3.
+ * needs no hash. One exception, D-102's: inline **style**, because the dialog primitive's
+ * scroll lock writes a `<style>` element (D-52). Images are this origin's alone: an avatar is
+ * initials on a tint and fetches nothing (D-100, D-237), and another host's picture comes
+ * through the image proxy. `connect-src 'self'` covers the socket, a same-origin `wss:` under
+ * CSP Level 3.
  */
 const DOCUMENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  // TODO(#110): 'self' alone once avatars are served through the image proxy.
-  "img-src 'self' https://avatars.githubusercontent.com",
+  "img-src 'self'",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

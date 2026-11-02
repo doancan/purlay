@@ -44,6 +44,7 @@ export const browserNotifier = (): Notifier | null => {
         ? await Notification.requestPermission()
         : Notification.permission,
     show: ({ title, body, tag, onOpen }): boolean => {
+      if (Notification.permission !== 'granted') return false;
       let notice: Notification;
       try {
         notice = new Notification(title, {

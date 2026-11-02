@@ -12,6 +12,8 @@ import {
   type ClonedDatabase,
   type Executor,
   type Transaction,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { INVITATION_TTL_DAYS } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -63,11 +65,11 @@ const TTL_MS = INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000;
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const as = async (db: Executor, room: Room, name: string): Promise<WorkspaceContext> => {
   const person = room.members[name];

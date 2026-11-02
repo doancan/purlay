@@ -330,7 +330,7 @@ describe('the compiler sees every file the linter does', () => {
  * is". The lockfile knows, but a lockfile is a consequence, and a green check
  * from a different resolved tree is the "green in one state is not green"
  * problem one layer down (`CONTRIBUTING.md` §6.3). An exact pin makes an upgrade
- * a visible commit that CI judges, which is what Dependabot already opens.
+ * a visible commit that CI judges (D-219).
  *
  * `workspace:*` is not a range — it names the package in this repository, and
  * there is nothing else it could resolve to. (D-56)

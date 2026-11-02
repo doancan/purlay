@@ -21,6 +21,8 @@
 
 const TEXT = 4.5;
 const BOUNDARY = 3;
+/** A control's own edge, soft by design (D-247): the field's fill and its label already say it is a control. */
+const CONTROL_EDGE = 1.6;
 
 export interface Pair {
   /** The colour that is drawn: text, an icon, a border, a ring. */
@@ -52,7 +54,7 @@ const SURFACES = ['surface-000', 'surface-050', 'surface-100', 'surface-200'] as
  * neutral in the light theme, the dark navy in the dark — and every shared control inside it speaks the
  * inks of the theme it is in, so each pair is computed in both themes like any other.
  */
-const NAV = ['nav-rail', 'nav-surface', 'nav-hover'] as const;
+const NAV = ['nav-rail', 'nav-surface', 'nav-hover', 'nav-selected'] as const;
 const inNav = (pairs: readonly Pair[]): readonly Pair[] => pairs;
 const AVATARS = ['avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6'] as const;
 const READING = [...SURFACES, 'accent-subtle', 'code-bg'] as const;
@@ -115,8 +117,9 @@ export const PAIRS: readonly Pair[] = [
     ),
     ...cross(['focus-ring'], NAV, BOUNDARY, 'the keyboard focus ring inside navigation'),
   ]),
-  ...cross(['border-strong'], READING, BOUNDARY, 'the edge of a control'),
+  ...cross(['border-strong'], READING, CONTROL_EDGE, 'the edge of a control'),
   ...cross(['focus-ring'], READING, BOUNDARY, 'the keyboard focus ring (UX §8)'),
+  ...cross(['composer-edge'], SURFACES, BOUNDARY, 'the focused composer’s edge: where you type'),
 ];
 
 /**
@@ -147,6 +150,7 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   'nav-rail': 'a background; it is the `background` of the pairs above',
   'nav-surface': 'a background; it is the `background` of the pairs above',
   'nav-hover': 'a background; it is the `background` of the pairs above',
+  'nav-selected': 'a background; it is the `background` of the pairs above',
   'nav-border': 'decorative: a divider inside navigation that carries no meaning',
   danger:
     'a fill; its legibility is `on-status` on it, and it never carries meaning without a label',

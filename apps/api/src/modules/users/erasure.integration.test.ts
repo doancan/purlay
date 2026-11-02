@@ -124,8 +124,14 @@ describe('integration: erasing an account', () => {
           time_zone: 'Europe/Istanbul',
           status_text: 'here',
           last_seen_at: NOW,
+          // She asked to be mailed about what she missed, and was (D-240).
+          missed_mail_since: NOW,
         })
         .where('id', '=', ada.userId)
+        .execute();
+      await db
+        .insertInto('missed_mail_letters')
+        .values({ user_id: ada.userId, sent_at: NOW, stop_digest: 'a'.repeat(64) })
         .execute();
       const sent = await sendMessage(db, clock, ada.context, {
         id: messageId(NOW),
@@ -193,11 +199,17 @@ describe('integration: erasing an account', () => {
         '203.0.113.7',
       );
       await after.settled();
+      // Two counters: the address's, and the address's from that client (D-231 §2).
       const counter = await addressCounterKey(adaEmail);
       const counters = async (): Promise<number> =>
-        (await db.selectFrom('rate_limits').select('key').where('key', '=', counter).execute())
-          .length;
-      expect(await counters()).toBe(1);
+        (
+          await db
+            .selectFrom('rate_limits')
+            .select('key')
+            .where('key', 'like', `${counter}%`)
+            .execute()
+        ).length;
+      expect(await counters()).toBe(2);
       // And how many invitation letters she sent today, kept under her id; bob's is the control.
       for (const person of [ada, member(room, 'bob')]) {
         await sql`insert into rate_limits (key, count, last_request)
@@ -247,6 +259,7 @@ describe('integration: erasing an account', () => {
         time_zone: null,
         status_text: null,
         last_seen_at: null,
+        missed_mail_since: null,
         deleted_at: NOW,
       });
       expect(isErased({ username: row.username })).toBe(true);
@@ -266,6 +279,7 @@ describe('integration: erasing an account', () => {
         'saved_messages',
         'thread_follows',
         'notifications',
+        'missed_mail_letters',
       ] as const) {
         expect(
           await db.selectFrom(table).select('user_id').where('user_id', '=', ada.userId).execute(),

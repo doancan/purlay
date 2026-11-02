@@ -108,6 +108,9 @@ export const erasedPerson = (id: string): User => ({
   avatarUrl: null,
 });
 
+/** The longest display name, as `users.display_name` holds it (`SCHEMA.md` §users). */
+export const DISPLAY_NAME_MAX = 128;
+
 /** How long a profile's title and status line may be (D-131). */
 export const PROFILE_TITLE_MAX = 80;
 export const PROFILE_STATUS_MAX = 100;
@@ -194,6 +197,14 @@ export const ChannelIncident = Type.Object({
 });
 export type ChannelIncident = Static<typeof ChannelIncident>;
 
+/**
+ * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
+ * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
+ * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
+ */
+export const GITHUB_REPOSITORY_PATTERN =
+  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
+
 export const Channel = Type.Object({
   id: Uuid,
   workspaceId: Uuid,
@@ -232,6 +243,17 @@ export const Channel = Type.Object({
   memberCount: Type.Integer({ minimum: 0 }),
   /** Its open incident (D-137); null when none is open, and always for a direct message. */
   incident: Type.Union([ChannelIncident, Type.Null()]),
+  /**
+   * The repository a code reference in its messages links to (D-223): its GitHub feed's, when it has
+   * exactly one; null with none or several, which would be a guess, and always for a direct message.
+   * Told to whoever can see the channel — who reads that feed's events in it already.
+   */
+  codeRepository: Type.Union([Type.String({ pattern: GITHUB_REPOSITORY_PATTERN }), Type.Null()]),
+  /**
+   * Whether only the workspace's owners and admins post in its feed (D-243): an announcement channel.
+   * Everybody in it still replies in a thread. Always false for a direct message.
+   */
+  onlyAdminsPost: Type.Boolean(),
 });
 export type Channel = Static<typeof Channel>;
 
@@ -282,14 +304,6 @@ export const GitHubLink = Type.String({
   pattern:
     '^https://github\\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/(?!\\.\\.?/)([A-Za-z0-9._-]{1,100})/(pull|issues)/([0-9]{1,10})$',
 });
-
-/**
- * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
- * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
- * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
- */
-export const GITHUB_REPOSITORY_PATTERN =
-  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
 
 /** How long a title, a release's name or a commit's first line is kept; longer is cut, with `…`. */
 export const GITHUB_EVENT_TEXT_MAX = 256;
@@ -383,6 +397,23 @@ export const GitHubEvent = Type.Union([
 ]);
 export type GitHubEvent = Static<typeof GitHubEvent>;
 
+/** The longest name an incoming webhook posts under (D-245): a label, as a channel's name is. */
+export const INCOMING_WEBHOOK_NAME_MAX = 80;
+
+/** What an incoming webhook is called, and what its messages say they are from (D-245). */
+export const IncomingWebhookName = Type.String({
+  minLength: 1,
+  maxLength: INCOMING_WEBHOOK_NAME_MAX,
+  format: 'name',
+});
+
+/**
+ * Who a message an incoming webhook posted is from (D-245): the hook's name as it was when it posted,
+ * kept with the message, so one revoked since still names what it said.
+ */
+export const IncomingWebhookAuthor = Closed({ name: IncomingWebhookName });
+export type IncomingWebhookAuthor = Static<typeof IncomingWebhookAuthor>;
+
 /**
  * What the parser records about a text message when it is written: hints for the
  * renderer, derived once (`SCHEMA.md` §6.4, `ARCHITECTURE.md` §8.1). Not on the wire
@@ -420,7 +451,49 @@ export type Reaction = Static<typeof Reaction>;
  * or both null — the database's `resolution_is_complete` — and only a root with at
  * least one reply can be resolved (I-8).
  */
+export const DECISION_NOTE_MAX = 2000;
+export const ACCEPTED_ANSWER_PREVIEW_MAX = 800;
+export const DecisionUrl = Type.String({
+  maxLength: 2048,
+  format: 'uri',
+  pattern: '^https?://[^\\s]+$',
+});
+/** Additive root metadata; absent on unchanged roots and older servers (D-204). */
+export const ThreadKnowledge = Type.Object({
+  version: Type.Integer({ minimum: 0 }),
+  isQuestion: Type.Boolean(),
+  assigneeId: Type.Union([Uuid, Type.Null()]),
+  acceptedAnswer: Type.Union([
+    Type.Object({ id: Uuid, content: Type.String({ maxLength: ACCEPTED_ANSWER_PREVIEW_MAX }) }),
+    Type.Null(),
+  ]),
+  decisionNote: Type.String({ maxLength: DECISION_NOTE_MAX }),
+  decisionUrl: Type.Union([DecisionUrl, Type.Null()]),
+});
+export type ThreadKnowledge = Static<typeof ThreadKnowledge>;
+
+/**
+ * A root's GitHub work (D-246): an issue made from the thread or an issue or pull request somebody linked, with
+ * its title and state as GitHub last said them. A record the channel reads, never a permission; the address is
+ * built from its parts, never taken from GitHub's words.
+ */
+export const GITHUB_WORK_PER_THREAD_MAX = 20;
+export const GitHubWorkLink = Type.Object({
+  id: Uuid,
+  repository: Type.String({ minLength: 3, maxLength: 140 }),
+  kind: Type.Union([Type.Literal('issue'), Type.Literal('pull')]),
+  number: Type.Integer({ minimum: 1 }),
+  title: Type.String({ maxLength: 256 }),
+  state: Type.Union([Type.Literal('open'), Type.Literal('closed'), Type.Literal('merged')]),
+  origin: Type.Union([Type.Literal('created'), Type.Literal('linked')]),
+  url: Type.String({ pattern: '^https://[^\\s]+$', maxLength: 300 }),
+});
+export type GitHubWorkLink = Static<typeof GitHubWorkLink>;
+
 export const ThreadSummary = Type.Object({
+  knowledge: Type.Optional(ThreadKnowledge),
+  /** Additive, absent when the root has none (D-246). */
+  githubWork: Type.Optional(Type.Array(GitHubWorkLink, { maxItems: GITHUB_WORK_PER_THREAD_MAX })),
   replyCount: Type.Integer({ minimum: 0 }),
   lastReplyAt: Type.Union([Timestamp, Type.Null()]),
   resolvedAt: Type.Union([Timestamp, Type.Null()]),
@@ -475,12 +548,20 @@ export const Message = Type.Object({
   channelId: Uuid,
   /**
    * Who wrote it; null for a message nobody wrote — a repository's event (D-134 §6), which carries
-   * `githubEvent` instead. At most one of the two is set — both are null for a removed event: the
+   * `githubEvent` instead, or an incoming webhook's, which carries `incomingWebhook` (D-245). At most
+   * one of the three is set — none for a removed event: the
    * database holds it (`messages_sender_by_type`) and the one reader builds both from the same row.
    */
   sender: Type.Union([User, Type.Null()]),
   /** What happened in a repository, for a message its feed posted; null for a person's, and a tombstone's. */
   githubEvent: Type.Union([GitHubEvent, Type.Null()]),
+  /**
+   * The incoming webhook a message was posted through, by the name it posted under (D-245); absent for
+   * every other message and for a tombstone. Its `sender` and `githubEvent` are null, and its words are
+   * `content`, markdown like a person's. Optional because it is an addition: a server before it never
+   * sends it, and a client before it draws the message as one nobody wrote.
+   */
+  incomingWebhook: Type.Optional(IncomingWebhookAuthor),
   content: Type.String(),
   /** Set when the message has been edited; the content is the current version. */
   editedAt: Type.Union([Timestamp, Type.Null()]),

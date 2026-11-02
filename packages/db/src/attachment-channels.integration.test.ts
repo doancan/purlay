@@ -7,18 +7,36 @@
  * The file runs here statement by statement inside the test's transaction, without the index built
  * `CONCURRENTLY`, which a transaction refuses; the migrator itself runs it whole in every database.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'kysely';
 import type { Executor } from './client';
 import { MIGRATIONS_DIRECTORY } from './migrator';
 import { splitStatements } from './statements';
-import { closeIntegrationDatabase, withRollback } from './testing';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  withRollback,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from './testing';
+
+// A database of its own (D-228): migration 0027's statements lock whole tables, and on the shared database a
+// rollback holding them deadlocks with every other file running beside it.
+let own: ClonedDatabase;
+beforeAll(async () => {
+  own = await cloneIntegrationDatabase();
+}, CLONE_HOOK_MS);
+const inOwnDatabase = async (body: Parameters<typeof withRollback>[0]): Promise<void> => {
+  await withRollback(body, own.db);
+};
 
 afterAll(async () => {
+  await own.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const STATEMENTS = splitStatements(
   readFileSync(join(MIGRATIONS_DIRECTORY, '0027_attachment_channels.sql'), 'utf8'),
@@ -106,7 +124,7 @@ const validated = async (db: Executor): Promise<Record<string, boolean>> => {
 
 describe('integration: migration 0027 on the rows already there', () => {
   test('a sent file is given its message’s channel, an unsent one none, and both checks hold', async () => {
-    await withRollback(async (db) => {
+    await inOwnDatabase(async (db) => {
       const world = await before0027(db);
       expect(await channelOf(db, world.linked)).toBeNull();
 
@@ -122,7 +140,7 @@ describe('integration: migration 0027 on the rows already there', () => {
   });
 
   test('run again, it changes nothing and refuses nothing', async () => {
-    await withRollback(async (db) => {
+    await inOwnDatabase(async (db) => {
       const world = await before0027(db);
       await migrate(db);
 

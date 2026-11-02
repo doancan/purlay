@@ -44,6 +44,8 @@ import type { Logger } from '../platform/logging';
 import type { PresenceRegistry } from './presence';
 import type { Attention } from '../platform/attention';
 import { requireWorkspaceMembership } from '../platform/tenancy';
+import { noteSessionActivity, type SessionLifetime } from '../modules/auth/session-lifetime';
+import { SESSION_CLOCK } from '../modules/auth/sessions';
 import type { RateLimiter } from './rate-limiter';
 
 export interface RouterDependencies {
@@ -66,6 +68,8 @@ export interface RouterDependencies {
   readonly presence: PresenceRegistry;
   /** Who is in front of a workspace's page now: what holds their pushes back (D-143). */
   readonly attention: Attention;
+  /** How long a session lives on the server now (D-244): `ACTIVE` is use the idle timeout counts. */
+  readonly sessionLifetime: () => SessionLifetime;
   readonly log: Logger;
   /** What the router needs of the connection it is answering; the hub supplies it. */
   readonly socket: SocketGate;
@@ -391,6 +395,13 @@ export const routeFrame = async (
         // same 404 a stranger gets.
         await requireWorkspaceMembership(database, identity.userId, parsed.payload.workspaceId);
         dependencies.attention.heard(identity.userId, parsed.payload.workspaceId);
+        // The person is using this session, over a socket no request resolves: what an idle timeout counts (D-244).
+        await noteSessionActivity(
+          database,
+          dependencies.sessionLifetime(),
+          SESSION_CLOCK.now(),
+          identity.sessionId,
+        );
         return [];
       }
     }

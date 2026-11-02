@@ -145,15 +145,17 @@ describe('independent latency trials', () => {
       await Bun.write(file, original);
       const slow = metric === 'ack' ? run(100, 30) : run(30, 100);
       const trials = [slow, run(31, 31), slow];
+      const again = [run(31, 31), slow, slow];
       let calls = 0;
       const result = await main(['--keep', file, '--record', record], () =>
-        Promise.resolve(trials[calls++] ?? run(999, 999)),
+        Promise.resolve([...trials, ...again][calls++] ?? run(999, 999)),
       );
-      expect(calls).toBe(3);
+      // Measured again once (D-227), and slow again: a sustained slowdown repeats.
+      expect(calls).toBe(6);
       expect(result.code).toBe(1);
       expect(result.lines.join('\n')).toContain('REGRESSED');
       expect(await Bun.file(file).text()).toBe(original);
-      expect(await Bun.file(record).json()).toEqual(summarizeTrials(trials));
+      expect(await Bun.file(record).json()).toEqual(summarizeTrials(again));
     },
   );
 
@@ -173,5 +175,86 @@ describe('independent latency trials', () => {
     expect(refusal).toBe('socket disconnected');
     expect(calls).toBe(2);
     expect(await Bun.file(file).text()).toBe(original);
+  });
+});
+
+describe('a regression, measured again (D-227)', () => {
+  /** A measure that answers these p95s in turn, and counts how many trials it was asked for. */
+  const measuring = (
+    answers: readonly Latency[],
+  ): { readonly measure: () => Promise<Latency>; readonly calls: () => number } => {
+    let calls = 0;
+    return {
+      measure: () => Promise.resolve(answers[calls++] ?? run(999, 999)),
+      calls: () => calls,
+    };
+  };
+  const slow = run(100, 30);
+  const steady = run(31, 31);
+
+  test('passes when three more trials hold, keeps and records them, and says both judgements', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const record = `${file}.current`;
+    await Bun.write(file, JSON.stringify(run(30, 30)));
+    const { measure, calls } = measuring([slow, slow, slow, steady, steady, steady]);
+    const result = await main(['--keep', file, '--record', record], measure);
+    expect(calls()).toBe(6);
+    expect(result.code).toBe(0);
+    const said = result.lines.join('\n');
+    expect(said).toContain(
+      'ACK round-trip p95: 100.0 ms of 120 ms (60 messages, was 30.0 ms) — REGRESSED',
+    );
+    expect(result.lines).toContain('first measurement regressed; measured again:');
+    expect(said).toContain('ACK round-trip p95: 31.0 ms of 120 ms (60 messages, was 30.0 ms)\n');
+    expect(await Bun.file(file).json()).toEqual(summarizeTrials([steady, steady, steady]));
+    expect(await Bun.file(record).json()).toEqual(summarizeTrials([steady, steady, steady]));
+  });
+
+  test('fails a regression that repeats, records the second, and keeps nothing', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const record = `${file}.current`;
+    const original = JSON.stringify(run(30, 30));
+    await Bun.write(file, original);
+    const second = run(90, 30);
+    const { measure, calls } = measuring([slow, slow, slow, second, second, second]);
+    const result = await main(['--keep', file, '--record', record], measure);
+    expect(calls()).toBe(6);
+    expect(result.code).toBe(1);
+    expect(result.lines.filter((line) => line.endsWith('— REGRESSED'))).toHaveLength(2);
+    expect(await Bun.file(file).text()).toBe(original);
+    expect(await Bun.file(record).json()).toEqual(summarizeTrials([second, second, second]));
+  });
+
+  test('measures again only once, however the second set ends', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    await Bun.write(file, JSON.stringify(run(30, 30)));
+    const { measure, calls } = measuring(Array.from({ length: 12 }, () => slow));
+    expect((await main(['--keep', file], measure)).code).toBe(1);
+    expect(calls()).toBe(6);
+  });
+
+  test('an interrupted trial while measuring again is an error, not a pass', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const original = JSON.stringify(run(30, 30));
+    await Bun.write(file, original);
+    let calls = 0;
+    const refusal = await main(['--keep', file], () => {
+      calls += 1;
+      if (calls === 5) return Promise.reject(new Error('socket disconnected'));
+      return Promise.resolve(calls <= 3 ? slow : steady);
+    }).then(
+      () => 'accepted',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(refusal).toBe('socket disconnected');
+    expect(await Bun.file(file).text()).toBe(original);
+  });
+
+  test('a run that passed the first time is not measured again', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    await Bun.write(file, JSON.stringify(run(30, 30)));
+    const { measure, calls } = measuring([steady, steady, steady, slow, slow, slow]);
+    expect((await main(['--keep', file], measure)).code).toBe(0);
+    expect(calls()).toBe(3);
   });
 });

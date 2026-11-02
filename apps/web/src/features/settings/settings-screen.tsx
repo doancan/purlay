@@ -7,6 +7,7 @@
  * is — rather than a page that would only refuse them.
  */
 import { NotFound } from '../shell/not-found';
+import { AboutPage } from './pages/about';
 import { AccountPage } from './pages/account';
 import { AuditPage } from './pages/audit';
 import { DataPage } from './pages/data';
@@ -28,6 +29,7 @@ const PAGES: Record<SettingsSectionId, () => React.JSX.Element> = {
   notifications: NotificationsPage,
   shortcuts: ShortcutsPage,
   account: AccountPage,
+  about: AboutPage,
   general: GeneralPage,
   members: MembersPage,
   invitations: InvitationsPage,

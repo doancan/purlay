@@ -11,7 +11,7 @@ import { fixedClock } from '../../platform/clock';
 import { credentialCipher, SealBroken } from '../../platform/crypto';
 import { AppError } from '../../platform/errors';
 import { aRoom, type Room } from '../../testing/rooms';
-import { channelFeeds, createFeed, removeFeed } from './feeds';
+import { channelFeeds, createFeed, regenerateSecret, removeFeed } from './feeds';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -211,6 +211,78 @@ describe('integration: a channel’s repository feeds', () => {
         (error: unknown) => (error instanceof Error ? error.message : 'not an error'),
       );
       expect(outcome).toContain('the contract does not know');
+    });
+  });
+
+  test('regenerated: a new secret for the same feed and address, sealed for its row, once, and on the trail without it', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = contextOf(room, 'alice');
+      const made = await createFeed(db, clock, cipher, alice, PUSH);
+      const again = await regenerateSecret(db, clock, cipher, alice, made.feed.id);
+
+      expect(again.feed).toEqual(made.feed);
+      expect(again.webhookPath).toBe(made.webhookPath);
+      expect(again.secret).toMatch(/^[0-9a-f]{64}$/);
+      expect(again.secret).not.toBe(made.secret);
+      const row = await db
+        .selectFrom('github_repo_feeds')
+        .select('secret_encrypted')
+        .where('id', '=', made.feed.id)
+        .executeTakeFirstOrThrow();
+      // The old secret is gone from the row, and the new one opens only for this row.
+      expect(await cipher.open(Buffer.from(row.secret_encrypted, 'base64'), made.feed.id)).toBe(
+        again.secret,
+      );
+      expect(row.secret_encrypted).not.toContain(again.secret);
+      expect(JSON.stringify(await channelFeeds(db, alice))).not.toContain(again.secret);
+
+      const trail = await db
+        .selectFrom('audit_log')
+        .select(['action', 'target_id', 'metadata'])
+        .where('workspace_id', '=', room.workspaceId)
+        .where('action', '=', 'integration.feed_secret_regenerated')
+        .execute();
+      expect(trail).toEqual([
+        {
+          action: 'integration.feed_secret_regenerated',
+          target_id: made.feed.id,
+          metadata: { repository: 'acme/api', channelId: room.channelId },
+        },
+      ]);
+      expect(JSON.stringify(trail)).not.toContain(again.secret);
+      expect(JSON.stringify(trail)).not.toContain(made.secret);
+    });
+  });
+
+  test('regenerating is an admin’s, in the feed’s own channel: a member, a stranger, an unknown or no id is refused and nothing changes', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const made = await createFeed(db, clock, cipher, contextOf(room, 'alice'), PUSH);
+      const sealedBefore = async (): Promise<string> =>
+        (
+          await db
+            .selectFrom('github_repo_feeds')
+            .select('secret_encrypted')
+            .where('id', '=', made.feed.id)
+            .executeTakeFirstOrThrow()
+        ).secret_encrypted;
+      const before = await sealedBefore();
+      const alice = contextOf(room, 'alice');
+      expect(
+        await refusal(regenerateSecret(db, clock, cipher, contextOf(room, 'bob'), made.feed.id)),
+      ).toBe('FORBIDDEN');
+      const other = await aRoom(db, ['carol']);
+      expect(
+        await refusal(regenerateSecret(db, clock, cipher, contextOf(other, 'carol'), made.feed.id)),
+      ).toBe('GITHUB_FEED_NOT_FOUND');
+      expect(await refusal(regenerateSecret(db, clock, cipher, alice, 'not-a-uuid'))).toBe(
+        'GITHUB_FEED_NOT_FOUND',
+      );
+      expect(await refusal(regenerateSecret(db, clock, cipher, alice, crypto.randomUUID()))).toBe(
+        'GITHUB_FEED_NOT_FOUND',
+      );
+      expect(await sealedBefore()).toBe(before);
     });
   });
 

@@ -139,6 +139,11 @@ export const RetentionCard = (): React.JSX.Element => {
                 ))}
               </Select>
             </SettingsRow>
+            {setting.data !== undefined && setting.data.channelsKeptLonger > 0 && (
+              <p className="mx-6 mb-5 text-label text-ink-muted max-narrow:mx-4">
+                {t('retention.channelsLonger', { count: setting.data.channelsKeptLonger })}
+              </p>
+            )}
             {shortenTo !== null && (
               <p
                 role="note"

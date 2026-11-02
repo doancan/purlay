@@ -10,6 +10,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { skipReleaseNotes } from './support';
 import { portFor, startFresh, type FreshServer } from './fresh';
 
 const PORT = portFor(80);
@@ -34,6 +35,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
   if (fresh === null) throw new Error('the server did not start');
   const { origin, code, github, oidc } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
 
   // The setup, finished through the API; sign-up is open so the newcomer below may make an account.
   const send = async (path: string, data?: unknown): Promise<void> => {
@@ -94,6 +96,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
 
   // A newcomer, signed out: the button, the provider, and back signed in.
   const newcomer = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(newcomer);
   const screen = await newcomer.newPage();
   await screen.goto('/sign-in');
   const button = screen.getByRole('link', { name: 'Continue with Acme SSO' });
@@ -117,6 +120,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
   const verifier = randomBytes(32).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   const app = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(app);
   const native = await app.newPage();
   await native.goto(
     `/sign-in/native?challenge=${challenge}&state=${randomBytes(16).toString('base64url')}`,
@@ -135,6 +139,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
   });
   expect(control.status()).toBe(204);
   const refused = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(refused);
   const again = await refused.newPage();
   await again.goto('/sign-in');
   await again.getByRole('link', { name: 'Continue with Acme SSO' }).click();

@@ -19,6 +19,7 @@ import { lazy, Suspense, type ComponentType } from 'react';
 import { ChannelScreen } from '../features/channel/channel-screen';
 import { InboxScreen } from '../features/inbox/inbox-screen';
 import { InviteScreen } from '../features/invitations/invite-screen';
+import { MailStopScreen } from '../features/missed-mail/stop-screen';
 import { QuestionsScreen } from '../features/questions/questions-screen';
 import { SearchScreen } from '../features/search/search-screen';
 import { SessionGate } from '../features/session/session';
@@ -33,6 +34,8 @@ import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { SavedScreen } from '../features/saved/saved-screen';
+import { DraftsScreen } from '../features/drafts/drafts-screen';
+import { UnreadsScreen } from '../features/unreads/unreads-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
@@ -105,6 +108,8 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       );
     case 'invite':
       return <InviteScreen />;
+    case 'mailStop':
+      return <MailStopScreen />;
     case 'workspace':
       return (
         <Shell slug={match.params.slug}>
@@ -139,6 +144,18 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <SavedScreen />
+        </Shell>
+      );
+    case 'drafts':
+      return (
+        <Shell slug={match.params.slug}>
+          <DraftsScreen />
+        </Shell>
+      );
+    case 'unreads':
+      return (
+        <Shell slug={match.params.slug}>
+          <UnreadsScreen />
         </Shell>
       );
     case 'welcome':

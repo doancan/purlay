@@ -9,6 +9,8 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -239,6 +241,27 @@ describe('integration: resolving', () => {
     });
   });
 
+  test('the author is told when it was closed, not when the question was asked', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const { root } = await aThread(db, room, 1);
+      const closedAt = at(600);
+      await setResolved(
+        { atomically: atomicallyOn(db), clock: fixedClock(closedAt), bus: recordingBus().bus },
+        idOf(room, 'bob'),
+        root,
+        true,
+      );
+      const told = await db
+        .selectFrom('notifications')
+        .select('created_at')
+        .where('user_id', '=', idOf(room, 'alice'))
+        .where('type', '=', 'thread_resolved')
+        .executeTakeFirstOrThrow();
+      expect(new Date(told.created_at).toISOString()).toBe(closedAt.toISOString());
+    });
+  });
+
   test('closing your own thread tells nobody', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
@@ -351,10 +374,10 @@ describe('integration: two people resolving at once', () => {
   let cloned: ClonedDatabase;
   beforeAll(async () => {
     cloned = await cloneIntegrationDatabase();
-  });
+  }, CLONE_HOOK_MS);
   afterAll(async () => {
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   test('are two decisions in sequence: one change, one announcement, one notification', async () => {
     const db = cloned.db;

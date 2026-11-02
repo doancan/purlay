@@ -40,7 +40,11 @@ const open = async (api: Partial<Api> = {}): Promise<View> => {
       <Outlet />
       <Toaster dismissLabel="Close" />
     </>,
-    { path: '/w/acme/settings/account', api: aSignedInApi(api) },
+    {
+      path: '/w/acme/settings/account',
+      // The page's export card (D-241): nothing exported, unless a test says.
+      api: aSignedInApi({ myExports: () => Promise.resolve([]), ...api }),
+    },
   );
   await settle();
   await view.findByRole('heading', { level: 1, name: 'Sessions & account' });
@@ -412,6 +416,8 @@ describe('how you sign in (D-176, D-179 §5)', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        twoFactor: false,
+        twoFactorRequired: false,
       }),
   };
 
@@ -436,6 +442,8 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: null,
           oidc: true,
+          twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('Single sign-on')).toBeDefined();
@@ -459,6 +467,8 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: 'ada-gh' },
           oidc: false,
+          twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('GitHub')).toBeDefined();
@@ -478,6 +488,8 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: null },
           oidc: false,
+          twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('Linked')).toBeDefined();
@@ -493,6 +505,8 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: 'ada' },
           oidc: false,
+          twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(card.getByText('Your GitHub account’s address. You sign in with GitHub.')).toBeDefined();
@@ -518,6 +532,8 @@ describe('how you sign in (D-176, D-179 §5)', () => {
               hasPassword: false,
               github: null,
               oidc: false,
+              twoFactor: false,
+              twoFactorRequired: false,
             }),
     });
     expect(await card.findByRole('button', { name: 'Retry' })).toBeDefined();
@@ -549,6 +565,8 @@ describe('change password', () => {
         hasPassword: true,
         github: null,
         oidc: false,
+        twoFactor: false,
+        twoFactorRequired: false,
       }),
   };
 
@@ -567,6 +585,8 @@ describe('change password', () => {
           hasPassword: false,
           github: null,
           oidc: false,
+          twoFactor: false,
+          twoFactorRequired: false,
         }),
     });
     expect(without.queryByRole('region', { name: 'Password' })).toBeNull();

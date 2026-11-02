@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName, toChannelName } from './channel-name';
+import { CHANNEL_NAME_MAX } from '@purlay/types';
+import { CHANNEL_NAME, finishedChannelName, toChannelName } from './channel-name';
 
 describe('a channel name, as it is typed', () => {
   test.each([

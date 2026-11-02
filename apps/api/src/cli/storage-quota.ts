@@ -13,6 +13,7 @@ import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { createLogger } from '../platform/logging';
+import { sendAuditLinesTo } from '../modules/audit/lines';
 import { atomicallyOn } from '../platform/transactions';
 
 const [slug, size, ...rest] = process.argv.slice(2);
@@ -26,6 +27,8 @@ if (slug === undefined || rest.length > 0 || (size !== undefined && quota === nu
 } else {
   const config = loadConfig(process.env);
   const log = createLogger({ level: config.LOG_LEVEL });
+  // Every entry this process writes to the trail is also a line of its log, ids only (D-222).
+  sendAuditLinesTo(log);
   const database = createDatabase({ ...databaseConnection(config, log), poolSize: 1 });
   try {
     const report = await atomicallyOn(database)(

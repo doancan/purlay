@@ -14,7 +14,7 @@ import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { ConfigurationError } from '../../platform/config';
 
 /** The paths the API owns. Anything else is the client's. */
-const API_PREFIXES = ['/auth', '/api', '/health'] as const;
+const API_PREFIXES = ['/auth', '/api', '/health', '/metrics'] as const;
 
 export type Route = 'socket' | 'api' | 'client';
 

@@ -21,8 +21,13 @@ const SETTINGS: ServerSettings = {
     from: 'purlay@example.com',
     allowPlaintext: true,
   },
+  githubApp: undefined,
   workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace']) },
   setupCompletedAt: new Date('2026-10-22T09:00:00.000Z'),
+  requireTwoFactor: false,
+  passwordSignIn: true,
+  sessionIdleTimeoutHours: null,
+  sessionMaxAgeDays: null,
 };
 
 describe('the view of the settings, which is all a response may carry', () => {
@@ -38,8 +43,13 @@ describe('the view of the settings, which is all a response may carry', () => {
         from: 'purlay@example.com',
         allowPlaintext: true,
       },
+      githubApp: null,
       workspaceCreators: { kind: 'listed', logins: ['ada', 'grace'] },
       setupCompletedAt: '2026-10-22T09:00:00.000Z',
+      requireTwoFactor: false,
+      passwordSignIn: true,
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
     });
     const written = JSON.stringify(view);
     expect(written).not.toContain('gh-secret-value');
@@ -55,16 +65,26 @@ describe('the view of the settings, which is all a response may carry', () => {
         github: undefined,
         oidc: undefined,
         smtp: undefined,
+        githubApp: undefined,
         workspaceCreators: { kind: 'first' },
         setupCompletedAt: undefined,
+        requireTwoFactor: false,
+        passwordSignIn: true,
+        sessionIdleTimeoutHours: null,
+        sessionMaxAgeDays: null,
       }),
     ).toEqual({
       signUp: 'open',
       github: null,
       oidc: null,
       smtp: null,
+      githubApp: null,
       workspaceCreators: { kind: 'first' },
       setupCompletedAt: null,
+      requireTwoFactor: false,
+      passwordSignIn: true,
+      sessionIdleTimeoutHours: null,
+      sessionMaxAgeDays: null,
     });
   });
 

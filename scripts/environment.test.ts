@@ -197,3 +197,20 @@ describe('the development environment', () => {
     }
   });
 });
+
+test('every suite entry point isolates file globals', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  expect(pkg.scripts['test']).toContain('test apps packages scripts --isolate ');
+  expect(pkg.scripts['test:integration']).toContain('test apps packages scripts --isolate ');
+  for (const runner of ['scripts/test-all.ts', 'scripts/mutate.ts']) {
+    expect(readFileSync(runner, 'utf8')).toMatch(/'test',\s*'--isolate'/);
+  }
+});
+
+test('the whole suite runs two files at a time, each with globals of its own (D-228)', () => {
+  const runner = readFileSync('scripts/test-all.ts', 'utf8');
+  expect(runner).toMatch(/'test',\s*'--isolate',\s*`--parallel=\$\{String\(WORKERS\)\}`/);
+  expect(runner).toMatch(/^const WORKERS = 2;$/m);
+});

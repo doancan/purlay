@@ -3,7 +3,7 @@
  * the name until it is edited — the same form's rule as *Create workspace* on the front page. The API
  * has no availability question, so a taken address is said when it is submitted.
  */
-import { WORKSPACE_NAME_MAX } from '@purlay/types';
+import { WORKSPACE_NAME_MAX, WORKSPACE_SLUG_MAX } from '@purlay/types';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
@@ -108,7 +108,7 @@ export const WorkspaceStep = ({ state, onBack, onNext }: StepProps): React.JSX.E
         <TextField
           label={t('workspace.create.slug')}
           value={address}
-          maxLength={64}
+          maxLength={WORKSPACE_SLUG_MAX}
           autoComplete="off"
           spellCheck={false}
           className="font-mono"

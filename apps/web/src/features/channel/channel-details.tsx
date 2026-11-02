@@ -1,7 +1,7 @@
 /**
  * A channel's details (D-123), opened from its name in the header: the product's wide dialog with
- * tabs (D-154). **About** — its name and topic, what the person is told about said in words, and at
- * the foot a danger zone with Leave and (for an owner or an admin) Archive; **Members** — who is in
+ * tabs (D-154). **About** — its name and topic, what the person is told about said in words, for an
+ * owner or an admin whether only they post in it (D-243), and at the foot a danger zone with Leave and (for an owner or an admin) Archive; **Members** — who is in
  * it, found by name when there are many, with Add people and — for whoever may (D-172) — Remove; **Integrations** — the repositories it
  * hears from, an owner's or an admin's only (D-134), and absent for anybody else. Files and pins are
  * not here (#485).
@@ -13,7 +13,13 @@
  * first, in place, as removing a member does.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import type { Channel, ChannelMember, UpdateChannelRequest, UserRole } from '@purlay/types';
+import {
+  CHANNEL_NAME_MAX,
+  type Channel,
+  type ChannelMember,
+  type UpdateChannelRequest,
+  type UserRole,
+} from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { fold } from '../composer/mention-suggest';
 import { useActions } from '../../data/actions-provider';
@@ -35,13 +41,17 @@ import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspaceRole } from '../settings/role';
 import { useWorkspace } from '../shell/workspace';
+import { forgetChannel } from '../questions/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
-import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
+import { IncomingWebhooks } from './incoming-webhooks';
+import { ChannelRetentionSection } from './channel-retention';
+import { CHANNEL_NAME, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
 import { useLeaveRefusal } from './leave';
 import { LEVELS, useChooseLevel } from './notification-level-menu';
-import { Radio } from '../../ui/checkbox';
+import { Checkbox, Radio } from '../../ui/checkbox';
+import { SlideTrack } from '../../ui/slide-track';
 
 const sectionTitle = 'text-label font-semibold text-ink';
 
@@ -192,6 +202,59 @@ const Notifications = ({ channel }: { readonly channel: Channel }): React.JSX.El
           </label>
         ))}
       </div>
+    </fieldset>
+  );
+};
+
+/**
+ * Who posts in the feed (D-243), for an owner or an admin in the channel: only they, or everybody —
+ * replies in a thread stay everybody's either way, and the hint says so. Saved as it is ticked, painted
+ * before the answer; a refusal puts the box back as the server has it and says why.
+ */
+const Posting = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+  const { t } = useI18n();
+  const describe = useDescribeFailure();
+  const { updateChannel } = useActions();
+  const hintId = useId();
+  const [asked, setAsked] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const change = async (onlyAdminsPost: boolean): Promise<void> => {
+    setAsked(onlyAdminsPost);
+    setProblem(null);
+    try {
+      await updateChannel(channel.id, { onlyAdminsPost });
+    } catch (failure) {
+      setProblem(`${t('details.saveFailed')} ${describe(failure)}`);
+    } finally {
+      setAsked(null);
+    }
+  };
+
+  return (
+    <fieldset className="flex flex-col">
+      <legend className={cn(sectionTitle, 'mb-2')}>{t('details.posting')}</legend>
+      <label className="flex items-start gap-2 text-body text-ink">
+        <Checkbox
+          checked={asked ?? channel.onlyAdminsPost}
+          disabled={asked !== null}
+          aria-describedby={hintId}
+          onChange={(event) => {
+            void change(event.target.checked);
+          }}
+        />
+        <span className="flex flex-col">
+          {t('details.onlyAdminsPost')}
+          <span id={hintId} className="text-caption text-ink-muted">
+            {t('details.onlyAdminsPostHint')}
+          </span>
+        </span>
+      </label>
+      {problem !== null && (
+        <p role="alert" className="mt-2 text-label text-danger-text">
+          {problem}
+        </p>
+      )}
     </fieldset>
   );
 };
@@ -478,6 +541,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
     try {
       if (what === 'leave') await leaveChannel(channel);
       else await archiveChannel(channel.id);
+      forgetChannel(workspace.id, channel.id);
       show({ message: t(what === 'leave' ? 'details.left' : 'details.archived', { name }) });
       navigate(href('workspace', { slug: workspace.slug }));
     } catch (failure) {
@@ -582,7 +646,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   const [tab, setTab] = useState<Tab>('about');
   const tabsRef = useRef<HTMLDivElement>(null);
   const base = useId();
-  // Repository feeds are an owner's or an admin's to see and set up (D-134 §2).
+  // Repository feeds and incoming webhooks are an owner's or an admin's to see and set up (D-134 §2, D-245).
   const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
   const configures = (role === 'owner' || role === 'admin') && channel.type !== 'direct_message';
   const tabs: readonly Tab[] = configures
@@ -617,12 +681,14 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
           aria-hidden="true"
           className="absolute inset-x-0 bottom-0 border-b-hairline border-border-subtle"
         />
-        <div
-          ref={tabsRef}
+        <SlideTrack
+          trackRef={tabsRef}
+          memory="channel-details"
+          mark="underline"
           role="tablist"
           aria-label={t('details.tabs')}
           onKeyDown={move}
-          className="relative flex gap-5"
+          className="flex gap-5"
         >
           {tabs.map((each) => (
             <button
@@ -638,10 +704,8 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
                 setTab(each);
               }}
               className={cn(
-                'flex h-control items-center gap-2 border-b-marker text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
-                each === tab
-                  ? 'border-accent text-ink'
-                  : 'border-transparent text-ink-muted hover:text-ink',
+                'flex h-control items-center gap-2 text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
+                each === tab ? 'text-ink' : 'text-ink-muted hover:text-ink',
               )}
             >
               {t(`details.tab.${each}`)}
@@ -652,7 +716,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
               )}
             </button>
           ))}
-        </div>
+        </SlideTrack>
       </div>
       {tabs.map((each) => (
         <div
@@ -667,11 +731,23 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
             <>
               <NameAndTopic channel={channel} />
               <Notifications channel={channel} />
+              {/* Who posts is an owner's or an admin's to say, from inside the channel (D-243). */}
+              {configures && channel.state !== null && <Posting channel={channel} />}
+              {/* How long it keeps its history is an owner's, as the workspace's is (D-225). */}
+              {role === 'owner' && channel.type !== 'direct_message' && (
+                <ChannelRetentionSection channel={channel} />
+              )}
               <Farewell channel={channel} />
             </>
           )}
           {each === 'members' && <Members channel={channel} />}
-          {each === 'integrations' && <GitHubFeeds channel={channel} />}
+          {each === 'integrations' && (
+            <>
+              <GitHubFeeds channel={channel} />
+              {/* An owner's or an admin's, as a feed is (D-245). */}
+              <IncomingWebhooks channel={channel} />
+            </>
+          )}
         </div>
       ))}
     </>

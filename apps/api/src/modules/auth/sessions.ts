@@ -27,6 +27,7 @@ import { AppError } from '../../platform/errors';
 import { readCookie, SESSION_COOKIE } from '../../platform/cookies';
 import { randomToken } from '../../platform/tokens';
 import type { Auth } from './better-auth';
+import { ACTIVITY_STALE_AFTER_MS, fixedEnd } from './session-lifetime';
 
 /**
  * The clock a session's expiry is judged by. Better Auth compares `expires_at` with the wall clock
@@ -45,7 +46,10 @@ export interface IssuedSession {
 export interface SessionOwner {
   readonly sessionId: string;
   readonly userId: string;
-  /** When it stops resolving, so a long-lived connection can end on time. */
+  /**
+   * When it stops resolving whatever is done with it — its expiry, or the server's maximum age if that is sooner
+   * (D-244) — so a long-lived connection can end on time. An idle timeout moves with use, and is the sweep's.
+   */
   readonly expiresAt: Date;
 }
 
@@ -105,20 +109,25 @@ export const issueSession = async (
  */
 const LAST_USED_STALE_AFTER_MS = 60 * 60 * 1000;
 
-/** `users.deleted_at`, mapped as the library's `deletedAt`; absent reads as never deleted. */
-const deletedAtOf = (user: object): unknown => {
-  const value: unknown = (user as Readonly<Record<string, unknown>>)['deletedAt'];
+/** A `users` column the library maps (`deletedAt`, `suspendedAt`); absent reads as never set. */
+const markOf = (user: object, field: 'deletedAt' | 'suspendedAt'): unknown => {
+  const value: unknown = (user as Readonly<Record<string, unknown>>)[field];
   return value ?? null;
 };
 
 /**
  * Refreshes `last_used_at` (the library's `updatedAt`) by row id when it is stale, through the
  * library's adapter, so nothing about the token is touched and the library's own refresh, which the
- * seam turns off, is not needed for it.
+ * seam turns off, is not needed for it. Where the server signs out an unused session, stale sooner:
+ * the column is then what the idle timeout is judged by (D-244).
  */
 const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<void> => {
   const now = SESSION_CLOCK.now();
-  if (now.getTime() - lastUsed.getTime() <= LAST_USED_STALE_AFTER_MS) return;
+  const staleAfter =
+    auth.sessionLifetime.sessionIdleTimeoutHours === null
+      ? LAST_USED_STALE_AFTER_MS
+      : ACTIVITY_STALE_AFTER_MS;
+  if (now.getTime() - lastUsed.getTime() <= staleAfter) return;
   const { adapter } = await auth.$context;
   await adapter.update({
     model: 'session',
@@ -134,7 +143,8 @@ const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<voi
  * carry the same cookie and resolve it here. Missing, malformed, tampered, expired, revoked and
  * unknown all answer `undefined`: a caller that could tell them apart could ask questions about
  * sessions it does not hold (D-60). A failure that is not about the session — the database is down
- * — is thrown, never read as *signed out*.
+ * — is thrown, never read as *signed out*. A session the server's lifetime policy ended is one of
+ * them: the library's read of it is where it is ended (`lapsedCallerEnded` in `better-auth.ts`, D-244).
  */
 export const sessionFromHeaders = async (
   auth: Auth,
@@ -148,12 +158,18 @@ export const sessionFromHeaders = async (
     const found = await auth.api.getSession({ headers, query: { disableRefresh: true } });
     if (found === null) return undefined;
     // A soft-deleted account keeps no live session, whatever row is left (ARCHITECTURE.md, D-139 §5).
-    if (deletedAtOf(found.user) !== null) return undefined;
+    if (markOf(found.user, 'deletedAt') !== null) return undefined;
+    // Nor a suspended one (D-233): its sessions were deleted when it was suspended, and this refuses one
+    // that a sign-in committed in the same instant.
+    if (markOf(found.user, 'suspendedAt') !== null) return undefined;
     await touch(auth, found.session.id, new Date(found.session.updatedAt));
     return {
       sessionId: found.session.id,
       userId: found.user.id,
-      expiresAt: new Date(found.session.expiresAt),
+      expiresAt: fixedEnd(auth.sessionLifetime, {
+        createdAt: new Date(found.session.createdAt),
+        expiresAt: new Date(found.session.expiresAt),
+      }),
     };
   } catch (error) {
     // A refresh that found its row deleted under it: the library's word for a session that ended
@@ -167,16 +183,35 @@ export const sessionFromHeaders = async (
 };
 
 /**
+ * What a session may reach while its person owes the server two-step verification (D-239): `everything` is
+ * refused until it is on; `enrolment` is only what turning it on needs — who they are, how they sign in, and
+ * signing out everywhere.
+ */
+export type SessionReach = 'everything' | 'enrolment';
+
+/** The refusal of a session whose person must turn on two-step verification first (D-239). */
+export const twoFactorRequired = (): AppError =>
+  new AppError({
+    code: 'TWO_FACTOR_REQUIRED',
+    message: 'Turn on two-step verification first.',
+  });
+
+/**
  * The same, as a refusal. A missing cookie and an invalid one produce the same `401`: telling them
- * apart would tell a caller whether a token they hold was ever real (D-60).
+ * apart would tell a caller whether a token they hold was ever real (D-60). A session whose person owes
+ * two-step verification is `403 TWO_FACTOR_REQUIRED` (D-239), unless what it asks is part of turning it on.
  */
 export const requireSessionFromHeaders = async (
   auth: Auth,
   headers: Headers,
+  reach: SessionReach = 'everything',
 ): Promise<SessionOwner> => {
   const owner = await sessionFromHeaders(auth, headers);
   if (owner === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  }
+  if (reach === 'everything' && (await auth.owesTwoFactor(owner.userId))) {
+    throw twoFactorRequired();
   }
   return owner;
 };

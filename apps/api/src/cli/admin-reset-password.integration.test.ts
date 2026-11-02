@@ -6,7 +6,12 @@
  * password given as an argument or in the environment is neither accepted nor repeated.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  type Executor,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { hashPassword } from 'better-auth/crypto';
 import { signInAdmin } from '../modules/setup/admin';
 import { systemClock } from '../platform/clock';
@@ -25,7 +30,7 @@ afterAll(async () => {
     }),
   );
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 interface Ran {
   readonly code: number;
@@ -138,6 +143,80 @@ describe('integration: bun run admin:reset-password', () => {
     expect(ran.code).toBe(0);
     expect(await accountsOf(db, admin.userId)).toBe(1);
     expect(await signsIn(db, admin.email, NEW)).toBe(true);
+  });
+
+  test('an administrator whose authenticator app is lost: two-step verification is off with the reset, and said so (D-236)', async () => {
+    const { db, url } = await aDatabase();
+    const admin = await anAdministrator(db);
+    await db
+      .updateTable('users')
+      .set({ two_factor_enabled: true })
+      .where('id', '=', admin.userId)
+      .execute();
+    await db
+      .insertInto('two_factors')
+      .values({ user_id: admin.userId, secret: 'sealed', backup_codes: 'sealed', verified: true })
+      .execute();
+    const ran = run(url, [admin.email], `${NEW}\n`);
+    expect(ran).toEqual({
+      code: 0,
+      out: `Password changed for ${admin.email}\nTwo-step verification is off for it now.\n`,
+      err: '',
+    });
+    expect(
+      await db.selectFrom('two_factors').where('user_id', '=', admin.userId).execute(),
+    ).toEqual([]);
+    const row = await db
+      .selectFrom('users')
+      .select('two_factor_enabled')
+      .where('id', '=', admin.userId)
+      .executeTakeFirstOrThrow();
+    expect(row.two_factor_enabled).toBe(false);
+    // The password alone signs in again, with no second step asked.
+    expect(await signsIn(db, admin.email, NEW)).toBe(true);
+  });
+
+  test('a server whose passwords were turned off: they are on again with the reset, on the trail, and the restart said (D-239)', async () => {
+    const { db, url } = await aDatabase();
+    const admin = await anAdministrator(db);
+    await db
+      .insertInto('server_settings')
+      .values({ id: true, password_sign_in: false })
+      .onConflict((conflict) => conflict.column('id').doUpdateSet({ password_sign_in: false }))
+      .execute();
+    const ran = run(url, [admin.email], `${NEW}\n`);
+    expect(ran).toEqual({
+      code: 0,
+      out: `Password changed for ${admin.email}\nPassword sign-in is on again. Restart the server for it to take effect.\n`,
+      err: '',
+    });
+    const settings = await db
+      .selectFrom('server_settings')
+      .select('password_sign_in')
+      .where('id', '=', true)
+      .executeTakeFirstOrThrow();
+    expect(settings.password_sign_in).toBe(true);
+    const actions = await db
+      .selectFrom('server_audit_log')
+      .select(['action', 'actor_user_id'])
+      .where('actor_user_id', '=', admin.userId)
+      .orderBy('id')
+      .execute();
+    expect(actions.map((row) => row.action)).toEqual([
+      'server.admin_password_reset',
+      'server.password_sign_in_changed',
+    ]);
+    // On already, it says nothing of it and leaves no second row.
+    const again = run(url, [admin.email], `${NEW}\n`);
+    expect(again.out).toBe(`Password changed for ${admin.email}\n`);
+    expect(
+      await db
+        .selectFrom('server_audit_log')
+        .select('id')
+        .where('actor_user_id', '=', admin.userId)
+        .where('action', '=', 'server.password_sign_in_changed')
+        .execute(),
+    ).toHaveLength(1);
   });
 
   test('it is not a general reset: anyone but the server administrator is refused, in the words an unknown address gets, and nothing changes', async () => {

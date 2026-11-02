@@ -10,6 +10,12 @@ import type { MessageKey, PlainKey } from '../../i18n/types';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
+/**
+ * What a password field takes: past the policy's longest, so a longer password is said to be too long
+ * rather than cut short without a word.
+ */
+export const PASSWORD_FIELD_MAX = PASSWORD_MAX_LENGTH + 64;
+
 /** One sentence for each problem the policy can name. */
 export const PASSWORD_PROBLEMS: Record<PasswordProblem, PlainKey> = {
   'too-short': 'setup.admin.problem.too-short',

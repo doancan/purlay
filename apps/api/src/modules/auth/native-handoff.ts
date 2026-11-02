@@ -119,7 +119,8 @@ export interface NativeSessionTerms {
  * Why a code did not open, for an operator's log and for nobody else: the person is told one thing whichever it was,
  * and a client that guesses learns nothing from the difference.
  */
-export type NativeRefusal = 'unknown' | 'spent' | 'expired' | 'burnt' | 'erased' | 'wrong-verifier';
+export type NativeRefusal =
+  'unknown' | 'spent' | 'expired' | 'burnt' | 'erased' | 'suspended' | 'wrong-verifier';
 
 /**
  * Spends a code for a session, or says nothing: `undefined` is every way it can fail, and is the same
@@ -161,6 +162,7 @@ export const exchangeNativeCode = async (
         'native_authorizations.expires_at',
         'native_authorizations.spent_at',
         'users.deleted_at',
+        'users.suspended_at',
       ])
       .where('native_authorizations.code_digest', '=', digest)
       .forUpdate(['native_authorizations'])
@@ -170,20 +172,23 @@ export const exchangeNativeCode = async (
       return undefined;
     }
 
-    // Spent, expired, burnt, or its person erased: nothing is counted and nothing is made.
+    // Spent, expired, burnt, or its person erased or suspended (D-233): nothing is counted and nothing is made.
     const live =
       found.spent_at === null &&
       found.expires_at.getTime() > now.getTime() &&
-      found.deleted_at === null;
+      found.deleted_at === null &&
+      found.suspended_at === null;
     if (!live) {
       refused?.(
         found.spent_at !== null
           ? 'spent'
           : found.deleted_at !== null
             ? 'erased'
-            : found.wrong_verifiers >= NATIVE_WRONG_VERIFIERS_MAX
-              ? 'burnt'
-              : 'expired',
+            : found.suspended_at !== null
+              ? 'suspended'
+              : found.wrong_verifiers >= NATIVE_WRONG_VERIFIERS_MAX
+                ? 'burnt'
+                : 'expired',
       );
       return undefined;
     }

@@ -36,6 +36,7 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  Table2,
   Smile,
   SquareCode,
   Strikethrough,
@@ -43,6 +44,7 @@ import {
   BellRing,
   Check,
   ChevronDown,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
@@ -71,6 +73,7 @@ import {
   Link2,
   Lock,
   LogOut,
+  Megaphone,
   Menu,
   MessagesSquare,
   Monitor,
@@ -153,6 +156,7 @@ const glyphs = {
   strike: Strikethrough,
   'inline-code': Braces,
   'code-block': SquareCode,
+  table: Table2,
   link: LinkIcon,
   'bullet-list': List,
   'numbered-list': ListOrdered,
@@ -186,6 +190,8 @@ const glyphs = {
   /** One back and one on, in a sequence: the image viewer's pictures (D-159). */
   previous: ChevronLeft,
   next: ChevronRight,
+  /** A day to pick: the date field's calendar. */
+  calendar: CalendarDays,
   shortcuts: Keyboard,
   warning: TriangleAlert,
   info: Info,
@@ -195,6 +201,8 @@ const glyphs = {
   invite: Link2,
   /** What signs a person in, and the end of an account: sessions and erasure. */
   lock: KeyRound,
+  /** A channel whose feed only its owners and admins post in: an announcement channel (D-243). */
+  announcement: Megaphone,
   /** Another service connected to the workspace: GitHub (D-23). */
   integration: Plug,
   /** GitHub itself: the sign-in button's mark. */

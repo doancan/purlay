@@ -13,6 +13,12 @@ afterAll(() => {
 });
 
 const MB = 1024 * 1024;
+/**
+ * What may sit in the two ends' socket buffers once reading stops: Linux grows them under load up to
+ * `tcp_rmem` (6 MB) and `tcp_wmem` (4 MB) by default, so 4 MB held only while the machine was idle and
+ * failed beside another test file (D-228). Still a twentieth of the 300 the server would send.
+ */
+const SOCKET_BUFFERS = 16 * MB;
 
 describe('a reply read with a bound', () => {
   test('a body within the bound is read whole, as text', async () => {
@@ -34,9 +40,9 @@ describe('a reply read with a bound', () => {
     stops.push(flooding.stop);
     const response = await fetch(flooding.url);
     expect(await readCapped(response, 8 * 1024)).toEqual({ tooLarge: true });
-    // Sockets buffer some: a few megabytes at most, never the 300 the server would send.
+    // Sockets buffer some — never the 300 the server would send.
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(4 * MB);
+    expect(flooding.written()).toBeLessThan(SOCKET_BUFFERS);
   });
 
   test('a length said up front past the bound is refused before a byte of the body is asked for', async () => {
@@ -58,6 +64,6 @@ describe('a reply read with a bound', () => {
     const response = await fetch(flooding.url);
     expect(await readCapped(response, 64 * 1024)).toEqual({ tooLarge: true });
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(4 * MB);
+    expect(flooding.written()).toBeLessThan(SOCKET_BUFFERS);
   });
 });

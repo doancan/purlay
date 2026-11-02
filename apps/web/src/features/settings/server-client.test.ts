@@ -32,6 +32,7 @@ const ANSWER = {
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
   oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  githubApp: { callbackUrl: 'https://purlay.test/cb', webhookUrl: 'https://purlay.test/hook' },
   channels: { github: true, email: false, oidc: false },
   adminEmail: 'admin@example.test',
 };
@@ -63,6 +64,8 @@ describe('reading the settings', () => {
       { ...ANSWER, channels: { github: true } },
       { ...ANSWER, needsReentry: 'x' },
       { ...ANSWER, appUrl: undefined },
+      { ...ANSWER, githubApp: { callbackUrl: 'x' } },
+      { ...ANSWER, githubApp: undefined },
     ]) {
       const failure = await failureOf(
         createServerClient(world(200, JSON.stringify(broken)).fetch).settings(),
@@ -93,6 +96,22 @@ describe('trying a channel', () => {
     expect(verdict).toEqual({ ok: true });
     expect(w.seen[0]?.path).toBe('/api/server/oidc');
     expect(w.seen[0]?.init.method).toBe('POST');
+  });
+
+  test('posts the GitHub App candidate and returns the verdict, and disconnects it by its own path', async () => {
+    const w = world(200, JSON.stringify({ ok: true }));
+    const candidate = {
+      appId: 1,
+      slug: 'purlay',
+      clientId: 'a',
+      clientSecret: 'b',
+      privateKey: 'k',
+      webhookSecret: 'w',
+    };
+    expect(await createServerClient(w.fetch).githubApp(candidate)).toEqual({ ok: true });
+    expect(w.seen[0]?.path).toBe('/api/server/github-app');
+    expect(w.seen[0]?.init.method).toBe('POST');
+    await createServerClient(world(204, '').fetch).disconnect('github-app', false);
   });
 
   test('posts the relay candidate and returns a refused verdict as it is', async () => {
@@ -130,13 +149,17 @@ describe('changing the settings', () => {
     ]);
   });
 
-  test('posts the sign-up policy and the workspace creators', async () => {
+  test('posts each rule of the policy on its own, and the workspace creators', async () => {
     const w = world(204, '');
     const client = createServerClient(w.fetch);
-    await client.policy('open');
+    await client.policy({ signUp: 'open' });
+    await client.policy({ requireTwoFactor: true });
+    await client.policy({ passwordSignIn: false });
     await client.creators({ kind: 'listed', logins: ['ada'] });
     expect(w.seen.map((one) => [one.path, one.init.body])).toEqual([
       ['/api/server/policy', '{"signUp":"open"}'],
+      ['/api/server/policy', '{"requireTwoFactor":true}'],
+      ['/api/server/policy', '{"passwordSignIn":false}'],
       ['/api/server/creators', '{"workspaceCreators":{"kind":"listed","logins":["ada"]}}'],
     ]);
   });
@@ -150,5 +173,46 @@ describe('changing the settings', () => {
     );
     expect(failure.status).toBe(409);
     expect(failure.reason).toBe('last-channel');
+  });
+});
+
+describe('accounts (D-233)', () => {
+  const ADA = {
+    id: '00000000-0000-4000-8000-00000000a0a1',
+    username: 'ada',
+    displayName: 'Ada',
+    email: null,
+    isServerAdmin: false,
+    suspendedAt: '2026-10-31T08:00:00.000Z',
+  };
+
+  test('finds by the words typed, escaped into the query, and nothing typed asks for everyone', async () => {
+    const w = world(200, JSON.stringify([ADA]));
+    const client = createServerClient(w.fetch);
+    expect(await client.accounts('Ada L&')).toEqual([ADA]);
+    await client.accounts('');
+    expect(w.seen.map((one) => [one.path, one.init.method])).toEqual([
+      ['/api/server/accounts?q=Ada%20L%26', 'GET'],
+      ['/api/server/accounts', 'GET'],
+    ]);
+  });
+
+  test('an answer that is not a list of accounts is a failure, never a half-read list', async () => {
+    for (const body of ['{}', JSON.stringify([{ ...ADA, isServerAdmin: 'no' }])]) {
+      expect(
+        isSetupFailure(await failureOf(createServerClient(world(200, body).fetch).accounts(''))),
+      ).toBe(true);
+    }
+  });
+
+  test('suspends with PUT and lifts with DELETE, on the account’s own address', async () => {
+    const w = world(204, '');
+    const client = createServerClient(w.fetch);
+    await client.suspend(ADA.id);
+    await client.lift(ADA.id);
+    expect(w.seen.map((one) => [one.path, one.init.method])).toEqual([
+      [`/api/server/accounts/${ADA.id}/suspension`, 'PUT'],
+      [`/api/server/accounts/${ADA.id}/suspension`, 'DELETE'],
+    ]);
   });
 });

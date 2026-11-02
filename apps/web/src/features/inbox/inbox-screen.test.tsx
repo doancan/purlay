@@ -302,8 +302,33 @@ describe('the states', () => {
 describe('the sidebar', () => {
   test('has Inbox, current on the inbox', async () => {
     const view = await visit({ notifications: () => Promise.resolve(page([])) });
-    const link = view.getByRole('link', { name: 'Inbox' });
+    // On a wide window it is the button that opens the inbox's panel (D-208).
+    const link = view.getByRole('button', { name: 'Inbox' });
     expect(link.getAttribute('aria-current')).toBe('page');
+    view.unmount();
+  });
+});
+
+describe('categories on the page (D-208)', () => {
+  test('choosing one asks the server for it, puts it in the address, and an empty one says which', async () => {
+    const asked: { types?: string }[] = [];
+    const view = await visit({
+      notifications: (_workspaceId, at = {}) => {
+        asked.push(at);
+        return Promise.resolve(page(at.types === undefined ? [told(1, 'mention')] : []));
+      },
+    });
+    const categories = within(view.getByRole('group', { name: 'Category' }));
+    await person().click(categories.getByRole('button', { name: 'Direct' }));
+    await settle();
+    expect(asked.at(-1)?.types).toBe('direct_message');
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/inbox?category=direct');
+    expect(view.getByText('No direct messages')).toBeDefined();
+    // Back to All is the bare address, as it always was.
+    await person().click(categories.getByRole('button', { name: 'All' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/inbox');
+    expect(view.getByText('words 1')).toBeDefined();
     view.unmount();
   });
 });
@@ -324,7 +349,9 @@ describe('triage', () => {
     expect(unread.getAttribute('aria-pressed')).toBe('true');
     expect(asked.some((at) => at.unreadOnly === true)).toBe(true);
     expect(view.getByText('All caught up')).toBeDefined();
-    await person().click(view.getByRole('button', { name: 'All' }));
+    // The read filter's All, not the category's (D-208): each control is its own named group.
+    const show = within(view.getByRole('group', { name: 'Show' }));
+    await person().click(show.getByRole('button', { name: 'All' }));
     await settle();
     expect(view.getByText('words 1')).toBeDefined();
     view.unmount();

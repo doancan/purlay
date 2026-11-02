@@ -221,14 +221,22 @@ const uploadRefusal = (
     case 'ATTACHMENT_NOT_FOUND':
     case 'SESSION_NOT_FOUND':
     case 'FORBIDDEN':
+    // The session gate takes the person to turn on two-step verification (D-239).
+    case 'TWO_FACTOR_REQUIRED':
     // Membership is the send's to judge (D-156): an upload is the workspace's, before any channel.
     case 'NOT_A_CHANNEL_MEMBER':
+    case 'ONLY_ADMINS_POST':
     case 'DATABASE_UNAVAILABLE':
     case 'INTERNAL':
     case 'MALFORMED':
     case 'UNKNOWN':
     case 'ACCOUNT_EMAIL_CONFLICT':
     case 'GITHUB_ACCOUNT_TAKEN':
+    // GitHub's, never an upload's (D-246).
+    case 'GITHUB_UNAVAILABLE':
+    case 'GITHUB_NOT_CONNECTED':
+    case 'GITHUB_AUTHORIZATION_REQUIRED':
+    case 'GITHUB_REQUEST_CONFLICT':
     // The setup's, never an upload's.
     case 'SETUP_UNAVAILABLE':
     case 'SETUP_LOCKED':
@@ -236,6 +244,8 @@ const uploadRefusal = (
     case 'SETTINGS_CHANGE_FAILED':
     case 'SERVER_CHANGE_REFUSED':
     case 'ADMIN_LINK_NOT_FOUND':
+    // The page a letter's link opens, never an upload's (D-240).
+    case 'MAIL_LINK_NOT_FOUND':
     case 'CHANNEL_NAME_TAKEN':
     case 'CHANNEL_NOT_FOUND':
     case 'CLIENT_TOO_OLD':
@@ -246,6 +256,8 @@ const uploadRefusal = (
     case 'GITHUB_FEED_NOT_FOUND':
     case 'GITHUB_FEEDS_LIMIT':
     case 'GITHUB_REPOSITORY_MISMATCH':
+    case 'INCOMING_WEBHOOK_NOT_FOUND':
+    case 'INCOMING_WEBHOOKS_LIMIT':
     case 'IMAGE_NOT_AVAILABLE':
     case 'INCIDENT_ID_CONFLICT':
     case 'INCIDENT_NOT_FOUND':
@@ -258,13 +270,20 @@ const uploadRefusal = (
     case 'SCHEDULED_MESSAGE_SENT':
     case 'SCHEDULED_MESSAGE_LIMIT':
     case 'LAST_CHANNEL_MEMBER':
+    case 'RETENTION_TOO_SHORT':
+    case 'WORKSPACE_DELETION_STARTED':
     case 'LAST_OWNER':
+    case 'KNOWLEDGE_CONFLICT':
+    case 'SAVED_SEARCH_NOT_FOUND':
+    case 'SAVED_SEARCH_LIMIT':
     case 'MESSAGE_ID_CONFLICT':
     case 'SCHEDULED_MESSAGE_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'NATIVE_CODE_NOT_FOUND':
     case 'PINS_LIMIT':
+    case 'BOOKMARKS_LIMIT':
+    case 'BOOKMARK_NOT_FOUND':
     case 'PUSH_UNAVAILABLE':
     case 'REAUTHENTICATION_REQUIRED':
     case 'ROUTE_NOT_FOUND':

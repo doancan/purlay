@@ -17,6 +17,9 @@
  * their p95s is compared, with every trial reported and recorded: one isolated stall cannot decide
  * the gate, and a slowdown in two or three trials still fails. Never retry until a pass (D-49).
  *
+ * **A regression must happen twice** (D-227): a run that regressed is measured again, three more trials,
+ * once, and fails only if that regresses too. `--record` keeps the run judged last; both are printed.
+ *
  * **It blocks on a regression, never on the line** (D-49): a p95 on a shared machine moves by tens of
  * percent between identical runs, and a gate people learn to re-run has stopped being a gate. So with a
  * baseline it fails when a p95 is more than `REGRESSION_FACTOR` times the recorded one *and* past the
@@ -330,12 +333,36 @@ export const main = async (
   const baselineFile = firstKept ? undefined : (keepFile ?? optionOf(args, '--baseline'));
   const recordFile = optionOf(args, '--record');
   const baseline = baselineFile === undefined ? null : await readLatency(baselineFile);
-  const trials: Latency[] = [];
-  for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
-    trials.push(await measure(MESSAGES_PER_TRIAL));
+  const measured = async (): Promise<{
+    readonly now: RepeatedLatency;
+    readonly regressed: boolean;
+    readonly lines: readonly string[];
+  }> => {
+    const trials: Latency[] = [];
+    for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
+      trials.push(await measure(MESSAGES_PER_TRIAL));
+    }
+    const now = summarizeTrials(trials);
+    const verdict = judge(now, baseline);
+    const detail = trials.map(
+      (trial, index) =>
+        `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms (${String(trial.messages)} messages)`,
+    );
+    return {
+      now,
+      regressed: verdict.regressed,
+      lines: [...verdict.lines, 'verdict: median of three independent p95 measurements', ...detail],
+    };
+  };
+  let { now, regressed, lines } = await measured();
+  // A regression must happen twice (D-227): a sustained slowdown shows again in three more trials, a
+  // runner's bad minute does not. Once, never until a pass; an interrupted trial is still an error.
+  if (regressed) {
+    const again = await measured();
+    ({ now, regressed } = again);
+    lines = [...lines, 'first measurement regressed; measured again:', ...again.lines];
   }
-  const now = summarizeTrials(trials);
-  const { regressed, lines } = judge(now, baseline);
+  // What is recorded is what was judged last, so the record and the verdict are the same run.
   const write = async (file: string): Promise<void> => {
     await Bun.write(file, `${JSON.stringify(now, null, 2)}\n`);
   };
@@ -343,14 +370,7 @@ export const main = async (
   // A regression is not adopted: the next run is judged against the last one that passed.
   if (keepFile !== undefined && !regressed) await write(keepFile);
   const said = firstKept ? ['no baseline yet: this run is recorded, nothing compared'] : [];
-  const detail = trials.map(
-    (trial, index) =>
-      `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms (${String(trial.messages)} messages)`,
-  );
-  return {
-    lines: [...said, ...lines, 'verdict: median of three independent p95 measurements', ...detail],
-    code: regressed ? 1 : 0,
-  };
+  return { lines: [...said, ...lines], code: regressed ? 1 : 0 };
 };
 
 if (import.meta.main) {

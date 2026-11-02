@@ -53,6 +53,8 @@ export const serveExternalImage = async (
       'content-security-policy': "default-src 'none'; frame-ancestors 'none'; sandbox",
       'cross-origin-resource-policy': 'same-origin',
       // The reader's own copy for a day: the image may change at its source, and is asked for again.
+      // Not asked about on every use as an attachment is (D-231 §3): it is public where it lives, so
+      // there is no access to withdraw, and asking again would be a fetch from its server each time.
       'cache-control': 'private, max-age=86400',
     },
   };

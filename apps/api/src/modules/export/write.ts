@@ -7,9 +7,9 @@
  */
 import { mkdir, open, rename, rm, stat, type FileHandle } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { ExportManifest } from '@purlay/types';
+import type { Database } from '@purlay/db';
+import type { ExportManifest, PersonalExportManifest } from '@purlay/types';
 import { AppError } from '../../platform/errors';
-import type { ExportedTable } from './tables';
 
 const exists = async (path: string): Promise<boolean> =>
   await stat(path).then(
@@ -17,11 +17,17 @@ const exists = async (path: string): Promise<boolean> =>
     () => false,
   );
 
-/** A directory being written, its files opened as their first line comes. */
+/**
+ * A directory being written — a workspace's export or a person's (D-241) — its files opened as their
+ * first line comes.
+ */
 export interface ExportDirectory {
-  readonly write: (table: ExportedTable, lines: readonly string[]) => Promise<void>;
+  readonly write: (table: keyof Database, lines: readonly string[]) => Promise<void>;
   /** Every table's file, empty ones too, then the manifest: the export is whole, still `.partial`. */
-  readonly seal: (manifest: ExportManifest, tables: readonly ExportedTable[]) => Promise<void>;
+  readonly seal: (
+    manifest: ExportManifest | PersonalExportManifest,
+    tables: readonly (keyof Database)[],
+  ) => Promise<void>;
   /** A file the export names, streamed to `blobs/<name>`; its bytes, or a throw with nothing left. */
   readonly writeBlob: (name: string, body: ReadableStream<Uint8Array>) => Promise<number>;
   /** The directory takes its name: only once the trail has said it exists. */
@@ -56,8 +62,8 @@ export const exportDirectory = async (target: string): Promise<ExportDirectory> 
     }
   }
   await mkdir(partial, { recursive: false, mode: 0o700 });
-  const files = new Map<ExportedTable, FileHandle>();
-  const fileOf = async (table: ExportedTable): Promise<FileHandle> => {
+  const files = new Map<keyof Database, FileHandle>();
+  const fileOf = async (table: keyof Database): Promise<FileHandle> => {
     const open_ = files.get(table);
     if (open_ !== undefined) return open_;
     const handle = await open(join(partial, `${table}.ndjson`), 'wx', 0o600);

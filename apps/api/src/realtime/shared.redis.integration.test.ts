@@ -344,6 +344,31 @@ const busNode = async (
   };
 };
 
+/**
+ * Every node is listening: a node's SUBSCRIBE is sent when it is made, not confirmed, and Redis keeps no
+ * message for a subscriber that is not there yet, so a frame published at once can miss a node for good.
+ * In rounds, each node says a fresh probe until a round is heard by every node. Redis hands a subscriber
+ * what was published in the order it was published, so a node that heard the last round has heard every
+ * earlier probe it ever will: what they heard can then be forgotten.
+ */
+const allListening = async (
+  nodes: readonly Awaited<ReturnType<typeof busNode>>[],
+): Promise<void> => {
+  const deadline = Date.now() + 10_000;
+  for (let round = 1; ; round += 1) {
+    const probes = nodes.map((_, index) => -(round * 100 + index + 1));
+    for (const [index, each] of nodes.entries()) await each.publish(frame(probes[index] ?? 0));
+    const heard = (): boolean =>
+      nodes.every((each) => probes.every((probe) => each.heard.some((f) => f.ts === probe)));
+    const roundEnds = Date.now() + 250;
+    while (!heard() && Date.now() < roundEnds) await Bun.sleep(10);
+    if (heard()) break;
+    if (Date.now() > deadline)
+      throw new Error('timed out waiting for every node to hear every other');
+  }
+  for (const each of nodes) each.heard.length = 0;
+};
+
 const frame = (ts: number): ServerFrame => ({
   event: 'PINS_UPDATED',
   data: { channelId: 'c' },
@@ -359,9 +384,12 @@ const until = async (done: () => boolean, what: string): Promise<void> => {
 };
 
 describe('integration: the bus across nodes', () => {
+  // Order and exactly-once, not speed: two hundred awaited publishes and their delivery to three nodes
+  // outlived the five seconds a test is given while the suite's other files ran beside it (D-228).
   test('each frame reaches every node exactly once, each publisher’s in its order, all nodes in one order', async () => {
     const topic = channelTopic(unique('c'));
     const [a, b, c] = [await busNode(topic), await busNode(topic), await busNode(topic)];
+    await allListening([a, b, c]);
     // A and B publish at once, a hundred each, a frame's `ts` saying who sent it and which.
     const send = async (from: typeof a, who: number): Promise<void> => {
       for (let n = 0; n < 100; n += 1) await from.publish(frame(who * 1_000 + n));
@@ -379,7 +407,7 @@ describe('integration: the bus across nodes', () => {
         Array.from({ length: 100 }, (_, n) => who * 1_000 + n),
       );
     }
-  });
+  }, 30_000);
 
   test('a node that listens to another topic hears nothing of this one', async () => {
     const topic = channelTopic(unique('c'));
@@ -415,12 +443,15 @@ describe('integration: a Redis that is away, or comes and goes', () => {
     link.close();
   });
 
+  // A reconnection waits out a backoff that doubles from 250 ms with jitter (`RECONNECT_BASE_MS`): a few
+  // tries before the proxy takes connections again outlived the five seconds a test is given (D-228).
   test('a connection that is cut is made again, subscribed again, and the node is told it may have missed frames', async () => {
     const proxy = await aDroppableProxy(redisUrlForTests());
     try {
       const topic = channelTopic(unique('c'));
       const behind = await busNode(topic, proxy.url);
       const direct = await busNode(topic);
+      await allListening([behind, direct]);
       await direct.publish(frame(1));
       await until(() => behind.heard.length === 1, 'the first frame');
       expect(behind.gaps()).toBe(0);
@@ -442,7 +473,7 @@ describe('integration: a Redis that is away, or comes and goes', () => {
     } finally {
       proxy.stop();
     }
-  });
+  }, 30_000);
 
   test('closing a link that is mid-reconnect leaves nothing running', async () => {
     const proxy = await aDroppableProxy(redisUrlForTests());

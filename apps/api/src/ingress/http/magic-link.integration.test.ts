@@ -18,9 +18,14 @@ import {
   aRecordingOutbox,
   NOW,
   testDependencies,
+  testConfig,
   type TestOverrides,
 } from '../../testing/doubles';
-import { SIGN_IN_LINKS_PER_HOUR, SIGN_IN_REQUESTS_PER_HOUR } from '../../modules/auth/magic-link';
+import {
+  SIGN_IN_LINKS_PER_ADDRESS,
+  SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT,
+  SIGN_IN_REQUESTS_PER_HOUR,
+} from '../../modules/auth/magic-link';
 import { createApp } from './app';
 
 afterAll(async () => {
@@ -34,7 +39,13 @@ type App = ReturnType<typeof createApp>;
 const anApp = (db: Executor, overrides: TestOverrides = {}): App =>
   createApp(testDependencies({ database: db, ...overrides }));
 
-const post = async (app: App, path: string, body: unknown, cookie?: string): Promise<Response> =>
+const post = async (
+  app: App,
+  path: string,
+  body: unknown,
+  cookie?: string,
+  client?: string,
+): Promise<Response> =>
   await app.handle(
     new Request(`${APP}${path}`, {
       method: 'POST',
@@ -42,6 +53,7 @@ const post = async (app: App, path: string, body: unknown, cookie?: string): Pro
         'content-type': 'application/json',
         origin: APP,
         ...(cookie === undefined ? {} : { cookie }),
+        ...(client === undefined ? {} : { 'x-forwarded-for': client }),
       },
       body: JSON.stringify(body),
     }),
@@ -57,6 +69,17 @@ const ask = async (
   await app.settled();
   return response;
 };
+
+/** Asked from `client`, as the proxy in front of the server names it. */
+const askFrom = async (app: App, client: string, email: string): Promise<Response> => {
+  const response = await post(app, '/auth/email', { email, locale: 'en' }, undefined, client);
+  await app.settled();
+  return response;
+};
+
+/** An app behind a proxy, so each request says which client it came from. */
+const behindAProxy = (db: Executor, overrides: TestOverrides = {}): App =>
+  anApp(db, { config: testConfig({ TRUST_PROXY: true }), ...overrides });
 
 const codeOf = async (response: Response): Promise<unknown> =>
   ((await response.json()) as { error?: { code?: unknown } }).error?.code;
@@ -216,7 +239,9 @@ describe('integration: asking for a sign-in link', () => {
       await anAccount(db, 'erased@example.test', { verified: true, deleted: true });
       const app = anApp(db, { mail });
       // An address past its five for the hour: the sixth answer is one more to compare.
-      for (let n = 0; n < SIGN_IN_LINKS_PER_HOUR; n += 1) await ask(app, 'spent@example.test');
+      for (let n = 0; n < SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT; n += 1) {
+        await ask(app, 'spent@example.test');
+      }
       const answers: string[] = [];
       for (const email of [
         'nobody@example.test',
@@ -262,24 +287,62 @@ describe('integration: asking for a sign-in link', () => {
       const mail = aRecordingOutbox();
       const clock = aMovableClock();
       const app = anApp(db, { mail, clock, signUp: 'open' });
-      for (let n = 0; n <= SIGN_IN_LINKS_PER_HOUR; n += 1) {
+      for (let n = 0; n <= SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT; n += 1) {
         expect((await ask(app, 'busy@example.test')).status).toBe(202);
       }
-      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_HOUR);
-      // Counted in the database, by the address's digest and never the address (D-179 §3).
+      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT);
+      // Counted in the database, by digests and never the address (D-179 §3): the client's, the
+      // address's from that client, and the address's from every client (D-231 §2).
       const counters = await db
         .selectFrom('rate_limits')
         .select('key')
         .where('key', 'like', 'purlay:sign-in-link:%')
         .execute();
-      expect(counters).toHaveLength(2);
+      expect(counters).toHaveLength(3);
       expect(JSON.stringify(counters)).not.toContain('busy');
       clock.advance(60 * 60_000 - 1);
       await ask(app, 'busy@example.test');
-      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_HOUR);
+      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT);
       clock.advance(1);
       await ask(app, 'busy@example.test');
-      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_HOUR + 1);
+      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT + 1);
+    });
+  });
+
+  test('a stranger asking for an address all hour does not keep its owner from signing in (D-231 §2)', async () => {
+    await withRollback(async (db) => {
+      const mail = aRecordingOutbox();
+      const app = behindAProxy(db, { mail, signUp: 'open' });
+      // As many as the stranger's client may ask in the hour, every one for the same address.
+      for (let n = 0; n < SIGN_IN_REQUESTS_PER_HOUR; n += 1) {
+        expect((await askFrom(app, '198.51.100.7', 'victim@example.test')).status).toBe(202);
+      }
+      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT);
+      // The owner, from their own client, is sent a link all the same.
+      expect((await askFrom(app, '203.0.113.9', 'victim@example.test')).status).toBe(202);
+      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT + 1);
+      expect(tokenIn(mail.posted.at(-1))).toHaveLength(64);
+      // One IPv6 subscriber is one client, whichever of its /64's addresses it asks from.
+      for (let n = 0; n <= SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT; n += 1) {
+        await askFrom(app, `2001:db8:1:2::${String(n + 1)}`, 'other@example.test');
+      }
+      expect(mail.posted.filter((message) => message.to === 'other@example.test')).toHaveLength(
+        SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT,
+      );
+    });
+  });
+
+  test('an address is sent no more than its ceiling in an hour, however many clients ask (D-231 §2)', async () => {
+    await withRollback(async (db) => {
+      const mail = aRecordingOutbox();
+      const app = behindAProxy(db, { mail, signUp: 'open' });
+      for (let n = 0; n <= SIGN_IN_LINKS_PER_ADDRESS; n += 1) {
+        expect(
+          (await askFrom(app, `192.0.2.${String(n + 1)}`, 'flooded@example.test')).status,
+        ).toBe(202);
+      }
+      expect(mail.posted).toHaveLength(SIGN_IN_LINKS_PER_ADDRESS);
+      expect(SIGN_IN_LINKS_PER_ADDRESS).toBeGreaterThan(SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT);
     });
   });
 

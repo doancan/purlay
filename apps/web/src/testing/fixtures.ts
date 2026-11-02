@@ -53,6 +53,9 @@ export const aSession = (): MeResponse => ({
   memberships: [{ workspace: WORKSPACE, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
   mayCreateWorkspace: true,
   isServerAdmin: false,
+  nameFromGitHub: false,
+  mustEnrolTwoFactor: false,
+  scheduledDeletions: [],
 });
 
 export const aChannel = (
@@ -65,6 +68,8 @@ export const aChannel = (
   name,
   topic: null,
   incident: null,
+  codeRepository: null,
+  onlyAdminsPost: false,
   type: 'public',
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
@@ -126,9 +131,17 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     savedIds: () => Promise.resolve([]),
     // And its channel's pins, to mark the pinned ones (D-130).
     pins: () => Promise.resolve([]),
+    // And its bookmarks, under the header (D-218).
+    bookmarks: () => Promise.resolve([]),
     // And who is online in the workspace (D-136): nobody, unless a test says.
     presence: () => Promise.resolve({ online: [], version: 0 }),
     incident: () => Promise.resolve({ incident: null }),
+    // And whether this is the person's quiet hours (D-234): none, unless a test says.
+    quietHours: () => Promise.resolve({ quietHours: null, timeZone: null }),
+    // And whether this server can email the person about what they missed (D-240): it cannot, unless a test says.
+    missedMail: () => Promise.resolve({ on: false, available: false }),
+    // A server without a GitHub App: nothing of issues is offered (D-246).
+    githubApp: () => Promise.resolve({ available: false, installation: null, authorization: null }),
     ...overrides,
   });
 

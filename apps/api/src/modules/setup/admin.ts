@@ -26,7 +26,13 @@
 import { kyselyAdapter } from '@better-auth/kysely-adapter';
 import { runWithAdapter } from '@better-auth/core/context';
 import { sessionTokenHashing, type Executor } from '@purlay/db';
-import { normalisedMailbox, passwordProblem, type PasswordProblem } from '@purlay/types';
+import {
+  DISPLAY_NAME_MAX,
+  FORBIDDEN_IN_NAME,
+  normalisedMailbox,
+  passwordProblem,
+  type PasswordProblem,
+} from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { atomicallyOn } from '../../platform/transactions';
 import { CLIENT_ADDRESS_HEADER, type Auth } from '../auth/better-auth';
@@ -71,12 +77,6 @@ export interface AdminInput {
   readonly password: string;
 }
 
-/** The display name's column (`SCHEMA.md` §users), in characters as the database counts them. */
-const NAME_MAX = 128;
-
-/** A control (`Cc`) or format (`Cf`) character: NUL, a line break, a bidi override that reorders a name. */
-const CONTROL = /[\p{Cc}\p{Cf}]/u;
-
 /** A unique index refused the write: an account with the address made by another request meanwhile. */
 const emailTaken = (error: unknown): boolean => {
   for (let at: unknown = error; at instanceof Error; at = at.cause) {
@@ -99,7 +99,7 @@ export const createAdmin = async (
   if (email === undefined) throw new AdminRefused({ reason: 'invalid-email' });
   const name = input.name.trim();
   const length = Array.from(name).length;
-  if (length === 0 || length > NAME_MAX || CONTROL.test(name)) {
+  if (length === 0 || length > DISPLAY_NAME_MAX || FORBIDDEN_IN_NAME.test(name)) {
     throw new AdminRefused({ reason: 'invalid-name' });
   }
   const problem = passwordProblem(input.password, { email, name });

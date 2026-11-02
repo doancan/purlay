@@ -10,7 +10,7 @@ import type { Clock } from '../../platform/clock';
 import type { CredentialCipher } from '../../platform/crypto';
 import type { Logger } from '../../platform/logging';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { unfurl, type GitHubApi } from '../../modules/integrations/unfurl';
+import { unfurl, type GitHubApi, type GitHubPauses } from '../../modules/integrations/unfurl';
 import type { RateLimiter } from '../../realtime/rate-limiter';
 import { requireSession } from './session';
 import { validated } from './validate';
@@ -25,11 +25,13 @@ export const unfurlLink = async (
     readonly log: Logger;
     /** One bucket per workspace for calls to GitHub (`GITHUB_CALL_BUDGET`). */
     readonly githubCalls: RateLimiter;
+    /** Workspaces GitHub told to wait (`GitHubPauses`). */
+    readonly githubPauses: GitHubPauses;
   },
   request: Request,
   body: unknown,
 ): Promise<UnfurlResponse> => {
-  const { database, clock, cipher, githubApi, log, githubCalls } = dependencies;
+  const { database, clock, cipher, githubApi, log, githubCalls, githubPauses } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const workspaceId =
     typeof body === 'object' &&
@@ -48,6 +50,7 @@ export const unfurlLink = async (
       github: githubApi,
       log,
       mayCallGitHub: async (id) => await githubCalls.consume(id),
+      pauses: githubPauses,
     },
     context,
     url,

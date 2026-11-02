@@ -1,3 +1,4 @@
+import type { QuestionFilters, SearchFilters } from '@purlay/types';
 /**
  * What a screen reads, as hooks. Each is a query over one `Api` call, keyed by
  * `keys`, so the socket's frames (`cache.ts`) and the screens address the same
@@ -19,12 +20,15 @@ import {
 import type {
   AuthMethods,
   MySignIn,
+  LatestReleaseAnswer,
+  DeviceSessionList,
   Channel,
   MeResponse,
   Message,
   MessagePage,
   FilePage,
   NotificationPage,
+  NotificationTypesFilter,
   WorkspaceMember,
   ChannelMember,
   ThreadFollow,
@@ -96,6 +100,23 @@ export const useSetupStatus = (enabled = true): UseQueryResult<SetupStatusAnswer
   });
 };
 
+/**
+ * The version this server runs and the newest release as it learned it (D-248). One read for both, from the
+ * session's own route: the public `GET /api/client` is charged to the address with the sign-in traffic and is not
+ * for the browser to ask on every load. The server keeps the release for hours, so the page asks once.
+ */
+export const useLatestRelease = (): UseQueryResult<LatestReleaseAnswer> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.latestRelease,
+    queryFn: ({ signal }) => api.latestRelease(signal),
+    // A refusal (a limit, a lapsed session) is shown at once with Retry: asking again in a second is no answer.
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+};
+
 /** The ways the caller signs in, and the GitHub account linked to it, if any (D-176, D-179 §5). */
 export const useMySignIn = (): UseQueryResult<MySignIn> => {
   const api = useApi();
@@ -105,12 +126,40 @@ export const useMySignIn = (): UseQueryResult<MySignIn> => {
   });
 };
 
-export const useChannels = (workspaceId: string): UseQueryResult<Channel[]> => {
+/** Where the caller is signed in, the one used last first (D-193). */
+export const useMySessions = (): UseQueryResult<DeviceSessionList> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.mySessions,
+    queryFn: ({ signal }) => api.mySessions(signal),
+  });
+};
+
+export const useChannels = (workspaceId: string, enabled = true): UseQueryResult<Channel[]> => {
   const api = useApi();
   return useQuery({
     queryKey: keys.channels(workspaceId),
     queryFn: ({ signal }) => api.channels(workspaceId, signal),
+    enabled,
   });
+};
+
+/**
+ * The repository a channel's code references link into (`Channel.codeRepository`, D-223), from the
+ * channel list the workspace already reads: null outside a workspace, until the list is read, and for a
+ * channel with none. Selected, so a row re-renders when this changes and not when the list's other
+ * fields do — every new message moves a channel's `lastMessageAt`.
+ */
+export const useCodeRepository = (workspaceId: string | null, channelId: string): string | null => {
+  const api = useApi();
+  const read = useQuery({
+    queryKey: keys.channels(workspaceId ?? ''),
+    queryFn: ({ signal }) => api.channels(workspaceId ?? '', signal),
+    enabled: workspaceId !== null,
+    select: (channels: Channel[]) =>
+      channels.find((channel) => channel.id === channelId)?.codeRepository ?? null,
+  });
+  return read.data ?? null;
 };
 
 export const useMembers = (workspaceId: string): UseQueryResult<WorkspaceMember[]> => {
@@ -264,14 +313,19 @@ export const useChannelFiles = (
 export const useUnresolved = (
   workspaceId: string,
   channelId: string | null = null,
+  filters: QuestionFilters = {},
 ): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.unresolved(workspaceId, channelId),
+    queryKey: keys.unresolved(workspaceId, channelId, filters),
     queryFn: ({ pageParam, signal }) =>
       api.unresolved(
         workspaceId,
-        { before: pageParam, ...(channelId === null ? {} : { channelId }) },
+        {
+          ...filters,
+          ...(pageParam === undefined ? {} : { before: pageParam }),
+          ...(channelId === null ? {} : { channelId }),
+        },
         signal,
       ),
     initialPageParam: undefined as string | undefined,
@@ -280,24 +334,69 @@ export const useUnresolved = (
   });
 };
 
+/**
+ * A view of the inbox (D-208): a name for the cache, and the `types` the server is asked for — none
+ * for every type. The data layer knows no categories; the inbox names them.
+ */
+export interface NotificationView {
+  readonly key: string;
+  readonly types?: NotificationTypesFilter;
+}
+
 /** The caller's inbox in one workspace, newest first, a page at a time (D-106). */
 export const useNotifications = (
   workspaceId: string,
   unreadOnly = false,
+  view?: NotificationView,
 ): UseInfiniteQueryResult<InfiniteData<NotificationPage>> => {
   const api = useApi();
+  const types = view?.types;
   return useInfiniteQuery({
-    queryKey: unreadOnly
-      ? keys.notifications(workspaceId, 'unread')
-      : keys.notifications(workspaceId),
+    // Every type keeps the inbox's first key, so what already reads or writes it still does.
+    queryKey: keys.notifications(
+      workspaceId,
+      unreadOnly ? 'unread' : undefined,
+      types === undefined ? undefined : view?.key,
+    ),
     queryFn: ({ pageParam, signal }) =>
       api.notifications(
         workspaceId,
-        unreadOnly ? { before: pageParam, unreadOnly } : { before: pageParam },
+        {
+          before: pageParam,
+          ...(unreadOnly ? { unreadOnly } : {}),
+          ...(types === undefined ? {} : { types }),
+        },
         signal,
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+};
+
+/** How many the inbox panel asks for (D-208): enough to triage, few enough to take in at a glance. */
+export const PANEL_LIMIT = 10;
+
+/**
+ * The inbox panel's one page of a view (D-208). One page and never more: when a frame says the inbox
+ * changed, this is read again in one request of ten rows, not every page a scrolled list has loaded.
+ * Asked only while the panel is open; closed, a frame marks it stale and opening reads it again.
+ */
+export const useNotificationsPanel = (
+  workspaceId: string,
+  view: NotificationView,
+  enabled: boolean,
+): UseQueryResult<NotificationPage> => {
+  const api = useApi();
+  const { types } = view;
+  return useQuery({
+    queryKey: keys.notificationsPanel(workspaceId, view.key),
+    queryFn: ({ signal }) =>
+      api.notifications(
+        workspaceId,
+        { limit: PANEL_LIMIT, ...(types === undefined ? {} : { types }) },
+        signal,
+      ),
+    enabled,
   });
 };
 
@@ -310,14 +409,16 @@ export const useSearch = (
   words: string,
   channelId: string | null = null,
   authorId: string | null = null,
+  filters: SearchFilters = {},
 ): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.search(workspaceId, words, channelId, authorId),
+    queryKey: keys.search(workspaceId, words, channelId, authorId, filters),
     queryFn: ({ pageParam, signal }) =>
       api.search(
         workspaceId,
         {
+          ...filters,
           q: words,
           before: pageParam,
           ...(channelId === null ? {} : { channelId }),
@@ -327,7 +428,10 @@ export const useSearch = (
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled: words.length >= SEARCH_QUERY_MIN,
+    enabled:
+      words.length >= SEARCH_QUERY_MIN ||
+      (words === '' &&
+        (Object.keys(filters).length > 0 || channelId !== null || authorId !== null)),
   });
 };
 

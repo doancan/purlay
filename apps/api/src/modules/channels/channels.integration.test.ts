@@ -195,6 +195,60 @@ describe('integration: what a channel says about the person asking', () => {
    * The sidebar renders on every load, so a query per channel is the N+1 the rules
    * forbid: the number of statements must not depend on the number of channels.
    */
+  /**
+   * The repository a code reference links to (D-223) is the channel's GitHub feed's when it has exactly
+   * one: none and several are null, the second a guess the product does not make.
+   */
+  test('a channel with one GitHub feed names its repository for code references; none or two name none', async () => {
+    await withRollback(async (db) => {
+      const { workspaceId, users } = await aConversation(db, 'cr-alice', 'cr-bob');
+      const [alice, bob] = users as [(typeof users)[0], (typeof users)[0]];
+      const none = await aChannelWith(db, workspaceId, 'cr-none', alice);
+      const one = await aChannelWith(db, workspaceId, 'cr-one', alice);
+      const two = await aChannelWith(db, workspaceId, 'cr-two', alice);
+      const feed = async (channelId: string, repository: string): Promise<void> => {
+        await db
+          .insertInto('github_repo_feeds')
+          .values({
+            id: crypto.randomUUID(),
+            workspace_id: workspaceId,
+            channel_id: channelId,
+            repository_full_name: repository,
+            events: ['push'],
+            secret_encrypted: 'sealed',
+            created_by: alice.userId,
+          })
+          .execute();
+      };
+      await feed(one, 'acme/api');
+      await feed(two, 'acme/api');
+      await feed(two, 'acme/web');
+      const context = await requireWorkspaceMembership(db, alice.userId, workspaceId);
+      const listed = await channelsVisibleIn(db, context);
+      const repositoryOf = (id: string): string | null | undefined =>
+        listed.find((channel) => channel.id === id)?.codeRepository;
+      expect([repositoryOf(none), repositoryOf(one), repositoryOf(two)]).toEqual([
+        null,
+        'acme/api',
+        null,
+      ]);
+      // Told to whoever can see it, joined or not — the same people who read the feed's events there.
+      expect((await channelFor(db, bob.userId, one)).codeRepository).toBe('acme/api');
+
+      // A feed disconnected is the next read's answer: two become one.
+      await db
+        .deleteFrom('github_repo_feeds')
+        .where('channel_id', '=', two)
+        .where('repository_full_name', '=', 'acme/web')
+        .execute();
+      expect((await channelFor(db, alice.userId, two)).codeRepository).toBe('acme/api');
+
+      // A direct message has no feed, and so no repository.
+      const pair = await openDirectMessage(db, clock, context, bob.userId);
+      expect(pair.channel.codeRepository).toBeNull();
+    });
+  });
+
   test('listing costs the same however many channels there are, direct messages included', async () => {
     await withRollback(async (db) => {
       const { workspaceId, users } = await aConversation(db, 'cs-n1', 'cs-n1-peer');

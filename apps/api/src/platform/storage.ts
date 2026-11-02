@@ -25,6 +25,9 @@ import { AppError } from './errors';
  */
 export const workspacePrefix = (workspaceId: string): string => `w/${workspaceId}/`;
 
+/** What a person owns in the store, and no workspace does: the exports of their own data (D-241). */
+export const personPrefix = (userId: string): string => `u/${userId}/`;
+
 export interface StoredObject {
   readonly body: ReadableStream<Uint8Array>;
   readonly size: number;

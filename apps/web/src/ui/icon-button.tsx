@@ -30,7 +30,7 @@ const sizeClasses = {
    * is taller than the band above a bubble and covered the author's name on a phone; at this size
    * it fits the band, and every target on the bar is the same (above the 24px WCAG minimum).
    */
-  bar: 'h-control aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink aria-pressed:text-accent-text',
+  bar: 'h-control aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink aria-pressed:text-ink',
   rail: 'size-rail-item rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink max-narrow:h-touch max-narrow:w-touch',
   /** A control in the sidebar, on the navigation's tone (D-118). */
   nav: 'h-control max-narrow:h-touch aspect-square rounded-md text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',

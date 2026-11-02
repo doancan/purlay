@@ -79,7 +79,7 @@ const openMenu = async (
     },
   );
   await settle();
-  await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+  await person().click(view.getByRole('button', { name: /Switch workspace/ }));
   return view;
 };
 
@@ -152,7 +152,7 @@ describe('invite people', () => {
     expect(view.getByRole('textbox', { name: 'Invitation link' })).toBeDefined();
 
     await person().click(view.getByRole('button', { name: 'Close' }));
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await invite(view);
     expect(view.queryByRole('textbox', { name: 'Invitation link' })).toBeNull();
   });
@@ -197,7 +197,13 @@ describe('invite people', () => {
 /** A server that can send mail: the same answer the sign-in screen reads. */
 const withMail: Partial<Api> = {
   authMethods: () =>
-    Promise.resolve({ github: true, email: true, oidc: null, signUp: 'invite-only' }),
+    Promise.resolve({
+      github: true,
+      email: true,
+      oidc: null,
+      signUp: 'invite-only',
+      password: true,
+    }),
 };
 
 const queuedFor = (...outcomes: InvitationMailResult[]): Promise<CreatedInvitation> =>

@@ -12,6 +12,8 @@ import {
   withRollback,
   type ClonedDatabase,
   type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
@@ -289,11 +291,11 @@ describe('integration: two direct messages opened at once are one', () => {
       create function hold_window() returns trigger language plpgsql as
       $$ begin perform pg_sleep(0.3); return new; end $$
     `.execute(cloned.db);
-  });
+  }, CLONE_HOOK_MS);
 
   afterAll(async () => {
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   /**
    * Both look, both find nothing, both insert: only the unique index on the pair can
@@ -343,11 +345,11 @@ describe('integration: two reads of one channel at once keep the counters consis
 
   beforeAll(async () => {
     cloned = await cloneIntegrationDatabase();
-  });
+  }, CLONE_HOOK_MS);
 
   afterAll(async () => {
     await cloned.drop();
-  });
+  }, DROP_HOOK_MS);
 
   test('the later position wins, however they interleave, and I-6 holds', async () => {
     const room = await aRoom(cloned.db);

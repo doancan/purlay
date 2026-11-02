@@ -26,6 +26,7 @@ import {
   apiAs,
   makeRoom,
   sessionApi,
+  skipReleaseNotes,
   type ApiClient,
   type Persona,
   type Room,
@@ -264,6 +265,12 @@ const withoutRowsOut = async (page: Page, violations: readonly Result[]): Promis
 };
 
 export const test = base.extend<Fixtures>({
+  // The window of release notes belongs to a person's first visit: every browser here has had it (D-248).
+  context: async ({ context }, use): Promise<void> => {
+    await skipReleaseNotes(context);
+    await use(context);
+  },
+
   throttling: [
     async ({ context }, use): Promise<void> => {
       const refused: string[] = [];
@@ -501,7 +508,7 @@ const browserLike = async (
   testInfo: TestInfo,
 ): Promise<BrowserContext> => {
   const { colorScheme, viewport, reducedMotion, locale, timezoneId } = testInfo.project.use;
-  return await browser.newContext({
+  const context = await browser.newContext({
     ...(baseURL === undefined ? {} : { baseURL }),
     ...(colorScheme === undefined ? {} : { colorScheme }),
     ...(viewport === undefined ? {} : { viewport }),
@@ -509,6 +516,8 @@ const browserLike = async (
     ...(locale === undefined ? {} : { locale }),
     ...(timezoneId === undefined ? {} : { timezoneId }),
   });
+  await skipReleaseNotes(context);
+  return context;
 };
 
 /** The cookie a browser holds after signing in: `__Host-` means Secure, host-only, `Path=/`. */

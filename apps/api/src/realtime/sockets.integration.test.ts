@@ -17,7 +17,13 @@
  * exactly what it missed.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  type Executor,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
   CLOSE_CODES,
@@ -82,12 +88,12 @@ beforeAll(async () => {
   });
   app = createApp(dependencies);
   server = `http://localhost:${String(app.listen(0))}`;
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const http = async (
   method: string,
@@ -1263,6 +1269,9 @@ describe('integration: two real sockets', () => {
         const second = await connect(room.alice, listening);
         await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
         await until(() => own.held().connections === 3, 'all three counted');
+        // Admission counts a socket before its async identity lookup finishes.
+        // A successful subscription proves her second socket has joined as her.
+        await subscribe(second, room.channelId);
         await first.close();
         await until(() => own.held().connections === 2, 'her first socket gone');
         expect(own.held().leaving).toBe(0);

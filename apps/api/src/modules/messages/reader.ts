@@ -16,13 +16,17 @@
 import { hideForReader } from './hidden';
 import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
+import { Type } from '@sinclair/typebox';
 import {
   GitHubEvent,
+  IncomingWebhookName,
   type Message,
   type Reaction,
   type ThreadSummary,
   type User,
 } from '@purlay/types';
+import { knowledgeFor } from './knowledge-reader';
+import { githubWorkFor } from '../integrations/github-work';
 import { attachmentSets, mentionSets, reactionSets } from './sets';
 
 /** What every query that returns messages selects. Kept beside `MessageRow` so they cannot drift. */
@@ -123,11 +127,21 @@ const summaryOf = (columns: ThreadColumns, people: ReadonlyMap<string, User>): T
 export const readSummary = async (
   executor: Executor,
   columns: ThreadColumns,
-): Promise<ThreadSummary> =>
-  summaryOf(
-    columns,
-    await usersByIds(executor, columns.resolved_by === null ? [] : [columns.resolved_by]),
-  );
+  rootId: string,
+): Promise<ThreadSummary> => {
+  const [people, knowledge, work] = await Promise.all([
+    usersByIds(executor, columns.resolved_by === null ? [] : [columns.resolved_by]),
+    knowledgeFor(executor, [rootId]),
+    githubWorkFor(executor, [rootId]),
+  ]);
+  const extra = knowledge.get(rootId);
+  const github = work.get(rootId);
+  return {
+    ...summaryOf(columns, people),
+    ...(extra === undefined ? {} : { knowledge: extra }),
+    ...(github === undefined ? {} : { githubWork: [...github] }),
+  };
+};
 
 /** One message's row by id, with its sender; undefined when there is none. */
 export const readMessage = async (
@@ -143,11 +157,23 @@ export const readMessage = async (
 
 /**
  * Who wrote it, and what happened, from one row: a person's message has its sender and no event; an
- * event has no sender and, unless it is a tombstone, the event its metadata holds. A row that is
+ * event has no sender and, unless it is a tombstone, the event its metadata holds — a repository's, or the
+ * incoming webhook it was posted through (D-245). A row that is
  * neither — which `messages_sender_by_type` and the one writer of events make impossible — is said,
  * loudly, rather than drawn as somebody's message or as nothing.
  */
-const authorship = (row: MessageRow): Pick<Message, 'sender' | 'githubEvent'> => {
+/**
+ * What an incoming webhook's message holds as its metadata (D-245): the kind `messages_event_known` knows,
+ * and the name the hook posted under. Its one writer is `integrations/incoming-webhooks.ts`.
+ */
+const IncomingWebhookMetadata = Type.Object(
+  { kind: Type.Literal('incoming_webhook'), name: IncomingWebhookName },
+  { additionalProperties: false },
+);
+
+const authorship = (
+  row: MessageRow,
+): Pick<Message, 'sender' | 'githubEvent' | 'incomingWebhook'> => {
   if (row.message_type === 'text') {
     if (row.sender_id === null || row.username === null || row.display_name === null) {
       throw new Error(`message ${row.id} is a person's with no person`);
@@ -163,6 +189,9 @@ const authorship = (row: MessageRow): Pick<Message, 'sender' | 'githubEvent'> =>
     };
   }
   if (row.deleted_at !== null) return { sender: null, githubEvent: null };
+  if (Value.Check(IncomingWebhookMetadata, row.metadata)) {
+    return { sender: null, githubEvent: null, incomingWebhook: { name: row.metadata.name } };
+  }
   if (!Value.Check(GitHubEvent, row.metadata)) {
     throw new Error(`message ${row.id} is an event the contract cannot say`);
   }
@@ -178,16 +207,22 @@ export const buildMessages = async (
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
   const resolvers = rows.flatMap((row) => (row.resolved_by === null ? [] : [row.resolved_by]));
-  const [reactions, mentions, attachments, people] = await Promise.all([
+  const roots = rows.filter((row) => row.parent_id === null).map((row) => row.id);
+  const [reactions, mentions, attachments, people, knowledge, work] = await Promise.all([
     reactionSets(executor, ids),
     mentionSets(executor, ids),
     attachmentSets(executor, ids),
     usersByIds(executor, [...new Set(resolvers)]),
+    knowledgeFor(executor, roots),
+    githubWorkFor(executor, roots),
   ]);
   return await hideForReader(
     executor,
     userId,
-    rows.map((row) => ({
+    rows.map((row): Message => {
+      const extra = knowledge.get(row.id);
+      const github = work.get(row.id);
+      return {
       id: row.id,
       channelId: row.channel_id,
       ...authorship(row),
@@ -197,12 +232,20 @@ export const buildMessages = async (
       createdAt: at(row.created_at),
       parentId: row.parent_id,
       // A reply has no summary of its own; a root always has one, with zero replies until it has some.
-      thread: row.parent_id === null ? summaryOf(row, people) : null,
+      thread:
+        row.parent_id === null
+          ? {
+              ...summaryOf(row, people),
+              ...(extra === undefined ? {} : { knowledge: extra }),
+              ...(github === undefined ? {} : { githubWork: [...github] }),
+            }
+          : null,
       reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
       mentions: [...(mentions.get(row.id) ?? [])],
       // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
       attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
-    })),
+      };
+    }),
   );
 };
 

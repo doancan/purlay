@@ -20,7 +20,7 @@ import { AppError } from '../../platform/errors';
 import { channelTopic, type EventBus } from '../../platform/events';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms';
-import { createFeed } from './feeds';
+import { createFeed, regenerateSecret } from './feeds';
 import { receiveDelivery, type Delivery, type WebhookDependencies } from './webhook';
 
 afterAll(async () => {
@@ -196,6 +196,19 @@ describe('integration: a delivery to a feed', () => {
     });
   });
 
+  test('an announcement channel’s feed still posts: an event is nobody’s root to refuse (D-243)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await db
+        .updateTable('channels')
+        .set({ only_admins_post: true })
+        .where('id', '=', world.room.channelId)
+        .execute();
+      expect(await world.deliver(push())).toBe('posted');
+      expect(await eventsIn(db, world.room.channelId)).toBe(1);
+    });
+  });
+
   test('a merged pull request is posted to a feed that hears of them, and a push to it is not', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db, undefined, false, ['pull_request', 'release']);
@@ -228,6 +241,25 @@ describe('integration: a delivery to a feed', () => {
       expect(await world.deliver(push(), { deliveryId: 'redelivered' })).toBe('duplicate');
       expect(await eventsIn(db, world.room.channelId)).toBe(1);
       expect((await counters(db, world.room, idOf(world.room, 'bob'))).unread).toBe(1);
+    });
+  });
+
+  test('a signed body sent again under a new delivery id is a replay: it posts nothing (D-231 §1)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const raw = new TextEncoder().encode(JSON.stringify(push()));
+      expect(await world.deliver(null, { raw, deliveryId: 'seen-once' })).toBe('posted');
+      // The id is not signed: anybody who saw the delivery can make up another.
+      expect(await world.deliver(null, { raw, deliveryId: 'made-up' })).toBe('duplicate');
+      // A body that differs by a byte is another delivery, and posts.
+      const next = new TextEncoder().encode(JSON.stringify(push({ after: sha('c') })));
+      expect(await world.deliver(null, { raw: next, deliveryId: 'next' })).toBe('posted');
+      expect(await eventsIn(db, world.room.channelId)).toBe(2);
+      // The same bytes to another feed are that feed's delivery: each feed has its own secret.
+      const other = await aWorld(db, await aRoom(db, ['alice']));
+      expect(await other.deliver(null, { raw, deliveryId: 'seen-once' })).toBe('posted');
+      const said = world.lines.filter((line) => line['msg'] === 'github delivery');
+      expect(said.map((line) => line['outcome'])).toEqual(['posted', 'duplicate', 'posted']);
     });
   });
 
@@ -331,6 +363,54 @@ describe('integration: a delivery to a feed', () => {
         last_failure: null,
       });
       expect(world.charged).toEqual([]);
+    });
+  });
+
+  test('a bad signature is one line of the log naming the feed and the outcome, never the secret, the signature or the body (#884)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const body = push({ ref: 'refs/heads/very-secret-branch' });
+      const signature = `sha256=${'1'.repeat(64)}`;
+      expect(await world.deliver(body, { signature })).toBe('WEBHOOK_SIGNATURE_INVALID');
+      const said = world.lines.filter((line) => line['msg'] === 'github delivery');
+      expect(said).toHaveLength(1);
+      expect(said[0]).toMatchObject({
+        level: 'warn',
+        feedId: world.feedId,
+        outcome: 'bad_signature',
+      });
+      const everything = JSON.stringify(world.lines);
+      expect(everything).not.toContain(world.secret);
+      expect(everything).not.toContain(signature);
+      expect(everything).not.toContain('very-secret-branch');
+    });
+  });
+
+  test('a regenerated secret: the old signature is dead at once, the new one posts, the address is the same (#884)', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const alice = world.room.members['alice']?.context;
+      if (alice === undefined) throw new Error('no alice');
+      const raw = new TextEncoder().encode(JSON.stringify(push()));
+      const signedWith = (secret: string): string =>
+        `sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`;
+      expect(await world.deliver(null, { raw })).toBe('posted');
+
+      const fresh = await regenerateSecret(db, clock, cipher, alice, world.feedId);
+      expect(fresh.feed.id).toBe(world.feedId);
+      expect(fresh.secret).not.toBe(world.secret);
+      // GitHub, still holding the old secret, is refused; with the new one it is let in.
+      expect(await world.deliver(null, { raw, signature: signedWith(world.secret) })).toBe(
+        'WEBHOOK_SIGNATURE_INVALID',
+      );
+      const second = new TextEncoder().encode(JSON.stringify(push({ ref: 'refs/heads/two' })));
+      expect(
+        await world.deliver(null, {
+          raw: second,
+          signature: `sha256=${createHmac('sha256', fresh.secret).update(second).digest('hex')}`,
+        }),
+      ).toBe('posted');
+      expect(await eventsIn(db, world.room.channelId)).toBe(2);
     });
   });
 

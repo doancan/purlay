@@ -34,6 +34,7 @@ import type { Clock } from '../../platform/clock';
 import type { CredentialCipher } from '../../platform/crypto';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
+import type { Counter } from '../../platform/metrics';
 import {
   mailInFlight,
   outbox,
@@ -96,6 +97,14 @@ export const runtimeServicesFrom = (
   const auth = createAuth({
     ...base,
     settings: { github: settings.github, oidc: settings.oidc, signUp: settings.signUp },
+    signInPolicy: {
+      requireTwoFactor: settings.requireTwoFactor,
+      passwordSignIn: settings.passwordSignIn,
+    },
+    sessionLifetime: {
+      sessionIdleTimeoutHours: settings.sessionIdleTimeoutHours,
+      sessionMaxAgeDays: settings.sessionMaxAgeDays,
+    },
     mailer: mail,
   });
   return { auth, mailer, mail, needsReentry, settings };
@@ -159,13 +168,14 @@ interface Pinned {
   readonly services: RuntimeServices | undefined;
 }
 
-export const runtimeServicesHolder = (log: Logger): RuntimeHolder => {
+export const runtimeServicesHolder = (log: Logger, mailFailures?: Counter): RuntimeHolder => {
   let settled: RuntimeServices | undefined;
   const pinned = new AsyncLocalStorage<Pinned>();
   const serving = (): RuntimeServices | undefined => pinned.getStore()?.services ?? settled;
   let queue: Promise<unknown> = Promise.resolve();
   let refused = false;
-  const sends = mailInFlight(log);
+  // Every relay's letters in one ledger, and their failures in one count (D-221).
+  const sends = mailInFlight(log, mailFailures);
 
   const auth = new Proxy({} as Auth, {
     get: (_target, property): unknown => {
@@ -385,6 +395,10 @@ export const applySettings = async (
       oidc: candidate.auth.oidc !== undefined,
       email: candidate.mail !== undefined,
       signUp: candidate.settings.signUp,
+      requireTwoFactor: candidate.settings.requireTwoFactor,
+      passwordSignIn: candidate.settings.passwordSignIn,
+      sessionIdleTimeoutHours: candidate.settings.sessionIdleTimeoutHours,
+      sessionMaxAgeDays: candidate.settings.sessionMaxAgeDays,
     });
     return candidate;
   });

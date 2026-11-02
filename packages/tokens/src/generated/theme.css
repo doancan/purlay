@@ -21,6 +21,7 @@
   --color-nav-rail: var(--nav-rail);
   --color-nav-surface: var(--nav-surface);
   --color-nav-hover: var(--nav-hover);
+  --color-nav-selected: var(--nav-selected);
   --color-nav-border: var(--nav-border);
   --color-nav-ink: var(--nav-ink);
   --color-nav-ink-muted: var(--nav-ink-muted);
@@ -38,6 +39,7 @@
   --color-avatar-5: var(--avatar-5);
   --color-avatar-6: var(--avatar-6);
   --color-focus-ring: var(--focus-ring);
+  --color-composer-edge: var(--composer-edge);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
@@ -96,6 +98,9 @@
   --container-dialog-lg: var(--size-dialog-lg);
   --container-palette: var(--size-palette);
   --height-palette-list: var(--size-palette-list);
+  --container-inbox-panel: var(--size-inbox-panel);
+  --height-inbox-panel-list: var(--size-inbox-panel-list);
+  --height-attachment-preview: var(--size-attachment-preview);
   --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
   --height-row: var(--size-row);
@@ -119,8 +124,11 @@
   --transition-duration-bar: var(--duration-bar);
   --transition-duration-hover: var(--duration-hover);
   --transition-duration-overlay: var(--duration-overlay);
+  --transition-duration-exit: var(--duration-exit);
   --transition-duration-step: var(--duration-step);
   --transition-duration-mark: var(--duration-mark);
+  --transition-duration-slide: var(--duration-slide);
+  --transition-duration-celebrate: var(--duration-celebrate);
   --transition-duration-nudge: var(--duration-nudge);
   --ease-standard: var(--easing-standard);
 
@@ -241,6 +249,11 @@
 @utility size-dot {
   width: var(--size-dot);
   height: var(--size-dot);
+}
+
+@utility size-qr {
+  width: var(--size-qr);
+  height: var(--size-qr);
 }
 
 @utility size-icon-sm {

@@ -6,7 +6,11 @@
  * one is set and since when; a token typed here is sent, and the field is emptied once it is saved.
  * It is checked here against the contract's rule — printable, no spaces — so the common slip is
  * answered before a round trip; the server stays the authority, and its refusal lands in the field.
+ * The server also asks GitHub whether it accepts the token before keeping it, and says afterwards when
+ * GitHub stopped accepting one (revoked, expired) and when a classic token is broader than cards need
+ * (D-23, amended; #884): both are shown here, to whoever can configure it.
  */
+import { GITHUB_TOKEN_MAX } from '@purlay/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
@@ -19,6 +23,7 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
+import { GitHubInstallationCard } from './github-issues';
 
 /** `SetGitHubTokenRequest`'s rule: printable ASCII, no spaces. */
 const TOKEN = /^[\x21-\x7e]+$/;
@@ -64,9 +69,13 @@ export const IntegrationsPage = (): React.JSX.Element => {
       await reread();
     } catch (failure) {
       setProblem(
-        isApiError(failure) && failure.code === 'VALIDATION_FAILED'
-          ? { field: 'token', message: t('github.invalid') }
-          : { field: 'form', message: `${t('github.saveFailed')} ${describe(failure)}` },
+        !isApiError(failure)
+          ? { field: 'form', message: `${t('github.saveFailed')} ${describe(failure)}` }
+          : failure.code === 'VALIDATION_FAILED'
+            ? { field: 'token', message: t('github.rejected') }
+            : failure.code === 'GITHUB_UNAVAILABLE'
+              ? { field: 'form', message: `${t('github.saveFailed')} ${t('github.unreachable')}` }
+              : { field: 'form', message: `${t('github.saveFailed')} ${describe(failure)}` },
       );
     } finally {
       setBusy(null);
@@ -90,6 +99,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
   };
 
   const connected = status.data?.configured === true;
+  const refused = status.data?.invalidSince ?? null;
   return (
     <SettingsPage
       title={t('settings.integrations.title')}
@@ -120,6 +130,16 @@ export const IntegrationsPage = (): React.JSX.Element => {
             </>
           }
         >
+          {refused !== null && (
+            <p role="alert" className="text-label text-danger-text">
+              {t('github.revoked', { when: format.absolute(refused) })}
+            </p>
+          )}
+          {status.data?.broadScopes === true && (
+            <p role="status" className="text-label text-warning-text">
+              {t('github.broad')}
+            </p>
+          )}
           <SettingsRow
             label={t('settings.integrations.status')}
             {...(status.data === undefined
@@ -150,14 +170,18 @@ export const IntegrationsPage = (): React.JSX.Element => {
               <span className="flex min-w-0 items-center gap-3">
                 <span
                   className={
-                    connected
-                      ? 'inline-flex h-badge items-center rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text'
-                      : 'inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption font-medium text-ink-muted'
+                    refused !== null
+                      ? 'inline-flex h-badge items-center rounded-pill bg-danger-subtle px-2 text-caption font-medium text-danger-text'
+                      : connected
+                        ? 'inline-flex h-badge items-center rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text'
+                        : 'inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption font-medium text-ink-muted'
                   }
                 >
-                  {connected
-                    ? t('settings.integrations.connected')
-                    : t('settings.integrations.notConnected')}
+                  {refused !== null
+                    ? t('settings.integrations.refused')
+                    : connected
+                      ? t('settings.integrations.connected')
+                      : t('settings.integrations.notConnected')}
                 </span>
                 {connected && (
                   <Button
@@ -179,7 +203,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
             type="password"
             placeholder={t('github.tokenShape')}
             value={token}
-            maxLength={255}
+            maxLength={GITHUB_TOKEN_MAX}
             autoComplete="off"
             spellCheck={false}
             {...(problem?.field === 'token' ? { error: problem.message } : {})}
@@ -189,6 +213,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
           />
         </SettingsCard>
       </form>
+      <GitHubInstallationCard />
     </SettingsPage>
   );
 };
