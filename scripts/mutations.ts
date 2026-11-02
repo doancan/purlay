@@ -1321,9 +1321,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sign-in-link-account-read-before-the-answer',
     why: 'the account is read before the answer and only the link left for after: the answer’s time says whether the address has an account',
     file: 'apps/api/src/modules/auth/magic-link.ts',
-    find: '  later(async () => {\n    const fate = await fateOf(database, clock, email, links.signUp, links.oidc);\n',
+    find: '  later(async () => {\n    const fate = await fateOf(database, clock, email, links.signUp, links.oidc, links.google);\n',
     replace:
-      '  const fate = await fateOf(database, clock, email, links.signUp, links.oidc);\n  later(async () => {\n',
+      '  const fate = await fateOf(database, clock, email, links.signUp, links.oidc, links.google);\n  later(async () => {\n',
     tests: ['apps/api/src/ingress/http/magic-link-race.integration.test.ts'],
   },
   {
@@ -1402,9 +1402,17 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sign-in-link-into-a-github-account',
     why: 'whoever holds a mailbox a GitHub account no longer uses is sent a link into that account (D-138 §2)',
     file: 'apps/api/src/modules/auth/magic-link.ts',
-    find: "  return madeByGitHub(account) ? 'github' : 'link';\n",
-    replace: "  return 'link';\n",
+    find: "  if (madeByGitHub(account)) return 'github';\n",
+    replace: '',
     tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
+  },
+  {
+    id: 'sign-in-link-into-a-google-account',
+    why: 'whoever holds a mailbox of an account Google made is sent a link into it while Google is connected (D-250)',
+    file: 'apps/api/src/modules/auth/magic-link.ts',
+    find: "  return googleConnected && madeByGoogle(account) ? 'google' : 'link';\n",
+    replace: "  return 'link';\n",
+    tests: ['apps/api/src/modules/auth/magic-link.integration.test.ts'],
   },
   {
     id: 'sign-in-link-into-an-erased-account',

@@ -512,7 +512,12 @@ export const readMySignIn = async (
   request: Request,
 ): Promise<MySignIn> => {
   const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
-  return await mySignIn(dependencies.database, userId, dependencies.auth.signInPolicy);
+  return await mySignIn(
+    dependencies.database,
+    userId,
+    dependencies.auth.signInPolicy,
+    dependencies.auth.google,
+  );
 };
 
 export const signOut = async (

@@ -278,7 +278,7 @@ describe('integration: a new person', () => {
       .executeTakeFirstOrThrow();
     expect(tokens).toEqual({ access_token: null, id_token: null, refresh_token: null });
     expect(
-      await mySignIn(db, userId, { requireTwoFactor: false, passwordSignIn: true }),
+      await mySignIn(db, userId, { requireTwoFactor: false, passwordSignIn: true }, true),
     ).toMatchObject({ google: true, oidc: false, github: null });
   });
 
