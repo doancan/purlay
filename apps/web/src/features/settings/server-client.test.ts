@@ -32,8 +32,9 @@ const ANSWER = {
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
   oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  googleCallbackUrl: 'https://purlay.test/auth/callback/google',
   githubApp: { callbackUrl: 'https://purlay.test/cb', webhookUrl: 'https://purlay.test/hook' },
-  channels: { github: true, email: false, oidc: false },
+  channels: { github: true, email: false, oidc: false, google: false },
   adminEmail: 'admin@example.test',
 };
 
@@ -62,6 +63,8 @@ describe('reading the settings', () => {
     for (const broken of [
       { ...ANSWER, adminEmail: 3 },
       { ...ANSWER, channels: { github: true } },
+      { ...ANSWER, channels: { github: true, email: false, oidc: false } },
+      { ...ANSWER, googleCallbackUrl: undefined },
       { ...ANSWER, needsReentry: 'x' },
       { ...ANSWER, appUrl: undefined },
       { ...ANSWER, githubApp: { callbackUrl: 'x' } },
@@ -96,6 +99,20 @@ describe('trying a channel', () => {
     expect(verdict).toEqual({ ok: true });
     expect(w.seen[0]?.path).toBe('/api/server/oidc');
     expect(w.seen[0]?.init.method).toBe('POST');
+  });
+
+  test('posts Google’s client and disconnects it by its own path', async () => {
+    const w = world(200, JSON.stringify({ ok: true }));
+    const verdict = await createServerClient(w.fetch).google({ clientId: 'a', clientSecret: 'b' });
+    expect(verdict).toEqual({ ok: true });
+    expect(w.seen[0]?.path).toBe('/api/server/google');
+    expect(w.seen[0]?.init.method).toBe('POST');
+    expect(w.seen[0]?.init.body).toBe('{"clientId":"a","clientSecret":"b"}');
+    const gone = world(204, '');
+    await createServerClient(gone.fetch).disconnect('google', true);
+    expect(gone.seen[0]?.path).toBe('/api/server/google');
+    expect(gone.seen[0]?.init.method).toBe('DELETE');
+    expect(gone.seen[0]?.init.body).toBe('{"confirmLastChannel":true}');
   });
 
   test('posts the GitHub App candidate and returns the verdict, and disconnects it by its own path', async () => {

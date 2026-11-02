@@ -234,6 +234,13 @@ describe('what the screen offers is what the server has connected', () => {
       view.unmount();
     });
 
+    test('with only Google and mail, the form is not alone: a rule parts it from the button', async () => {
+      const view = await open(withGoogle({ email: true }));
+      const form = view.getByRole('form', { name: 'Sign in with a password' });
+      expect(form.className).toContain('border-t-hairline');
+      view.unmount();
+    });
+
     test('Google alone is the one button, and the server is not said to be unset', async () => {
       const view = await open(withGoogle());
       const links = [...view.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
@@ -314,13 +321,13 @@ describe('what the screen offers is what the server has connected', () => {
     [
       'en',
       'This server is not set up yet',
-      'Neither GitHub, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
+      'Neither GitHub, Google, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
       'Set up this server',
     ],
     [
       'tr',
       'Bu sunucu henüz kurulmadı',
-      'GitHub ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+      'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
       'Bu sunucuyu kur',
     ],
   ] as const) {
