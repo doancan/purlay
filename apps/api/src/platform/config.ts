@@ -24,6 +24,8 @@ import {
   GITHUB_APP_PRIVATE_KEY_MAX,
   GITHUB_APP_SLUG_PATTERN,
   GITHUB_APP_WEBHOOK_SECRET_MAX,
+  GOOGLE_CLIENT_ID_MAX,
+  GOOGLE_CLIENT_SECRET_MAX,
   OIDC_NAME_MAX,
 } from '@purlay/types';
 import { githubAppKeyProblem } from './github-app-key';
@@ -90,6 +92,12 @@ export const Environment = Type.Object({
   /** A seed, as the GitHub app is (D-200): the OpenID Connect provider single sign-on goes through. The
    *  issuer, the client id and the client secret are all three or none; `OIDC_NAME` is the button's label.
    *  None is single sign-on off, and nothing is sent anywhere. */
+  /** A seed, as the GitHub app is (D-250): Google's OAuth client, the one provider whose address is fixed, so
+   *  an operator gives only who this server is to it. Both or neither; neither is Google off. */
+  GOOGLE_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_ID_MAX })),
+  GOOGLE_CLIENT_SECRET: Type.Optional(
+    Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_SECRET_MAX }),
+  ),
   OIDC_ISSUER: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
   OIDC_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
   OIDC_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
@@ -215,6 +223,7 @@ export type Config = Static<typeof Environment>;
 const SECRETS: ReadonlySet<string> = new Set([
   'GITHUB_CLIENT_SECRET',
   'OIDC_CLIENT_SECRET',
+  'GOOGLE_CLIENT_SECRET',
   'GITHUB_APP_CLIENT_SECRET',
   'GITHUB_APP_PRIVATE_KEY',
   'GITHUB_APP_WEBHOOK_SECRET',
@@ -364,6 +373,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   problems.push(...mailProblems(config));
   problems.push(...redisProblems(config));
   problems.push(...githubAppProblems(config));
+  problems.push(...googleProblems(config));
   problems.push(...oidcProblems(config));
   problems.push(...githubIssuesAppProblems(config));
   problems.push(...nativeClientProblems(config));
@@ -492,6 +502,12 @@ const mailProblems = (config: Config): string[] => {
 const githubAppProblems = (config: Config): string[] =>
   (config.GITHUB_CLIENT_ID === undefined) !== (config.GITHUB_CLIENT_SECRET === undefined)
     ? ['GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: set both, or neither']
+    : [];
+
+/** Google's OAuth client (D-250): both variables or neither, as the GitHub app's pair is. */
+const googleProblems = (config: Config): string[] =>
+  (config.GOOGLE_CLIENT_ID === undefined) !== (config.GOOGLE_CLIENT_SECRET === undefined)
+    ? ['GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: set both, or neither']
     : [];
 
 /**
