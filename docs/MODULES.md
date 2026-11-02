@@ -153,7 +153,7 @@ until then it is a stated intent and not a guarantee.
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
-| A module cannot starve the others of connections | a per-module cap and `statement_timeout`; a test with one module saturated | 5 |
+| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built**, a module is handed it when it is made | 5 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
