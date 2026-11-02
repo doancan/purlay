@@ -14,6 +14,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { portFor, startFresh, type FreshServer } from './fresh';
+import { skipReleaseNotes } from './support';
 
 const PORT = portFor(50);
 
@@ -35,6 +36,7 @@ test('walks a fresh server from the code to its first workspace', async ({ brows
   if (fresh === null) throw new Error('the server did not start');
   const { origin, code, github, relay } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
   const page = await context.newPage();
 
   // `/` on a server nobody has set up is the wizard.
@@ -114,6 +116,7 @@ test('walks a fresh server from the code to its first workspace', async ({ brows
   // Out and in again with the password (R30): a browser that holds nothing signs the administrator in
   // — a wrong password first, in the one sentence that does not say whether the address exists.
   const returning = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(returning);
   const again = await returning.newPage();
   await again.goto('/sign-in');
   const methods = await again.request.get('/api/auth/methods');

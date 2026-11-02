@@ -28,6 +28,9 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
       signUp: 'invite-only',
       password: true,
     }),
+  // The shell asks which version the server runs: a build the release notes know nothing of, which shows nothing,
+  // and nothing newer known, as a server that cannot reach GitHub answers. About's tests say otherwise.
+  latestRelease: () => Promise.resolve({ current: '0.0.0', latest: null }),
   // A server already set up, as the sign-in card's tests assume.
   setupStatus: () => Promise.resolve({ open: false, appUrl: 'http://localhost' }),
   authorizeNative: unexpected('authorizeNative'),

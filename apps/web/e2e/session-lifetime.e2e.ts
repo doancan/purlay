@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { portFor, startFresh, type FreshServer } from './fresh';
+import { skipReleaseNotes } from './support';
 
 const PORT = portFor(160);
 const EMAIL = 'elif@example.test';
@@ -55,6 +56,7 @@ test('an idle timeout chosen on the page signs out a session left unused, at its
   if (fresh === null) throw new Error('the server did not start');
   const { origin, code, github } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
   const send = async (path: string, data?: unknown): Promise<void> => {
     const response = await context.request.post(path, { data, headers: { origin } });
     expect(response.ok(), `${path}: ${String(response.status())} ${await response.text()}`).toBe(

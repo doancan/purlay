@@ -6,7 +6,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Persona, type Room } from './fixtures';
-import { history, writeInParallel, type ApiClient } from './support';
+import { history, writeInParallel, type ApiClient, skipReleaseNotes } from './support';
 
 const rowWith = (page: Page, text: string): Locator =>
   page.locator('[data-message-row]', { hasText: text });
@@ -266,6 +266,7 @@ test.describe('resolving', () => {
         ...(colorScheme === undefined ? {} : { colorScheme }),
         ...(viewport === undefined ? {} : { viewport }),
       });
+      await skipReleaseNotes(context);
       await securityPolicy.watch(context);
       await context.addCookies([
         {

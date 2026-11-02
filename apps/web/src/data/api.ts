@@ -69,6 +69,7 @@ import {
   NativeAuthorizeResponse,
   type NativeAuthorizeRequest,
   MySignIn,
+  LatestReleaseAnswer,
   DeviceSessionList,
   PasswordSignInAnswer,
   TwoFactorEnrolment,
@@ -386,6 +387,8 @@ export interface Api {
   /** Throws away one's own upload that was never sent (D-109 §5). */
   readonly discardAttachment: (attachmentId: string) => Promise<void>;
 
+  /** The version this server runs and the newest release as it could learn it; `latest` is null when it could not (D-248). */
+  readonly latestRelease: (signal?: AbortSignal) => Promise<LatestReleaseAnswer>;
   /** Which ways in this server offers: GitHub always, email when mail is configured (D-138 §6). */
   readonly authMethods: (signal?: AbortSignal) => Promise<AuthMethods>;
   /** Whether the server is open to setup, and the address it is configured for (D-179 §4). */
@@ -983,6 +986,8 @@ export const createApi = (http: Http): Api => {
     deleteMessage: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}`, options()),
     discardAttachment: (attachmentId) =>
       http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
+    latestRelease: (signal) =>
+      http.request('GET', '/api/releases/latest', LatestReleaseAnswer, options({}, signal)),
     authMethods: (signal) =>
       http.request('GET', '/api/auth/methods', AuthMethods, options({}, signal)),
     setupStatus: (signal) =>

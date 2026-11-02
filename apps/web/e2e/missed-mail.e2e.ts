@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { messageId } from '@purlay/types';
 import { letterWith, linkIn, portFor, startFresh, type FreshServer } from './fresh';
-import { wallClock } from './support';
+import { wallClock, skipReleaseNotes } from './support';
 
 const PORT = portFor(60);
 const PASSWORD = 'a long and unusual phrase 7';
@@ -65,6 +65,7 @@ test('turned on in Notifications, one letter about a direct message, and its lin
 
   // The server, set up with a relay, by its administrator — whose address the relay's letter verifies.
   const ada = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(ada);
   const asAda = posting(ada.request, origin);
   await asAda('/setup/claim', { code });
   await asAda('/setup/admin', {
@@ -106,6 +107,7 @@ test('turned on in Notifications, one letter about a direct message, and its lin
     {},
   );
   const ayse = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(ayse);
   const asAyse = posting(ayse.request, origin);
   await asAyse('/api/invitations/passport', { token: invitation, email: 'ayse@example.test' });
   await asAyse('/auth/email', { email: 'ayse@example.test', locale: 'en' });
@@ -175,6 +177,7 @@ test('turned on in Notifications, one letter about a direct message, and its lin
   // The stop link, in a browser with nobody signed in: it asks first, then stops it.
   const stop = linkIn(letter, /\/mail\/stop#[0-9a-f]{64}/);
   const stranger = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(stranger);
   const reading = await stranger.newPage();
   await reading.goto(stop);
   await expect(reading.getByRole('heading', { name: 'Stop these emails?' })).toBeVisible();

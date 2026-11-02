@@ -118,6 +118,10 @@ export const Environment = Type.Object({
    *  Server. Checked as `GITHUB_URL` is. */
   GITHUB_API_URL: Type.String({ minLength: 1, default: GITHUB_API_URL_DEFAULT }),
 
+  /** Whether the server asks GitHub, at most once in six hours, which release of Purlay is newest, so that About
+   *  can say whether this one is (D-248). Off, it never calls GitHub for it. */
+  UPDATE_CHECK: Type.Boolean({ default: true }),
+
   /** 32 bytes, base64. The root secret; the OAuth state signing key is derived
    *  from it with domain separation rather than being a second variable (D-62).
    *  Decoded and checked in `loadConfig`: a length says nothing about entropy. */

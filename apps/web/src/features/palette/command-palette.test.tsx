@@ -166,6 +166,7 @@ describe('what is on offer before anything is typed', () => {
       'Notifications',
       'Keyboard shortcuts',
       'Sessions & account',
+      'About',
       'General',
       'Members',
       'Invitations',

@@ -11,6 +11,7 @@
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { messageId } from '@purlay/types';
 import { expect, test } from '@playwright/test';
+import { skipReleaseNotes } from './support';
 import { portFor, startFresh, type FreshServer } from './fresh';
 
 const PORT = portFor(120);
@@ -39,6 +40,7 @@ test('the administrator connects the App, an owner installs it, a person allows 
   if (fresh === null) throw new Error('the server did not start');
   const { origin, code, github, githubApp } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
 
   // The setup, finished through the API: the administrator is the first workspace's owner.
   const send = async (path: string, data?: unknown): Promise<void> => {
@@ -212,6 +214,7 @@ test('the administrator connects the App, an owner installs it, a person allows 
     locale: 'tr-TR',
     storageState: await context.storageState(),
   });
+  await skipReleaseNotes(turkish);
   const tr = await turkish.newPage();
   // The thread, in Turkish: the work it points at, and the dialog's words.
   await tr.goto(`/w/acme-engineering/c/${channelId}?thread=${rootId}`);

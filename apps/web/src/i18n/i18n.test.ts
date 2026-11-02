@@ -164,6 +164,14 @@ describe('timestamps', () => {
     expect(f.time(new Date('2026-10-10T14:28:00Z'), now)).toBe('12m ago');
   });
 
+  test('a date is a day in words with no time, in the person’s zone', () => {
+    expect(f.date('2026-10-10T14:32:00Z')).toBe('Oct 10, 2026');
+    expect(createFormatters('en', 'Pacific/Auckland').date('2026-10-10T14:32:00Z')).toBe(
+      'Oct 11, 2026',
+    );
+    expect(createFormatters('tr', 'UTC').date('2026-10-10T14:32:00Z')).toBe('10 Eki 2026');
+  });
+
   test('the absolute time is complete', () => {
     expect(f.absolute('2026-10-10T14:32:00Z')).toMatch(/^Oct 10, 2026.*2:32\sPM$/);
   });

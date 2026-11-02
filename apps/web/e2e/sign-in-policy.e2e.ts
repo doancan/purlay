@@ -11,7 +11,7 @@
 import { createHmac } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { portFor, startFresh, type FreshServer } from './fresh';
-import { wallClock } from './support';
+import { wallClock, skipReleaseNotes } from './support';
 
 const PORT = portFor(110);
 const EMAIL = 'ayse@example.test';
@@ -53,6 +53,7 @@ test('the administrator requires two-step verification, is held back until it is
   if (fresh === null) throw new Error('the server did not start');
   const { origin, code, github } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
   const send = async (path: string, data?: unknown): Promise<void> => {
     const response = await context.request.post(path, { data, headers: { origin } });
     expect(response.ok(), `${path}: ${String(response.status())} ${await response.text()}`).toBe(
@@ -136,6 +137,7 @@ test('the administrator requires two-step verification, is held back until it is
 
   // A new browser: no password form, and the server refuses a password all the same.
   const stranger = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(stranger);
   const signIn = await stranger.newPage();
   await signIn.goto('/sign-in');
   await expect(signIn.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();

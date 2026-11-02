@@ -36,6 +36,7 @@ import { afterAnswer } from '../../platform/after-answer';
 import type { SignInLinkDependencies } from '../../modules/auth/magic-link';
 import { authMethods } from './auth-methods';
 import { clientInfo, clientPolicyOf } from './client-info';
+import { readLatestRelease } from './releases';
 import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
@@ -171,6 +172,7 @@ import {
   platformAppFetch,
   type GitHubAppFetch,
 } from '../../modules/integrations/github-app-api';
+import { latestReleaseCheck } from '../../modules/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
   createWorkspaceChannel,
@@ -525,6 +527,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     ),
     githubUrls,
   );
+  // One per application: what it has asked GitHub is kept for every caller (D-248).
+  const releases = latestReleaseCheck({
+    enabled: dependencies.config.UPDATE_CHECK,
+    apiUrl: dependencies.config.GITHUB_API_URL,
+    fetch: dependencies.githubAppFetch ?? platformAppFetch,
+    clock: dependencies.clock,
+    log,
+  });
   const githubIssues = (): GitHubIssueRouteDependencies => ({
     ...githubApp(),
     bus: sockets.bus,
@@ -925,6 +935,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return new Response(body, { headers });
     })
     .get('/api/me', async ({ request }) => await readMe(creating, request))
+    .get(
+      '/api/releases/latest',
+      async ({ request }) =>
+        await readLatestRelease({ auth: dependencies.auth, releases }, request),
+    )
     .get('/api/me/sign-in', async ({ request }) => await readMySignIn(dependencies, request))
     .get(
       '/api/me/sessions',

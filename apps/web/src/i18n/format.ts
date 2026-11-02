@@ -20,6 +20,8 @@ import type { Locale } from './types';
 export interface Formatters {
   /** The short timestamp a message row shows. */
   readonly time: (value: Date | string, now: Date) => string;
+  /** A calendar day in words, without a time: "Oct 30, 2026". */
+  readonly date: (value: Date | string) => string;
   /** The full time, for hover and for assistive technology. */
   readonly absolute: (value: Date | string) => string;
   /** The label of a day divider; `today` and `yesterday` are the catalogue's words. */
@@ -75,6 +77,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
     timeStyle: 'short',
     ...zone,
   });
+  const dateOnly = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', ...zone });
   const calendarDay = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',
@@ -157,6 +160,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
       if (sameDay(date, now)) return clock.format(date);
       return (sameYear(date, now) ? monthDay : monthDayYear).format(date);
     },
+    date: (value) => dateOnly.format(asDate(value)),
     absolute: (value) => full.format(asDate(value)),
     day: (value, now, words): string => {
       const date = asDate(value);

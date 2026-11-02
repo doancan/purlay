@@ -12,6 +12,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { skipReleaseNotes } from './support';
 
 interface Manifest {
   readonly origin: string;
@@ -65,6 +66,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   if (manifest === null) throw new Error('the server did not start');
   const { origin, code, github } = manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
 
   // The setup, finished through the API: the administrator ends up signed in.
   const send = async (path: string, data?: unknown): Promise<void> => {
@@ -147,6 +149,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
 
   // Anybody else is told the route does not exist.
   const stranger = await browser.newContext({ baseURL: origin });
+  await skipReleaseNotes(stranger);
   const refused = await stranger.request.get('/api/server/settings');
   expect(refused.status()).toBe(404);
   expect((await stranger.request.get('/api/server/accounts')).status()).toBe(404);

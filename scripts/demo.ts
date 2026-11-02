@@ -123,14 +123,28 @@ if (files !== null) {
 }
 // GitHub's API is not reachable from here either: a token saved on the Integrations page is checked
 // against this stand-in, which knows every token and says nothing of its scopes (D-23, amended).
-// It answers nothing else, so a card is a plain link here as it was.
+// It answers the newest release About asks for (D-248), a version far ahead of any this repository will
+// make so that About always has a newer one to name, and nothing else, so a card is a plain link here as
+// it was.
 const github = Bun.serve({
   port: 0,
   hostname: '127.0.0.1',
-  fetch: (request) =>
-    new URL(request.url).pathname === '/rate_limit' && request.headers.has('authorization')
-      ? Response.json({ resources: {} })
-      : Response.json({ message: 'Not Found' }, { status: 404 }),
+  fetch: (request) => {
+    const path = new URL(request.url).pathname;
+    if (path === '/rate_limit' && request.headers.has('authorization')) {
+      return Response.json({ resources: {} });
+    }
+    if (path === '/repos/doancan/purlay/releases/latest') {
+      return Response.json({
+        tag_name: 'v99.0.0',
+        html_url: 'https://github.com/doancan/purlay/releases/tag/v99.0.0',
+        published_at: '2026-11-01T09:00:00Z',
+        draft: false,
+        prerelease: false,
+      });
+    }
+    return Response.json({ message: 'Not Found' }, { status: 404 });
+  },
 });
 say(`starting the API on :${String(apiPort)}…`);
 const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {

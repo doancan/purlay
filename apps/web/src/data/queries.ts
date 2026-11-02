@@ -20,6 +20,7 @@ import {
 import type {
   AuthMethods,
   MySignIn,
+  LatestReleaseAnswer,
   DeviceSessionList,
   Channel,
   MeResponse,
@@ -93,6 +94,23 @@ export const useSetupStatus = (enabled = true): UseQueryResult<SetupStatusAnswer
     queryKey: keys.setupStatus,
     queryFn: ({ signal }) => api.setupStatus(signal),
     enabled,
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+};
+
+/**
+ * The version this server runs and the newest release as it learned it (D-248). One read for both, from the
+ * session's own route: the public `GET /api/client` is charged to the address with the sign-in traffic and is not
+ * for the browser to ask on every load. The server keeps the release for hours, so the page asks once.
+ */
+export const useLatestRelease = (): UseQueryResult<LatestReleaseAnswer> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.latestRelease,
+    queryFn: ({ signal }) => api.latestRelease(signal),
+    // A refusal (a limit, a lapsed session) is shown at once with Retry: asking again in a second is no answer.
     retry: false,
     staleTime: Infinity,
     refetchOnWindowFocus: false,

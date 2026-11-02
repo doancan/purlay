@@ -243,7 +243,7 @@ export const limitOf = (response: Response, now: Date): number | null => {
 };
 
 /** A body read as JSON and checked; anything else is GitHub unavailable, said without the body. */
-const readChecked = async <T extends TSchema>(
+export const readChecked = async <T extends TSchema>(
   response: Response,
   schema: T,
   what: string,
