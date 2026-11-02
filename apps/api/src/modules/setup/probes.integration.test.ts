@@ -39,6 +39,7 @@ import {
   OIDC_PROBE_CODE,
   probeAppKey,
   probeGitHub,
+  probeGoogle,
   probeOidc,
   probeSmtp,
   RAW_MAX,
@@ -769,6 +770,45 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
   ])('%s is %s', async (_what, behaviour, reason) => {
     const { issuer } = await provider(behaviour);
     expect(failure(await tryIt(issuer)).reason).toBe(reason);
+  });
+
+  describe('Google (D-250)', () => {
+    const tryGoogle = async (issuer: string, clientSecret: string): Promise<ProbeResult> =>
+      await probeGoogle(
+        AUTHORITY,
+        { clientId: OIDC_STUB_CREDENTIALS.clientId, clientSecret },
+        issuer,
+        {
+          fetch: (url, init) => fetch(url, init),
+          appUrl: APP,
+          log: createLogger({ level: 'silent' }),
+        },
+      );
+
+    test('a client Google takes is ok, asked with a code nobody was given', async () => {
+      const { stub, issuer } = await provider();
+      expect(await tryGoogle(issuer, OIDC_STUB_CREDENTIALS.clientSecret)).toEqual({ ok: true });
+      expect(stub.refusals).toEqual(['invalid_grant']);
+      expect(stub.presentedCodes).toEqual([OIDC_PROBE_CODE]);
+    });
+
+    test('a secret Google refuses is secret-rejected, and the reply shows none of it', async () => {
+      const { issuer } = await provider();
+      const result = failure(await tryGoogle(issuer, 'S3CRET-google-wrong'));
+      expect(result.reason).toBe('secret-rejected');
+      expect(result.raw).not.toContain('S3CRET-google-wrong');
+    });
+
+    test('a Google nothing answers for is unreachable, and one that is not a provider is refused', async () => {
+      const closed = await aClosedPort();
+      expect(failure(await tryGoogle(`http://127.0.0.1:${String(closed)}`, 'x')).reason).toBe(
+        'unreachable',
+      );
+      const { issuer } = await provider({ discovery: 'issuer-mismatch' });
+      expect(failure(await tryGoogle(issuer, OIDC_STUB_CREDENTIALS.clientSecret)).reason).toBe(
+        'issuer-mismatch',
+      );
+    });
   });
 
   test('a provider nothing answers for is unreachable', async () => {
