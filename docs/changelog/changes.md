@@ -23,6 +23,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Security
+
+- **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)
 
 ---
