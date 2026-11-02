@@ -17,7 +17,12 @@
  */
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Message, Reaction, WorkspaceMember } from '@purlay/types';
+import {
+  REACTIONS_PER_PERSON_MAX,
+  type Message,
+  type Reaction,
+  type WorkspaceMember,
+} from '@purlay/types';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useActions } from '../../data/actions-provider';
@@ -45,7 +50,11 @@ export const QUICK_REACTIONS = [
 /** How many people a chip's tip names before it counts the rest. */
 const NAMED = 3;
 
-/** Adds the person's reaction, or takes it back when it is already there; says so if it fails. */
+/**
+ * Adds the person's reaction, or takes it back when it is already there; says so if it fails.
+ * One past the person's limit on the message (D-249) is not sent: the toast says why and how to
+ * make room, where the server's refusal would only say that it was not saved.
+ */
 const useToggle = (message: Message, meId: string): ((emoji: string) => void) => {
   const { react, unreact } = useActions();
   const { show } = useToast();
@@ -53,6 +62,11 @@ const useToggle = (message: Message, meId: string): ((emoji: string) => void) =>
   const describe = useDescribeFailure();
   return (emoji): void => {
     const mine = message.reactions.some((r) => r.emoji === emoji && r.userIds.includes(meId));
+    const given = message.reactions.filter((r) => r.userIds.includes(meId)).length;
+    if (!mine && given >= REACTIONS_PER_PERSON_MAX) {
+      show({ message: t('message.reactionLimit', { count: REACTIONS_PER_PERSON_MAX }) });
+      return;
+    }
     if (!mine && hasPartyPopper(emoji)) celebrate();
     (mine ? unreact(message, emoji) : react(message, emoji)).catch((failure: unknown) => {
       show({ message: `${t('message.reactionFailed')} ${describe(failure)}` });

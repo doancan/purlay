@@ -2540,6 +2540,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
   {
+    id: 'reactions-per-person-not-checked',
+    why: 'one person can put every emoji on a message, the D-249 limit of three a promise only the client keeps',
+    file: 'apps/api/src/modules/reactions/reactions.ts',
+    find: '      if (await wouldExceedPerson(transaction, messageId, caller.userId, emoji)) {\n',
+    replace: '      if (false) {\n',
+    tests: ['apps/api/src/modules/reactions/reactions.integration.test.ts'],
+  },
+  {
     id: 'channel-state-version-not-counted',
     why: 'a late CHANNEL_STATE cannot be told from a newer one, so an old badge overwrites the current number until something else moves it',
     file: 'apps/api/src/modules/messages/delivery.ts',
@@ -8679,7 +8687,7 @@ export const MUTATIONS: readonly Mutation[] = [
     why: 'a list that is not GitHub logins reaches the settings and is a server error instead of a refusal',
     file: 'apps/api/src/ingress/http/server.ts',
     find: '      if (!logins.every(isGitHubLogin)) {\n',
-    replace: '      if (false as boolean) {\n',
+    replace: '      if (false) {\n',
     tests: [SERVER_TESTS],
   },
   {
