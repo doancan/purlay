@@ -10189,7 +10189,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'oidc-issuer-of-token-not-checked',
     why: 'a token signed by another issuer is believed: a mix-up',
     file: OIDC,
-    find: '      issuer,\n      audience: clientId,',
+    find: '      issuer: accepted,\n      audience: clientId,',
     replace: '      audience: clientId,',
     tests: [OIDC_TESTS],
   },

@@ -33,6 +33,12 @@
  * sign-in is refused (`OIDC_EMAIL_UNVERIFIED`) — the library then links an existing account only if that
  * account's own address is verified too (D-200 §3).
  *
+ * **One core, two providers** (`OidcDefinition`): the provider an operator configures is `OIDC_DEFINITION`, and a
+ * fixed provider (Google, `google.ts`) is the same verification with what differs said by its definition — the
+ * issuers a token's `iss` may name, how the account is keyed, the codes a refusal is said by, the log's prefix,
+ * and an `admit` asked once the token and its address are believed. Discovery is never widened: its `issuer`
+ * must still be the configured one exactly.
+ *
  * Everything that reaches the network goes through `fetch`, an argument, so a test stands a provider of its own
  * in place of the real one (`testing/fake-oidc-provider.ts`).
  */
@@ -67,6 +73,33 @@ export type OidcFetch = GithubFetch;
 
 /** The provider's identifier in the library's tables: `accounts.provider_id` (D-200 §3). */
 export const OIDC_PROVIDER_ID = 'oidc';
+
+/**
+ * What makes a provider the one it is, over the core every provider shares (D-200, D-250). The generic slot's
+ * is `OIDC_DEFINITION`; a fixed provider names its own.
+ */
+export interface OidcDefinition {
+  /** `accounts.provider_id`, and the library's name for the provider: `oidc` or `google`. */
+  readonly id: string;
+  /**
+   * The `iss` an `id_token` may carry besides the configured issuer, which it always may (and only that, where
+   * this is empty). Only the token's check is widened by it: the discovery document's `issuer` must equal the
+   * configured issuer exactly, whatever this holds.
+   */
+  readonly acceptedIssuers: readonly string[];
+  /** `accounts.account_id` for a subject under the configured issuer. */
+  readonly accountKey: (issuer: string, subject: string) => string;
+  /** The `APIError` codes the provider not answering, and an address it did not vouch for, are said by. */
+  readonly codes: { readonly unavailable: string; readonly unverified: string };
+  /** What every log line of a sign-in through it begins with. */
+  readonly logPrefix: string;
+  /** Asked after the token is verified, before the library links or creates; throws APIError to refuse. */
+  readonly admit?: (
+    claims: Readonly<Record<string, unknown>>,
+    email: string,
+    accountId: string,
+  ) => Promise<void>;
+}
 
 /** The scopes asked for: the identity, and the address and name it carries — nothing that grants anything. */
 const SCOPES: readonly string[] = ['openid', 'email', 'profile'];
@@ -338,7 +371,7 @@ export interface OidcDependencies {
 
 /** The provider, as the sign-in library takes one (`OAuthProvider`): everything it does is below. */
 export interface OidcProvider {
-  readonly id: typeof OIDC_PROVIDER_ID;
+  readonly id: string;
   readonly name: string;
   /** Checks the discovery document and the key set now (the probe's, and a test's), throwing as `discover` does. */
   readonly check: () => Promise<Discovery>;
@@ -356,9 +389,13 @@ export const createOidcProvider = (
   credentials: OidcCredentials,
   name: string,
   deps: OidcDependencies,
+  definition: OidcDefinition = OIDC_DEFINITION,
 ): OidcProvider => {
   const { fetch: get, clock, log } = deps;
   const { issuer, clientId } = credentials;
+  const { id, codes, logPrefix } = definition;
+  // Never empty: the configured issuer is always one, so no definition can leave `iss` unchecked.
+  const accepted = [...new Set([issuer, ...definition.acceptedIssuers])];
 
   /** The metadata, fetched once an hour and by one request at a time. */
   let discovery: { readonly value: Discovery; readonly at: number } | undefined;
@@ -424,7 +461,7 @@ export const createOidcProvider = (
     if (nonce === undefined || nonce === '')
       throw new Error('the sign-in carries no nonce to bind the token to');
     const { payload } = await jwtVerify(idToken, keyFor(metadata.jwksUri), {
-      issuer,
+      issuer: accepted,
       audience: clientId,
       algorithms: [...metadata.algorithms],
       requiredClaims: ['iss', 'sub', 'aud', 'exp', 'iat'],
@@ -459,21 +496,21 @@ export const createOidcProvider = (
   }): Promise<OAuth2Tokens | null> => {
     // No verifier, no request: the code is no use to anybody who did not start this sign-in (PKCE).
     if (codeVerifier === undefined || codeVerifier === '') {
-      log.error('oidc sign-in: the library gave no PKCE verifier for the code');
+      log.error(`${logPrefix}: the library gave no PKCE verifier for the code`);
       return null;
     }
     let metadata: Discovery;
     try {
       metadata = await discovered();
     } catch (error) {
-      log.warn('oidc sign-in: the provider could not be discovered', { err: error });
+      log.warn(`${logPrefix}: the provider could not be discovered`, { err: error });
       return null;
     }
     let answer: { readonly status: number; readonly json: unknown };
     try {
       answer = await tokenRequest(metadata, credentials, { code, codeVerifier, redirectURI }, get);
     } catch (error) {
-      log.warn('oidc sign-in: the token endpoint could not be reached', { err: error });
+      log.warn(`${logPrefix}: the token endpoint could not be reached`, { err: error });
       return null;
     }
     const body = isRecord(answer.json) ? answer.json : {};
@@ -483,7 +520,7 @@ export const createOidcProvider = (
       // A client the provider no longer accepts is the operator's to fix, and every sign-in fails until they do:
       // loud, where a spent code is a person's retry.
       const level = said === 'invalid_client' || said === 'unauthorized_client' ? 'error' : 'warn';
-      log[level]('oidc sign-in: the provider gave no id_token for the code', {
+      log[level](`${logPrefix}: the provider gave no id_token for the code`, {
         status: answer.status,
         ...(typeof said === 'string' ? { oidcError: said.slice(0, 64) } : {}),
       });
@@ -504,7 +541,7 @@ export const createOidcProvider = (
     data: { readonly sub: string; readonly iss: string };
   } | null> => {
     if (tokens.idToken === undefined || tokens.idToken === '') {
-      log.warn('oidc sign-in: the token response held no id_token');
+      log.warn(`${logPrefix}: the token response held no id_token`);
       return null;
     }
     let claims: Readonly<Record<string, unknown>>;
@@ -513,16 +550,16 @@ export const createOidcProvider = (
     } catch (error) {
       // A key set that could not be had is the provider's failing, not the token's: said as such.
       if (error instanceof OidcDiscoveryError) {
-        log.warn('oidc sign-in: the keys of the provider could not be had', {
+        log.warn(`${logPrefix}: the keys of the provider could not be had`, {
           reason: error.reason,
         });
         throw new APIError('BAD_GATEWAY', {
-          code: 'OIDC_UNAVAILABLE',
+          code: codes.unavailable,
           message: 'The single sign-on provider did not answer.',
         });
       }
       // Which check refused it is the log's, by name; the person is told it did not work, never why.
-      log.warn('oidc sign-in: the id_token was refused', {
+      log.warn(`${logPrefix}: the id_token was refused`, {
         reason: error instanceof Error ? error.name : 'unknown',
         ...(error instanceof errors.JOSEError ? { code: error.code } : {}),
       });
@@ -534,13 +571,17 @@ export const createOidcProvider = (
       typeof claims['email'] === 'string' ? normalisedMailbox(claims['email']) : undefined;
     const yes = claims['email_verified'] === true || claims['email_verified'] === 'true';
     if (email === undefined || !yes) {
-      log.info('oidc sign-in: the provider did not vouch for a verified address');
+      log.info(`${logPrefix}: the provider did not vouch for a verified address`);
       throw new APIError('FORBIDDEN', {
-        code: 'OIDC_EMAIL_UNVERIFIED',
+        code: codes.unverified,
         message: 'The provider did not say the address is verified.',
       });
     }
-    deps.onIdentity(accountKeyOf(issuer, subject));
+    const accountId = definition.accountKey(issuer, subject);
+    // The provider's own say on who may come in (Google's address rules), once the token and its address are
+    // believed and before anybody is told of the account; a refusal is thrown as it is.
+    if (definition.admit !== undefined) await definition.admit(claims, email, accountId);
+    deps.onIdentity(accountId);
     return {
       user: {
         name: oidcDisplayName(claims['name']),
@@ -555,7 +596,7 @@ export const createOidcProvider = (
   };
 
   const provider: OAuthProvider<OidcProfile> = {
-    id: OIDC_PROVIDER_ID,
+    id,
     name,
     issuer,
     // The nonce is bound to the state this sign-in made, and a callback without it is refused.
@@ -566,7 +607,7 @@ export const createOidcProvider = (
     // Only a person who started it by pressing the button; a provider-initiated sign-in is not served.
     allowIdpInitiated: false,
     accountSubject: ({ profile }: { readonly profile: { readonly sub: string } }): string =>
-      accountKeyOf(issuer, profile.sub),
+      definition.accountKey(issuer, profile.sub),
     createAuthorizationURL: async (data: {
       readonly state: string;
       readonly codeVerifier: string;
@@ -577,14 +618,14 @@ export const createOidcProvider = (
       try {
         metadata = await discovered();
       } catch (error) {
-        log.warn('oidc sign-in: the provider could not be discovered', { err: error });
+        log.warn(`${logPrefix}: the provider could not be discovered`, { err: error });
         throw new APIError('BAD_GATEWAY', {
-          code: 'OIDC_UNAVAILABLE',
+          code: codes.unavailable,
           message: 'The single sign-on provider did not answer.',
         });
       }
       return await createAuthorizationURL({
-        id: OIDC_PROVIDER_ID,
+        id,
         options: { clientId, redirectURI: data.redirectURI },
         authorizationEndpoint: metadata.authorizationEndpoint,
         state: data.state,
@@ -598,7 +639,7 @@ export const createOidcProvider = (
     getUserInfo: userInfo,
   };
   return {
-    id: OIDC_PROVIDER_ID,
+    id,
     name,
     provider,
     check: async (): Promise<Discovery> => {
@@ -611,6 +652,19 @@ export const createOidcProvider = (
 
 /** What the library keeps as the account's id: the issuer and the subject, so a repeated `sub` is no other's. */
 export const accountKeyOf = (issuer: string, subject: string): string => `${issuer}|${subject}`;
+
+/**
+ * The provider an operator configures (D-200): the token's `iss` exactly the configured issuer and nothing
+ * beside it, the account keyed by issuer and subject, refused by the `OIDC_*` codes, and nothing more asked
+ * before the library acts.
+ */
+const OIDC_DEFINITION: OidcDefinition = {
+  id: OIDC_PROVIDER_ID,
+  acceptedIssuers: [],
+  accountKey: accountKeyOf,
+  codes: { unavailable: 'OIDC_UNAVAILABLE', unverified: 'OIDC_EMAIL_UNVERIFIED' },
+  logPrefix: 'oidc sign-in',
+};
 
 /** A credential part as RFC 6749 §2.3.1 sends it in the header: `application/x-www-form-urlencoded`. */
 const formEncoded = (value: string): string =>
