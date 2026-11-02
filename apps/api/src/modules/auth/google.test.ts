@@ -145,6 +145,28 @@ describe('the Google definition', () => {
     });
     expect(refused).toMatchObject({ status: 'BAD_GATEWAY', body: { code: 'GOOGLE_UNAVAILABLE' } });
   });
+
+  test('each provider says its refusals as itself, and the generic one’s words are what they always were', async () => {
+    const unverified = { claims: { email_verified: false } };
+    const unreachable = { jwks: 'unreachable' as const };
+    const google = googleDefinition(ISSUER, admitting);
+    expect((await verifying(google, unverified)).refused).toMatchObject({
+      body: { message: 'Google did not say the address is verified.' },
+    });
+    expect((await verifying(google, unreachable)).refused).toMatchObject({
+      body: { message: 'Google did not answer the sign-in.' },
+    });
+    // A client of the library's social route reads these as they are: the generic provider's are unchanged.
+    expect((await verifying(OIDC_DEFINITION, unverified)).refused).toMatchObject({
+      body: {
+        code: 'OIDC_EMAIL_UNVERIFIED',
+        message: 'The provider did not say the address is verified.',
+      },
+    });
+    expect((await verifying(undefined, unreachable)).refused).toMatchObject({
+      body: { code: 'OIDC_UNAVAILABLE', message: 'The single sign-on provider did not answer.' },
+    });
+  });
 });
 
 describe('admission', () => {

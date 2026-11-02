@@ -23,6 +23,7 @@ import {
 } from '@purlay/db';
 import { AuthMethods, type SignInFailure } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
+import { isAPIError } from 'better-auth/api';
 import { createApp, type HttpApplication } from './app';
 import { RETRY_COOKIE, STATE_COOKIE } from '../../platform/cookies';
 import type { Clock } from '../../platform/clock';
@@ -281,6 +282,21 @@ describe('integration: a new person', () => {
     ).toMatchObject({ google: true, oidc: false, github: null });
   });
 
+  test('with an address outside Gmail and no hd, no account having it: made as any sign-up, Google’s say not needed', async () => {
+    const person = aPerson({ email: `ali-${unique()}@sirket.com` });
+    const server = await aServer(person);
+    const userId = await expectSignedIn(
+      server,
+      await signInWithGoogle(server.app, ORIGIN, server.stub),
+    );
+    const user = await userBy('id', userId);
+    expect(user?.email).toBe(person.email);
+    expect(user?.google_made).toBe(true);
+    expect(await accountsOf(userId)).toEqual([
+      { provider_id: GOOGLE_PROVIDER_ID, account_id: person.sub },
+    ]);
+  });
+
   test('on an invite-only server without a passport is signup-closed, and nothing is made', async () => {
     const person = aPerson();
     const server = await aServer(person, { signUp: 'invite-only' });
@@ -326,6 +342,26 @@ describe('integration: a new person', () => {
     server.stub.person = other;
     expectSentBack(await signInWithGoogle(server.app, ORIGIN, server.stub, pair), 'signup-closed');
     expect(await userBy('email', other.email)).toBeUndefined();
+  });
+});
+
+describe('integration: the sign-in round', () => {
+  test('a Google sign-in is served only inside the handler, where google_made is written', async () => {
+    const server = await aServer(aPerson());
+    const provider = (await server.auth.$context).socialProviders.find(
+      (one) => one.id === GOOGLE_PROVIDER_ID,
+    );
+    const nonce = 'n'.repeat(32);
+    const refused = await provider
+      ?.getUserInfo({
+        idToken: await server.stub.mint(nonce),
+        expectedIdTokenNonce: nonce,
+      })
+      .then(
+        () => 'answered',
+        (error: unknown) => (isAPIError(error) ? error.statusCode : String(error)),
+      );
+    expect(refused).toBe(500);
   });
 });
 
