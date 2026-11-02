@@ -14,7 +14,9 @@
  * but only some addresses are Google's to vouch for — a Gmail address, or one in a Workspace domain the token
  * names in `hd`. Any other address Google knows was verified once, by somebody, and may since have changed
  * hands; it is not enough to link an existing account by (D-250). The rule is the caller's to apply, in
- * `admit`, which the sign-in hands in with the database it needs.
+ * `admit`, which the sign-in hands in with the database it needs. The same rule says what an account Google
+ * makes keeps: its address proven only where it is Google's (`emailVerified`), so that GitHub or single sign-on
+ * cannot link into an account Google made at an address Google merely knows.
  */
 import type { OidcDefinition } from './oidc';
 
@@ -41,6 +43,9 @@ export const googleDefinition = (
     unverified: 'Google did not say the address is verified.',
   },
   logPrefix: 'google sign-in',
+  // An account Google makes keeps its address as proven only where Google speaks for it, so nothing else links
+  // into it by an address Google merely knows (D-250 §3); Google itself signs it in by the `sub` whatever it holds.
+  emailVerified: (claims, email) => authoritativeForGoogle(email, claims['hd']),
   ...(admit === undefined ? {} : { admit }),
 });
 
