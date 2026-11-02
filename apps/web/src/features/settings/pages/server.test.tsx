@@ -16,6 +16,7 @@ import {
 } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import { en } from '../../../i18n/catalogue/en';
+import { tr } from '../../../i18n/catalogue/tr';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import { aSession, aSignedInApi } from '../../../testing/fixtures';
@@ -97,6 +98,7 @@ const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
   settings: () => Promise.resolve(anAnswer()),
   github: unexpected('github'),
   oidc: unexpected('oidc'),
+  google: unexpected('google'),
   smtp: unexpected('smtp'),
   githubApp: unexpected('githubApp'),
   disconnect: unexpected('disconnect'),
@@ -969,6 +971,166 @@ describe('Settings → Server — single sign-on (D-200)', () => {
 
   test('has no axe violations connected or not', async () => {
     const view = await render(aClient({ settings: () => Promise.resolve(WITH_OIDC) }));
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+});
+
+const GOOGLE_VIEW = {
+  clientId: '1234-abc.apps.googleusercontent.com',
+  clientSecret: { set: true as const },
+};
+
+const WITH_GOOGLE = anAnswer({
+  settings: { ...anAnswer().settings, google: GOOGLE_VIEW },
+  channels: { github: false, email: false, oidc: false, google: true },
+});
+
+describe('Settings → Server — Google (D-250)', () => {
+  const GOOGLE_REASONS_A_TRY_GIVES = [
+    'secret-rejected',
+    'client-unknown',
+    'unreachable',
+    'tls-failed',
+    'unexpected-reply',
+  ] as const;
+
+  const fill = async (scope: Scope, secret = 'shh-google'): Promise<void> => {
+    await person().type(scope.getByLabelText('Client ID'), ' 1234-abc.apps.googleusercontent.com ');
+    await person().type(scope.getByLabelText('Client secret'), secret);
+  };
+
+  test('says nothing is connected, and shows the address to register, which copies', async () => {
+    const view = await render(aClient());
+    const google = card(view, 'Sign in with Google');
+    expect(google.getByText('Not connected')).toBeDefined();
+    expect(google.getByText(en['settings.server.google.empty'])).toBeDefined();
+    expect(google.getByRole('button', { name: 'Connect Google' })).toBeDefined();
+    expect(google.getByText('https://purlay.test/auth/callback/google')).toBeDefined();
+    await person().click(google.getByRole('button', { name: 'Copy' }));
+    await settle();
+    expect(await navigator.clipboard.readText()).toBe('https://purlay.test/auth/callback/google');
+    view.unmount();
+  });
+
+  test('a client that works is sent trimmed, both fields, the form closes, and the card says it is connected', async () => {
+    const sent: unknown[] = [];
+    let saved = false;
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(saved ? WITH_GOOGLE : anAnswer()),
+        google: (candidate) => {
+          sent.push(candidate);
+          saved = true;
+          return Promise.resolve({ ok: true });
+        },
+      }),
+    );
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(sent).toEqual([
+      { clientId: '1234-abc.apps.googleusercontent.com', clientSecret: 'shh-google' },
+    ]);
+    expect(google.getByText('Connected')).toBeDefined();
+    expect(google.getByText(en['settings.server.google.saved'])).toBeDefined();
+    expect(google.queryByLabelText('Client secret')).toBeNull();
+    expect(view.getByRole('main').textContent).not.toContain('shh-google');
+    view.unmount();
+  });
+
+  test.each(GOOGLE_REASONS_A_TRY_GIVES)(
+    'a try that fails for %s is said in words for Google, keeps what was typed, and offers another try',
+    async (reason) => {
+      const failed: ProbeResult = { ok: false, reason, raw: '<b>google said no</b>' };
+      const view = await render(aClient({ google: () => Promise.resolve(failed) }));
+      const google = card(view, 'Sign in with Google');
+      await person().click(google.getByRole('button', { name: 'Connect Google' }));
+      await fill(google);
+      await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+      await settle();
+      expect(google.getByText(en[reasonWords(reason, 'google').what])).toBeDefined();
+      expect(google.getByText('<b>google said no</b>')).toBeDefined();
+      expect(google.getByLabelText<HTMLInputElement>('Client secret').value).toBe('shh-google');
+      expect(google.getByRole('button', { name: 'Try again' })).toBeDefined();
+      view.unmount();
+    },
+  );
+
+  test('a rejected secret is said in both languages', () => {
+    const words = reasonWords('secret-rejected', 'google');
+    expect(en[words.what]).toBe('Google knows this client and refused its secret.');
+    expect(tr[words.what]).toBe('Google bu istemciyi tanıyor ama gizli anahtarını reddetti.');
+    for (const key of [words.what, ...words.fix]) expect(tr[key]).not.toBe(en[key]);
+  });
+
+  test('disconnecting as the last way in asks first and says the strong thing, then sends it confirmed', async () => {
+    const asked: [string, boolean][] = [];
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(WITH_GOOGLE),
+        disconnect: (channel, confirm) => {
+          asked.push([channel, confirm]);
+          return Promise.resolve();
+        },
+      }),
+    );
+    await person().click(
+      card(view, 'Sign in with Google').getByRole('button', { name: 'Disconnect' }),
+    );
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.getByText(en['settings.server.google.disconnectBody'])).toBeDefined();
+    expect(dialog.getByText(en['settings.server.lastWay'])).toBeDefined();
+    await person().click(dialog.getByRole('button', { name: 'Disconnect anyway' }));
+    await settle();
+    expect(asked).toEqual([['google', true]]);
+    expect(
+      card(view, 'Sign in with Google').getByText(en['settings.server.google.disconnected']),
+    ).toBeDefined();
+    view.unmount();
+  });
+
+  test('Google counts as another way in for the others: disconnecting GitHub is the plain question', async () => {
+    const view = await render(
+      aClient({
+        settings: () =>
+          Promise.resolve({
+            ...WITH_GOOGLE,
+            settings: { ...WITH_GOOGLE.settings, github: CONNECTED.settings.github },
+            channels: { github: true, email: false, oidc: false, google: true },
+          }),
+      }),
+    );
+    await person().click(
+      card(view, 'Sign in with GitHub').getByRole('button', { name: 'Disconnect' }),
+    );
+    expect(within(view.getByRole('dialog')).queryByText(en['settings.server.lastWay'])).toBeNull();
+    view.unmount();
+  });
+
+  test('the sign-in policy counts Google as a provider: passwords may be turned off with only Google', async () => {
+    const asked: unknown[] = [];
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(WITH_GOOGLE),
+        policy: (change) => {
+          asked.push(change);
+          return Promise.resolve();
+        },
+      }),
+    );
+    const signIn = card(view, 'How people sign in');
+    expect(signIn.queryByText(en['settings.server.signIn.passwords.needsProvider'])).toBeNull();
+    await person().click(signIn.getByRole('radio', { name: /^Off/ }));
+    await settle();
+    expect(asked).toEqual([{ passwordSignIn: false }]);
+    view.unmount();
+  });
+
+  test('has no axe violations connected or not', async () => {
+    const view = await render(aClient({ settings: () => Promise.resolve(WITH_GOOGLE) }));
     await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();
   });

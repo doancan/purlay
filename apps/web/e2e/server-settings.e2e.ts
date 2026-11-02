@@ -126,6 +126,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
     github: true,
     email: false,
     oidc: null,
+    google: false,
     signUp: 'open',
     password: true,
   });

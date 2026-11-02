@@ -158,7 +158,7 @@ export const en = {
   'signIn.methods.retry': 'Try again',
   'signIn.notSetUp.title': 'This server is not set up yet',
   'signIn.notSetUp.body':
-    'Neither GitHub, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
+    'Neither GitHub, Google, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
   'signIn.notSetUp.action': 'Set up this server',
   'signIn.scope': 'Purlay asks GitHub for your name, username and email, and nothing else.',
   'signIn.email.label': 'Email address',
@@ -1883,6 +1883,10 @@ export const en = {
   'settings.account.github': 'GitHub',
   'settings.account.githubSignsIn': 'You can sign in with this GitHub account.',
   'settings.account.githubLinked': 'Linked',
+  'settings.account.emailGoogle': 'Your Google account’s address. You sign in with Google.',
+  'settings.account.google': 'Google',
+  'settings.account.googleSignsIn': 'You can sign in with this Google account.',
+  'settings.account.googleLinked': 'Linked',
   'settings.account.oidc': 'Single sign-on',
   'settings.account.oidcSignsIn':
     'Your organisation’s sign-in is linked to this account, and an emailed link no longer signs in to it.',
@@ -1908,7 +1912,7 @@ export const en = {
   'settings.account.twoFactor.description':
     'After your password, signing in asks for a code from an authenticator app on your phone.',
   'settings.account.twoFactor.otherWays':
-    'It protects your password. Signing in with GitHub, single sign-on or an emailed link relies on that provider’s own security.',
+    'It protects your password. Signing in with GitHub, Google, single sign-on or an emailed link relies on that provider’s own security.',
   'settings.account.twoFactor.required':
     'This server requires it of an account with a password, so it stays on.',
   'settings.account.twoFactor.status': 'Status',
@@ -2440,6 +2444,29 @@ export const en = {
   'setup.oidc.reason.unexpected-reply.fix1':
     'Check that the redirect address below is registered for this client at the provider.',
   'setup.oidc.reason.unexpected-reply.fix2': 'If it stays, the reply below says what answered.',
+  // What the reasons mean for Google's try: its address is fixed, so none of them is about an issuer.
+  'setup.google.reason.secret-rejected.what': 'Google knows this client and refused its secret.',
+  'setup.google.reason.secret-rejected.fix1':
+    'Copy the client secret from the OAuth client’s page in Google Cloud again.',
+  'setup.google.reason.secret-rejected.fix2':
+    'A secret may have been disabled or replaced: make a new one and paste it here.',
+  'setup.google.reason.client-unknown.what': 'Google does not know this client.',
+  'setup.google.reason.client-unknown.fix1': 'Copy the client ID from Google Cloud again.',
+  'setup.google.reason.client-unknown.fix2':
+    'The OAuth client may have been deleted, or the ID may belong to another project.',
+  'setup.google.reason.unreachable.what': 'Google did not answer, or not in time.',
+  'setup.google.reason.unreachable.fix1': 'Try again in a moment.',
+  'setup.google.reason.unreachable.fix2':
+    'Check that this server may connect out to accounts.google.com.',
+  'setup.google.reason.tls-failed.what': 'Google was reached, but the secure connection failed.',
+  'setup.google.reason.tls-failed.fix1':
+    'Something between this server and Google may be replacing its certificate.',
+  'setup.google.reason.tls-failed.fix2':
+    'This server trusts the certificate authorities its system does.',
+  'setup.google.reason.unexpected-reply.what': 'The answer was not one Google gives.',
+  'setup.google.reason.unexpected-reply.fix1':
+    'Check that the redirect address below is registered for this client in Google Cloud.',
+  'setup.google.reason.unexpected-reply.fix2': 'If it stays, the reply below says what answered.',
   'setup.failed.network': 'The server could not be reached. Check the connection and try again.',
   'setup.failed.rate': {
     one: 'Too many tries from this browser. Wait {count} minute and try again.',
@@ -2550,6 +2577,28 @@ export const en = {
   'settings.server.oidc.disconnectBody':
     'People will no longer be able to sign in through the provider. Sessions already open stay open, and accounts it made keep working by their other ways in.',
   'settings.server.oidc.disconnected': 'Single sign-on is disconnected.',
+  'settings.server.google.title': 'Sign in with Google',
+  'settings.server.google.description':
+    'People sign in with their Google account, through an OAuth client you own in Google Cloud.',
+  'settings.server.google.empty': 'Nobody can sign in with Google until a client is connected.',
+  'settings.server.google.clientId': 'Client ID {id}',
+  'settings.server.google.callback': 'Redirect address',
+  'settings.server.google.callbackHint':
+    'Add this as an authorised redirect URI on the OAuth client in Google Cloud.',
+  'settings.server.google.connect': 'Connect Google',
+  'settings.server.google.replace': 'Replace credentials',
+  'settings.server.google.clientIdLabel': 'Client ID',
+  'settings.server.google.clientSecretLabel': 'Client secret',
+  'settings.server.google.hint':
+    'Google is asked about the client before anything is saved. The secret is stored encrypted and never shown again.',
+  'settings.server.google.verifiedNote':
+    'An existing account is linked only when Google says the address is verified, the account’s address is verified too, and the address is a Gmail one or belongs to the Google Workspace domain the person signed in with.',
+  'settings.server.google.save': 'Try the connection and save',
+  'settings.server.google.saved': 'Saved. Google sign-in uses this client from now on.',
+  'settings.server.google.disconnectTitle': 'Disconnect Google sign-in?',
+  'settings.server.google.disconnectBody':
+    'People will no longer be able to sign in with Google. Sessions already open stay open, and accounts Google made keep working by their other ways in.',
+  'settings.server.google.disconnected': 'Google is disconnected.',
   'settings.server.email.title': 'E-mail',
   'settings.server.email.description':
     'Sign-in links and invitations are sent through this mail server.',
@@ -2589,7 +2638,7 @@ export const en = {
     'Suspend {name}? They are signed out on every device and cannot sign in until you lift it.',
   'settings.server.signIn.title': 'How people sign in',
   'settings.server.signIn.description':
-    'Rules for accounts that sign in with a password. GitHub, single sign-on and emailed links keep their own security.',
+    'Rules for accounts that sign in with a password. GitHub, Google, single sign-on and emailed links keep their own security.',
   'settings.server.signIn.twoFactor': 'Two-step verification',
   'settings.server.signIn.twoFactor.off': 'Optional',
   'settings.server.signIn.twoFactor.off.body': 'Each person with a password decides.',
@@ -2601,9 +2650,9 @@ export const en = {
   'settings.server.signIn.passwords.on.body': 'An address and password sign in.',
   'settings.server.signIn.passwords.off': 'Off',
   'settings.server.signIn.passwords.off.body':
-    'Only GitHub or single sign-on. If they stop working, the server’s administrator turns passwords back on with admin:reset-password.',
+    'Only GitHub, Google or single sign-on. If they stop working, the server’s administrator turns passwords back on with admin:reset-password.',
   'settings.server.signIn.passwords.needsProvider':
-    'Connect GitHub or single sign-on first: password sign-in can be turned off only while one of them works.',
+    'Connect GitHub, Google or single sign-on first: password sign-in can be turned off only while one of them works.',
   'settings.server.signIn.saved': 'Saved. It applies from the next request.',
   'settings.server.lifetime.title': 'How long a session lasts',
   'settings.server.lifetime.description':
@@ -2620,7 +2669,7 @@ export const en = {
   'settings.server.lifetime.days': { one: '{count} day', other: '{count} days' },
   'settings.server.lifetime.weeks': { one: '{count} week', other: '{count} weeks' },
   'settings.server.passwordsOffLast':
-    'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
+    'Password sign-in is off, and this is the last of GitHub, Google and single sign-on: nobody could sign in. Turn passwords on first.',
   'settings.server.creators.title': 'Who can create workspaces',
   'settings.server.creators.description':
     'Signing in stays open: a person who is invited can always join a workspace.',

@@ -146,6 +146,21 @@ describe('the sign-up screen', () => {
     expect(links).toEqual(['/auth/oidc', '/auth/github', '/auth/google']);
   });
 
+  test('open with Google and mail, the email form is not alone: a rule parts it from the button', async () => {
+    const view = await visit({
+      github: false,
+      email: true,
+      oidc: null,
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    const send = view.getByRole('button', { name: 'Email me a sign-in link' });
+    expect(send.closest('form')?.className).toContain('border-t-hairline');
+    expect(send.className).not.toContain('bg-accent');
+    view.unmount();
+  });
+
   test('open without mail: GitHub only, and no form', async () => {
     const view = await visit({
       github: true,
