@@ -14,12 +14,12 @@
  *   longer the one that was probed.
  * - **The relay's test letter goes to the administrator's own address**, as a plain test: this is a
  *   change made by someone who is signed in, not the proof of an address.
- * - **Never the only way in by accident.** Disconnecting GitHub, Google, single sign-on or the relay is refused when no other
- *   way for other people to sign in would remain, unless the administrator says so
+ * - **Never the only way in by accident.** Disconnecting GitHub, Google, single sign-on or the relay is
+ *   refused when no other way for other people to sign in would remain, unless the administrator says so
  *   (`confirmLastChannel`). The rule is weighed inside the swap's own transaction, under its lock, from
  *   what that transaction saved — two disconnects at once cannot both pass it.
- * - **Never nobody's way in** (D-239). Password sign-in is turned off only while GitHub, Google or single sign-on is
- *   connected, and the last of them is not disconnected while it is off — no confirmation lets it go. Both
+ * - **Never nobody's way in** (D-239). Password sign-in is turned off only while GitHub, Google or single
+ *   sign-on is connected, and the last of them is not disconnected while it is off — no confirmation lets it go. Both
  *   rules are weighed as the last way in is, inside the swap's transaction, from what that transaction saved:
  *   two administrators at once, one turning passwords off and one disconnecting the provider, cannot both pass.
  * - **Every change is on the trail** (`server_audit_log`), written in the transaction that saves it:
@@ -141,9 +141,9 @@ const SENTENCES: Record<ServerChangeRefusal, string> = {
   'not-connected': 'There is nothing of that kind connected.',
   'setup-unfinished': 'The setup is not finished yet; its steps change the settings until it is.',
   'no-provider':
-    'Password sign-in can be turned off only while GitHub or single sign-on is connected.',
+    'Password sign-in can be turned off only while GitHub, Google or single sign-on is connected.',
   'passwords-off':
-    'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
+    'Password sign-in is off, and this is the last of GitHub, Google and single sign-on: nobody could sign in. Turn passwords on first.',
 };
 
 export class ServerChangeRefused extends Error {

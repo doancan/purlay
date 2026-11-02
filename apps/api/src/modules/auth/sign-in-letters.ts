@@ -1,7 +1,7 @@
 /**
  * The messages signing in by email sends (D-138 §2, §4): a link, and — to the address of an
- * account GitHub or Google made — a word to sign in with that provider instead (D-250). In the language the person asked in
- * (D-41), plain text, and the same as HTML with the one address made a link.
+ * account GitHub or Google made — a word to sign in with that provider instead (D-250). In the language
+ * the person asked in (D-41), plain text, and the same as HTML with the one address made a link.
  */
 import { SIGN_IN_LINK_TTL_MINUTES, type EmailSignInRequest } from '@purlay/types';
 import { textLetter, type MailMessage } from '../../platform/mail';
