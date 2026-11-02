@@ -23,6 +23,7 @@ const NOTHING_SET: ServerSettings = {
   signUp: 'invite-only',
   github: undefined,
   oidc: undefined,
+  google: undefined,
   smtp: undefined,
   githubApp: undefined,
   workspaceCreators: { kind: 'first' },
