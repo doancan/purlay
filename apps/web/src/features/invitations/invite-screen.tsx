@@ -34,6 +34,7 @@ import { SessionGate } from '../session/session';
 import { LogoMark, Notice } from '../shell/notice';
 import { EmailSignInForm } from '../sign-in/email-sign-in-form';
 import { GitHubButton } from '../sign-in/github-button';
+import { GoogleButton } from '../sign-in/google-button';
 import { OidcButton } from '../sign-in/oidc-button';
 import { browserInvitationPorts, forgetInvitation, pendingInvitation } from './pending';
 
@@ -239,6 +240,7 @@ const SignedOutInvitation = (): React.JSX.Element => {
   };
 
   const github = methods.data?.github === true;
+  const google = methods.data?.google === true;
   const oidc = methods.data?.oidc ?? null;
   const mail = methods.data?.email === true;
   return (
@@ -257,19 +259,25 @@ const SignedOutInvitation = (): React.JSX.Element => {
           {oidc !== null && (
             <OidcButton
               name={oidc.name}
-              variant={mail || github ? 'secondary' : 'primary'}
+              variant={mail || github || google ? 'secondary' : 'primary'}
               before={async () => await askPassport()}
             />
           )}
           {(github || methods.isError) && (
             <GitHubButton
-              variant={mail || oidc !== null ? 'secondary' : 'primary'}
+              variant={mail || google || oidc !== null ? 'secondary' : 'primary'}
+              before={async () => await askPassport()}
+            />
+          )}
+          {google && (
+            <GoogleButton
+              variant={mail || github || oidc !== null ? 'secondary' : 'primary'}
               before={async () => await askPassport()}
             />
           )}
           {mail && (
             <EmailSignInForm
-              alone={!github && oidc === null}
+              alone={!github && !google && oidc === null}
               mail
               beforeLink={async (email) => await askPassport(email)}
             />

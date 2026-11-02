@@ -344,6 +344,32 @@ describe('an invitation, opened by somebody who is not signed in', () => {
     });
   });
 
+  test('Google: the passport is asked for first, and only when it is given does the page leave for /auth/google', async () => {
+    const order: string[] = [];
+    const left = spyOn(leave, 'to').mockImplementation((url) => {
+      order.push(`leave ${url}`);
+    });
+    const view = await asSignedOut({
+      authMethods: () =>
+        Promise.resolve({
+          github: true,
+          email: false,
+          oidc: null,
+          google: true,
+          signUp: 'invite-only',
+          password: true,
+        }),
+      openInvitationPassport: async (input) => {
+        order.push(`passport ${JSON.stringify(input)}`);
+        await Promise.resolve();
+      },
+    });
+    await person().click(view.getByRole('link', { name: 'Continue with Google' }));
+    await settle();
+    expect(order).toEqual([`passport ${JSON.stringify({ token: TOKEN })}`, 'leave /auth/google']);
+    left.mockRestore();
+  });
+
   test('a link that does not open is the page’s "does not open" state, forgotten, and nothing else happens', async () => {
     const left = spyOn(leave, 'to').mockImplementation(() => undefined);
     const view = await asSignedOut({

@@ -1184,6 +1184,14 @@ address is verified, or (Google) the address belongs to an existing account and 
 says which check failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
 longer signs in to that account.
 
+**Google** (D-250) is a button of its own, *Continue with Google* (*Google ile devam et*), marked with Google's
+four-colour "G" (the four colours are brand tokens, the same in every theme; nothing is loaded from Google), after
+GitHub's and before the email form, leaving for `/auth/google`; the sign-up screen and an invitation page offer it
+as they offer GitHub (the invitation page asks for its passport first). A server whose only way in is Google has
+the button, the password form and no *not set up* sentence. Its one reason is *`google-unavailable`* — "Google did
+not answer. Try again in a moment, or sign in another way." (*Google yanıt vermedi. Biraz sonra yeniden dene ya da
+başka bir yolla gir.*); an address Google does not vouch for is the existing *`email-unverified`*.
+
 **When a GitHub sign-in did not finish**, one sentence says what happened and what to do, above the
 button, and never blames the person (D-121). Two are new with D-179 §5. *`signup-closed`* — an
 *invite-only* server and no invitation: "This Purlay server makes accounts by invitation only — ask
