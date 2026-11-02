@@ -1081,9 +1081,9 @@ that is read again after every change and never polled:
   applied as it is chosen (*Saved. This applies from the next sign-up.*).
 - **How people sign in** (D-239) — *Two-step verification*: *Optional* or *Required* (anyone with a password
   must turn it on before anything else, the administrator included); *Password sign-in*: *On* or *Off* (only
-  GitHub or single sign-on; *admin:reset-password* turns it back on). Each applies as it is chosen (*Saved. It
-  applies from the next request.*). With neither GitHub nor single sign-on connected, the row says to connect
-  one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
+  GitHub, Google or single sign-on; *admin:reset-password* turns it back on). Each applies as it is chosen (*Saved.
+  It applies from the next request.*). With none of GitHub, Google and single sign-on connected, the row says to
+  connect one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
   not offered: the dialog says why, and has no **Disconnect**.
 - **How long a session lasts** (D-244) — two selects, each applied as it is chosen (*Saved. It applies from the
   next request.*): *Sign out when unused for* — *Never*, *1 hour*, *8 hours*, *1 day*, *1 week* (using Purlay in
@@ -1176,9 +1176,12 @@ button like it, leaving for `/auth/oidc`; the sign-up screen and an invitation p
 (the invitation page asks for its passport first). A server whose only way in is single sign-on has the button, the
 password form and no *not set up* sentence. Two reasons are its own: *`oidc-unavailable`* — "Single sign-on could
 not be reached, or did not give an identity this server trusts — wait a moment and try again, and if it stays, tell
-whoever runs this server." — and *`email-unverified`* — "Single sign-on did not say your email address is verified,
-so it cannot sign you in. Ask whoever runs your organisation's sign-in to verify it." Neither says which check
-failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
+whoever runs this server." — and *`email-unverified`* — "This sign-in didn't prove the address is yours, so it can't
+open the account that uses it. Sign in the way you did before, or ask for an invitation." (*Bu giriş adresin sana ait
+olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet
+iste.*) — one sentence for single sign-on and Google alike, since either refuses by it: the provider did not say the
+address is verified, or (Google) the address belongs to an existing account and is not Google's to vouch for. Neither
+says which check failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
 longer signs in to that account.
 
 **When a GitHub sign-in did not finish**, one sentence says what happened and what to do, above the
