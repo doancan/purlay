@@ -36,6 +36,10 @@ export const googleDefinition = (
   acceptedIssuers: [issuer, issuer.replace(/^https:\/\//u, '')],
   accountKey: (_issuer, subject) => subject,
   codes: { unavailable: 'GOOGLE_UNAVAILABLE', unverified: 'GOOGLE_EMAIL_UNVERIFIED' },
+  messages: {
+    unavailable: 'Google did not answer the sign-in.',
+    unverified: 'Google did not say the address is verified.',
+  },
   logPrefix: 'google sign-in',
   ...(admit === undefined ? {} : { admit }),
 });
