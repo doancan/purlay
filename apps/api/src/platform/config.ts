@@ -96,7 +96,7 @@ export const Environment = Type.Object({
   OIDC_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
   OIDC_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
   OIDC_NAME: Type.Optional(Type.String({ minLength: 1, maxLength: OIDC_NAME_MAX })),
-  /** A seed, as the GitHub app is (D-250): Google's OAuth client, the one provider whose address is fixed, so
+  /** A seed, as the GitHub app is (D-251): Google's OAuth client, the one provider whose address is fixed, so
    *  an operator gives only who this server is to it. Both or neither; neither is Google off. */
   GOOGLE_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_ID_MAX })),
   GOOGLE_CLIENT_SECRET: Type.Optional(
@@ -504,7 +504,7 @@ const githubAppProblems = (config: Config): string[] =>
     ? ['GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: set both, or neither']
     : [];
 
-/** Google's OAuth client (D-250): both variables or neither, as the GitHub app's pair is. */
+/** Google's OAuth client (D-251): both variables or neither, as the GitHub app's pair is. */
 const googleProblems = (config: Config): string[] =>
   (config.GOOGLE_CLIENT_ID === undefined) !== (config.GOOGLE_CLIENT_SECRET === undefined)
     ? ['GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: set both, or neither']

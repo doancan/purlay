@@ -212,7 +212,7 @@ export const connectOidcProvider = async (
 
 /**
  * `POST /api/server/google` — Google's OAuth client tried (its discovery, its keys, the client); `200` with the
- * outcome either way, and kept only if it worked (D-250).
+ * outcome either way, and kept only if it worked (D-251).
  */
 export const connectGoogleClient = async (
   dependencies: ServerDependencies,

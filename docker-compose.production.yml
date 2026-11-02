@@ -69,7 +69,7 @@ x-environment: &environment
   OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
   OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
   OIDC_NAME: ${OIDC_NAME:-}
-  # Google's OAuth client (D-250), a seed read on the first start only: both or neither, empty is neither.
+  # Google's OAuth client (D-251), a seed read on the first start only: both or neither, empty is neither.
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
   # The GitHub App issues are written through (D-246), a seed read on the first start only: all six or none,

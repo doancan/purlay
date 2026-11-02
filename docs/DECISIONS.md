@@ -9870,7 +9870,7 @@ GitHub's is, and named in the log.
 turns away the people it should let in more often than it stops the ones it should not: then the rule changes, and
 this entry with it. Dropping the way in is `DELETE /api/server/oidc` and a migration that drops four columns.
 
-**Related:** D-250 gives Google a way in of its own, built on the same checks, so that this slot stays for an
+**Related:** D-251 gives Google a way in of its own, built on the same checks, so that this slot stays for an
 organisation's provider.
 
 ### D-201. The cloud's nodes share one Redis for the bus, the limiters and presence, chosen by `REDIS_URL` alone — builds on D-7, D-25, D-82, D-84, D-190, D-198

@@ -249,7 +249,7 @@ const OIDC_FAILURE_FOR_LIBRARY_CODE: typeof FAILURE_FOR_LIBRARY_CODE = {
 };
 
 /**
- * What Google says differently (D-250): the OIDC core's words — Google is that core with a fixed issuer — but a
+ * What Google says differently (D-251): the OIDC core's words — Google is that core with a fixed issuer — but a
  * code Google did not take is Google being unavailable.
  */
 const GOOGLE_FAILURE_FOR_LIBRARY_CODE: typeof FAILURE_FOR_LIBRARY_CODE = {
@@ -306,7 +306,7 @@ const failureForStatus = (log: Logger, status: number, provider: SignInProvider)
   if (status === 429 || status === 503) return 'busy';
   if (status === 502) return UNAVAILABLE[provider];
   // The provider's own refusal to name a verified address, thrown out of its profile call (`oidc.ts`) — and, for
-  // Google, of an address that is an account's and not Google's to vouch for (`better-auth.ts`, D-250).
+  // Google, of an address that is an account's and not Google's to vouch for (`better-auth.ts`, D-251).
   if (status === 403 && provider !== 'github') return 'email-unverified';
   log.error(`${LABEL[provider]} failed for a reason nobody anticipated`, { status });
   return 'failed';

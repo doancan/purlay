@@ -114,7 +114,7 @@ describe('the ways in', () => {
     });
   });
 
-  test('Google is on when its client is connected, and asking connects to nobody (D-250)', async () => {
+  test('Google is on when its client is connected, and asking connects to nobody (D-251)', async () => {
     const stub = await anOidcStub({ sub: 's', email: 'a@gmail.com' });
     const auth = aTestAuth(unconnectedDatabase(), {
       settings: {

@@ -763,7 +763,7 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
     expect(failure(await tryIt(issuer)).reason).toBe(reason);
   });
 
-  describe('Google (D-250)', () => {
+  describe('Google (D-251)', () => {
     const tryGoogle = async (issuer: string, clientSecret: string): Promise<ProbeResult> =>
       await probeGoogle(
         AUTHORITY,

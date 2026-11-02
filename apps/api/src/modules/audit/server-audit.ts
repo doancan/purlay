@@ -18,7 +18,7 @@ export type ServerAuditAction =
   | 'server.github_disconnected'
   | 'server.oidc_connected'
   | 'server.oidc_disconnected'
-  /** Sign in with Google (D-250). */
+  /** Sign in with Google (D-251). */
   | 'server.google_connected'
   | 'server.google_disconnected'
   /** The GitHub App issues are written through (D-246). */

@@ -129,7 +129,7 @@ describe('integration: how an account signs in', () => {
     });
   });
 
-  test('Google is named only for the account it is linked to, beside single sign-on or alone (D-250)', async () => {
+  test('Google is named only for the account it is linked to, beside single sign-on or alone (D-251)', async () => {
     await withRollback(async (db) => {
       const linked = await made(db);
       const both = await made(db);
@@ -157,7 +157,7 @@ describe('integration: how an account signs in', () => {
     });
   });
 
-  test('an account Google made has no links while Google is connected, and has them again once it is not (D-250)', async () => {
+  test('an account Google made has no links while Google is connected, and has them again once it is not (D-251)', async () => {
     await withRollback(async (db) => {
       const id = await made(db, { googleMade: true });
       const email = await made(db);

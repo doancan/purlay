@@ -306,7 +306,7 @@ describe('integration: an account single sign-on is linked to is signed into by 
   });
 });
 
-describe('integration: an account Google made is told to use Google (D-250)', () => {
+describe('integration: an account Google made is told to use Google (D-251)', () => {
   const anAccountGoogleMade = async (db: Executor, email: string): Promise<string> => {
     const id = await anAccount(db, email, true);
     await db.updateTable('users').set({ google_made: true }).where('id', '=', id).execute();

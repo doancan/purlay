@@ -1408,7 +1408,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'sign-in-link-into-a-google-account',
-    why: 'whoever holds a mailbox of an account Google made is sent a link into it while Google is connected (D-250)',
+    why: 'whoever holds a mailbox of an account Google made is sent a link into it while Google is connected (D-251)',
     file: 'apps/api/src/modules/auth/magic-link.ts',
     find: "  return googleConnected && madeByGoogle(account) ? 'google' : 'link';\n",
     replace: "  return 'link';\n",
@@ -10363,7 +10363,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-unauthoritative-address-linked',
-    why: 'Google links an existing account by an address it has no say over — one outside Gmail and the hd domain, which may have changed hands (D-250)',
+    why: 'Google links an existing account by an address it has no say over — one outside Gmail and the hd domain, which may have changed hands (D-251)',
     file: BETTER_AUTH,
     find: "    if (existing === undefined || authoritativeForGoogle(email, claims['hd'])) return;\n",
     replace: '    return;\n',
@@ -10371,7 +10371,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-newcomer-weighed-as-a-link',
-    why: 'a new person whose address is outside Gmail and names no hd is refused as unverified, though no account is linked by it: a sign-up is the server’s rules to decide, not Google’s say (D-250)',
+    why: 'a new person whose address is outside Gmail and names no hd is refused as unverified, though no account is linked by it: a sign-up is the server’s rules to decide, not Google’s say (D-251)',
     file: BETTER_AUTH,
     find: "    if (existing === undefined || authoritativeForGoogle(email, claims['hd'])) return;\n",
     replace: "    if (authoritativeForGoogle(email, claims['hd'])) return;\n",
@@ -10379,7 +10379,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-newcomer-address-always-proven',
-    why: 'an account Google makes at an address Google merely knows is stored verified, so GitHub or single sign-on links into it by that address (D-250 §3)',
+    why: 'an account Google makes at an address Google merely knows is stored verified, so GitHub or single sign-on links into it by that address (D-251 §3)',
     file: GOOGLE,
     find: "  emailVerified: (claims, email) => authoritativeForGoogle(email, claims['hd']),\n",
     replace: '  emailVerified: () => true,\n',
@@ -10387,7 +10387,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-outside-the-handler',
-    why: 'a Google sign-in served outside the handler makes an account not marked google_made, which passes for one made by email (D-250)',
+    why: 'a Google sign-in served outside the handler makes an account not marked google_made, which passes for one made by email (D-251)',
     file: BETTER_AUTH,
     find: '              if (round === undefined) {\n',
     replace: '              if (false) {\n',
@@ -10395,7 +10395,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-linked-sub-weighed-by-address',
-    why: 'a person Google is linked to by their sub is refused once their new Google address is somebody else’s: the address decides, not the sub (D-250)',
+    why: 'a person Google is linked to by their sub is refused once their new Google address is somebody else’s: the address decides, not the sub (D-251)',
     file: BETTER_AUTH,
     find: '    if (linked !== undefined) return;\n',
     replace: '',
@@ -10403,7 +10403,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-owned-account-linked-by-address',
-    why: 'Google signs in to an account single sign-on owns by address, past the provider that decides who still works there (D-250)',
+    why: 'Google signs in to an account single sign-on owns by address, past the provider that decides who still works there (D-251)',
     file: BETTER_AUTH,
     find: '        ? sso.length > 0 ||\n          held.some(',
     replace: '        ? false ||\n          held.some(',
@@ -10411,7 +10411,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-second-sub-linked-by-address',
-    why: 'a second Google sub carrying the address of an account Google is linked to is added beside the first, and signs in as the person it was (D-250)',
+    why: 'a second Google sub carrying the address of an account Google is linked to is added beside the first, and signs in as the person it was (D-251)',
     file: BETTER_AUTH,
     find: '(row) => row.provider_id === GOOGLE_PROVIDER_ID && row.account_id !== account.accountId,',
     replace: '(row) => row.provider_id === GOOGLE_PROVIDER_ID && false,',
@@ -10419,7 +10419,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-identity-conflict-skipped',
-    why: 'Google is linked by address to an account that has a single sign-on identity or another Google one, though neither may be (D-250)',
+    why: 'Google is linked by address to an account that has a single sign-on identity or another Google one, though neither may be (D-251)',
     file: BETTER_AUTH,
     find: '  const { providerId } = account;\n  if (\n    providerId !== OIDC_PROVIDER_ID &&',
     replace:
@@ -10428,7 +10428,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-authoritative-ignored',
-    why: 'every address is taken as one Google speaks for, so an account at an address Google has no say over is linked by it (D-250)',
+    why: 'every address is taken as one Google speaks for, so an account at an address Google has no say over is linked by it (D-251)',
     file: GOOGLE,
     find: "  const at = email.lastIndexOf('@');\n  if (at < 0) return false;\n",
     replace: "  return true;\n  const at = email.lastIndexOf('@');\n  if (at < 0) return false;\n",
@@ -10436,7 +10436,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'google-made-account-not-marked',
-    why: 'an account Google made passes for one made by email, and is sent sign-in links it should never get (D-250)',
+    why: 'an account Google made passes for one made by email, and is sent sign-in links it should never get (D-251)',
     file: BETTER_AUTH,
     find: '                googleMade: google,\n',
     replace: '                googleMade: false,\n',

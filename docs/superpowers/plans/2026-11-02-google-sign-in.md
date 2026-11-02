@@ -25,7 +25,7 @@
 - No `CONTRACT_VERSION` bump (additions never bump, D-186). New path constants go into `CONSTANTS` in `apps/api/src/contract/bundle.ts`.
 - Button order: OIDC (if connected) → GitHub → Google → email. Label "Continue with Google" / "Google ile devam et".
 - Multicolour Google "G" as inline SVG in `apps/web/src/components/icon.tsx`; its four colours as brand tokens in `packages/tokens/tokens.json` (same value in every theme; register in `pairs.ts` or `EXEMPT` per D-97). Nothing loaded from Google.
-- Decision record D-250; migration `0078`. Commit messages: Conventional Commits, no tool name, no ticket reference, no co-author trailer.
+- Decision record D-251; migration `0078`. Commit messages: Conventional Commits, no tool name, no ticket reference, no co-author trailer.
 - Two pull requests (production-line budget 400): **PR 1** = Tasks 1–7 (server, contract, docs), **PR 2** = Tasks 8–9 (web). Branches `feat/google-sign-in-server`, `feat/google-sign-in-web`. Each needs an issue (`Closes #n`) labelled with its areas (`api`, `database`, `contracts`, `testing` / `web`, `testing`); use `large-change` only if one still exceeds 400.
 
 ## Review Focus
@@ -180,13 +180,13 @@
 ### Task 7: Decision record, docs, mutants — then open PR 1
 
 **Files:**
-- Modify: `docs/DECISIONS.md` (append D-250; one "Related: D-250" line under D-200), `README.md` (decision count), `docs/API.md` (the `/auth/google`, callback, `/api/server/google` rows; `AuthMethods`), `docs/CONFIG.md` (operator note: Google Cloud Console → OAuth client "Web application", redirect `APP_URL/auth/callback/google`, consent screen External, publish to "In production"), `docs/changelog/changes.md` (**Added**: `- **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-250)`), `scripts/mutations.ts`
+- Modify: `docs/DECISIONS.md` (append D-251; one "Related: D-251" line under D-200), `README.md` (decision count), `docs/API.md` (the `/auth/google`, callback, `/api/server/google` rows; `AuthMethods`), `docs/CONFIG.md` (operator note: Google Cloud Console → OAuth client "Web application", redirect `APP_URL/auth/callback/google`, consent screen External, publish to "In production"), `docs/changelog/changes.md` (**Added**: `- **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)`), `scripts/mutations.ts`
 - Test: `bun run check:docs`, `scripts/changelog.test.ts`
 
 - [ ] **Step 1:** Add mutants (each with `tests:` naming the file that kills it): `google-authoritative-ignored` (`authoritativeForGoogle` → `true`; killed by `google-sign-in.integration.test.ts`), `google-identity-conflict-skipped` (the `google` branch of `refusedIdentityConflict` removed; same file), `google-made-gets-links` (the `'google'` branch of `fateOf` removed; `magic-link.integration.test.ts`). Verify each by hand: apply, run its test, see a failure, restore.
-- [ ] **Step 2:** Write D-250 (Context, Decision 1–n matching the Global Constraints, Rejected: the generic slot for Google; `hd` as an entry restriction; trusting every verified address; links for Google-made accounts; several OIDC slots; a monochrome mark; a setup-wizard step; Cost of reversing).
+- [ ] **Step 2:** Write D-251 (Context, Decision 1–n matching the Global Constraints, Rejected: the generic slot for Google; `hd` as an entry restriction; trusting every verified address; links for Google-made accounts; several OIDC slots; a monochrome mark; a setup-wizard step; Cost of reversing).
 - [ ] **Step 3:** Run `bun run check:docs`, `bun run typecheck`, `bun run lint`, `bun run knip`, `bun run format:check`, `bun run test`, `bun run test:integration` — all clean (needs Docker + `POSTGRES_PORT=55432 bun run db:up:postgres`).
-- [ ] **Step 4:** Commit `docs: record Google sign-in (D-250)`; create the issue, push `feat/google-sign-in-server`, open PR 1 with the repository template filled (Failure modes: each line names its test).
+- [ ] **Step 4:** Commit `docs: record Google sign-in (D-251)`; create the issue, push `feat/google-sign-in-server`, open PR 1 with the repository template filled (Failure modes: each line names its test).
 
 ### Task 8: Web — the Google button
 
