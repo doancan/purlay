@@ -1016,4 +1016,12 @@ describe('Google sign-in is a seed of two variables, both or neither (D-250)', (
     const message = refusal({ ...bare, ...google, DATABASE_URL: '' });
     expect(message).not.toContain(google.GOOGLE_CLIENT_SECRET);
   });
+
+  test('is a secret: a refusal of the secret itself names the variable and never quotes it', () => {
+    const GOOGLE_CLIENT_SECRET = `GOCSPX-${'x'.repeat(300)}`;
+    const message = refusal({ ...bare, ...google, GOOGLE_CLIENT_SECRET });
+    expect(message).toContain('GOOGLE_CLIENT_SECRET');
+    expect(message).toContain('(value withheld)');
+    expect(message).not.toContain('GOCSPX-');
+  });
 });

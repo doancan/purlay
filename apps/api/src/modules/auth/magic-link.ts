@@ -9,7 +9,7 @@
  *   sign in by it. Whether an account has the address is never said.
  * - **Who a link signs in.** An account made by email or linked to GitHub, its address verified.
  *   Never an account GitHub made (D-138 §2: it is told to use GitHub instead), nor one Google made while
- *   Google is connected (D-250: told to use Google), one single sign-on is linked
+ *   Google is connected (D-250: told to use Google), nor one single sign-on is linked
  *   to (D-200 §6), an erased one, or one
  *   whose address was never proven: the library would remove its password and end its sessions
  *   (D-179 §4, measured) — the setup administrator's is such an account (Ruling R32). An address no
