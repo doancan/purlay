@@ -594,6 +594,14 @@ export const ReactionsResponse = Type.Object({ reactions: Type.Array(Reaction) }
 export type ReactionsResponse = Static<typeof ReactionsResponse>;
 
 /**
+ * How many different emoji one person may put on one message (D-249). Enough for a reaction that
+ * says where a thing stands — 👀 and then ✅ — with one to spare; not enough for one person to
+ * fill a message with emoji. Taking one back makes room for another. The server refuses one past it;
+ * a client says so without asking.
+ */
+export const REACTIONS_PER_PERSON_MAX = 3;
+
+/**
  * The most people a conversation has, the caller counted (D-127): past it, it is a channel — with a
  * name, settings and a topic.
  */

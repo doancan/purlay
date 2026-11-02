@@ -21,7 +21,7 @@ import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
 } from '@purlay/db';
-import { messageId, ReactionsResponse } from '@purlay/types';
+import { messageId, ReactionsResponse, REACTIONS_PER_PERSON_MAX } from '@purlay/types';
 import { REACTION_KINDS_MAX } from '../../modules/reactions/reactions';
 import { fixedClock } from '../../platform/clock';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -110,6 +110,19 @@ const aMemberOf = async (db: Executor, message: string, userId: string): Promise
   await db
     .insertInto('channel_members')
     .values({ channel_id: channelId, user_id: userId })
+    .execute();
+};
+
+/** Puts `emoji` on a message as one person's, straight into the table, past the door's limits. */
+const seedKinds = async (
+  db: Executor,
+  message: string,
+  userId: string,
+  emoji: readonly string[],
+): Promise<void> => {
+  await db
+    .insertInto('reactions')
+    .values(emoji.map((e) => ({ message_id: message, user_id: userId, emoji: e, created_at: NOW })))
     .execute();
 };
 
@@ -264,7 +277,27 @@ describe('integration: reacting over HTTP', () => {
       const kinds = Array.from({ length: REACTION_KINDS_MAX }, (_, index) =>
         String.fromCodePoint(0x1f600 + index),
       );
-      for (const emoji of kinds) {
+      // Twenty kinds take seven people through the door; the owner's, straight into the table.
+      await seedKinds(db, room.root, room.owner.userId, kinds);
+
+      const bob = await aSignedInUser(db, clock, 'rxh-j2');
+      await aMemberOf(db, room.root, bob.userId);
+      const over = await call(db, 'PUT', reactionPath(room.root, '🦄'), bob.cookie);
+      expect(over.status).toBe(400);
+      expect((await errorOf(over)).fields).toMatchObject({ emoji: expect.any(String) as string });
+
+      const joined = await call(db, 'PUT', reactionPath(room.root, kinds[0] ?? ''), bob.cookie);
+      expect(joined.status).toBe(200);
+    });
+  });
+
+  test('a fourth emoji from one person is a 400; taking one back makes room (D-249)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, await aSignedInUser(db, clock, 'rxh-k'));
+      const mine = Array.from({ length: REACTIONS_PER_PERSON_MAX }, (_, index) =>
+        String.fromCodePoint(0x1f600 + index),
+      );
+      for (const emoji of mine) {
         expect(
           (await call(db, 'PUT', reactionPath(room.root, emoji), room.owner.cookie)).status,
         ).toBe(200);
@@ -273,10 +306,15 @@ describe('integration: reacting over HTTP', () => {
       expect(over.status).toBe(400);
       expect((await errorOf(over)).fields).toMatchObject({ emoji: expect.any(String) as string });
 
-      const bob = await aSignedInUser(db, clock, 'rxh-j2');
-      await aMemberOf(db, room.root, bob.userId);
-      const joined = await call(db, 'PUT', reactionPath(room.root, kinds[0] ?? ''), bob.cookie);
-      expect(joined.status).toBe(200);
+      const back = await call(
+        db,
+        'DELETE',
+        reactionPath(room.root, mine[0] ?? ''),
+        room.owner.cookie,
+      );
+      expect(back.status).toBe(200);
+      const again = await call(db, 'PUT', reactionPath(room.root, '🦄'), room.owner.cookie);
+      expect(again.status).toBe(200);
     });
   });
 });
@@ -304,24 +342,26 @@ describe('integration: two people adding a new kind at the limit', () => {
   test('exactly one wins, and the message ends with twenty kinds', async () => {
     const alice = await aSignedInUser(cloned.db, clock, 'rxh-race-a');
     const bob = await aSignedInUser(cloned.db, clock, 'rxh-race-b');
+    const carol = await aSignedInUser(cloned.db, clock, 'rxh-race-c');
     const room = await aRoom(cloned.db, alice);
     await aMemberOf(cloned.db, room.root, bob.userId);
-    for (let index = 0; index < REACTION_KINDS_MAX - 1; index += 1) {
-      await call(
-        cloned.db,
-        'PUT',
-        reactionPath(room.root, String.fromCodePoint(0x1f600 + index)),
-        alice.cookie,
-      );
-    }
+    await aMemberOf(cloned.db, room.root, carol.userId);
+    await seedKinds(
+      cloned.db,
+      room.root,
+      alice.userId,
+      Array.from({ length: REACTION_KINDS_MAX - 1 }, (_, index) =>
+        String.fromCodePoint(0x1f600 + index),
+      ),
+    );
     await sql`create trigger hold before insert on reactions for each row execute function hold_window()`.execute(
       cloned.db,
     );
 
     try {
       const [first, second] = await Promise.all([
-        call(cloned.db, 'PUT', reactionPath(room.root, '🦄'), alice.cookie),
-        call(cloned.db, 'PUT', reactionPath(room.root, '🦊'), bob.cookie),
+        call(cloned.db, 'PUT', reactionPath(room.root, '🦄'), bob.cookie),
+        call(cloned.db, 'PUT', reactionPath(room.root, '🦊'), carol.cookie),
       ]);
       expect([first.status, second.status].sort()).toEqual([200, 400]);
     } finally {

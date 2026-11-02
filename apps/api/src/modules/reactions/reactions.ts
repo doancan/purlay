@@ -13,7 +13,7 @@
  * reason, and let one person's double click be heard by the whole channel.
  */
 import { sql, type Executor } from '@purlay/db';
-import type { ReactionsResponse } from '@purlay/types';
+import { REACTIONS_PER_PERSON_MAX, type ReactionsResponse } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelMember, requireMessageById } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
@@ -78,6 +78,34 @@ const wouldExceedKinds = async (
 };
 
 /**
+ * Whether this would be one reaction too many from the caller: an emoji they have not used on the
+ * message, with `REACTIONS_PER_PERSON_MAX` of theirs already on it (D-249). Read under the same
+ * lock as the kinds, so one person's two clicks at once cannot both pass the count.
+ */
+const wouldExceedPerson = async (
+  executor: Executor,
+  messageId: string,
+  userId: string,
+  emoji: string,
+): Promise<boolean> => {
+  const mine = await executor
+    .selectFrom('reactions')
+    .select('emoji')
+    .where('message_id', '=', messageId)
+    .where('user_id', '=', userId)
+    .execute();
+  return mine.length >= REACTIONS_PER_PERSON_MAX && !mine.some((row) => row.emoji === emoji);
+};
+
+/** A refusal naming the `emoji` field, as every refusal of a reaction does. */
+const refusedEmoji = (reason: string): AppError =>
+  new AppError({
+    code: 'VALIDATION_FAILED',
+    message: 'The request did not match the contract.',
+    details: { fields: { emoji: reason } },
+  });
+
+/**
  * Adds the caller's reaction (`present`) or removes it, and answers the set.
  *
  * The message is reached through the same single-query guard every message
@@ -102,16 +130,15 @@ export const setReaction = async (
     if (present) {
       // Adding one is writing in the channel, a member's (D-156); taking one's own back is not.
       await requireChannelMember(transaction, context, 'Join the channel to react in it.');
+      if (await wouldExceedPerson(transaction, messageId, caller.userId, emoji)) {
+        throw refusedEmoji(
+          `a person puts at most ${String(REACTIONS_PER_PERSON_MAX)} reactions on a message`,
+        );
+      }
       if (await wouldExceedKinds(transaction, messageId, emoji)) {
-        throw new AppError({
-          code: 'VALIDATION_FAILED',
-          message: 'The request did not match the contract.',
-          details: {
-            fields: {
-              emoji: `a message carries at most ${String(REACTION_KINDS_MAX)} different reactions`,
-            },
-          },
-        });
+        throw refusedEmoji(
+          `a message carries at most ${String(REACTION_KINDS_MAX)} different reactions`,
+        );
       }
       const inserted = await transaction
         .insertInto('reactions')

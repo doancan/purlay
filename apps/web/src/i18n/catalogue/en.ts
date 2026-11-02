@@ -1315,6 +1315,8 @@ export const en = {
   'message.task.done': 'Done',
   'message.task.open': 'Not done',
   'message.reactionFailed': 'The reaction was not saved.',
+  'message.reactionLimit':
+    'You can add at most {count} reactions to a message. Take one back to add another.',
   'reaction.thumbsUp': 'Thumbs up',
   'reaction.heart': 'Heart',
   'reaction.celebrate': 'Celebrate',
