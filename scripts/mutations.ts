@@ -69,6 +69,8 @@ const GITHUB_WORK_TESTS = 'apps/api/src/ingress/http/github-work.integration.tes
 const GITHUB_ISSUES_TESTS = 'apps/api/src/ingress/http/github-issues.integration.test.ts';
 const OIDC = 'apps/api/src/modules/auth/oidc.ts';
 const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
+const GOOGLE = 'apps/api/src/modules/auth/google.ts';
+const GOOGLE_TESTS = 'apps/api/src/modules/auth/google.test.ts';
 const RESET_PASSWORD = 'apps/api/src/modules/setup/reset-password.ts';
 const RESET_CLI = 'apps/api/src/cli/admin-reset-password.ts';
 const RESET_TESTS = 'apps/api/src/cli/admin-reset-password.integration.test.ts';
@@ -10192,6 +10194,31 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '      issuer: accepted,\n      audience: clientId,',
     replace: '      audience: clientId,',
     tests: [OIDC_TESTS],
+  },
+  {
+    id: 'oidc-token-issuer-widened-for-every-provider',
+    why: 'the generic provider believes an iss beside the configured one: the exact match a mix-up is stopped by is gone',
+    file: OIDC,
+    find: '  const accepted = [...new Set([issuer, ...definition.acceptedIssuers])];',
+    replace:
+      "  const accepted = [...new Set([issuer, issuer.replace(/^https:\\/\\//u, ''), ...definition.acceptedIssuers])];",
+    tests: [GOOGLE_TESTS],
+  },
+  {
+    id: 'google-admit-not-asked',
+    why: 'Google is believed for an address it has no say over: an existing account is linked by an address that may have changed hands',
+    file: OIDC,
+    find: '    if (definition.admit !== undefined) await definition.admit(claims, email, accountId);\n',
+    replace: '',
+    tests: [GOOGLE_TESTS],
+  },
+  {
+    id: 'google-hd-covers-subdomains',
+    why: 'a Workspace domain speaks for its subdomains: whoever runs sub.example.com is believed for example.com addresses',
+    file: GOOGLE,
+    find: 'domain === hd.toLowerCase()',
+    replace: 'domain.endsWith(hd.toLowerCase())',
+    tests: [GOOGLE_TESTS],
   },
   {
     id: 'oidc-algorithms-from-the-token',

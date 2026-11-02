@@ -658,7 +658,7 @@ export const accountKeyOf = (issuer: string, subject: string): string => `${issu
  * beside it, the account keyed by issuer and subject, refused by the `OIDC_*` codes, and nothing more asked
  * before the library acts.
  */
-const OIDC_DEFINITION: OidcDefinition = {
+export const OIDC_DEFINITION: OidcDefinition = {
   id: OIDC_PROVIDER_ID,
   acceptedIssuers: [],
   accountKey: accountKeyOf,
