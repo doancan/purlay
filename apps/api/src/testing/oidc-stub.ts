@@ -24,6 +24,8 @@ export interface OidcPerson {
   readonly sub: string;
   readonly email: string;
   readonly name?: string | undefined;
+  /** The Workspace domain a Google account belongs to, carried as `hd` (absent for a Gmail account). */
+  readonly hd?: string | undefined;
 }
 
 /** How the stub answers, where a test needs a provider to fail or to lie. Read at every call: a test may change it. */
@@ -181,6 +183,7 @@ export const anOidcStub = async (
       email: stub.person.email,
       email_verified: true,
       ...(stub.person.name === undefined ? {} : { name: stub.person.name }),
+      ...(stub.person.hd === undefined ? {} : { hd: stub.person.hd }),
     };
     const claims = Object.fromEntries(
       Object.entries({ ...base, ...(behaviour.claims ?? {}) }).filter(
