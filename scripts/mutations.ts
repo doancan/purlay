@@ -10410,6 +10410,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: [GOOGLE_SIGN_IN_TESTS],
   },
   {
+    id: 'google-identity-conflict-skipped',
+    why: 'Google is linked by address to an account that has a single sign-on identity or another Google one, though neither may be (D-250)',
+    file: BETTER_AUTH,
+    find: '  const { providerId } = account;\n  if (\n    providerId !== OIDC_PROVIDER_ID &&',
+    replace:
+      '  const { providerId } = account;\n  if (providerId === GOOGLE_PROVIDER_ID) return;\n  if (\n    providerId !== OIDC_PROVIDER_ID &&',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-authoritative-ignored',
+    why: 'every address is taken as one Google speaks for, so an account at an address Google has no say over is linked by it (D-250)',
+    file: GOOGLE,
+    find: "  const at = email.lastIndexOf('@');\n  if (at < 0) return false;\n",
+    replace: "  return true;\n  const at = email.lastIndexOf('@');\n  if (at < 0) return false;\n",
+    tests: [GOOGLE_SIGN_IN_TESTS, GOOGLE_TESTS],
+  },
+  {
     id: 'google-made-account-not-marked',
     why: 'an account Google made passes for one made by email, and is sent sign-in links it should never get (D-250)',
     file: BETTER_AUTH,

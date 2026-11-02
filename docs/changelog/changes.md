@@ -23,6 +23,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-250)
+
 ### Security
 
 - **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)
