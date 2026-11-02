@@ -37,6 +37,7 @@ describe('the view of the settings, which is all a response may carry', () => {
       signUp: 'invite-only',
       github: { clientId: 'Iv1.app', clientSecret: { set: true } },
       oidc: null,
+      google: null,
       smtp: {
         // Where the relay is, and nothing of who signs in to it: some relays take a token as the user.
         address: { set: true, host: 'smtp://relay.example.com:587' },
@@ -77,6 +78,7 @@ describe('the view of the settings, which is all a response may carry', () => {
       signUp: 'open',
       github: null,
       oidc: null,
+      google: null,
       smtp: null,
       githubApp: null,
       workspaceCreators: { kind: 'first' },

@@ -37,6 +37,7 @@ test.describe('the sign-in screen', () => {
       github: true,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
@@ -57,7 +58,14 @@ test.describe('the sign-in screen', () => {
   }) => {
     await page.route('**/api/auth/methods', async (route) => {
       await route.fulfill({
-        json: { github: false, email: false, oidc: null, signUp: 'invite-only', password: true },
+        json: {
+          github: false,
+          email: false,
+          oidc: null,
+          google: false,
+          signUp: 'invite-only',
+          password: true,
+        },
       });
     });
     await page.goto('/sign-in');

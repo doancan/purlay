@@ -1604,6 +1604,8 @@ export const AuthMethods = Type.Object({
    * words in the person's language.
    */
   oidc: Type.Union([Type.Object({ name: Type.Union([Type.String(), Type.Null()]) }), Type.Null()]),
+  /** Whether Google is connected as a way in (D-250). */
+  google: Type.Boolean(),
   /** Who may make an account: anybody, or only the holder of an invitation (R51). */
   signUp: Type.Union([Type.Literal('open'), Type.Literal('invite-only')]),
   /**
@@ -1748,6 +1750,8 @@ export const MySignIn = Type.Object({
   ]),
   /** Whether the account is linked to the organisation's single sign-on (D-200); only ever the caller's own. */
   oidc: Type.Boolean(),
+  /** Whether the account is linked to a Google identity (D-250); only ever the caller's own. */
+  google: Type.Boolean(),
   /** Whether a password sign-in asks for a code from an authenticator app too (D-236). */
   twoFactor: Type.Boolean(),
   /**
@@ -1892,11 +1896,23 @@ export const ServerOidcRequest = FromClient({
 });
 export type ServerOidcRequest = Static<typeof ServerOidcRequest>;
 
+/**
+ * `POST /api/server/google` — Google's OAuth client (D-250), tried with these values and kept only if it
+ * works. The widths are the same as GitHub's: both are a client id and a secret an operator pastes.
+ */
+export const GOOGLE_CLIENT_ID_MAX = 128;
+export const GOOGLE_CLIENT_SECRET_MAX = 256;
+export const ServerGoogleRequest = FromClient({
+  clientId: Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_ID_MAX }),
+  clientSecret: Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_SECRET_MAX }),
+});
+export type ServerGoogleRequest = Static<typeof ServerGoogleRequest>;
+
 /** `POST /api/server/smtp` — the relay, tried with a test letter to the caller, kept only if it works. */
 export const ServerSmtpRequest = FromClient(SmtpRelay);
 export type ServerSmtpRequest = Static<typeof ServerSmtpRequest>;
 
-/** `DELETE /api/server/github`, `/smtp` and `/oidc` — the body is optional; `confirmLastChannel` is the only field. */
+/** `DELETE /api/server/github`, `/smtp`, `/oidc` and `/google` — the body is optional; `confirmLastChannel` is the only field. */
 export const ServerDisconnectRequest = FromClient({
   confirmLastChannel: Type.Optional(Type.Boolean()),
 });

@@ -105,6 +105,12 @@ CREATE TABLE users (
     -- github_id: the first keeps its email link and its own names.
     github_connected_at TIMESTAMPTZ,
 
+    -- Whether Google made the account (D-250, 0078): its first way in was Google, not a link sent to its
+    -- address. While Google is connected such an account is sent no sign-in link, only a letter saying to use
+    -- Google (the rule D-138 §2 sets for GitHub's); email-made accounts keep their links. FALSE for every
+    -- account that existed before.
+    google_made BOOLEAN NOT NULL DEFAULT FALSE,
+
     -- Whether the address is one a provider vouched for, or a link sent to it was followed. Better Auth
     -- reads it: an address that is not verified is never linked to by one that is, and an invitation is
     -- accepted only by an account whose address is. FALSE until something says so. (D-179, 0047)
@@ -2001,6 +2007,8 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   disconnected while it is — a rule the application weighs inside the transaction that saves the change, not
   a check here: a provider whose secret a rotated key cannot open is set in its columns and no way in, which
   only the application can tell. `bun run admin:reset-password` turns passwords on again.
+- **Google** (D-250, added by 0078) is a pair — client id and sealed client secret — or none, as GitHub's is;
+  its issuer is fixed (`GOOGLE_ISSUER`), so nothing else is stored.
 - **How long a session lives** (D-244, added by 0073): `session_idle_timeout_hours` signs out a session unused for
   that long, and `session_max_age_days` one that old since its sign-in, whatever its use; `NULL` is off, as every
   server was before. Which values may be chosen is `@purlay/types`' (`SESSION_IDLE_TIMEOUT_HOURS`,
@@ -2048,6 +2056,9 @@ CREATE TABLE server_settings (
     github_app_client_secret_encrypted  TEXT,
     github_app_private_key_encrypted    TEXT,
     github_app_webhook_secret_encrypted TEXT,
+    -- Google's OAuth client (D-250), added by 0078; the secret sealed as the others, a pair or nothing.
+    google_client_id                    TEXT,
+    google_client_secret_encrypted      TEXT,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -2067,6 +2078,10 @@ CREATE TABLE server_settings (
         CHECK (oidc_issuer <> '' AND oidc_client_id <> '' AND oidc_name <> ''),
     CONSTRAINT server_settings_oidc_name_needs_provider
         CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL),
+    CONSTRAINT server_settings_google_pair
+        CHECK ((google_client_id IS NULL) = (google_client_secret_encrypted IS NULL)),
+    CONSTRAINT server_settings_google_not_blank
+        CHECK (google_client_id <> '' AND google_client_secret_encrypted <> ''),
     CONSTRAINT server_settings_session_lifetime_positive
         CHECK (session_idle_timeout_hours > 0 AND session_max_age_days > 0)
     CONSTRAINT server_settings_github_app_whole
@@ -2492,6 +2507,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0075_github_app.sql server_settings.github_app_*, github_app_installations, github_user_authorizations, github_app_handshakes, github_app_deliveries: the GitHub App, a workspace's installation, a person's own authorization  (D-246)
 0076_github_links.sql github_links, github_operations: what a thread points at on GitHub, and the bounded record that makes creating an issue recoverable  (D-246)
 0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
+0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-250)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

@@ -557,6 +557,8 @@ export const settingsView = (settings: ServerSettings): ServerSettingsView => ({
           clientSecret: { set: true },
           name: settings.oidc.name ?? null,
         },
+  // Made real when Google can be connected (D-250).
+  google: null,
   smtp:
     settings.smtp === undefined
       ? null

@@ -146,6 +146,7 @@ export const en = {
   'signIn.githubUnavailable': 'GitHub could not be reached — wait a moment and try again.',
   'signIn.oidcUnavailable':
     'Single sign-on could not be reached, or did not give an identity this server trusts — wait a moment and try again, and if it stays, tell whoever runs this server.',
+  'signIn.googleUnavailable': 'Google could not be reached — wait a moment and try again.',
   'signIn.emailUnverified':
     'Single sign-on did not say your email address is verified, so it cannot sign you in. Ask whoever runs your organisation’s sign-in to verify it.',
   'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',

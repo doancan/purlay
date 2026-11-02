@@ -34,6 +34,15 @@ export const SIGN_IN_CALLBACK = `${AUTH_BASE_PATH}/callback/github`;
 export const OIDC_START_PATH = '/auth/oidc';
 export const OIDC_CALLBACK = `${AUTH_BASE_PATH}/callback/oidc`;
 
+/**
+ * The same for Google (D-250): a start of Purlay's, the library's own callback, and the one issuer Google's
+ * discovery lives under. Google is an OpenID Connect provider with a fixed address, so an operator gives only
+ * a client id and a secret.
+ */
+export const GOOGLE_START_PATH = '/auth/google';
+export const GOOGLE_CALLBACK = `${AUTH_BASE_PATH}/callback/google`;
+export const GOOGLE_ISSUER = 'https://accounts.google.com';
+
 /** How long a sign-in link opens (D-138 §4): the server's expiry and every sentence that names it. */
 export const SIGN_IN_LINK_TTL_MINUTES = 15;
 
@@ -66,6 +75,8 @@ export const SignInFailure = Type.Union([
    * a valid identity: an id_token whose signature, issuer, audience, expiry or nonce is wrong (D-200).
    */
   Type.Literal('oidc-unavailable'),
+  /** Google could not be reached, refused, or answered something that is not a valid identity (D-250). */
+  Type.Literal('google-unavailable'),
   /** The single sign-on gave no address, or did not say it was verified: it is never linked on that (D-200 §3). */
   Type.Literal('email-unverified'),
   /** Too many sign-ins from here, or no database connection in time: wait, then retry. */

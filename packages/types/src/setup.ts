@@ -101,7 +101,7 @@ export type FinishProblem = (typeof FINISH_PROBLEMS)[number];
 export type SetupStepRefusal = FinishProblem | 'admin-exists';
 
 /** A setting holding a sealed secret: what a rotated `ENCRYPTION_KEY` can leave unreadable (D-179 §6). */
-export type SealedSettingName = 'github' | 'smtp' | 'oidc' | 'githubApp';
+export type SealedSettingName = 'github' | 'smtp' | 'oidc' | 'google' | 'githubApp';
 
 /**
  * The server's settings as a response may carry them (D-179 §6): a secret is whether it is set, the
@@ -128,6 +128,11 @@ export interface ServerSettingsView {
     readonly clientSecret: { readonly set: boolean };
     /** What the sign-in button says; `null` is the default, `Single sign-on`. */
     readonly name: string | null;
+  } | null;
+  /** Google's OAuth client (D-250): who this server is to it, never the secret. */
+  readonly google: {
+    readonly clientId: string;
+    readonly clientSecret: { readonly set: boolean };
   } | null;
   /** The GitHub App issues are written through (D-246): who it is, never its secrets. */
   readonly githubApp: GitHubAppView | null;
@@ -208,6 +213,8 @@ export interface ServerSettingsAnswer {
   readonly githubCallbackUrl: string;
   /** The callback address to register with the single sign-on provider: `APP_URL/auth/callback/oidc` (D-200). */
   readonly oidcCallbackUrl: string;
+  /** The callback address to register with Google: `APP_URL/auth/callback/google` (D-250). */
+  readonly googleCallbackUrl: string;
   /** What the GitHub App's settings on GitHub point at (D-246). */
   readonly githubApp: GitHubAppAddresses;
   /** Which ways for other people to sign in serve now. */
@@ -215,6 +222,7 @@ export interface ServerSettingsAnswer {
     readonly github: boolean;
     readonly email: boolean;
     readonly oidc: boolean;
+    readonly google: boolean;
   };
   /** The caller's own address: where the relay's test letter goes. */
   readonly adminEmail: string;
