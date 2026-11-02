@@ -12045,5 +12045,7 @@ row skips rows it has no file for and says so, so rolling back one release stays
 additive. (c) *Workspace-level enablement* is a precondition of selling a package (rule 9).
 
 **Open.** (b) *Wire names:* namespacing frame types (`chat.message.created`) breaks installed clients, so the old
-names stay as aliases for one release, and whether a client ignores a type it does not know is verified before the
-unions open.
+names stay as aliases for one release. That a client ignores a type it does not know is **verified** for the web
+client (D-82: `parseServerMessage` returns `unknown`, the connection drops it, `server-frame.test.ts` holds it); it
+is not verified for a native client, which is checked before the unions open. The unions open with the first module
+that has frames of its own, not before: a registry with no entries would be a shape nothing has tried.
