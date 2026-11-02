@@ -44,6 +44,8 @@ export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
   'ws',
 ]);
 
+/** The setting that runs the core alone: written out, because blank is read as unset. */
+const NONE = 'none';
 const MODULE_ID = /^[a-z][a-z0-9-]{0,31}$/;
 const CAPABILITY = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
 
@@ -62,8 +64,9 @@ export interface ModuleRegistry {
   /** The modules this build carries, in the order they were given. */
   readonly bundled: readonly ModuleManifest[];
   /**
-   * The modules to start for a `MODULES` setting, partners first. Unset is every bundled module and empty
-   * is the core alone. Throws `ModuleConfigError` for an unknown or repeated id, an empty item, or a module
+   * The modules to start for a `MODULES` setting, partners first. Unset or blank is every bundled module —
+   * the configuration reads a blank variable as unset everywhere, and a blank that turned modules off would
+   * be a surprise — and `none` is the core alone. Throws `ModuleConfigError` for an unknown or repeated id, an empty item, or a module
    * whose requirement is not enabled.
    */
   resolve(setting: string | undefined): readonly ModuleManifest[];
@@ -159,7 +162,8 @@ const enabledBy = (
   setting: string | undefined,
 ): readonly ModuleManifest[] => {
   if (setting === undefined) return bundled;
-  if (setting.trim() === '') return [];
+  if (setting.trim() === '') return bundled;
+  if (setting.trim() === NONE) return [];
 
   const problems: string[] = [];
   const named = new Set<string>();

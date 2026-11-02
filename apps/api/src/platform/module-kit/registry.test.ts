@@ -49,9 +49,11 @@ describe('the setting', () => {
     expect(idsOf(registry.resolve(undefined))).toEqual(['chat', 'notes', 'issues']);
   });
 
-  test('empty, or only blanks, is the core alone', () => {
-    expect(registry.resolve('')).toEqual([]);
-    expect(registry.resolve('   ')).toEqual([]);
+  test('blank is unset, which is every module; none is the core alone', () => {
+    expect(idsOf(registry.resolve(''))).toEqual(idsOf(registry.resolve(undefined)));
+    expect(idsOf(registry.resolve('   '))).toEqual(idsOf(registry.resolve(undefined)));
+    expect(registry.resolve('none')).toEqual([]);
+    expect(registry.resolve(' none ')).toEqual([]);
   });
 
   test('names a subset, and a module runs without a partner it only uses', () => {
