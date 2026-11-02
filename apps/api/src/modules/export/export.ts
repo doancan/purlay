@@ -216,10 +216,14 @@ export const readTables = async (
   return counted;
 };
 
-/** The shape every row was in, read inside the snapshot: the last migration the database had. */
+/**
+ * The shape every row was in, read inside the snapshot: the last migration the database had. A module's
+ * migrations are recorded as `<module>/<file>` and sort among the core's, so they are left out — the stamp
+ * names the core's shape, and a module that is off must not change it (D-250).
+ */
 export const schemaOf = async (transaction: Transaction): Promise<string> => {
   const latest = await sql<{ name: string }>`
-    select name from kysely_migration order by name desc limit 1
+    select name from kysely_migration where name not like '%/%' order by name desc limit 1
   `.execute(transaction);
   return latestMigration(latest.rows[0]?.name);
 };

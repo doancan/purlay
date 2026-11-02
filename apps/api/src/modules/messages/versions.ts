@@ -20,7 +20,7 @@ import {
 } from '@purlay/types';
 import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
-import { limitOf } from './threads';
+import { limitOf } from '../../platform/pagination';
 
 const versionNotFound = (): AppError =>
   new AppError({ code: 'MESSAGE_VERSION_NOT_FOUND', message: 'Version not found.' });

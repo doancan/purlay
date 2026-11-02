@@ -41,7 +41,7 @@ import {
   type ChannelContext,
 } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
-import { limitOf } from '../messages/threads';
+import { limitOf } from '../../platform/pagination';
 
 const at = (value: Date | string): string => new Date(value).toISOString();
 

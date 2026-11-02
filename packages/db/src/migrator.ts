@@ -55,6 +55,19 @@ export interface MigrationFile {
   readonly transactional: boolean;
 }
 
+/**
+ * A module's own ordered set of migrations (D-250). Its files live in a directory of their own and are
+ * recorded as `<id>/<file>`, so they never collide with the core's, whose rows keep the bare names they have
+ * always had. Order and checksum are checked within a set, never across sets: a module that was off for
+ * three releases opens on the fourth.
+ */
+export interface MigrationSet {
+  readonly id: string;
+  readonly directory: string;
+}
+
+const SET_ID = /^[a-z][a-z0-9-]*$/;
+
 export interface MigrationResult {
   readonly migrationName: string;
   readonly status: 'Success' | 'Error' | 'NotExecuted';
@@ -78,13 +91,14 @@ const isTransactional = (text: string): boolean => {
 
 export const readMigrationFiles = async (
   directory = MIGRATIONS_DIRECTORY,
+  prefix = '',
 ): Promise<readonly MigrationFile[]> => {
   const names = (await readdir(directory)).filter((f) => f.endsWith('.sql')).sort();
   return await Promise.all(
     names.map(async (file): Promise<MigrationFile> => {
       const text = await readFile(join(directory, file), 'utf8');
       return {
-        name: file.replace(/\.sql$/, ''),
+        name: `${prefix}${file.replace(/\.sql$/, '')}`,
         text,
         checksum: createHash('sha256').update(text).digest('hex'),
         transactional: isTransactional(text),
@@ -102,6 +116,65 @@ const readRecorded = async (db: QueryExecutorProvider): Promise<Recorded[]> => {
   const { rows } = await sql<Recorded>`
     select name, checksum from ${sql.table(TABLE)} order by timestamp, name`.execute(db);
   return rows;
+};
+
+/** The files of the core's directory and of each module's set, each set apart from the others. */
+interface LoadedSet {
+  /** `''` for the core, `<id>/` for a module: the start of every name the set records. */
+  readonly prefix: string;
+  readonly files: readonly MigrationFile[];
+}
+
+const loadSets = async (
+  directory: string,
+  modules: readonly MigrationSet[],
+): Promise<readonly LoadedSet[]> => {
+  const seen = new Set<string>();
+  for (const { id } of modules) {
+    if (!SET_ID.test(id)) throw new Error(`"${id}" is not a migration set id`);
+    if (seen.has(id)) throw new Error(`the migration set "${id}" is given twice`);
+    seen.add(id);
+  }
+  return [
+    { prefix: '', files: await readMigrationFiles(directory) },
+    ...(await Promise.all(
+      modules.map(async ({ id, directory: dir }): Promise<LoadedSet> => ({
+        prefix: `${id}/`,
+        files: await readMigrationFiles(dir, `${id}/`),
+      })),
+    )),
+  ];
+};
+
+/** What a database has recorded for the sets of this run, and what it has for sets that are not in it. */
+interface Split {
+  readonly byPrefix: ReadonlyMap<string, readonly Recorded[]>;
+  /** Rows of a module this run does not carry: not an error, a module that is off. */
+  readonly dormant: readonly Recorded[];
+}
+
+const split = (sets: readonly LoadedSet[], recorded: readonly Recorded[]): Split => {
+  const byPrefix = new Map<string, Recorded[]>(sets.map((set) => [set.prefix, []]));
+  const dormant: Recorded[] = [];
+  for (const row of recorded) {
+    const slash = row.name.indexOf('/');
+    const prefix = slash === -1 ? '' : row.name.slice(0, slash + 1);
+    const rows = byPrefix.get(prefix);
+    if (rows === undefined) dormant.push(row);
+    else rows.push(row);
+  }
+  return { byPrefix, dormant };
+};
+
+/** Every set checked against its own rows: the rows to adopt, and the rows of the sets that are off. */
+const verifySets = (
+  sets: readonly LoadedSet[],
+  recorded: readonly Recorded[],
+  edits: Readonly<Record<string, CommentOnlyEdit>> | undefined,
+): { readonly adopt: readonly Recorded[]; readonly dormant: readonly Recorded[] } => {
+  const { byPrefix, dormant } = split(sets, recorded);
+  const adopt = sets.flatMap((set) => verify(set.files, byPrefix.get(set.prefix) ?? [], edits));
+  return { adopt, dormant };
 };
 
 /**
@@ -229,6 +302,10 @@ export interface MigrateOptions {
   readonly deadlockRetry?: RetryPolicy;
   /** Comment corrections to accept; the default is `COMMENT_ONLY_EDITS`. For tests. */
   readonly commentOnlyEdits?: Readonly<Record<string, CommentOnlyEdit>>;
+  /** The enabled modules' sets, applied after the core's in this order. None means the core alone. */
+  readonly modules?: readonly MigrationSet[];
+  /** Told the names a database holds for modules this run does not carry, which are not an error. */
+  readonly onDormant?: (names: readonly string[]) => void;
 }
 
 /** Idempotent: applying an already-applied migration is a no-op. */
@@ -240,7 +317,7 @@ export const migrateToLatest = async <T>(
   const lockWaitMilliseconds = options.lockWaitMilliseconds ?? LOCK_WAIT_MILLISECONDS;
   const results: MigrationResult[] = [];
   try {
-    const files = await readMigrationFiles(directory);
+    const sets = await loadSets(directory, options.modules ?? []);
     await db.connection().execute(async (conn) => {
       // One session for the whole run: the lock belongs to it, and ends with it if the
       // process dies. Released below on every path that gets past acquiring it.
@@ -253,8 +330,11 @@ export const migrateToLatest = async <T>(
           conn,
         );
 
+        const files = sets.flatMap((set) => set.files);
         const recorded = await readRecorded(conn);
-        for (const row of verify(files, recorded, options.commentOnlyEdits)) {
+        const { adopt, dormant } = verifySets(sets, recorded, options.commentOnlyEdits);
+        if (dormant.length > 0) options.onDormant?.(dormant.map((row) => row.name));
+        for (const row of adopt) {
           const file = files.find((f) => f.name === row.name);
           await sql`update ${sql.table(TABLE)} set checksum = ${file?.checksum ?? null}
             where name = ${row.name}`.execute(conn);
@@ -302,6 +382,7 @@ export const migrationHistoryProblem = async (
   db: QueryExecutorProvider,
   directory = MIGRATIONS_DIRECTORY,
   commentOnlyEdits: Readonly<Record<string, CommentOnlyEdit>> = COMMENT_ONLY_EDITS,
+  modules: readonly MigrationSet[] = [],
 ): Promise<string | undefined> => {
   const present = await sql<{ table: boolean; checksum: boolean }>`
     select to_regclass(${TABLE}) is not null as "table",
@@ -309,7 +390,7 @@ export const migrationHistoryProblem = async (
                    where table_schema = current_schema() and table_name = ${TABLE}
                      and column_name = 'checksum') as checksum`.execute(db);
   if (present.rows[0]?.table !== true) return undefined;
-  const files = await readMigrationFiles(directory);
+  const sets = await loadSets(directory, modules);
   // A database migrated before checksums existed has no column: every row is unchecked.
   const recorded = present.rows[0].checksum
     ? await readRecorded(db)
@@ -320,7 +401,7 @@ export const migrationHistoryProblem = async (
         )
       ).rows;
   try {
-    verify(files, recorded, commentOnlyEdits);
+    verifySets(sets, recorded, commentOnlyEdits);
     return undefined;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -336,8 +417,9 @@ export const migrationHistoryProblem = async (
 export const pendingMigrations = async (
   db: QueryExecutorProvider,
   directory = MIGRATIONS_DIRECTORY,
+  modules: readonly MigrationSet[] = [],
 ): Promise<readonly string[]> => {
-  const files = await readMigrationFiles(directory);
+  const files = (await loadSets(directory, modules)).flatMap((set) => set.files);
   const exists = await sql<{ present: boolean }>`
     select to_regclass(${TABLE}) is not null as present`.execute(db);
   if (exists.rows[0]?.present !== true) return files.map((f) => f.name);

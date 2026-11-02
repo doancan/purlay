@@ -14,8 +14,9 @@
  * with the message and publishes nothing, because nothing changed.
  */
 import { sql, type Executor } from '@purlay/db';
-import { PAGE_LIMIT, type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
+import { type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
 import { AppError } from '../../platform/errors';
+import { limitOf } from '../../platform/pagination';
 import {
   requireChannelMember,
   requireMessageById,
@@ -43,9 +44,6 @@ export interface PageQuery {
   readonly after?: string | undefined;
   readonly limit?: number | undefined;
 }
-
-export const limitOf = (query: PageQuery): number =>
-  Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max);
 
 /** Two directions at once has no meaning, and picking one silently is how a client reads a page it did not ask for. */
 const refuseBothDirections = (query: PageQuery): void => {

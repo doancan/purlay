@@ -22,7 +22,8 @@ import { AppError } from '../../platform/errors';
 import { channelNotFound } from '../../platform/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { MESSAGE_COLUMNS } from '../messages/reader';
-import { asPage, limitOf } from '../messages/threads';
+import { asPage } from '../messages/threads';
+import { limitOf } from '../../platform/pagination';
 
 /** `%`, `_` and `\` are what a person typed, not a pattern: escaped for `ILIKE`'s default escape. */
 export const literalPattern = (words: string): string =>

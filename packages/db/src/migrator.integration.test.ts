@@ -574,3 +574,138 @@ describe('integration: a corrected comment in an applied migration', () => {
     }
   });
 });
+
+describe('integration: the migrations of modules (D-250)', () => {
+  const names = async (db: Kysely<unknown>): Promise<string[]> =>
+    (
+      await sql<{ name: string }>`select name from kysely_migration order by name`.execute(db)
+    ).rows.map((row) => row.name);
+
+  test('are recorded as <module>/<file> beside the core, whose rows keep their bare names', async () => {
+    const db = open(await freshSchema());
+    try {
+      const core = migrationsDirectory({ '0001_core.sql': 'CREATE TABLE core_t (id int);' });
+      const notes = migrationsDirectory({ '0001_notes.sql': 'CREATE TABLE notes_t (id int);' });
+      const { error, results } = await migrateToLatest(db, core, {
+        modules: [{ id: 'notes', directory: notes }],
+      });
+      expect(error).toBeUndefined();
+      expect(results?.map((r) => r.migrationName)).toEqual(['0001_core', 'notes/0001_notes']);
+      expect(await names(db)).toEqual(['0001_core', 'notes/0001_notes']);
+
+      // Idempotent with the same sets: nothing is applied again.
+      const again = await migrateToLatest(db, core, {
+        modules: [{ id: 'notes', directory: notes }],
+      });
+      expect(again.error).toBeUndefined();
+      expect(again.results).toEqual([]);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  test('keep their own order: two sets may both have a 0001', async () => {
+    const db = open(await freshSchema());
+    try {
+      const core = migrationsDirectory({ '0001_a.sql': 'CREATE TABLE a (id int);' });
+      const one = migrationsDirectory({ '0001_x.sql': 'CREATE TABLE x (id int);' });
+      const two = migrationsDirectory({ '0001_y.sql': 'CREATE TABLE y (id int);' });
+      const { error } = await migrateToLatest(db, core, {
+        modules: [
+          { id: 'one', directory: one },
+          { id: 'two', directory: two },
+        ],
+      });
+      expect(error).toBeUndefined();
+      expect(await names(db)).toEqual(['0001_a', 'one/0001_x', 'two/0001_y']);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  test('a module that was off is not an error, and its rows are reported; turned on it opens where it stopped', async () => {
+    const db = open(await freshSchema());
+    try {
+      const core = migrationsDirectory({ '0001_core.sql': 'CREATE TABLE core_t (id int);' });
+      const notes = migrationsDirectory({ '0001_notes.sql': 'CREATE TABLE notes_t (id int);' });
+      const sets = [{ id: 'notes', directory: notes }];
+      expect((await migrateToLatest(db, core, { modules: sets })).error).toBeUndefined();
+
+      const dormant: string[][] = [];
+      const off = await migrateToLatest(db, core, { onDormant: (rows) => dormant.push([...rows]) });
+      expect(off.error).toBeUndefined();
+      expect(dormant).toEqual([['notes/0001_notes']]);
+      expect(await migrationHistoryProblem(db, core)).toBeUndefined();
+      expect(await pendingMigrations(db, core)).toEqual([]);
+
+      writeFileSync(join(notes, '0002_more.sql'), 'ALTER TABLE notes_t ADD COLUMN body text;');
+      expect(await pendingMigrations(db, core, sets)).toEqual(['notes/0002_more']);
+      const on = await migrateToLatest(db, core, { modules: sets });
+      expect(on.error).toBeUndefined();
+      expect(on.results?.map((r) => r.migrationName)).toEqual(['notes/0002_more']);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  test('are checked within their set: an edited file, and a missing one, name the set', async () => {
+    const db = open(await freshSchema());
+    try {
+      const core = migrationsDirectory({ '0001_core.sql': 'CREATE TABLE core_t (id int);' });
+      const notes = migrationsDirectory({ '0001_notes.sql': 'CREATE TABLE notes_t (id int);' });
+      const sets = [{ id: 'notes', directory: notes }];
+      expect((await migrateToLatest(db, core, { modules: sets })).error).toBeUndefined();
+
+      writeFileSync(join(notes, '0001_notes.sql'), 'CREATE TABLE notes_t (id bigint);');
+      const edited = await migrateToLatest(db, core, { modules: sets });
+      expect(String(edited.error)).toContain(
+        'migration notes/0001_notes was edited after it was applied',
+      );
+      expect(await migrationHistoryProblem(db, core, undefined, sets)).toContain(
+        'notes/0001_notes',
+      );
+
+      rmSync(join(notes, '0001_notes.sql'));
+      const missing = await migrateToLatest(db, core, { modules: sets });
+      expect(String(missing.error)).toContain(
+        'previously applied migration notes/0001_notes is missing',
+      );
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  test('a core file that sorts before an applied core file is refused whatever the modules hold', async () => {
+    const db = open(await freshSchema());
+    try {
+      const core = migrationsDirectory({ '0002_b.sql': 'CREATE TABLE b (id int);' });
+      const notes = migrationsDirectory({ '0001_n.sql': 'CREATE TABLE n (id int);' });
+      const sets = [{ id: 'notes', directory: notes }];
+      expect((await migrateToLatest(db, core, { modules: sets })).error).toBeUndefined();
+      writeFileSync(join(core, '0001_a.sql'), 'CREATE TABLE a (id int);');
+      const { error } = await migrateToLatest(db, core, { modules: sets });
+      expect(String(error)).toContain('A new migration must sort after the last applied one');
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  test('refuse a set id that is not a name, and one given twice', async () => {
+    const db = open(await freshSchema());
+    try {
+      const core = migrationsDirectory({ '0001_core.sql': 'SELECT 1;' });
+      const some = migrationsDirectory({ '0001_x.sql': 'SELECT 1;' });
+      const bad = await migrateToLatest(db, core, { modules: [{ id: 'Bad/Id', directory: some }] });
+      expect(String(bad.error)).toContain('is not a migration set id');
+      const twice = await migrateToLatest(db, core, {
+        modules: [
+          { id: 'x', directory: some },
+          { id: 'x', directory: some },
+        ],
+      });
+      expect(String(twice.error)).toContain('is given twice');
+    } finally {
+      await db.destroy();
+    }
+  });
+});

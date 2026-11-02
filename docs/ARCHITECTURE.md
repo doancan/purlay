@@ -128,6 +128,8 @@ purlay/
 │   │       │                  `/ws` by the composition root in `http/app.ts`
 │   │       ├── realtime/        the socket door: frame router, hub (connection lifecycle,
 │   │       │                  backpressure), the in-process EventBus, the rate limiter
+│   │       ├── features/        the modules of the product (D-250, `MODULES.md`): one folder each, below the
+│   │       │                  doors like `modules/`, importing no other feature; none exists yet
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line
 │   │       │   ├── auth/        the sign-in library (Better Auth) and what sits on it: sessions (token SHA-256 at rest)
 │   │       │   ├── workspaces/  tenancy, membership, roles, Deep Work
@@ -140,7 +142,8 @@ purlay/
 │   │       │   ├── search/
 │   │       │   └── integrations/github/  unfurl, link_previews cache
 │   │       ├── platform/        the bottom layer: config, clock, errors, tenancy, channel
-│   │       │                  visibility, the EventBus seam, the transaction boundary
+│   │       │                  visibility, the EventBus seam, the transaction boundary,
+│   │       │                  `module-kit/` — the manifest type and which modules a process runs
 │   │       ├── testing/         fixtures every layer's tests may use; never imported by code
 │   │       └── index.ts
 │   │
@@ -175,8 +178,10 @@ purlay/
 ```
 
 **Dependency rule, enforced by lint:** the two doors — `ingress/http` and `realtime` — call
-`modules`, and `modules` call `platform`. A module never imports from either door, and `platform`
-imports from nothing above it. `realtime` never imports `ingress` (ingress composes it), and
+`features` and `modules`, `features` call `modules`, and `modules` call `platform`. A module or a
+feature never imports from either door, and `platform` imports from nothing above it. **The core —
+`modules` and `platform` — imports no feature, and no feature imports another** (D-250); the lint
+finds the folders under `features/` itself, so a new one is fenced on the day it is made. `realtime` never imports `ingress` (ingress composes it), and
 production code never imports `testing/` — both are lint rules. A route handler or frame handler validates, calls one service and
 serializes: sign-in, the `/me` read and the fan-out that ends a session's sockets are in `modules` and
 `platform/events.ts` (D-47). `apps/web` never imports from `apps/api` — only from `packages/*`.

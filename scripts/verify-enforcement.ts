@@ -9,7 +9,7 @@
  * Run by CI. A failure here means the guardrails are gone, not that the code is
  * wrong — which is the more expensive failure of the two.
  */
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 
 interface Violation {
@@ -66,6 +66,37 @@ const VIOLATIONS: readonly Violation[] = [
     path: 'apps/api/src/modules/__enforcement__.ts',
     source:
       "import { thing } from '../ingress/http/routes';\n\nexport const use = (): unknown => thing;\n",
+  },
+  // The modules of the product (D-250). Their folders are found by the linter at start, so the two
+  // `enforce-*` below are planted before the run and a rule is written for each.
+  {
+    rule: 'a feature may not import another feature (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import { thing } from '../enforce-b/thing';\n\nexport const use = (): unknown => thing;\n",
+  },
+  {
+    rule: 'a feature imports the platform and its own files freely (control)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-b/__enforcement__.ts',
+    source:
+      "import { systemClock } from '../../platform/clock';\nimport { thing } from './thing';\n\nexport const use = (): unknown => [systemClock, thing];\n",
+    allowed: true,
+  },
+  {
+    rule: 'the core imports no feature (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source:
+      "import { thing } from '../features/enforce-a/thing';\n\nexport const use = (): unknown => thing;\n",
+  },
+  {
+    rule: 'a module of the core imports no feature (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/modules/__enforcement__.ts',
+    source:
+      "import { thing } from '../features/enforce-a/thing';\n\nexport const use = (): unknown => thing;\n",
   },
   // The two doors are peers, and ingress composes realtime, so the cycle that was
   // there (realtime importing a cookie module out of ingress) cannot return. (#245)
@@ -426,6 +457,11 @@ const placed = VIOLATIONS.map((violation, index) => {
   return { ...violation, file: join(dirname(violation.path), name) };
 });
 
+const FEATURES = 'apps/api/src/features';
+const removeIfEmpty = (dir: string): void => {
+  if (existsSync(dir) && readdirSync(dir).length === 0) rmSync(dir, { recursive: true });
+};
+
 let failures = 0;
 try {
   for (const violation of placed) {
@@ -495,6 +531,12 @@ try {
 } finally {
   // Always, or a throw above leaves a violation in the source tree.
   for (const violation of placed) rmSync(violation.file, { force: true });
+  // The linter reads `features/` for the modules there are, so a folder left behind would be one.
+  const planted = new Set(
+    placed.map((violation) => dirname(violation.file)).filter((dir) => dir.startsWith(FEATURES)),
+  );
+  for (const dir of planted) removeIfEmpty(dir);
+  removeIfEmpty(FEATURES);
 }
 
 /**

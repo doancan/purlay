@@ -17,6 +17,7 @@ a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 | 1 | **`PRD.md`** | Who it is for, what problem it solves, what ships in which phase | Scope |
 | 2 | **`DECISIONS.md`** | Why every non-obvious choice was made, and what was rejected | **Everything — it wins any conflict** |
 | 3 | **`ARCHITECTURE.md`** | How the parts fit: layers, transport, protocol, isolation | Structure |
+| — | **`MODULES.md`** | How a module is declared, loaded, kept apart and removed (design; D-250) | Modularity |
 | 4 | **`SCHEMA.md`** | What is stored: tables, indexes, invariants, migration order | Data |
 | 5 | **`UX.md`** | How it behaves: layout, thread interaction, keyboard, states | Interaction |
 | 6 | **`API.md`** | The HTTP endpoint contract, per phase | Interface |
