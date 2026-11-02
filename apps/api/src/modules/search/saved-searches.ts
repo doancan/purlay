@@ -13,7 +13,7 @@ import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { channelNotFound, visibleChannelIds } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
-import { limitOf } from '../messages/threads';
+import { limitOf } from '../../platform/pagination';
 import { validateSearch } from './search';
 
 const missing = (): AppError =>

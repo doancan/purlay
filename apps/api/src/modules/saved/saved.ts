@@ -31,7 +31,7 @@ import { requireMessageById, visibleChannelIds } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
-import { limitOf } from '../messages/threads';
+import { limitOf } from '../../platform/pagination';
 
 const at = (value: Date | string): string => new Date(value).toISOString();
 

@@ -31,7 +31,7 @@ import { requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
-import { limitOf } from '../messages/threads';
+import { limitOf } from '../../platform/pagination';
 
 /** A channel with a notification newly read, as its row now is: what the caller's devices are told. */
 export interface Told {

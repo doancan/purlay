@@ -2365,18 +2365,18 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'history-limit-not-capped',
     why: 'one request reads the whole channel',
-    file: MESSAGES,
+    file: 'apps/api/src/platform/pagination.ts',
     find: 'Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max)',
     replace: 'Math.max(query.limit ?? PAGE_LIMIT.default, 1)',
-    tests: MESSAGES_TESTS,
+    tests: [...MESSAGES_TESTS, 'apps/api/src/platform/pagination.test.ts'],
   },
   {
     id: 'history-limit-not-floored',
     why: 'a limit of zero or less returns nothing, or a database error',
-    file: MESSAGES,
+    file: 'apps/api/src/platform/pagination.ts',
     find: 'Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max)',
     replace: 'Math.min(query.limit ?? PAGE_LIMIT.default, PAGE_LIMIT.max)',
-    tests: MESSAGES_TESTS,
+    tests: [...MESSAGES_TESTS, 'apps/api/src/platform/pagination.test.ts'],
   },
   {
     id: 'member-list-includes-deleted-users',
