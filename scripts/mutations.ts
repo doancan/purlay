@@ -12396,4 +12396,59 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/modules/export/export.integration.test.ts'],
   },
+  {
+    id: 'module-budget-no-cap',
+    why: "a module takes every connection of the pool and chat's sends queue behind it (D-250)",
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: 'if (inUse < limit) {',
+    replace: 'if (true) {',
+    tests: [
+      'apps/api/src/platform/module-budget.test.ts',
+      'apps/api/src/platform/module-budget.integration.test.ts',
+    ],
+  },
+  {
+    id: 'module-budget-slot-kept',
+    why: 'a module that threw keeps its slot, and its share is gone until the process restarts (D-250)',
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: '      share.release();',
+    replace: '      void 0;',
+    tests: [
+      'apps/api/src/platform/module-budget.test.ts',
+      'apps/api/src/platform/module-budget.integration.test.ts',
+    ],
+  },
+  {
+    id: 'module-budget-handoff-frees',
+    why: 'a released slot is freed and taken again, so a newcomer can jump the queue (D-250)',
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: 'if (next === undefined) inUse -= 1;',
+    replace: 'inUse -= 1;',
+    tests: [
+      'apps/api/src/platform/module-budget.test.ts',
+      'apps/api/src/platform/module-budget.integration.test.ts',
+    ],
+  },
+  {
+    id: 'module-budget-joins-nothing',
+    why: "a service in a test's transaction would open a second, outside the rollback (D-250)",
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: 'if (isTransaction(executor)) return await body(executor);',
+    replace: '',
+    tests: [
+      'apps/api/src/platform/module-budget.test.ts',
+      'apps/api/src/platform/module-budget.integration.test.ts',
+    ],
+  },
+  {
+    id: 'module-budget-no-timeout',
+    why: "a module's slow statement runs as long as the pool's limit, holding its connection (D-250)",
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: "await sql`select set_config('statement_timeout', ${String(budget.statementTimeoutMs)}, true)`.execute(",
+    replace: 'await sql`select 1`.execute(',
+    tests: [
+      'apps/api/src/platform/module-budget.test.ts',
+      'apps/api/src/platform/module-budget.integration.test.ts',
+    ],
+  },
 ];
