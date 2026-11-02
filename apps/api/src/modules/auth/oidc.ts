@@ -75,7 +75,7 @@ export type OidcFetch = GithubFetch;
 export const OIDC_PROVIDER_ID = 'oidc';
 
 /**
- * What makes a provider the one it is, over the core every provider shares (D-200, D-250). The generic slot's
+ * What makes a provider the one it is, over the core every provider shares (D-200, D-251). The generic slot's
  * is `OIDC_DEFINITION`; a fixed provider names its own.
  */
 export interface OidcDefinition {
@@ -108,7 +108,7 @@ export interface OidcDefinition {
    * Whether the address the provider vouched for is told to the library as proven — what an account it makes
    * keeps in `users.email_verified`, and so whether a later sign-in of another kind may link into it by the
    * address. Absent, it always is (the generic provider, D-200); Google's says so only of an address that is
-   * Google's own to vouch for (D-250 §3).
+   * Google's own to vouch for (D-251 §3).
    */
   readonly emailVerified?: (claims: Readonly<Record<string, unknown>>, email: string) => boolean;
 }

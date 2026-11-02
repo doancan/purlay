@@ -25,7 +25,7 @@ have it.
 
 ### Added
 
-- **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-250)
+- **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
 
 ### Security
 

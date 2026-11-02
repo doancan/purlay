@@ -1,6 +1,6 @@
 /**
  * The messages signing in by email sends (D-138 §2, §4): a link, and — to the address of an
- * account GitHub or Google made — a word to sign in with that provider instead (D-250). In the language
+ * account GitHub or Google made — a word to sign in with that provider instead (D-251). In the language
  * the person asked in (D-41), plain text, and the same as HTML with the one address made a link.
  */
 import { SIGN_IN_LINK_TTL_MINUTES, type EmailSignInRequest } from '@purlay/types';
@@ -49,6 +49,6 @@ export const linkLetter = (to: string, locale: SignInLocale, url: string): MailM
 export const githubLetter = (to: string, locale: SignInLocale, appUrl: string): MailMessage =>
   textLetter(to, WORDS[locale].githubSubject, WORDS[locale].github(appUrl), appUrl);
 
-/** The word to an account Google made: no link, and the way it does sign in (D-250). */
+/** The word to an account Google made: no link, and the way it does sign in (D-251). */
 export const googleLetter = (to: string, locale: SignInLocale, appUrl: string): MailMessage =>
   textLetter(to, WORDS[locale].googleSubject, WORDS[locale].google(appUrl), appUrl);

@@ -1,5 +1,5 @@
 /**
- * Sign in with Google (D-250), driven through real requests against the mounted library and a real database, with
+ * Sign in with Google (D-251), driven through real requests against the mounted library and a real database, with
  * Google a strict double at the `fetch` boundary standing at Google's own issuer (`testing/google-sign-in.ts`).
  *
  * What the token must be is the OIDC core's, tested whole in `oidc-sign-in.integration.test.ts`; here is what
@@ -299,7 +299,7 @@ describe('integration: a new person', () => {
     const user = await userBy('id', userId);
     expect(user?.email).toBe(person.email);
     expect(user?.google_made).toBe(true);
-    // Google did not speak for the address, so nothing else may link into the account by it (D-250 §3).
+    // Google did not speak for the address, so nothing else may link into the account by it (D-251 §3).
     expect(user?.email_verified).toBe(false);
     expect(await accountsOf(userId)).toEqual([
       { provider_id: GOOGLE_PROVIDER_ID, account_id: person.sub },
@@ -415,7 +415,7 @@ describe('integration: the sign-in round', () => {
   });
 });
 
-describe('integration: an existing account by its address (D-250)', () => {
+describe('integration: an existing account by its address (D-251)', () => {
   test('a verified email-made Gmail account is linked and signed into; google_made stays false', async () => {
     const email = `ali-${unique()}@gmail.com`;
     const existing = await anEmailAccount(email);

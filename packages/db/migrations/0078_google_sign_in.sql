@@ -1,6 +1,6 @@
 -- 0078_google_sign_in
 --
--- Sign in with Google (D-250): Google's OAuth client as a setting of the server's, kept the way GitHub's pair
+-- Sign in with Google (D-251): Google's OAuth client as a setting of the server's, kept the way GitHub's pair
 -- (0049) and the single sign-on provider (0059) are (D-179 §6). Google's issuer and endpoints are fixed, so an
 -- operator gives a client id and a secret and nothing else.
 --

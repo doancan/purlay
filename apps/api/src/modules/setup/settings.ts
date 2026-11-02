@@ -65,7 +65,7 @@ export interface GitHubAppSettings {
   readonly webhookSecret: string;
 }
 
-/** Google's OAuth client (D-250): who this server is to Google. Its address is fixed, so nothing else is kept. */
+/** Google's OAuth client (D-251): who this server is to Google. Its address is fixed, so nothing else is kept. */
 interface GoogleSettings {
   readonly clientId: string;
   readonly clientSecret: string;
@@ -74,7 +74,7 @@ interface GoogleSettings {
 /** Everything the server reads from its settings: what the sign-in library takes, and the rest. */
 export interface ServerSettings extends AuthSettings, SignInPolicy, SessionLifetime {
   readonly smtp: SmtpSettings | undefined;
-  /** Google's OAuth client (D-250), the secret opened; unset, Google is not a way in. */
+  /** Google's OAuth client (D-251), the secret opened; unset, Google is not a way in. */
   readonly google: GoogleSettings | undefined;
   /** The GitHub App (D-246); unset, nothing of issues from conversations is offered. */
   readonly githubApp: GitHubAppSettings | undefined;

@@ -109,7 +109,7 @@ export interface AuthSettings {
    */
   readonly oidc: (OidcCredentials & { readonly name: string | undefined }) | undefined;
   /**
-   * Google's OAuth client (D-250): `undefined` is off — nothing is registered, and nothing is sent to Google.
+   * Google's OAuth client (D-251): `undefined` is off — nothing is registered, and nothing is sent to Google.
    * Where Google is, is not a setting: `AuthDependencies.googleIssuer`.
    */
   readonly google: { readonly clientId: string; readonly clientSecret: string } | undefined;
@@ -166,7 +166,7 @@ export interface AuthDependencies {
   /** What reaches GitHub; a test passes its own. Unset is the platform's `fetch`. */
   readonly fetch?: GithubFetch;
   /**
-   * Google's issuer (D-250): `GOOGLE_ISSUER` unless a test stands a provider of its own somewhere else. The one
+   * Google's issuer (D-251): `GOOGLE_ISSUER` unless a test stands a provider of its own somewhere else. The one
    * value both the client's issuer and the definition's accepted issuers are made from, so they cannot differ.
    */
   readonly googleIssuer?: string;
@@ -257,7 +257,7 @@ interface SignInRound {
   profile: GitHubProfile | undefined;
   /** The single sign-on account a verified token vouched for, as the library keeps it (D-200). */
   oidcAccountId?: string | undefined;
-  /** The Google account (its bare `sub`) a verified token vouched for (D-250). */
+  /** The Google account (its bare `sub`) a verified token vouched for (D-251). */
   googleAccountId?: string | undefined;
   made: boolean;
   /** The person a request that ends sessions acts for, and the sessions they had before it ran. */
@@ -826,7 +826,7 @@ export const admittedByPassport = async (
 };
 
 /**
- * Whom a provider's account may be added to (D-200 §3, §6; D-179 §3; D-250), decided where the library makes the
+ * Whom a provider's account may be added to (D-200 §3, §6; D-179 §3; D-251), decided where the library makes the
  * row:
  *
  * - **An account has one single sign-on identity.** The library links a callback it does not know to the
@@ -879,7 +879,7 @@ const refusedIdentityConflict = async (
 };
 
 /**
- * Google's say before the library links or makes anything (D-250): an existing account is linked by its address
+ * Google's say before the library links or makes anything (D-251): an existing account is linked by its address
  * only where the address is Google's to vouch for (`authoritativeForGoogle`) — a Gmail address, or one in the
  * Workspace domain the token names in `hd`. Any other is refused as unverified (`GOOGLE_EMAIL_UNVERIFIED`, the
  * person told `email-unverified`), and nothing is changed.
@@ -1122,7 +1122,7 @@ export interface SignInLinks {
    * only while it is — disconnected, the account's other ways back in are not closed by a provider that is gone.
    */
   readonly oidc: boolean;
-  /** Whether Google is connected now (D-250): an account Google made is answered by it, not by a link, while it is. */
+  /** Whether Google is connected now (D-251): an account Google made is answered by it, not by a link, while it is. */
   readonly google: boolean;
   /** Where the library's mail goes, for the one message about signing in that is not a link. */
   readonly outbox: Outbox;
@@ -1188,7 +1188,7 @@ export type Auth = ReturnType<typeof betterAuth> & {
    */
   readonly oidc: { readonly name: string | undefined } | undefined;
   /**
-   * Whether Google is connected, so its provider is registered (D-250); where it is not, `GET /auth/google` is
+   * Whether Google is connected, so its provider is registered (D-251); where it is not, `GET /auth/google` is
    * the route that does not exist.
    */
   readonly google: boolean;
@@ -1431,7 +1431,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           },
         });
 
-  // Google, the same: built from the settings, asked nothing until somebody presses its button (D-250). Its issuer
+  // Google, the same: built from the settings, asked nothing until somebody presses its button (D-251). Its issuer
   // is one value, from which both the client's issuer and the issuers a token may name are made.
   const googleIssuer = deps.googleIssuer ?? GOOGLE_ISSUER;
   const googleProvider =
@@ -1447,7 +1447,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             onIdentity: (accountId): void => {
               const round = signInRounds.getStore();
               // Outside the handler nothing would mark an account Google made as Google's, and it would pass
-              // for one made by email (D-250): refused, as GitHub's is.
+              // for one made by email (D-251): refused, as GitHub's is.
               if (round === undefined) {
                 throw new APIError('INTERNAL_SERVER_ERROR', {
                   message: 'A Google sign-in is served only through the handler.',
@@ -1537,7 +1537,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           returned: false,
           fieldName: 'github_login',
         },
-        // Whether Google made the account (D-250), written by the user hook in the transaction that makes it, as
+        // Whether Google made the account (D-251), written by the user hook in the transaction that makes it, as
         // GitHub's id is: an account Google made is never, even for a moment, one that looks made by email.
         googleMade: {
           type: 'boolean',
@@ -1821,7 +1821,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 // Whatever a client sent under these names is overwritten: they come from GitHub alone.
                 githubId: github === undefined ? null : String(github.id),
                 githubLogin: github === undefined ? null : github.login,
-                // The same, from Google's sign-in alone (D-250).
+                // The same, from Google's sign-in alone (D-251).
                 googleMade: google,
               },
             };

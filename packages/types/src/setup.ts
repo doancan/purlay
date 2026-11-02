@@ -129,7 +129,7 @@ export interface ServerSettingsView {
     /** What the sign-in button says; `null` is the default, `Single sign-on`. */
     readonly name: string | null;
   } | null;
-  /** Google's OAuth client (D-250): who this server is to it, never the secret. */
+  /** Google's OAuth client (D-251): who this server is to it, never the secret. */
   readonly google: {
     readonly clientId: string;
     readonly clientSecret: { readonly set: boolean };
@@ -213,7 +213,7 @@ export interface ServerSettingsAnswer {
   readonly githubCallbackUrl: string;
   /** The callback address to register with the single sign-on provider: `APP_URL/auth/callback/oidc` (D-200). */
   readonly oidcCallbackUrl: string;
-  /** The callback address to register with Google: `APP_URL/auth/callback/google` (D-250). */
+  /** The callback address to register with Google: `APP_URL/auth/callback/google` (D-251). */
   readonly googleCallbackUrl: string;
   /** What the GitHub App's settings on GitHub point at (D-246). */
   readonly githubApp: GitHubAppAddresses;

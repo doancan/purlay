@@ -1,5 +1,5 @@
 /**
- * Sign in with Google for a test, through the sign-in library as a browser drives it (D-250): Google is the strict
+ * Sign in with Google for a test, through the sign-in library as a browser drives it (D-251): Google is the strict
  * OIDC double at the `fetch` boundary (`oidc-stub.ts`), standing at Google's own issuer, so everything between the
  * button and the session is the real thing — the library's state and nonce, its callback, its account rules, the
  * Google definition's issuers and address rules, Purlay's own hooks. As `oidc-sign-in.ts`, a test using this runs

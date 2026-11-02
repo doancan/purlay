@@ -1,6 +1,6 @@
 # Google ile giriş — tasarım
 
-Tarih: 2026-11-02 · Durum: onaylandı (2026-11-02) · Karar kaydı olarak: D-250 (uygulamayla birlikte yazılacak)
+Tarih: 2026-11-02 · Durum: onaylandı (2026-11-02) · Karar kaydı olarak: D-251 (uygulamayla birlikte yazılacak)
 
 ## Amaç ve neden
 
@@ -38,7 +38,7 @@ Kullanıcının onayladığı davranış (sohbetteki özet):
    sonrasında Yönetim → Sunucu'da bir kart: bağlan (önce denenir), değiştir, bağlantıyı kes.
 3. Giriş, kayıt ve davet ekranlarında Google butonu; Hesap sayfasında "Google bağlı" satırı.
 4. Hem web hem yerel uygulamaların el değiştirmesi (D-191) değişmeden çalışır.
-5. Belgeler: D-250, `CONFIG.md`, `API.md`, `UX.md`, `SCHEMA.md`, `docs/changelog/changes.md`, `.env.example` /
+5. Belgeler: D-251, `CONFIG.md`, `API.md`, `UX.md`, `SCHEMA.md`, `docs/changelog/changes.md`, `.env.example` /
    `docker-compose.production.yml`.
 
 ## Hedef olmayanlar
@@ -139,7 +139,7 @@ Kullanıcının onayladığı davranış (sohbetteki özet):
 
 ### Belgeler
 
-- D-250 karar kaydı: bağlam, kararlar, reddedilenler (genel yuvayı Google'a vermek; `hd` ile *giriş* kısıtlaması;
+- D-251 karar kaydı: bağlam, kararlar, reddedilenler (genel yuvayı Google'a vermek; `hd` ile *giriş* kısıtlaması;
   her doğrulanmış adrese güvenmek; Google'ın açtığı hesaba bağlantı göndermek; birden çok OIDC yuvası; tek renkli logo;
   sihirbaz adımı), geri dönüş maliyeti. D-200'e bir "ilgili" satırı.
 - `CONFIG.md` tablosu ve "nerede yaşar" listesi; `API.md` rotaları; `SCHEMA.md` sütunları; changelog **Added**.

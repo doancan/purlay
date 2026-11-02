@@ -35,7 +35,7 @@ export const OIDC_START_PATH = '/auth/oidc';
 export const OIDC_CALLBACK = `${AUTH_BASE_PATH}/callback/oidc`;
 
 /**
- * The same for Google (D-250): a start of Purlay's, the library's own callback, and the one issuer Google's
+ * The same for Google (D-251): a start of Purlay's, the library's own callback, and the one issuer Google's
  * discovery lives under. Google is an OpenID Connect provider with a fixed address, so an operator gives only
  * a client id and a secret.
  */
@@ -75,7 +75,7 @@ export const SignInFailure = Type.Union([
    * a valid identity: an id_token whose signature, issuer, audience, expiry or nonce is wrong (D-200).
    */
   Type.Literal('oidc-unavailable'),
-  /** Google could not be reached, refused, or answered something that is not a valid identity (D-250). */
+  /** Google could not be reached, refused, or answered something that is not a valid identity (D-251). */
   Type.Literal('google-unavailable'),
   /** The single sign-on gave no address, or did not say it was verified: it is never linked on that (D-200 §3). */
   Type.Literal('email-unverified'),
