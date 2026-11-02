@@ -96,7 +96,12 @@ export const runtimeServicesFrom = (
   const mail = mailer === undefined ? undefined : outbox(mailer.send, base.log, sends);
   const auth = createAuth({
     ...base,
-    settings: { github: settings.github, oidc: settings.oidc, signUp: settings.signUp },
+    settings: {
+      github: settings.github,
+      oidc: settings.oidc,
+      google: settings.google,
+      signUp: settings.signUp,
+    },
     signInPolicy: {
       requireTwoFactor: settings.requireTwoFactor,
       passwordSignIn: settings.passwordSignIn,
@@ -393,6 +398,7 @@ export const applySettings = async (
     log.info('the server settings changed and serve from now on', {
       github: candidate.auth.github,
       oidc: candidate.auth.oidc !== undefined,
+      google: candidate.auth.google,
       email: candidate.mail !== undefined,
       signUp: candidate.settings.signUp,
       requireTwoFactor: candidate.settings.requireTwoFactor,

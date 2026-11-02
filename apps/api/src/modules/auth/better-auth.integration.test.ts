@@ -84,6 +84,7 @@ const authWith = (over: Partial<AuthDependencies> = {}): Auth =>
     settings: {
       github: { clientId: 'client', clientSecret: 'secret' },
       oidc: undefined,
+      google: undefined,
       signUp: 'open',
     },
     githubUrls: { web: GITHUB_URL_DEFAULT, api: GITHUB_API_URL_DEFAULT },

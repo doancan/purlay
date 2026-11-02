@@ -555,7 +555,7 @@ export const createOidcProvider = (
         });
         throw new APIError('BAD_GATEWAY', {
           code: codes.unavailable,
-          message: 'The single sign-on provider did not answer.',
+          message: `${name} did not answer the sign-in.`,
         });
       }
       // Which check refused it is the log's, by name; the person is told it did not work, never why.
@@ -574,7 +574,7 @@ export const createOidcProvider = (
       log.info(`${logPrefix}: the provider did not vouch for a verified address`);
       throw new APIError('FORBIDDEN', {
         code: codes.unverified,
-        message: 'The provider did not say the address is verified.',
+        message: `${name} did not say the address is verified.`,
       });
     }
     const accountId = definition.accountKey(issuer, subject);
@@ -621,7 +621,7 @@ export const createOidcProvider = (
         log.warn(`${logPrefix}: the provider could not be discovered`, { err: error });
         throw new APIError('BAD_GATEWAY', {
           code: codes.unavailable,
-          message: 'The single sign-on provider did not answer.',
+          message: `${name} did not answer the sign-in.`,
         });
       }
       return await createAuthorizationURL({

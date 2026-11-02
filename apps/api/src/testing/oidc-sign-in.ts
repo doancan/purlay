@@ -26,6 +26,7 @@ export const anOidcAuth = (
     settings: {
       github: undefined,
       oidc: { issuer: stub.issuer(), ...OIDC_STUB_CREDENTIALS, name },
+      google: undefined,
       signUp: signUp ?? 'open',
     },
     fetch: stub.fetch,

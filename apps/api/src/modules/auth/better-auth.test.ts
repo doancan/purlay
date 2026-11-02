@@ -38,7 +38,12 @@ const nobodyListening: EventBus = {
   forget: () => undefined,
 };
 
-const closedToGithub: AuthSettings = { github: undefined, oidc: undefined, signUp: 'open' };
+const closedToGithub: AuthSettings = {
+  github: undefined,
+  oidc: undefined,
+  google: undefined,
+  signUp: 'open',
+};
 
 const deps = (over: Partial<AuthDependencies> = {}): AuthDependencies => ({
   database,
@@ -220,6 +225,7 @@ describe('createAuth', () => {
         settings: {
           github: { clientId: 'id', clientSecret: 'secret' },
           oidc: undefined,
+          google: undefined,
           signUp: 'open',
         },
       }),
@@ -237,6 +243,7 @@ describe('createAuth', () => {
           settings: {
             github: { clientId: 'id', clientSecret: 's' },
             oidc: undefined,
+            google: undefined,
             signUp: 'open',
           },
         }),
@@ -266,6 +273,7 @@ describe('createAuth', () => {
         settings: {
           github: { clientId: 'id', clientSecret: 's' },
           oidc: undefined,
+          google: undefined,
           signUp: 'open',
         },
       }),
@@ -283,6 +291,7 @@ describe('createAuth', () => {
         settings: {
           github: { clientId: 'id', clientSecret: 's' },
           oidc: undefined,
+          google: undefined,
           signUp: 'invite-only',
         },
       }),
@@ -296,6 +305,7 @@ describe('createAuth', () => {
           settings: {
             github: { clientId: 'id', clientSecret: 's' },
             oidc: undefined,
+            google: undefined,
             signUp: 'open',
           },
         }),
@@ -366,6 +376,7 @@ describe('the GitHub address guard', () => {
         settings: {
           github: { clientId: 'id', clientSecret: 's' },
           oidc: undefined,
+          google: undefined,
           signUp: 'open',
         },
       }),
@@ -458,6 +469,7 @@ describe('the GitHub address guard', () => {
         settings: {
           github: { clientId: 'id', clientSecret: 's' },
           oidc: undefined,
+          google: undefined,
           signUp: 'open',
         },
       }),

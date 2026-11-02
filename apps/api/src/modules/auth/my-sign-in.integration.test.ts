@@ -127,6 +127,25 @@ describe('integration: how an account signs in', () => {
     });
   });
 
+  test('Google is named only for the account it is linked to, beside single sign-on or alone (D-250)', async () => {
+    await withRollback(async (db) => {
+      const linked = await made(db);
+      const both = await made(db);
+      const other = await made(db);
+      await db
+        .insertInto('accounts')
+        .values([
+          { user_id: linked, account_id: '104500000000000000001', provider_id: 'google' },
+          { user_id: both, account_id: '104500000000000000002', provider_id: 'google' },
+          { user_id: both, account_id: 'https://idp.example.test|sub-2', provider_id: 'oidc' },
+        ])
+        .execute();
+      expect(await mySignIn(db, linked, NO_POLICY)).toMatchObject({ google: true, oidc: false });
+      expect(await mySignIn(db, both, NO_POLICY)).toMatchObject({ google: true, oidc: true });
+      expect(await mySignIn(db, other, NO_POLICY)).toMatchObject({ google: false, oidc: false });
+    });
+  });
+
   test('two-step verification is required of an account with a password, only where the policy asks and passwords sign in (D-239)', async () => {
     await withRollback(async (db) => {
       const withPassword = await made(db, { password: true });
