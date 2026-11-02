@@ -654,3 +654,46 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     expect(Value.Check(ServerFrame, { ...frame, version: 2 })).toBe(true);
   });
 });
+
+describe('signing in with Google (D-250)', () => {
+  const methods = {
+    github: false,
+    email: true,
+    oidc: null,
+    signUp: 'open',
+    password: true,
+  };
+
+  test('the methods say whether Google is offered: without it they do not validate, with it they do', () => {
+    expect(Value.Check(api.AuthMethods, methods)).toBe(false);
+    expect(Value.Check(api.AuthMethods, { ...methods, google: true })).toBe(true);
+    expect(Value.Check(api.AuthMethods, { ...methods, google: 'yes' })).toBe(false);
+  });
+
+  test('a person’s own sign-in says whether Google is linked to the account', () => {
+    const mine = {
+      email: 'a@example.com',
+      emailLinks: true,
+      hasPassword: true,
+      github: null,
+      oidc: false,
+      twoFactor: false,
+      twoFactorRequired: false,
+    };
+    expect(Value.Check(api.MySignIn, mine)).toBe(false);
+    expect(Value.Check(api.MySignIn, { ...mine, google: false })).toBe(true);
+  });
+
+  test('connecting Google takes a client id and a secret, and an empty one is refused', () => {
+    expect(Value.Check(api.ServerGoogleRequest, { clientId: 'id', clientSecret: 'secret' })).toBe(
+      true,
+    );
+    expect(Value.Check(api.ServerGoogleRequest, { clientId: '', clientSecret: 'secret' })).toBe(
+      false,
+    );
+    expect(Value.Check(api.ServerGoogleRequest, { clientId: 'id', clientSecret: '' })).toBe(false);
+    expect(
+      Value.Check(api.ServerGoogleRequest, { clientId: 'id', clientSecret: 's', extra: 1 }),
+    ).toBe(false);
+  });
+});

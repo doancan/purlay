@@ -148,6 +148,7 @@ export const tr = {
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden dene.',
   'signIn.oidcUnavailable':
     'Tek oturum açma hizmetine ulaşılamadı ya da bu sunucunun güvendiği bir kimlik vermedi — biraz bekleyip yeniden dene; sürerse sunucuyu yönetene haber ver.',
+  'signIn.googleUnavailable': 'Google’a ulaşılamadı — biraz bekleyip yeniden dene.',
   'signIn.emailUnverified':
     'Tek oturum açma e-posta adresinin doğrulanmış olduğunu söylemedi; bu yüzden seni giriş yaptıramaz. Kuruluşunun oturum açma sistemini yönetene adresini doğrulatmasını söyle.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',

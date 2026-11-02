@@ -50,6 +50,7 @@ const head = [
       github_id: 'omit',
       github_login: 'omit',
       github_connected_at: 'omit',
+      google_made: 'omit',
       // What the sign-in library keeps about the account, and who may run the server: the person's own,
       // and a credential's neighbour, never the controller's data about them (D-179).
       email_verified: 'omit',

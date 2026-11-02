@@ -55,6 +55,7 @@ export const PERSONAL_COLUMNS: PersonalColumns = {
     github_id: 'export',
     github_login: 'export',
     github_connected_at: 'export',
+    google_made: 'export',
     title: 'export',
     time_zone: 'export',
     status_text: 'export',

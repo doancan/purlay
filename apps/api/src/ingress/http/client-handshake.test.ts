@@ -90,6 +90,7 @@ describe('GET /api/client', () => {
       github: true,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });

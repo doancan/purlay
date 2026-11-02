@@ -826,6 +826,7 @@ describe('the endpoints', () => {
       hasPassword: false,
       github: null,
       oidc: false,
+      google: false,
       twoFactor: false,
       twoFactorRequired: false,
     });
@@ -835,6 +836,7 @@ describe('the endpoints', () => {
       hasPassword: false,
       github: null,
       oidc: false,
+      google: false,
       twoFactor: false,
       twoFactorRequired: false,
     });
@@ -892,6 +894,7 @@ describe('the endpoints', () => {
       github: false,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -899,6 +902,7 @@ describe('the endpoints', () => {
       github: false,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });

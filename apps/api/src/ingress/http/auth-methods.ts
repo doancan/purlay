@@ -16,6 +16,8 @@ export const authMethods = (
   github: auth.github,
   email: auth.signInLinks !== undefined,
   oidc: auth.oidc === undefined ? null : { name: auth.oidc.name ?? null },
+  // Made real when Google can be connected (D-250).
+  google: false,
   signUp: auth.signUp,
   password: auth.signInPolicy.passwordSignIn,
 });

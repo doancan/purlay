@@ -43,6 +43,7 @@ const signIn = (overrides: Partial<MySignIn> = {}): MySignIn => ({
   hasPassword: true,
   github: null,
   oidc: false,
+  google: false,
   twoFactor: false,
   twoFactorRequired: false,
   ...overrides,
