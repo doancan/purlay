@@ -36,6 +36,9 @@ the cloud sells is *that we operate it*: backups, upgrades, monitoring, incident
 somebody to email. Crippling the free product to sell the paid one would destroy audience 3, and
 audience 3 is what makes audience 2 believe the data is portable.
 
+**Amended 2026-11-02 (D-250).** The cloud may price what it operates by the modules a customer runs. Nothing is held back from a
+self-hoster, who can run every module free; "the only thing the cloud sells" reads as *the operation of what the code does*.
+
 The billing and metering modules live in the same repository, ship disabled by default, and are
 inert in a self-hosted deployment.
 
@@ -80,7 +83,7 @@ Purlay wins on four axes, in this order:
 
 | Axis | Concrete meaning | How it is measured |
 |---|---|---|
-| **Simplicity** | No apps directory, no workflow builder, no huddles, no canvas, no AI summaries. One way to do each thing. | Feature count stays under a hard cap (`PRD.md` §6 non-goals) |
+| **Simplicity** | No apps directory, no workflow builder, no huddles, no canvas, no AI summaries. One way to do each thing. | Every feature pays an admission cost — a budget, a matrix cell, a removal condition (D-250); the non-goals in `PRD.md` §6 stand |
 | **Speed** | Typing→render is never blocked on the network. Cold load and interaction budgets in `PRD.md` §5. | Measured budgets, enforced in CI |
 | **Cost** | Self-hosted. No per-seat fee. **No message history limit** — Slack's free-tier 90-day cutoff is the single most cited pain. | $0 per seat; full history retained |
 | **Dev-native** | Code, diffs and GitHub links are first-class objects, not attachments-with-syntax-colors. | Qualitative, judged by dogfood team |
@@ -11939,3 +11942,84 @@ the person said. *A workspace setting* — a number nobody would tune, and a sec
 
 **Cost of reversing.** Change the constant (or delete the check in `reactions.ts` and the toast's guard); nothing is
 stored.
+
+### D-250. Purlay is a set of modules over a small core, and chat is one of them — builds on D-1, D-2, D-7, D-24, D-43, D-86; amends D-1, D-2 and `PRD.md` §6
+
+**Context.** Purlay was team chat. The owner now means it to be an all-in-one workspace — chat, issues and projects,
+notes, mail — with more large features to follow, and four things have to stay true while it grows. An instance
+installed for chat alone is chat alone: no other feature's tables, routes, bundle or menu. Features work without one
+another and degrade, not break, when a partner is absent. The code stays one open repository, so a self-hoster can have
+any subset. And the cloud can sell the same subsets as packages. None of this holds today: `messages` is a hub that
+`integrations`, `workspaces`, `attachments` and `channels` import and are imported by; channel visibility, message
+erasure and the export catalogue live in the core; the wire unions (`Topic`, `ServerFrame`, `NotificationType`) are
+closed; the web app imports every screen statically; and the migrations are one line every instance runs whole.
+
+No standing decision forbids an issue tracker, notes or mail: none is in `PRD.md` §6's list, and D-204's "no task
+tracker" bounded that decision's own scope. What this decision changes is the *shape* the product grows in, and two
+sentences that would otherwise contradict it (below).
+
+**Decision.** A **core** and **modules**, in one process over one database (D-7 stands: a module is not a service, and
+there is no broker).
+
+1. **The core** is identity, workspaces and tenancy (`WorkspaceContext`), permissions, audit, the domain event bus,
+   notifications, attachments, the search fan-out, erasure and export as catalogues modules contribute to, and the
+   module registry. Nothing in it names a module. What names chat today — channel visibility, message erasure, the
+   messages in the export catalogue — moves to chat, and `MODULES.md` §9 steps 6–9 do it. Until then the sentence is
+   a goal, and a test of `platform/` holds it once they are done.
+2. **A module is a unit that registers itself**, through a manifest (`MODULES.md` §2). Chat is a module, not the base:
+   issues and notes run without it. Modules are **first-party code in this repository**. The manifest is not a trust
+   boundary, and loading a module from elsewhere is not supported — `PRD.md` §6 keeps "plugin directory" a non-goal.
+3. **One build; the modules an instance runs are a setting.** `MODULES` unset means every bundled module, empty means
+   the core alone. An unknown or repeated id, a missing requirement, a cycle, or an id that is a core path segment
+   stops the process at boot. A disabled module is not mounted and its web chunk is never requested; a request for it
+   gets the plain `404` of any unknown route, never a distinct answer.
+4. **Modules meet through the core, never through each other's code.** By events first; by a port the core defines
+   where there are two users or a test boundary; by asking whether a capability exists. A caller that finds it absent
+   hides the feature or does nothing. Importing another module is a lint error, and **reading another module's tables
+   is a lint error too**: a module is given a query handle typed with its own tables and the core's, and reads across
+   go through a port.
+5. **A module's tables exist only while it is enabled, and disabling drops nothing.** Each module owns an ordered set of
+   migrations; a foreign key goes from a module to the core, never between modules. Disabled, the tables stay and are
+   inert. The manifest declares what the module's data needs — erasure of a person (D-139), the tables of an export
+   (D-140), retention, the audit actions it writes and the permissions it gates — and the core runs them for every
+   module whose tables exist, enabled or not, so closing a module never leaves a person's data out of an erasure.
+6. **Every combination that is run is tested; the rest are not promised.** CI boots and smoke-tests the core alone,
+   each module alone with what it requires, and everything, and a disabled module's route must be `404`. Promoting an
+   `optional` partner to `requires` is a breaking change, said in the release notes. A module is admitted only with a
+   section in `MODULES.md`, its own budget gate (initial bundle, lazy chunk, and the latency of every other module's
+   hot path measured with it busy), and the condition on which it is removed if nobody uses it. This replaces the hard
+   cap on the number of features in D-2's table with a cost every feature must pay.
+7. **Isolation is by budget, not by process.** A module gets a share of the connection pool, a deadline per request and
+   an error boundary around its handlers and jobs; a search source has a deadline and is skipped, and said to be, when
+   it overruns. Every log line and metric carries the module.
+8. **A cluster runs one module set.** A node records its module set and release in the database at boot and refuses to
+   serve beside a live peer whose set differs; frames of a module a node does not run are dropped, not delivered.
+9. **Commercial model.** All code stays AGPL and in this repository (D-24); there is still no open core. A self-hosted
+   instance can run every module, free. The cloud may price what it operates by the modules a customer runs, never by
+   seat (D-43's other rules stand). **This amends** D-1's "the only thing the cloud sells is that we operate it" and
+   `PRD.md` §6's "never withheld capability": a package is priced by what we run for a customer, and nothing is
+   withheld from anyone who runs it themselves. Until per-workspace enablement exists the cloud sells a package per
+   instance; a multi-tenant instance with mixed packages is not supported, and the guard goes through
+   `WorkspaceContext` when the first package needs it.
+
+**Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
+chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs
+the database executor and `WorkspaceContext` and so either imports the platform downward or copies it, with a manifest,
+a workspace entry and a gate per package for one consumer. *Build-time selection* — a smaller artefact, a build and a
+test matrix for every combination. *A feature flag over shared code* — a default-off flag is a dead path that knip does
+not see, and it does nothing for the bundle. *Every migration always applied* — simple, but an instance "for chat
+only" holds every other module's tables, and cross-module keys leak in unseen. *Closing some modules* — it would end
+"no open core" (D-1). *Dropping a module's tables when it is closed* — an erasure and an export would then depend on
+which modules happened to be on. *Third-party modules* — a process-wide manifest with the database role is not a
+sandbox, and a directory is a non-goal.
+
+**Cost of reversing.** Dear once the migrations are split and cheap before: until then the registry and manifest are
+types and a loop. After modules ship, removing one is dropping its manifest, and its tables stay until an operator
+drops them by hand (D-9).
+
+**Open.** (a) *Existing installs:* rename the legacy migration rows to `chat/…` through a map, or count them all as
+the core's — the second is simpler and fixes chat's order into the core's; decided before the migrator work, and the
+release before it refuses to start on renamed rows with a message naming the fix. (b) *Wire names:* namespacing frame
+types (`chat.message.created`) breaks installed clients, so the old names stay as aliases for one release, and whether
+a client ignores a type it does not know is verified before the unions open. (c) *Workspace-level enablement* waits
+for the first cloud package.
