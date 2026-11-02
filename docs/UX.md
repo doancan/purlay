@@ -1190,7 +1190,8 @@ GitHub's and before the email form, leaving for `/auth/google`; the sign-up scre
 as they offer GitHub (the invitation page asks for its passport first). A server whose only way in is Google has
 the button, the password form and no *not set up* sentence. Its one reason is *`google-unavailable`* — "Google did
 not answer. Try again in a moment, or sign in another way." (*Google yanıt vermedi. Biraz sonra yeniden dene ya da
-başka bir yolla gir.*); an address Google does not vouch for is the existing *`email-unverified`*.
+başka bir yolla gir.*); an address Google does not vouch for — unverified, or an existing account's at a domain
+that is neither Gmail nor the token's Workspace domain — is the shared *`email-unverified`* above.
 
 **When a GitHub sign-in did not finish**, one sentence says what happened and what to do, above the
 button, and never blames the person (D-121). Two are new with D-179 §5. *`signup-closed`* — an
