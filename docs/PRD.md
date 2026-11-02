@@ -319,7 +319,8 @@ contractually requires one (D-28)
 > subscription billing is now built (D-43) — but charging by seat would contradict the cost axis
 > D-2 competes on and the first paragraph of `README.md`. The cloud charges per workspace, so
 > adding a teammate never costs more. **Open core joined the list** in the same change: the cloud
-> sells operation, never withheld capability.
+> sells operation, never withheld capability. D-250 prices that operation by the modules a customer
+> runs; a self-hoster runs every module free, so nothing is withheld.
 
 > **SSO left this list on 2026-09-09.** D-25 set a multi-node capacity ceiling and D-26 added an
 > audit log; both describe an organisation that has an identity provider, so "never SSO" had
