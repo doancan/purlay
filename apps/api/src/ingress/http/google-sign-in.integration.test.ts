@@ -33,7 +33,14 @@ import {
   testConfig,
   testDependencies,
 } from '../../testing/doubles';
-import { cookiesFrom, type StartedSignIn } from '../../testing/github-sign-in';
+import {
+  aGitHubAuth,
+  aGitHubFor,
+  aGitHubPerson,
+  cookiesFrom,
+  signInWithGitHub,
+  type StartedSignIn,
+} from '../../testing/github-sign-in';
 import type { OidcBehaviour, OidcPerson, OidcStub } from '../../testing/oidc-stub';
 import {
   aGoogleAuth,
@@ -282,7 +289,7 @@ describe('integration: a new person', () => {
     ).toMatchObject({ google: true, oidc: false, github: null });
   });
 
-  test('with an address outside Gmail and no hd, no account having it: made as any sign-up, Google’s say not needed', async () => {
+  test('with an address outside Gmail and no hd, no account having it: made as any sign-up, its address not counted as proven', async () => {
     const person = aPerson({ email: `ali-${unique()}@sirket.com` });
     const server = await aServer(person);
     const userId = await expectSignedIn(
@@ -292,9 +299,52 @@ describe('integration: a new person', () => {
     const user = await userBy('id', userId);
     expect(user?.email).toBe(person.email);
     expect(user?.google_made).toBe(true);
+    // Google did not speak for the address, so nothing else may link into the account by it (D-250 §3).
+    expect(user?.email_verified).toBe(false);
     expect(await accountsOf(userId)).toEqual([
       { provider_id: GOOGLE_PROVIDER_ID, account_id: person.sub },
     ]);
+    // Google still signs the person in by the sub, and leaves the address as it was.
+    const again = await aServer(person);
+    expect(await expectSignedIn(again, await signInWithGoogle(again.app, ORIGIN, again.stub))).toBe(
+      userId,
+    );
+    expect((await userBy('id', userId))?.email_verified).toBe(false);
+  });
+
+  test('an account Google made at an address not its own is not linked into by GitHub with that address: email-taken', async () => {
+    const email = `ali-${unique()}@sirket.com`;
+    const person = aPerson({ email });
+    const server = await aServer(person);
+    const userId = await expectSignedIn(
+      server,
+      await signInWithGoogle(server.app, ORIGIN, server.stub),
+    );
+    const github = aGitHubFor(aGitHubPerson(undefined, { email }));
+    const config = testConfig({ APP_URL: ORIGIN });
+    const backplane = inProcessBackplane();
+    const auth = aGitHubAuth(db, github.fetch, {
+      baseUrl: ORIGIN,
+      signUp: 'open',
+      sessionTtlDays: config.SESSION_TTL_DAYS,
+      bus: backplane.node(() => undefined, NO_LOG),
+    });
+    const app = createApp(testDependencies({ database: db, config, auth, backplane }));
+    expectSentBack(await signInWithGitHub(app, ORIGIN, github), 'email-taken');
+    expect(await accountsOf(userId)).toEqual([
+      { provider_id: GOOGLE_PROVIDER_ID, account_id: person.sub },
+    ]);
+    expect((await userBy('id', userId))?.github_id).toBeNull();
+  });
+
+  test('with an address in the Workspace domain hd names, its address is proven as a Gmail one is', async () => {
+    const person = aPerson({ email: `ali-${unique()}@sirket.com`, hd: 'sirket.com' });
+    const server = await aServer(person);
+    const userId = await expectSignedIn(
+      server,
+      await signInWithGoogle(server.app, ORIGIN, server.stub),
+    );
+    expect((await userBy('id', userId))?.email_verified).toBe(true);
   });
 
   test('on an invite-only server without a passport is signup-closed, and nothing is made', async () => {

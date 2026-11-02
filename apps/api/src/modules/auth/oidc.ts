@@ -104,6 +104,13 @@ export interface OidcDefinition {
     email: string,
     accountId: string,
   ) => Promise<void>;
+  /**
+   * Whether the address the provider vouched for is told to the library as proven — what an account it makes
+   * keeps in `users.email_verified`, and so whether a later sign-in of another kind may link into it by the
+   * address. Absent, it always is (the generic provider, D-200); Google's says so only of an address that is
+   * Google's own to vouch for (D-250 §3).
+   */
+  readonly emailVerified?: (claims: Readonly<Record<string, unknown>>, email: string) => boolean;
 }
 
 /** The scopes asked for: the identity, and the address and name it carries — nothing that grants anything. */
@@ -540,7 +547,7 @@ export const createOidcProvider = (
     user: {
       name: string | undefined;
       email: string;
-      emailVerified: true;
+      emailVerified: boolean;
       username: string;
     };
     data: { readonly sub: string; readonly iss: string };
@@ -591,7 +598,7 @@ export const createOidcProvider = (
       user: {
         name: oidcDisplayName(claims['name']),
         email,
-        emailVerified: true,
+        emailVerified: definition.emailVerified?.(claims, email) ?? true,
         // Made from the address as an email account's is (D-138 §5), and made free and unique by the user hook
         // (`better-auth.ts`) whatever is said here; nothing the provider chose reaches it.
         username: usernameFrom(email) ?? `user-${randomToken().slice(0, 6)}`,
