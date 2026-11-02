@@ -10353,6 +10353,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: [GOOGLE_SIGN_IN_TESTS],
   },
   {
+    id: 'google-newcomer-weighed-as-a-link',
+    why: 'a new person whose address is outside Gmail and names no hd is refused as unverified, though no account is linked by it: a sign-up is the server’s rules to decide, not Google’s say (D-250)',
+    file: BETTER_AUTH,
+    find: "    if (existing === undefined || authoritativeForGoogle(email, claims['hd'])) return;\n",
+    replace: "    if (authoritativeForGoogle(email, claims['hd'])) return;\n",
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-outside-the-handler',
+    why: 'a Google sign-in served outside the handler makes an account not marked google_made, which passes for one made by email (D-250)',
+    file: BETTER_AUTH,
+    find: '              if (round === undefined) {\n',
+    replace: '              if (false) {\n',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
     id: 'google-linked-sub-weighed-by-address',
     why: 'a person Google is linked to by their sub is refused once their new Google address is somebody else’s: the address decides, not the sub (D-250)',
     file: BETTER_AUTH,

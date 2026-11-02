@@ -91,6 +91,11 @@ export interface OidcDefinition {
   readonly accountKey: (issuer: string, subject: string) => string;
   /** The `APIError` codes the provider not answering, and an address it did not vouch for, are said by. */
   readonly codes: { readonly unavailable: string; readonly unverified: string };
+  /**
+   * The words those two refusals carry. A client of the library's own routes reads them (`POST /auth/sign-in/social`
+   * answers its refusal as it is), so each provider says them as itself.
+   */
+  readonly messages: { readonly unavailable: string; readonly unverified: string };
   /** What every log line of a sign-in through it begins with. */
   readonly logPrefix: string;
   /** Asked after the token is verified, before the library links or creates; throws APIError to refuse. */
@@ -555,7 +560,7 @@ export const createOidcProvider = (
         });
         throw new APIError('BAD_GATEWAY', {
           code: codes.unavailable,
-          message: `${name} did not answer the sign-in.`,
+          message: definition.messages.unavailable,
         });
       }
       // Which check refused it is the log's, by name; the person is told it did not work, never why.
@@ -574,7 +579,7 @@ export const createOidcProvider = (
       log.info(`${logPrefix}: the provider did not vouch for a verified address`);
       throw new APIError('FORBIDDEN', {
         code: codes.unverified,
-        message: `${name} did not say the address is verified.`,
+        message: definition.messages.unverified,
       });
     }
     const accountId = definition.accountKey(issuer, subject);
@@ -621,7 +626,7 @@ export const createOidcProvider = (
         log.warn(`${logPrefix}: the provider could not be discovered`, { err: error });
         throw new APIError('BAD_GATEWAY', {
           code: codes.unavailable,
-          message: `${name} did not answer the sign-in.`,
+          message: definition.messages.unavailable,
         });
       }
       return await createAuthorizationURL({
@@ -663,6 +668,10 @@ export const OIDC_DEFINITION: OidcDefinition = {
   acceptedIssuers: [],
   accountKey: accountKeyOf,
   codes: { unavailable: 'OIDC_UNAVAILABLE', unverified: 'OIDC_EMAIL_UNVERIFIED' },
+  messages: {
+    unavailable: 'The single sign-on provider did not answer.',
+    unverified: 'The provider did not say the address is verified.',
+  },
   logPrefix: 'oidc sign-in',
 };
 
