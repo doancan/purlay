@@ -152,7 +152,7 @@ export const tr = {
   'signIn.googleUnavailable':
     'Google yanıt vermedi. Biraz sonra yeniden dene ya da başka bir yolla gir.',
   'signIn.emailUnverified':
-    'Tek oturum açma e-posta adresinin doğrulanmış olduğunu söylemedi; bu yüzden seni giriş yaptıramaz. Kuruluşunun oturum açma sistemini yönetene adresini doğrulatmasını söyle.',
+    'Bu giriş adresin sana ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet iste.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
   'signIn.ended': 'Oturumun sona erdi. Devam etmek için yeniden giriş yap.',
@@ -2408,11 +2408,11 @@ export const tr = {
   'setup.oidc.reason.unexpected-reply.fix2':
     'Sürerse, aşağıdaki yanıt neyin cevap verdiğini söyler.',
   'setup.google.reason.secret-rejected.what':
-    'Google bu istemciyi tanıyor ama gizli anahtarını reddetti.',
+    'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştır.',
   'setup.google.reason.secret-rejected.fix1':
-    'İstemci gizli anahtarını Google Cloud’daki OAuth istemcisi sayfasından yeniden kopyala.',
+    'İstemci kimliğini ve gizli anahtarını Google Cloud’daki OAuth istemcisi sayfasından yeniden kopyala.',
   'setup.google.reason.secret-rejected.fix2':
-    'Anahtar devre dışı bırakılmış ya da değiştirilmiş olabilir: yenisini üretip buraya yapıştır.',
+    'Anahtar devre dışı bırakılmış, değiştirilmiş ya da istemci silinmiş olabilir: yeni bir anahtar üretip ikisini de buraya yapıştır.',
   'setup.google.reason.client-unknown.what': 'Google bu istemciyi tanımıyor.',
   'setup.google.reason.client-unknown.fix1': 'İstemci kimliğini Google Cloud’dan yeniden kopyala.',
   'setup.google.reason.client-unknown.fix2':

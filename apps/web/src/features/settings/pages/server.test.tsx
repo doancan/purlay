@@ -435,7 +435,7 @@ describe('Settings → Server', () => {
     view.unmount();
   });
 
-  test('passwords cannot be turned off with neither GitHub nor single sign-on: said before, and the refusal in its words', async () => {
+  test('passwords cannot be turned off with none of GitHub, Google and single sign-on: said before, and the refusal in its words', async () => {
     const view = await render(
       aClient({
         policy: () =>
@@ -455,7 +455,7 @@ describe('Settings → Server', () => {
     view.unmount();
   });
 
-  test('with passwords off, the last of GitHub and single sign-on is not offered to be disconnected (D-239)', async () => {
+  test('with passwords off, the last of GitHub, Google and single sign-on is not offered to be disconnected (D-239)', async () => {
     const view = await render(
       aClient({
         settings: () =>
@@ -1059,11 +1059,29 @@ describe('Settings → Server — Google (D-250)', () => {
     },
   );
 
-  test('a rejected secret is said in both languages', () => {
+  test('a refused client is said in both languages as the ID and the secret together: Google answers a wrong ID as it does a wrong secret', () => {
     const words = reasonWords('secret-rejected', 'google');
-    expect(en[words.what]).toBe('Google knows this client and refused its secret.');
-    expect(tr[words.what]).toBe('Google bu istemciyi tanıyor ama gizli anahtarını reddetti.');
+    expect(en[words.what]).toBe(
+      'Google refused this client ID and secret. Check both against the Google Cloud console.',
+    );
+    expect(tr[words.what]).toBe(
+      'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştır.',
+    );
     for (const key of [words.what, ...words.fix]) expect(tr[key]).not.toBe(en[key]);
+  });
+
+  test('a refused client outlines neither field: which of the two is wrong is not known', async () => {
+    const failed: ProbeResult = { ok: false, reason: 'secret-rejected', raw: 'invalid_client' };
+    const view = await render(aClient({ google: () => Promise.resolve(failed) }));
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(google.getByText(en[reasonWords('secret-rejected', 'google').what])).toBeDefined();
+    expect(google.getByLabelText('Client ID').getAttribute('aria-invalid')).toBeNull();
+    expect(google.getByLabelText('Client secret').getAttribute('aria-invalid')).toBeNull();
+    view.unmount();
   });
 
   test('disconnecting as the last way in asks first and says the strong thing, then sends it confirmed', async () => {

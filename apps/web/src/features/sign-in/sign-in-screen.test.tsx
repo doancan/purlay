@@ -271,6 +271,21 @@ describe('what the screen offers is what the server has connected', () => {
       });
     }
 
+    for (const [locale, sentence] of [
+      [
+        'en',
+        'This sign-in didn’t prove the address is yours, so it can’t open the account that uses it. Sign in the way you did before, or ask for an invitation.',
+      ],
+      [
+        'tr',
+        'Bu giriş adresin sana ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet iste.',
+      ],
+    ] as const) {
+      test(`an address it does not vouch for is said without naming a provider, in ${locale}`, async () => {
+        expect(await saidAt(signInFailureHref('email-unverified'), locale)).toBe(sentence);
+      });
+    }
+
     test('its mark is the four-colour G, hidden from assistive technology', async () => {
       const view = await open(withGoogle());
       const svg = view.getByRole('link', { name: 'Continue with Google' }).querySelector('svg');
