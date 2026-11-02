@@ -16,6 +16,7 @@ const SETTINGS: ServerSettings = {
   signUp: 'invite-only',
   github: { clientId: 'Iv1.app', clientSecret: 'gh-secret-value' },
   oidc: undefined,
+  google: undefined,
   smtp: {
     smtpUrl: 'smtp://mailer:pa%3Ass@relay.example.com:587',
     from: 'purlay@example.com',
@@ -65,6 +66,7 @@ describe('the view of the settings, which is all a response may carry', () => {
         signUp: 'open',
         github: undefined,
         oidc: undefined,
+        google: undefined,
         smtp: undefined,
         githubApp: undefined,
         workspaceCreators: { kind: 'first' },

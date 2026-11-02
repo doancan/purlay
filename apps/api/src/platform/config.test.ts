@@ -979,3 +979,41 @@ describe('the GitHub App is a setting, off while unset (D-246)', () => {
     );
   });
 });
+
+describe('Google sign-in is a seed of two variables, both or neither (D-250)', () => {
+  const bare = Object.fromEntries(
+    Object.entries(valid).filter(([key]) => !key.startsWith('GOOGLE_CLIENT_')),
+  );
+  const google = {
+    GOOGLE_CLIENT_ID: '123-abc.apps.googleusercontent.com',
+    GOOGLE_CLIENT_SECRET: 'GOCSPX-secret-value',
+  };
+
+  test('neither is a server without Google', () => {
+    const config = loadConfig(bare);
+    expect([config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET]).toEqual([undefined, undefined]);
+  });
+
+  test('both are read when both are set; empty strings are unset', () => {
+    const config = loadConfig({ ...bare, ...google });
+    expect([config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET]).toEqual([
+      google.GOOGLE_CLIENT_ID,
+      google.GOOGLE_CLIENT_SECRET,
+    ]);
+    const empty = loadConfig({ ...bare, GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '' });
+    expect([empty.GOOGLE_CLIENT_ID, empty.GOOGLE_CLIENT_SECRET]).toEqual([undefined, undefined]);
+  });
+
+  test('one without the other is refused, naming both variables and never the value', () => {
+    const message = 'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: set both, or neither';
+    expect(refusal({ ...bare, GOOGLE_CLIENT_ID: google.GOOGLE_CLIENT_ID })).toContain(message);
+    const secretOnly = refusal({ ...bare, GOOGLE_CLIENT_SECRET: google.GOOGLE_CLIENT_SECRET });
+    expect(secretOnly).toContain(message);
+    expect(secretOnly).not.toContain(google.GOOGLE_CLIENT_SECRET);
+  });
+
+  test('a bad value elsewhere never quotes the Google secret back', () => {
+    const message = refusal({ ...bare, ...google, DATABASE_URL: '' });
+    expect(message).not.toContain(google.GOOGLE_CLIENT_SECRET);
+  });
+});
