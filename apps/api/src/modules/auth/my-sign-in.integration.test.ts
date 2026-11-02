@@ -70,6 +70,7 @@ describe('integration: how an account signs in', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
       });
       expect(await mySignIn(db, withPassword, NO_POLICY)).toMatchObject({
@@ -77,6 +78,7 @@ describe('integration: how an account signs in', () => {
         hasPassword: true,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
       });
     });
@@ -91,6 +93,7 @@ describe('integration: how an account signs in', () => {
         hasPassword: false,
         github: { login: 'octocat' },
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       });

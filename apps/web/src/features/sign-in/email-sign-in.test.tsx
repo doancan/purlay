@@ -53,6 +53,7 @@ const signedOut = (overrides: Partial<Api>): Api => {
         github: true,
         email: true,
         oidc: null,
+        google: false,
         signUp: 'invite-only',
         password: true,
       }),

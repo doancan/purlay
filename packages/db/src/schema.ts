@@ -486,6 +486,8 @@ export interface ServerSettings {
   github_app_webhook_secret_encrypted: string | null;
   github_client_id: string | null;
   github_client_secret_encrypted: string | null;
+  google_client_id: string | null;
+  google_client_secret_encrypted: string | null;
   id: Generated<boolean>;
   imported_from_env_at: Timestamp | null;
   mail_from: string | null;
@@ -565,6 +567,7 @@ export interface Users {
   github_connected_at: Timestamp | null;
   github_id: Int8 | null;
   github_login: string | null;
+  google_made: Generated<boolean>;
   id: Generated<string>;
   is_server_admin: Generated<boolean>;
   last_seen_at: Timestamp | null;

@@ -33,7 +33,14 @@ describe('the ways in', () => {
   test('each of GitHub and email is on when the server has it, off when it has not — for anybody, signed in or not', async () => {
     expect(await ask(false)).toEqual([
       200,
-      { github: true, email: false, oidc: null, signUp: 'invite-only', password: true },
+      {
+        github: true,
+        email: false,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      },
     ]);
     const [status, body] = await ask(true);
     expect(status).toBe(200);
@@ -42,12 +49,20 @@ describe('the ways in', () => {
       github: true,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
     expect(await ask(true, false)).toEqual([
       200,
-      { github: false, email: true, oidc: null, signUp: 'invite-only', password: true },
+      {
+        github: false,
+        email: true,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      },
     ]);
   });
 
@@ -59,6 +74,7 @@ describe('the ways in', () => {
       github: false,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
@@ -83,6 +99,7 @@ describe('the ways in', () => {
       github: false,
       email: false,
       oidc: { name: 'Acme SSO' },
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
@@ -90,6 +107,7 @@ describe('the ways in', () => {
       github: false,
       email: false,
       oidc: { name: null },
+      google: false,
       signUp: 'invite-only',
       password: true,
     });

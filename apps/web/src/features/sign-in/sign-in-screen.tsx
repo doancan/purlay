@@ -45,6 +45,7 @@ type SentenceKey =
   | 'signIn.signupClosed'
   | 'signIn.githubUnavailable'
   | 'signIn.oidcUnavailable'
+  | 'signIn.googleUnavailable'
   | 'signIn.emailUnverified'
   | 'signIn.busy'
   | 'signIn.failed';
@@ -71,6 +72,8 @@ const sentenceFor = (failure: SignInFailure, mail: boolean): SentenceKey => {
       return 'signIn.githubUnavailable';
     case 'oidc-unavailable':
       return 'signIn.oidcUnavailable';
+    case 'google-unavailable':
+      return 'signIn.googleUnavailable';
     case 'email-unverified':
       return 'signIn.emailUnverified';
     case 'busy':

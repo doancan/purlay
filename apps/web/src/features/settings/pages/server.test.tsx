@@ -48,6 +48,7 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
     sessionMaxAgeDays: null,
     github: null,
     oidc: null,
+    google: null,
     smtp: null,
     githubApp: null,
     workspaceCreators: { kind: 'first' },
@@ -57,11 +58,12 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
   oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  googleCallbackUrl: 'https://purlay.test/auth/callback/google',
   githubApp: {
     callbackUrl: 'https://purlay.test/api/github-app/callback',
     webhookUrl: 'https://purlay.test/api/webhooks/github-app',
   },
-  channels: { github: false, email: false, oidc: false },
+  channels: { github: false, email: false, oidc: false, google: false },
   adminEmail: 'admin@example.test',
   ...over,
 });
@@ -75,6 +77,7 @@ const CONNECTED = anAnswer({
     sessionMaxAgeDays: null,
     github: { clientId: 'Iv1.abc123', clientSecret: { set: true } },
     oidc: null,
+    google: null,
     smtp: {
       address: { set: true, host: 'smtp://mail.example.test:587' },
       from: 'purlay@example.test',
@@ -84,7 +87,7 @@ const CONNECTED = anAnswer({
     workspaceCreators: { kind: 'listed', logins: ['ada', 'grace'] },
     setupCompletedAt: '2026-10-01T00:00:00.000Z',
   },
-  channels: { github: true, email: true, oidc: false },
+  channels: { github: true, email: true, oidc: false, google: false },
 });
 
 const unexpected = (name: string) => (): Promise<never> =>
@@ -318,7 +321,7 @@ describe('Settings → Server', () => {
     const asked: [string, boolean][] = [];
     const only = anAnswer({
       settings: { ...CONNECTED.settings, smtp: null },
-      channels: { github: true, email: false, oidc: false },
+      channels: { github: true, email: false, oidc: false, google: false },
     });
     const view = await render(
       aClient({
@@ -768,7 +771,7 @@ const OIDC_VIEW = {
 
 const WITH_OIDC = anAnswer({
   settings: { ...anAnswer().settings, oidc: OIDC_VIEW },
-  channels: { github: false, email: false, oidc: true },
+  channels: { github: false, email: false, oidc: true, google: false },
 });
 
 describe('Settings → Server — single sign-on (D-200)', () => {
@@ -933,7 +936,7 @@ describe('Settings → Server — single sign-on (D-200)', () => {
         settings: () =>
           Promise.resolve({
             ...WITH_OIDC,
-            channels: { github: true, email: false, oidc: true },
+            channels: { github: true, email: false, oidc: true, google: false },
           }),
         disconnect: (channel, confirm) => {
           asked.push([channel, confirm]);

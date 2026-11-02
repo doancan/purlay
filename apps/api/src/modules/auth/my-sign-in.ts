@@ -50,6 +50,8 @@ export const mySignIn = async (
     emailLinks: !madeByGitHub(row),
     github: row.github_id === null ? null : { login: row.github_login },
     oidc: sso !== undefined,
+    // Made real when Google can be linked (D-250).
+    google: false,
     twoFactor: row.two_factor_enabled,
     // Required of an account a password signs into, while one does (D-239).
     twoFactorRequired: credential !== undefined && policy.requireTwoFactor && policy.passwordSignIn,

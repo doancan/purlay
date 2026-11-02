@@ -462,6 +462,7 @@ describe('the sign-in screen', () => {
           github: true,
           email: false,
           oidc: null,
+          google: false,
           signUp: 'invite-only',
           password: true,
         }),

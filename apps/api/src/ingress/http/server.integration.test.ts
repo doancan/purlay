@@ -21,6 +21,7 @@ import {
 import {
   GITHUB_APP_CALLBACK,
   GITHUB_APP_WEBHOOK,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type MeResponse,
@@ -386,6 +387,7 @@ describe('integration: Administration → Server', () => {
         signUp: 'invite-only',
         github: null,
         oidc: null,
+        google: null,
         smtp: null,
         githubApp: null,
         workspaceCreators: { kind: 'first' },
@@ -399,11 +401,12 @@ describe('integration: Administration → Server', () => {
       appUrl: ORIGIN,
       githubCallbackUrl: `${ORIGIN}${SIGN_IN_CALLBACK}`,
       oidcCallbackUrl: `${ORIGIN}${OIDC_CALLBACK}`,
+      googleCallbackUrl: `${ORIGIN}${GOOGLE_CALLBACK}`,
       githubApp: {
         callbackUrl: `${ORIGIN}${GITHUB_APP_CALLBACK}`,
         webhookUrl: `${ORIGIN}${GITHUB_APP_WEBHOOK}`,
       },
-      channels: { github: false, email: false, oidc: false },
+      channels: { github: false, email: false, oidc: false, google: false },
       adminEmail: server.admin.email,
     });
     const relay = await aRelay();
@@ -433,7 +436,7 @@ describe('integration: Administration → Server', () => {
       from: 'purlay@example.test',
       allowPlaintext: false,
     });
-    expect(connected.channels).toEqual({ github: true, email: true, oidc: false });
+    expect(connected.channels).toEqual({ github: true, email: true, oidc: false, google: false });
     const text = JSON.stringify(connected);
     for (const secret of [GITHUB_OK.clientSecret, RELAY_PASS, RELAY_USER]) {
       expect(text).not.toContain(secret);
@@ -582,7 +585,12 @@ describe('integration: Administration → Server', () => {
     expect(confirmed.status).toBe(204);
     const gone = await readSettings(server.db, cipher);
     expect([gone.github, gone.smtp]).toEqual([undefined, undefined]);
-    expect((await viewOf(server)).channels).toEqual({ github: false, email: false, oidc: false });
+    expect((await viewOf(server)).channels).toEqual({
+      github: false,
+      email: false,
+      oidc: false,
+      google: false,
+    });
   });
 
   test('a GitHub secret the key cannot open can be disconnected, under the same last-way-in rule', async () => {
@@ -874,7 +882,7 @@ describe('integration: Administration → Server — single sign-on (D-200)', ()
       clientSecret: { set: true },
       name: 'Acme SSO',
     });
-    expect(view.channels).toEqual({ github: false, email: false, oidc: true });
+    expect(view.channels).toEqual({ github: false, email: false, oidc: true, google: false });
     expect(view.oidcCallbackUrl).toBe(`${ORIGIN}${OIDC_CALLBACK}`);
     // Served from the next request: the sign-in screen is told, with the label.
     const methods = await call(server, 'GET', '/api/auth/methods');

@@ -291,6 +291,7 @@ export const COLUMNS: Columns = {
     github_id: 'omit',
     github_login: 'omit',
     github_connected_at: 'omit',
+    google_made: 'omit',
     // What the sign-in library keeps about the account, and who may run the server: the person's own,
     // and a credential's neighbour, never the controller's data about them (D-179).
     email_verified: 'omit',
@@ -412,6 +413,7 @@ export const PERSONAL_COLUMNS: PersonalColumns = {
     github_id: 'export',
     github_login: 'export',
     github_connected_at: 'export',
+    google_made: 'export',
     title: 'export',
     time_zone: 'export',
     status_text: 'export',

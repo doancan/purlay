@@ -39,6 +39,7 @@ describe('integration: how the caller signs in', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       });
@@ -75,6 +76,7 @@ describe('integration: how the caller signs in', () => {
         hasPassword: false,
         github: { login: 'made-with-github' },
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       });
@@ -99,6 +101,7 @@ describe('integration: how the caller signs in', () => {
         hasPassword: false,
         github: { login: 'linked-login' },
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       });

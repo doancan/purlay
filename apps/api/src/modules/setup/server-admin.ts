@@ -29,6 +29,7 @@ import type { Executor, Transaction } from '@purlay/db';
 import {
   GITHUB_APP_CALLBACK,
   GITHUB_APP_WEBHOOK,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type ProbeResult,
@@ -202,6 +203,7 @@ export const serverSettingsOf = async (
     appUrl,
     githubCallbackUrl: `${appUrl}${SIGN_IN_CALLBACK}`,
     oidcCallbackUrl: `${appUrl}${OIDC_CALLBACK}`,
+    googleCallbackUrl: `${appUrl}${GOOGLE_CALLBACK}`,
     githubApp: {
       callbackUrl: `${appUrl}${GITHUB_APP_CALLBACK}`,
       webhookUrl: `${appUrl}${GITHUB_APP_WEBHOOK}`,
@@ -210,6 +212,7 @@ export const serverSettingsOf = async (
       github: current.auth.github,
       email: current.mail !== undefined,
       oidc: current.auth.oidc !== undefined,
+      google: false,
     },
     adminEmail: (await addressOf(database, admin)).email,
   };

@@ -51,7 +51,7 @@ describe('the sign-up screen', () => {
   test('open, with GitHub and mail: both ways, no password, and a way back to sign-in', async () => {
     const asked: EmailSignInRequest[] = [];
     const view = await visit(
-      { github: true, email: true, oidc: null, signUp: 'open', password: true },
+      { github: true, email: true, oidc: null, google: false, signUp: 'open', password: true },
       'en',
       asked,
     );
@@ -71,6 +71,7 @@ describe('the sign-up screen', () => {
       github: true,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -82,6 +83,7 @@ describe('the sign-up screen', () => {
       github: false,
       email: false,
       oidc: { name: null },
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -92,7 +94,14 @@ describe('the sign-up screen', () => {
     await expectNoAxeViolations(view.container);
     view.unmount();
     const tr = await visit(
-      { github: false, email: false, oidc: { name: null }, signUp: 'open', password: true },
+      {
+        github: false,
+        email: false,
+        oidc: { name: null },
+        google: false,
+        signUp: 'open',
+        password: true,
+      },
       'tr',
     );
     expect(tr.getByRole('link', { name: 'tek oturum açma ile devam et' })).toBeDefined();
@@ -101,6 +110,7 @@ describe('the sign-up screen', () => {
       github: true,
       email: true,
       oidc: { name: 'Acme SSO' },
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -113,6 +123,7 @@ describe('the sign-up screen', () => {
       github: true,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -125,6 +136,7 @@ describe('the sign-up screen', () => {
       github: false,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -150,7 +162,14 @@ describe('the sign-up screen', () => {
   ] as const) {
     test(`invite-only: the notice in ${locale}, with the sign-in link and no form or button`, async () => {
       const view = await visit(
-        { github: true, email: true, oidc: null, signUp: 'invite-only', password: true },
+        {
+          github: true,
+          email: true,
+          oidc: null,
+          google: false,
+          signUp: 'invite-only',
+          password: true,
+        },
         locale,
       );
       expect(view.getByRole('heading', { level: 1, name: title })).toBeDefined();
@@ -178,6 +197,7 @@ describe('the sign-up screen, before the server has said what it offers', () => 
                 github: true,
                 email: false,
                 oidc: null,
+                google: false,
                 signUp: 'open',
                 password: true,
               });
@@ -216,6 +236,7 @@ describe('the sign-up screen, before the server has said what it offers', () => 
             github: true,
             email: true,
             oidc: null,
+            google: false,
             signUp: 'open',
             password: true,
           }),

@@ -30,7 +30,14 @@ const signedOut = (mail: boolean, github = true): ReturnType<typeof anApi> =>
   anApi({
     me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
     authMethods: () =>
-      Promise.resolve({ github, email: mail, oidc: null, signUp: 'invite-only', password: true }),
+      Promise.resolve({
+        github,
+        email: mail,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      }),
   });
 
 /** The one sentence the screen says about the way here, or null when it says none. */
@@ -152,6 +159,7 @@ describe('what the screen offers is what the server has connected', () => {
             github: false,
             email: false,
             oidc,
+            google: false,
             signUp: 'invite-only',
             password: true,
             ...over,
@@ -220,6 +228,7 @@ describe('what the screen offers is what the server has connected', () => {
             github: true,
             email: true,
             oidc: null,
+            google: false,
             signUp: policy,
             password: true,
           }),
@@ -280,7 +289,14 @@ describe('what the screen offers is what the server has connected', () => {
     expect(view.queryByRole('link', { name: GITHUB })).toBeNull();
     expect(view.queryByText('This server is not set up yet')).toBeNull();
     await act(async () => {
-      answer({ github: true, email: false, oidc: null, signUp: 'invite-only', password: true });
+      answer({
+        github: true,
+        email: false,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      });
       await Promise.resolve();
     });
     await settle();
@@ -299,6 +315,7 @@ describe('what the screen offers is what the server has connected', () => {
               github: false,
               email: true,
               oidc: null,
+              google: false,
               signUp: 'invite-only',
               password: true,
             });
@@ -338,6 +355,7 @@ describe('what the screen offers is what the server has connected', () => {
               github: true,
               email: false,
               oidc: null,
+              google: false,
               signUp: 'invite-only',
               password: true,
             });
