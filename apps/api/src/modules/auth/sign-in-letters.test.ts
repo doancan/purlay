@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { SIGN_IN_LINK_TTL_MINUTES } from '@purlay/types';
-import { githubLetter, linkLetter } from './sign-in-letters';
+import { githubLetter, googleLetter, linkLetter } from './sign-in-letters';
 
 const URL_OPENED = 'https://purlay.test/sign-in/email#token';
 
@@ -30,5 +30,21 @@ describe('the word to an account GitHub made', () => {
     const letter = githubLetter('a@example.test', 'tr', 'https://purlay.test');
     expect(letter.subject).toBe('Purlay’a giriş');
     expect(letter.text).toContain('https://purlay.test adresinde “GitHub ile devam et”');
+  });
+});
+
+describe('the word to an account Google made', () => {
+  test('has no link to sign in, and points to Google at the server’s address, in English', () => {
+    const letter = googleLetter('a@example.test', 'en', 'https://purlay.test');
+    expect(letter.to).toBe('a@example.test');
+    expect(letter.subject).toBe('Signing in to Purlay');
+    expect(letter.text).toContain('“Continue with Google” at https://purlay.test');
+    expect(letter.text).not.toContain('#');
+  });
+
+  test('says the same in Turkish', () => {
+    const letter = googleLetter('a@example.test', 'tr', 'https://purlay.test');
+    expect(letter.subject).toBe('Purlay’a giriş');
+    expect(letter.text).toContain('https://purlay.test adresinde “Google ile devam et”');
   });
 });
