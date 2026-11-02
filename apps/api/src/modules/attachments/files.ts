@@ -13,7 +13,7 @@ import { sql, type Executor } from '@purlay/db';
 import type { FilePage, FileQuery } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { ChannelContext } from '../../platform/channels';
-import { limitOf } from '../messages/threads';
+import { limitOf } from '../../platform/pagination';
 import { asAttachment } from './uploads';
 
 const at = (value: Date | string): string => new Date(value).toISOString();
