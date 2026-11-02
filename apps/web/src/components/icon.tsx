@@ -114,7 +114,7 @@ const GitHubMark = (props: React.SVGProps<SVGSVGElement>): React.JSX.Element => 
 /**
  * Google's "G", which the icon set does not carry either: Google's sign-in branding asks for the
  * four-colour mark, so unlike the rest of the set it is not `currentColor`. Its four slices are brand
- * tokens, the same in every theme (D-97, D-250 §9), on Google's own 48-unit drawing; it is inline, so
+ * tokens, the same in every theme (D-97, D-251 §9), on Google's own 48-unit drawing; it is inline, so
  * nothing is loaded from Google (D-39). Only where Google is named — signing in with it.
  */
 const GoogleMark = (props: React.SVGProps<SVGSVGElement>): React.JSX.Element => (

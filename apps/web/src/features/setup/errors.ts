@@ -159,7 +159,7 @@ const OIDC_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
 };
 
 /**
- * The same for Google's try (D-250): Google's address is fixed, so no reason points at an issuer field — a
+ * The same for Google's try (D-251): Google's address is fixed, so no reason points at an issuer field — a
  * Google that cannot be reached or whose answer is wrong is not something the form can put right.
  */
 const GOOGLE_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
@@ -167,7 +167,7 @@ const GOOGLE_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
     what: 'setup.google.reason.secret-rejected.what',
     fix: ['setup.google.reason.secret-rejected.fix1', 'setup.google.reason.secret-rejected.fix2'],
     // Google's token endpoint answers `invalid_client` for an ID it does not know as for a wrong secret, so
-    // which of the two is wrong is not known: neither field is outlined (D-250 §7).
+    // which of the two is wrong is not known: neither field is outlined (D-251 §7).
     field: null,
     stoppedAt: null,
   },

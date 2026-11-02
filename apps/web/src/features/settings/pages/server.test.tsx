@@ -986,7 +986,7 @@ const WITH_GOOGLE = anAnswer({
   channels: { github: false, email: false, oidc: false, google: true },
 });
 
-describe('Settings → Server — Google (D-250)', () => {
+describe('Settings → Server — Google (D-251)', () => {
   const GOOGLE_REASONS_A_TRY_GIVES = [
     'secret-rejected',
     'client-unknown',

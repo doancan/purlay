@@ -37,7 +37,7 @@ export interface ServerClient {
     readonly clientSecret: string;
     readonly name: string;
   }) => Promise<ProbeResult>;
-  /** Google's OAuth client (D-250): tried with what is typed and kept only if it works. */
+  /** Google's OAuth client (D-251): tried with what is typed and kept only if it works. */
   readonly google: (candidate: {
     readonly clientId: string;
     readonly clientSecret: string;
