@@ -1,5 +1,5 @@
 /**
- * Administration → Server's Google (D-250): the OAuth client this server is registered as at Google. Google's
+ * Administration → Server's Google (D-251): the OAuth client this server is registered as at Google. Google's
  * address is fixed, so only the client ID and secret are asked. As the other sign-in cards are: tried with what
  * is typed before anything is kept — one call, answered with the try's outcome in words per reason — and
  * disconnected after a question that says so when it is the last way in. The secret is never shown again, and
