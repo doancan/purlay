@@ -47,8 +47,8 @@ declares:
    unknown or repeated id, an empty item, or a missing requirement stops the process before it listens; a
    cycle, a reserved id or a repeated capability are caught earlier, when the build's registry is made.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
-3. Record this node's module set and release in the database. A node whose set differs from a live peer's
-   refuses to serve (D-250 rule 8).
+3. Record this node's module set in the database. A node whose set differs from a live peer's refuses to serve
+   (D-250 rule 8); the release may differ, so a rolling deploy passes, and nodes of different sets share no bus channel.
 4. Run each enabled module's migrations (§5).
 5. Call each module's `register`, which writes into the core's registries. **Capabilities are fixed after this
    step**: a question about one has the same answer for the life of the process.
@@ -68,9 +68,11 @@ In this order:
 
 1. **Events.** A module publishes on the **domain bus**; nobody listening is not an error. This is a new
    in-process bus, distinct from the socket `EventBus` that fans frames out to connections. Delivery is
-   *at most once, after commit* (D-35), and there is no outbox (D-7). A consumer whose state must not drift
-   reads the source when it needs it, or relies on a row written in the same transaction; it never treats an
-   event as the only copy of a fact.
+   *at most once, after commit* (D-35), and there is no outbox framework (D-7). The manifest says of each event
+   whether it is a **hint** (a UI nudge, fine to lose) or a **fact** (a notification, an index update, a system
+   message). A fact is also a row written in the same transaction and drained by a sweeper job — a table and a
+   loop, not a framework — so a crash between commit and publish loses nothing. A consumer never treats an event
+   as the only copy of a fact.
 2. **A port the core defines**, only where two modules use it or a test needs the boundary
    (`NotificationSink`, `SearchSource`, `SystemMessagePort`, `AttachmentOwner`).
 3. **Asking whether a capability exists** (`capabilities.has(…)`). The caller that finds it absent hides the
@@ -80,7 +82,9 @@ A module imports `module-kit`, `platform` and `@purlay/types` and nothing from a
 
 **Reads are bounded the same way.** A module is handed a query handle typed with *its own tables and the
 core's* — never the combined schema — and a lint rule rejects a table name outside that set in a query. A
-read across modules goes through a port. This is what makes "no foreign key between modules" mean more than
+read across modules goes through a port. Raw `sql` is the way round a typed handle, so a lint rule bans it in
+`features/` too; a table is named only in the manifest's `data` hooks, which receive an executor of the module's
+own. This is what makes "no foreign key between modules" mean more than
 the schema: without it a module could `select` another's table and every rule above would hold on paper.
 
 **The wire unions** open up the same way. `Topic` keeps its core prefixes and takes module prefixes from a
@@ -103,9 +107,15 @@ moves into that module.
 - Erasure, export and retention run for every module whose tables exist, enabled or not (D-250 rule 5), so
   the export catalogue is assembled from the manifests and its test — a table in the database that no manifest
   names fails it — keeps working.
-- Existing installs keep working through a one-time, transactional rename of their legacy rows. **It is not
-  decided** (D-250, open question a) whether they become `chat/…` or the core's, and the release before it
-  refuses to start on renamed rows, with a message naming the fix.
+- **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
+  added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
+  first 77 files always create chat's tables, inert where chat is off. The release before the first prefixed row
+  skips rows it has no file for and says so, so one release of rollback stays possible while module migrations are
+  additive. Anything that reads the migration table for the core's schema stamp (the export's) filters to the
+  core's rows.
+- **Every table has one owner**, core or a module, in a list a test holds to the database; a foreign key across
+  owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
+  point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
   with each module alone as well as with all of them.
 
@@ -120,9 +130,12 @@ no module code; `budget:web` states a bound for it and one per module.
 
 Modules share a process, an event loop and a connection pool, so they are kept apart by **budget**:
 
-- a share of the pool, a deadline per request and an error boundary around each handler and job — an
-  unhandled rejection in one module is that module's, not the process's;
-- a deadline per `SearchSource`; one that overruns is skipped and the response says which;
+- a share of the pool — a cap on a module's concurrent connections with a queue timeout — a
+  `statement_timeout` set inside its transactions, a deadline per request and an error boundary around each
+  handler and job: an unhandled rejection in one module is that module's, not the process's. **These land in step
+  5, before a second module exists**, because a gate in step 12 would measure a mechanism nobody built;
+- a deadline and an abort signal per `SearchSource`; one that overruns is cancelled, skipped, and the response
+  says which (`skipped: [module]`, a wire shape fixed in step 4);
 - the CI latency gate runs for the hot path of **every** module with another one busy, not for chat's send
   path alone;
 - every log line and metric carries `module`.
@@ -136,17 +149,22 @@ until then it is a stated intent and not a guarantee.
 |---|---|---|
 | No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |
 | The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
-| No read of another module's tables | typed query handle and a lint rule on table names | 5 |
-| No foreign key between modules | a schema test on the per-module `db:check` | 10 |
+| No read of another module's tables | typed query handle; a lint ban on raw `sql` in `features/` | 5 |
+| Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
+| Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
+| A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
+| A module cannot starve the others of connections | a per-module cap and `statement_timeout`; a test with one module saturated | 5 |
+| A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
 | A bundle has no cycle, repeat or double capability | the registry, and mutations in `scripts/mutations.ts` | 1 |
 | `MODULES` is valid | `resolve`, at boot | 3 |
+| The matrix exists from the start | CI cells for core-alone and everything, widened per step | 3 |
 | Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
 | Disabled ⇒ no tables | the CI matrix, per cell | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
 | A core migration keeps module schemas valid | CI migrating each set from the last release | 10 |
-| One module set in a cluster | the boot check and its test | 12 |
+| One module set in a cluster; a rolling deploy still passes | the boot check, a two-node test with different sets, a bus channel per set | 12 |
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
 | Shell chunk holds no module code | `budget:web` shape check | 11 |
@@ -161,7 +179,8 @@ only combinations promised (D-250 rule 6).
 A section in this file with its requires, optional partners and capabilities · its migration set, with the
 `SCHEMA.md` and `DATA.md` entries · its `data` hooks (erasure, export, retention) · its audit actions and
 permissions · its events and notifications · its web manifest and chunk bound · its smoke test and matrix cell
-· its latency measure · the condition on which it is removed if nobody uses it (D-250 rule 6).
+· its latency measure · what a user sees for each partner that is absent · the threshold at which it is removed if
+nobody uses it (D-250 rule 6).
 
 ## 10. Order of work
 
@@ -170,16 +189,23 @@ Each step ships alone and can be reverted.
 | # | Step | Behaviour changes? |
 |---|---|---|
 | 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
-| 2 | Migrator learns sets and the legacy rename (after open question a); old and new schemas compared | no |
-| 3 | `MODULES` read at boot into the registry; the server lists enabled modules; the web registry skeleton | no |
-| 4 | Wire unions opened, with aliases | no |
-| 5 | The core ports, the domain bus, the typed query handle | no |
+| 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only; old and new schemas compared on a copy | no |
+| 3 | `MODULES` read at boot into the registry; the server lists enabled modules; the web registry skeleton; the CI matrix skeleton (core alone, everything) | no |
+| 4 | Wire unions opened, with aliases; a client ignores unknown frames (tested); the replay rule; `skipped` in the search response | no |
+| 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
+| 5b | Issues' thin slice for the dogfood team — open an issue from a message, link back — to prove the ports with a real user before the moves | new feature |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat`; channel visibility, message erasure and the export entries move with it | no |
-| 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module | no |
+| 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
 | 11 | Chat's web screens a lazy chunk; budgets split | no |
-| 12 | `MODULES` turns modules off; the matrix, the cluster check and the per-module budgets in CI | **yes** |
-| 13 | Issues, the second module — the contract meets a real second user | new feature |
+| 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |
+| 13 | Issues complete, the second module in full | new feature |
+
+**Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
+module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
+**Between modules** a table of module pair × experience (mention, link, notification, search, attachment,
+permission, onboarding) says what a user sees when the partner is absent: shown, hidden, or plain text. It is part
+of each module's section (§9).
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The

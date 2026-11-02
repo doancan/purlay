@@ -11977,12 +11977,17 @@ there is no broker).
    where there are two users or a test boundary; by asking whether a capability exists. A caller that finds it absent
    hides the feature or does nothing. Importing another module is a lint error, and **reading another module's tables
    is a lint error too**: a module is given a query handle typed with its own tables and the core's, and reads across
-   go through a port.
+   go through a port. Raw `sql` in a module is the way round a typed handle, so it is a lint error there too: a table is
+   named only in the manifest's `data` hooks, which are handed an executor of the module's own. An event is either a
+   *hint* (a UI nudge, may be lost) or a *fact* (a notification, an index update, a system message): a fact is also a
+   row written in the same transaction and drained by a sweeper, because delivery after commit is at most once (D-35).
 5. **A module's tables exist only while it is enabled, and disabling drops nothing.** Each module owns an ordered set of
    migrations; a foreign key goes from a module to the core, never between modules. Disabled, the tables stay and are
    inert. The manifest declares what the module's data needs — erasure of a person (D-139), the tables of an export
    (D-140), retention, the audit actions it writes and the permissions it gates — and the core runs them for every
    module whose tables exist, enabled or not, so closing a module never leaves a person's data out of an erasure.
+   Every table is owned by the core or one module, written down and tested; a foreign key across owners fails a test,
+   and a list of the ones that exist today may only shrink. A core migration never names a module's table.
 6. **Every combination that is run is tested; the rest are not promised.** CI boots and smoke-tests the core alone,
    each module alone with what it requires, and everything, and a disabled module's route must be `404`. Promoting an
    `optional` partner to `requires` is a breaking change, said in the release notes. A module is admitted only with a
@@ -11990,17 +11995,21 @@ there is no broker).
    hot path measured with it busy), and the condition on which it is removed if nobody uses it. This replaces the hard
    cap on the number of features in D-2's table with a cost every feature must pay.
 7. **Isolation is by budget, not by process.** A module gets a share of the connection pool, a deadline per request and
-   an error boundary around its handlers and jobs; a search source has a deadline and is skipped, and said to be, when
-   it overruns. Every log line and metric carries the module.
-8. **A cluster runs one module set.** A node records its module set and release in the database at boot and refuses to
-   serve beside a live peer whose set differs; frames of a module a node does not run are dropped, not delivered.
+   an error boundary around its handlers and jobs — **built before a second module ships, not after**: a cap on its
+   concurrent connections with a queue timeout, and a `statement_timeout` set inside its transactions. A search source
+   takes an abort signal and a deadline, and is skipped, and said to be, when it overruns. Every log line and metric carries the module.
+8. **A cluster runs one module set.** A node records its module set in the database at boot and refuses to serve beside a
+   live peer whose set differs. The release may differ, so a rolling deploy is not blocked. Nodes of different sets also
+   share no channel on the bus, so a typo in `MODULES` on one node cannot make it receive another set's frames.
 9. **Commercial model.** All code stays AGPL and in this repository (D-24); there is still no open core. A self-hosted
    instance can run every module, free. The cloud may price what it operates by the modules a customer runs, never by
    seat (D-43's other rules stand). **This amends** D-1's "the only thing the cloud sells is that we operate it" and
    `PRD.md` §6's "never withheld capability": a package is priced by what we run for a customer, and nothing is
-   withheld from anyone who runs it themselves. Until per-workspace enablement exists the cloud sells a package per
-   instance; a multi-tenant instance with mixed packages is not supported, and the guard goes through
-   `WorkspaceContext` when the first package needs it.
+   withheld from anyone who runs it themselves. A package is not sold before per-workspace enablement
+   exists, because a package per instance would make the cloud one deployment per customer and end D-1's small
+   operation. Until then a multi-tenant instance with mixed packages is unsupported and nothing is priced by module.
+   Disabling a module keeps its data for a stated period and then offers deletion, and the data stays exportable
+   throughout.
 
 **Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
 chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs
@@ -12017,9 +12026,13 @@ sandbox, and a directory is a non-goal.
 types and a loop. After modules ship, removing one is dropping its manifest, and its tables stay until an operator
 drops them by hand (D-9).
 
-**Open.** (a) *Existing installs:* rename the legacy migration rows to `chat/…` through a map, or count them all as
-the core's — the second is simpler and fixes chat's order into the core's; decided before the migrator work, and the
-release before it refuses to start on renamed rows with a message naming the fix. (b) *Wire names:* namespacing frame
-types (`chat.message.created`) breaks installed clients, so the old names stay as aliases for one release, and whether
-a client ignores a type it does not know is verified before the unions open. (c) *Workspace-level enablement* waits
-for the first cloud package.
+**Decided.** (a) *Existing installs:* the legacy migration rows stay as they are and count as the core's. A rename
+would change the rows `0055` selects by name and the dump the restore rehearsal compares, and gains nothing a new
+file cannot: only files added from now on go under `<module>/`. The cost is that the first 77 files always create
+chat's tables, even where chat is off — inert, which rule 5 already accepts. The release before the first prefixed
+row skips rows it has no file for and says so, so rolling back one release stays possible while module migrations are
+additive. (c) *Workspace-level enablement* is a precondition of selling a package (rule 9).
+
+**Open.** (b) *Wire names:* namespacing frame types (`chat.message.created`) breaks installed clients, so the old
+names stay as aliases for one release, and whether a client ignores a type it does not know is verified before the
+unions open.
