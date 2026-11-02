@@ -111,6 +111,8 @@ interface Server {
   readonly holder: RuntimeHolder;
   readonly lines: string[];
   readonly github: GitHubStub;
+  /** Google, as the double plays it, served on a loopback port; the server's probe is pointed at it. */
+  readonly google: OidcStub;
   readonly person: ReturnType<typeof aGitHubPerson>;
   readonly admin: SignedInUser;
   readonly member: SignedInUser;
@@ -135,6 +137,8 @@ const aServer = async (
   });
   const served = github.serve(0);
   stops.push(served.stop);
+  const google = await anOidcStub({ sub: 'grace', email: 'grace@gmail.com' });
+  stops.push(google.serve(0).stop);
   const { log, lines } = recording();
   const holder = runtimeServicesHolder(log);
   const build: SettingsChange['build'] = (settings, needsReentry) =>
@@ -198,6 +202,7 @@ const aServer = async (
       }),
       clock: systemClock,
       log,
+      googleIssuer: google.issuer(),
       auth: holder.auth,
       services: holder,
       workspaceCreators: readWorkspaceCreators,
@@ -222,7 +227,7 @@ const aServer = async (
             },
     }),
   );
-  return { app, db: cloned.db, holder, lines, github, person, admin, member, owner };
+  return { app, db: cloned.db, holder, lines, github, google, person, admin, member, owner };
 };
 
 interface Call {
@@ -299,6 +304,8 @@ const ROUTES: readonly [method: 'GET' | 'POST' | 'DELETE', path: string, body: u
   ['DELETE', '/api/server/github', undefined],
   ['DELETE', '/api/server/smtp', undefined],
   ['DELETE', '/api/server/oidc', undefined],
+  ['POST', '/api/server/google', { ...OIDC_STUB_CREDENTIALS }],
+  ['DELETE', '/api/server/google', undefined],
   ['POST', '/api/server/github-app', { ...GITHUB_APP_STUB }],
   ['DELETE', '/api/server/github-app', undefined],
   ['POST', '/api/server/policy', { signUp: 'open' }],
@@ -1535,5 +1542,133 @@ describe('integration: server runtime compatibility paths', () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(relay.received[0]?.data).toContain('Purlay sunucundan bir deneme');
     expect(relay.received[0]?.data).not.toContain('A test from your Purlay server');
+  });
+});
+
+describe('integration: Administration → Server — Google (D-250)', () => {
+  const as = (server: Server): { cookie: string } => ({ cookie: server.admin.cookie });
+  const google = { ...OIDC_STUB_CREDENTIALS };
+  const refusalOf = async (response: Response): Promise<[number, unknown]> => [
+    response.status,
+    ((await response.json()) as { error: { details: { reason: unknown } } }).error.details.reason,
+  ];
+
+  test('a client Google takes is tried, kept and served, the secret sealed and never shown again', async () => {
+    const server = await aServer();
+    const tried = await call(server, 'POST', '/api/server/google', { ...as(server), body: google });
+    expect(tried.status).toBe(200);
+    expect(await tried.json()).toEqual({ ok: true });
+    // Weighed at the token endpoint with a code nobody was given, before anything was saved.
+    expect(server.google.refusals).toEqual(['invalid_grant']);
+    const view = await viewOf(server);
+    expect(view.settings.google).toEqual({
+      clientId: OIDC_STUB_CREDENTIALS.clientId,
+      clientSecret: { set: true },
+    });
+    expect(view.channels.google).toBe(true);
+    expect(view.googleCallbackUrl).toBe(`${ORIGIN}${GOOGLE_CALLBACK}`);
+    const row = await server.db
+      .selectFrom('server_settings')
+      .select('google_client_secret_encrypted')
+      .where('id', '=', true)
+      .executeTakeFirstOrThrow();
+    expect(row.google_client_secret_encrypted).not.toContain(OIDC_STUB_CREDENTIALS.clientSecret);
+    expect((await readSettings(server.db, cipher)).google?.clientSecret).toBe(
+      OIDC_STUB_CREDENTIALS.clientSecret,
+    );
+    expect([JSON.stringify(view), ...server.lines].join('\n')).not.toContain(
+      OIDC_STUB_CREDENTIALS.clientSecret,
+    );
+    expect((await trail(server)).map((entry) => entry.action)).toEqual(['server.google_connected']);
+  });
+
+  test('a secret Google refuses saves nothing, says why, writes no trail and shows none of it', async () => {
+    const server = await aServer();
+    const refused = await call(server, 'POST', '/api/server/google', {
+      ...as(server),
+      body: { ...google, clientSecret: BAD_SECRET },
+    });
+    expect(refused.status).toBe(200);
+    const answer = (await refused.json()) as { ok: boolean; reason: string };
+    expect([answer.ok, answer.reason]).toEqual([false, 'secret-rejected']);
+    expect(JSON.stringify(answer)).not.toContain(BAD_SECRET);
+    expect((await readSettings(server.db, cipher)).google).toBeUndefined();
+    expect(await trail(server)).toEqual([]);
+    expect((await viewOf(server)).channels.google).toBe(false);
+    expect(server.lines.join('\n')).not.toContain(BAD_SECRET);
+  });
+
+  test('a body that is not a client id and a secret is refused as input', async () => {
+    const server = await aServer();
+    const bad = await call(server, 'POST', '/api/server/google', {
+      ...as(server),
+      body: { clientId: '', clientSecret: 'x' },
+    });
+    expect(bad.status).toBe(400);
+    expect((await readSettings(server.db, cipher)).google).toBeUndefined();
+  });
+
+  test('the members and the signed out are met as everyone is: absent', async () => {
+    const server = await aServer();
+    for (const cookie of [server.member.cookie, server.owner.cookie, undefined]) {
+      const response = await call(server, 'POST', '/api/server/google', { cookie, body: google });
+      expect(response.status).toBe(404);
+    }
+    expect(server.google.refusals).toEqual([]);
+  });
+
+  test('Google as the only way in is asked about; said outright it goes, with its trail', async () => {
+    const server = await aServer();
+    await call(server, 'POST', '/api/server/google', { ...as(server), body: google });
+    const refused = await call(server, 'DELETE', '/api/server/google', as(server));
+    expect(await refusalOf(refused)).toEqual([409, 'last-channel']);
+    expect((await readSettings(server.db, cipher)).google).toBeDefined();
+    const gone = await call(server, 'DELETE', '/api/server/google', {
+      ...as(server),
+      body: { confirmLastChannel: true },
+    });
+    expect(gone.status).toBe(204);
+    const row = await server.db
+      .selectFrom('server_settings')
+      .select(['google_client_id', 'google_client_secret_encrypted'])
+      .where('id', '=', true)
+      .executeTakeFirstOrThrow();
+    expect(Object.values(row)).toEqual([null, null]);
+    expect((await viewOf(server)).channels.google).toBe(false);
+    expect((await trail(server)).map((entry) => entry.action)).toEqual([
+      'server.google_connected',
+      'server.google_disconnected',
+    ]);
+    const again = await call(server, 'DELETE', '/api/server/google', as(server));
+    expect(await refusalOf(again)).toEqual([409, 'not-connected']);
+  });
+
+  test('Google counts as a way in: with another serving no confirmation is needed, and it keeps the others from being the last', async () => {
+    const server = await aServer();
+    const relay = await aRelay();
+    await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
+    await call(server, 'POST', '/api/server/google', { ...as(server), body: google });
+    expect((await call(server, 'DELETE', '/api/server/smtp', as(server))).status).toBe(204);
+    // Now Google is the last.
+    expect((await call(server, 'DELETE', '/api/server/google', as(server))).status).toBe(409);
+  });
+
+  test('with Google the only provider, passwords may be turned off, and Google then stays', async () => {
+    const server = await aServer();
+    await call(server, 'POST', '/api/server/google', { ...as(server), body: google });
+    expect(
+      (
+        await call(server, 'POST', '/api/server/policy', {
+          ...as(server),
+          body: { passwordSignIn: false },
+        })
+      ).status,
+    ).toBe(204);
+    const last = await call(server, 'DELETE', '/api/server/google', {
+      ...as(server),
+      body: { confirmLastChannel: true },
+    });
+    expect(await refusalOf(last)).toEqual([409, 'passwords-off']);
+    expect((await readSettings(server.db, cipher)).google).toBeDefined();
   });
 });

@@ -10324,8 +10324,17 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'oidc-disconnect-ignores-last-way-in',
     why: 'disconnecting the last way in leaves only the administrator’s password, with no question asked',
     file: SERVER_ADMIN,
-    find: '          settings.github === undefined &&\n          settings.smtp === undefined &&\n          settings.oidc === undefined\n        ) {',
+    find: '          settings.github === undefined &&\n          settings.smtp === undefined &&\n          settings.oidc === undefined &&\n          settings.google === undefined\n        ) {',
     replace: '          false\n        ) {',
+    tests: [SERVER_TESTS],
+  },
+  {
+    id: 'google-probe-keeps-a-client-that-failed',
+    why: 'a Google client whose secret was refused is saved and served: every sign-in through it fails for everybody',
+    file: SERVER_ADMIN,
+    find: '  const result = await probeGoogle(admin, candidate, dependencies.googleIssuer, dependencies.oidc);\n  if (!result.ok) return result;',
+    replace:
+      '  const result = await probeGoogle(admin, candidate, dependencies.googleIssuer, dependencies.oidc);',
     tests: [SERVER_TESTS],
   },
   {

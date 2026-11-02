@@ -143,6 +143,7 @@ import {
   changeSignInPolicy,
   changeWorkspaceCreators,
   connectGitHubApp,
+  connectGoogleClient,
   connectOidcProvider,
   connectMailRelay,
   connectIssuesApp,
@@ -310,6 +311,8 @@ export interface Dependencies {
   readonly githubApp?: () => GitHubAppSettings | undefined;
   /** How the App's calls reach GitHub; absent, the platform's `fetch`. A test hands its stand-in's. */
   readonly githubAppFetch?: GitHubAppFetch;
+  /** Where Google is, as the sign-in is told; absent, Google's own. A test's stand-in. */
+  readonly googleIssuer?: string;
   /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
   readonly externalFetch?: ExternalFetch;
   readonly log: Logger;
@@ -869,6 +872,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, body }) => await connectOidcProvider(setup, request, body),
     )
     .post(
+      '/api/server/google',
+      async ({ request, body }) => await connectGoogleClient(setup, request, body),
+    )
+    .post(
       '/api/server/smtp',
       async ({ request, body }) => await connectMailRelay(setup, request, body),
     )
@@ -888,6 +895,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .delete('/api/server/oidc', async ({ request, set }) => {
       await disconnectChannel(setup, request, 'oidc');
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/server/google', async ({ request, set }) => {
+      await disconnectChannel(setup, request, 'google');
       set.status = 204;
       return '';
     })
