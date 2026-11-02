@@ -60,6 +60,10 @@ export const colorTokens = [
   'syntax-function',
   'syntax-type',
   'syntax-operator',
+  'brand-google-blue',
+  'brand-google-green',
+  'brand-google-yellow',
+  'brand-google-red',
 ] as const;
 
 export const spacingTokens = [

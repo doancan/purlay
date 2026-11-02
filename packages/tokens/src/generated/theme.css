@@ -59,6 +59,10 @@
   --color-syntax-function: var(--syntax-function);
   --color-syntax-type: var(--syntax-type);
   --color-syntax-operator: var(--syntax-operator);
+  --color-brand-google-blue: var(--brand-google-blue);
+  --color-brand-google-green: var(--brand-google-green);
+  --color-brand-google-yellow: var(--brand-google-yellow);
+  --color-brand-google-red: var(--brand-google-red);
 
   /* Spacing: p-, m-, gap-, inset- … (the 4px grid; there is no multiplier) */
   --spacing-0: var(--space-0);

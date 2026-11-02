@@ -128,6 +128,7 @@ export const en = {
   'signIn.title': 'Sign in to Purlay',
   'signIn.lede': 'Team chat where a question stays open until somebody closes it.',
   'signIn.github': 'Continue with GitHub',
+  'signIn.google': 'Continue with Google',
   // Single sign-on (D-200). `{name}` is the operator's label for the button, or the default below.
   'signIn.oidc': 'Continue with {name}',
   'signIn.oidc.default': 'single sign-on',
@@ -146,7 +147,8 @@ export const en = {
   'signIn.githubUnavailable': 'GitHub could not be reached — wait a moment and try again.',
   'signIn.oidcUnavailable':
     'Single sign-on could not be reached, or did not give an identity this server trusts — wait a moment and try again, and if it stays, tell whoever runs this server.',
-  'signIn.googleUnavailable': 'Google could not be reached — wait a moment and try again.',
+  'signIn.googleUnavailable':
+    'Google did not answer. Try again in a moment, or sign in another way.',
   'signIn.emailUnverified':
     'Single sign-on did not say your email address is verified, so it cannot sign you in. Ask whoever runs your organisation’s sign-in to verify it.',
   'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',

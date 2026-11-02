@@ -16,6 +16,7 @@ import { LogoMark } from '../shell/notice';
 import { useEffect } from 'react';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
+import { GoogleButton } from './google-button';
 import { OidcButton } from './oidc-button';
 
 export const SignUpScreen = (): React.JSX.Element => {
@@ -24,6 +25,7 @@ export const SignUpScreen = (): React.JSX.Element => {
   const me = useMe();
   const methods = useAuthMethods();
   const github = methods.data?.github === true;
+  const google = methods.data?.google === true;
   const oidc = methods.data?.oidc ?? null;
   const mail = methods.data?.email === true;
   const open = methods.data?.signUp === 'open';
@@ -72,7 +74,7 @@ export const SignUpScreen = (): React.JSX.Element => {
             </div>
             {signIn}
           </>
-        ) : !github && oidc === null && !mail ? (
+        ) : !github && !google && oidc === null && !mail ? (
           <>
             <div className="flex flex-col items-center gap-2">
               <h1 className="text-display">{t('signUp.title')}</h1>
@@ -88,16 +90,24 @@ export const SignUpScreen = (): React.JSX.Element => {
             </div>
             {oidc !== null && (
               <div className="flex w-full flex-col items-center gap-3">
-                <OidcButton name={oidc.name} variant={mail || github ? 'secondary' : 'primary'} />
+                <OidcButton
+                  name={oidc.name}
+                  variant={mail || github || google ? 'secondary' : 'primary'}
+                />
               </div>
             )}
             {github && (
               <div className="flex w-full flex-col items-center gap-3">
-                <GitHubButton variant={mail || oidc !== null ? 'secondary' : 'primary'} />
+                <GitHubButton variant={mail || google || oidc !== null ? 'secondary' : 'primary'} />
                 <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
               </div>
             )}
-            <EmailSignInForm alone={!github && oidc === null} mail={mail} />
+            {google && (
+              <div className="flex w-full flex-col items-center gap-3">
+                <GoogleButton variant={mail || github || oidc !== null ? 'secondary' : 'primary'} />
+              </div>
+            )}
+            <EmailSignInForm alone={!github && !google && oidc === null} mail={mail} />
             {signIn}
           </>
         )}

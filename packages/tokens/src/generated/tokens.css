@@ -144,6 +144,10 @@
   --syntax-function: #7aa7f7;
   --syntax-type: #f2a877;
   --syntax-operator: #a9a9b1;
+  --brand-google-blue: #4285f4;
+  --brand-google-green: #34a853;
+  --brand-google-yellow: #fbbc05;
+  --brand-google-red: #ea4335;
   --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-raised: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
   --shadow-float: 0 8px 24px 0 rgba(0, 0, 0, 0.45);
@@ -200,6 +204,10 @@
   --syntax-function: #2563eb;
   --syntax-type: #9a3412;
   --syntax-operator: #52525b;
+  --brand-google-blue: #4285f4;
+  --brand-google-green: #34a853;
+  --brand-google-yellow: #fbbc05;
+  --brand-google-red: #ea4335;
   --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
   --shadow-raised: 0 4px 12px 0 rgba(0, 0, 0, 0.05);
   --shadow-float: 0 8px 24px 0 rgba(0, 0, 0, 0.08);
@@ -256,6 +264,10 @@
   --syntax-function: #7aa7f7;
   --syntax-type: #f2a877;
   --syntax-operator: #a9a9c6;
+  --brand-google-blue: #4285f4;
+  --brand-google-green: #34a853;
+  --brand-google-yellow: #fbbc05;
+  --brand-google-red: #ea4335;
   --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-raised: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
   --shadow-float: 0 8px 24px 0 rgba(0, 0, 0, 0.45);
