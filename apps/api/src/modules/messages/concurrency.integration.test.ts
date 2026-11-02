@@ -18,7 +18,7 @@ import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
 } from '@purlay/db';
-import { messageId, type ServerFrame } from '@purlay/types';
+import { messageId, REACTIONS_PER_PERSON_MAX, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
@@ -181,11 +181,19 @@ describe('integration: two people adding different new reactions at the cap', ()
     const { bus } = recordingBus();
     const plain = { atomically: atomicallyOn(db), clock, bus };
 
-    // One short of the cap, all by Alice.
-    const aliceSession = await session(alice.userId);
-    for (let kind = 0; kind < REACTION_KINDS_MAX - 1; kind += 1) {
-      await setReaction(plain, aliceSession, root, String.fromCodePoint(0x1f600 + kind), true);
-    }
+    // One short of the cap, all as Alice's — straight into the table, since one person gives at
+    // most three through the door (D-249).
+    await db
+      .insertInto('reactions')
+      .values(
+        Array.from({ length: REACTION_KINDS_MAX - 1 }, (_, kind) => ({
+          message_id: root,
+          user_id: alice.userId,
+          emoji: String.fromCodePoint(0x1f600 + kind),
+          created_at: NOW,
+        })),
+      )
+      .execute();
 
     const bobFirst = holdOpen(atomicallyOn(db));
     const first = setReaction(
@@ -212,6 +220,59 @@ describe('integration: two people adding different new reactions at the cap', ()
       .groupBy('emoji')
       .execute();
     expect(kinds).toHaveLength(REACTION_KINDS_MAX);
+  });
+});
+
+describe('integration: one person adding two new reactions at their limit (D-249)', () => {
+  test('one is refused, so a person never has more on a message than the limit', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice']);
+    const alice = room.members['alice'];
+    if (alice === undefined) throw new Error('room');
+    const root = (await sendMessage(db, clock, alice.context, { id: nextId(), content: 'q' }))
+      .message.id;
+    const row = await db
+      .insertInto('sessions')
+      .values({
+        user_id: alice.userId,
+        token_hash: `h-${crypto.randomUUID()}`,
+        expires_at: new Date(NOW.getTime() + 86_400_000),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const aliceSession = { userId: alice.userId, sessionId: row.id };
+    const { bus } = recordingBus();
+    const plain = { atomically: atomicallyOn(db), clock, bus };
+
+    for (let kind = 0; kind < REACTIONS_PER_PERSON_MAX - 1; kind += 1) {
+      await setReaction(plain, aliceSession, root, String.fromCodePoint(0x1f600 + kind), true);
+    }
+
+    const firstTab = holdOpen(atomicallyOn(db));
+    const first = setReaction(
+      { atomically: firstTab.atomically, clock, bus },
+      aliceSession,
+      root,
+      '🅰',
+      true,
+    );
+    await firstTab.holding;
+    const second = setReaction(plain, aliceSession, root, '🅱', true).then(
+      () => 'added',
+      () => 'refused',
+    );
+    expect(await settlesWithin(second, BLOCKED_FOR_MS)).toBe(false);
+    firstTab.release();
+    await first;
+
+    expect(await second).toBe('refused');
+    const mine = await db
+      .selectFrom('reactions')
+      .select('emoji')
+      .where('message_id', '=', root)
+      .where('user_id', '=', alice.userId)
+      .execute();
+    expect(mine).toHaveLength(REACTIONS_PER_PERSON_MAX);
   });
 });
 

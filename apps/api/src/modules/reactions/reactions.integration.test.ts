@@ -4,7 +4,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId, type ServerFrame, type Topic } from '@purlay/types';
+import { messageId, REACTIONS_PER_PERSON_MAX, type ServerFrame, type Topic } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { EventBus } from '../../platform/events';
@@ -247,6 +247,29 @@ describe('integration: reacting', () => {
   });
 });
 
+/**
+ * Puts `emoji` on a message as Alice's, straight into the table: twenty kinds take seven people
+ * through the door, and what these tests hold is the count, not who reached it.
+ */
+const seeded = async (
+  db: Executor,
+  room: Room,
+  message: string,
+  emoji: readonly string[],
+): Promise<void> => {
+  await db
+    .insertInto('reactions')
+    .values(
+      emoji.map((e) => ({
+        message_id: message,
+        user_id: room.alice.userId,
+        emoji: e,
+        created_at: NOW,
+      })),
+    )
+    .execute();
+};
+
 describe('integration: the cap on kinds', () => {
   const KINDS = Array.from({ length: REACTION_KINDS_MAX }, (_, index) =>
     String.fromCodePoint(0x1f600 + index),
@@ -256,10 +279,9 @@ describe('integration: the cap on kinds', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);
       const { bus, sent } = aRecordingBus();
-      for (const emoji of KINDS) await react(db, bus, room.alice, room.root, emoji);
-      sent.length = 0;
+      await seeded(db, room, room.root, KINDS);
 
-      const refusal = await refusalFrom(() => react(db, bus, room.alice, room.root, '🦄'));
+      const refusal = await refusalFrom(() => react(db, bus, room.bob, room.root, '🦄'));
       expect(refusal.status).toBe(400);
       expect(refusal.body).toMatchObject({
         code: 'VALIDATION_FAILED',
@@ -273,10 +295,13 @@ describe('integration: the cap on kinds', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);
       const { bus } = aRecordingBus();
-      for (const emoji of KINDS) await react(db, bus, room.alice, room.root, emoji);
+      await seeded(db, room, room.root, KINDS);
       const set = await react(db, bus, room.bob, room.root, KINDS[0] ?? '');
       expect(set).toHaveLength(REACTION_KINDS_MAX);
-      expect(set[0]?.userIds).toEqual([room.alice.userId, room.bob.userId]);
+      expect(set.find((r) => r.emoji === KINDS[0])?.userIds).toEqual([
+        room.alice.userId,
+        room.bob.userId,
+      ]);
     });
   });
 
@@ -284,9 +309,9 @@ describe('integration: the cap on kinds', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);
       const { bus } = aRecordingBus();
-      for (const emoji of KINDS) await react(db, bus, room.alice, room.root, emoji);
+      await seeded(db, room, room.root, KINDS);
       await react(db, bus, room.alice, room.root, KINDS[0] ?? '', false);
-      expect(await react(db, bus, room.alice, room.root, '🦄')).toHaveLength(REACTION_KINDS_MAX);
+      expect(await react(db, bus, room.bob, room.root, '🦄')).toHaveLength(REACTION_KINDS_MAX);
     });
   });
 
@@ -294,7 +319,71 @@ describe('integration: the cap on kinds', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);
       const { bus } = aRecordingBus();
-      for (const emoji of KINDS) await react(db, bus, room.alice, room.root, emoji);
+      await seeded(db, room, room.root, KINDS);
+      expect(await react(db, bus, room.bob, room.reply, '🦄')).toHaveLength(1);
+    });
+  });
+});
+
+describe('integration: the cap on one person (D-249)', () => {
+  const MINE = Array.from({ length: REACTIONS_PER_PERSON_MAX }, (_, index) =>
+    String.fromCodePoint(0x1f600 + index),
+  );
+
+  test('a person puts three emoji on a message; the fourth is refused, naming the field, and nobody is told', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const { bus, sent } = aRecordingBus();
+      for (const emoji of MINE) await react(db, bus, room.alice, room.root, emoji);
+      sent.length = 0;
+
+      const refusal = await refusalFrom(() => react(db, bus, room.alice, room.root, '🦄'));
+      expect(refusal.status).toBe(400);
+      expect(refusal.body).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        details: { fields: { emoji: expect.stringContaining('3') as string } },
+      });
+      expect(sent).toHaveLength(0);
+    });
+  });
+
+  test('reacting again with one of your own three is the idempotent answer, not a refusal', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const { bus } = aRecordingBus();
+      for (const emoji of MINE) await react(db, bus, room.alice, room.root, emoji);
+      expect(await react(db, bus, room.alice, room.root, MINE[0] ?? '')).toHaveLength(
+        REACTIONS_PER_PERSON_MAX,
+      );
+    });
+  });
+
+  test('the cap is per person: someone else still reacts, with a new emoji too', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const { bus } = aRecordingBus();
+      for (const emoji of MINE) await react(db, bus, room.alice, room.root, emoji);
+      const set = await react(db, bus, room.bob, room.root, '🦄');
+      expect(set.map((r) => r.emoji)).toEqual([...MINE, '🦄']);
+    });
+  });
+
+  test('taking one back makes room for another', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const { bus } = aRecordingBus();
+      for (const emoji of MINE) await react(db, bus, room.alice, room.root, emoji);
+      await react(db, bus, room.alice, room.root, MINE[0] ?? '', false);
+      const set = await react(db, bus, room.alice, room.root, '🦄');
+      expect(set.map((r) => r.emoji)).toEqual([...MINE.slice(1), '🦄']);
+    });
+  });
+
+  test('the cap is per message: the same person has three on another', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const { bus } = aRecordingBus();
+      for (const emoji of MINE) await react(db, bus, room.alice, room.root, emoji);
       expect(await react(db, bus, room.alice, room.reply, '🦄')).toHaveLength(1);
     });
   });

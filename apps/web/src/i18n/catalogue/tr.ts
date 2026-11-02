@@ -1306,6 +1306,8 @@ export const tr = {
   'message.task.done': 'Tamamlandı',
   'message.task.open': 'Tamamlanmadı',
   'message.reactionFailed': 'Tepki kaydedilemedi.',
+  'message.reactionLimit':
+    'Bir mesaja en fazla {count} tepki ekleyebilirsin. Başka bir tane eklemek için birini geri al.',
   'reaction.thumbsUp': 'Beğen',
   'reaction.heart': 'Kalp',
   'reaction.celebrate': 'Kutla',

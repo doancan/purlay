@@ -577,6 +577,60 @@ describe('reactions', () => {
     ).toBeDefined();
   });
 
+  describe('the limit of three a person (D-249)', () => {
+    const atLimit = aMessage(1, {
+      reactions: [
+        { emoji: '👍', userIds: [ME.id] },
+        { emoji: '👀', userIds: [ME.id, BOB.id] },
+        { emoji: '✅', userIds: [ME.id] },
+        { emoji: '🎉', userIds: [BOB.id] },
+      ],
+    });
+
+    test('a fourth is not sent, and a toast says how to make room', async () => {
+      const calls: string[] = [];
+      const view = await mount(props({ message: atLimit }), {
+        api: anApi({
+          react: (_id, emoji) => {
+            calls.push(emoji);
+            return Promise.resolve({ reactions: [] });
+          },
+        }),
+      });
+      await person().click(view.getByRole('button', { name: '🎉, 1 reaction' }));
+      expect(
+        await view.findByText(
+          'You can add at most 3 reactions to a message. Take one back to add another.',
+        ),
+      ).toBeDefined();
+      expect(calls).toEqual([]);
+    });
+
+    test('at the limit, one of your own is still taken back', async () => {
+      const calls: string[] = [];
+      const view = await mount(props({ message: atLimit }), {
+        api: anApi({
+          unreact: (_id, emoji) => {
+            calls.push(emoji);
+            return Promise.resolve({ reactions: [] });
+          },
+        }),
+      });
+      await person().click(view.getByRole('button', { name: '👀, 2 reactions' }));
+      expect(calls).toEqual(['👀']);
+    });
+
+    test('in Turkish, the toast is Turkish', async () => {
+      const view = await mount(props({ message: atLimit }), { locale: 'tr' });
+      await person().click(view.getByRole('button', { name: '🎉, 1 tepki' }));
+      expect(
+        await view.findByText(
+          'Bir mesaja en fazla 3 tepki ekleyebilirsin. Başka bir tane eklemek için birini geri al.',
+        ),
+      ).toBeDefined();
+    });
+  });
+
   test('the quick set is seven distinct emoji, each with words', () => {
     expect(new Set(QUICK_REACTIONS.map((r) => r.emoji)).size).toBe(7);
     expect(QUICK_REACTIONS.every((r) => r.name.startsWith('reaction.'))).toBe(true);
