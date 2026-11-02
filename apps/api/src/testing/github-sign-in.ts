@@ -52,6 +52,7 @@ export const aGitHubAuth = (
     settings: {
       github: GITHUB_STUB_CREDENTIALS,
       oidc: undefined,
+      google: undefined,
       signUp: signUp ?? 'open',
     },
     fetch,

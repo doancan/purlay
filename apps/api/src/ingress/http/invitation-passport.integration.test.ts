@@ -656,7 +656,7 @@ describe('integration: what the passport does not touch', () => {
     // The administrator is made by `createAdmin` through the library's internal adapter, outside any
     // request: the hook sees no route, and decides nothing.
     const auth = aTestAuth(cloned.db, {
-      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+      settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'invite-only' },
     });
     const context = await auth.$context;
     const user = await context.internalAdapter.createUser(

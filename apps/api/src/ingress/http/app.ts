@@ -62,6 +62,7 @@ import { endMySession, readMySessions } from './devices';
 import {
   AUTH_BASE_PATH,
   GITHUB_APP_CALLBACK,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
 } from '@purlay/types';
@@ -669,7 +670,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
       // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
-      if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK) {
+      if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK || path === GOOGLE_CALLBACK) {
         return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
       }
       // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246).
@@ -748,6 +749,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/auth/oidc', async ({ set }) => respond(set, await startSignIn(dependencies, 'oidc')))
+    .get('/auth/google', async ({ set }) => respond(set, await startSignIn(dependencies, 'google')))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
     .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth))
     // The native application's way in (D-191): the browser's page says yes, the application spends the code.

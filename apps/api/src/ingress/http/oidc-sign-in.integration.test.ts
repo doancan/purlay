@@ -436,6 +436,7 @@ describe('integration: one identity per account (D-200 §3, §6)', () => {
       settings: {
         github: GITHUB_STUB_CREDENTIALS,
         oidc: { issuer: stub.issuer(), ...OIDC_STUB_CREDENTIALS, name: undefined },
+        google: undefined,
         signUp: 'open',
       },
       // Two providers, one fetch: the issuer's addresses are the provider's, the rest GitHub's.

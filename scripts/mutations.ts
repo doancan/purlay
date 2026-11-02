@@ -71,6 +71,7 @@ const OIDC = 'apps/api/src/modules/auth/oidc.ts';
 const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
 const GOOGLE = 'apps/api/src/modules/auth/google.ts';
 const GOOGLE_TESTS = 'apps/api/src/modules/auth/google.test.ts';
+const GOOGLE_SIGN_IN_TESTS = 'apps/api/src/ingress/http/google-sign-in.integration.test.ts';
 const RESET_PASSWORD = 'apps/api/src/modules/setup/reset-password.ts';
 const RESET_CLI = 'apps/api/src/cli/admin-reset-password.ts';
 const RESET_TESTS = 'apps/api/src/cli/admin-reset-password.integration.test.ts';
@@ -5750,8 +5751,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'auth-github-outside-the-handler',
     why: 'a GitHub sign-in served outside the handler makes an account without its GitHub columns, refused by WORKSPACE_CREATORS for no reason anybody sees',
     file: BETTER_AUTH,
-    find: '    if (round === undefined) {\n',
-    replace: '    if (false) {\n',
+    find: '    const round = signInRounds.getStore();\n    if (round === undefined) {\n',
+    replace: '    const round = signInRounds.getStore();\n    if (false) {\n',
     tests: ['apps/api/src/modules/auth/better-auth.test.ts'],
   },
   {
@@ -6995,7 +6996,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'github-social-route-no-provider-guard',
     why: "the library's own social route answers a 500 and an error in the log on a server with no GitHub app",
     file: AUTH_INGRESS,
-    find: "  if (url.pathname === SOCIAL_SIGN_IN && !auth.github && auth.oidc === undefined) {\n    throw notSetUp('github');\n  }\n",
+    find: "  if (url.pathname === SOCIAL_SIGN_IN && !auth.github && auth.oidc === undefined && !auth.google) {\n    throw notSetUp('github');\n  }\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/auth-methods.test.ts'],
   },
@@ -10331,7 +10332,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'oidc-second-subject-linked-by-address',
     why: 'a recycled or changed address with a new subject is added beside the old identity, and signs in as the person who left',
     file: BETTER_AUTH,
-    find: '      ? held.some((row) => row.account_id !== account.accountId)\n',
+    find: '      ? sso.some((row) => row.account_id !== account.accountId)\n',
     replace: '      ? false\n',
     tests: [OIDC_TESTS],
   },
@@ -10339,9 +10340,57 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'oidc-owned-account-linked-to-github',
     why: 'GitHub signs in to an account single sign-on owns by address, past the provider that decides who still works there',
     file: BETTER_AUTH,
-    find: '      : held.length > 0 ||',
-    replace: '      : false ||',
+    find: '        : sso.length > 0 || (await holdsAnotherGitHubIdentity(database, account));\n',
+    replace: '        : false || (await holdsAnotherGitHubIdentity(database, account));\n',
     tests: [OIDC_TESTS],
+  },
+  {
+    id: 'google-unauthoritative-address-linked',
+    why: 'Google links an existing account by an address it has no say over — one outside Gmail and the hd domain, which may have changed hands (D-250)',
+    file: BETTER_AUTH,
+    find: "    if (existing === undefined || authoritativeForGoogle(email, claims['hd'])) return;\n",
+    replace: '    return;\n',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-linked-sub-weighed-by-address',
+    why: 'a person Google is linked to by their sub is refused once their new Google address is somebody else’s: the address decides, not the sub (D-250)',
+    file: BETTER_AUTH,
+    find: '    if (linked !== undefined) return;\n',
+    replace: '',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-owned-account-linked-by-address',
+    why: 'Google signs in to an account single sign-on owns by address, past the provider that decides who still works there (D-250)',
+    file: BETTER_AUTH,
+    find: '        ? sso.length > 0 ||\n          held.some(',
+    replace: '        ? false ||\n          held.some(',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-second-sub-linked-by-address',
+    why: 'a second Google sub carrying the address of an account Google is linked to is added beside the first, and signs in as the person it was (D-250)',
+    file: BETTER_AUTH,
+    find: '(row) => row.provider_id === GOOGLE_PROVIDER_ID && row.account_id !== account.accountId,',
+    replace: '(row) => row.provider_id === GOOGLE_PROVIDER_ID && false,',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-made-account-not-marked',
+    why: 'an account Google made passes for one made by email, and is sent sign-in links it should never get (D-250)',
+    file: BETTER_AUTH,
+    find: '                googleMade: google,\n',
+    replace: '                googleMade: false,\n',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
+    id: 'google-lost-sign-up-race-failed',
+    why: 'two first Google sign-ins of one person at once: the tab that lost is told it failed instead of being sent round (D-78)',
+    file: BETTER_AUTH,
+    find: '            ? { providerId: GOOGLE_PROVIDER_ID, accountId: round.googleAccountId }\n',
+    replace: '            ? undefined\n',
+    tests: [GOOGLE_SIGN_IN_TESTS],
   },
   {
     id: 'github-second-identity-linked-by-address',

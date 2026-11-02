@@ -8,6 +8,7 @@ import type { Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import type { SignInPolicy } from './better-auth';
 import { madeByGitHub } from './magic-link';
+import { GOOGLE_PROVIDER_ID } from './google';
 import { OIDC_PROVIDER_ID } from './oidc';
 
 /**
@@ -38,20 +39,24 @@ export const mySignIn = async (
     .where('provider_id', '=', 'credential')
     .where('password', 'is not', null)
     .executeTakeFirst();
-  const sso = await executor
-    .selectFrom('accounts')
-    .select('id')
-    .where('user_id', '=', userId)
-    .where('provider_id', '=', OIDC_PROVIDER_ID)
-    .executeTakeFirst();
+  const providers = new Set(
+    (
+      await executor
+        .selectFrom('accounts')
+        .select('provider_id')
+        .where('user_id', '=', userId)
+        .where('provider_id', 'in', [OIDC_PROVIDER_ID, GOOGLE_PROVIDER_ID])
+        .execute()
+    ).map((account) => account.provider_id),
+  );
   return {
     email: row.email,
     hasPassword: credential !== undefined,
     emailLinks: !madeByGitHub(row),
     github: row.github_id === null ? null : { login: row.github_login },
-    oidc: sso !== undefined,
-    // Made real when Google can be linked (D-250).
-    google: false,
+    oidc: providers.has(OIDC_PROVIDER_ID),
+    // Linked by its `sub`, whether Google made the account or it was linked by its address (D-250).
+    google: providers.has(GOOGLE_PROVIDER_ID),
     twoFactor: row.two_factor_enabled,
     // Required of an account a password signs into, while one does (D-239).
     twoFactorRequired: credential !== undefined && policy.requireTwoFactor && policy.passwordSignIn,
