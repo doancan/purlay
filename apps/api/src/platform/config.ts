@@ -92,16 +92,16 @@ export const Environment = Type.Object({
   /** A seed, as the GitHub app is (D-200): the OpenID Connect provider single sign-on goes through. The
    *  issuer, the client id and the client secret are all three or none; `OIDC_NAME` is the button's label.
    *  None is single sign-on off, and nothing is sent anywhere. */
+  OIDC_ISSUER: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
+  OIDC_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+  OIDC_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
+  OIDC_NAME: Type.Optional(Type.String({ minLength: 1, maxLength: OIDC_NAME_MAX })),
   /** A seed, as the GitHub app is (D-250): Google's OAuth client, the one provider whose address is fixed, so
    *  an operator gives only who this server is to it. Both or neither; neither is Google off. */
   GOOGLE_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_ID_MAX })),
   GOOGLE_CLIENT_SECRET: Type.Optional(
     Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_SECRET_MAX }),
   ),
-  OIDC_ISSUER: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
-  OIDC_CLIENT_ID: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
-  OIDC_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
-  OIDC_NAME: Type.Optional(Type.String({ minLength: 1, maxLength: OIDC_NAME_MAX })),
   /** A seed, as the GitHub app is (D-246): the GitHub App issues are written through — its id, its slug, its
    *  client id and secret, its private key (PEM; `\n` written out is a line break) and its webhook secret.
    *  All six or none. None is no App: nothing of issues is offered, and nothing changes. */
