@@ -43,7 +43,7 @@ declares:
 
 ## 3. Boot
 
-1. Parse `MODULES` (`module-kit`'s `resolve`). Unset means every bundled module; empty means the core alone. An
+1. Parse `MODULES` (`module-kit`'s `resolve`). Unset or blank means every bundled module (a blank variable is read as unset everywhere in the configuration); `none` means the core alone. An
    unknown or repeated id, an empty item, or a missing requirement stops the process before it listens; a
    cycle, a reserved id or a repeated capability are caught earlier, when the build's registry is made.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
@@ -158,8 +158,8 @@ until then it is a stated intent and not a guarantee.
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
 | A bundle has no cycle, repeat or double capability | the registry, and mutations in `scripts/mutations.ts` | 1 |
-| `MODULES` is valid | `resolve`, at boot | 3 |
-| The matrix exists from the start | CI cells for core-alone and everything, widened per step | 3 |
+| `MODULES` is valid | `resolve`, at boot | 12 |
+| The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
 | Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
 | Disabled ⇒ no tables | the CI matrix, per cell | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
@@ -168,7 +168,7 @@ until then it is a stated intent and not a guarantee.
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
 | Shell chunk holds no module code | `budget:web` shape check | 11 |
-| This file lists the manifests | a test | 3 |
+| This file lists the manifests | a test | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
 `modules/**`, `features/**`, `platform/**` or `packages/db/**` changes. It is the set of cells run, and the
@@ -189,8 +189,8 @@ Each step ships alone and can be reverted.
 | # | Step | Behaviour changes? |
 |---|---|---|
 | 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
-| 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 3 | no |
-| 3 | `MODULES` read at boot into the registry; the server lists enabled modules; the web registry skeleton; the CI matrix skeleton (core alone, everything) | no |
+| 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 12 | no |
+| 3 | *Folded into 12.* Reading `MODULES` at boot before anything can be turned off would accept a setting that does nothing — `MODULES=none` with chat still running — which `CONFIG.md` forbids: a variable is read when the feature that needs it is built. The server's list of modules and the web registry wait for the first module that has a screen (11) | — |
 | 4 | Wire unions opened, with aliases; a client ignores unknown frames (tested); the replay rule; `skipped` in the search response | no |
 | 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
 | 5b | Issues' thin slice for the dogfood team — open an issue from a message, link back — to prove the ports with a real user before the moves | new feature |

@@ -11980,8 +11980,8 @@ there is no broker).
 2. **A module is a unit that registers itself**, through a manifest (`MODULES.md` §2). Chat is a module, not the base:
    issues and notes run without it. Modules are **first-party code in this repository**. The manifest is not a trust
    boundary, and loading a module from elsewhere is not supported — `PRD.md` §6 keeps "plugin directory" a non-goal.
-3. **One build; the modules an instance runs are a setting.** `MODULES` unset means every bundled module, empty means
-   the core alone. An unknown or repeated id, a missing requirement, a cycle, or an id that is a core path segment
+3. **One build; the modules an instance runs are a setting.** `MODULES` unset or blank means every bundled module, `none`
+   means the core alone. An unknown or repeated id, a missing requirement, a cycle, or an id that is a core path segment
    stops the process at boot. A disabled module is not mounted and its web chunk is never requested; a request for it
    gets the plain `404` of any unknown route, never a distinct answer.
 4. **Modules meet through the core, never through each other's code.** By events first; by a port the core defines
