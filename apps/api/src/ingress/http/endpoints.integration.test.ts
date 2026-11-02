@@ -119,6 +119,8 @@ const STEPS: readonly Step[] = [
   { id: 'getClientInfo', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getAuthMethods', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getMe', spec: () => ({}), status: 200 },
+  // The check is off in this server's configuration, so the answer is the empty one; `releases.integration.test.ts` has the rest.
+  { id: 'getLatestRelease', spec: () => ({}), status: 200 },
 
   // ── Workspaces
   { id: 'listWorkspaces', spec: () => ({}), status: 200 },

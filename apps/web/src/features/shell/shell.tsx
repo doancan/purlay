@@ -15,6 +15,7 @@ import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
 import { ConnectionBar } from './connection-bar';
+import { ReleaseNotesOnce } from '../about/release-notes-once';
 import { LostSends } from './lost-sends';
 import { ScreenBoundary } from './failure-boundary';
 import { UpdateBar } from './update-bar';
@@ -53,6 +54,7 @@ export const Shell = ({
                 <PresenceReader />
                 <AttentionReporter />
                 <LostSends />
+                <ReleaseNotesOnce />
                 <NavProvider>
                   <div className="flex h-screen bg-surface-100 text-ink">
                     <SidebarSlot />

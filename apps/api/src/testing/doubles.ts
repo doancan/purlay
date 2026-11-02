@@ -115,6 +115,8 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   SMTP_ALLOW_PLAINTEXT: false,
   GITHUB_URL: GITHUB_URL_DEFAULT,
   GITHUB_API_URL: GITHUB_API_URL_DEFAULT,
+  // A test never asks GitHub which release is newest; the one about it says what it asks with.
+  UPDATE_CHECK: false,
   ...overrides,
 });
 

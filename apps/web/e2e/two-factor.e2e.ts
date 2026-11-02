@@ -11,7 +11,7 @@
 import { createHmac } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { portFor, startFresh, type FreshServer } from './fresh';
-import { wallClock } from './support';
+import { wallClock, skipReleaseNotes } from './support';
 
 const PORT = portFor(90);
 const EMAIL = 'ayse@example.test';
@@ -50,6 +50,7 @@ const codeFor = (shownKey: string, steps = 0): string => {
 /** A browser with nobody in it, at the sign-in screen, after a right password. */
 const askedForTheCode = async (browser: Browser, origin: string): Promise<Page> => {
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
   const page = await context.newPage();
   await page.goto('/sign-in');
   await page.getByRole('textbox', { name: 'Email address' }).fill(EMAIL);
@@ -67,6 +68,7 @@ test('the administrator turns it on, and then signs in with the password and a c
   if (fresh === null) throw new Error('the server did not start');
   const { origin, code, github } = fresh.manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(context);
   const send = async (path: string, data?: unknown): Promise<void> => {
     const response = await context.request.post(path, { data, headers: { origin } });
     expect(response.ok(), `${path}: ${String(response.status())} ${await response.text()}`).toBe(

@@ -17,6 +17,10 @@ export const keys = {
   mySignIn: ['my-sign-in'] as const,
   /** Where the caller is signed in (D-193). */
   mySessions: ['my-sessions'] as const,
+  /** The version this server runs, and the newest release as it learned it (D-248). */
+  latestRelease: ['latest-release'] as const,
+  /** The notes of the release the server runs, read from what the build carries (D-248). */
+  releaseNotes: (version: string) => ['release-notes', version] as const,
   /** Which ways in this server offers (D-138 §6). */
   authMethods: ['auth-methods'] as const,
   /** Whether the server is open to setup (D-179 §4). */

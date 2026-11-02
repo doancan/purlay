@@ -354,7 +354,7 @@ form leaves them — from `/` or from the menu — never on the welcome step, wh
 **Settings** (D-146). A page, `/w/<slug>/settings/<section>`, opened from the rail's gear, the
 account menu, the workspace menu's **Workspace settings** and the palette. The sidebar's place holds
 its navigation: **Back to <workspace>**, then **Account** — Profile, Preferences, Notifications,
-Keyboard shortcuts, Sessions & account — and, for an owner or an admin, **Workspace** — General,
+Keyboard shortcuts, Sessions & account, About — and, for an owner or an admin, **Workspace** — General,
 Members, Invitations, Integrations, Audit log, Data & retention. The current page is marked as the
 current channel is. Each page: a title, one sentence, then cards; a setting is a row with its label and
 a sentence on the left and its control on the right (stacked below 900px). The page is the main area's full width, from its left edge (D-177). A choice
@@ -379,6 +379,29 @@ it. On a narrow window the navigation opens as the sidebar does.
   one an hour). The letter ends with a link to `/mail/stop#…`, a page of its own that needs no sign-in: it asks
   *Stop these emails?* and stops them only on its button, so a mail scanner that opens it changes nothing.
 - **Keyboard shortcuts** — the reference, as a page.
+- **About** (D-248), for everyone — two cards. **Version**: *This server runs* the version it says it runs, and
+  *Newest release*, with its number, the day it was published and **View release on GitHub** (another tab), or
+  *Unknown* where the server could not learn it; below, one sentence in a status line — *You are up to date.*
+  (also for a server ahead of the newest release, as a build between releases is), *Version 1.2.0 is available.*
+  in the warning tone, or *Could not check for a newer version…*, which says the server could not reach GitHub or
+  its administrator turned the check off — never drawn as an error, because a server that does not call out is
+  working as configured. A version that is not three numbers cannot be compared and says *could not check*. While
+  it loads the card is a skeleton; the version and the newest release come in one request, and a request that failed (a refusal, a lapsed session, no network) is an error with **Retry** (*Could not load the version*), told apart from *Unknown*, which is the server's deliberate answer that it could not check. While the version loads, or after it failed, the release-notes window does not open. **What's new**, only where the
+  build carries notes for the running version, opens the window below. **Open source**: the licence
+  (`AGPL-3.0-or-later`) and the repository, a link to GitHub in another tab.
+- **What's new in Purlay x.y.z** (D-248) — a window, once per version per browser. The first screen a signed-in person
+  opens after the server was updated shows, over it, the notes of the version the server now runs: its title
+  names the version, its description the day it was released, and under it the categories (*Added*, *Changed*,
+  *Deprecated*, *Removed*, *Fixed*, *Security*) each with its lines, each line drawn as the markdown it was written
+  in — the area bold, a name in code. Long notes scroll inside the window, which a keyboard reaches by a stop of its
+  own. Focus is held in it; **Got it**, the close button, **Esc** and a click on the scrim close it, and each
+  of them remembers the version in this browser (`purlay.releaseNotesSeen`), so a reload, a return or another screen
+  never opens it again for that version and the next version opens it once more — on a brand-new server as on
+  an old one, with no special case. It is not drawn over the setup, the sign-in or the native hand-off, which are
+  not the signed-in frame. It shows nothing, and never holds the app up, when the browser's storage cannot be read
+  (rather than at every load), when the build has no notes for the version, or when the notes do not load — a notes file that fails to load is not remembered as *none*: the next screen tries again. Another
+  browser, or a person who cleared their data, sees it once more. The notes are in English, as written; the frame
+  around them is in the person's language. **What's new** on About opens the same window by hand and remembers nothing.
 - **A thread's GitHub** (D-246) — under the decision, only where the workspace has an installation in use and for
   a member of the channel: what the root points at (`acme/api#12 · Retry with jitter · Open`, a link built from its
   parts, with its state — *Open*, *Closed* or *Merged*, kept current by GitHub's events and changing under the open

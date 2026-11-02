@@ -80,6 +80,7 @@ import {
   WorkspaceMemberList,
 } from './api';
 import { Attachment, Channel, Message, Workspace } from './models';
+import { LatestReleaseAnswer } from './releases';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -162,6 +163,15 @@ export const ENDPOINTS = [
     path: '/api/auth/methods',
     auth: 'none',
     responses: { 200: AuthMethods },
+  }),
+
+  // ── What this server runs, and what is newest
+  read({
+    id: 'getLatestRelease',
+    method: 'GET',
+    path: '/api/releases/latest',
+    auth: 'session',
+    responses: { 200: LatestReleaseAnswer },
   }),
 
   // ── The person, and their workspaces

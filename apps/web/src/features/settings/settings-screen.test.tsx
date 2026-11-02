@@ -35,6 +35,7 @@ const ACCOUNT = [
   'Notifications',
   'Keyboard shortcuts',
   'Sessions & account',
+  'About',
 ];
 const WORKSPACE = ['General', 'Members', 'Invitations', 'Integrations', 'Audit log'];
 

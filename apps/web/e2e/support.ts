@@ -13,8 +13,39 @@
  * write budget (`429` + `Retry-After`) instead of failing on it, because a room of seventy
  * messages is more than one person's burst and a test must not be flaky for being thorough.
  */
-import { expect, type Locator, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { messageId, type Message } from '@purlay/types';
+
+/** Where the page remembers which version's release notes it has shown (D-248). */
+export const RELEASE_NOTES_SEEN_KEY = 'purlay.releaseNotesSeen';
+
+/** The version this checkout is: the root manifest's, which the server under test reports as its own. */
+export const RUNNING_VERSION = (
+  JSON.parse(readFileSync(join(import.meta.dirname, '../../../package.json'), 'utf8')) as {
+    version: string;
+  }
+).version;
+
+/**
+ * Makes a browser one that has already seen this version's release notes, as it is after the first
+ * visit. The window those notes open in is a dialog over the first signed-in screen of every new
+ * browser (D-248); a test that is about something else starts from a browser that has closed it. A key
+ * that is there is left as it is, so a test that sets its own is not overwritten.
+ */
+export const skipReleaseNotes = async (context: BrowserContext): Promise<void> => {
+  await context.addInitScript(
+    ({ key, version }) => {
+      try {
+        if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, version);
+      } catch {
+        // Storage that cannot be written: the page shows no window then either.
+      }
+    },
+    { key: RELEASE_NOTES_SEEN_KEY, version: RUNNING_VERSION },
+  );
+};
 
 export type Persona = 'dogancan' | 'alice' | 'bob' | 'carol';
 

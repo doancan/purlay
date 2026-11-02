@@ -15,6 +15,7 @@ const PAGES = [
   ['notifications', 'Notifications'],
   ['shortcuts', 'Keyboard shortcuts'],
   ['account', 'Sessions & account'],
+  ['about', 'About'],
   ['general', 'General'],
   ['members', 'Members'],
   ['invitations', 'Invitations'],

@@ -65,6 +65,16 @@ describe('loading configuration', () => {
     expect(config.NODE_ENV).toBe('development');
   });
 
+  test('UPDATE_CHECK is on unless it is turned off, and says which variable when it is garbled (D-248)', () => {
+    expect(loadConfig(valid).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: '' }).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: 'true' }).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: '1' }).UPDATE_CHECK).toBe(true);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: 'false' }).UPDATE_CHECK).toBe(false);
+    expect(loadConfig({ ...valid, UPDATE_CHECK: '0' }).UPDATE_CHECK).toBe(false);
+    expect(refusal({ ...valid, UPDATE_CHECK: 'sometimes' })).toContain('UPDATE_CHECK');
+  });
+
   test('defaults are applied, so an unset optional is not a failure', () => {
     const config = loadConfig(valid);
     expect(config.PORT).toBe(3001);

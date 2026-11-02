@@ -149,6 +149,9 @@ const SETUP_ROUTES: ReadonlyMap<string, 'auth' | 'setup' | 'setupSecrets'> = new
 const COSTLY_READS: ReadonlySet<string> = new Set([
   '/api/images',
   '/api/integrations/github/unfurl',
+  // The newest release is asked of GitHub once in six hours for everybody (D-248), but it is a call the
+  // server may make on a reader's behalf, so it is charged as one.
+  '/api/releases/latest',
 ]);
 
 /** The route that makes an invitation passport, charged to `PASSPORT_BUDGET`. */

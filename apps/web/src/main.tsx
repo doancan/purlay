@@ -8,6 +8,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { App } from './app/app';
+import { bundledReleaseNotes } from './features/about/release-notes-files';
 import { browserInvitationPorts, captureInvitation } from './features/invitations/pending';
 import { trackInputModality } from './ui/input-modality';
 import { browserNativePorts, captureNativeHandoff } from './features/native/pending';
@@ -26,6 +27,6 @@ if (root === null) throw new Error('index.html has no #root to mount into');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <App ports={{ releaseNotes: bundledReleaseNotes }} />
   </StrictMode>,
 );

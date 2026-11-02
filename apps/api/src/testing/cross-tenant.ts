@@ -767,6 +767,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'GET /api/client':
     'nobody is signed in yet: what this server is and the oldest client it serves, the same for every caller (D-190)',
+  'GET /api/releases/latest':
+    'the newest release of Purlay on GitHub, the same for everyone signed in, and names no workspace and holds nothing of any (D-248)',
   'POST /api/native/authorize':
     'hands the caller’s own session to their own application and names no workspace; the code is bound to the caller and a secret only the application holds (D-191)',
   'POST /api/native/token':

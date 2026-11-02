@@ -80,6 +80,8 @@ x-environment: &environment
   # Where GitHub is: github.com and its API unless set, for a GitHub Enterprise Server. Empty is unset.
   GITHUB_URL: ${GITHUB_URL:-}
   GITHUB_API_URL: ${GITHUB_API_URL:-}
+  # Whether the server asks GitHub which release is newest, for About (D-248). `false` and it never does.
+  UPDATE_CHECK: ${UPDATE_CHECK:-true}
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
   # Who may make a workspace: GitHub logins, or `*`. Unset, only the first person in (D-155).

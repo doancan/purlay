@@ -13,6 +13,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { letterWith, linkIn, portFor, startFresh, type FreshServer } from './fresh';
+import { skipReleaseNotes } from './support';
 
 const PORT = portFor(70);
 
@@ -41,6 +42,7 @@ test('a sender with a name, the letter again, and an invited person by email', a
     colorScheme: 'dark',
     viewport: { width: 820, height: 900 },
   });
+  await skipReleaseNotes(context);
   const page = await context.newPage();
 
   await page.goto('/setup');
@@ -85,6 +87,8 @@ test('a sender with a name, the letter again, and an invited person by email', a
   expect(second).not.toBe(first);
 
   const reader = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+
+  await skipReleaseNotes(reader);
   const reading = await reader.newPage();
   await reading.goto(first);
   await expect(reading.getByRole('heading', { name: 'This link does not open' })).toBeVisible();
@@ -114,6 +118,7 @@ test('a sender with a name, the letter again, and an invited person by email', a
   const invitation = await letterWith(mailbox, /You have been invited/);
   const invite = linkIn(invitation, /\/invite#[0-9a-f]{64}/);
   const invitee = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  await skipReleaseNotes(invitee);
   const guest = await invitee.newPage();
   await guest.goto(invite);
   await expect(guest.getByRole('heading', { name: 'You have been invited' })).toBeVisible();

@@ -12,6 +12,31 @@ import { CATEGORIES, NOTES_HEADING, NOTHING, problemsIn } from './changelog';
 
 const CHANGELOG = join(import.meta.dir, '../docs/changelog');
 
+// The scripts depend on no package, so that a release can be cut from a bare checkout; the client reads the
+// notes with the lists in `@purlay/types`, and this is what keeps the two one.
+describe('the shape the client reads', () => {
+  const client = readFileSync(join(import.meta.dir, '../packages/types/src/releases.ts'), 'utf8');
+
+  test('is the shape the judge holds: the same categories in the same order, the same heading', () => {
+    const listed = /RELEASE_CATEGORIES = \[([^\]]*)\] as const/.exec(client)?.[1] ?? '';
+    expect([...listed.matchAll(/'([A-Za-z]+)'/g)].map((match) => match[1])).toEqual([
+      ...CATEGORIES,
+    ]);
+    const heading = /RELEASE_NOTES_HEADING = (\/.*\/);/.exec(client)?.[1];
+    expect(heading).toBeDefined();
+    // The same pattern, however the dash is written in each source: judged by what each accepts.
+    const mine = new RegExp(heading?.slice(1, -1) ?? '');
+    for (const line of [
+      '# Purlay v0.1.0 — 2026-10-26',
+      '# Purlay v0.1.0 - 2026-10-26',
+      '# Purlay v0.1 — 2026-10-26',
+      '# Purlay v0.1.0 — 2026-10-26 ',
+    ]) {
+      expect(mine.test(line)).toBe(NOTES_HEADING.test(line));
+    }
+  });
+});
+
 describe('what the judge refuses', () => {
   const good =
     '### Added\n\n- **Messages** — a thing (D-1)\n\n### Fixed\n\n- **Search** — another\n';

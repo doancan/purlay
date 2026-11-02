@@ -872,6 +872,21 @@ describe('the endpoints', () => {
     });
   });
 
+  test('the version this server runs and the newest release it learned of (D-248)', async () => {
+    const release = {
+      version: '1.3.0',
+      url: 'https://github.com/doancan/purlay/releases/tag/v1.3.0',
+      publishedAt: '2026-10-30T08:00:00.000Z',
+    };
+    const newest = harness({ current: '1.2.3', latest: release });
+    expect(await newest.api.latestRelease()).toEqual({ current: '1.2.3', latest: release });
+    expect(newest.calls[0]).toMatchObject({ method: 'GET', url: '/api/releases/latest' });
+    expect(await harness({ current: '1.2.3', latest: null }).api.latestRelease()).toEqual({
+      current: '1.2.3',
+      latest: null,
+    });
+  });
+
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
     const methods = harness({
       github: false,
