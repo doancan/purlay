@@ -139,6 +139,26 @@ describe('the Google definition', () => {
     expect(JSON.stringify(lines)).not.toContain('oidc sign-in');
   });
 
+  test('the address is told proven only where it is Google’s; the generic provider’s always is', async () => {
+    const outside = { sub: '1045', email: 'ada@sirket.com' };
+    const google = googleDefinition(ISSUER, admitting);
+    const told = async (
+      definition: OidcDefinition | undefined,
+      behaviour: OidcBehaviour,
+      person: OidcPerson,
+    ): Promise<unknown> =>
+      ((await verifying(definition, behaviour, [], person)).outcome as { user: unknown }).user;
+    expect(await told(google, {}, outside)).toMatchObject({ emailVerified: false });
+    expect(await told(google, { claims: { hd: 'sirket.com' } }, outside)).toMatchObject({
+      emailVerified: true,
+    });
+    expect(await told(google, {}, { sub: '1045', email: 'ada@gmail.com' })).toMatchObject({
+      emailVerified: true,
+    });
+    expect(await told(OIDC_DEFINITION, {}, outside)).toMatchObject({ emailVerified: true });
+    expect(await told(undefined, {}, outside)).toMatchObject({ emailVerified: true });
+  });
+
   test('a key set that cannot be had is GOOGLE_UNAVAILABLE', async () => {
     const { refused } = await verifying(googleDefinition(ISSUER, admitting), {
       jwks: 'unreachable',

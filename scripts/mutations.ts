@@ -10378,6 +10378,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: [GOOGLE_SIGN_IN_TESTS],
   },
   {
+    id: 'google-newcomer-address-always-proven',
+    why: 'an account Google makes at an address Google merely knows is stored verified, so GitHub or single sign-on links into it by that address (D-250 §3)',
+    file: GOOGLE,
+    find: "  emailVerified: (claims, email) => authoritativeForGoogle(email, claims['hd']),\n",
+    replace: '  emailVerified: () => true,\n',
+    tests: [GOOGLE_SIGN_IN_TESTS],
+  },
+  {
     id: 'google-outside-the-handler',
     why: 'a Google sign-in served outside the handler makes an account not marked google_made, which passes for one made by email (D-250)',
     file: BETTER_AUTH,

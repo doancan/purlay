@@ -12090,7 +12090,12 @@ own way of being believed — and the checks are D-200's, not a second copy of t
    person who registered a Google account on it would be signed in as the person it was. That is refused as
    `email-unverified`, and nothing is written. **No account at the address** is a sign-up and follows the server's own
    rules, so a newcomer at an outside address may sign up: the question was never whether Google may vouch for
-   somebody's mailbox but whether it may be used to take another person's account.
+   somebody's mailbox but whether it may be used to take another person's account. **The same rule says what an
+   account Google makes keeps**: `users.email_verified` is true only where the address is Google's to vouch for
+   (`OidcDefinition.emailVerified`, which the generic provider leaves out and so always tells the library `true`). An
+   account Google made at an outside address is therefore not one GitHub or single sign-on links into by that address
+   — the library's own gate refuses it (`email-taken`) — and nobody who later holds the address takes it that way;
+   Google signs it in by the `sub` as any other.
 4. **An account Google made is marked.** `users.google_made` (migration 0078) is set in the sign-up that Google's
    callback makes, and nowhere else; an account made by email and later linked to Google keeps it false. It is the
    same distinction `github_id` carries for GitHub's, and it is what §6 needs.
@@ -12147,7 +12152,13 @@ own way of being believed — and the checks are D-200's, not a second copy of t
 
 **Accepted.** A person whose `hd`-less address is outside Gmail cannot link an existing account by Google, and is told
 `email-unverified`: they sign in the way the account was made, or an administrator invites them. A Workspace address
-whose `hd` is missing from the token is treated as outside Gmail. Google may show an unpublished OAuth client only to
+whose `hd` is missing from the token is treated as outside Gmail. An account Google made at an outside address has an
+unproven address (§3): it is signed into by Google alone, is sent no sign-in letter (`fateOf` answers nothing for an
+unproven address, as for any) — so with Google disconnected it has no way in of its own, unlike one at a Gmail or `hd`
+address, which gets its links back (§6) — and GitHub or single sign-on refuses it as `email-taken`. An account Google made at a
+Gmail or `hd` address is proven, so GitHub or single sign-on carrying the same verified address links into it, as
+either links into an account GitHub made. That order is not blocked: Google is refused an account single sign-on is
+linked to (§5), but single sign-on is not refused an account Google is linked to. Google may show an unpublished OAuth client only to
 its test users; the operator note in `CONFIG.md` says to publish it.
 
 **Cost of reversing.** Disconnect Google (`DELETE /api/server/google`) and no route answers, the button disappears and
