@@ -1,7 +1,7 @@
 /**
  * How this server signs people in (#81, D-138 §6), asked before anybody is: the sign-in screen offers
  * only what works. GitHub where an app is connected; single sign-on where a provider is (D-200); Google where its client is
- * (D-250); email when the server can send a link — when the
+ * (D-251); email when the server can send a link — when the
  * instance, built from the server's settings (D-179 §6), has a relay to mail one through. A server with
  * neither is waiting for its setup (D-179 §4), and says so with two `false`. `signUp` is who may make
  * an account (R51): the sign-in screen offers "Create an account" under `open` only. `password` is whether the

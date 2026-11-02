@@ -26,7 +26,7 @@ describe('where GitHub sends the browser back (D-179, R13)', () => {
     expect(OIDC_CALLBACK).toBe('/auth/callback/oidc');
   });
 
-  test('and where Google does (D-250): a start of ours, the library’s callback, and Google’s issuer', () => {
+  test('and where Google does (D-251): a start of ours, the library’s callback, and Google’s issuer', () => {
     expect(GOOGLE_START_PATH).toBe('/auth/google');
     expect(GOOGLE_CALLBACK).toBe('/auth/callback/google');
     expect(GOOGLE_ISSUER).toBe('https://accounts.google.com');

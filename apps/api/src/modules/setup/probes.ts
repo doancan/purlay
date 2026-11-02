@@ -331,7 +331,7 @@ export const probeOidc = async (
   await probeProvider(credentials, undefined, `${appUrl}${OIDC_CALLBACK}`, { fetch, log });
 
 /**
- * Google tried as any provider is (D-250): the same three calls, at Google's issuer — `issuer` is the
+ * Google tried as any provider is (D-251): the same three calls, at Google's issuer — `issuer` is the
  * sign-in's own (`GOOGLE_ISSUER`, or a test's stand-in) — through Google's definition, with Google's callback
  * as the redirect address. Nothing is asked of Google until an administrator presses the button.
  */

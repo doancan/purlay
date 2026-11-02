@@ -14,7 +14,7 @@ import { OIDC_PROVIDER_ID } from './oidc';
 /**
  * The ways an account signs in: its address, whether a link to it signs in — an account made by
  * email, linked to GitHub or not, and never one GitHub made (D-138 §2), nor one Google made while
- * Google is connected (D-250) — and its GitHub account, if any.
+ * Google is connected (D-251) — and its GitHub account, if any.
  */
 export const mySignIn = async (
   executor: Executor,
@@ -64,7 +64,7 @@ export const mySignIn = async (
     emailLinks: !madeByGitHub(row) && !(googleConnected && madeByGoogle(row)),
     github: row.github_id === null ? null : { login: row.github_login },
     oidc: providers.has(OIDC_PROVIDER_ID),
-    // Linked by its `sub`, whether Google made the account or it was linked by its address (D-250).
+    // Linked by its `sub`, whether Google made the account or it was linked by its address (D-251).
     google: providers.has(GOOGLE_PROVIDER_ID),
     twoFactor: row.two_factor_enabled,
     // Required of an account a password signs into, while one does (D-239).

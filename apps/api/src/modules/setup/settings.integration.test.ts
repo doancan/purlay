@@ -855,7 +855,7 @@ describe('integration: the GitHub App in the settings (D-246)', () => {
   });
 });
 
-describe('integration: Google in the settings (D-250)', () => {
+describe('integration: Google in the settings (D-251)', () => {
   const column = async (db: Executor): Promise<{ id: string | null; secret: string | null }> =>
     await db
       .selectFrom('server_settings')

@@ -980,7 +980,7 @@ describe('the GitHub App is a setting, off while unset (D-246)', () => {
   });
 });
 
-describe('Google sign-in is a seed of two variables, both or neither (D-250)', () => {
+describe('Google sign-in is a seed of two variables, both or neither (D-251)', () => {
   const bare = Object.fromEntries(
     Object.entries(valid).filter(([key]) => !key.startsWith('GOOGLE_CLIENT_')),
   );

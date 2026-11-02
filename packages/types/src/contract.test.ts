@@ -655,7 +655,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
   });
 });
 
-describe('signing in with Google (D-250)', () => {
+describe('signing in with Google (D-251)', () => {
   const methods = {
     github: false,
     email: true,

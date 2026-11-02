@@ -273,7 +273,7 @@ export const connectOidc = async (
 /**
  * Google's OAuth client tried under the administrator's authority — Google's discovery, its keys and the
  * client's credentials (`probeGoogle`, at the sign-in's own issuer) — and, only if it all worked, kept and
- * served (D-250). The secret is sealed in the settings and never answered.
+ * served (D-251). The secret is sealed in the settings and never answered.
  */
 export const connectGoogle = async (
   dependencies: ServerAdminDependencies & {
