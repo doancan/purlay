@@ -189,7 +189,7 @@ Each step ships alone and can be reverted.
 | # | Step | Behaviour changes? |
 |---|---|---|
 | 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
-| 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only; old and new schemas compared on a copy | no |
+| 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 3 | no |
 | 3 | `MODULES` read at boot into the registry; the server lists enabled modules; the web registry skeleton; the CI matrix skeleton (core alone, everything) | no |
 | 4 | Wire unions opened, with aliases; a client ignores unknown frames (tested); the replay rule; `skipped` in the search response | no |
 | 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
