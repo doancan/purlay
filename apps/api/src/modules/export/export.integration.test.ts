@@ -22,7 +22,7 @@ import { aMemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { recordAudit } from '../audit/audit';
 import { sendMessage } from '../messages/messages';
-import { everyChannel, exportWorkspace, TABLE_ORDER } from './export';
+import { everyChannel, exportWorkspace, schemaOf, TABLE_ORDER } from './export';
 import { COLUMNS, EXCLUDED, MIGRATOR_TABLES, type ExportedTable } from './tables';
 
 afterAll(async () => {
@@ -564,6 +564,17 @@ describe('integration: exporting a workspace', () => {
           ),
         ).toBe('absent');
       });
+    });
+  });
+});
+
+describe('integration: the schema an export is stamped with', () => {
+  test('is the core’s last migration, whatever a module has recorded (D-250)', async () => {
+    await withRollback(async (db) => {
+      const before = await schemaOf(db);
+      await sql`insert into kysely_migration (name, timestamp, checksum)
+        values ('zz-module/9999_later', '2099-01-01T00:00:00.000Z', repeat('0', 64))`.execute(db);
+      expect(await schemaOf(db)).toBe(before);
     });
   });
 });
