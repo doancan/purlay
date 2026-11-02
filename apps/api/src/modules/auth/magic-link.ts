@@ -8,7 +8,8 @@
  *   `SIGN_IN_LINK_NOT_FOUND` — for a link never made, spent, expired, or one whose account may not
  *   sign in by it. Whether an account has the address is never said.
  * - **Who a link signs in.** An account made by email or linked to GitHub, its address verified.
- *   Never an account GitHub made (D-138 §2: it is told to use GitHub instead), one single sign-on is linked
+ *   Never an account GitHub made (D-138 §2: it is told to use GitHub instead), nor one Google made while
+ *   Google is connected (D-250: told to use Google), one single sign-on is linked
  *   to (D-200 §6), an erased one, or one
  *   whose address was never proven: the library would remove its password and end its sessions
  *   (D-179 §4, measured) — the setup administrator's is such an account (Ruling R32). An address no
@@ -34,7 +35,7 @@ import { tokenDigest } from '../../platform/tokens';
 import { counted } from './counters';
 import type { SignInLinks } from './better-auth';
 import { OIDC_PROVIDER_ID } from './oidc';
-import { githubLetter } from './sign-in-letters';
+import { githubLetter, googleLetter } from './sign-in-letters';
 
 /** How many messages an address may be sent in an hour at one client's asking (O-4: provisional). */
 export const SIGN_IN_LINKS_PER_ADDRESS_AND_CLIENT = 5;
@@ -74,8 +75,15 @@ export const madeByGitHub = (account: {
   readonly github_connected_at: Date | null;
 }): boolean => account.github_id !== null && account.github_connected_at === null;
 
-/** What a request for an address comes to: a link, the word to use GitHub, or nothing at all. */
-type Fate = 'link' | 'github' | 'nothing';
+/**
+ * An account Google made, which never signs in by link while Google is connected (D-250). One made by
+ * email keeps its link once Google is linked to it too, as with GitHub.
+ */
+export const madeByGoogle = (account: { readonly google_made: boolean }): boolean =>
+  account.google_made;
+
+/** What a request for an address comes to: a link, the word to use GitHub or Google, or nothing at all. */
+type Fate = 'link' | 'github' | 'google' | 'nothing';
 
 /**
  * Whether a link to `email` may sign somebody in, read now. Asked when a link is asked for and again
@@ -87,10 +95,18 @@ const fateOf = async (
   email: string,
   signUp: SignInLinks['signUp'],
   ssoConnected: boolean,
+  googleConnected: boolean,
 ): Promise<Fate> => {
   const account = await executor
     .selectFrom('users')
-    .select(['id', 'github_id', 'github_connected_at', 'deleted_at', 'email_verified'])
+    .select([
+      'id',
+      'github_id',
+      'github_connected_at',
+      'google_made',
+      'deleted_at',
+      'email_verified',
+    ])
     .where('email', '=', email)
     .executeTakeFirst();
   // No account: the link makes one, where anybody may (D-179 §5) — and, where only the invited may, for
@@ -119,7 +135,9 @@ const fateOf = async (
         .where('provider_id', '=', OIDC_PROVIDER_ID)
         .executeTakeFirst();
   if (sso !== undefined) return 'nothing';
-  return madeByGitHub(account) ? 'github' : 'link';
+  if (madeByGitHub(account)) return 'github';
+  // Google made it and is connected: its way in is Google. Disconnected, the link is its way back in again.
+  return googleConnected && madeByGoogle(account) ? 'google' : 'link';
 };
 
 /** What a counter of ours is kept under in `rate_limits`: a purpose and a digest, never an address. */
@@ -193,7 +211,7 @@ export const requestSignInLink = async (
   // After the answer, what depends on the address: whether it has an account, and the link the library
   // makes for it — a row written and a message queued, which an answer that waited for them would time.
   later(async () => {
-    const fate = await fateOf(database, clock, email, links.signUp, links.oidc);
+    const fate = await fateOf(database, clock, email, links.signUp, links.oidc, links.google);
     if (fate === 'link') {
       await links.issue(email, {
         locale: input.locale,
@@ -202,6 +220,8 @@ export const requestSignInLink = async (
       });
     } else if (fate === 'github') {
       links.outbox.post(githubLetter(email, input.locale, appUrl), 'sign-in');
+    } else if (fate === 'google') {
+      links.outbox.post(googleLetter(email, input.locale, appUrl), 'sign-in');
     }
   });
 };
@@ -252,7 +272,7 @@ export const previewSignInLink = async (
   const email = row === undefined ? undefined : addressOf(row.value);
   if (
     email === undefined ||
-    (await fateOf(database, clock, email, links.signUp, links.oidc)) !== 'link'
+    (await fateOf(database, clock, email, links.signUp, links.oidc, links.google)) !== 'link'
   ) {
     throw linkNotFound();
   }

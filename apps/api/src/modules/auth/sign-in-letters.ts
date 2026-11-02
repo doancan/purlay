@@ -1,6 +1,6 @@
 /**
- * The two messages signing in by email sends (D-138 §2, §4): a link, and — to the address of an
- * account GitHub made — a word to sign in with GitHub instead. In the language the person asked in
+ * The messages signing in by email sends (D-138 §2, §4): a link, and — to the address of an
+ * account GitHub or Google made — a word to sign in with that provider instead (D-250). In the language the person asked in
  * (D-41), plain text, and the same as HTML with the one address made a link.
  */
 import { SIGN_IN_LINK_TTL_MINUTES, type EmailSignInRequest } from '@purlay/types';
@@ -19,6 +19,11 @@ const WORDS = {
       'Somebody asked to sign in to Purlay with this address. It belongs to an account that signs ' +
       `in with GitHub — use “Continue with GitHub” at ${url}.\n\n` +
       'If it was not you, you can ignore this message.',
+    googleSubject: 'Signing in to Purlay',
+    google: (url: string): string =>
+      'Somebody asked to sign in to Purlay with this address. It belongs to an account that signs ' +
+      `in with Google — use “Continue with Google” at ${url}.\n\n` +
+      'If it was not you, you can ignore this message.',
   },
   tr: {
     linkSubject: 'Purlay giriş bağlantın',
@@ -29,6 +34,10 @@ const WORDS = {
     github: (url: string): string =>
       'Biri bu adresle Purlay’a girmek istedi. Bu adres GitHub ile giriş yapan bir hesaba ait — ' +
       `${url} adresinde “GitHub ile devam et” düğmesini kullan.\n\nSen değilsen bu mesajı görmezden gelebilirsin.`,
+    googleSubject: 'Purlay’a giriş',
+    google: (url: string): string =>
+      'Biri bu adresle Purlay’a girmek istedi. Bu adres Google ile giriş yapan bir hesaba ait — ' +
+      `${url} adresinde “Google ile devam et” düğmesini kullan.\n\nSen değilsen bu mesajı görmezden gelebilirsin.`,
   },
 } as const;
 
@@ -39,3 +48,7 @@ export const linkLetter = (to: string, locale: SignInLocale, url: string): MailM
 /** The word to an account GitHub made: no link, and the way it does sign in (D-138 §2). */
 export const githubLetter = (to: string, locale: SignInLocale, appUrl: string): MailMessage =>
   textLetter(to, WORDS[locale].githubSubject, WORDS[locale].github(appUrl), appUrl);
+
+/** The word to an account Google made: no link, and the way it does sign in (D-250). */
+export const googleLetter = (to: string, locale: SignInLocale, appUrl: string): MailMessage =>
+  textLetter(to, WORDS[locale].googleSubject, WORDS[locale].google(appUrl), appUrl);
