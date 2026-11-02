@@ -3390,6 +3390,17 @@ recorded checksum means and makes any comment edit invisible, including a mislea
 
 ---
 
+*Amended 2026-11-02 — a module has a set of its own (D-250):* the migrator takes the core's directory and the
+sets of the enabled modules, each a directory of its own, and applies the core's first. A module's rows are
+recorded as `<module>/<file>`; **the rows that exist are left as they are and are the core's**, so no database is
+rewritten and the restore rehearsal's dump does not move. Order, checksum, a missing file and an out-of-order file
+are checked within a set, never across sets, so two sets may both have a `0001` and a module that was off for
+releases opens where it stopped. Rows of a module this run does not carry are not an error: the migrator hands
+their names to the caller to log. The lock stays one, taken once for the whole run. The schema stamp of an export
+reads the core's rows only, so a module that is off does not change it. **Rejected — renaming the existing rows to
+`chat/…`:** `0055` selects one by name and would silently update nothing on a fresh database, and the rename
+gains nothing a new file under a module's directory does not.
+
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
 
 `createDatabase` set a pool size and nothing else (#243). With a pool of two, a third query waited 7,612 ms
