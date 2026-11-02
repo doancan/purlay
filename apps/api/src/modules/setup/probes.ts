@@ -27,6 +27,7 @@
 import net from 'node:net';
 import {
   normalisedMailbox,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   type ProbeReason,
   type ProbeResult,
@@ -49,8 +50,10 @@ import {
   tokenRequest,
   type Discovery,
   type OidcCredentials,
+  type OidcDefinition,
   type OidcFetch,
 } from '../auth/oidc';
+import { googleDefinition } from '../auth/google';
 import {
   GitHubRateLimited,
   GitHubUnauthorized,
@@ -324,6 +327,32 @@ export const probeOidc = async (
   _authority: ProbeAuthority,
   credentials: OidcCredentials,
   { fetch, appUrl, log }: OidcProbeDependencies,
+): Promise<ProbeResult> =>
+  await probeProvider(credentials, undefined, `${appUrl}${OIDC_CALLBACK}`, { fetch, log });
+
+/**
+ * Google tried as any provider is (D-250): the same three calls, at Google's issuer — `issuer` is the
+ * sign-in's own (`GOOGLE_ISSUER`, or a test's stand-in) — through Google's definition, with Google's callback
+ * as the redirect address. Nothing is asked of Google until an administrator presses the button.
+ */
+export const probeGoogle = async (
+  _authority: ProbeAuthority,
+  credentials: { readonly clientId: string; readonly clientSecret: string },
+  issuer: string,
+  { fetch, appUrl, log }: OidcProbeDependencies,
+): Promise<ProbeResult> =>
+  await probeProvider(
+    { issuer, ...credentials },
+    googleDefinition(issuer, undefined),
+    `${appUrl}${GOOGLE_CALLBACK}`,
+    { fetch, log },
+  );
+
+const probeProvider = async (
+  credentials: OidcCredentials,
+  definition: OidcDefinition | undefined,
+  redirectURI: string,
+  { fetch, log }: Pick<OidcProbeDependencies, 'fetch' | 'log'>,
 ): Promise<ProbeResult> => {
   const secrets = [credentials.clientSecret];
   const said = (error: unknown): string => {
@@ -332,12 +361,12 @@ export const probeOidc = async (
   };
   let metadata: Discovery;
   try {
-    const provider = createOidcProvider(credentials, 'probe', {
-      fetch,
-      clock: systemClock,
-      log,
-      onIdentity: (): void => undefined,
-    });
+    const provider = createOidcProvider(
+      credentials,
+      'probe',
+      { fetch, clock: systemClock, log, onIdentity: (): void => undefined },
+      definition,
+    );
     metadata = await provider.check();
   } catch (error) {
     if (error instanceof OidcDiscoveryError) {
@@ -357,7 +386,7 @@ export const probeOidc = async (
       {
         code: OIDC_PROBE_CODE,
         codeVerifier: 'purlay-probe-verifier-purlay-probe-verifier-purlay',
-        redirectURI: `${appUrl}${OIDC_CALLBACK}`,
+        redirectURI,
       },
       fetch,
     );
