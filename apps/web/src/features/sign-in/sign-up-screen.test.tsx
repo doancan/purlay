@@ -118,6 +118,34 @@ describe('the sign-up screen', () => {
     expect(named.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
   });
 
+  test('open with Google alone: its button, after single sign-on and GitHub when they are there', async () => {
+    const alone = await visit({
+      github: false,
+      email: false,
+      oidc: null,
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    expect(alone.getByRole('link', { name: 'Continue with Google' }).getAttribute('href')).toBe(
+      '/auth/google',
+    );
+    expect(alone.queryByText(/not set up|nothing to sign up/i)).toBeNull();
+    alone.unmount();
+    const all = await visit({
+      github: true,
+      email: true,
+      oidc: { name: null },
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    const links = [...all.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(links).toEqual(['/auth/oidc', '/auth/github', '/auth/google']);
+  });
+
   test('open without mail: GitHub only, and no form', async () => {
     const view = await visit({
       github: true,

@@ -11,6 +11,7 @@ import { ApiError } from '../../data/errors';
 import { installDom } from '../../testing/dom';
 import { anApi } from '../../testing/fake-api';
 import { renderApp } from '../../testing/render';
+import { expectNoAxeViolations } from '../../testing/axe';
 import { systemClock } from '../../system-clock';
 import type { Locale } from '../../i18n/types';
 
@@ -203,6 +204,71 @@ describe('what the screen offers is what the server has connected', () => {
       const view = await open(withOidc({ name: null }, { email: true }));
       const form = view.getByRole('form', { name: 'Sign in with a password' });
       expect(form.className).toContain('border-t-hairline');
+      view.unmount();
+    });
+  });
+
+  describe('Google (D-250)', () => {
+    const withGoogle = (over: Partial<AuthMethods> = {}): ReturnType<typeof anApi> =>
+      anApi({
+        me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
+        authMethods: () =>
+          Promise.resolve({
+            github: false,
+            email: false,
+            oidc: null,
+            google: true,
+            signUp: 'invite-only',
+            password: true,
+            ...over,
+          }),
+      });
+
+    test('single sign-on, GitHub and Google are offered in that order', async () => {
+      const view = await open(withGoogle({ github: true, oidc: { name: null } }));
+      const links = [...view.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+        a.getAttribute('href'),
+      );
+      expect(links).toEqual(['/auth/oidc', '/auth/github', '/auth/google']);
+      await expectNoAxeViolations(view.container);
+      view.unmount();
+    });
+
+    test('Google alone is the one button, and the server is not said to be unset', async () => {
+      const view = await open(withGoogle());
+      const links = [...view.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+        a.getAttribute('href'),
+      );
+      expect(links).toEqual(['/auth/google']);
+      expect(view.queryByText('This server is not set up yet')).toBeNull();
+      view.unmount();
+    });
+
+    for (const [locale, label, sentence] of [
+      [
+        'en',
+        'Continue with Google',
+        'Google did not answer. Try again in a moment, or sign in another way.',
+      ],
+      [
+        'tr',
+        'Google ile devam et',
+        'Google yanıt vermedi. Biraz sonra yeniden dene ya da başka bir yolla gir.',
+      ],
+    ] as const) {
+      test(`its label and its unavailable sentence, in ${locale}`, async () => {
+        const view = await open(withGoogle(), locale);
+        expect(view.getByRole('link', { name: label }).getAttribute('href')).toBe('/auth/google');
+        view.unmount();
+        expect(await saidAt(signInFailureHref('google-unavailable'), locale)).toBe(sentence);
+      });
+    }
+
+    test('its mark is the four-colour G, hidden from assistive technology', async () => {
+      const view = await open(withGoogle());
+      const svg = view.getByRole('link', { name: 'Continue with Google' }).querySelector('svg');
+      expect(svg?.getAttribute('aria-hidden')).toBe('true');
+      expect(svg?.querySelectorAll('path').length).toBe(4);
       view.unmount();
     });
   });
