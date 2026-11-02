@@ -344,6 +344,24 @@ describe('an invitation, opened by somebody who is not signed in', () => {
     });
   });
 
+  test('Google and mail: the email form is not alone, a rule parts it from the button', async () => {
+    const view = await asSignedOut({
+      authMethods: () =>
+        Promise.resolve({
+          github: false,
+          email: true,
+          oidc: null,
+          google: true,
+          signUp: 'invite-only',
+          password: true,
+        }),
+    });
+    const send = view.getByRole('button', { name: 'Email me a sign-in link' });
+    expect(send.closest('form')?.className).toContain('border-t-hairline');
+    expect(send.className).not.toContain('bg-accent');
+    view.unmount();
+  });
+
   test('Google: the passport is asked for first, and only when it is given does the page leave for /auth/google', async () => {
     const order: string[] = [];
     const left = spyOn(leave, 'to').mockImplementation((url) => {

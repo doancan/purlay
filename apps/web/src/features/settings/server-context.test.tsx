@@ -18,6 +18,7 @@ describe('the client the Server cards call through', () => {
       settings: () => Promise.reject(new Error('unused')),
       github: () => Promise.reject(new Error('unused')),
       oidc: () => Promise.reject(new Error('unused')),
+      google: () => Promise.reject(new Error('unused')),
       smtp: () => Promise.reject(new Error('unused')),
       githubApp: () => Promise.reject(new Error('unused')),
       disconnect: () => Promise.reject(new Error('unused')),

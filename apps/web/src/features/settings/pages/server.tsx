@@ -15,6 +15,7 @@ import { NotFound } from '../../shell/not-found';
 import { SettingsPage } from '../page';
 import { SERVER_SETTINGS_KEY, useServerClient } from '../server-context';
 import { EmailCard, GitHubCard } from './server-channels';
+import { GoogleCard } from './server-google';
 import { OidcCard } from './server-oidc';
 import { GitHubAppCard } from './server-github-app';
 import { AccountsCard } from './server-accounts';
@@ -54,6 +55,7 @@ export const ServerPage = (): React.JSX.Element => {
       ) : (
         <>
           <GitHubCard view={settings.data} />
+          <GoogleCard view={settings.data} />
           <OidcCard view={settings.data} />
           <EmailCard view={settings.data} />
           <GitHubAppCard view={settings.data} />
