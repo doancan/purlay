@@ -266,6 +266,7 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(await methods(server)).toEqual({
         github: false,
         email: false,
+        google: false,
         oidc: null,
         signUp: 'invite-only',
         password: true,
@@ -280,6 +281,7 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(await methods(server)).toEqual({
         github: true,
         email: false,
+        google: false,
         oidc: null,
         signUp: 'open',
         password: true,
@@ -300,6 +302,7 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(await methods(server)).toEqual({
         github: false,
         email: false,
+        google: false,
         oidc: null,
         signUp: 'open',
         password: true,
@@ -319,6 +322,7 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(await methods(server)).toEqual({
         github: false,
         email: false,
+        google: false,
         oidc: null,
         signUp: 'invite-only',
         password: true,
@@ -331,6 +335,7 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(await methods(server)).toEqual({
         github: false,
         email: true,
+        google: false,
         oidc: null,
         signUp: 'open',
         password: true,
@@ -358,6 +363,7 @@ describe('integration: a change of the settings, served without a restart', () =
       expect(await methods(server)).toEqual({
         github: false,
         email: false,
+        google: false,
         oidc: null,
         signUp: 'open',
         password: true,
@@ -435,6 +441,7 @@ describe('integration: a change of the settings, served without a restart', () =
     expect(await methods(server)).toEqual({
       github: false,
       email: false,
+      google: false,
       oidc: null,
       signUp: 'invite-only',
       password: true,

@@ -148,6 +148,7 @@ describe('integration: a server built from its settings', () => {
       expect(await (await app.handle(new Request(`${ORIGIN}/api/auth/methods`))).json()).toEqual({
         github: true,
         email: true,
+        google: false,
         oidc: null,
         signUp: 'open',
         password: true,
@@ -176,6 +177,7 @@ describe('integration: a server built from its settings', () => {
     expect(await (await app.handle(new Request(`${ORIGIN}/api/auth/methods`))).json()).toEqual({
       github: true,
       email: false,
+      google: false,
       oidc: null,
       signUp: 'open',
       password: true,
@@ -195,6 +197,7 @@ describe('integration: a server built from its settings', () => {
     expect(await (await app.handle(new Request(`${ORIGIN}/api/auth/methods`))).json()).toEqual({
       github: false,
       email: false,
+      google: false,
       oidc: null,
       signUp: 'open',
       password: true,

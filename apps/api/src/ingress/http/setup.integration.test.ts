@@ -401,6 +401,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
     expect(await methods.json()).toEqual({
       github: true,
       email: false,
+      google: false,
       oidc: null,
       signUp: 'invite-only',
       password: true,
@@ -427,6 +428,7 @@ describe('integration: the setup over HTTP, start to finish', () => {
     expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
       github: true,
       email: true,
+      google: false,
       oidc: null,
       signUp: 'invite-only',
       password: true,
@@ -1273,6 +1275,7 @@ describe('integration: the finish rule', () => {
     expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
       github: true,
       email: false,
+      google: false,
       oidc: null,
       signUp: 'invite-only',
       password: true,
@@ -1317,6 +1320,7 @@ describe('integration: the finish rule', () => {
     expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
       github: false,
       email: true,
+      google: false,
       oidc: null,
       signUp: 'invite-only',
       password: true,
