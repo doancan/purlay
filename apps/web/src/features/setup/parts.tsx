@@ -97,7 +97,7 @@ export const ProbeFailure = ({
   channel,
 }: {
   readonly result: Extract<ProbeResult, { ok: false }>;
-  /** Whose try it was, where its words differ from GitHub's and the mail server's (D-200, D-250). */
+  /** Whose try it was, where its words differ from GitHub's and the mail server's (D-200, D-251). */
   readonly channel?: 'oidc' | 'google';
 }): React.JSX.Element => {
   const { t } = useI18n();

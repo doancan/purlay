@@ -208,7 +208,7 @@ describe('what the screen offers is what the server has connected', () => {
     });
   });
 
-  describe('Google (D-250)', () => {
+  describe('Google (D-251)', () => {
     const withGoogle = (over: Partial<AuthMethods> = {}): ReturnType<typeof anApi> =>
       anApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),

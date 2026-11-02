@@ -1,5 +1,5 @@
 /**
- * "Continue with Google": a link to `/auth/google` (`ProviderButton`), marked with Google's own "G" (D-250 §9).
+ * "Continue with Google": a link to `/auth/google` (`ProviderButton`), marked with Google's own "G" (D-251 §9).
  */
 import { GOOGLE_START_PATH } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';

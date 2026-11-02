@@ -1184,7 +1184,7 @@ address is verified, or (Google) the address belongs to an existing account and 
 says which check failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
 longer signs in to that account.
 
-**Google** (D-250) is a button of its own, *Continue with Google* (*Google ile devam et*), marked with Google's
+**Google** (D-251) is a button of its own, *Continue with Google* (*Google ile devam et*), marked with Google's
 four-colour "G" (the four colours are brand tokens, the same in every theme; nothing is loaded from Google), after
 GitHub's and before the email form, leaving for `/auth/google`; the sign-up screen and an invitation page offer it
 as they offer GitHub (the invitation page asks for its passport first). A server whose only way in is Google has
