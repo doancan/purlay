@@ -29,9 +29,10 @@ test.describe('About', () => {
     );
     const source = main.getByRole('region', { name: 'Open source' });
     await expect(source.getByText('AGPL-3.0-or-later')).toBeVisible();
-    await expect(
-      source.getByRole('link', { name: /github\.com\/doancan\/purlay/ }),
-    ).toHaveAttribute('href', 'https://github.com/doancan/purlay');
+    await expect(source.getByRole('link', { name: 'github.com/doancan/purlay' })).toHaveAttribute(
+      'href',
+      'https://github.com/doancan/purlay',
+    );
     await expectNoAxe();
   });
 

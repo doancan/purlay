@@ -173,7 +173,9 @@ describe('the About page', () => {
     });
     const card = within(view.getByRole('region', { name: 'Open source' }));
     expect(card.getByText('AGPL-3.0-or-later')).toBeDefined();
-    const repository = card.getByRole('link', { name: /github\.com\/doancan\/purlay/ });
+    const repository = card.getByRole('link', {
+      name: (name) => name.includes('github.com/doancan/purlay'),
+    });
     expect(repository.getAttribute('href')).toBe('https://github.com/doancan/purlay');
     expect(repository.getAttribute('target')).toBe('_blank');
     expect(repository.textContent).toContain('github.com/doancan/purlay');

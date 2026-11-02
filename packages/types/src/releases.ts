@@ -87,7 +87,8 @@ export const readReleaseNotes = (text: string): ReleaseNotes | null => {
   const groups: { category: ReleaseNotesGroup['category']; items: string[] }[] = [];
   let current: { category: ReleaseNotesGroup['category']; items: string[] } | undefined;
   for (const line of lines.slice(1)) {
-    const category = /^###\s+(.*?)\s*$/.exec(line)?.[1];
+    const category =
+      line.startsWith('###') && /^\s/.test(line.slice(3)) ? line.slice(3).trim() : undefined;
     if (category !== undefined) {
       const known = RELEASE_CATEGORIES.find((name) => name === category);
       current = known === undefined ? undefined : { category: known, items: [] };
