@@ -191,7 +191,7 @@ Each step ships alone and can be reverted.
 | 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
 | 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 12 | no |
 | 3 | *Folded into 12.* Reading `MODULES` at boot before anything can be turned off would accept a setting that does nothing — `MODULES=none` with chat still running — which `CONFIG.md` forbids: a variable is read when the feature that needs it is built. The server's list of modules and the web registry wait for the first module that has a screen (11) | — |
-| 4 | Wire unions opened, with aliases; a client ignores unknown frames (tested); the replay rule; `skipped` in the search response | no |
+| 4 | Wire unions opened, with aliases, **with the first module that has frames of its own** (5b); the web client already ignores unknown frames (D-82, tested) and a native client is checked first; the replay rule; `skipped` in the search response | no |
 | 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
 | 5b | Issues' thin slice for the dogfood team — open an issue from a message, link back — to prove the ports with a real user before the moves | new feature |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
