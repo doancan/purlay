@@ -1160,7 +1160,7 @@ describe('integration: Administration → Server — the sign-in policy (D-239)'
     for (const row of await trail(server)) expect(row.session).toBe(server.admin.sessionId);
   });
 
-  test('passwords are turned off only while GitHub or single sign-on serves — the mail relay is not one of them', async () => {
+  test('passwords are turned off only while GitHub, Google or single sign-on serves — the mail relay is not one of them', async () => {
     const server = await aServer();
     const relay = await aRelay();
     await call(server, 'POST', '/api/server/smtp', { ...as(server), body: smtpBody(relay) });
@@ -1185,7 +1185,7 @@ describe('integration: Administration → Server — the sign-in policy (D-239)'
     ).toBe(204);
   });
 
-  test('with passwords off the last of GitHub and single sign-on stays, confirmed or not; the relay and the other provider may go', async () => {
+  test('with passwords off the last of GitHub, Google and single sign-on stays, confirmed or not; the relay and the other provider may go', async () => {
     const server = await aServer();
     const relay = await aRelay();
     const { body } = await aProvider();
