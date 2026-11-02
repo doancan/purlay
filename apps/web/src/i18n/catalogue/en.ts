@@ -150,7 +150,7 @@ export const en = {
   'signIn.googleUnavailable':
     'Google did not answer. Try again in a moment, or sign in another way.',
   'signIn.emailUnverified':
-    'Single sign-on did not say your email address is verified, so it cannot sign you in. Ask whoever runs your organisation’s sign-in to verify it.',
+    'This sign-in didn’t prove the address is yours, so it can’t open the account that uses it. Sign in the way you did before, or ask for an invitation.',
   'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',
   'signIn.failed': 'Sign-in did not finish — try again.',
   'signIn.ended': 'Your session ended. Sign in again to carry on.',
@@ -2445,11 +2445,13 @@ export const en = {
     'Check that the redirect address below is registered for this client at the provider.',
   'setup.oidc.reason.unexpected-reply.fix2': 'If it stays, the reply below says what answered.',
   // What the reasons mean for Google's try: its address is fixed, so none of them is about an issuer.
-  'setup.google.reason.secret-rejected.what': 'Google knows this client and refused its secret.',
+  // Google answers an unknown client ID as it answers a wrong secret, so neither is named alone.
+  'setup.google.reason.secret-rejected.what':
+    'Google refused this client ID and secret. Check both against the Google Cloud console.',
   'setup.google.reason.secret-rejected.fix1':
-    'Copy the client secret from the OAuth client’s page in Google Cloud again.',
+    'Copy the client ID and the client secret from the OAuth client’s page in Google Cloud again.',
   'setup.google.reason.secret-rejected.fix2':
-    'A secret may have been disabled or replaced: make a new one and paste it here.',
+    'The secret may have been disabled or replaced, or the client deleted: make a new secret and paste both here.',
   'setup.google.reason.client-unknown.what': 'Google does not know this client.',
   'setup.google.reason.client-unknown.fix1': 'Copy the client ID from Google Cloud again.',
   'setup.google.reason.client-unknown.fix2':

@@ -166,7 +166,9 @@ const GOOGLE_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
   'secret-rejected': {
     what: 'setup.google.reason.secret-rejected.what',
     fix: ['setup.google.reason.secret-rejected.fix1', 'setup.google.reason.secret-rejected.fix2'],
-    field: 'clientSecret',
+    // Google's token endpoint answers `invalid_client` for an ID it does not know as for a wrong secret, so
+    // which of the two is wrong is not known: neither field is outlined (D-250 §7).
+    field: null,
     stoppedAt: null,
   },
   'client-unknown': {
