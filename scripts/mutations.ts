@@ -12371,4 +12371,29 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'if (false) {',
     tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
   },
+  {
+    id: 'migration-set-dormant-is-error',
+    why: 'a module that is off would stop the process at boot, for rows it has no files for (D-250)',
+    file: 'packages/db/src/migrator.ts',
+    find: 'if (rows === undefined) dormant.push(row);',
+    replace:
+      'if (rows === undefined) throw new Error(`corrupted migrations: ${row.name} is missing`);',
+    tests: ['packages/db/src/migrator.integration.test.ts'],
+  },
+  {
+    id: 'migration-set-prefix-lost',
+    why: 'two sets with the same file name would record one row and the second would never run (D-250)',
+    file: 'packages/db/src/migrator.ts',
+    find: 'name: `${prefix}${file.replace(',
+    replace: 'name: `${file.replace(',
+    tests: ['packages/db/src/migrator.integration.test.ts'],
+  },
+  {
+    id: 'export-stamp-reads-modules',
+    why: 'an export would be stamped with a module migration, so a module that is off changes its shape (D-250)',
+    file: 'apps/api/src/modules/export/export.ts',
+    find: " where name not like '%/%'",
+    replace: '',
+    tests: ['apps/api/src/modules/export/export.integration.test.ts'],
+  },
 ];
