@@ -2064,7 +2064,7 @@ export const tr = {
   'user.menu': 'Hesap',
   'user.setAway': 'Uzakta görün',
   'user.setActive': 'Etkin görün',
-  'user.awayFailed': 'Durumunuz değiştirilemedi.',
+  'user.awayFailed': 'Durumun değiştirilemedi.',
   'user.signOut': 'Çıkış yap',
   'user.signOutEverywhere': 'Her yerden çıkış yap',
   'user.signOutEverywhere.entry': 'Her yerden çıkış yap…',
