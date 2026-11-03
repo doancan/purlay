@@ -6,14 +6,16 @@ import { useEffect, useMemo } from 'react';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
-import { useRoute } from '../../router/router-provider';
+import { Link, useRoute } from '../../router/router-provider';
+import { buttonStyle } from '../../ui/button';
+import { useRuns } from '../session/session';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { lastChannel } from '../questions/last-channel';
 import { Notice } from './notice';
 import { ScreenBar } from './screen-bar';
 import { useWorkspace } from './workspace';
 
-export const WorkspaceHome = (): React.JSX.Element => {
+const ChatWorkspaceHome = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
@@ -55,3 +57,32 @@ export const WorkspaceHome = (): React.JSX.Element => {
     </>
   );
 };
+
+/** Where the server runs no module with a front door of its own: the workspace's people and settings are what is here. */
+const CoreWorkspaceHome = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  return (
+    <>
+      <ScreenBar />
+      <Notice
+        as="h1"
+        glyph="settings"
+        title={t('state.workspace.core.title')}
+        body={t('state.workspace.core.body')}
+        action={
+          <Link
+            to="settingsHome"
+            params={{ slug: workspace.slug }}
+            className={buttonStyle('primary')}
+          >
+            {t('settings.label')}
+          </Link>
+        }
+      />
+    </>
+  );
+};
+
+export const WorkspaceHome = (): React.JSX.Element =>
+  useRuns('chat') ? <ChatWorkspaceHome /> : <CoreWorkspaceHome />;

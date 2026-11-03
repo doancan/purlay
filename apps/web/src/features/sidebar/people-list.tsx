@@ -28,9 +28,9 @@ import { useOnline } from '../../realtime/realtime-provider';
 import type { User } from '@purlay/types';
 import { Button } from '../../ui/button';
 import { useToast } from '../../ui/toast';
-import { useSession } from '../session/session';
+import { useRuns, useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
-import { ActionRow, ChannelRow } from './channel-row';
+import { ActionRow, ChannelRow, StaticRow } from './channel-row';
 import { people } from './ordering';
 import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
@@ -72,7 +72,9 @@ export const PeopleList = (): React.JSX.Element | null => {
   const { workspace, role } = useWorkspace();
   const { user: me } = useSession();
   const members = useMembers(workspace.id);
-  const channels = useChannels(workspace.id);
+  // Whom a person has a conversation with is chat's to say; without it a person is a name.
+  const chat = useRuns('chat');
+  const channels = useChannels(workspace.id, chat);
   const { openDirectMessage } = useActions();
   const { match, navigate } = useRoute();
   const { show } = useToast();
@@ -97,8 +99,8 @@ export const PeopleList = (): React.JSX.Element | null => {
 
   // The channel list's own state is the channel section's to show; here it only decides
   // whether a name has a conversation behind it, so waiting for it is waiting for both.
-  const failed = members.isError || channels.isError;
-  const waiting = members.isPending || channels.isPending;
+  const failed = members.isError || (chat && channels.isError);
+  const waiting = members.isPending || (chat && channels.isPending);
   // Every message moves the channels' cache; sorting every member again is only owed when they change.
   const entries = useMemo(
     () => people(members.data ?? [], channels.data ?? []),
@@ -150,7 +152,7 @@ export const PeopleList = (): React.JSX.Element | null => {
             retryLabel={t('common.retry')}
             onRetry={() => {
               void members.refetch();
-              void channels.refetch();
+              if (chat) void channels.refetch();
             }}
           />
         ) : (
@@ -171,7 +173,15 @@ export const PeopleList = (): React.JSX.Element | null => {
               );
               return (
                 <li key={user.id}>
-                  {direct === null ? (
+                  {!chat ? (
+                    <StaticRow
+                      avatar={<PersonAvatar user={user} meId={me.id} />}
+                      unread={false}
+                      mentions={0}
+                    >
+                      {label}
+                    </StaticRow>
+                  ) : direct === null ? (
                     <ActionRow
                       avatar={<PersonAvatar user={user} meId={me.id} />}
                       unread={false}

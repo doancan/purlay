@@ -13038,4 +13038,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'false',
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
+  {
+    id: 'web-frame-asks-for-chat-whatever-runs',
+    why: 'the page asks a server that runs no chat for its channels and keeps a socket reader for what it never sends (D-250)',
+    file: 'apps/web/src/realtime/realtime-provider.tsx',
+    find: "useChannels(workspace.id, useRuns('chat'))",
+    replace: 'useChannels(workspace.id)',
+    tests: ['apps/web/src/features/shell/chatless-shell.test.tsx'],
+  },
+  {
+    id: 'web-chat-pieces-drawn-whatever-runs',
+    why: 'the rail, the sidebar and the readers of chat are drawn on a server that runs no chat (D-250)',
+    file: 'apps/web/src/features/shell/module-gate.tsx',
+    find: '(useRuns(module) ? <>{children}</> : null)',
+    replace: '<>{children}</>',
+    tests: ['apps/web/src/features/shell/chatless-shell.test.tsx'],
+  },
 ];

@@ -25,6 +25,7 @@ import { WorkspaceMenu } from '../sidebar/workspace-menu';
 import { useRoute } from '../../router/router-provider';
 import { LazySettingsNav } from '../settings/load';
 import { AccountMenu } from './account-menu';
+import { WhenRun } from './module-gate';
 
 interface SidebarProps {
   /** Inside the narrow window's overlay: as tall as the panel rather than as tall as the page's row. */
@@ -62,18 +63,22 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
             <WorkspaceMenu />
             <SidebarOptions />
           </div>
-          <div className="px-2 pb-3">
-            <JumpField />
-          </div>
+          <WhenRun module="chat">
+            <div className="px-2 pb-3">
+              <JumpField />
+            </div>
+          </WhenRun>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
-            <div className="pt-1 pb-3">
-              <UnreadsRow />
-              <StarredList />
-              <ChannelList />
-            </div>
-            <div className="border-t-hairline border-nav-border py-3">
-              <ConversationList />
-            </div>
+            <WhenRun module="chat">
+              <div className="pt-1 pb-3">
+                <UnreadsRow />
+                <StarredList />
+                <ChannelList />
+              </div>
+              <div className="border-t-hairline border-nav-border py-3">
+                <ConversationList />
+              </div>
+            </WhenRun>
             <div className="border-t-hairline border-nav-border py-3">
               <PeopleList />
             </div>

@@ -749,6 +749,8 @@ export const tr = {
   'state.channel.removed.title': 'Bu kanaldan çıkarıldın',
   'state.channel.removed.body':
     'Biri seni kanaldan çıkardı. Konuşması üyelerinde kalır; içlerinden biri seni yeniden ekleyebilir.',
+  'state.workspace.core.title': 'Çalışma alanın',
+  'state.workspace.core.body': 'Kişileri ve ayarları menüde.',
   'state.workspace.empty.title': 'Bir kanal seç',
   'state.workspace.empty.body': 'Listeden birini seç ya da ilkini oluştur.',
 
