@@ -14,7 +14,10 @@
  * new version, and told active again at once on the page's next word (`active`). Here `away` is idleness
  * only; the person's own choice is the announcer's to add. A socket back inside the grace changes nothing,
  * idle or not; a person who went offline forgets it, and arrives active. Alone on a node this is decided
- * here, by one timer per person; across nodes the shared record decides.
+ * here, by one timer per person. Across nodes the shared record decides, and only what it answers is told: a
+ * word that ended a told idle, and the idle lapses a renewal's sweep finds (up to a renewal late), so two
+ * nodes never both tell. The node still keeps when each person's page last spoke here, to answer from
+ * while the record cannot be reached.
  *
  * Telling is the caller's (`announce`): reading who shares a workspace and publishing. It is awaited
  * by `settled`, so a drain and a test know when it is done; `stop` cancels every grace not yet run.
@@ -38,11 +41,21 @@ import { after, type Timers } from './hub';
  * only grows across the whole cluster, taken from the record's own clock. Rejects when it cannot answer.
  */
 export interface PresenceDirectory {
-  /** This node holds a socket of theirs: the version when nobody did, null when somebody already did. */
-  readonly join: (userId: string) => Promise<number | null>;
+  /**
+   * This node holds a socket of theirs: the version when nobody did, null when somebody already did. Somebody
+   * nobody held arrives active, quiet for `awayAfterMs` from now; a second node or a renewal changes neither.
+   */
+  readonly join: (userId: string, awayAfterMs: number) => Promise<number | null>;
   /** This node holds none now: the version when nobody does, null when another node still does. */
   readonly leave: (userId: string) => Promise<number | null>;
-  /** Which of these people are online on any node, each at the version that said so. */
+  /**
+   * A page of theirs spoke: they are quiet for `awayAfterMs` from now. The version when this ended an idle that
+   * was told, null otherwise, and null for somebody nobody holds.
+   */
+  readonly active: (userId: string, awayAfterMs: number) => Promise<number | null>;
+  /** Their state at a new version, when somebody holds them; null when nobody does. */
+  readonly retell: (userId: string) => Promise<PresenceChange | null>;
+  /** Which of these people are online on any node, each at the version that said so, and whether idle. */
   readonly among: (userIds: readonly string[]) => Promise<readonly PresenceChange[]>;
   /** A version every later change is larger than. */
   readonly version: () => Promise<number>;
@@ -51,6 +64,7 @@ export interface PresenceDirectory {
   /**
    * People whose last claim lapsed and whom nobody has told of: a node that died, was stopped, or could not
    * say they left. Each is returned once, to whoever asks first, at the version that says they are offline.
+   * And people still held whose page has been quiet for their `awayAfterMs`, returned once, online and away.
    */
   readonly sweep: () => Promise<readonly PresenceChange[]>;
 }
@@ -128,6 +142,8 @@ export const onlinePresence = ({
   const idle = new Set<string>();
   /** One timer per online person: when it runs they have been quiet for `awayAfterMs`. */
   const idleTimers = new Map<string, () => void>();
+  /** When each person online here last spoke here: what this node answers from while the record is away. */
+  const spoke = new Map<string, number>();
   const running = new Set<Promise<void>>();
   // Stopping: the sockets the drain closes leave no grace behind them, and tell nobody.
   let stopped = false;
@@ -165,6 +181,11 @@ export const onlinePresence = ({
     idleTimers.delete(userId);
     idle.delete(userId);
   };
+  /** Idle as this node alone knows it: told idle here, or, with a record, quiet here for `awayAfterMs`. */
+  const idleHere = (userId: string): boolean =>
+    directory === undefined
+      ? idle.has(userId)
+      : clock.now().getTime() - (spoke.get(userId) ?? clock.now().getTime()) >= awayAfterMs;
   /** The change last made for each person, until it is told: a retry only tells what is still true. */
   const latest = new Map<string, number>();
   /** Retries waiting: cancelled when the node stops. */
@@ -231,7 +252,7 @@ export const onlinePresence = ({
         inTurn(userId, async () => {
           let joined: number | null;
           try {
-            joined = await directory.join(userId);
+            joined = await directory.join(userId, awayAfterMs);
           } catch (error) {
             // The next renewal tries again; the link has said that Redis is away.
             log.debug('presence could not be renewed', { userId, err: error });
@@ -245,7 +266,10 @@ export const onlinePresence = ({
       sweepLapsed();
       cancelRenewal = after(timers, DIRECTORY_RENEW_MS, renew);
     };
-    /** Tells of people nobody held any longer and nobody told of: a node died, or stopped, or could not say. */
+    /**
+     * Tells of people nobody held any longer and nobody told of: a node died, or stopped, or could not say; and
+     * of people quiet everywhere for `awayAfterMs`, whom nobody has told away.
+     */
     const sweepLapsed = (): void => {
       const swept: Promise<void> = directory
         .sweep()
@@ -276,6 +300,7 @@ export const onlinePresence = ({
       if (online.has(userId)) return;
       const version = next();
       online.set(userId, version);
+      spoke.set(userId, clock.now().getTime());
       if (directory === undefined) {
         armIdle(userId);
         tell({ userId, online: true, away: false, version });
@@ -284,7 +309,7 @@ export const onlinePresence = ({
       inTurn(userId, async () => {
         let joined: number | null;
         try {
-          joined = await directory.join(userId);
+          joined = await directory.join(userId, awayAfterMs);
         } catch (error) {
           // They are online here whatever the record says: told, at this node's own version.
           log.warn('presence could not reach the shared record; telling from this node alone', {
@@ -303,6 +328,7 @@ export const onlinePresence = ({
       const cancel = after(timers, graceMs, () => {
         leaving.delete(userId);
         online.delete(userId);
+        spoke.delete(userId);
         if (directory === undefined) {
           forgetIdle(userId);
           tell({ userId, online: false, away: false, version: next() });
@@ -329,21 +355,68 @@ export const onlinePresence = ({
     },
 
     active: (userId): void => {
-      // With a directory, the word goes to the shared record: the cross-node path, not this one.
-      if (stopped || directory !== undefined || !online.has(userId)) return;
-      armIdle(userId);
-      if (!idle.delete(userId)) return;
-      const version = next();
-      online.set(userId, version);
-      tell({ userId, online: true, away: false, version });
+      if (stopped || !online.has(userId)) return;
+      spoke.set(userId, clock.now().getTime());
+      if (directory === undefined) {
+        armIdle(userId);
+        if (!idle.delete(userId)) return;
+        const version = next();
+        online.set(userId, version);
+        tell({ userId, online: true, away: false, version });
+        return;
+      }
+      // The record decides, for every node: told only when this word ended an idle that was told.
+      inTurn(userId, async () => {
+        let ended: number | null;
+        try {
+          ended = await directory.active(userId, awayAfterMs);
+        } catch (error) {
+          // Nothing told: the next word, or the next sweep, puts it right.
+          log.warn('presence could not reach the shared record; the word is not recorded', {
+            userId,
+            err: error,
+          });
+          return;
+        }
+        if (ended !== null) tell({ userId, online: true, away: false, version: seen(ended) });
+      });
     },
 
     retell: (userId): Promise<void> => {
-      if (stopped || directory !== undefined || !online.has(userId)) return Promise.resolve();
-      const version = next();
-      online.set(userId, version);
-      tell({ userId, online: true, away: idle.has(userId), version });
-      return Promise.resolve();
+      if (stopped) return Promise.resolve();
+      if (directory === undefined) {
+        if (!online.has(userId)) return Promise.resolve();
+        const version = next();
+        online.set(userId, version);
+        tell({ userId, online: true, away: idle.has(userId), version });
+        return Promise.resolve();
+      }
+      // Asked of the record, not of this node: the person may be held only by another.
+      return new Promise<void>((resolve) => {
+        inTurn(userId, async () => {
+          try {
+            let change: PresenceChange | null;
+            try {
+              change = await directory.retell(userId);
+            } catch (error) {
+              log.warn(
+                'presence could not reach the shared record; retelling from this node alone',
+                {
+                  userId,
+                  err: error,
+                },
+              );
+              if (!online.has(userId)) return;
+              const version = next();
+              online.set(userId, version);
+              change = { userId, online: true, away: idleHere(userId), version };
+            }
+            if (change !== null) tell({ ...change, version: seen(change.version) });
+          } finally {
+            resolve();
+          }
+        });
+      });
     },
 
     onlineAmong: async (userIds): Promise<readonly PresenceChange[]> => {
@@ -360,7 +433,7 @@ export const onlinePresence = ({
         const version = online.get(userId);
         return version === undefined
           ? []
-          : [{ userId, online: true, away: idle.has(userId), version }];
+          : [{ userId, online: true, away: idleHere(userId), version }];
       });
     },
 
