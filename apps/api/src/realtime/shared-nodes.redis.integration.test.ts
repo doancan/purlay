@@ -16,6 +16,7 @@ import {
   messageId,
   PRESENCE_GRACE_MS,
   ServerFrame as ServerFrameSchema,
+  type PresenceChange,
   type ServerFrame,
 } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
@@ -34,6 +35,8 @@ import {
 import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 import type { Timers } from './hub';
+import { onlinePresence, type OnlinePresence } from './online';
+import { ONLINE_PREFIX, redisPresenceDirectory } from './redis-presence';
 import { sharedRealtime } from './shared';
 
 const origin = 'https://purlay.test';
@@ -338,6 +341,128 @@ describe('integration: presence across nodes', () => {
     await listener.until(() => changes(listener, room.bob.userId).includes(false), 'Bob offline');
     expect(changes(listener, room.bob.userId)).toEqual([true, false]);
     await listener.close();
+  });
+});
+
+/**
+ * Idleness across nodes (D-257), on the shared record of a real Redis. A page's word does not reach
+ * `online.active` through a socket yet, so each node here is its presence alone — its own link, its own
+ * directory, its renewals and sweeps run quickly — speaking for the person as the socket would.
+ */
+describe('integration: who is away across nodes', () => {
+  /** Five quiet minutes, shortened: Redis's own clock decides when they have passed. */
+  const AWAY_MS = 400;
+  /** Renewals, sweeps, graces and retries, every few milliseconds. */
+  const brisk = (): Timers & { readonly freeze: () => void } => {
+    let frozen = false;
+    return {
+      set: (callback, ms): ReturnType<typeof setTimeout> =>
+        setTimeout(
+          () => {
+            if (!frozen) callback();
+          },
+          Math.min(ms, 25),
+        ),
+      clear: (handle): void => {
+        clearTimeout(handle as ReturnType<typeof setTimeout>);
+      },
+      freeze: (): void => {
+        frozen = true;
+      },
+    };
+  };
+  interface PresenceNode {
+    readonly online: OnlinePresence;
+    readonly id: string;
+    /** The node dies: no renewal, no sweep, no release. */
+    readonly die: () => void;
+  }
+  const told: PresenceChange[] = [];
+  const presenceNode = (): PresenceNode => {
+    const id = crypto.randomUUID();
+    const timers = brisk();
+    const online = onlinePresence({
+      clock,
+      timers,
+      log: silent,
+      announce: (change): Promise<void> => {
+        told.push(change);
+        return Promise.resolve();
+      },
+      awayAfterMs: AWAY_MS,
+      directory: redisPresenceDirectory(a.link, id),
+    });
+    return { online, id, die: timers.freeze };
+  };
+  const states = (userId: string): [boolean, boolean][] =>
+    told.filter((c) => c.userId === userId).map((c) => [c.online, c.away]);
+  /** Speaks for the person on one node every so often, for as long as asked. */
+  const speak = async (node: PresenceNode, userId: string, ms: number): Promise<void> => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      node.online.active(userId);
+      await Bun.sleep(AWAY_MS / 4);
+    }
+  };
+
+  test('a person idle on one node and speaking on the other is active', async () => {
+    const userId = crypto.randomUUID();
+    const one = presenceNode();
+    const other = presenceNode();
+    one.online.arrived(userId);
+    other.online.arrived(userId);
+    await speak(other, userId, 3 * AWAY_MS);
+    expect(states(userId)).toEqual([[true, false]]);
+    expect(await one.online.onlineAmong([userId])).toMatchObject([{ online: true, away: false }]);
+    one.online.stop();
+    other.online.stop();
+  });
+
+  test('a node that dies while its socket was idle leaves the person active where they speak', async () => {
+    const userId = crypto.randomUUID();
+    const dying = presenceNode();
+    const living = presenceNode();
+    dying.online.arrived(userId);
+    living.online.arrived(userId);
+    await speak(living, userId, AWAY_MS);
+    dying.die();
+    // What its claim becomes once it has not been renewed for its lifetime.
+    await a.link.send('HSET', [`${ONLINE_PREFIX}${userId}`, `n:${dying.id}`, '1']);
+    await speak(living, userId, 3 * AWAY_MS);
+    expect(states(userId)).toEqual([[true, false]]);
+    expect(await living.online.onlineAmong([userId])).toMatchObject([
+      { online: true, away: false },
+    ]);
+    living.online.stop();
+  });
+
+  test('an idle lapse is told once across two nodes', async () => {
+    const userId = crypto.randomUUID();
+    const one = presenceNode();
+    const other = presenceNode();
+    one.online.arrived(userId);
+    other.online.arrived(userId);
+    await until(() => states(userId).length >= 2, 'the person told away');
+    await Bun.sleep(AWAY_MS);
+    expect(states(userId)).toEqual([
+      [true, false],
+      [true, true],
+    ]);
+    expect(await other.online.onlineAmong([userId])).toMatchObject([{ away: true }]);
+
+    one.online.active(userId);
+    await until(() => states(userId).length >= 3, 'the person told active');
+    other.online.active(userId);
+    await Bun.sleep(AWAY_MS / 2);
+    expect(states(userId)).toEqual([
+      [true, false],
+      [true, true],
+      [true, false],
+    ]);
+    const versions = told.filter((c) => c.userId === userId).map((c) => c.version);
+    expect(versions).toEqual([...versions].sort((x, y) => x - y));
+    one.online.stop();
+    other.online.stop();
   });
 });
 
