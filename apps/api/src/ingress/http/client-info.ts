@@ -36,7 +36,6 @@ export const clientInfo = (
       messageReminders: modules.includes('chat'),
       personalMessageDeletion: modules.includes('chat'),
     },
-    modules: [...modules],
     server: { version: SERVER_VERSION },
     contractVersion: CONTRACT_VERSION,
     appUrl: config.APP_URL,

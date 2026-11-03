@@ -3,7 +3,7 @@
 > Authority: `DECISIONS.md` D-250 is binding on *why*. This file is binding on *how a module is built,
 > loaded, kept apart and removed*. **Status: partly built.** Chat is the one module, under `features/chat`, and
 > the core runs without it: `MODULES` is read at boot, a module's routes and jobs are left out when it is
-> not run, the web draws only the modules `GET /api/client` lists, and the migration sets, the composition, the cluster check and the table-ownership list
+> not run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them), and the migration sets, the composition, the cluster check and the table-ownership list
 > exist. What is not built: a second module, the typed query handle and the per-module generated `schema.ts`,
 > the `contract` step of the attachment link, workspace-level enablement, and the matrix in CI. §8 says what
 > each rule is held by and which step builds it, and §10 the order; a line marked **built** there is, and one

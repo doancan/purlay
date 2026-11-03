@@ -32,9 +32,9 @@ describe('GET /api/client', () => {
     expect(Value.Check(ClientInfo, await response.json())).toBe(true);
   });
 
-  test('names the modules the server runs, so a client draws only what is there', async () => {
-    const body = (await (await server()('/api/client')).json()) as ClientInfo;
-    expect(body.modules).toEqual(['chat']);
+  test('does not name the modules the server runs: that is for a signed-in caller (`/api/me`), not the public handshake', async () => {
+    const body = (await (await server()('/api/client')).json()) as Record<string, unknown>;
+    expect(Object.keys(body)).not.toContain('modules');
   });
 
   test('advertises additive API support publicly even to a client below the configured minimum', async () => {
