@@ -11,6 +11,7 @@ import { fixedClock } from '../platform/clock';
 import type { WorkspaceContext } from '../platform/tenancy';
 import { createChannel } from './channels/channels';
 import { createWorkspace } from './workspaces/workspaces';
+import { chatWorkspaceHooks } from './channels/workspace-hooks';
 import { acceptInvitation, createInvitation, revokeInvitation } from './workspaces/invitations';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
@@ -19,7 +20,7 @@ describe('multi-write services take a transaction', () => {
   test('the pool is refused by the type, a transaction is accepted', () => {
     const workspaceFromPool = async (pool: Executor): Promise<unknown> =>
       // @ts-expect-error — this must not compile: the pool is not a transaction.
-      await createWorkspace(pool, clock, 'user', { name: 'n', slug: 's' });
+      await createWorkspace(pool, clock, 'user', { name: 'n', slug: 's' }, chatWorkspaceHooks());
     const channelFromPool = async (pool: Executor, context: WorkspaceContext): Promise<unknown> =>
       // @ts-expect-error — this must not compile: the pool is not a transaction.
       await createChannel(pool, clock, context, { name: 'n' });
@@ -37,7 +38,13 @@ describe('multi-write services take a transaction', () => {
       // @ts-expect-error — this must not compile: the pool is not a transaction.
       await acceptInvitation(pool, clock, 'user', 'token');
     const fromTransaction = async (transaction: Transaction): Promise<unknown> =>
-      await createWorkspace(transaction, clock, 'user', { name: 'n', slug: 's' });
+      await createWorkspace(
+        transaction,
+        clock,
+        'user',
+        { name: 'n', slug: 's' },
+        chatWorkspaceHooks(),
+      );
 
     expect([
       workspaceFromPool,

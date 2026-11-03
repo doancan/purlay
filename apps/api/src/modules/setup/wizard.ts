@@ -30,7 +30,7 @@ import type { Clock } from '../../platform/clock';
 import { smtpTransport, type MailMessage, type SmtpTransportFactory } from '../../platform/mail';
 import { atomicallyOn } from '../../platform/transactions';
 import type { SignInLocale } from '../auth/sign-in-letters';
-import { createWorkspace } from '../workspaces/workspaces';
+import { createWorkspace, type WorkspaceCreated } from '../workspaces/workspaces';
 import {
   candidateRefusal,
   GITHUB_PROBE_TIMEOUT_MS,
@@ -431,6 +431,7 @@ export const makeFirstWorkspace = async (
   session: SetupSession,
   input: { readonly name: string; readonly slug: string },
   clock: Clock,
+  workspaceCreated: WorkspaceCreated,
 ): Promise<{ readonly workspace: Workspace; readonly created: boolean }> => {
   await inTurn(executor, session, 'workspace', clock);
   return await atomicallyOn(executor)(async (transaction) => {
@@ -441,7 +442,13 @@ export const makeFirstWorkspace = async (
       await recordStep(transaction, session, 'workspace', clock);
       return { workspace: made, created: false };
     }
-    const workspace = await createWorkspace(transaction, clock, state.admin_user_id, input);
+    const workspace = await createWorkspace(
+      transaction,
+      clock,
+      state.admin_user_id,
+      input,
+      workspaceCreated,
+    );
     await recordStep(transaction, session, 'workspace', clock);
     return { workspace, created: true };
   });
