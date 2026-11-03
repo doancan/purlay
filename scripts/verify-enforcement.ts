@@ -104,6 +104,20 @@ const VIOLATIONS: readonly Violation[] = [
     allowed: true,
   },
   {
+    rule: "a module of the core imports none of chat's (D-250)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/modules/users/__enforcement__.ts',
+    source:
+      "import { thing } from '../messages/thing';\n\nexport const use = (): unknown => thing;\n",
+  },
+  {
+    rule: "a module of chat imports the core's freely (control)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/modules/messages/__enforcement__.ts',
+    source: "import { thing } from '../users/thing';\n\nexport const use = (): unknown => thing;\n",
+    allowed: true,
+  },
+  {
     rule: 'the core imports no feature (D-250)',
     ruleId: 'no-restricted-imports',
     path: 'apps/api/src/platform/__enforcement__.ts',

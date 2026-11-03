@@ -23,6 +23,44 @@ const NO_TRANSPORT_TYPES = {
 const FEATURES_DIR = 'apps/api/src/features';
 const FEATURE_IDS = featureIds(FEATURES_DIR);
 
+// Until chat moves under `features/` (`MODULES.md` §10, step 9) its modules sit in `modules/` beside the
+// core's, and this is where each is said to be one or the other. The core imports none of chat's — it must work
+// with chat absent (D-250) — and a new folder that is in neither list stops the linter rather than escape
+// the rule. The list shrinks to nothing when the move is done.
+const CORE_MODULES = [
+  'attachments',
+  'audit',
+  'auth',
+  'export',
+  'images',
+  'jobs',
+  'push',
+  'setup',
+  'users',
+  'workspaces',
+];
+const CHAT_MODULES = [
+  'bookmarks',
+  'channels',
+  'incidents',
+  'integrations',
+  'messages',
+  'notifications',
+  'pins',
+  'presence',
+  'reactions',
+  'saved',
+  'search',
+];
+const UNCLASSIFIED_MODULES = featureIds('apps/api/src/modules').filter(
+  (id) => !CORE_MODULES.includes(id) && !CHAT_MODULES.includes(id),
+);
+if (UNCLASSIFIED_MODULES.length > 0) {
+  throw new Error(
+    `apps/api/src/modules/ has ${UNCLASSIFIED_MODULES.join(', ')}: say in eslint.config.mjs whether each is the core's or chat's (D-250)`,
+  );
+}
+
 const NO_FEATURES = {
   group: ['**/features/**'],
   message:
@@ -605,6 +643,30 @@ export default defineConfig([
         'error',
         {
           patterns: [NO_TRANSPORT_TYPES, NO_FEATURES],
+          paths: [NO_CREATE_DATABASE],
+        },
+      ],
+    },
+  },
+
+  // The core's modules import none of chat's, so that the core runs with chat absent (D-250). Restates the
+  // module rules above, which ESLint replaces rather than merges; tests may, they build a room to act in.
+  {
+    files: CORE_MODULES.map((id) => `apps/api/src/modules/${id}/**/*.ts`),
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            NO_TRANSPORT_TYPES,
+            NO_FEATURES,
+            {
+              regex: String.raw`^\.\./(${CHAT_MODULES.join('|')})(/|$)`,
+              message:
+                "A module of the core imports none of chat's: the core runs with chat absent. Reach it through a hook, a port or an event the core defines. (D-250, MODULES.md §4)",
+            },
+          ],
           paths: [NO_CREATE_DATABASE],
         },
       ],
