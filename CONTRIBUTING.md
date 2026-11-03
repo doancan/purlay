@@ -225,6 +225,8 @@ What belongs here is the discipline around them:
   will. `bun run test:e2e:install` fetches Chromium once (CI runs it too); `bun run test:e2e` runs Playwright against the same harness in a database named
   `purlay_e2e`, in both themes and at two widths; `bun run test:e2e:update` rewrites the
   screenshots, which you then look at before committing (they depend on the machine's fonts).
+  `bun run test:modules-none` serves the same seeded world with `MODULES=none` and drives one spec in a real browser (no chat
+  route asked for, no chat screen drawn, no console error); CI runs it beside the suite in each project (D-250).
   `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, not
   in CI, with screenshots ignored and each engine's known limits skipped by name
   (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
