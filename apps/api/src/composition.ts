@@ -122,7 +122,7 @@ export interface Composition {
 /**
  * The composition of the modules given, in the order given. `bundled` is every module the build carries, so that a path
  * of one that is not run is known to be closed: with chat left out, its routes are not routes. Both lists are taken as
- * ordered: `composeFor` is how a build gets them in the order the registry resolved (`MODULES.md` §3.2), and the order is
+ * ordered: `composeFor` is how a build gets them in the order the registry resolved (`MODULES.md` §3), and the order is
  * what hook registration, the purge and the export tables follow.
  */
 export const compose = (

@@ -313,7 +313,7 @@ if _sources < 100:
 # row are the other two places a module is listed, and a module added to `bundledModules` without them is a document
 # that does not know it exists.
 _composition = pathlib.Path('apps/api/src/composition.ts').read_text()
-_bundle = re.search(r'bundledModules: readonly BundledModule\[\] = \[([^\]]*)\]', _composition)
+_bundle = re.search(r'bundledModules(?:: readonly BundledModule\[\])? = \[([^\]]*)\]', _composition)
 _bundled_ids = [re.sub(r'(?<!^)(?=[A-Z])', '-', n.strip()[:-len('Module')]).lower()
                 for n in (_bundle.group(1).split(',') if _bundle else []) if n.strip().endswith('Module')]
 if not _bundled_ids:

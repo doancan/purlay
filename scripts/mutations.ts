@@ -13065,7 +13065,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'composition-held-order-follows-the-list',
-    why: 'what every module holds (purge tables, export tables, erasure hooks) follows the build’s list, not the resolved order, so a requirement is not honoured (D-250, MODULES.md §3.2)',
+    why: 'what every module holds (purge tables, export tables, erasure hooks) follows the build’s list, not the resolved order, so a requirement is not honoured (D-250, MODULES.md §3)',
     file: 'apps/api/src/composition.ts',
     find: '    inResolvedOrder(carriedRegistry.resolve(undefined)),\n',
     replace: '    carried,\n',
@@ -13073,7 +13073,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'composition-running-order-is-the-set',
-    why: 'the running modules act in the build’s list order, as the set of resolved ids filters it, not in the registry’s order (D-250, MODULES.md §3.2)',
+    why: 'the running modules act in the build’s list order, as the set of resolved ids filters it, not in the registry’s order (D-250, MODULES.md §3)',
     file: 'apps/api/src/composition.ts',
     find: '    inResolvedOrder(carriedRegistry.resolve(setting)),\n',
     replace:
