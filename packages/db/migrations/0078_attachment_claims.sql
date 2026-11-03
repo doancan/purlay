@@ -18,8 +18,10 @@
 -- blocked, and a crashed build leaves an INVALID index that is dropped first.
 --
 -- This is the expand half, and nothing is removed: `attachments.message_id` and `channel_id` and their keys stay
--- and are written as before, so the release before this one still runs on the schema. They go in the release
--- after, once nothing reads them.
+-- and are written as before, so what the release before this one wrote and reads is intact. They go in the release
+-- after, once nothing reads them. (That release still refuses to start on a migration it has no file for, as it
+-- does for every migration, D-86: going back is the restore of the backup taken before the deploy; what the
+-- two halves keep is that no data is moved out from under code that is still reading it.)
 
 ALTER TABLE attachments ADD COLUMN IF NOT EXISTS claimed_at timestamptz;
 
