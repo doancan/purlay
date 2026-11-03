@@ -104,17 +104,24 @@ describe('addressing everybody', () => {
     expect(broadcastMention('a ` @here')).toBe('@here');
   });
 
-  test('is linear: a pathological 16,000-character input is read at once', () => {
-    for (const text of [
-      '`'.repeat(16_000),
-      '@'.repeat(16_000),
-      'a@'.repeat(8_000),
-      '`a'.repeat(8_000),
-      '\n'.repeat(16_000),
-    ]) {
-      const started = performance.now();
-      broadcastMention(text);
-      expect(performance.now() - started).toBeLessThan(250);
+  test('is linear: four times the pathological input takes about four times as long, not sixteen', () => {
+    // A quadratic scan would take sixteen times as long for four times the text. The best of a few runs of each size,
+    // so a busy machine's pause is not read as growth, and a ratio rather than a number of milliseconds, which depends
+    // on the machine.
+    const best = (text: string): number => {
+      let fastest = Number.POSITIVE_INFINITY;
+      for (let run = 0; run < 5; run++) {
+        const started = performance.now();
+        broadcastMention(text);
+        fastest = Math.min(fastest, performance.now() - started);
+      }
+      return fastest;
+    };
+    for (const unit of ['`', '@', 'a@', '`a', '\n']) {
+      const small = best(unit.repeat(16_000 / unit.length));
+      const large = best(unit.repeat(64_000 / unit.length));
+      // Below a millisecond the clock cannot tell the two apart: linear by any measure.
+      expect(large < 1 || large / Math.max(small, 0.05) < 9).toBe(true);
     }
   });
 });
