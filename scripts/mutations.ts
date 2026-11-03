@@ -13229,4 +13229,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  (true)',
     tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
   },
+  {
+    id: 'client-handshake-names-the-modules',
+    why: 'the public handshake tells anybody, signed in or not, which modules a server runs: the oracle a closed route is built not to be (D-250)',
+    file: 'apps/api/src/ingress/http/client-info.ts',
+    find: '    server: { version: SERVER_VERSION },\n',
+    replace: '    modules: [...modules],\n    server: { version: SERVER_VERSION },\n',
+    tests: ['apps/api/src/ingress/http/client-handshake.test.ts'],
+  },
 ];
