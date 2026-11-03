@@ -15,6 +15,7 @@ const unchanged = manifest({
   provides: ['issues.link'],
   routes: ['/api/issues/**'],
   jobs: ['issues:remind'],
+  frames: ['ISSUE_WATCH'],
 });
 const before = [releasedFrom(unchanged)];
 
@@ -30,6 +31,7 @@ describe('what a release promised of a manifest', () => {
       provides: ['issues.link', 'issues.search'],
       routes: ['/api/issues/**', '/api/boards/**'],
       jobs: ['issues:remind', 'issues:digest'],
+      frames: ['ISSUE_WATCH', 'ISSUE_TYPING'],
     });
     expect(incompatibilities(before, [richer, manifest({ id: 'notes' })])).toEqual([]);
   });
@@ -53,12 +55,13 @@ describe('what a release promised of a manifest', () => {
     expect(incompatibilities(released, [manifest({ id: 'issues' })])).toEqual([]);
   });
 
-  test('a capability, a route and a job that went are each said', () => {
+  test('a capability, a route, a socket operation and a job that went are each said', () => {
     const now = manifest({ id: 'issues', optional: ['chat'] });
     expect(incompatibilities(before, [now])).toEqual([
       "module 'issues' no longer provides 'issues.link'",
       "module 'issues' no longer owns the route '/api/issues/**'",
       "module 'issues' no longer runs the job 'issues:remind'",
+      "module 'issues' no longer owns the socket operation 'ISSUE_WATCH'",
     ]);
   });
 

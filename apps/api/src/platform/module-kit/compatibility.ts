@@ -11,6 +11,7 @@ export interface ReleasedManifest {
   readonly provides: readonly string[];
   readonly routes: readonly string[];
   readonly jobs: readonly string[];
+  readonly frames: readonly string[];
 }
 
 /** A deliberate break, said where a reviewer reads it. `change` is the sentence `incompatibilities` gives. */
@@ -37,6 +38,7 @@ export const releasedFrom = (manifest: ModuleManifest): ReleasedManifest => ({
   provides: sorted(manifest.provides),
   routes: sorted(manifest.routes),
   jobs: sorted(manifest.jobs),
+  frames: sorted(manifest.frames),
 });
 
 const missing = (released: readonly string[], current: readonly string[]): string[] =>
@@ -44,9 +46,9 @@ const missing = (released: readonly string[], current: readonly string[]): strin
 
 /**
  * Each way the current manifests break what the last release promised, as a sentence. Not breaks: a new module, a
- * new capability, route or job, a dropped requirement, a new or dropped optional partner. What is silent is the
+ * new capability, route, job or socket operation, a dropped requirement, a new or dropped optional partner. What is silent is the
  * rest — an operator who ran the last release's set would find a module refusing to start for a partner it never
- * needed, a capability another module asks for gone, or a route or a scheduled job that now answers as if it never
+ * needed, a capability another module asks for gone, or a route, a socket operation or a scheduled job that now answers as if it never
  * existed.
  */
 export const incompatibilities = (
@@ -74,6 +76,9 @@ export const incompatibilities = (
       ),
       ...missing(before.jobs, after.jobs).map(
         (job) => `module '${before.id}' no longer runs the job '${job}'`,
+      ),
+      ...missing(before.frames, after.frames).map(
+        (op) => `module '${before.id}' no longer owns the socket operation '${op}'`,
       ),
     ];
   });

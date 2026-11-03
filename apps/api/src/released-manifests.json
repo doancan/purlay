@@ -35,6 +35,12 @@
       ],
       "jobs": [
         "mail:missed"
+      ],
+      "frames": [
+        "MESSAGE_SEND",
+        "SUBSCRIBE",
+        "TYPING",
+        "UNSUBSCRIBE"
       ]
     }
   ],
