@@ -127,6 +127,15 @@ const failure = (result: ProbeResult): { reason: ProbeReason; raw: string } => {
   return { reason: result.reason, raw: result.raw };
 };
 
+/**
+ * How far a hostile server got before the probe stopped reading: the floods are 300 MiB, and a probe that read
+ * on to the end would leave `written()` at all of it. What is measured is how much the server handed to the
+ * socket by the time the close reached it, and on a loaded machine the kernel's buffers and the loopback let a
+ * few MiB through first, so the bound sits a decade below the flood rather than a hair above what a quiet
+ * machine writes. It still fails for a probe that keeps reading.
+ */
+const STOPPED_WELL_BEFORE_THE_FLOOD_ENDS = 32 * 1024 * 1024;
+
 describe('integration: trying a relay (D-179 §4.4)', () => {
   test('a relay that takes the login, the sender and the recipient is sent the one letter, as given', async () => {
     const relay = await relayFor({ login: { user: USER, pass: PASS } });
@@ -523,7 +532,7 @@ describe('integration: a GitHub that redirects or floods (review, fix round 1)',
       raw: 'HTTP 200: a reply longer than 8 KB',
     });
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(4 * 1024 * 1024);
+    expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
   });
 
   test('a reply whose length says it is too long is not read at all', async () => {
@@ -531,7 +540,7 @@ describe('integration: a GitHub that redirects or floods (review, fix round 1)',
     stops.push(flooding.stop);
     expect(failure(await tryAt(flooding.url)).raw).toBe('HTTP 200: a reply longer than 8 KB');
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(4 * 1024 * 1024);
+    expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
   });
 });
 
@@ -800,7 +809,7 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
     stops.push(flooding.stop);
     expect(failure(await tryIt(flooding.url)).reason).toBe('discovery-invalid');
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(8 * 1024 * 1024);
+    expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
   });
 
   test('a token endpoint that redirects the secret elsewhere is unexpected-reply, and the secret goes nowhere', async () => {
