@@ -13237,4 +13237,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    modules: [...modules],\n    server: { version: SERVER_VERSION },\n',
     tests: ['apps/api/src/ingress/http/client-handshake.test.ts'],
   },
+  {
+    id: 'core-sweep-names-a-chat-table',
+    why: 'a job of the core deletes from a table chat owns, as the sweeps did before they moved, so the core no longer runs with chat absent (D-250)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .deleteFrom('native_authorizations')",
+    replace: "    .deleteFrom('link_previews')",
+    tests: ['apps/api/src/core-tables.test.ts'],
+  },
 ];
