@@ -13165,4 +13165,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/module-compat.test.ts'],
   },
+  {
+    id: 'chat-drops-a-socket-operation-silently',
+    why: 'a module stops owning a socket operation a deployed client sends, and nothing says so before a release (D-250)',
+    file: 'apps/api/src/features/chat/module.ts',
+    find: "    frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],",
+    replace: "    frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'TYPING'],",
+    tests: ['apps/api/src/module-compat.test.ts'],
+  },
 ];
