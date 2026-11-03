@@ -8,7 +8,8 @@
  * recovered from point-in-time recovery (D-44). See `migrator.ts`.
  */
 import { createMigrationDatabase, tlsFromEnvironment } from '../client';
-import { migrateToLatest, setsNamedBy } from '../migrator';
+import { migrateToLatest, setsNamedBy, type MigrationSet } from '../migrator';
+import { ModulesSettingError } from '../modules-setting';
 
 const connectionString = process.env['DATABASE_URL'];
 if (connectionString === undefined || connectionString === '') {
@@ -17,7 +18,15 @@ if (connectionString === undefined || connectionString === '') {
 }
 
 // The modules this installation runs (`MODULES`, D-250): the core's migrations always, and each named module's.
-const modules = setsNamedBy(process.env['MODULES']);
+// A setting the API would refuse is refused here, before anything is applied.
+let modules: readonly MigrationSet[];
+try {
+  modules = setsNamedBy(process.env['MODULES']);
+} catch (error) {
+  if (!(error instanceof ModulesSettingError)) throw error;
+  console.error(error.message);
+  process.exit(1);
+}
 
 // The same TLS settings as the application, so a managed database that refuses a
 // clear connection is migrated by the command that starts it (D-86), on the connection

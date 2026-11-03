@@ -40,6 +40,7 @@ have it.
 
 ### Fixed
 
+- **Operations** — `bun run db:migrate` reads `MODULES` exactly as the server does: a setting the server refuses (`CHAT`, `chat,calendar`, `none,chat`, `,`) now stops the command with exit 1 and the reason, instead of migrating the wrong set (D-250)
 - **Operations** — A fresh install started with `MODULES=none` can erase an account, purge a deleted workspace, export and run its nightly jobs; they failed on tables only chat's own migrations make (D-250)
 
 ### Security

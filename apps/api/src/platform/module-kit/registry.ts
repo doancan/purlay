@@ -8,6 +8,12 @@
  *
  * Pure: it reads no environment and opens nothing. The composition root passes the setting in.
  */
+import {
+  MODULE_ID,
+  ModulesSettingError,
+  parseModulesSetting,
+  type ModulesSetting,
+} from '@purlay/db';
 import type { CoreClaims } from './core-claims';
 import type { ModuleManifest } from './manifest';
 import { templatesOverlap } from './routes';
@@ -46,9 +52,7 @@ export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
   'ws',
 ]);
 
-/** The setting that runs the core alone: written out, because blank is read as unset. */
-const NONE = 'none';
-const MODULE_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const MODULES_SUBJECT = 'MODULES cannot start this process';
 const CAPABILITY = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
 
 /** A setting or a bundle that cannot start. `problems` is every reason, one sentence each. */
@@ -218,28 +222,25 @@ const enabledBy = (
   bundled: readonly ModuleManifest[],
   setting: string | undefined,
 ): readonly ModuleManifest[] => {
-  if (setting === undefined) return bundled;
-  if (setting.trim() === '') return bundled;
-  if (setting.trim() === NONE) return [];
+  // The shape of the setting is `parseModulesSetting`'s, the reading `db:migrate` takes too; what a module
+  // requires of another is this registry's to check.
+  let parsed: ModulesSetting;
+  try {
+    parsed = parseModulesSetting(
+      setting,
+      bundled.map((manifest) => manifest.id),
+    );
+  } catch (error) {
+    if (error instanceof ModulesSettingError) {
+      throw new ModuleConfigError(MODULES_SUBJECT, error.problems);
+    }
+    throw error;
+  }
+  if (parsed.kind === 'all') return bundled;
+  if (parsed.kind === 'none') return [];
 
   const problems: string[] = [];
-  const named = new Set<string>();
-  const known = new Map(bundled.map((manifest) => [manifest.id, manifest]));
-  const items = setting.split(',').map((item) => item.trim());
-
-  for (const item of items) {
-    if (item === '') {
-      problems.push('MODULES has an empty item: a doubled or trailing comma');
-    } else if (named.has(item)) {
-      problems.push(`MODULES names "${item}" twice`);
-    } else if (!known.has(item)) {
-      problems.push(
-        `MODULES names "${item}", which this build does not have (it has: ${idsOf(bundled)})`,
-      );
-    }
-    named.add(item);
-  }
-
+  const named = new Set(parsed.ids);
   const enabled = bundled.filter((manifest) => named.has(manifest.id));
   for (const manifest of enabled) {
     for (const required of manifest.requires) {
@@ -248,13 +249,9 @@ const enabledBy = (
       }
     }
   }
-  if (problems.length > 0)
-    throw new ModuleConfigError('MODULES cannot start this process', problems);
+  if (problems.length > 0) throw new ModuleConfigError(MODULES_SUBJECT, problems);
   return enabled;
 };
-
-const idsOf = (manifests: readonly ModuleManifest[]): string =>
-  manifests.length === 0 ? 'none' : manifests.map((manifest) => manifest.id).join(', ');
 
 /**
  * Partners before the modules that use them, and the modules that wait on one another and so can never

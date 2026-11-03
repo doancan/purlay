@@ -71,7 +71,13 @@ describe('the setting', () => {
 
   test('does not guess at a different spelling', () => {
     expect(problemsOf(() => registry.resolve('Chat'))).toEqual([
-      'MODULES names "Chat", which this build does not have (it has: chat, issues, notes)',
+      'MODULES names "Chat", which is not a module id: lowercase letters, digits and hyphens, starting with a letter',
+    ]);
+  });
+
+  test('says none must stand alone when it is listed with a module', () => {
+    expect(problemsOf(() => registry.resolve('none,chat'))).toEqual([
+      'MODULES has "none" with other items: none must stand alone',
     ]);
   });
 

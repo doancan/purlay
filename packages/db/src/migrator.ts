@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql, type Kysely, type QueryExecutorProvider } from 'kysely';
+import { parseModulesSetting } from './modules-setting';
 import { DEADLOCK_RETRY, retryOnDeadlock, type Retry, type RetryPolicy } from './retry';
 import { executableText, splitStatements } from './statements';
 
@@ -78,18 +79,24 @@ export const PRODUCT_MIGRATION_SETS = [
 ] as const satisfies readonly MigrationSet[];
 
 /**
+ * The ids of the modules this build carries — those with a set of migrations and those without. A module that
+ * keeps no tables of its own is still a module a `MODULES` setting may name, so this list is the build's, not
+ * `PRODUCT_MIGRATION_SETS`'s; `module-compat.test.ts` holds it to the manifests.
+ */
+export const PRODUCT_MODULE_IDS: readonly string[] = ['chat', 'issues'];
+
+/**
  * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every
- * set this build carries, `none` the core alone, otherwise the ones listed. A word that names no set is not this
- * command's to judge — a module may have no tables — and the API refuses the setting in full when it boots.
+ * set this build carries, `none` the core alone, otherwise the ones listed. The setting is read by
+ * `parseModulesSetting`, the reading the API boots on too, so what this command refuses the API refuses and the
+ * other way round — bar what a module requires of another, which only the API's manifests know. Throws
+ * `ModulesSettingError` naming every problem.
  */
 export const setsNamedBy = (setting: string | undefined): readonly MigrationSet[] => {
-  const words = (setting ?? '')
-    .split(',')
-    .map((word) => word.trim())
-    .filter((word) => word !== '');
-  if (words.length === 0) return PRODUCT_MIGRATION_SETS;
-  if (words.length === 1 && words[0] === 'none') return [];
-  return PRODUCT_MIGRATION_SETS.filter((set) => words.includes(set.id));
+  const parsed = parseModulesSetting(setting, PRODUCT_MODULE_IDS);
+  if (parsed.kind === 'all') return PRODUCT_MIGRATION_SETS;
+  if (parsed.kind === 'none') return [];
+  return PRODUCT_MIGRATION_SETS.filter((set) => parsed.ids.includes(set.id));
 };
 
 export interface MigrationResult {

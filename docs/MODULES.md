@@ -54,8 +54,15 @@ registers — the audit actions are in `modules/audit`, and the role rules are i
 ## 3. Boot
 
 1. Parse `MODULES` (`module-kit`'s `resolve`). Unset or blank means every bundled module (a blank variable is read as unset everywhere in the configuration); `none` means the core alone. An
-   unknown or repeated id, an empty item, or a missing requirement stops the process before it listens; a
-   cycle, a reserved id or a repeated capability are caught earlier, when the build's registry is made.
+   unknown or repeated id, an id outside the grammar (lowercase letters, digits and hyphens: `CHAT`, `None` and
+   `chat;issues` are refused, never corrected), an empty item, `none` listed with another id (it must stand alone),
+   or a missing requirement stops the process before it listens; a cycle, a reserved id or a repeated capability
+   are caught earlier, when the build's registry is made. **One reading serves both commands:**
+   `parseModulesSetting` (`packages/db`) is the tokenizer and validator of the setting's shape, and `resolve`
+   and `bun run db:migrate` both call it, so a setting one refuses the other refuses, with the same sentences;
+   `db:migrate` exits 1 naming `MODULES` and each problem before it applies anything. Only what a module
+   `requires` of another is the API's to check, since only the manifests say so. `module-setting-pair.test.ts`
+   holds the two as a pair over a table of inputs.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
 3. Where nodes share Redis, record this node's module set in the shared record (`realtime/module-set.ts`) and
    compare it with the live peers'. A difference is **said, never acted on** (D-250 rule 8 as amended by D-255): the

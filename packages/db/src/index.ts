@@ -35,10 +35,17 @@ export type {
   SqlBool,
 } from 'kysely';
 export {
+  MODULE_ID,
+  ModulesSettingError,
+  parseModulesSetting,
+  type ModulesSetting,
+} from './modules-setting';
+export {
   migrateToLatest,
   type MigrateOptions,
   MIGRATIONS_DIRECTORY,
   PRODUCT_MIGRATION_SETS,
+  PRODUCT_MODULE_IDS,
   setsNamedBy,
   migrationHistoryProblem,
   pendingMigrations,
