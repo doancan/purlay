@@ -143,8 +143,8 @@ moves into that module.
   additive. Anything that reads the migration table for the core's schema stamp (the export's) filters to the
   core's rows.
 - **Every table has one owner**, core or a module, in a list a test holds to the database; a foreign key across
-  owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
-  point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
+  owners fails it, and the list of those that exist is empty (**built**, `chat/0005`: the last, from `attachments`
+  to `messages`, went with the link's columns). A core migration never names a module's table.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
   with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
   tables (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
@@ -230,7 +230,7 @@ Each step ships alone and can be reverted.
 | 5b | Issues' thin slice for the dogfood team — open an issue from a message, link back — to prove the ports with a real user before the moves | new feature |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
-| 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
+| 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero — **built, ships in the release after the expand** (`chat/0005`); the lint that forbids a chat table's name in `modules/` and `platform/` is not, for eleven files of the core still name them (the list above) | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |
 | 13 | Issues complete, the second module in full | new feature |
@@ -273,15 +273,21 @@ unchanged and proved so:
    `attachments`, and the core's table holds a stored object, its uploader and its workspace and nothing of a
    message. An upload nobody links is what the orphan sweep already removes after a day. It is a migration that
    moves data and every reader of those two columns changes with it, so it is done with step 10, on a copy with
-   the dumps compared, and the ratchet keeps the crossing in view until then. **In three releases, two built:**
+   the dumps compared, and the ratchet kept the crossing in view until then. **In three releases, all built:**
    *expand* (**built**: `claimed_at`, `message_attachments` backfilled, and a send writing the old columns and the
    link together); *the readers move* (**built**: the core says unsent and sent with `claimed_at`, chat finds a file's
    message and channel through `message_attachments`, the workspace export's and the person's export's bounds read
    through the link, and `dropFiles` is the core's `dropFilesById` and chat's `dropMessageFiles`; a test,
    `attachment-readers.test.ts`, fails if production code reads `attachments.message_id` or `channel_id` again,
-   with an allow-list of the one place that still writes them); *contract* (**left**: the columns, their keys and
-   indexes go, the dual write and the allow-list with them, and the exports stop writing the two columns — which
-   changes the frozen shape of an export, so it is its own change).
+   with an allow-list of the one place that still writes them); *contract* (**built, ships in the release after the expand** — merge only after a release containing
+   `0079` is published: `chat/0005` drops the columns, their keys and indexes, the dual write and the allow-list go,
+   and the exports stop writing the two columns on `attachments` and write `message_attachments` instead, which
+   changes the shape of an export. It is a file of **chat's set**, not the core's: the sets run core first, so a core
+   file dropping the columns would run before `chat/0001`'s backfill reads them, on every new install and for a server
+   that was off chat for a release; in chat's set it follows the backfill always, and a server without chat keeps the
+   columns, inert. It refuses, with nothing changed, a database whose link table does not carry every sent file —
+   one that skipped the expand release — and its rollback is the backup restore, D-86. The ownership list's
+   exceptions are now none.)
 
 The three behaviours that could change without a test failing: the default channel at workspace creation (an
 integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
@@ -324,9 +330,10 @@ request with behaviour unchanged:
    two tests, to `features/chat/channels/guard.ts`, the `ChannelContext` brand still in that one file;
    `attachmentNotFound`, a plain error, moved to `platform/errors.ts`, where the attachment code reaches it. Nothing
    in the core imports the guard now (one workspace test still does, which the lint allows);
-7. the message link of an attachment becomes chat's (step 8 above), with step 10;
+7. the message link of an attachment becomes chat's (step 8 above), with step 10 (**built, ships in the release after
+   the expand**);
 8. the lint then forbids a chat table's name in `modules/` and `platform/`, from an allow-list that has shrunk to
-   nothing.
+   nothing. **Not built with the contract:** the repo has no such lint and no allow-list to shrink; the core still names chat's tables in `push/sender.ts`, `jobs/jobs.ts` and others, each its own inversion, so the lint comes after them.
 
 **Step 12, in the order it is built.** (a) *The composition* (**built**): `composition.ts` takes the modules a process runs
 and makes from them what the core leaves open — the workspace's first hook, the account's erasure hook, who answers
