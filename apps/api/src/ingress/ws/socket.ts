@@ -57,6 +57,8 @@ export interface SocketDependencies {
   readonly shared?: SharedState | undefined;
   /** The per-user write bucket, shared with HTTP's. */
   readonly userWrites: RateLimiter;
+  /** The operations of a module this process does not run (`composition.ts`); absent, none is closed. */
+  readonly closedFrame?: (op: string) => boolean;
   /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
@@ -302,6 +304,9 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   bus,
                   limiter,
                   userWrites: dependencies.userWrites,
+                  ...(dependencies.closedFrame === undefined
+                    ? {}
+                    : { closedFrame: dependencies.closedFrame }),
                   presence,
                   attention: dependencies.attention,
                   sessionLifetime: () => dependencies.auth.sessionLifetime,

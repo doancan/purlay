@@ -516,7 +516,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
-  const sockets = createSocketLifecycle({ ...dependencies, userWrites, metrics });
+  const sockets = createSocketLifecycle({
+    ...dependencies,
+    userWrites,
+    metrics,
+    closedFrame: modules.closedFrame,
+  });
   metrics.registry.gauge(
     'purlay_websocket_connections',
     'WebSocket connections open on this process.',

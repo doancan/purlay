@@ -53,6 +53,11 @@ import { SESSION_CLOCK } from '../modules/auth/sessions';
 import type { RateLimiter } from './rate-limiter';
 
 export interface RouterDependencies {
+  /**
+   * Whether an operation is a module's that this process does not run; answered as an operation nobody has. Absent,
+   * none is closed: the composition root passes it (`composition.ts`), a test of one operation need not.
+   */
+  readonly closedFrame?: (op: string) => boolean;
   readonly database: Executor;
   /** The write path's transaction boundary (D-35, `platform/transactions.ts`). */
   readonly atomically: Atomically;
@@ -237,6 +242,16 @@ export const routeFrame = async (
 
   if (!Value.Check(ClientFrame, parsed)) {
     return [refuse('That frame did not match the contract.', fieldsOf(parsed), refIdOf(parsed))];
+  }
+
+  if (dependencies.closedFrame?.(parsed.op) === true) {
+    return [
+      refuse(
+        'That frame did not match the contract.',
+        { op: 'is not an operation this server accepts' },
+        parsed.id,
+      ),
+    ];
   }
 
   try {
