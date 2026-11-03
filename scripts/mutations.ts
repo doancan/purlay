@@ -12954,7 +12954,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'composition-purge-steps-dropped',
     why: "the purge of a deleted workspace leaves a running module's messages and channels behind (D-242, D-250)",
     file: 'apps/api/src/composition.ts',
-    find: 'before: modules.flatMap((module) => module.workspacePurge?.before ?? []),',
+    find: 'before: holding.flatMap((module) => module.workspacePurge?.before ?? []),',
     replace: 'before: [],',
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
