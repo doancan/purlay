@@ -711,8 +711,8 @@ export interface DB {
   github_links: GithubLinks;
   github_operations: GithubOperations;
   github_repo_feeds: GithubRepoFeeds;
-  hidden_messages: HiddenMessages;
   github_user_authorizations: GithubUserAuthorizations;
+  hidden_messages: HiddenMessages;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
@@ -735,9 +735,9 @@ export interface DB {
   rate_limits: RateLimits;
   reactions: Reactions;
   saved_messages: SavedMessages;
+  saved_searches: SavedSearches;
   scheduled_message_attachments: ScheduledMessageAttachments;
   scheduled_messages: ScheduledMessages;
-  saved_searches: SavedSearches;
   server_audit_log: ServerAuditLog;
   server_settings: ServerSettings;
   sessions: Sessions;
