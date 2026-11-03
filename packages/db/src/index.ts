@@ -35,6 +35,7 @@ export {
   migrateToLatest,
   type MigrateOptions,
   MIGRATIONS_DIRECTORY,
+  PRODUCT_MIGRATION_SETS,
   migrationHistoryProblem,
   pendingMigrations,
   readMigrationFiles,

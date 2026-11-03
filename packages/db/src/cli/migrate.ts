@@ -8,7 +8,7 @@
  * recovered from point-in-time recovery (D-44). See `migrator.ts`.
  */
 import { createMigrationDatabase, tlsFromEnvironment } from '../client';
-import { migrateToLatest } from '../migrator';
+import { migrateToLatest, PRODUCT_MIGRATION_SETS } from '../migrator';
 
 const connectionString = process.env['DATABASE_URL'];
 if (connectionString === undefined || connectionString === '') {
@@ -28,6 +28,7 @@ const db = createMigrationDatabase({
 });
 
 const { error, results } = await migrateToLatest(db, undefined, {
+  modules: PRODUCT_MIGRATION_SETS,
   onRetry: (retry) => {
     console.warn(
       `  retrying ${retry.migration}: attempt ${String(retry.attempt)} was ended as a deadlock victim; ` +

@@ -18,6 +18,7 @@
 import {
   createMigrationDatabase,
   migrateToLatest,
+  PRODUCT_MIGRATION_SETS,
   migrationHistoryProblem,
   pendingMigrations,
   type Executor,
@@ -37,11 +38,13 @@ export const migrateOnStart = async (
   options: Pick<MigrateOptions, 'onRetry'> = {},
 ): Promise<readonly string[]> => {
   const database = createMigrationDatabase(connection);
-  const { error, results } = await migrateToLatest(database, directory, options).finally(
-    async () => {
-      await database.destroy();
-    },
-  );
+  const { error, results } = await migrateToLatest(database, directory, {
+    // A directory given is a test's own; the product's own is its core and every module's set.
+    modules: directory === undefined ? PRODUCT_MIGRATION_SETS : [],
+    ...options,
+  }).finally(async () => {
+    await database.destroy();
+  });
   if (error !== undefined) {
     const failed = (results ?? []).find((result) => result.status === 'Error');
     throw new Error(
@@ -75,8 +78,16 @@ export const untilMigrated = async (
     let kind: string | undefined;
     let reason: string | undefined;
     try {
-      const history = await migrationHistoryProblem(database);
-      const pending = history === undefined ? await pendingMigrations(database) : [];
+      const history = await migrationHistoryProblem(
+        database,
+        undefined,
+        undefined,
+        PRODUCT_MIGRATION_SETS,
+      );
+      const pending =
+        history === undefined
+          ? await pendingMigrations(database, undefined, PRODUCT_MIGRATION_SETS)
+          : [];
       if (history !== undefined) [kind, reason] = ['history', history];
       else if (pending.length > 0) {
         [kind, reason] = ['pending', `migrations not applied: ${pending.join(', ')}`];

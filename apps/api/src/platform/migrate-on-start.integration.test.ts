@@ -2,7 +2,13 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabase, dropDatabases, readMigrationFiles, sql } from '@purlay/db';
+import {
+  createDatabase,
+  dropDatabases,
+  PRODUCT_MIGRATION_SETS,
+  readMigrationFiles,
+  sql,
+} from '@purlay/db';
 import type { Executor } from '@purlay/db';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
@@ -35,6 +41,20 @@ const freshDatabase = async (suffix: string): Promise<{ name: string; db: Execut
   created.push(name);
   return { name, db: createDatabase({ connectionString: urlFor(name), poolSize: 4 }) };
 };
+
+/** Every migration a process applies, in the order it applies them: the core's, then each module's set. */
+const everyMigration = async (): Promise<string[]> => [
+  ...(await readMigrationFiles()).map((file) => file.name),
+  ...(
+    await Promise.all(
+      PRODUCT_MIGRATION_SETS.map(
+        async (set) => await readMigrationFiles(set.directory, `${set.id}/`),
+      ),
+    )
+  )
+    .flat()
+    .map((file) => file.name),
+];
 
 const recorded = async (db: Executor): Promise<string[]> => {
   const { rows } = await sql<{
@@ -180,7 +200,7 @@ describe('integration: migrate on start', () => {
   test('an empty database is migrated to the latest, and starting again changes nothing', async () => {
     const { name, db } = await freshDatabase('one');
     try {
-      const files = (await readMigrationFiles()).map((file) => file.name);
+      const files = await everyMigration();
       expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual(files);
       expect(await recorded(db)).toEqual(files);
       expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual([]);
@@ -304,7 +324,7 @@ describe('integration: migrate on start', () => {
         return 0;
       };
       const answers = await Promise.all(ports.map(ready));
-      const files = (await readMigrationFiles()).map((file) => file.name);
+      const files = await everyMigration();
       // Both answered, neither exited (a node that cannot migrate exits 1), and every
       // migration is recorded once: `name` is the primary key, so twice is an error.
       expect({

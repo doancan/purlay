@@ -65,6 +65,7 @@ export interface AdminEmailVerification {
 
 export interface Attachments {
   channel_id: string | null;
+  claimed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   file_name: string;
   height: number | null;
@@ -317,6 +318,13 @@ export interface Mentions {
   created_at: Generated<Timestamp>;
   id: Generated<string>;
   mentioned_user_id: string;
+  message_id: string;
+  workspace_id: string;
+}
+
+export interface MessageAttachments {
+  attachment_id: string;
+  channel_id: string;
   message_id: string;
   workspace_id: string;
 }
@@ -670,6 +678,7 @@ export interface DB {
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;
+  message_attachments: MessageAttachments;
   message_versions: MessageVersions;
   messages: Messages;
   missed_mail_letters: MissedMailLetters;
