@@ -179,9 +179,14 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/workspaces/members.ts#changeRole': {
     none: 'changes what a member may manage, not which channels they see (#51)',
   },
-  // Out of the workspace — removed by an admin, or leaving (D-152), both through `takeOut`: their
-  // sockets stop receiving every channel they could see in it.
+  // Out of the workspace — removed by an admin, or leaving (D-152), both through `takeOut`, which has chat
+  // take them out of its channels (`leaveAll`, D-250): their sockets stop receiving every channel they could
+  // see in it.
   'apps/api/src/modules/workspaces/members.ts#takeOut': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
+  },
+  'apps/api/src/features/chat/channels/workspace-channels.ts#leaveAll': {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
   },
