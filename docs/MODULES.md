@@ -209,6 +209,34 @@ module a written removal threshold — active workspaces, retention, support loa
 permission, onboarding) says what a user sees when the partner is absent: shown, hidden, or plain text. It is part
 of each module's section (§9).
 
+**Steps 6–8 in detail** — measured from the imports, not guessed. Nine imports in seven files go from a core
+module to a chat one; the other mutual pairs (`messages`↔`workspaces`, `integrations`↔`setup`) are chat reaching
+the core, which is allowed, and end when the core's side is inverted. Four ways to remove an edge, in the order to
+try them: move the symbol to the side that owns it; a port the core defines and a module implements; a list of
+**in-transaction hooks** that modules register at the composition root and the core runs inside its own
+transaction (the domain bus cannot do this: it is after commit and at most once, and a workspace must never exist
+without its first channel); the domain bus for what may be lost. Each is its own pull request, with behaviour
+unchanged and proved so:
+
+1. leaf moves — the GitHub client and the `ILIKE` escape to `platform/` (**built**);
+2. a `workspaceCreated` hook list; chat registers the creation of the default channel, and a hook that throws
+   rolls the whole workspace back;
+3. `dropFiles` to `attachments`, taking the ids of the messages it drops;
+4. erasure and retention hooks: the core keeps the loop, the drain and the audit line, chat the tombstoning;
+5. notifications: they are written only by messages and point at channels and messages, so they move to chat as
+   `mention_notifications`; a generic core inbox waits for a second writer;
+6. the channel file list leaves `attachments`;
+7. the workspace purge's message and channel steps become a chat hook, and `REMAINING_TABLES` splits by owner;
+8. the two foreign keys from `attachments` to `messages` are dropped, a reconciliation sweep in the orphan job
+   takes their place, and the ownership list empties — a migration, and so rehearsed on a copy and the owner's
+   call (D-250).
+
+The three behaviours that could change without a test failing: the default channel at workspace creation (an
+integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
+workspace); the erasure of a person's messages (the existing tests unchanged, and the rows compared before and
+after on a seeded fixture, with two erasures racing); and the nightly retention (a test that the hook is
+registered when chat is on, and the counts on aged fixtures identical).
+
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The
 places the core and chat share data — attachments, read state, notifications, which reference messages by key
