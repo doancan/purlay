@@ -124,6 +124,7 @@ describe('integration: upgrading from the previous release', () => {
       expect(after.error).toBeUndefined();
       expect(after.results?.map((result) => result.migrationName)).toEqual([
         '0079_attachment_claims',
+        '0080_away_chosen',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

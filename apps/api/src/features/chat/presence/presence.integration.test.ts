@@ -60,7 +60,7 @@ describe('integration: who hears that somebody came online', () => {
       const here = await aRoom(db, ['alice', 'bob'], { outsiders: ['erin'] });
       const alice = idOf(here, 'alice');
       const node = listening(db);
-      const change = { userId: alice, online: true, version: 7 };
+      const change = { userId: alice, online: true, away: false, version: 7 };
       await node.announce(change);
       expect(node.heard(idOf(here, 'bob'))).toEqual([change]);
       // In the workspace, not in the channel: presence is the workspace's, not a channel's.
@@ -75,10 +75,10 @@ describe('integration: who hears that somebody came online', () => {
       const there = await aRoom(db, ['carol', 'dave']);
       const carol = idOf(there, 'carol');
       const node = listening(db);
-      await node.announce({ userId: idOf(here, 'alice'), online: true, version: 1 });
+      await node.announce({ userId: idOf(here, 'alice'), online: true, away: false, version: 1 });
       expect(node.heard(carol)).toEqual([]);
       // The control: the same socket does hear somebody she shares a workspace with.
-      const dave = { userId: idOf(there, 'dave'), online: true, version: 2 };
+      const dave = { userId: idOf(there, 'dave'), online: true, away: false, version: 2 };
       await node.announce(dave);
       expect(node.heard(carol)).toEqual([dave]);
     });
@@ -89,14 +89,14 @@ describe('integration: who hears that somebody came online', () => {
       const here = await aRoom(db, ['alice', 'bob']);
       const bob = idOf(here, 'bob');
       const node = listening(db);
-      await node.announce({ userId: idOf(here, 'alice'), online: true, version: 1 });
+      await node.announce({ userId: idOf(here, 'alice'), online: true, away: false, version: 1 });
       expect(node.heard(bob)).toHaveLength(1);
       await db
         .deleteFrom('workspace_members')
         .where('workspace_id', '=', here.workspaceId)
         .where('user_id', '=', bob)
         .execute();
-      await node.announce({ userId: idOf(here, 'alice'), online: false, version: 2 });
+      await node.announce({ userId: idOf(here, 'alice'), online: false, away: false, version: 2 });
       expect(node.heard(bob)).toHaveLength(1);
     });
   });
@@ -117,14 +117,14 @@ describe('integration: who hears that somebody came online', () => {
           Promise.resolve(
             userIds.flatMap((userId) => {
               const at = online.get(userId);
-              return at === undefined ? [] : [{ userId, online: true, version: at }];
+              return at === undefined ? [] : [{ userId, online: true, away: false, version: at }];
             }),
           ),
         version: () => (version += 1),
       });
       // Carol is online, and in no workspace of Bob's: not in his.
       expect(snapshot).toEqual({
-        online: [{ userId: alice, online: true, version: 3 }],
+        online: [{ userId: alice, online: true, away: false, version: 3 }],
         version: 11,
       });
     });

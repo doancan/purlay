@@ -10613,17 +10613,18 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'presence-announces-every-join',
     why: 'the first socket on a second node is told as a change',
     file: 'apps/api/src/realtime/online.ts',
-    find: '        if (joined !== null) tell({ userId, online: true, version: seen(joined) });\n        await Promise.resolve();',
+    find: '        if (joined !== null) tell({ userId, online: true, away: false, version: seen(joined) });\n        await Promise.resolve();',
     replace:
-      '        tell({ userId, online: true, version: seen(joined ?? version) });\n        await Promise.resolve();',
+      '        tell({ userId, online: true, away: false, version: seen(joined ?? version) });\n        await Promise.resolve();',
     tests: ['apps/api/src/realtime/online.directory.test.ts'],
   },
   {
     id: 'presence-announces-every-leave',
     why: 'the last socket on one node tells the room the person is offline while another node holds them',
     file: 'apps/api/src/realtime/online.ts',
-    find: '          if (left !== null) tell({ userId, online: false, version: seen(left) });',
-    replace: '          tell({ userId, online: false, version: seen(left ?? next()) });',
+    find: '          if (left !== null) tell({ userId, online: false, away: false, version: seen(left) });',
+    replace:
+      '          tell({ userId, online: false, away: false, version: seen(left ?? next()) });',
     tests: ['apps/api/src/realtime/online.directory.test.ts'],
   },
   {

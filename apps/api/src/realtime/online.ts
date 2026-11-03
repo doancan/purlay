@@ -198,7 +198,7 @@ export const onlinePresence = ({
             return;
           }
           if (joined !== null && online.has(userId)) {
-            tell({ userId, online: true, version: seen(joined) });
+            tell({ userId, online: true, away: false, version: seen(joined) });
           }
         });
       }
@@ -237,7 +237,7 @@ export const onlinePresence = ({
       const version = next();
       online.set(userId, version);
       if (directory === undefined) {
-        tell({ userId, online: true, version });
+        tell({ userId, online: true, away: false, version });
         return;
       }
       inTurn(userId, async () => {
@@ -252,7 +252,7 @@ export const onlinePresence = ({
           });
           joined = version;
         }
-        if (joined !== null) tell({ userId, online: true, version: seen(joined) });
+        if (joined !== null) tell({ userId, online: true, away: false, version: seen(joined) });
         await Promise.resolve();
       });
     },
@@ -263,7 +263,7 @@ export const onlinePresence = ({
         leaving.delete(userId);
         online.delete(userId);
         if (directory === undefined) {
-          tell({ userId, online: false, version: next() });
+          tell({ userId, online: false, away: false, version: next() });
           return;
         }
         inTurn(userId, async () => {
@@ -279,7 +279,7 @@ export const onlinePresence = ({
             });
             return;
           }
-          if (left !== null) tell({ userId, online: false, version: seen(left) });
+          if (left !== null) tell({ userId, online: false, away: false, version: seen(left) });
           await Promise.resolve();
         });
       });
@@ -298,7 +298,7 @@ export const onlinePresence = ({
       }
       return userIds.flatMap((userId) => {
         const version = online.get(userId);
-        return version === undefined ? [] : [{ userId, online: true, version }];
+        return version === undefined ? [] : [{ userId, online: true, away: false, version }];
       });
     },
 

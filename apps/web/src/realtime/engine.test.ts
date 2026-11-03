@@ -1118,7 +1118,7 @@ describe('Deep Work changed in another tab (#526)', () => {
       w.deliver(
         frame({
           event: 'PRESENCE',
-          data: { changes: [{ userId: alice, online, version }] },
+          data: { changes: [{ userId: alice, online, away: false, version }] },
           ts: T0,
         }),
       );
@@ -1130,7 +1130,7 @@ describe('Deep Work changed in another tab (#526)', () => {
     say(true, 30);
     expect(w.engine.store.getState().presence[alice]).toEqual({ online: true, version: 30 });
     // A snapshot read before the latest change is kept out too.
-    w.engine.applyPresence([{ userId: alice, online: false, version: 25 }]);
+    w.engine.applyPresence([{ userId: alice, online: false, away: false, version: 25 }]);
     expect(w.engine.store.getState().presence[alice]?.online).toBe(true);
   });
 
@@ -1332,6 +1332,7 @@ describe('is the session still there', () => {
       mustEnrolTwoFactor: false,
       scheduledDeletions: [],
       modules: ['chat'],
+      awayChosen: false,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

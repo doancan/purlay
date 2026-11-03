@@ -497,11 +497,23 @@ export const TypingServerFrame = Type.Object({
  */
 export const PRESENCE_GRACE_MS = 30_000;
 
+/**
+ * How long a person who is online may say nothing before they are told as away (D-257): the page's own
+ * word that they are using Purlay (`ACTIVE_EVERY_MS`, at most once a minute) renews the window, so a
+ * person typing never reaches it.
+ */
+export const AWAY_AFTER_MS = 300_000;
+
 /** One person's presence, at a version that only grows on the node that said it. */
 export const PresenceChange = Type.Object(
   {
     userId: Uuid,
     online: Type.Boolean(),
+    /**
+     * Online and idle for `AWAY_AFTER_MS`, or away by the person's choice (D-257); always false when
+     * offline.
+     */
+    away: Type.Boolean(),
     /** Later is larger; a client keeps the largest it has heard for a person (D-136 §3). */
     version: Type.Integer({ minimum: 0 }),
   },
