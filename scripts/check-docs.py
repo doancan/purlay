@@ -82,7 +82,20 @@ for f, s in docs.items():
 # The migrations that exist are the files, not what a document says about them —
 # reading the list from SCHEMA.md compared the document to itself.
 applied = sorted(p.name for p in pathlib.Path('packages/db/migrations').glob('*.sql'))
-planned = sorted(set(re.findall(r'\b(00\d\d_[a-z_]+\.sql)', sch)))
+# A module's own set lives in a directory of its own and is named `<module>/<file>` (D-250, D-86): the core's
+# numbers are not its numbers, so a reference without the module's name is the core's.
+module_applied = sorted(
+    f"{d.name}/{p.name}"
+    for d in pathlib.Path('packages/db/migrations').iterdir() if d.is_dir()
+    for p in d.glob('*.sql')
+)
+planned = sorted(set(re.findall(r'(?<![\w/-])(00\d\d_[a-z_]+\.sql)', sch)))
+for name in module_applied:
+    if not re.search(rf'^{re.escape(name)}\b', sch, re.M):
+        problems['module migration missing from SCHEMA.md §12'].append(name)
+for name in sorted(set(re.findall(r'(?<![\w/-])([a-z][a-z0-9-]*/00\d\d_[a-z_]+\.sql)', sch))):
+    if name not in module_applied:
+        problems['SCHEMA.md names a module migration that is not a file'].append(name)
 for name in applied:
     # Listed as an entry of §12's list — a line of its own — not merely mentioned
     # somewhere in prose, which would pass for a file the list forgot.

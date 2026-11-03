@@ -1149,6 +1149,36 @@ CREATE INDEX idx_attachments_uploader   ON attachments (uploader_id);
 CREATE INDEX idx_attachments_workspace  ON attachments (workspace_id);
 ```
 
+**The link to the message is moving into chat (D-250, `MODULES.md` §10, step 8).** `0078` adds `claimed_at`, which the
+core reads in place of `message_id IS NULL` — null until a module has taken the upload, set in the transaction that
+links it — and makes `(id, workspace_id)` unique so that a table of chat's can key to both. Chat's own migration set
+adds `message_attachments`, below, with the keys `attachments` has to `messages` and a key to `attachments`; it is backfilled
+from `message_id` and `channel_id`, and the two are written together. **`message_id`, `channel_id` and their keys stay for one
+release** — the release before reads them — and go in the next, once nothing does.
+
+```sql
+-- chat/0001_message_attachments.sql
+CREATE TABLE message_attachments (
+    attachment_id UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL,
+    message_id    UUID NOT NULL,
+    channel_id    UUID NOT NULL,
+    CONSTRAINT message_attachments_attachment_fkey
+        FOREIGN KEY (attachment_id, workspace_id) REFERENCES attachments (id, workspace_id) ON DELETE CASCADE,
+    -- The same two keys `attachments` has: its workspace and its channel are those of its message (I-1).
+    CONSTRAINT message_attachments_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id) ON DELETE CASCADE,
+    CONSTRAINT message_attachments_message_workspace_fkey
+        FOREIGN KEY (message_id, workspace_id) REFERENCES messages (id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_message_attachments_message ON message_attachments (message_id);
+CREATE INDEX idx_message_attachments_channel ON message_attachments (channel_id, message_id DESC, attachment_id DESC);
+```
+
+`packages/db/src/upgrade.integration.test.ts` builds the previous release's schema, puts attachments in it as that
+release wrote them, migrates to head the way a process does and checks the claim, the link, each key on its own and
+that starting again changes nothing.
+
 ### 7.3. `mentions`
 
 Resolved by the parser at write time, so notification fan-out never re-parses message bodies.
@@ -2508,6 +2538,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0076_github_links.sql github_links, github_operations: what a thread points at on GitHub, and the bounded record that makes creating an issue recoverable  (D-246)
 0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
 0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-251)
+0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
+chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
