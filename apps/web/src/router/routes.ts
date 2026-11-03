@@ -40,6 +40,7 @@ const ROUTES = {
   saved: '/w/:slug/saved',
   drafts: '/w/:slug/drafts',
   unreads: '/w/:slug/unreads',
+  issues: '/w/:slug/issues',
   welcome: '/w/:slug/welcome',
   // Settings are a page with a navigation of its own (D-146); the bare address opens Profile.
   settingsHome: '/w/:slug/settings',
@@ -72,6 +73,7 @@ const ROUTE_MODULES: Readonly<Record<RouteName, string | null>> = {
   saved: 'chat',
   drafts: 'chat',
   unreads: 'chat',
+  issues: 'issues',
   welcome: null,
   settingsHome: null,
   settings: null,

@@ -257,6 +257,25 @@ describe('on a server that runs no chat', () => {
   });
 });
 
+describe('issues, a module of its own', () => {
+  test('is offered where the server runs it, beside chat or alone, and takes the person to the screen', async () => {
+    for (const modules of [['chat', 'issues'], ['issues']]) {
+      const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules }) });
+      const { options, view } = await mount(where, '/w/acme');
+      const row = view
+        .queryAllByRole('option')
+        .find((option) => option.textContent.startsWith('Issues'));
+      expect(row).toBeDefined();
+      expect(options().filter((text) => text.startsWith('Issues'))).toHaveLength(1);
+    }
+  });
+
+  test('is not offered where the server does not run it', async () => {
+    const { options } = await mount(apiWith(), '/w/acme');
+    expect(options().some((text) => text.startsWith('Issues'))).toBe(false);
+  });
+});
+
 describe('a row has a tile', () => {
   test('a person has their avatar and everything else has its glyph, none of it read aloud', async () => {
     const { view } = await mount();

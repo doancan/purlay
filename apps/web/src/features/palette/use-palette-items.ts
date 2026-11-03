@@ -30,6 +30,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const { user, modules } = useSession();
   // Channels, conversations and what is read are chat's: a server without it offers only the core's.
   const chat = modules.includes('chat');
+  const issues = modules.includes('issues');
   const { match, navigate } = useRoute();
   const { setChoice } = useTheme();
   const { openDirectMessage } = useActions();
@@ -167,6 +168,19 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
       }
     }
 
+    if (issues) {
+      items.push({
+        id: 'view:issues',
+        group: 'views',
+        label: t('issues.title'),
+        glyph: 'issues',
+        recency: '',
+        run: () => {
+          navigate(href('issues', { slug }));
+        },
+      });
+    }
+
     // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
     for (const section of sectionsFor(role, serverAdmin, modules)) {
       items.push({
@@ -259,6 +273,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     role,
     serverAdmin,
     chat,
+    issues,
     modules,
   ]);
 };

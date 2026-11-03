@@ -11,6 +11,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Link, useRoute } from '../../router/router-provider';
 import { Tooltip } from '../../ui/tooltip';
 import { InboxLink } from '../inbox/inbox-link';
+import { IssuesLink } from '../issues/issues-link';
 import { SavedLink } from '../saved/saved-link';
 import { DraftsLink } from '../drafts/drafts-link';
 import { SearchLink } from '../search/search-link';
@@ -89,6 +90,9 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
           <SearchLink />
           <SavedLink />
           <DraftsLink />
+        </WhenRun>
+        <WhenRun module="issues">
+          <IssuesLink />
         </WhenRun>
       </div>
       <div className="mt-auto">

@@ -4,7 +4,7 @@
  * writes itself, so it never depends on what Vite happened to emit today.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -167,6 +167,23 @@ describe('the shape the budget protects', () => {
     const problems = shapeProblems(dist, measure(dist));
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('assets/index-aaa.js contains syntax-highlighting code');
+  });
+
+  test('a module’s screen in an initial chunk is named, and the word it is found by is the screen’s own', () => {
+    const dist = aBuild({
+      'assets/index-aaa.js': 'h("div",{"data-screen":"screen-of-the-issues-module"})',
+      'theme-init.js': 'x',
+    });
+    const problems = shapeProblems(dist, measure(dist));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("assets/index-aaa.js contains the issues module's screen");
+    const clean = aBuild({ 'assets/index-aaa.js': 'const shell = 1;', 'theme-init.js': 'x' });
+    expect(shapeProblems(clean, measure(clean))).toEqual([]);
+    const screen = readFileSync(
+      join(import.meta.dirname, '../apps/web/src/features/issues/issues-screen.tsx'),
+      'utf8',
+    );
+    expect(screen).toContain("export const ISSUES_SCREEN = 'screen-of-the-issues-module';");
   });
 
   test('two locale catalogues in the initial chunks is named; one is allowed', () => {
