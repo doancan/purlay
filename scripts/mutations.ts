@@ -12972,6 +12972,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'composition-held-order-follows-the-list',
+    why: 'what every module holds (purge tables, export tables, erasure hooks) follows the build’s list, not the resolved order, so a requirement is not honoured (D-250, MODULES.md §3.2)',
+    file: 'apps/api/src/composition.ts',
+    find: '    inResolvedOrder(carriedRegistry.resolve(undefined)),\n',
+    replace: '    carried,\n',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-running-order-is-the-set',
+    why: 'the running modules act in the build’s list order, as the set of resolved ids filters it, not in the registry’s order (D-250, MODULES.md §3.2)',
+    file: 'apps/api/src/composition.ts',
+    find: '    inResolvedOrder(carriedRegistry.resolve(setting)),\n',
+    replace:
+      '    carried.filter((module) => carriedRegistry.resolve(setting).includes(module.manifest)),\n',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'composition-attachment-first-reader-only',
     why: 'a second running module’s attachments are unreadable: only the first reader is asked (D-250)',
     file: 'apps/api/src/composition.ts',

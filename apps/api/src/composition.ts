@@ -116,8 +116,10 @@ export interface Composition {
 }
 
 /**
- * The composition of the modules given. `bundled` is every module the build carries, so that a path of one that is
- * not run is known to be closed: with chat left out, its routes are not routes.
+ * The composition of the modules given, in the order given. `bundled` is every module the build carries, so that a path
+ * of one that is not run is known to be closed: with chat left out, its routes are not routes. Both lists are taken as
+ * ordered: `composeFor` is how a build gets them in the order the registry resolved (`MODULES.md` §3.2), and the order is
+ * what hook registration, the purge and the export tables follow.
  */
 export const compose = (
   modules: readonly BundledModule[],
@@ -125,10 +127,11 @@ export const compose = (
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
-  // What a process acts with is the modules it runs; what it keeps whole is every module whose rows exist.
+  // What a process acts with is the modules it runs; what it keeps whole is every module whose rows exist, in the same
+  // order whichever of them run (a module given that the build does not carry follows the build's).
   const holding = [
-    ...modules,
-    ...bundled.filter((module) => !modules.includes(module) && module.dataInCore),
+    ...bundled.filter((module) => module.dataInCore || modules.includes(module)),
+    ...modules.filter((module) => !bundled.includes(module)),
   ];
   for (const module of modules) {
     if (module.workspaceCreated !== undefined) workspaceCreated.register(module.workspaceCreated);
@@ -190,14 +193,27 @@ export const compose = (
   };
 };
 
-/** What a process runs when nothing says otherwise: every module this build carries. */
-export const composition: Composition = compose(bundledModules);
-
 /**
- * The composition for an operator's `MODULES` setting: unset is every module the build carries, `none` the core
- * alone. Throws `ModuleConfigError` naming every problem, for the process to stop on before it listens.
+ * The composition for an operator's `MODULES` setting over the modules a build carries: unset is every one, `none` the
+ * core alone. What acts is the running modules in the order the registry resolved, partners first; what is held is every
+ * carried module in the resolved order of the whole build, so the order does not depend on the setting. Throws
+ * `ModuleConfigError` naming every problem, for the process to stop on before it listens.
  */
-export const compositionFor = (setting: string | undefined): Composition => {
-  const named = new Set(registry.resolve(setting).map((module) => module.id));
-  return compose(bundledModules.filter((module) => named.has(module.manifest.id)));
+export const composeFor = (
+  carried: readonly BundledModule[],
+  setting: string | undefined,
+): Composition => {
+  const carriedRegistry = moduleRegistry(carried.map((module) => module.manifest));
+  const inResolvedOrder = (manifests: readonly ModuleManifest[]): BundledModule[] =>
+    manifests.flatMap((manifest) => carried.filter((module) => module.manifest === manifest));
+  return compose(
+    inResolvedOrder(carriedRegistry.resolve(setting)),
+    inResolvedOrder(carriedRegistry.resolve(undefined)),
+  );
 };
+
+export const compositionFor = (setting: string | undefined): Composition =>
+  composeFor(bundledModules, setting);
+
+/** What a process runs when nothing says otherwise: every module this build carries. */
+export const composition: Composition = compositionFor(undefined);

@@ -4,6 +4,7 @@ import {
   compose,
   composition,
   compositionFor,
+  composeFor,
   registry,
   type BundledModule,
 } from './composition';
@@ -12,7 +13,7 @@ import { issuesModule } from './features/issues/module';
 import type { AttachmentReader } from './modules/attachments/readable';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
 import { attachmentNotFound, AppError } from './platform/errors';
-import { aDatabaseThatMustNotBeTouched } from './testing/doubles';
+import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
 
 const another: BundledModule = {
   manifest: { id: 'other', requires: [], optional: [], provides: [] },
@@ -131,6 +132,66 @@ describe('the application as its modules make it', () => {
       await expect(
         compose([broken, second], [broken, second]).readAttachment(database, 'u', 'in-second'),
       ).rejects.toThrow('the database is gone');
+    });
+  });
+
+  describe('in what order the modules take part', () => {
+    const calls: string[] = [];
+    const named = (
+      id: string,
+      requires: readonly string[],
+      table: 'issues' | 'mentions' | 'channels',
+    ): BundledModule => ({
+      dataInCore: true,
+      manifest: { id, requires, optional: [], provides: [] },
+      userErased: async () => {
+        calls.push(id);
+      },
+      workspacePurge: { before: [], after: [], tables: [table] },
+    });
+    // `consumer` sorts before `provider` and stands first in the build's list, but needs it started first.
+    const consumer = named('consumer', ['provider'], 'issues');
+    const provider = named('provider', [], 'mentions');
+    const loner = named('zloner', [], 'channels');
+    const carried = [consumer, provider, loner];
+    const idsOf = (modules: readonly BundledModule[]): string[] =>
+      modules.map((module) => module.manifest.id);
+
+    test('is the order the registry resolved, not the order the build lists them in', () => {
+      expect(idsOf(composeFor(carried, undefined).modules)).toEqual([
+        'provider',
+        'zloner',
+        'consumer',
+      ]);
+    });
+
+    test('keeps what every module holds in that order whichever of them run', async () => {
+      for (const setting of [undefined, 'none', 'provider', 'zloner', 'provider,consumer']) {
+        calls.length = 0;
+        const composed = composeFor(carried, setting);
+        expect(composed.workspacePurge.tables).toEqual(['mentions', 'channels', 'issues']);
+        await composed.userErased.run(aTransactionThatMustNotBeTouched(), 'u');
+        expect(calls).toEqual(['provider', 'zloner', 'consumer']);
+      }
+    });
+
+    test('has the modules that run act in the resolved order, and only those', () => {
+      expect(idsOf(composeFor(carried, 'consumer,zloner,provider').modules)).toEqual([
+        'provider',
+        'zloner',
+        'consumer',
+      ]);
+      expect(idsOf(composeFor(carried, 'zloner').modules)).toEqual(['zloner']);
+      expect(idsOf(composeFor(carried, 'none').modules)).toEqual([]);
+    });
+
+    test('is the same for a build’s own modules whatever the setting', () => {
+      expect(compositionFor(undefined).workspacePurge.tables).toEqual(
+        compositionFor('issues').workspacePurge.tables,
+      );
+      expect(compositionFor('none').workspacePurge.tables).toEqual(
+        compositionFor('chat').workspacePurge.tables,
+      );
     });
   });
 

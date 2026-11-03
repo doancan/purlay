@@ -498,7 +498,7 @@ for the channels, the purge's steps and tables, the two catalogues, the columns 
 and what it contributes (`features/chat/module.ts`), and a process with no module has the core alone, shown on a real
 database. (b) *`MODULES` read at boot* (**built**): `compositionFor(setting)` hands the process only the modules it names, and a setting that
 names none the build carries stops it before it listens; the migrations (`MIGRATE_ON_START`, `db:migrate`, readiness and
-the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert.
+the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert. **Order** is the registry's resolved one (partners first): the modules that run act in it, and what every carried module holds (erasure hooks, the purge's steps and tables, the export tables) follows the resolved order of the whole build, so it does not change with the `MODULES` value (`composeFor`).
 (c) *Routes, jobs and commands* (**built**): a module's manifest lists its route templates and its jobs; a path of a module that
 is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one that acts for its
 users (chat's missed-mail letter) exits `0` with a line saying so and is left out of the status report — its sweeps and the retention purge still run, the rows being there — and `GET /api/me` lists the modules the server runs (the public `GET /api/client` does not, PR #963).
