@@ -9,7 +9,6 @@
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import { NEEDS_YOU } from '@purlay/types';
 import type { ChannelStateUpdate } from './delivery';
-import { enqueueObjectDeletions } from '../attachments/deletions';
 
 /** A message as the counters saw it when it was sent. */
 export interface Counted {
@@ -209,38 +208,6 @@ export const takeBackLive = async (
   for (const channelId of [...byChannel.keys()].sort()) {
     await takeBack(transaction, now, channelId, byChannel.get(channelId) ?? []);
   }
-};
-
-/**
- * The files of these messages: rows deleted, their bytes off the workspace, their keys queued for the
- * store in the same transaction (D-141) and returned, for the caller to delete once it has committed.
- */
-export const dropFiles = async (
-  transaction: Transaction,
-  workspaceId: string,
-  messageIds: readonly string[],
-): Promise<{ readonly count: number; readonly keys: readonly string[] }> => {
-  if (messageIds.length === 0) return { count: 0, keys: [] };
-  const gone = await transaction
-    .deleteFrom('attachments')
-    .where('message_id', 'in', messageIds)
-    .returning(['size_bytes', 'storage_key', 'thumbnail_key'])
-    .execute();
-  if (gone.length > 0) {
-    const bytes = gone.reduce((sum, row) => sum + BigInt(row.size_bytes), 0n);
-    await transaction
-      .updateTable('workspaces')
-      .set({
-        storage_used_bytes: sql<string>`greatest(storage_used_bytes - ${bytes.toString()}::bigint, 0)`,
-      })
-      .where('id', '=', workspaceId)
-      .execute();
-  }
-  const keys = gone.flatMap((row) =>
-    row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
-  );
-  await enqueueObjectDeletions(transaction, keys);
-  return { count: gone.length, keys };
 };
 
 /** The memberships of these channels, locked in one order: channel, then person (D-106 §3). */

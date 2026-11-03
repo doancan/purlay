@@ -15,12 +15,12 @@ import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions } from '../attachments/deletions';
+import { dropFiles } from '../attachments/deletions';
 import { recordAudit } from '../audit/audit';
 import type { JobDependencies } from '../jobs/jobs';
 import {
   REMOVED_COLUMNS,
   channelsOf,
-  dropFiles,
   lockMemberships,
   takeBackLive,
   tombstoneRows,

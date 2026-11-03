@@ -27,7 +27,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
 import { recordServerAudit } from '../audit/server-audit';
 import type { JobDependencies } from '../jobs/jobs';
-import { dropFiles } from '../messages/tombstone';
+import { dropFiles } from '../attachments/deletions';
 
 /** Messages or uploads one transaction takes. */
 export const WORKSPACE_PURGE_BATCH = 500;
