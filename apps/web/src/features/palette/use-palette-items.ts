@@ -27,13 +27,15 @@ import type { PaletteItem } from './rank';
 export const usePaletteItems = (): readonly PaletteItem[] => {
   const { t, setLocale } = useI18n();
   const { workspace } = useWorkspace();
-  const { user } = useSession();
+  const { user, modules } = useSession();
+  // Channels, conversations and what is read are chat's: a server without it offers only the core's.
+  const chat = modules.includes('chat');
   const { match, navigate } = useRoute();
   const { setChoice } = useTheme();
   const { openDirectMessage } = useActions();
   const deepWork = useDeepWorkControls();
   const markAllRead = useMarkAllRead();
-  const channels = useChannels(workspace.id).data;
+  const channels = useChannels(workspace.id, chat).data;
   const members = useMembers(workspace.id).data;
   const role = useWorkspaceRole();
   const serverAdmin = useIsServerAdmin();
@@ -46,123 +48,127 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     const ordered = inSidebarOrder(channels ?? []);
     const current = ordered.find((c) => c.id === currentChannelId);
 
-    items.push({
-      id: 'view:questions',
-      group: 'views',
-      label: t('questions.title'),
-      glyph: 'open-question',
-      recency: '',
-      run: () => {
-        navigate(href('questions', { slug }));
-      },
-    });
-    // The rail's places, by name (`PRD.md` §4.6): the palette is the product's search over where to go.
-    for (const view of [
-      { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
-      { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
-      { id: 'drafts', label: t('drafts.title'), glyph: 'edit', to: href('drafts', { slug }) },
-      {
-        id: 'unreads',
-        label: t('unreads.title'),
-        glyph: 'channels',
-        to: href('unreads', { slug }),
-      },
-      { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
-    ] as const) {
+    if (chat) {
       items.push({
-        id: `view:${view.id}`,
+        id: 'view:questions',
         group: 'views',
-        label: view.label,
-        glyph: view.glyph,
+        label: t('questions.title'),
+        glyph: 'open-question',
         recency: '',
         run: () => {
-          navigate(view.to);
+          navigate(href('questions', { slug }));
         },
       });
-    }
-    if (current !== undefined) {
-      items.push({
-        id: 'view:feed',
-        group: 'views',
-        label: t('palette.view.feed'),
-        hint: displayName(current, user.id, t('sidebar.you'), t('user.erased')),
-        glyph: 'channel',
-        recency: '',
-        run: () => {
-          navigate(href('channel', { slug, channelId: current.id }));
+      // The rail's places, by name (`PRD.md` §4.6): the palette is the product's search over where to go.
+      for (const view of [
+        { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
+        { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
+        { id: 'drafts', label: t('drafts.title'), glyph: 'edit', to: href('drafts', { slug }) },
+        {
+          id: 'unreads',
+          label: t('unreads.title'),
+          glyph: 'channels',
+          to: href('unreads', { slug }),
         },
-      });
-    }
-
-    for (const channel of ordered) {
-      // A group conversation is found by its people (D-127); one with a single other person is the
-      // People group's.
-      if (channel.type === 'direct_message') {
-        if (channel.peer !== null) continue;
+        { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
+      ] as const) {
         items.push({
-          id: `group:${channel.id}`,
+          id: `view:${view.id}`,
+          group: 'views',
+          label: view.label,
+          glyph: view.glyph,
+          recency: '',
+          run: () => {
+            navigate(view.to);
+          },
+        });
+      }
+      if (current !== undefined) {
+        items.push({
+          id: 'view:feed',
+          group: 'views',
+          label: t('palette.view.feed'),
+          hint: displayName(current, user.id, t('sidebar.you'), t('user.erased')),
+          glyph: 'channel',
+          recency: '',
+          run: () => {
+            navigate(href('channel', { slug, channelId: current.id }));
+          },
+        });
+      }
+
+      for (const channel of ordered) {
+        // A group conversation is found by its people (D-127); one with a single other person is the
+        // People group's.
+        if (channel.type === 'direct_message') {
+          if (channel.peer !== null) continue;
+          items.push({
+            id: `group:${channel.id}`,
+            group: 'channels',
+            label: displayName(channel, user.id, t('sidebar.you'), t('user.erased')),
+            keywords: channel.peers.map((person) => person.username),
+            glyph: 'people',
+            faces: channel.peers,
+            recency: channel.lastMessageAt ?? '',
+            run: () => {
+              navigate(href('channel', { slug, channelId: channel.id }));
+            },
+          });
+          continue;
+        }
+        items.push({
+          id: `channel:${channel.id}`,
           group: 'channels',
-          label: displayName(channel, user.id, t('sidebar.you'), t('user.erased')),
-          keywords: channel.peers.map((person) => person.username),
-          glyph: 'people',
-          faces: channel.peers,
+          label: channel.name ?? '',
+          glyph: channel.type === 'private' ? 'private-channel' : 'channel',
           recency: channel.lastMessageAt ?? '',
           run: () => {
             navigate(href('channel', { slug, channelId: channel.id }));
           },
         });
-        continue;
       }
-      items.push({
-        id: `channel:${channel.id}`,
-        group: 'channels',
-        label: channel.name ?? '',
-        glyph: channel.type === 'private' ? 'private-channel' : 'channel',
-        recency: channel.lastMessageAt ?? '',
-        run: () => {
-          navigate(href('channel', { slug, channelId: channel.id }));
-        },
-      });
-    }
 
-    // Public channels the person has not joined: found too, and said so — opening one reads it,
-    // with the Join bar its feed already offers.
-    for (const channel of channels ?? []) {
-      if (channel.type !== 'public' || channel.state !== null) continue;
-      items.push({
-        id: `channel:${channel.id}`,
-        group: 'channels',
-        label: channel.name ?? '',
-        hint: t('palette.notJoined'),
-        glyph: 'channel',
-        recency: '',
-        run: () => {
-          navigate(href('channel', { slug, channelId: channel.id }));
-        },
-      });
-    }
+      // Public channels the person has not joined: found too, and said so — opening one reads it,
+      // with the Join bar its feed already offers.
+      for (const channel of channels ?? []) {
+        if (channel.type !== 'public' || channel.state !== null) continue;
+        items.push({
+          id: `channel:${channel.id}`,
+          group: 'channels',
+          label: channel.name ?? '',
+          hint: t('palette.notJoined'),
+          glyph: 'channel',
+          recency: '',
+          run: () => {
+            navigate(href('channel', { slug, channelId: channel.id }));
+          },
+        });
+      }
 
-    for (const { user: person } of members ?? []) {
-      const existing = ordered.find((c) => c.type === 'direct_message' && c.peer?.id === person.id);
-      const you = person.id === user.id;
-      items.push({
-        id: `person:${person.id}`,
-        group: 'people',
-        label: you ? t('sidebar.you') : person.displayName,
-        keywords: you ? [person.username, person.displayName] : [person.username],
-        hint: `@${person.username}`,
-        glyph: 'person',
-        avatar: { name: person.displayName, username: person.username },
-        recency: existing?.lastMessageAt ?? '',
-        run: async () => {
-          const channel = existing ?? (await openDirectMessage(workspace.id, person.id));
-          navigate(href('channel', { slug, channelId: channel.id }));
-        },
-      });
+      for (const { user: person } of members ?? []) {
+        const existing = ordered.find(
+          (c) => c.type === 'direct_message' && c.peer?.id === person.id,
+        );
+        const you = person.id === user.id;
+        items.push({
+          id: `person:${person.id}`,
+          group: 'people',
+          label: you ? t('sidebar.you') : person.displayName,
+          keywords: you ? [person.username, person.displayName] : [person.username],
+          hint: `@${person.username}`,
+          glyph: 'person',
+          avatar: { name: person.displayName, username: person.username },
+          recency: existing?.lastMessageAt ?? '',
+          run: async () => {
+            const channel = existing ?? (await openDirectMessage(workspace.id, person.id));
+            navigate(href('channel', { slug, channelId: channel.id }));
+          },
+        });
+      }
     }
 
     // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
-    for (const section of sectionsFor(role, serverAdmin)) {
+    for (const section of sectionsFor(role, serverAdmin, modules)) {
       items.push({
         id: `settings:${section.id}`,
         group: 'settings',
@@ -177,14 +183,16 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     }
 
     // What `Shift+Esc` does (D-238), for a person who does not know the key.
-    items.push({
-      id: 'read-all',
-      group: 'settings',
-      label: t('readAll.label'),
-      glyph: 'confirm',
-      recency: '',
-      run: markAllRead,
-    });
+    if (chat) {
+      items.push({
+        id: 'read-all',
+        group: 'settings',
+        label: t('readAll.label'),
+        glyph: 'confirm',
+        recency: '',
+        run: markAllRead,
+      });
+    }
     // Deep Work as the account menu offers it (D-124): the whiles to start it for, or its end.
     if (deepWork !== null && deepWork.until === null) {
       for (const choice of DEEP_WORK_CHOICES) {
@@ -250,5 +258,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     markAllRead,
     role,
     serverAdmin,
+    chat,
+    modules,
   ]);
 };

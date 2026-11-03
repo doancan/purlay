@@ -67,7 +67,9 @@ const Opener = (): React.JSX.Element => {
         Shortcuts
       </button>
       <span>{open ? 'wanted' : 'not wanted'}</span>
-      {deferred !== null && <deferred.ShortcutsDialog open={open} mac onOpenChange={setOpen} />}
+      {deferred !== null && (
+        <deferred.ShortcutsDialog open={open} mac modules={['chat']} onOpenChange={setOpen} />
+      )}
     </>
   );
 };
