@@ -46,6 +46,7 @@ import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { Logger } from '../platform/logging';
 import type { PresenceRegistry } from './presence';
+import type { OnlinePresence } from './online';
 import type { Attention } from '../platform/attention';
 import { requireWorkspaceMembership } from '../platform/tenancy';
 import { noteSessionActivity, type SessionLifetime } from '../modules/auth/session-lifetime';
@@ -77,6 +78,8 @@ export interface RouterDependencies {
   readonly presence: PresenceRegistry;
   /** Who is in front of a workspace's page now: what holds their pushes back (D-143). */
   readonly attention: Attention;
+  /** Who is online, and idle: `ACTIVE` is the page's word that keeps its person from being told away (D-257). */
+  readonly online: Pick<OnlinePresence, 'active'>;
   /** How long a session lives on the server now (D-244): `ACTIVE` is use the idle timeout counts. */
   readonly sessionLifetime: () => SessionLifetime;
   readonly log: Logger;
@@ -414,6 +417,8 @@ export const routeFrame = async (
         // same 404 a stranger gets.
         await requireWorkspaceMembership(database, identity.userId, parsed.payload.workspaceId);
         dependencies.attention.heard(identity.userId, parsed.payload.workspaceId);
+        // And the person's page spoke: their five quiet minutes start again (D-257).
+        dependencies.online.active(identity.userId);
         // The person is using this session, over a socket no request resolves: what an idle timeout counts (D-244).
         await noteSessionActivity(
           database,

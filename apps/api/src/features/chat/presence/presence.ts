@@ -8,6 +8,11 @@
  *
  * **A workspace's presence** is its members online now, for a member of it; anybody else is told the
  * workspace does not exist, as for every workspace route (D-34).
+ *
+ * **Away is idleness or the person's choice** (D-257): the node says whether they are idle, and their own
+ * `users.away_chosen` is read here as the change is told, and as the snapshot is read, so the first change
+ * heard after an arrival is already away for somebody who chose it — nobody sees active-then-away. Offline
+ * wins: an offline change is never away, and nobody offline is in a snapshot.
  */
 import type { Executor } from '@purlay/db';
 import type { PresenceChange, PresenceSnapshot } from '@purlay/types';
@@ -37,6 +42,16 @@ const coMembers = async (executor: Executor, userId: string): Promise<readonly s
   return [...everyone];
 };
 
+/** Whether the person chose to appear away; false for nobody (an account erased meanwhile). */
+const awayChosen = async (executor: Executor, userId: string): Promise<boolean> =>
+  (
+    await executor
+      .selectFrom('users')
+      .select('away_chosen')
+      .where('id', '=', userId)
+      .executeTakeFirst()
+  )?.away_chosen ?? false;
+
 export const announcePresence = async (
   {
     database,
@@ -52,12 +67,14 @@ export const announcePresence = async (
   change: PresenceChange,
 ): Promise<void> => {
   const told = await coMembers(database, change.userId);
+  const chosen = change.online && (await awayChosen(database, change.userId));
+  const state: PresenceChange = { ...change, away: change.online && (change.away || chosen) };
   await publishAfterCommit(log, [
     told.map((memberId) =>
       publication('PRESENCE', () =>
         bus.publish(userTopic(memberId), {
           event: 'PRESENCE',
-          data: { changes: [change] },
+          data: { changes: [state] },
           ts: clock.now().getTime(),
         }),
       ),
@@ -71,15 +88,23 @@ export const workspacePresence = async (
   context: WorkspaceContext,
   online: OnlineReader,
 ): Promise<PresenceSnapshot> => {
+  // The members and their choices, in one read: a member's away is their idleness or their choice.
   const members = await executor
     .selectFrom('workspace_members')
-    .select('user_id')
+    .innerJoin('users', 'users.id', 'workspace_members.user_id')
+    .select(['workspace_members.user_id', 'users.away_chosen'])
     .where('workspace_id', '=', context.workspaceId)
     .execute();
+  const chose = new Set(
+    members.filter((member) => member.away_chosen).map((member) => member.user_id),
+  );
   // The version first: anybody who goes online after it is heard by a frame at a later one.
   const version = await online.version();
   return {
-    online: [...(await online.onlineAmong(members.map((member) => member.user_id)))],
+    online: (await online.onlineAmong(members.map((member) => member.user_id))).map((change) => ({
+      ...change,
+      away: change.away || chose.has(change.userId),
+    })),
     version,
   };
 };

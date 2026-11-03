@@ -101,6 +101,53 @@ describe('integration: who hears that somebody came online', () => {
     });
   });
 
+  test('the person’s own choice is added to what is told, and never to an offline change (D-257)', async () => {
+    await withRollback(async (db) => {
+      const here = await aRoom(db, ['alice', 'bob']);
+      const alice = idOf(here, 'alice');
+      const bob = idOf(here, 'bob');
+      const node = listening(db);
+      await node.announce({ userId: alice, online: true, away: false, version: 1 });
+      await db.updateTable('users').set({ away_chosen: true }).where('id', '=', alice).execute();
+      // Read as it is told: the change after the choice is away, though the node told it active.
+      await node.announce({ userId: alice, online: true, away: false, version: 2 });
+      await node.announce({ userId: alice, online: false, away: false, version: 3 });
+      expect(node.heard(bob)).toEqual([
+        { userId: alice, online: true, away: false, version: 1 },
+        { userId: alice, online: true, away: true, version: 2 },
+        { userId: alice, online: false, away: false, version: 3 },
+      ]);
+    });
+  });
+
+  test('a workspace’s presence carries away for an idle member and for one who chose it (D-257)', async () => {
+    await withRollback(async (db) => {
+      const here = await aRoom(db, ['alice', 'bob', 'carol']);
+      const alice = idOf(here, 'alice');
+      const bob = idOf(here, 'bob');
+      const carol = idOf(here, 'carol');
+      await db
+        .updateTable('users')
+        .set({ away_chosen: true })
+        .where('id', 'in', [alice, carol])
+        .execute();
+      const context = await requireWorkspaceMembership(db, bob, here.workspaceId);
+      // Alice chose away and is not idle; Bob is idle and chose nothing; Carol chose away and is offline.
+      const snapshot = await workspacePresence(db, context, {
+        onlineAmong: (userIds) =>
+          Promise.resolve(
+            userIds.flatMap((userId) =>
+              userId === carol ? [] : [{ userId, online: true, away: userId === bob, version: 5 }],
+            ),
+          ),
+        version: () => 6,
+      });
+      expect(
+        Object.fromEntries(snapshot.online.map((change) => [change.userId, change.away])),
+      ).toEqual({ [alice]: true, [bob]: true });
+    });
+  });
+
   test('a workspace’s presence is its members online, and the version everyone else is offline at', async () => {
     await withRollback(async (db) => {
       const here = await aRoom(db, ['alice', 'bob']);
