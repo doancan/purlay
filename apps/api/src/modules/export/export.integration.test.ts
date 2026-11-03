@@ -10,7 +10,13 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { chmod, mkdtemp, readdir, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeIntegrationDatabase, sql, withRollback, type Transaction } from '@purlay/db';
+import {
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  type Database,
+  type Transaction,
+} from '@purlay/db';
 import { ExportManifest, messageId } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { fixedClock } from '../../platform/clock';
@@ -22,8 +28,10 @@ import { aMemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { recordAudit } from '../audit/audit';
 import { sendMessage } from '../../features/chat/messages/messages';
-import { everyChannel, exportWorkspace, schemaOf, TABLE_ORDER } from './export';
-import { COLUMNS, EXCLUDED, MIGRATOR_TABLES, type ExportedTable } from './tables';
+import { exportWorkspace, schemaOf } from './export';
+import { everyChannel } from '../../features/chat/export';
+import { MIGRATOR_TABLES } from './tables';
+import { EVERY_TABLE_DECIDED, EXCLUDED_FROM_EXPORT, exportCatalogue } from '../../export-catalogue';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -185,7 +193,7 @@ const fill = async (
   return { secrets: [feedSecret, tokenHash, storageKey], ids: [id, fileId, incident] };
 };
 
-const lines = async (directory: string, table: ExportedTable): Promise<Record<string, unknown>[]> =>
+const lines = async (directory: string, table: string): Promise<Record<string, unknown>[]> =>
   (await readFile(join(directory, `${table}.ndjson`), 'utf8'))
     .split('\n')
     .filter((line) => line !== '')
@@ -231,12 +239,18 @@ describe('integration: exporting a workspace', () => {
         .where('id', '=', a.workspaceId)
         .executeTakeFirstOrThrow();
       const { path, manifest } = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         workspace,
         {
           kind: 'all',
           workspaceId: a.workspaceId,
-          channelIds: await everyChannel(db, a.workspaceId),
+          prepared: { chat: await everyChannel(db, a.workspaceId) },
         },
         target,
       );
@@ -248,9 +262,13 @@ describe('integration: exporting a workspace', () => {
       // Every table written, each count its file's, and — the fixture's own check — none empty.
       const files = (await readdir(target)).sort();
       expect(files).toEqual(
-        [...TABLE_ORDER.map((table) => `${table}.ndjson`), 'blobs', 'manifest.json'].sort(),
+        [
+          ...exportCatalogue.order.map((table) => `${table}.ndjson`),
+          'blobs',
+          'manifest.json',
+        ].sort(),
       );
-      for (const table of TABLE_ORDER) {
+      for (const table of exportCatalogue.order) {
         const rows = await lines(target, table);
         expect({ table, rows: rows.length }).toEqual({ table, rows: manifest.tables[table] ?? -1 });
         expect({ table, empty: rows.length === 0 }).toEqual({ table, empty: false });
@@ -313,12 +331,18 @@ describe('integration: exporting a workspace', () => {
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'out');
       const workspace = { id: a.workspaceId, slug: 'acme', name: 'Acme' };
       await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         workspace,
         {
           kind: 'all',
           workspaceId: a.workspaceId,
-          channelIds: await everyChannel(db, a.workspaceId),
+          prepared: { chat: await everyChannel(db, a.workspaceId) },
         },
         target,
       );
@@ -329,8 +353,8 @@ describe('integration: exporting a workspace', () => {
       `.execute(db);
       const named = new Set<string>();
       for (const { table, column } of rows) {
-        if (!(table in COLUMNS)) continue;
-        for (const row of await lines(target, table as ExportedTable)) {
+        if (!exportCatalogue.order.some((name) => name === table)) continue;
+        for (const row of await lines(target, table)) {
           const value = row[column];
           if (typeof value === 'string') named.add(value);
         }
@@ -342,6 +366,8 @@ describe('integration: exporting a workspace', () => {
   });
 
   test('every table and every column of the catalogue is decided on', async () => {
+    // The compile-time half: the composition root does not compile while a table of the schema is undecided.
+    expect(EVERY_TABLE_DECIDED).toBe(true);
     await withRollback(async (db) => {
       const { rows } = await sql<{ table: string; columns: string[] }>`
         select table_name as table, array_agg(column_name::text order by column_name) as columns
@@ -349,7 +375,7 @@ describe('integration: exporting a workspace', () => {
         group by table_name
       `.execute(db);
       // The migrator's own tables come and go with how it ran; everything else is decided.
-      const decided = [...Object.keys(COLUMNS), ...Object.keys(EXCLUDED)];
+      const decided = [...exportCatalogue.order, ...Object.keys(EXCLUDED_FROM_EXPORT)];
       expect(
         rows
           .map((row) => row.table)
@@ -357,10 +383,10 @@ describe('integration: exporting a workspace', () => {
           .sort(),
       ).toEqual([...decided].sort());
       for (const row of rows) {
-        if (!(row.table in COLUMNS)) continue;
+        if (!exportCatalogue.order.some((name) => name === row.table)) continue;
         expect({ table: row.table, columns: row.columns }).toEqual({
           table: row.table,
-          columns: Object.keys(COLUMNS[row.table as ExportedTable]).sort(),
+          columns: Object.keys(exportCatalogue.table(row.table as keyof Database).columns).sort(),
         });
       }
     });
@@ -371,9 +397,15 @@ describe('integration: exporting a workspace', () => {
       const a = await aRoom(db, ['pat']);
       const target = await mkdtemp(join(tmpdir(), 'purlay-export-'));
       const failure = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: a.workspaceId, channelIds: [] },
+        { kind: 'all', workspaceId: a.workspaceId, prepared: { chat: [] } },
         target,
       ).then(
         () => null,
@@ -418,13 +450,19 @@ describe('integration: exporting a workspace', () => {
 
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'scoped');
       await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
         // b's channel passed by mistake: it must select nothing.
         {
           kind: 'visible-to-owner',
           workspaceId: a.workspaceId,
-          channelIds: [a.channelId, b.channelId],
+          prepared: { chat: [a.channelId, b.channelId] },
         },
         target,
       );
@@ -453,9 +491,15 @@ describe('integration: exporting a workspace', () => {
     await withRollback(async (db) => {
       const a = await aRoom(db, ['pat']);
       const failure = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: a.workspaceId, channelIds: [a.channelId] },
+        { kind: 'all', workspaceId: a.workspaceId, prepared: { chat: [a.channelId] } },
         join(tmpdir(), `purlay-no-such-${crypto.randomUUID()}`, 'out'),
       ).then(
         () => null,
@@ -471,9 +515,15 @@ describe('integration: exporting a workspace', () => {
       const shared = await mkdtemp(join(tmpdir(), 'purlay-export-'));
       await chmod(shared, 0o777);
       const failure = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: a.workspaceId, channelIds: [a.channelId] },
+        { kind: 'all', workspaceId: a.workspaceId, prepared: { chat: [a.channelId] } },
         join(shared, 'out'),
       ).then(
         () => null,
@@ -495,9 +545,15 @@ describe('integration: exporting a workspace', () => {
       await prepare(room);
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'out');
       const result = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          catalogue: exportCatalogue,
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+        },
         { id: room.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: room.workspaceId, channelIds: [room.channelId] },
+        { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
         target,
       ).then(
         (done) => done,
@@ -587,7 +643,7 @@ describe('integration: the schema an export is stamped with', () => {
  */
 const shapeOf = async (directory: string): Promise<Record<string, unknown>> => {
   const shape: Record<string, unknown> = {};
-  for (const table of TABLE_ORDER) {
+  for (const table of exportCatalogue.order) {
     const rows = await lines(directory, table);
     shape[table] = { rows: rows.length, columns: Object.keys(rows[0] ?? {}).sort() };
   }
@@ -608,12 +664,18 @@ describe('integration: the shape of an export', () => {
       for (const kind of ['all', 'visible-to-owner'] as const) {
         const target = join(await mkdtemp(join(tmpdir(), 'purlay-shape-')), kind);
         await exportWorkspace(
-          { database: db, clock, log: aRecordingLogger().log, storage: store },
+          {
+            catalogue: exportCatalogue,
+            database: db,
+            clock,
+            log: aRecordingLogger().log,
+            storage: store,
+          },
           workspace,
           {
             kind,
             workspaceId: room.workspaceId,
-            channelIds: await everyChannel(db, room.workspaceId),
+            prepared: { chat: await everyChannel(db, room.workspaceId) },
           },
           target,
         );

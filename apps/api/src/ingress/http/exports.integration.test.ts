@@ -38,6 +38,7 @@ import { sendMessage } from '../../features/chat/messages/messages';
 import { exportQueue } from '../../modules/export/queue';
 import { sayAlive, sweepExports } from '../../modules/export/requests';
 import { createApp } from './app';
+import { exportCatalogue } from '../../export-catalogue';
 
 let cloned: ClonedDatabase;
 
@@ -80,7 +81,13 @@ const aWorld = async (
     .where('workspace_id', '=', room.workspaceId)
     .where('user_id', '=', room.members['bob']?.userId ?? '')
     .execute();
-  const queue = exportQueue({ database: cloned.db, clock, log: silent, storage: store });
+  const queue = exportQueue({
+    catalogue: exportCatalogue,
+    database: cloned.db,
+    clock,
+    log: silent,
+    storage: store,
+  });
   const app = createApp(
     testDependencies({
       database: cloned.db,
@@ -364,6 +371,7 @@ describe('integration: an owner’s export', () => {
       if (refusesDelete) world.store.failing('delete', new Error('the bucket refuses'));
       const { log, lines } = aRecordingLogger();
       const queue = exportQueue({
+        catalogue: exportCatalogue,
         database: cloned.db,
         clock: {
           now: (): Date => {
@@ -541,6 +549,7 @@ describe('integration: an owner’s export', () => {
   test('a failure it cannot even record is logged, and the queue goes on', async () => {
     const { log, lines } = aRecordingLogger();
     const queue = exportQueue({
+      catalogue: exportCatalogue,
       database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
       clock,
       log,
@@ -559,7 +568,13 @@ describe('integration: an owner’s export', () => {
     const later = aMovableClock();
     later.advance(5 * 60_000);
     await sayAlive(
-      { database: cloned.db, clock: later, log: silent, storage: world.store },
+      {
+        catalogue: exportCatalogue,
+        database: cloned.db,
+        clock: later,
+        log: silent,
+        storage: world.store,
+      },
       'workspace_exports',
       asked.id,
     );
@@ -573,6 +588,7 @@ describe('integration: an owner’s export', () => {
     const { log, lines } = aRecordingLogger();
     await sayAlive(
       {
+        catalogue: exportCatalogue,
         database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
         clock,
         log,
