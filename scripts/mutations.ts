@@ -12740,8 +12740,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'export-catalogue-core-people-unasked',
     why: "the people the core's own rows name are left out of the users file (D-140, D-250)",
     file: 'apps/api/src/modules/export/catalogue.ts',
-    find: 'contributions.flatMap((contribution) => contribution.people(scope)),',
-    replace: 'modules.flatMap((contribution) => contribution.people(scope)),',
+    find: '        contributions\n          .filter((contribution) => !lacks(contribution.ownSet, scope.absent))',
+    replace:
+      '        modules\n          .filter((contribution) => !lacks(contribution.ownSet, scope.absent))',
     tests: ['apps/api/src/modules/export/catalogue.test.ts'],
   },
   {
@@ -12780,8 +12781,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'personal-catalogue-core-workspaces-unasked',
     why: "the workspaces the person is a member of are left out of the workspaces file when the core's own rows are not asked (D-241, D-250)",
     file: PERSONAL_CATALOGUE,
-    find: 'contributions.flatMap((contribution) => contribution.workspaces(userId)),',
-    replace: 'modules.flatMap((contribution) => contribution.workspaces(userId)),',
+    find: '        contributions\n          .filter(\n            (contribution) => !(contribution.ownSet ?? []).some((own) => absent.includes(own)),',
+    replace:
+      '        modules\n          .filter(\n            (contribution) => !(contribution.ownSet ?? []).some((own) => absent.includes(own)),',
     tests: [PERSONAL_CATALOGUE_TESTS],
   },
   {
