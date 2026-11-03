@@ -267,6 +267,7 @@ import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
+import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
 import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
@@ -1090,6 +1091,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    // Away by choice (D-257): stored, then told again through the presence this node keeps.
+    .put(
+      '/api/me/away',
+      async ({ request, body }) => await setMyAway(dependencies, sockets.online, request, body),
+    )
     .put('/api/me/locale', async ({ request, body, set }) => {
       await setMyLocale(dependencies, request, body);
       set.status = 204;

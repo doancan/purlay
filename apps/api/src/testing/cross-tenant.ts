@@ -845,6 +845,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'POST /api/native/token':
     'nobody is signed in yet: the code and verifier name the person who authorised, whatever the caller claims (D-191)',
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
+  'PUT /api/me/away':
+    'sets the caller’s own away choice and names no workspace; told only to co-members (D-257)',
   'GET /api/me/quiet-hours': 'reads the caller’s own quiet hours and names no workspace (D-234)',
   'PUT /api/me/quiet-hours': 'sets the caller’s own quiet hours and names no workspace (D-234)',
   'GET /api/me/missed-mail':

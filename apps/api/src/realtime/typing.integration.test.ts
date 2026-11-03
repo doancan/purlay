@@ -65,6 +65,7 @@ const aNode = (
           bus,
           presence,
           attention: nobodyActive,
+          online: { active: () => undefined },
           sessionLifetime: () => NO_SESSION_LIFETIME,
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),

@@ -98,6 +98,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           presence: inMemoryPresenceRegistry(clock),
           attention: nobodyActive,
+          online: { active: () => undefined },
           sessionLifetime: () => NO_SESSION_LIFETIME,
           log: createLogger({ level: 'silent' }),
           socket: hub,
