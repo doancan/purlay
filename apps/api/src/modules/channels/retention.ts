@@ -3,7 +3,7 @@
  * or at least so many whole days. **Only ever longer**, so no setting here deletes more than the
  * workspace's own window already would: a floor shorter than the workspace keeps now is refused, and a
  * workspace window lengthened past it later simply wins. What is kept is the longer of the two, which
- * the purge computes for itself on every batch (`modules/retention/purge.ts`); `effectiveDays` here is
+ * the purge computes for itself on every batch (`modules/messages/retention-purge.ts`); `effectiveDays` here is
  * that same rule, said to the owner.
  *
  * An owner's, to read and to set, as the workspace's window is (D-139 §4): keeping a team's history

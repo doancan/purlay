@@ -19,7 +19,7 @@
  */
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
-import { purgeRetention } from '../modules/retention/purge';
+import { purgeRetention } from '../modules/messages/retention-purge';
 import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
