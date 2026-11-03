@@ -899,8 +899,8 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'erasure-keeps-saved-items',
     why: 'what the person kept at hand outlives them',
-    file: 'apps/api/src/modules/users/erasure.ts',
-    find: "  await executor.deleteFrom('saved_messages').where('user_id', '=', person.id).execute();\n",
+    file: 'apps/api/src/features/chat/channels/user-hooks.ts',
+    find: "    await transaction.deleteFrom('saved_messages').where('user_id', '=', userId).execute();\n",
     replace: '',
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
@@ -11401,8 +11401,8 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'missed-mail-erasure-keeps-letters',
     why: 'an erased person’s letters and their stop links outlive them (D-240, D-139 §5)',
-    file: 'apps/api/src/modules/users/erasure.ts',
-    find: "  await executor.deleteFrom('missed_mail_letters').where('user_id', '=', person.id).execute();\n",
+    file: 'apps/api/src/features/chat/channels/user-hooks.ts',
+    find: "    await transaction.deleteFrom('missed_mail_letters').where('user_id', '=', userId).execute();\n",
     replace: '',
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
@@ -12554,5 +12554,13 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'channelIds: await channels.idsIn(executor, workspaceId),',
     replace: 'channelIds: [],',
     tests: ['apps/api/src/modules/workspaces/workspace-channels.integration.test.ts'],
+  },
+  {
+    id: 'erasure-hooks-not-run',
+    why: 'what the modules keep of an erased person — saved items, inbox, missed-mail letters — outlives them (D-139 §5, D-250)',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: '  await userErased.run(executor, person.id);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
 ];
