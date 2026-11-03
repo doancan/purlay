@@ -110,114 +110,179 @@ const lines = async (directory: string, table: string): Promise<Record<string, u
     .filter((line) => line !== '')
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 
+/** The fixture: pat in two workspaces with a footprint in each, beside others who did the same. */
+interface Fixture {
+  store: MemoryStore;
+  a: Room;
+  b: Room;
+  c: Room;
+  pat: Member;
+  ann: Member;
+  qui: Member;
+  patA: { message: string; file: string };
+  patB: { message: string; file: string };
+  annOwn: { message: string; file: string };
+  quiOwn: { message: string; file: string };
+  left: { id: string };
+  before: { message: { id: string } };
+  regretted: { message: { id: string } };
+  passwordHash: string;
+  totpSecret: string;
+  token: string;
+  tokenHash: string;
+}
+
+const aPersonWithAFootprint = async (db: Transaction): Promise<Fixture> => {
+  const store = aMemoryStore();
+  const a = await aRoom(db, ['pat', 'ann']);
+  const b = await aRoom(db, ['qui', 'pat2']);
+  const c = await aRoom(db, ['zed']);
+  // pat is in both: b's second member becomes pat.
+  const pat = member(a, 'pat');
+  const ann = member(a, 'ann');
+  const qui = member(b, 'qui');
+  for (const table of ['workspace_members', 'channel_members'] as const) {
+    await db
+      .updateTable(table)
+      .set({ user_id: pat.userId })
+      .where('user_id', '=', member(b, 'pat2').userId)
+      .execute();
+  }
+  const patInB: Member = {
+    ...pat,
+    context: { ...member(b, 'pat2').context, userId: pat.userId },
+  };
+  await db
+    .updateTable('channel_members')
+    .set({ notification_level: 'mentions', starred_at: NOW })
+    .where('user_id', '=', pat.userId)
+    .where('channel_id', '=', a.channelId)
+    .execute();
+
+  // Others write first, so each footprint has someone else's message to react to and save.
+  const annFirst = await sendMessage(db, fixedClock(next()), ann.context, {
+    id: messageId(next()),
+    content: 'ann wrote this first',
+  });
+  const quiFirst = await sendMessage(db, fixedClock(next()), qui.context, {
+    id: messageId(next()),
+    content: 'qui wrote this first',
+  });
+  await sendMessage(db, fixedClock(next()), member(c, 'zed').context, {
+    id: messageId(next()),
+    content: 'zed alone in c',
+  });
+  const patA = await footprint(db, store, a, pat, 'pat in acme', annFirst.message.id);
+  const patB = await footprint(db, store, b, patInB, 'pat in beta', quiFirst.message.id);
+  const annOwn = await footprint(db, store, a, ann, 'ann in acme', patA.message);
+  const quiOwn = await footprint(db, store, b, qui, 'qui in beta', patB.message);
+
+  // A private channel pat wrote in, then left: what they wrote there is still theirs.
+  const left = await db
+    .insertInto('channels')
+    .values({
+      workspace_id: a.workspaceId,
+      name: 'gone-from',
+      type: 'private',
+      created_by: ann.userId,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('channel_members')
+    .values({ channel_id: left.id, user_id: pat.userId, joined_at: NOW })
+    .execute();
+  const before = await sendMessage(
+    db,
+    fixedClock(next()),
+    { ...pat.context, channelId: left.id },
+    { id: messageId(next()), content: 'said before leaving' },
+  );
+  await db
+    .deleteFrom('channel_members')
+    .where('channel_id', '=', left.id)
+    .where('user_id', '=', pat.userId)
+    .execute();
+  // A message pat deleted: its words are not offered back.
+  const regretted = await sendMessage(db, fixedClock(next()), pat.context, {
+    id: messageId(next()),
+    content: 'regretted words',
+  });
+  await db
+    .updateTable('messages')
+    .set({ deleted_at: NOW })
+    .where('id', '=', regretted.message.id)
+    .execute();
+
+  // pat's secrets, each in its own table: none may ride out.
+  const passwordHash = `scrypt:${crypto.randomUUID()}`;
+  await db
+    .insertInto('accounts')
+    .values({
+      account_id: pat.userId,
+      provider_id: 'credential',
+      user_id: pat.userId,
+      password: passwordHash,
+    })
+    .execute();
+  const totpSecret = `sealed-${crypto.randomUUID()}`;
+  await db
+    .insertInto('two_factors')
+    .values({ user_id: pat.userId, secret: totpSecret, backup_codes: `codes-${totpSecret}` })
+    .execute();
+  const { token } = await aSession(db, clock, pat.userId);
+  const tokenHash = (
+    await db
+      .selectFrom('sessions')
+      .select('token_hash')
+      .where('user_id', '=', pat.userId)
+      .executeTakeFirstOrThrow()
+  ).token_hash;
+  return {
+    store,
+    a,
+    b,
+    c,
+    pat,
+    ann,
+    qui,
+    patA,
+    patB,
+    annOwn,
+    quiOwn,
+    left,
+    before,
+    regretted,
+    passwordHash,
+    totpSecret,
+    token,
+    tokenHash,
+  };
+};
+
 describe('integration: exporting a person’s own data', () => {
   test('holds exactly their rows, the places they name, and nothing of anybody else’s', async () => {
     await withRollback(async (db) => {
-      const store = aMemoryStore();
-      const a = await aRoom(db, ['pat', 'ann']);
-      const b = await aRoom(db, ['qui', 'pat2']);
-      const c = await aRoom(db, ['zed']);
-      // pat is in both: b's second member becomes pat.
-      const pat = member(a, 'pat');
-      const ann = member(a, 'ann');
-      const qui = member(b, 'qui');
-      for (const table of ['workspace_members', 'channel_members'] as const) {
-        await db
-          .updateTable(table)
-          .set({ user_id: pat.userId })
-          .where('user_id', '=', member(b, 'pat2').userId)
-          .execute();
-      }
-      const patInB: Member = {
-        ...pat,
-        context: { ...member(b, 'pat2').context, userId: pat.userId },
-      };
-      await db
-        .updateTable('channel_members')
-        .set({ notification_level: 'mentions', starred_at: NOW })
-        .where('user_id', '=', pat.userId)
-        .where('channel_id', '=', a.channelId)
-        .execute();
-
-      // Others write first, so each footprint has someone else's message to react to and save.
-      const annFirst = await sendMessage(db, fixedClock(next()), ann.context, {
-        id: messageId(next()),
-        content: 'ann wrote this first',
-      });
-      const quiFirst = await sendMessage(db, fixedClock(next()), qui.context, {
-        id: messageId(next()),
-        content: 'qui wrote this first',
-      });
-      await sendMessage(db, fixedClock(next()), member(c, 'zed').context, {
-        id: messageId(next()),
-        content: 'zed alone in c',
-      });
-      const patA = await footprint(db, store, a, pat, 'pat in acme', annFirst.message.id);
-      const patB = await footprint(db, store, b, patInB, 'pat in beta', quiFirst.message.id);
-      const annOwn = await footprint(db, store, a, ann, 'ann in acme', patA.message);
-      const quiOwn = await footprint(db, store, b, qui, 'qui in beta', patB.message);
-
-      // A private channel pat wrote in, then left: what they wrote there is still theirs.
-      const left = await db
-        .insertInto('channels')
-        .values({
-          workspace_id: a.workspaceId,
-          name: 'gone-from',
-          type: 'private',
-          created_by: ann.userId,
-        })
-        .returning('id')
-        .executeTakeFirstOrThrow();
-      await db
-        .insertInto('channel_members')
-        .values({ channel_id: left.id, user_id: pat.userId, joined_at: NOW })
-        .execute();
-      const before = await sendMessage(
-        db,
-        fixedClock(next()),
-        { ...pat.context, channelId: left.id },
-        { id: messageId(next()), content: 'said before leaving' },
-      );
-      await db
-        .deleteFrom('channel_members')
-        .where('channel_id', '=', left.id)
-        .where('user_id', '=', pat.userId)
-        .execute();
-      // A message pat deleted: its words are not offered back.
-      const regretted = await sendMessage(db, fixedClock(next()), pat.context, {
-        id: messageId(next()),
-        content: 'regretted words',
-      });
-      await db
-        .updateTable('messages')
-        .set({ deleted_at: NOW })
-        .where('id', '=', regretted.message.id)
-        .execute();
-
-      // pat's secrets, each in its own table: none may ride out.
-      const passwordHash = `scrypt:${crypto.randomUUID()}`;
-      await db
-        .insertInto('accounts')
-        .values({
-          account_id: pat.userId,
-          provider_id: 'credential',
-          user_id: pat.userId,
-          password: passwordHash,
-        })
-        .execute();
-      const totpSecret = `sealed-${crypto.randomUUID()}`;
-      await db
-        .insertInto('two_factors')
-        .values({ user_id: pat.userId, secret: totpSecret, backup_codes: `codes-${totpSecret}` })
-        .execute();
-      const { token } = await aSession(db, clock, pat.userId);
-      const tokenHash = (
-        await db
-          .selectFrom('sessions')
-          .select('token_hash')
-          .where('user_id', '=', pat.userId)
-          .executeTakeFirstOrThrow()
-      ).token_hash;
+      const {
+        store,
+        a,
+        b,
+        c,
+        pat,
+        ann,
+        qui,
+        patA,
+        patB,
+        annOwn,
+        quiOwn,
+        left,
+        before,
+        regretted,
+        passwordHash,
+        totpSecret,
+        token,
+        tokenHash,
+      } = await aPersonWithAFootprint(db);
 
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-personal-')), 'out');
       const { path, manifest } = await exportPerson(
@@ -375,3 +440,199 @@ describe('integration: exporting a person’s own data', () => {
     });
   });
 });
+
+/**
+ * The shape of what a person's export writes, held still so that moving its catalogue between modules (D-250)
+ * cannot change a file unseen: the tables in the order the manifest lists them, which is the order they are
+ * written in, and for each how many rows the fixture gives it and the columns of those rows. The values are
+ * random or time-bound; the shape is not.
+ */
+const shapeOf = async (
+  directory: string,
+  tables: Readonly<Record<string, number>>,
+): Promise<Record<string, unknown>> => {
+  const shape: Record<string, unknown> = {};
+  for (const table of Object.keys(tables)) {
+    const rows = await lines(directory, table);
+    shape[table] = { rows: rows.length, columns: Object.keys(rows[0] ?? {}).sort() };
+  }
+  return { order: Object.keys(tables), files: (await readdir(directory)).sort(), tables: shape };
+};
+
+describe('integration: the shape of a person’s export', () => {
+  test('is the one it has always written', async () => {
+    await withRollback(async (db) => {
+      const { store, pat } = await aPersonWithAFootprint(db);
+      const target = join(await mkdtemp(join(tmpdir(), 'purlay-personal-shape-')), 'out');
+      const { manifest } = await exportPerson(
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        { id: pat.userId, username: pat.username },
+        target,
+      );
+      expect(await shapeOf(target, manifest.tables)).toEqual(FROZEN_SHAPE);
+    });
+  });
+});
+
+/**
+ * As written when this test was made, before the catalogue moved between modules. A change that is meant says so
+ * by changing this, in the same pull request, with the reason.
+ */
+const FROZEN_SHAPE: Record<string, unknown> = {
+  order: [
+    'users',
+    'workspaces',
+    'workspace_members',
+    'channels',
+    'channel_members',
+    'messages',
+    'reactions',
+    'attachments',
+    'saved_messages',
+    'saved_searches',
+    'thread_follows',
+    'channel_bookmarks',
+  ],
+  files: [
+    'attachments.ndjson',
+    'blobs',
+    'channel_bookmarks.ndjson',
+    'channel_members.ndjson',
+    'channels.ndjson',
+    'manifest.json',
+    'messages.ndjson',
+    'reactions.ndjson',
+    'saved_messages.ndjson',
+    'saved_searches.ndjson',
+    'thread_follows.ndjson',
+    'users.ndjson',
+    'workspace_members.ndjson',
+    'workspaces.ndjson',
+  ],
+  tables: {
+    users: {
+      rows: 1,
+      columns: [
+        'avatar_url',
+        'created_at',
+        'deleted_at',
+        'display_name',
+        'email',
+        'email_verified',
+        'github_connected_at',
+        'github_id',
+        'github_login',
+        'id',
+        'is_server_admin',
+        'last_seen_at',
+        'locale',
+        'missed_mail_since',
+        'quiet_days',
+        'quiet_from',
+        'quiet_to',
+        'status_text',
+        'suspended_at',
+        'time_zone',
+        'title',
+        'two_factor_enabled',
+        'updated_at',
+        'username',
+      ],
+    },
+    workspaces: {
+      rows: 2,
+      columns: ['id', 'name', 'slug'],
+    },
+    workspace_members: {
+      rows: 2,
+      columns: [
+        'deep_work_until',
+        'id',
+        'is_deep_work_active',
+        'joined_at',
+        'role',
+        'user_id',
+        'workspace_id',
+      ],
+    },
+    channels: {
+      rows: 3,
+      columns: ['id', 'name', 'type', 'workspace_id'],
+    },
+    channel_members: {
+      rows: 2,
+      columns: [
+        'channel_id',
+        'id',
+        'joined_at',
+        'last_read_message_id',
+        'notification_level',
+        'starred_at',
+        'user_id',
+      ],
+    },
+    messages: {
+      rows: 3,
+      columns: [
+        'channel_id',
+        'content',
+        'created_at',
+        'edited_at',
+        'id',
+        'is_question',
+        'message_type',
+        'metadata',
+        'parent_id',
+        'sender_id',
+        'updated_at',
+        'workspace_id',
+      ],
+    },
+    reactions: {
+      rows: 2,
+      columns: ['created_at', 'emoji', 'id', 'message_id', 'user_id'],
+    },
+    attachments: {
+      rows: 2,
+      columns: [
+        'channel_id',
+        'created_at',
+        'file_name',
+        'height',
+        'id',
+        'kind',
+        'message_id',
+        'mime_type',
+        'size_bytes',
+        'uploader_id',
+        'width',
+        'workspace_id',
+      ],
+    },
+    saved_messages: {
+      rows: 2,
+      columns: [
+        'channel_id',
+        'id',
+        'message_id',
+        'saved_at',
+        'state',
+        'updated_at',
+        'user_id',
+        'workspace_id',
+      ],
+    },
+    saved_searches: {
+      rows: 2,
+      columns: ['created_at', 'id', 'name', 'query', 'user_id', 'workspace_id'],
+    },
+    thread_follows: {
+      rows: 2,
+      columns: ['channel_id', 'following', 'message_id', 'updated_at', 'user_id', 'workspace_id'],
+    },
+    channel_bookmarks: {
+      rows: 2,
+      columns: ['added_at', 'added_by', 'channel_id', 'id', 'title', 'url', 'workspace_id'],
+    },
+  },
+};
