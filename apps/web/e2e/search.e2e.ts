@@ -33,6 +33,8 @@ test.describe('search', () => {
     await shellReady(page);
     await (await railLink(page, 'Search')).click();
     const field = page.getByRole('searchbox', { name: 'Search messages' });
+    // The search screen is chat's chunk: it is there when it has loaded, and Tab is pressed after that.
+    await expect(field).toBeVisible();
     // Arriving focuses the page, as every navigation does; the field is its first stop after the
     // header (which, narrow, holds the navigation toggle).
     await expect(page.locator('main')).toBeFocused();
