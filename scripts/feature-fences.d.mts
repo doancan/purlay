@@ -28,5 +28,5 @@ export function featureFences(
   dir: string,
   ids: readonly string[],
   noTransportTypes: RestrictedPattern,
-  noCreateDatabase: RestrictedPath,
+  paths: readonly RestrictedPath[],
 ): FeatureFence[];

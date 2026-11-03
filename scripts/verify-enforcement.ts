@@ -85,6 +85,25 @@ const VIOLATIONS: readonly Violation[] = [
     allowed: true,
   },
   {
+    rule: 'a feature writes no raw SQL: the tag from the database package (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source: "import { sql } from '@purlay/db';\n\nexport const use = (): unknown => sql;\n",
+  },
+  {
+    rule: 'a feature writes no raw SQL: the tag from the query builder (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source: "import { sql } from 'kysely';\n\nexport const use = (): unknown => sql;\n",
+  },
+  {
+    rule: 'the core may write raw SQL, as it does today (control)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source: "import { sql } from '@purlay/db';\n\nexport const use = (): unknown => sql;\n",
+    allowed: true,
+  },
+  {
     rule: 'the core imports no feature (D-250)',
     ruleId: 'no-restricted-imports',
     path: 'apps/api/src/platform/__enforcement__.ts',
