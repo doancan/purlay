@@ -376,3 +376,65 @@ describe('integration: an attachment’s channel is its message’s (0027)', () 
     });
   });
 });
+
+describe('integration: a sent file is linked in chat’s table and claimed (0078, chat/0001)', () => {
+  test('a message sent with files writes the claim, the link and the columns the release before reads', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const unsent = await upload(world, 'unsent.txt');
+      const { message, files } = await sendWith(world, world.publicChannel, ['a.txt', 'b.txt']);
+
+      const links = await db
+        .selectFrom('message_attachments')
+        .select(['attachment_id', 'workspace_id', 'message_id', 'channel_id'])
+        .where('message_id', '=', message)
+        .orderBy('attachment_id')
+        .execute();
+      expect(links).toEqual(
+        [...files].sort().map((id) => ({
+          attachment_id: id,
+          workspace_id: world.workspaceId,
+          message_id: message,
+          channel_id: world.publicChannel,
+        })),
+      );
+      const rows = await db
+        .selectFrom('attachments')
+        .select(['id', 'message_id', 'channel_id', 'claimed_at'])
+        .where('id', 'in', [...files, unsent])
+        .orderBy('id')
+        .execute();
+      for (const row of rows) {
+        const sent = files.includes(row.id);
+        expect({ id: row.id, claimed: row.claimed_at !== null }).toEqual({
+          id: row.id,
+          claimed: sent,
+        });
+        // The columns are still written, because the release before this one reads them.
+        expect({ id: row.id, message: row.message_id }).toEqual({
+          id: row.id,
+          message: sent ? message : null,
+        });
+      }
+      // The unsent upload has no link, and a second message cannot claim a file already sent.
+      expect(
+        await db
+          .selectFrom('message_attachments')
+          .select('attachment_id')
+          .where('attachment_id', '=', unsent)
+          .execute(),
+      ).toEqual([]);
+      const again = await world.call(
+        'POST',
+        `/api/channels/${world.publicChannel}/messages`,
+        world.owner,
+        {
+          id: anId(),
+          content: 'again',
+          attachmentIds: [files[0]],
+        },
+      );
+      expect(again.status).toBe(404);
+    });
+  });
+});

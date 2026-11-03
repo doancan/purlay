@@ -187,23 +187,28 @@ const currentSummary = async (
  * bytes they hold. Any other id — unknown, somebody else's, already sent, another workspace's — is
  * one refusal that tells nothing apart, and the transaction writes nothing (D-109 §6, §7). The rows
  * are locked as they are linked, so two sends racing for one upload cannot both have it.
+ *
+ * Written twice while the link moves into chat's own table (`MODULES.md` §10, step 8): the columns of
+ * `attachments` the release before this one reads, and `message_attachments`, with the claim the core
+ * reads. The columns go in the release after, once nothing reads them.
  */
 const linkAttachments = async (
   executor: Executor,
   context: ChannelContext,
   messageId: string,
   ids: readonly string[],
+  at: Date,
 ): Promise<bigint> => {
   if (ids.length === 0) return 0n;
   const linked = await executor
     .updateTable('attachments')
-    // Its channel with it: a channel's files are found by it (D-129).
-    .set({ message_id: messageId, channel_id: context.channelId })
+    // Its channel with it: a channel's files are found by it (D-129). Claimed, for the core to know it is sent.
+    .set({ message_id: messageId, channel_id: context.channelId, claimed_at: at })
     .where('id', 'in', ids)
     .where('workspace_id', '=', context.workspaceId)
     .where('uploader_id', '=', context.userId)
     .where('message_id', 'is', null)
-    .returning('size_bytes')
+    .returning(['id', 'size_bytes'])
     .execute();
   if (linked.length !== ids.length) {
     throw new AppError({
@@ -211,6 +216,17 @@ const linkAttachments = async (
       message: 'That attachment is not there to send.',
     });
   }
+  await executor
+    .insertInto('message_attachments')
+    .values(
+      linked.map((row) => ({
+        attachment_id: row.id,
+        workspace_id: context.workspaceId,
+        message_id: messageId,
+        channel_id: context.channelId,
+      })),
+    )
+    .execute();
   // BIGINT arrives as text: summed as integers, never as strings.
   return linked.reduce((sum, row) => sum + BigInt(row.size_bytes), 0n);
 };
@@ -338,7 +354,13 @@ export const sendMessage = async (
 
   const sentAt = clock.now();
 
-  const carried = await linkAttachments(executor, context, input.id, input.attachmentIds ?? []);
+  const carried = await linkAttachments(
+    executor,
+    context,
+    input.id,
+    input.attachmentIds ?? [],
+    sentAt,
+  );
 
   // A reply moves its root's summary, in this transaction (`SCHEMA.md` §11: the
   // service keeps the counter equal to the rows). `greatest` so two repliers whose
