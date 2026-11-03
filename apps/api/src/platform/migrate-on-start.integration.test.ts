@@ -4,14 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createDatabase,
+  createMigrationDatabase,
   dropDatabases,
+  migrateToLatest,
   migrationHistoryProblem,
   pendingMigrations,
   PRODUCT_MIGRATION_SETS,
   readMigrationFiles,
   sql,
 } from '@purlay/db';
-import type { Executor } from '@purlay/db';
+import type { Executor, MigrationSet } from '@purlay/db';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
 import { aRecordingLogger } from '../testing/doubles';
@@ -131,6 +133,39 @@ const answer = async (port: number, path: string): Promise<[number, string | und
     return [0, undefined];
   }
 };
+
+/** Waits until `condition` holds, for as long as a slow runner may take; says so when it never does. */
+const waitUntil = async (condition: () => boolean, what: string): Promise<void> => {
+  const deadline = Date.now() + 20_000;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error(`gave up waiting for ${what}`);
+    await Bun.sleep(10);
+  }
+};
+
+/** A module set of its own, one table, for a test that needs a set that is not every product set. */
+const aSetOf = (id: string, table: string): { set: MigrationSet; remove: () => void } => {
+  const directory = mkdtempSync(join(tmpdir(), 'migration-set-'));
+  writeFileSync(join(directory, '0001_table.sql'), `CREATE TABLE ${table} (id int);`);
+  return {
+    set: { id, directory },
+    remove: () => rmSync(directory, { recursive: true, force: true }),
+  };
+};
+
+/** Applies the core and these sets to a database, as a process that runs those modules does. */
+const migrateWith = async (name: string, sets: readonly MigrationSet[]): Promise<void> => {
+  const database = createMigrationDatabase({ connectionString: urlFor(name) });
+  try {
+    const { error } = await migrateToLatest(database, undefined, { modules: sets });
+    if (error !== undefined)
+      throw new Error('migrating the test database failed', { cause: error });
+  } finally {
+    await database.destroy();
+  }
+};
+
+const WAITING = 'waiting for the migrations before reading the settings';
 
 /** Waits for a path to answer this status; answers what it last saw. */
 const until = async (port: number, path: string, status: number): Promise<number> => {
@@ -724,6 +759,90 @@ describe('integration: migrate on start', () => {
       await db.destroy();
     }
   });
+
+  test('waiting for the migrations is for the sets it is given: a database that has exactly those is waited on no longer', async () => {
+    const { name, db } = await freshDatabase('until-partial');
+    const extra = aSetOf('extra', 'extra_things');
+    try {
+      // The core and one set that is not the product's: neither the product's chat set nor its absence counts.
+      await migrateWith(name, [extra.set]);
+      const { log, lines } = aRecordingLogger();
+      const outcome = await Promise.race([
+        untilMigrated(db, log, 20, [extra.set]).then(() => 'resolved' as const),
+        Bun.sleep(10_000).then(() => 'still waiting' as const),
+      ]);
+      expect({ outcome, said: lines.filter((line) => line['msg'] === WAITING) }).toEqual({
+        outcome: 'resolved',
+        said: [],
+      });
+    } finally {
+      extra.remove();
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('waiting for the migrations keeps waiting for a set of the list that is not applied, saying so once', async () => {
+    const { name, db } = await freshDatabase('until-missing');
+    const extra = aSetOf('extra', 'extra_things');
+    try {
+      await migrateWith(name, []);
+      const { log, lines } = aRecordingLogger();
+      let done = false;
+      const waiting = untilMigrated(db, log, 20, [extra.set]).then(() => {
+        done = true;
+      });
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
+      // Several polls have gone by once the line is written and its reason is read again.
+      await Bun.sleep(100);
+      expect(done).toBe(false);
+      const said = lines.filter((line) => line['msg'] === WAITING);
+      expect(said).toHaveLength(1);
+      expect(String(said[0]?.['reason'])).toContain('extra/0001_table');
+      await migrateWith(name, [extra.set]);
+      await waiting;
+      expect(done).toBe(true);
+    } finally {
+      extra.remove();
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('waiting for the migrations judges the history of the sets it is given: one edited after it was applied is waited on', async () => {
+    const { name, db } = await freshDatabase('until-edited');
+    const extra = aSetOf('extra', 'extra_things');
+    try {
+      await migrateWith(name, [extra.set]);
+      const { rows } = await sql<{ checksum: string }>`
+        select checksum from kysely_migration where name = 'extra/0001_table'`.execute(db);
+      const checksum = rows[0]?.checksum ?? '';
+      await sql`update kysely_migration set checksum = repeat('0', 64)
+        where name = 'extra/0001_table'`.execute(db);
+      const { log, lines } = aRecordingLogger();
+      let done = false;
+      const waiting = untilMigrated(db, log, 20, [extra.set]).then(() => {
+        done = true;
+      });
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
+      await Bun.sleep(100);
+      expect(done).toBe(false);
+      const said = lines.filter((line) => line['msg'] === WAITING);
+      expect(said).toHaveLength(1);
+      expect(String(said[0]?.['reason'])).toContain('extra/0001_table was edited');
+      await sql`update kysely_migration set checksum = ${checksum}
+        where name = 'extra/0001_table'`.execute(db);
+      await waiting;
+      expect(done).toBe(true);
+    } finally {
+      extra.remove();
+      await db.destroy();
+    }
+  }, 60_000);
 
   test('an SMTP address no transport can be built from refuses the start and stores nothing; corrected, the next start imports it', async () => {
     const { name, db } = await freshDatabase('badsmtp');

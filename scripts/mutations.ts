@@ -13269,4 +13269,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'false',
     tests: ['apps/api/src/composition.test.ts'],
   },
+  {
+    id: 'readiness-ignores-the-sets-the-process-runs',
+    why: "/health/ready is called without the migration sets of the modules this process runs, so a MODULES=none node on a database without chat's set never becomes ready (D-250)",
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '        () => dependencies.shared?.problem(),\n        modules.migrationSets,\n',
+    replace: '        () => dependencies.shared?.problem(),\n',
+    tests: ['apps/api/src/ingress/http/readiness.integration.test.ts'],
+  },
+  {
+    id: 'wait-for-migrations-checks-history-of-every-set',
+    why: 'the wait of a node that does not migrate judges the migration history against every set the build carries, not the modules it runs, so a MODULES=none node on a database with a set it does not know never starts (D-250)',
+    file: 'apps/api/src/platform/migrate-on-start.ts',
+    find: 'await migrationHistoryProblem(database, undefined, undefined, sets)',
+    replace: 'await migrationHistoryProblem(database)',
+    tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
+  },
+  {
+    id: 'wait-for-migrations-wants-every-set',
+    why: 'the wait of a node that does not migrate lists as pending the migrations of every set the build carries, not the modules it runs, so a MODULES=none node on a database migrated core-only never starts (D-250)',
+    file: 'apps/api/src/platform/migrate-on-start.ts',
+    find: 'await pendingMigrations(database, undefined, sets)',
+    replace: 'await pendingMigrations(database)',
+    tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
+  },
 ];
