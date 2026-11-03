@@ -5,7 +5,13 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { COLLATED_COLUMNS, READINESS_FRESH_MS, recentReadiness, type Readiness } from './readiness';
+import { CHAT_COLLATED_COLUMNS } from '../features/chat/collated-columns';
+import {
+  CORE_COLLATED_COLUMNS,
+  READINESS_FRESH_MS,
+  recentReadiness,
+  type Readiness,
+} from './readiness';
 
 const MIGRATIONS = 'packages/db/migrations';
 
@@ -27,9 +33,8 @@ describe('the columns readiness checks', () => {
   test('are exactly the ones the migrations declare COLLATE "C"', () => {
     const declared = collatedInMigrations();
     expect(declared.length).toBeGreaterThan(0);
-    expect(COLLATED_COLUMNS.map(([table, column]) => `${table}.${column}`).sort()).toEqual(
-      declared,
-    );
+    const checked = [...CORE_COLLATED_COLUMNS, ...CHAT_COLLATED_COLUMNS];
+    expect(checked.map(([table, column]) => `${table}.${column}`).sort()).toEqual(declared);
   });
 });
 

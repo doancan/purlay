@@ -106,6 +106,15 @@ describe('integration: readiness', () => {
     });
   });
 
+  test('a column chat declares byte-wise, and does not, is not ready either (D-250)', async () => {
+    await withRollback(async (db) => {
+      await sql`alter table channels alter column name type text collate "POSIX"`.execute(db);
+      const answer = await ready(db);
+      expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
+      expect(String(answer.reasons[0])).toContain('channels.name');
+    });
+  });
+
   /**
    * The sign-in library's own check reads the catalogue on a connection of its own, which a
    * rolled-back transaction is not, so these two break a clone (D-179).

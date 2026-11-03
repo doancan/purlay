@@ -12564,6 +12564,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {
+    id: 'readiness-forgets-the-modules-collated-columns',
+    why: 'a channel name column restored without COLLATE "C" is called ready because only the core\'s columns are asked about (D-40, D-250)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '[...CORE_COLLATED_COLUMNS, ...dependencies.collatedColumns]',
+    replace: '[...CORE_COLLATED_COLUMNS]',
+    tests: ['apps/api/src/ingress/http/readiness.integration.test.ts'],
+  },
+  {
     id: 'export-catalogue-order-scrambled',
     why: "the files of an export are written with the core's last tables before the modules', so a reader meets children before their parents (D-140, D-250)",
     file: 'apps/api/src/modules/export/catalogue.ts',

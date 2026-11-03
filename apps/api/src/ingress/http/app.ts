@@ -176,6 +176,7 @@ import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
 import { chatUserErased } from '../../features/chat/channels/user-hooks';
+import { CHAT_COLLATED_COLUMNS } from '../../features/chat/collated-columns';
 import type { UserErased } from '../../modules/users/erasure';
 import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
@@ -220,7 +221,13 @@ import {
   removeMessage,
 } from './messages';
 import { changeReaction } from './reactions';
-import { readiness, recentReadiness, type Readiness } from '../../platform/readiness';
+import {
+  CORE_COLLATED_COLUMNS,
+  readiness,
+  recentReadiness,
+  type CollatedColumn,
+  type Readiness,
+} from '../../platform/readiness';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
@@ -364,6 +371,8 @@ export interface Dependencies {
   readonly workspaceChannels?: WorkspaceChannels;
   /** What the modules forget of a person whose account is erased, inside the erasure (D-250); absent, chat's. */
   readonly userErased?: UserErased;
+  /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
+  readonly collatedColumns?: readonly CollatedColumn[];
   /**
    * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
    * absent, the application keeps one of its own — a test reads it through `/metrics`.
@@ -456,6 +465,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     workspaceCreated: given.workspaceCreated ?? chatWorkspaceHooks(),
     workspaceChannels: given.workspaceChannels ?? chatWorkspaceChannels,
     userErased: given.userErased ?? chatUserErased(),
+    collatedColumns: given.collatedColumns ?? CHAT_COLLATED_COLUMNS,
   };
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
@@ -478,6 +488,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     async () =>
       await readiness(
         dependencies.database,
+        [...CORE_COLLATED_COLUMNS, ...dependencies.collatedColumns],
         async () => await dependencies.auth.schemaProblem(),
         () => dependencies.shared?.problem(),
       ),
