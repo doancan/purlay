@@ -377,7 +377,7 @@ describe('integration: an attachment’s channel is its message’s (0027)', () 
   });
 });
 
-describe('integration: a sent file is linked in chat’s table and claimed (0078, chat/0001)', () => {
+describe('integration: a sent file is linked in chat’s table and claimed (0079, chat/0001)', () => {
   test('a message sent with files writes the claim, the link and the columns the release before reads', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);

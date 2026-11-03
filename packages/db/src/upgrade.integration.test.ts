@@ -17,7 +17,7 @@ import { MIGRATIONS_DIRECTORY, migrateToLatest, PRODUCT_MIGRATION_SETS } from '.
 import { closeIntegrationDatabase } from './testing';
 
 /** The first migration of this release: everything before it is the previous release's schema. */
-const THIS_RELEASE_STARTS_AT = '0078_attachment_claims.sql';
+const THIS_RELEASE_STARTS_AT = '0079_attachment_claims.sql';
 
 const directories: string[] = [];
 const databases: string[] = [];
@@ -78,7 +78,7 @@ describe('integration: upgrading from the previous release', () => {
     try {
       const before = await migrateToLatest(db, previousRelease());
       expect(before.error).toBeUndefined();
-      expect(before.results?.at(-1)?.migrationName).toBe('0077_github_token_state');
+      expect(before.results?.at(-1)?.migrationName).toBe('0078_google_sign_in');
 
       // The previous release's data: a workspace, a channel, a message, and three uploads — one sent with the
       // message, one sent with a second, one not sent at all.
@@ -123,7 +123,7 @@ describe('integration: upgrading from the previous release', () => {
       const after = await migrateToLatest(db, undefined, { modules: PRODUCT_MIGRATION_SETS });
       expect(after.error).toBeUndefined();
       expect(after.results?.map((result) => result.migrationName)).toEqual([
-        '0078_attachment_claims',
+        '0079_attachment_claims',
         'chat/0001_message_attachments',
       ]);
 

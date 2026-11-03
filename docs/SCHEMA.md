@@ -1149,7 +1149,7 @@ CREATE INDEX idx_attachments_uploader   ON attachments (uploader_id);
 CREATE INDEX idx_attachments_workspace  ON attachments (workspace_id);
 ```
 
-**The link to the message is moving into chat (D-250, `MODULES.md` §10, step 8).** `0078` adds `claimed_at`, which the
+**The link to the message is moving into chat (D-250, `MODULES.md` §10, step 8).** `0079` adds `claimed_at`, which the
 core reads in place of `message_id IS NULL` — null until a module has taken the upload, set in the transaction that
 links it — and makes `(id, workspace_id)` unique so that a table of chat's can key to both. Chat's own migration set
 adds `message_attachments`, below, with the keys `attachments` has to `messages` and a key to `attachments`; it is backfilled

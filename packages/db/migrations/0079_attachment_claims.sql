@@ -1,5 +1,5 @@
 -- purlay: no-transaction
--- 0078_attachment_claims
+-- 0079_attachment_claims
 --
 -- The core's half of moving an attachment's link to its message into chat (D-250, `MODULES.md` §10, step 8).
 --
