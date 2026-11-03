@@ -11996,7 +11996,7 @@ there is no broker).
 1. **The core** is identity, workspaces and tenancy (`WorkspaceContext`), permissions, audit, the domain event bus,
    notifications, attachments, the search fan-out, erasure and export as catalogues modules contribute to, and the
    module registry. Nothing in it names a module. What names chat today — channel visibility, message erasure, the
-   messages in the export catalogue — moves to chat, and `MODULES.md` §9 steps 6–9 do it. Until then the sentence is
+   messages in the export catalogue — moves to chat, and `MODULES.md` §10 steps 6–9 do it. Until then the sentence is
    a goal, and a test of `platform/` holds it once they are done.
 2. **A module is a unit that registers itself**, through a manifest (`MODULES.md` §2). Chat is a module, not the base:
    issues and notes run without it. Modules are **first-party code in this repository**. The manifest is not a trust
@@ -12004,7 +12004,8 @@ there is no broker).
 3. **One build; the modules an instance runs are a setting.** `MODULES` unset or blank means every bundled module, `none`
    means the core alone. An unknown or repeated id, a missing requirement, a cycle, or an id that is a core path segment
    stops the process at boot. A disabled module is not mounted and its web chunk is never requested; a request for it
-   gets the plain `404` of any unknown route, never a distinct answer.
+   gets the plain `404` of any unknown route, never a distinct answer. *(Amended 2026-11-04, D-255 §2: the routes are
+   registered and closed by path, not left unmounted. The answer is the same.)*
 4. **Modules meet through the core, never through each other's code.** By events first; by a port the core defines
    where there are two users or a test boundary; by asking whether a capability exists. A caller that finds it absent
    hides the feature or does nothing. Importing another module is a lint error, and **reading another module's tables
@@ -12033,6 +12034,7 @@ there is no broker).
 8. **A cluster runs one module set.** A node records its module set in the database at boot and refuses to serve beside a
    live peer whose set differs. The release may differ, so a rolling deploy is not blocked. Nodes of different sets also
    share no channel on the bus, so a typo in `MODULES` on one node cannot make it receive another set's frames.
+   *(Amended 2026-11-04, D-255 §1: the node does not refuse and no channel is split per set. The text stays as decided.)*
 9. **Commercial model.** All code stays AGPL and in this repository (D-24); there is still no open core. A self-hosted
    instance can run every module, free. The cloud may price what it operates by the modules a customer runs, never by
    seat (D-43's other rules stand). **This amends** D-1's "the only thing the cloud sells is that we operate it" and
@@ -12060,7 +12062,7 @@ drops them by hand (D-9).
 
 **Decided.** (a) *Existing installs:* the legacy migration rows stay as they are and count as the core's. A rename
 would change the rows `0055` selects by name and the dump the restore rehearsal compares, and gains nothing a new
-file cannot: only files added from now on go under `<module>/`. The cost is that the first 77 files always create
+file cannot: only files added from now on go under `<module>/`. The cost is that the 77 files that existed when this was decided always create
 chat's tables, even where chat is off — inert, which rule 5 already accepts. The release before the first prefixed
 row skips rows it has no file for and says so, so rolling back one release stays possible while module migrations are
 additive. (c) *Workspace-level enablement* is a precondition of selling a package (rule 9).
@@ -12297,7 +12299,8 @@ record and says no more.
      explain, for a record nobody keeps ten thousand of on purpose.
 6. **Routes** are `/api/workspaces/:workspaceId/issues` and `/…/issues/:issueId`, in the manifest, so a process that
    does not run the module answers the plain `404` of any unknown path (D-250 rule 3). `GET /api/me` and
-   `GET /api/client` list `issues` where it runs.
+   `GET /api/client` list `issues` where it runs. *(Amended 2026-11-04, D-255 §5: only `GET /api/me` lists it; the public
+   handshake names no module.)*
 7. **The web** loads the screen as a chunk of the module's own, by one `import()` from `load.tsx`, drawn at
    `/w/:slug/issues` behind `ModuleGate`, with a rail link and a palette entry only where the session lists the module.
    `budget:web` fails a build whose initial chunks carry the screen's code.
@@ -12313,3 +12316,68 @@ it would hide a real fault.
 **Cost of reversing.** Dropping the module is deleting its folders, its row in `bundledModules`, the set's directory and
 its entry in the owner list; its table stays until an operator drops it (D-250 rule 5).
 
+### D-255. Decided in practice (module structure) — builds on D-250, D-254
+
+**Context.** Two modules now run, and building the second one settled several things the first decision either
+left open or got wrong, each of them decided in a pull request and written in no decision. Two sentences of D-250
+rule 8 and one of D-254 §6 are no longer true, and a document that keeps saying them is a defect (`MODULES.md` §8).
+This records what is true. D-250 and D-254 stand otherwise, and their text is not rewritten: each sentence this
+changes carries a note that points here.
+
+**Decision.**
+
+1. **A cluster is told, not stopped.** *Amends D-250 rule 8.* Where nodes share Redis each records its module set in one
+   shared record that lapses by itself (`realtime/module-set.ts`); a node that finds another set logs it once, and
+   once more when the nodes agree, and **keeps serving**; readiness does not change. A node does not refuse beside a
+   peer with another set. Nodes of different sets **share the one bus channel**, because a channel per set would stop
+   a sign-out on one node from closing the sockets of another. What keeps a node out of a module it does not run is
+   the closure of §2, not the channel. A rolling deploy of a new set therefore passes, and the advice to an
+   operator is to finish the roll (`DEPLOY.md`).
+2. **Closed means a path nobody has.** *Amends D-250 rule 3's "not mounted".* Every route of the build is registered, because the
+   application is one typed chain and its type is what the web client reads; a module that is not run is closed by
+   the manifest: its `routes` are answered as any unknown path, before the rate limit and the session; its `frames`
+   as an operation nobody has; its `events` are dropped at delivery, from the node's own services and from a node
+   that does run it (a person's own topic is held by every socket, so a topic would not keep them out); its `jobs`
+   exit `0` with a line. At the edge the order is the same: a closed webhook is not asked for the body rules of a
+   webhook, so it answers whatever its headers say as `/api/no-such-thing` does. A route-ownership test holds the
+   manifests and the registered routes together.
+3. **Data is held whether or not a module runs, and `tableExists` is how.** A module's erasure, purge, export and
+   retention contributions are in every process's composition (`dataInCore`) and each asks `tableExists`
+   (`@purlay/db`) at the moment it needs a table the module's own set makes, never remembered, since another node may
+   apply the set while this one runs. Chat's own-set tables and issues' table are held this way (D-254 §4). A process
+   that runs a module on a database without its set is not a cell: readiness refuses it. The alternative, a
+   contribution split into a part held always and a part held where the set is applied, would need the process to
+   know the database's sets when composed.
+4. **An attached file is chat's.** What is attached to a message is judged by chat's `readAttachment`: with chat not run,
+   `GET /api/attachments/:id` and `/thumbnail` answer `ATTACHMENT_NOT_FOUND` for it as for an id that never existed,
+   while an upload nobody attached stays its uploader's. The core names no module; the manifest widens the reader.
+5. **The session carries the modules; the public handshake does not.** *Amends D-254 §6.* `GET /api/me` lists
+   `modules`; `GET /api/client` names none (PR #963), so the public answer adds nothing to what a closed route's `404`
+   hides. The exception that already existed stays: `capabilities` (`scheduledMessages`, `messageReminders`,
+   `personalMessageDeletion`, D-58), derived from chat, because a native client needs them before it signs in. That is
+   the one thing an anonymous caller can infer about the set, and it is documented as such. The macOS client reading
+   `modules` is issue #958.
+6. **The contract migration of the attachment link is chat's.** The three-release move of `attachments.message_id` and
+   `channel_id` (`MODULES.md` §10, step 8) ends with a step in **chat's own set**, `chat/0005` (draft PR #961, not
+   merged), not in the core's migrations: a core migration never names a module's table (D-250 rule 5), and the
+   columns are the link's. Until it merges the dual write and its allow-list stay.
+7. **Manifests do not shrink silently.** `module-compat.test.ts` holds the manifests to the last release's, kept in
+   `released-manifests.json`: no new requirement, no capability, route, job, frame or id gone, unless a dated entry
+   under `exceptions` in that file says so, where a reviewer sees it. `bun run release` rewrites the snapshot and
+   clears the exceptions.
+8. **Issues stays minimal.** D-254 stands: no link, no frame, no comments, no notification. Its removal threshold is
+   **decided by the owner at each release, against the measured use**; a measurable rule is required before a package
+   is sold (D-250 rule 9) and does not exist yet.
+9. **Pool isolation is built as a mechanism and not yet taken by a process.** *D-250 rule 7 said it would be built
+   before a second module ships.* `budgeted` (`platform/module-budget.ts`: a cap on open transactions, a queue timeout,
+   a `statement_timeout`) exists and is tested alone; no module is handed it, and the second module shipped without it.
+   That is recorded as a debt, not as a decision to skip: wiring it, and a latency gate that knows modules, are the
+   operability work. Until then isolation by budget is intent.
+
+**Rejected.** *Refusing to serve beside a peer with another set* (D-250's text): a rolling deploy of a new set would
+be impossible without an outage, and a typo would be an outage anyway. *A bus channel per set*: a sign-out must reach
+every socket. *Leaving unmounted routes out of the chain*: it breaks the typed client. *Listing modules in the public
+handshake*: a caller who has not signed in would read the instance's packages.
+
+**Cost of reversing.** Documentation and tests only; §1 and §2 are held by `module-set.test.ts` and `modules-off*`, and a
+change of either is a change of those.

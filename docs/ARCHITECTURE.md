@@ -131,9 +131,13 @@ purlay/
 │   │       ├── features/        the modules of the product (D-250, `MODULES.md`): one folder each, below the
 │   │       │                  doors like `modules/`, importing no other feature and no `modules/` code the
 │   │       │                  other way round
-│   │       │   └── chat/        channels, messages, reactions, pins, saved, search, presence, bookmarks,
-│   │       │                  incidents, the GitHub integration and the inbox: what the product was before
-│   │       │                  it was a set of modules. It still writes raw SQL; the others may not
+│   │       │   ├── chat/        channels, messages, reactions, pins, saved, search, presence, bookmarks,
+│   │       │   │              incidents, the GitHub integration and the inbox: what the product was before
+│   │       │   │              it was a set of modules. It still writes raw SQL; the others may not
+│   │       │   └── issues/      a workspace's issues (D-254): its manifest and data hooks, with a migration
+│   │       │                  set of its own (`packages/db/migrations/issues/`). The route table is in
+│   │       │                  `ingress/http/issues.ts`; every module is listed in `composition.ts`
+│   │       │                  (`bundledModules`) and in `MODULES.md` §11, which also says how to add one
 │   │       ├── modules/         the core's business rules; no HTTP or WS types cross this line, and none of
 │   │       │                  it imports a feature
 │   │       │   ├── auth/        the sign-in library (Better Auth) and what sits on it: sessions (token SHA-256 at rest)
@@ -158,7 +162,9 @@ purlay/
 │           ├── app/             providers (one tree, every port optional), the frame, the outlet,
 │           │                    and deferred.ts: the deferred chunk — settings, image viewer, the
 │           │                    overlays opened on purpose — fetched once the browser is idle (D-159, D-163)
-│           ├── features/        vertical slices: chat, threads, palette, notifications, auth
+│           ├── features/        vertical slices: chat, threads, palette, notifications, auth, and the modules'
+│           │                  screens (`chat/load.tsx`, `issues/load.tsx`): each a lazy chunk behind
+│           │                  `ModuleGate`, shown only where `GET /api/me` lists the module (`MODULES.md` §6)
 │           ├── ui/              primitives on Radix where focus and ARIA fail silently; token classes only
 │           ├── components/      shared pieces: Icon (the one door to the icon set), CodeBlock, Markdown
 │           ├── theme/           light, dark and system — per device, set before first paint (D-98)
