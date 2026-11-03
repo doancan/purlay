@@ -400,28 +400,41 @@ describe('integration: readiness with a shared Redis (D-201)', () => {
   });
 });
 
+/**
+ * What the test is given: more than the 10 s `until` waits for a node to notice, so the wait ends in its own named
+ * error, not in the runner's 5 s default — which on a loaded runner cut the test off with no word of what it waited for.
+ */
+const LOSS_TEST_MS = 20_000;
+
 describe('integration: a node that loses Redis', () => {
-  test('keeps serving its sockets, and when Redis is back sends them to replay from their cursors', async () => {
-    const room = await aRoom();
-    const socket = await connect(b, room.bob.cookie);
-    await subscribe(socket, room.channelId);
+  test(
+    'keeps serving its sockets, and when Redis is back sends them to replay from their cursors',
+    async () => {
+      const room = await aRoom();
+      const socket = await connect(b, room.bob.cookie);
+      await subscribe(socket, room.channelId);
 
-    proxy.drop();
-    await until(() => !b.link.subscribed(), 'node B to notice');
-    // Redis is away: the socket stays open, and writes through node B itself still reach it.
-    const id = messageId(new Date(NOW.getTime() + 500));
-    expect(
-      (
-        await http(b, 'POST', `/api/channels/${room.channelId}/messages`, room.alice.cookie, {
-          id,
-          content: 'during',
-        })
-      ).status,
-    ).toBe(201);
-    await socket.until((frames) => created(frames).includes(id), 'the write to reach its own node');
+      proxy.drop();
+      await until(() => !b.link.subscribed(), 'node B to notice');
+      // Redis is away: the socket stays open, and writes through node B itself still reach it.
+      const id = messageId(new Date(NOW.getTime() + 500));
+      expect(
+        (
+          await http(b, 'POST', `/api/channels/${room.channelId}/messages`, room.alice.cookie, {
+            id,
+            content: 'during',
+          })
+        ).status,
+      ).toBe(201);
+      await socket.until(
+        (frames) => created(frames).includes(id),
+        'the write to reach its own node',
+      );
 
-    expect(await socket.ended).toBe(CLOSE_CODES.RESTARTING);
-  });
+      expect(await socket.ended).toBe(CLOSE_CODES.RESTARTING);
+    },
+    LOSS_TEST_MS,
+  );
 });
 
 const until = async (done: () => boolean, what: string): Promise<void> => {
