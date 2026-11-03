@@ -35,7 +35,10 @@ export interface BundledModule {
    * Its tables were made by the core's own migrations, so they exist whether or not the module runs. What the module
    * contributes to the lifecycle of that data — an erased account's, a deleted workspace's, an export, who answers
    * for the channels a member leaves — then applies even to a process that does not run it: a person's right to be
-   * erased does not wait for a setting. A module with a migration set of its own is held only while it runs.
+   * erased does not wait for a setting. A module whose migration set makes some of its tables (chat's link between
+   * a message and its files, its drafts, reminders and hidden messages) has those tables only where the set was
+   * applied: the hooks ask `tableExists` before they name one, so a database migrated without the set is no failure
+   * and one that has it is still kept whole (`MODULES.md` §5).
    */
   readonly dataInCore?: boolean;
   /**

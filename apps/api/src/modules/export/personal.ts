@@ -56,14 +56,17 @@ export const exportPerson = async (
         counted[name] = await readTable(
           transaction,
           name,
-          { columns: projection(table), ...table.bounds(person.id, workspaces) },
+          {
+            columns: projection(table),
+            ...(await table.bounds(person.id, workspaces, transaction)),
+          },
           directory.write,
         );
       }
       return {
         schema: await schemaOf(transaction),
         tables: counted,
-        objects: await filesOf(transaction, personalCatalogue.files(person.id)),
+        objects: await filesOf(transaction, await personalCatalogue.files(person.id, transaction)),
       };
     });
     // The snapshot has committed: the files are copied outside it, however slow the store.

@@ -13,7 +13,7 @@
  * `attachments` is the core's table, bounded here by the messages the person wrote, because that is the link it
  * still has; it moves with the link when that becomes chat's (`MODULES.md` §10, step 8).
  */
-import { sql, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type Executor, type RawBuilder } from '@purlay/db';
 import {
   personalTableExport,
   type PersonalContribution,
@@ -24,10 +24,13 @@ const theirMessages = (userId: string): RawBuilder<unknown> =>
   sql`select id from messages where sender_id = ${userId} and deleted_at is null`;
 
 /** The files they sent with those messages; one uploaded and never sent is gone within a day (D-109 §5). */
-const theirFiles = (userId: string): RawBuilder<unknown> =>
-  sql`uploader_id = ${userId} and id in (
-    select attachment_id from message_attachments where message_id in (${theirMessages(userId)})
-  )`;
+const theirFiles = async (userId: string, executor: Executor): Promise<RawBuilder<unknown>> =>
+  // The link is made by chat's own migration set: where it was never applied no message carried a file.
+  (await tableExists(executor, 'message_attachments'))
+    ? sql`uploader_id = ${userId} and id in (
+        select attachment_id from message_attachments where message_id in (${theirMessages(userId)})
+      )`
+    : sql`false`;
 
 /** The channels the person's rows name, so each id in the export says which channel it was. */
 const theirChannels = (userId: string): RawBuilder<unknown> => sql`
@@ -142,7 +145,10 @@ const tables = [
       storage_key: 'omit',
       thumbnail_key: 'omit',
     },
-    (userId) => ({ where: theirFiles(userId), order: 'id' }),
+    async (userId, _workspaces, executor) => ({
+      where: await theirFiles(userId, executor),
+      order: 'id',
+    }),
   ),
   personalTableExport(
     'saved_messages',

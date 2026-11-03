@@ -10,18 +10,33 @@
  * `attachments` is the core's table, bounded here by the messages of the channels covered, because that is the
  * link it still has; it moves with the link when that becomes chat's (`MODULES.md` §10, step 8).
  */
-import { sql, type Executor, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type Executor, type RawBuilder } from '@purlay/db';
 import { visibleChannelIds } from './channels/guard';
 import { tableExport, type ExportContribution, type Scope } from '../../modules/export/catalogue';
 
-/** The channels the export covers, as `prepare` decided. */
-const coveredChannels = (scope: Scope): readonly string[] => {
-  const covered = scope.prepared['chat'];
-  if (!Array.isArray(covered) || !covered.every((id) => typeof id === 'string')) {
+/** What `prepare` decided: the channels the export covers, and whether chat's link to the files is there to be read. */
+interface Prepared {
+  readonly channels: readonly string[];
+  readonly filesLinked: boolean;
+}
+
+const preparedFor = (scope: Scope): Prepared => {
+  const prepared = scope.prepared['chat'];
+  if (
+    typeof prepared !== 'object' ||
+    prepared === null ||
+    !('channels' in prepared) ||
+    !Array.isArray(prepared.channels) ||
+    !prepared.channels.every((id) => typeof id === 'string') ||
+    !('filesLinked' in prepared) ||
+    typeof prepared.filesLinked !== 'boolean'
+  ) {
     throw new Error('the export was not prepared with the channels it covers');
   }
-  return covered;
+  return { channels: prepared.channels, filesLinked: prepared.filesLinked };
 };
+
+const coveredChannels = (scope: Scope): readonly string[] => preparedFor(scope).channels;
 
 /** The channels an operator's export covers: every channel of the workspace, archived ones too. */
 export const everyChannel = async (executor: Executor, workspaceId: string): Promise<string[]> =>
@@ -46,7 +61,10 @@ const messagesOf = (scope: Scope): RawBuilder<unknown> =>
 
 /** The files those messages carry, found through the link: the attachments' own `message_id` is no longer read (D-250). */
 const filesOf = (scope: Scope): RawBuilder<unknown> =>
-  sql`select attachment_id from message_attachments where workspace_id = ${scope.workspaceId} and message_id in (${messagesOf(scope)})`;
+  // The link is made by chat's own migration set: where it was never applied no message carried a file.
+  preparedFor(scope).filesLinked
+    ? sql`select attachment_id from message_attachments where workspace_id = ${scope.workspaceId} and message_id in (${messagesOf(scope)})`
+    : sql`select null::uuid where false`;
 
 const incidentsOf = (scope: Scope): RawBuilder<unknown> =>
   sql`select id from incidents where workspace_id = ${scope.workspaceId} and channel_id in (${channelsIn(scope)})`;
@@ -296,10 +314,13 @@ export type ChatWritten = (typeof tables)[number]['name'];
 
 export const chatExport: ExportContribution = {
   id: 'chat',
-  prepare: async (executor, request) =>
-    request.kind === 'all'
-      ? await everyChannel(executor, request.workspaceId)
-      : await visibleChannelIds(executor, request.viewer),
+  prepare: async (executor, request): Promise<Prepared> => ({
+    channels:
+      request.kind === 'all'
+        ? await everyChannel(executor, request.workspaceId)
+        : await visibleChannelIds(executor, request.viewer),
+    filesLinked: await tableExists(executor, 'message_attachments'),
+  }),
   tables,
   people: (scope) => [
     sql`select created_by from channels where id in (${channelsIn(scope)})`,

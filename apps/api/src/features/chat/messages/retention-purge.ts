@@ -31,6 +31,7 @@
  */
 import {
   sql,
+  tableExists,
   type DB,
   type Executor,
   type Expression,
@@ -202,6 +203,8 @@ const purgeRoots = async (
   workspaceId: string,
   cutoff: Date,
 ): Promise<Batch> => {
+  // Chat's own set makes the link, and a database migrated without it has no message to carry a file.
+  const linked = await tableExists(transaction, 'message_attachments');
   const candidates = await transaction
     .selectFrom('messages as message')
     .innerJoin('channels', 'channels.id', 'message.channel_id')
@@ -221,12 +224,16 @@ const purgeRoots = async (
               .whereRef('reply.parent_id', '=', 'message.id'),
           ),
         ),
-        eb.exists(
-          eb
-            .selectFrom('message_attachments')
-            .select('message_attachments.attachment_id')
-            .whereRef('message_attachments.message_id', '=', 'message.id'),
-        ),
+        ...(linked
+          ? [
+              eb.exists(
+                eb
+                  .selectFrom('message_attachments')
+                  .select('message_attachments.attachment_id')
+                  .whereRef('message_attachments.message_id', '=', 'message.id'),
+              ),
+            ]
+          : []),
       ]),
     )
     .orderBy('message.created_at')

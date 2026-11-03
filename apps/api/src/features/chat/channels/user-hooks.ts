@@ -5,6 +5,7 @@
  * where the application is put together; the account code names none of these tables, and runs the hooks inside
  * the erasure's own transaction, at the place these deletes always ran.
  */
+import { tableExists } from '@purlay/db';
 import { hookList, type HookList } from '../../../platform/hooks';
 import type { UserErased } from '../../../modules/users/erasure';
 
@@ -12,9 +13,12 @@ import type { UserErased } from '../../../modules/users/erasure';
 export const forgetWhatChatKeeps = async (
   ...[transaction, userId]: Parameters<UserErased['run']>
 ): Promise<void> => {
-  await transaction.deleteFrom('hidden_messages').where('user_id', '=', userId).execute();
-  await transaction.deleteFrom('message_reminders').where('user_id', '=', userId).execute();
-  await transaction.deleteFrom('scheduled_messages').where('user_id', '=', userId).execute();
+  // Made by chat's own migration set, so absent from a database migrated without it, where there is nothing to forget.
+  for (const table of ['hidden_messages', 'message_reminders', 'scheduled_messages'] as const) {
+    if (await tableExists(transaction, table)) {
+      await transaction.deleteFrom(table).where('user_id', '=', userId).execute();
+    }
+  }
   await transaction.deleteFrom('saved_searches').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('saved_messages').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('thread_follows').where('user_id', '=', userId).execute();

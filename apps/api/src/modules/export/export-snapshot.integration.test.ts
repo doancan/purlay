@@ -54,7 +54,11 @@ describe('integration: an export’s snapshot', () => {
     await snapshotOn(cloned.db)(async (transaction) => {
       await readTables(
         transaction,
-        { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
+        {
+          kind: 'all',
+          workspaceId: room.workspaceId,
+          prepared: { chat: { channels: [room.channelId], filesLinked: true } },
+        },
         async (table, lines) => {
           if (table === 'messages' && !committed) {
             // Another connection, committed at once, while the export holds its snapshot.
@@ -133,7 +137,11 @@ describe('integration: an export’s snapshot', () => {
         storage: removing,
       },
       { id: room.workspaceId, slug: 'acme', name: 'Acme' },
-      { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
+      {
+        kind: 'all',
+        workspaceId: room.workspaceId,
+        prepared: { chat: { channels: [room.channelId], filesLinked: true } },
+      },
       target,
     );
     expect(manifest.blobs).toEqual({ count: 0, bytes: 0, removed: [fileId], missing: [] });
