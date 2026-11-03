@@ -17,9 +17,9 @@ import { DAY_MS, fixedClock } from '../../platform/clock';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, counters, type Room } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
-import { sendMessage } from '../messages/messages';
-import { removeMessage } from '../messages/delete';
-import { PURGE_BATCH, purgeRetention, purgeWorkspace } from './purge';
+import { sendMessage } from './messages';
+import { removeMessage } from './delete';
+import { PURGE_BATCH, purgeRetention, purgeWorkspace } from './retention-purge';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
