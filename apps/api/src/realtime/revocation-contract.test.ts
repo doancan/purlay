@@ -246,7 +246,7 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   },
   // The erasure of a workspace whose deletion was asked for a grace period ago (D-242): its channels and
   // memberships go, but nobody could reach them since the deletion was asked for, when every socket was told.
-  'apps/api/src/modules/workspaces/deletion-purge.ts#channelBatch': {
+  'apps/api/src/modules/messages/workspace-purge.ts#channelBatch': {
     none: 'a job with no bus, deleting the channels of a workspace whose sockets were told when its deletion was asked for (#870)',
   },
   'apps/api/src/modules/workspaces/deletion-purge.ts#purgeWorkspaceContent': {
