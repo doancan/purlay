@@ -442,10 +442,9 @@ describe('integration: migrate on start', () => {
       expect(await answer(port, '/api/nothing-like-it')).toEqual([404, 'ROUTE_NOT_FOUND']);
       const client = (await (
         await fetch(`http://127.0.0.1:${String(port)}/api/client`)
-      ).json()) as {
-        modules?: string[];
-      };
-      expect(client.modules).toEqual([]);
+      ).json()) as Record<string, unknown>;
+      // The public handshake does not name modules (D-250): it is a signed-in caller's `/api/me` that does.
+      expect(client).not.toHaveProperty('modules');
     } finally {
       node.kill();
       await node.exited;
