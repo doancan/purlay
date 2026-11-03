@@ -29,6 +29,16 @@ const NO_FEATURES = {
     'The core imports no module: modules and platform sit below the features, and a feature is reached through an event, a port or a capability. (D-250, MODULES.md §4)',
 };
 
+// A table is named in a module's `data` hooks and nowhere else, so a module cannot read another's by
+// writing its name (D-250 rule 4). The query builder is typed with the module's own tables; raw `sql` is the
+// way round that typing, so a feature may not import it, from either place it comes from.
+const NO_RAW_SQL = ['@purlay/db', 'kysely'].map((name) => ({
+  name,
+  importNames: ['sql'],
+  message:
+    'A module does not write raw SQL: it names a table only in its data hooks, and the typed query builder keeps it to its own tables. (D-250, MODULES.md §4)',
+}));
+
 const NO_CREATE_DATABASE = {
   name: '@purlay/db',
   importNames: ['createDatabase'],
@@ -604,7 +614,10 @@ export default defineConfig([
   // A feature: below the doors like a module, never importing another feature — its code or its tables'
   // owner — and, like a module, taking its executor as an argument. One block for each, because the
   // rule has to name the others. (D-250, MODULES.md §4)
-  ...featureFences(FEATURES_DIR, FEATURE_IDS, NO_TRANSPORT_TYPES, NO_CREATE_DATABASE),
+  ...featureFences(FEATURES_DIR, FEATURE_IDS, NO_TRANSPORT_TYPES, [
+    NO_CREATE_DATABASE,
+    ...NO_RAW_SQL,
+  ]),
 
   // The door that composes the other: realtime imports nothing from ingress. Its
   // tests may — they stand up a whole application to drive a real socket — and so
