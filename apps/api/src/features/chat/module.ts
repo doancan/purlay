@@ -17,8 +17,6 @@ import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
 export const chatModule = {
-  // Its tables are in the core's first migrations (`MODULES.md` §5): they exist with chat off.
-  dataInCore: true,
   manifest: {
     id: 'chat',
     requires: [],

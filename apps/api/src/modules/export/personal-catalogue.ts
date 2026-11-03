@@ -16,7 +16,7 @@
  * compile error where its table is described until somebody decides whether a person's own copy carries it. The
  * composition root (`export-catalogue.ts`) holds the sum to the schema.
  */
-import { sql, tableExists, type Database, type Executor, type RawBuilder } from '@purlay/db';
+import { absentTables, sql, type Database, type Executor, type RawBuilder } from '@purlay/db';
 import type { Bounds } from './catalogue';
 
 /** A column: in a person's export, or left out. */
@@ -68,6 +68,8 @@ export interface PersonalContribution {
   readonly tables: readonly PersonalTableExport[];
   /** The tables its own migration set makes, absent from a database migrated without the set: not read, and its workspaces not asked for. */
   readonly ownSet?: readonly (keyof Database)[];
+  /** The tables of the module that no export of a person writes, each with why (see `ExportContribution.excluded`). */
+  readonly excluded?: Readonly<Record<string, string>>;
   /** Each a `select <workspace's id> from …` over the person's rows: the workspaces they name. */
   readonly workspaces: (userId: string) => readonly RawBuilder<unknown>[];
   /** A bound on `attachments` selecting the files the person sent, whose bytes the export copies. */
@@ -130,13 +132,11 @@ export const assemblePersonalCatalogue = (
           .flatMap((contribution) => contribution.workspaces(userId)),
         sql` union `,
       ),
-    absent: async (executor: Executor): Promise<readonly (keyof Database)[]> => {
-      const absent: (keyof Database)[] = [];
-      for (const table of contributions.flatMap((contribution) => contribution.ownSet ?? [])) {
-        if (!(await tableExists(executor, table))) absent.push(table);
-      }
-      return absent;
-    },
+    absent: async (executor: Executor): Promise<readonly (keyof Database)[]> =>
+      await absentTables(
+        executor,
+        contributions.flatMap((contribution) => contribution.ownSet ?? []),
+      ),
     files: async (userId: string, executor: Executor): Promise<RawBuilder<unknown> | undefined> =>
       await modules.find((module) => module.files !== undefined)?.files?.(userId, executor),
   };

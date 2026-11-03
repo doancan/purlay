@@ -244,7 +244,7 @@ describe('the document check', () => {
     test('fails when a module is bundled and no document knows it', () => {
       const root = aCopy();
       edit(root, 'apps/api/src/composition.ts', (text) =>
-        text.replace('[chatModule, issuesModule]', '[chatModule, issuesModule, notesModule]'),
+        text.replace('  issuesModule,\n]', '  issuesModule,\n  notesModule,\n]'),
       );
       const { status, output } = run(root);
       expect(status).toBe(1);

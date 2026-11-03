@@ -4,17 +4,50 @@ import {
   compose,
   composition,
   compositionFor,
+  composeFor,
   registry,
   type BundledModule,
 } from './composition';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
+import type { AttachmentReader } from './modules/attachments/readable';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
+import { attachmentNotFound, AppError } from './platform/errors';
+import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
 
 const another: BundledModule = {
   manifest: { id: 'other', requires: [], optional: [], provides: [] },
   workspaceChannels: { ...noWorkspaceChannels },
 };
+
+/** A reader that answers for the files it is given and refuses every other, as a module's reader does. */
+const readerOf =
+  (...files: readonly string[]): AttachmentReader =>
+  (_executor, _userId, attachmentId) =>
+    files.includes(attachmentId)
+      ? Promise.resolve({
+          id: attachmentId,
+          storageKey: `key/${attachmentId}`,
+          thumbnailKey: null,
+          fileName: attachmentId,
+          kind: 'file',
+        })
+      : Promise.reject(attachmentNotFound());
+
+/** How a reading ended: the file's id, the refusal's code, or the failure's message. */
+const outcomeOf = async (reading: Promise<{ readonly id: string }>): Promise<string> => {
+  try {
+    return (await reading).id;
+  } catch (error: unknown) {
+    if (error instanceof AppError) return error.body.code;
+    return error instanceof Error ? error.message : 'not an error';
+  }
+};
+
+const moduleReading = (id: string, reader: AttachmentReader): BundledModule => ({
+  manifest: { id, requires: [], optional: [], provides: [] },
+  readAttachment: reader,
+});
 
 describe('the application as its modules make it', () => {
   test('carries chat and issues, and the registry of the build is sound', () => {
@@ -77,6 +110,111 @@ describe('the application as its modules make it', () => {
     expect(() => compose([chatModule, another, second])).toThrow(
       "more than one module answers for a workspace's channels: chat, other, second",
     );
+  });
+
+  describe('who may read an attachment', () => {
+    const database = aDatabaseThatMustNotBeTouched();
+    const first = moduleReading('first', readerOf('in-first'));
+    const second = moduleReading('second', readerOf('in-second'));
+
+    test('is whoever any running module’s reader says may, not the first module’s alone', async () => {
+      const both = compose([first, second], [first, second]);
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'in-first'))).toBe('in-first');
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'in-second'))).toBe('in-second');
+    });
+
+    test('is refused as any attachment nobody answers for is, once every reader has said no', async () => {
+      const both = compose([first, second], [first, second]);
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'nowhere'))).toBe(
+        'ATTACHMENT_NOT_FOUND',
+      );
+    });
+
+    test('does not ask a module that is not run, and keeps a reader’s own failure a failure', async () => {
+      const onlyFirst = compose([first], [first, second]);
+      expect(await outcomeOf(onlyFirst.readAttachment(database, 'u', 'in-second'))).toBe(
+        'ATTACHMENT_NOT_FOUND',
+      );
+      const broken = moduleReading('broken', () =>
+        Promise.reject(new Error('the database is gone')),
+      );
+      const withBroken = compose([broken, second], [broken, second]);
+      expect(await outcomeOf(withBroken.readAttachment(database, 'u', 'in-second'))).toBe(
+        'the database is gone',
+      );
+    });
+  });
+
+  describe('in what order the modules take part', () => {
+    const calls: string[] = [];
+    const named = (
+      id: string,
+      requires: readonly string[],
+      table: 'issues' | 'mentions' | 'channels',
+    ): BundledModule => ({
+      manifest: { id, requires, optional: [], provides: [] },
+      userErased: (): Promise<void> => {
+        calls.push(id);
+        return Promise.resolve();
+      },
+      workspacePurge: { before: [], after: [], tables: [table] },
+    });
+    // `consumer` sorts before `provider` and stands first in the build's list, but needs it started first.
+    const consumer = named('consumer', ['provider'], 'issues');
+    const provider = named('provider', [], 'mentions');
+    const loner = named('zloner', [], 'channels');
+    const carried = [consumer, provider, loner];
+    const idsOf = (modules: readonly BundledModule[]): string[] =>
+      modules.map((module) => module.manifest.id);
+
+    test('is the order the registry resolved, not the order the build lists them in', () => {
+      expect(idsOf(composeFor(carried, undefined).modules)).toEqual([
+        'provider',
+        'zloner',
+        'consumer',
+      ]);
+    });
+
+    test('keeps what every module holds in that order whichever of them run', async () => {
+      for (const setting of [undefined, 'none', 'provider', 'zloner', 'provider,consumer']) {
+        calls.length = 0;
+        const composed = composeFor(carried, setting);
+        expect(composed.workspacePurge.tables).toEqual(['mentions', 'channels', 'issues']);
+        await composed.userErased.run(aTransactionThatMustNotBeTouched(), 'u');
+        expect(calls).toEqual(['provider', 'zloner', 'consumer']);
+      }
+    });
+
+    test('has the modules that run act in the resolved order, and only those', () => {
+      expect(idsOf(composeFor(carried, 'consumer,zloner,provider').modules)).toEqual([
+        'provider',
+        'zloner',
+        'consumer',
+      ]);
+      expect(idsOf(composeFor(carried, 'zloner').modules)).toEqual(['zloner']);
+      expect(idsOf(composeFor(carried, 'none').modules)).toEqual([]);
+    });
+
+    test('stops a build whose module claims a route the core has, or one another module has', () => {
+      const claiming = (id: string, routes: string[]): BundledModule => ({
+        manifest: { id, requires: [], optional: [], provides: [], routes },
+      });
+      expect(() => composeFor([claiming('notes', ['/api/me'])], undefined)).toThrow(
+        /"notes" owns the route "\/api\/me", which overlaps the core's/,
+      );
+      expect(() =>
+        composeFor([claiming('notes', ['/api/x/**']), claiming('todos', ['/api/x/y'])], undefined),
+      ).toThrow(/both own routes that overlap/);
+    });
+
+    test('is the same for a build’s own modules whatever the setting', () => {
+      expect(compositionFor(undefined).workspacePurge.tables).toEqual(
+        compositionFor('issues').workspacePurge.tables,
+      );
+      expect(compositionFor('none').workspacePurge.tables).toEqual(
+        compositionFor('chat').workspacePurge.tables,
+      );
+    });
   });
 
   describe('for the MODULES setting', () => {

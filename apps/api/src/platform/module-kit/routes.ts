@@ -25,3 +25,23 @@ export const ownsPath = (templates: readonly string[]): ((path: string) => boole
     return compiled.some((template) => matches(template, given));
   };
 };
+
+/**
+ * Whether some path is matched by both templates (a subtree and a template inside it, two templates that differ only
+ * where one has a name), by the same rules as `ownsPath`. A literal template that is only the prefix of another matches
+ * a different path and does not overlap it.
+ */
+export const templatesOverlap = (first: string, second: string): boolean => {
+  const left = segments(first);
+  const right = segments(second);
+  for (let index = 0; ; index += 1) {
+    const a = left[index];
+    const b = right[index];
+    if (a === '**' && b === '**') return true;
+    // A subtree takes any path with a segment here, so the other must have one.
+    if (a === '**') return b !== undefined;
+    if (b === '**') return a !== undefined;
+    if (a === undefined || b === undefined) return a === b;
+    if (!a.startsWith(':') && !b.startsWith(':') && a !== b) return false;
+  }
+};

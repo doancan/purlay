@@ -15,7 +15,7 @@ import { visibleChannelIds } from './channels/guard';
 import { tableExport, type ExportContribution, type Scope } from '../../modules/export/catalogue';
 
 /** What `prepare` decided: the channels the export covers, and whether chat's link to the files is there to be read. */
-interface Prepared {
+export interface Prepared {
   readonly channels: readonly string[];
   readonly filesLinked: boolean;
 }
@@ -309,45 +309,8 @@ const tables = [
   ),
 ] as const;
 
-/** The tables chat writes into an export. */
-export type ChatWritten = (typeof tables)[number]['name'];
-
-export const chatExport: ExportContribution = {
-  id: 'chat',
-  prepare: async (executor, request): Promise<Prepared> => ({
-    channels:
-      request.kind === 'all'
-        ? await everyChannel(executor, request.workspaceId)
-        : await visibleChannelIds(executor, request.viewer),
-    filesLinked: await tableExists(executor, 'message_attachments'),
-  }),
-  tables,
-  people: (scope) => [
-    sql`select created_by from channels where id in (${channelsIn(scope)})`,
-    sql`select user_id from channel_members where channel_id in (${channelsIn(scope)})`,
-    sql`select sender_id from messages where id in (${messagesOf(scope)})`,
-    sql`select resolved_by from messages where id in (${messagesOf(scope)})`,
-    sql`select question_assignee_id from messages where id in (${messagesOf(scope)})`,
-    sql`select decision_updated_by from messages where id in (${messagesOf(scope)})`,
-    sql`select user_id from reactions where message_id in (${messagesOf(scope)})`,
-    sql`select mentioned_user_id from mentions where message_id in (${messagesOf(scope)})`,
-    sql`select pinned_by from pinned_messages where message_id in (${messagesOf(scope)})`,
-    sql`select added_by from channel_bookmarks where channel_id in (${channelsIn(scope)})`,
-    sql`select uploader_id from attachments where id in (${filesOf(scope)})`,
-    sql`select declared_by from incidents where id in (${incidentsOf(scope)})`,
-    sql`select actor_id from incident_updates where incident_id in (${incidentsOf(scope)})`,
-    sql`select user_id from incident_responders where incident_id in (${incidentsOf(scope)})`,
-    sql`select added_by from incident_responders where incident_id in (${incidentsOf(scope)})`,
-    sql`select created_by from github_repo_feeds where channel_id in (${channelsIn(scope)})`,
-    sql`select created_by from github_links where channel_id in (${channelsIn(scope)})`,
-  ],
-  // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
-  files: (scope) => sql`id in (${filesOf(scope)})`,
-  audit: (rows) => ({ messages: String(rows['messages'] ?? 0) }),
-};
-
 /** The tables of chat that are not in an export, and why. */
-export type ChatExcluded =
+type ChatExcluded =
   | 'message_attachments'
   | 'hidden_messages'
   | 'message_reminders'
@@ -368,7 +331,7 @@ export type ChatExcluded =
   | 'thread_follows'
   | 'link_previews';
 
-export const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
+const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   message_attachments:
     'which message a file was sent with: written beside the file’s own `message_id` and `channel_id`, which the export carries, until those move here and this table is what carries them',
   hidden_messages: 'messages each person deleted for themselves alone: their own state',
@@ -398,3 +361,40 @@ export const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   thread_follows: 'which threads each person follows or let go, their own state',
   link_previews: 'a cache of other sites’ pages',
 };
+
+export const chatExport = {
+  id: 'chat',
+  prepare: async (executor, request): Promise<Prepared> => ({
+    channels:
+      request.kind === 'all'
+        ? await everyChannel(executor, request.workspaceId)
+        : await visibleChannelIds(executor, request.viewer),
+    filesLinked: await tableExists(executor, 'message_attachments'),
+  }),
+  tables,
+  people: (scope: Scope): RawBuilder<unknown>[] => [
+    sql`select created_by from channels where id in (${channelsIn(scope)})`,
+    sql`select user_id from channel_members where channel_id in (${channelsIn(scope)})`,
+    sql`select sender_id from messages where id in (${messagesOf(scope)})`,
+    sql`select resolved_by from messages where id in (${messagesOf(scope)})`,
+    sql`select question_assignee_id from messages where id in (${messagesOf(scope)})`,
+    sql`select decision_updated_by from messages where id in (${messagesOf(scope)})`,
+    sql`select user_id from reactions where message_id in (${messagesOf(scope)})`,
+    sql`select mentioned_user_id from mentions where message_id in (${messagesOf(scope)})`,
+    sql`select pinned_by from pinned_messages where message_id in (${messagesOf(scope)})`,
+    sql`select added_by from channel_bookmarks where channel_id in (${channelsIn(scope)})`,
+    sql`select uploader_id from attachments where id in (${filesOf(scope)})`,
+    sql`select declared_by from incidents where id in (${incidentsOf(scope)})`,
+    sql`select actor_id from incident_updates where incident_id in (${incidentsOf(scope)})`,
+    sql`select user_id from incident_responders where incident_id in (${incidentsOf(scope)})`,
+    sql`select added_by from incident_responders where incident_id in (${incidentsOf(scope)})`,
+    sql`select created_by from github_repo_feeds where channel_id in (${channelsIn(scope)})`,
+    sql`select created_by from github_links where channel_id in (${channelsIn(scope)})`,
+  ],
+  // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
+  files: (scope: Scope): RawBuilder<unknown> => sql`id in (${filesOf(scope)})`,
+  audit: (rows: Readonly<Record<string, number>>): Record<string, string> => ({
+    messages: String(rows['messages'] ?? 0),
+  }),
+  excluded: CHAT_EXCLUDED,
+} satisfies ExportContribution;

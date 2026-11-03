@@ -4,7 +4,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import { closeIntegrationDatabase, integrationDatabase } from './testing';
-import { CROSS_OWNER_FOREIGN_KEYS, TABLE_OWNERS } from './table-owners';
+import { CROSS_OWNER_FOREIGN_KEYS, TABLE_OWNERS, type TableOwner } from './table-owners';
+
+/** The list, asked about the tables the database names: strings, not the schema's own. */
+const owners: Readonly<Record<string, TableOwner>> = TABLE_OWNERS;
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -29,8 +32,8 @@ describe('integration: who owns each table', () => {
     );
     const crossing = rows
       .filter(({ child, parent }) => {
-        const from = TABLE_OWNERS[child];
-        const to = TABLE_OWNERS[parent];
+        const from = owners[child];
+        const to = owners[parent];
         // Within an owner, or from a module to the core, is the rule; anything else is a crossing.
         return from !== to && to !== 'core';
       })

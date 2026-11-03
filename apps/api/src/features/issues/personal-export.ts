@@ -3,6 +3,7 @@
  * Who each was assigned to is somebody else's and stays out; so do the issues others made that name them, which are
  * the workspace's.
  */
+import type { RawBuilder } from '@purlay/db';
 import {
   ownedBy,
   personalTableExport,
@@ -29,12 +30,11 @@ const tables = [
   ),
 ] as const;
 
-/** The tables issues writes into a person's export. */
-export type IssuesPersonalWritten = (typeof tables)[number]['name'];
-
-export const issuesPersonalExport: PersonalContribution = {
+export const issuesPersonalExport = {
   id: 'issues',
   tables,
   ownSet: ['issues'],
-  workspaces: (userId) => [workspacesOwnedBy('issues', 'created_by', userId)],
-};
+  workspaces: (userId: string): RawBuilder<unknown>[] => [
+    workspacesOwnedBy('issues', 'created_by', userId),
+  ],
+} satisfies PersonalContribution;

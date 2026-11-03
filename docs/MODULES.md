@@ -91,7 +91,8 @@ That holds before any other judgement of the request: the edge's refusals of a b
 does, whatever its headers say. A file is judged by what it is attached to: one attached to a message is chat's, so with chat not run
 `GET /api/attachments/:id` and its `/thumbnail` answer `ATTACHMENT_NOT_FOUND` for it, as for an id that never existed, while an upload
 nobody attached (the core's) stays its uploader's to read and discard. The manifest's `readAttachment` is how a module widens the core's reader;
-the core names no module.
+the core names no module. Every running module's reader is asked in turn, the core's own last, and a file is readable if any says so (a reader says no with
+`attachmentNotFound`; any other failure stays a failure). Composed, not exclusive, because a reader only answers for what its module holds and so two modules never contradict.
 
 **A workspace made while chat is not run has no first channel**, because the hook that makes it is chat's. Turning
 chat on later does not backfill one: no job or migration looks for workspaces without a channel. The chat front door
@@ -145,19 +146,24 @@ moves into that module.
 - A disabled module's applied rows are not "missing"; they are logged.
 - Erasure, export and retention run for every module whose tables exist, enabled or not (D-250 rule 5), so
   the export catalogue is assembled from the manifests and its test — a table in the database that no manifest
-  names fails it — keeps working. **Built** as `dataInCore`: a module whose tables the core's own migrations made
-  (chat) contributes its erasure, purge, export, retention and channel answers whether or not it runs, and only
-  what *acts* (its routes, its mail, what a new workspace starts with) waits for it to run. **A module's own set
-  makes some of those tables** (chat's `message_attachments`, `scheduled_messages`, `message_reminders`,
-  `hidden_messages` and `scheduled_message_attachments`), and a database migrated without the set — a fresh install
-  that runs `MODULES=none` — has none of them. Where they exist the hooks reach them whether or not the module runs, so
-  the right to be erased does not wait for a setting; where they do not there is nothing to reach, and each place
-  that names one asks `tableExists` (`@purlay/db`) first, at the moment it needs the table and never remembered, since
-  another node may apply the set while this one runs. The alternative, a contribution split into a part held always and
-  a part held only where the set is applied, would need the process to know the database's sets when it is composed,
-  and a node that was composed before the set arrived would then miss rows that are there. A process that *runs* a
-  module on a database without its set is not a cell: readiness refuses it. `module-lifecycle.integration.test.ts`
-  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own. Issues (D-254), whose one table is all in its own set, is held the same way, and its `ownSet` tells the exports which tables to skip.
+  names fails it — keeps working. **Built** without a flag: every bundled module's data
+  hooks are held always, whether or not it runs, in the resolved order of the build (`composeFor`) — its erasure, purge,
+  export, retention and channel answers — and only what *acts* (its routes, its mail, what a new workspace starts with,
+  the attachment reader) waits for it to run. There was a `dataInCore` flag for this, and it was dropped: every bundled
+  module set it, and a `false` would have made a person's erasure wait for a setting (rule 5), so it had no safe value.
+  **A module's own set makes some of those tables** (chat's `message_attachments`, `scheduled_messages`,
+  `message_reminders`, `hidden_messages` and `scheduled_message_attachments`; all of issues'), and a database migrated
+  without the set — a fresh install that runs `MODULES=none` — has none of them. Where they exist the hooks reach them
+  whether or not the module runs, so the right to be erased does not wait for a setting; where they do not there is
+  nothing to reach. **`tableExists` (`@purlay/db`) is the one primitive for that**, asked at the moment the table is
+  needed and never remembered, since another node may apply the set while this one runs; `absentTables` is its
+  list form, for the purge's tables and the exports' `ownSet`. `ownSet` stays because the catalogues need it for what
+  `tableExists` cannot say alone: which contribution's rows and people to leave out when its table is absent. The alternative,
+  a contribution split into a part held always and a part held only where the set is applied, would need the process to
+  know the database's sets when it is composed, and a node that was composed before the set arrived would then miss
+  rows that are there. A process that *runs* a module on a database without its set is not a cell: readiness refuses
+  it. `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment reader in each cell,
+  on a database of its own.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
   77 files that existed when this was decided always create chat's tables, inert where chat is off. The release before the first prefixed row
@@ -167,6 +173,9 @@ moves into that module.
 - **Every table has one owner**, core or a module, in a list a test holds to the database; a foreign key across
   owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
   point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
+  An owner is `core` or the id of a registered migration set (`TableOwner` is derived from `PRODUCT_MIGRATION_SETS`, and the list
+  covers every table of the generated schema or does not compile); `module-sets.test.ts` holds the sets to the bundled modules and
+  to `migrations/<id>/`, so a directory with no registered set, or a set with no module, fails a test.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
   with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
   tables (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
@@ -218,7 +227,7 @@ until then it is a stated intent and not a guarantee.
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
-| A bundle has no cycle, repeat or double capability | the registry, and mutations in `scripts/mutations.ts` | 1 |
+| A bundle has no cycle, repeat or double capability, and no two modules (nor a module and the core, `core-claims.ts`) own the same route template (a subtree or a named segment overlapping another's counts), job, socket operation or server event | the registry, and mutations in `scripts/mutations.ts` | 1 |
 | `MODULES` is valid | `resolve`, at boot: a process that cannot parse it logs `MODULES cannot be run; exiting` with every problem and exits `1` (`registry.test.ts`, `migrate-on-start.integration.test.ts`) — **built** | 12 |
 | The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
 | Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, and `test:modules-none`, a browser spec run in the browser job — **built**; not a whole-suite matrix | 12 |
@@ -453,7 +462,9 @@ request with behaviour unchanged:
    its files, and its words on the trail — and assembles the core's (`core-export.ts`) and each module's
    (`features/chat/export.ts`) in the order the files have always been written: the core's first three tables,
    the modules', the core's last two. The composition root (`export-catalogue.ts`) holds the sum to the schema at
-   compile time, naming a table nobody decided, and the integration test holds it to the database. A frozen
+   compile time, naming a table nobody decided, and the integration test holds it to the database. The modules' side is read
+   off `bundledModules` itself — the names of each contribution's `tables` and the keys of its `excluded` — so a third module is held to
+   the schema, for both exports, without `export-catalogue.ts` being edited. A frozen
    shape of the files, rows and columns — the safety net, written first — passed unchanged through the move.
    `attachments` is still described by chat, which bounds it by messages, until the link is chat's (step 8)
 4. **The personal export** (**built**) the same way: `modules/export/personal-catalogue.ts` defines its contribution and
@@ -497,7 +508,7 @@ for the channels, the purge's steps and tables, the two catalogues, the columns 
 and what it contributes (`features/chat/module.ts`), and a process with no module has the core alone, shown on a real
 database. (b) *`MODULES` read at boot* (**built**): `compositionFor(setting)` hands the process only the modules it names, and a setting that
 names none the build carries stops it before it listens; the migrations (`MIGRATE_ON_START`, `db:migrate`, readiness and
-the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert.
+the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert. **Order** is the registry's resolved one (partners first): the modules that run act in it, and what every carried module holds (erasure hooks, the purge's steps and tables, the export tables) follows the resolved order of the whole build, so it does not change with the `MODULES` value (`composeFor`).
 (c) *Routes, jobs and commands* (**built**): a module's manifest lists its route templates and its jobs; a path of a module that
 is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one that acts for its
 users (chat's missed-mail letter) exits `0` with a line saying so and is left out of the status report — its sweeps and the retention purge still run, the rows being there — and `GET /api/me` lists the modules the server runs (the public `GET /api/client` does not, PR #963).
@@ -566,7 +577,7 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 - **`data` hooks.** `userErased` takes an erased account off the issues assigned to it (what it made stays, under the
   anonymised row); `workspacePurge` empties the table by name, because a purged workspace keeps its row as a tombstone and
   the cascade never fires; `export` and `personalExport` write the table whole and the person's own. **All four are held
-  whether or not the module runs** (`dataInCore`), and each asks `tableExists` first, so a database that never had the
+  whether or not the module runs** (every bundled module is, `composition.ts`), and each asks `tableExists` first, so a database that never had the
   set is no failure and one that ran issues and was then turned off is erased, purged and exported whole: its rows stay
   while the module is off, and the right to be erased and a deleted workspace's purge do not wait for a setting
   (D-254 §4). The exports skip the table through the contribution's `ownSet`.

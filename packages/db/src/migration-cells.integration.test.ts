@@ -12,7 +12,9 @@ import {
   setsNamedBy,
   type MigrationSet,
 } from './migrator';
-import { TABLE_OWNERS } from './table-owners';
+import { TABLE_OWNERS, type TableOwner } from './table-owners';
+
+const owners: Readonly<Record<string, TableOwner>> = TABLE_OWNERS;
 import { closeIntegrationDatabase, dropDatabases, DROP_HOOK_MS } from './testing';
 
 const databases: string[] = [];
@@ -71,7 +73,7 @@ describe('integration: the cells of the matrix, migrated', () => {
         const alone = await tablesAfter(setsNamedBy(set.id));
         const added = alone.filter((table) => !core.includes(table));
         expect(added.length).toBeGreaterThan(0);
-        expect(added.filter((table) => TABLE_OWNERS[table] !== set.id)).toEqual([]);
+        expect(added.filter((table) => owners[table] !== set.id)).toEqual([]);
         expect(core.filter((table) => !alone.includes(table))).toEqual([]);
       }
     },
