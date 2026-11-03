@@ -178,7 +178,17 @@ export const notify = async (
     if (writtenAt !== undefined && new Date(row.joined_at) > writtenAt)
       alreadyRead.add(row.user_id);
   }
-  const notified = candidates.filter((userId) => !muted.has(userId));
+  const hidden = new Set(
+    (
+      await executor
+        .selectFrom('hidden_messages')
+        .select('user_id')
+        .where('message_id', '=', messageId)
+        .where('user_id', 'in', candidates)
+        .execute()
+    ).map((row) => row.user_id),
+  );
+  const notified = candidates.filter((userId) => !muted.has(userId) && !hidden.has(userId));
   if (notified.length === 0) return [];
   // Written and counted all the same: only how it may interrupt is held back (D-15, D-108).
   const deep = await inDeepWork(executor, context.workspaceId, notified, now);

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { PUSH_WORDS, pushBody } from './words';
 
 const CATALOGUE_KEY = {
+  reminder: 'inbox.why.reminder',
   mention: 'inbox.why.mention',
   direct_message: 'inbox.why.direct',
   thread_reply: 'inbox.why.reply',

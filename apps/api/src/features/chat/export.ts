@@ -328,6 +328,10 @@ export const chatExport: ExportContribution = {
 /** The tables of chat that are not in an export, and why. */
 export type ChatExcluded =
   | 'message_attachments'
+  | 'hidden_messages'
+  | 'message_reminders'
+  | 'scheduled_messages'
+  | 'scheduled_message_attachments'
   | 'github_integrations'
   | 'github_deliveries'
   | 'incoming_webhooks'
@@ -346,6 +350,11 @@ export type ChatExcluded =
 export const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   message_attachments:
     'which message a file was sent with: written beside the file’s own `message_id` and `channel_id`, which the export carries, until those move here and this table is what carries them',
+  hidden_messages: 'messages each person deleted for themselves alone: their own state',
+  message_reminders: 'each person’s private reminders: their own state',
+  scheduled_messages: 'each person’s private messages not yet sent: theirs until they are sent',
+  scheduled_message_attachments:
+    'which unsent scheduled message holds a file: a person’s private draft, as the draft is',
   github_integrations: 'the sealed GitHub token: a credential never leaves',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   incoming_webhooks:

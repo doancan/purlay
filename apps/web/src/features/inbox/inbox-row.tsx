@@ -21,6 +21,8 @@ import { whyOf } from './why';
 
 const glyphOf = (type: Notification['type']): GlyphName => {
   switch (type) {
+    case 'reminder':
+      return 'notifications';
     case 'mention':
       return 'notifications';
     case 'direct_message':

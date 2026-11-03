@@ -29,7 +29,13 @@ export const clientInfo = (
 ): ClientInfo => {
   const { macos } = clientPolicyOf(config);
   return {
-    capabilities: { notificationTypeFilters: true },
+    // Scheduling, reminders and deleting a message for oneself are chat's: offered where chat runs (D-250).
+    capabilities: {
+      notificationTypeFilters: true,
+      scheduledMessages: modules.includes('chat'),
+      messageReminders: modules.includes('chat'),
+      personalMessageDeletion: modules.includes('chat'),
+    },
     modules: [...modules],
     server: { version: SERVER_VERSION },
     contractVersion: CONTRACT_VERSION,

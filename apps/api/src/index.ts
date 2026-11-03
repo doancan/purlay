@@ -8,6 +8,9 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
+import { deliverReminders } from './features/chat/reminders/delivery';
+import { deliverScheduled } from './features/chat/scheduled/delivery';
+import { timedDeliveryLoop } from './features/chat/scheduled/loop';
 import { exportQueue } from './modules/export/queue';
 import { compositionFor, type Composition } from './composition';
 import { ModuleConfigError } from './platform/module-kit/registry';
@@ -202,6 +205,32 @@ const servicesFor = (
   needsReentry: readonly SealedSetting[],
 ): RuntimeServices => runtimeServicesFrom(settings, runtimeBase, needsReentry, services.sends);
 
+const timedDelivery = timedDeliveryLoop(
+  async () => {
+    const dependencies = {
+      database,
+      clock: systemClock,
+      bus: runtimeBase.bus,
+      log,
+      ...(push === undefined ? {} : { push }),
+    };
+    const results = await Promise.allSettled([
+      deliverScheduled(dependencies),
+      deliverReminders(dependencies),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  },
+  (callback, milliseconds) => {
+    const timer = setTimeout(callback, milliseconds);
+    return (): void => {
+      clearTimeout(timer);
+    };
+  },
+  log,
+);
+
 const app = createApp({
   composition: modules,
   auth: services.auth,
@@ -232,6 +261,7 @@ const app = createApp({
 log.info('listening', { port: app.listen(config.PORT) });
 // A crash stops new work at once: readiness says no and the sockets are told to come back (#634).
 crash.onCrash(() => {
+  void timedDelivery.stop();
   drainRefusingChanges(services, app.drain)().catch((failure: unknown) => {
     plainLog.warn('draining after a crash failed', { err: failure });
   });
@@ -243,7 +273,10 @@ installShutdown({
   drain: drainRefusingChanges(services, app.drain),
   // Pushes for writes already committed, then the mail of every relay this process served with, then
   // the reports of the shutdown itself — the error tracker still has its time — then the pool.
-  closeDatabase: closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet }),
+  closeDatabase: async () => {
+    await timedDelivery.stop();
+    await closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet })();
+  },
   log,
   process,
   deadlineMs: 10_000,
@@ -336,6 +369,8 @@ if (config.MIGRATE_ON_START === true) {
   }
 }
 services.settle(runtime);
+// Scheduled messages and reminders are chat's (D-250): delivered by a process that runs chat, and by no other.
+if (modules.modules.some((module) => module.manifest.id === 'chat')) timedDelivery.start();
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
 log.info(
   runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',

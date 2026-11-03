@@ -95,7 +95,8 @@ export const pathFor = (path: string, ids: Ids): string =>
   path.replace(/:(\w+)/g, (_whole, name: string) => {
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
-    if (name === 'messageId' || name === 'searchId') return ids.messageId;
+    // A saved search's and a scheduled message's ids are the client's to choose: any fresh one will do.
+    if (name === 'messageId' || name === 'searchId' || name === 'scheduledId') return ids.messageId;
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
@@ -471,6 +472,39 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/workspaces/:workspaceId/saved-searches/:searchId': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'removes the caller’s own filter only' },
+  },
+  'PUT /api/channels/:channelId/scheduled/:scheduledId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (now) => ({
+      content: 'crossing',
+      sendAt: new Date(now.getTime() + 3_600_000).toISOString(),
+    }),
+    visibility: CHANNEL,
+  },
+  'DELETE /api/channels/:channelId/scheduled/:scheduledId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
+  'GET /api/workspaces/:workspaceId/scheduled': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide' },
+  },
+  'PUT /api/messages/:messageId/reminder': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    body: (now) => ({ remindAt: new Date(now.getTime() + 3_600_000).toISOString() }),
+    visibility: MESSAGE,
+  },
+  'DELETE /api/messages/:messageId/reminder': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+  },
+  'GET /api/workspaces/:workspaceId/reminders': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide' },
+  },
+  'PUT /api/messages/:messageId/hidden': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
   },
   'PUT /api/messages/:messageId/reactions/:emoji': {
     refusal: 'MESSAGE_NOT_FOUND',

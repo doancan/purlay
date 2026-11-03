@@ -137,6 +137,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/features/chat/channels/read-state.ts#markUnread': {
     none: 'moves a read position back and recounts; nobody gains or loses sight of a channel (#25)',
   },
+  // Deleting a message for oneself (personal deletion) recounts the person's own unread counters when the message
+  // was unread: what they have to read, not what they may see.
+  'apps/api/src/features/chat/messages/hide.ts#hideMessage': {
+    none: 'recounts the person’s own unread counters; nobody gains or loses sight of a channel (#25)',
+  },
   // Deep Work is a member's own quiet; it changes what interrupts them, not what they may see
   // (D-108, #59).
   'apps/api/src/modules/workspaces/deep-work.ts#setDeepWork': {

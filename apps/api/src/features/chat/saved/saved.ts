@@ -11,6 +11,7 @@
  * - **Saving again keeps what was there**: its id, its time, and its state unless a state is given —
  *   so a second Save never undoes "completed".
  */
+import { notHiddenBy } from '../messages/hidden';
 import {
   sql,
   type Database,
@@ -47,7 +48,8 @@ const shown = (
     .where('saved_messages.user_id', '=', context.userId)
     .where('saved_messages.workspace_id', '=', context.workspaceId)
     .where('saved_messages.channel_id', 'in', visible)
-    .where('messages.deleted_at', 'is', null);
+    .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId));
 
 /** Saves the message, or moves its save to `input.state`. Answers the workspace it is in. */
 export const saveMessage = async (

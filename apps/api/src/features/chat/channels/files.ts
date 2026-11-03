@@ -9,6 +9,7 @@
  * - **Keyset on the message, then the file.** A message carries several (`ATTACHMENTS_PER_MESSAGE_MAX`),
  *   so the cursor is a file's id and the next page starts after it within its message.
  */
+import { notHiddenBy } from '../messages/hidden';
 import { sql, type Executor } from '@purlay/db';
 import type { FilePage, FileQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
@@ -72,6 +73,7 @@ export const channelFiles = async (
     ])
     .where('message_attachments.channel_id', '=', context.channelId)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .orderBy('message_attachments.message_id', 'desc')
     .orderBy('message_attachments.attachment_id', 'desc')
     .limit(limit + 1);

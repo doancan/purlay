@@ -286,6 +286,38 @@ const STEPS: readonly Step[] = [
     status: 200,
   },
   { id: 'listSavedIds', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
+  {
+    id: 'setMessageReminder',
+    spec: (c) => ({
+      params: { messageId: c.rootId },
+      json: { remindAt: new Date(NOW.getTime() + 60000).toISOString() },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listMessageReminders',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  { id: 'cancelMessageReminder', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
+  {
+    id: 'scheduleMessage',
+    spec: (c) => ({
+      params: { channelId: c.channelId, scheduledId: c.rootId },
+      json: { content: 'Later', sendAt: new Date(NOW.getTime() + 60000).toISOString() },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listScheduledMessages',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  {
+    id: 'cancelScheduledMessage',
+    spec: (c) => ({ params: { channelId: c.channelId, scheduledId: c.rootId } }),
+    status: 204,
+  },
   { id: 'unsaveMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
   {
     id: 'setKnowledge',
@@ -447,6 +479,7 @@ const STEPS: readonly Step[] = [
     status: 204,
   },
   { id: 'logout', as: 'aliceElsewhere', spec: () => ({}), status: 204 },
+  { id: 'hideMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 200 },
   { id: 'deleteMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 204 },
   { id: 'logoutEverywhere', as: 'bob', spec: () => ({}), status: 204 },
 ];

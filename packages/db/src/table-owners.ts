@@ -57,6 +57,11 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   // to chat's `messages`, so no key runs from the core to chat (`MODULES.md` §10, step 8).
   message_attachments: 'chat',
   messages: 'chat',
+  // A person's own drafts, reminders and messages deleted for them alone (chat's set, 0002–0004).
+  hidden_messages: 'chat',
+  message_reminders: 'chat',
+  scheduled_message_attachments: 'chat',
+  scheduled_messages: 'chat',
   missed_mail_letters: 'chat',
   pinned_messages: 'chat',
   reactions: 'chat',

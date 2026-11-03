@@ -15,6 +15,7 @@
  * **A thread is read here too** (D-147): opening it reads the caller's notifications for its
  * replies, by the same path, since that is all reading a thread changes.
  */
+import { notHiddenBy } from '../messages/hidden';
 import { sql, type Executor, type RawBuilder, type Transaction } from '@purlay/db';
 import type {
   ChannelState,
@@ -112,7 +113,11 @@ export const inboxOf = async (
     .leftJoin('messages as roots', 'roots.id', 'messages.parent_id')
     .select(MESSAGE_COLUMNS)
     .select([
-      'roots.content as root_content',
+      sql<
+        string | null
+      >`case when ${notHiddenBy(context.userId, sql.ref('roots.id'))} then roots.content else null end`.as(
+        'root_content',
+      ),
       'roots.sender_id as root_sender_id',
       'roots.deleted_at as root_deleted_at',
       'notifications.id as notification_id',
@@ -124,6 +129,7 @@ export const inboxOf = async (
     .where('notifications.workspace_id', '=', context.workspaceId)
     .where('notifications.channel_id', 'in', visible)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .orderBy('notifications.created_at', 'desc')
     .orderBy('notifications.message_id', 'desc')
     .orderBy('notifications.id', 'desc')

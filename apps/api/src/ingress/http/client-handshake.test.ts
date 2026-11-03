@@ -48,7 +48,12 @@ describe('GET /api/client', () => {
       const body: unknown = await response.json();
       expect(Value.Check(ClientInfo, body)).toBe(true);
       expect(body).toMatchObject({
-        capabilities: { notificationTypeFilters: true },
+        capabilities: {
+          notificationTypeFilters: true,
+          scheduledMessages: true,
+          messageReminders: true,
+          personalMessageDeletion: true,
+        },
         contractVersion: CONTRACT_VERSION,
       });
       expect(response.headers.get('cache-control')).toBe('no-store');

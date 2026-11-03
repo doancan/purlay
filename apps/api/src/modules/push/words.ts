@@ -9,10 +9,11 @@ import type { NEEDS_YOU, PushLocale } from '@purlay/types';
  * Why the person was told — and, for a group conversation, that it was written to several (D-127);
  * for a reply, whether the thread is theirs or one they are only in (D-162).
  */
-type Said = (typeof NEEDS_YOU)[number] | 'group' | 'reply_in';
+type Said = (typeof NEEDS_YOU)[number] | 'group' | 'reply_in' | 'reminder';
 
 export const PUSH_WORDS: Readonly<Record<PushLocale, Readonly<Record<Said, string>>>> = {
   en: {
+    reminder: 'Your message reminder is due',
     mention: '{name} mentioned you',
     direct_message: '{name} wrote to you',
     thread_reply: '{name} replied in your thread',
@@ -21,6 +22,7 @@ export const PUSH_WORDS: Readonly<Record<PushLocale, Readonly<Record<Said, strin
     group: '{name} wrote to the conversation',
   },
   tr: {
+    reminder: 'Mesaj hatırlatıcının zamanı geldi',
     mention: '{name} senden bahsetti',
     direct_message: '{name} sana yazdı',
     thread_reply: '{name} thread’ine yanıt verdi',
@@ -39,7 +41,7 @@ export const pushBody = (locale: PushLocale, reason: Said, name: string): string
  * the person's own thread only when they started it (D-162) — as the inbox's row says it.
  */
 export const saidOf = (
-  reason: (typeof NEEDS_YOU)[number],
+  reason: (typeof NEEDS_YOU)[number] | 'reminder',
   group: boolean,
   rootAuthorId: string | null,
   userId: string,

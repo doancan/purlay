@@ -1,6 +1,7 @@
 /**
- * What chat forgets when an account is erased (D-139 §5, D-250): the searches and messages they saved, the
- * threads they followed, their inbox, and when they were last mailed about what they missed (D-240). Registered
+ * What chat forgets when an account is erased (D-139 §5, D-250): the messages they deleted for themselves, their
+ * reminders and scheduled messages (whose reserved files go back to the orphan sweep), the searches and messages
+ * they saved, the threads they followed, their inbox, and when they were last mailed about what they missed (D-240). Registered
  * where the application is put together; the account code names none of these tables, and runs the hooks inside
  * the erasure's own transaction, at the place these deletes always ran.
  */
@@ -11,6 +12,9 @@ import type { UserErased } from '../../../modules/users/erasure';
 export const forgetWhatChatKeeps = async (
   ...[transaction, userId]: Parameters<UserErased['run']>
 ): Promise<void> => {
+  await transaction.deleteFrom('hidden_messages').where('user_id', '=', userId).execute();
+  await transaction.deleteFrom('message_reminders').where('user_id', '=', userId).execute();
+  await transaction.deleteFrom('scheduled_messages').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('saved_searches').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('saved_messages').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('thread_follows').where('user_id', '=', userId).execute();

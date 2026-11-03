@@ -1426,6 +1426,110 @@ At most `BOOKMARKS_MAX` a channel, counted under the channel's row lock, so two 
 one at once cannot both get in. Added twice, the first stays and nothing changes. The workspace export
 carries them (D-140).
 
+### 7.9. `scheduled_messages` and `scheduled_message_attachments`
+
+A person's message written to be sent later (chat's set, `chat/0002`): a durable private draft the server delivers
+at `send_at` even while every client is closed. Delivery and the sent marker commit in one transaction; row locks
+serialize an edit, a cancellation and a delivery. One past its time and refused (the person left the channel, say)
+is `failed` with the refusal's code, and an edit makes it `pending` again. Sent and failed rows go 30 days after
+their last change.
+
+```sql
+CREATE TYPE scheduled_message_state AS ENUM ('pending', 'sent', 'failed');
+
+CREATE TABLE scheduled_messages (
+    id              UUID PRIMARY KEY,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id      UUID NOT NULL,
+    parent_id       UUID,
+    content         TEXT NOT NULL,
+    send_at         TIMESTAMPTZ NOT NULL,
+    state           scheduled_message_state NOT NULL DEFAULT 'pending',
+    revision        INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+    sent_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    failure_code    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (id, workspace_id),
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id, channel_id) REFERENCES messages(id, channel_id) ON DELETE CASCADE,
+    CHECK ((state = 'failed') = (failure_code IS NOT NULL))
+);
+CREATE INDEX idx_scheduled_messages_due       ON scheduled_messages (send_at, id) WHERE state = 'pending';
+CREATE INDEX idx_scheduled_messages_owner     ON scheduled_messages (user_id, workspace_id, state, send_at);
+CREATE INDEX idx_scheduled_messages_workspace ON scheduled_messages (workspace_id);
+CREATE INDEX idx_scheduled_messages_channel   ON scheduled_messages (channel_id, workspace_id);
+CREATE INDEX idx_scheduled_messages_parent    ON scheduled_messages (parent_id, channel_id) WHERE parent_id IS NOT NULL;
+CREATE INDEX idx_scheduled_messages_sent      ON scheduled_messages (sent_message_id) WHERE sent_message_id IS NOT NULL;
+CREATE INDEX idx_scheduled_messages_finished  ON scheduled_messages (updated_at) WHERE state <> 'pending';
+
+CREATE TABLE scheduled_message_attachments (
+    attachment_id        UUID PRIMARY KEY,
+    workspace_id         UUID NOT NULL,
+    scheduled_message_id UUID NOT NULL,
+    CONSTRAINT scheduled_message_attachments_attachment_fkey
+        FOREIGN KEY (attachment_id, workspace_id) REFERENCES attachments (id, workspace_id) ON DELETE CASCADE,
+    CONSTRAINT scheduled_message_attachments_schedule_fkey
+        FOREIGN KEY (scheduled_message_id, workspace_id) REFERENCES scheduled_messages (id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_scheduled_message_attachments_schedule
+    ON scheduled_message_attachments (scheduled_message_id, workspace_id);
+```
+
+**The files a draft will send are reserved in chat's table, not by a column of `attachments`** (D-250: keys run from a
+module to the core). A reserved upload is claimed (`claimed_at`), so the core neither sweeps it as an orphan nor lets
+it be sent or discarded elsewhere. The trigger `scheduled_message_attachments_release` gives the claim back whenever a
+reservation row goes — edited away, delivered (the send claims the file again as it links it), the draft cancelled, or
+the draft taken by a cascade — so an upload nobody then sends is the orphan sweep's, as before.
+
+### 7.10. `message_reminders`
+
+When a person asked to be reminded of a message (chat's set, `chat/0003`): private, one a person a message, told in
+their inbox as a `reminder` notification when due and deleted then. `notification_type` gains `reminder`.
+
+```sql
+CREATE TABLE message_reminders (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id   UUID NOT NULL,
+    message_id   UUID NOT NULL,
+    remind_at    TIMESTAMPTZ NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, message_id),
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id, channel_id) REFERENCES messages(id, channel_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_message_reminders_due       ON message_reminders (remind_at, id);
+CREATE INDEX idx_message_reminders_workspace ON message_reminders (workspace_id);
+CREATE INDEX idx_message_reminders_channel   ON message_reminders (channel_id, workspace_id);
+CREATE INDEX idx_message_reminders_message   ON message_reminders (message_id, channel_id);
+```
+
+### 7.11. `hidden_messages`
+
+A message a person deleted for themselves alone (chat's set, `chat/0004`): the shared message and its files are
+unchanged for everybody else. Personal lists leave it out before they page; a feed shows it as deleted, to that
+person only; `hidden_at` is what a client catching up (D-194) is told by.
+
+```sql
+CREATE TABLE hidden_messages (
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message_id   UUID NOT NULL,
+    channel_id   UUID NOT NULL,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    hidden_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, message_id),
+    FOREIGN KEY (message_id, channel_id) REFERENCES messages(id, channel_id) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_hidden_messages_workspace ON hidden_messages (workspace_id);
+CREATE INDEX idx_hidden_messages_message   ON hidden_messages (message_id, channel_id);
+CREATE INDEX idx_hidden_messages_channel   ON hidden_messages (channel_id, workspace_id);
+CREATE INDEX idx_hidden_messages_changes   ON hidden_messages (user_id, channel_id, hidden_at, message_id);
+```
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -2542,6 +2646,9 @@ file that leaves its transaction runs statement by statement and must be safe to
 0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-251)
 0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
+chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
+chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
+chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

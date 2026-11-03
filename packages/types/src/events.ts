@@ -369,6 +369,21 @@ export const DeepWorkUpdatedFrame = Type.Object({
  * tab or another device. On their own `user:` topic only; it carries no message, and a client asks
  * again for what it shows.
  */
+export const MessageHiddenFrame = Type.Object({
+  event: Type.Literal('MESSAGE_HIDDEN'),
+  data: Type.Object(
+    { workspaceId: Uuid, channelId: Uuid, messageId: Uuid, hiddenAt: Timestamp },
+    { additionalProperties: false },
+  ),
+  ...envelope,
+});
+
+export const RemindersUpdatedFrame = Type.Object({
+  event: Type.Literal('REMINDERS_UPDATED'),
+  data: Type.Object({ workspaceId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
 export const SavedUpdatedFrame = Type.Object({
   event: Type.Literal('SAVED_UPDATED'),
   data: Type.Object({ workspaceId: Uuid }, { additionalProperties: false }),
@@ -541,6 +556,8 @@ export const ServerFrame = Type.Union([
   AccessRevokedFrame,
   DeepWorkUpdatedFrame,
   SavedUpdatedFrame,
+  RemindersUpdatedFrame,
+  MessageHiddenFrame,
   NotificationsUpdatedFrame,
   PinsUpdatedFrame,
   BookmarksUpdatedFrame,

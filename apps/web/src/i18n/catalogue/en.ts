@@ -1641,6 +1641,7 @@ export const en = {
     one: '{count} reply',
     other: '{count} replies',
   },
+  'inbox.why.reminder': 'Your message reminder is due',
   'inbox.why.channel': '{name} wrote',
   'inbox.readAll': 'Mark all read',
   'inbox.readFailed': 'Not marked read.',

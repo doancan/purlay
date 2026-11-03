@@ -258,6 +258,9 @@ import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
+import { hideMyMessage } from './hidden';
+import { deleteReminder, listReminders, putReminder } from './reminders';
+import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
@@ -1288,6 +1291,38 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
+    .put(
+      '/api/messages/:messageId/hidden',
+      async ({ request, params }) => await hideMyMessage(sending, request, params.messageId),
+    )
+    .put(
+      '/api/messages/:messageId/reminder',
+      async ({ request, params, body }) =>
+        await putReminder(sending, request, params.messageId, body),
+    )
+    .delete('/api/messages/:messageId/reminder', async ({ request, params, set }) => {
+      await deleteReminder(sending, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
+    .get(
+      '/api/workspaces/:workspaceId/reminders',
+      async ({ request, params }) => await listReminders(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/scheduled',
+      async ({ request, params }) => await listScheduled(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/channels/:channelId/scheduled/:scheduledId',
+      async ({ request, params, body }) =>
+        await putScheduled(dependencies, request, params.channelId, params.scheduledId, body),
+    )
+    .delete('/api/channels/:channelId/scheduled/:scheduledId', async ({ request, params, set }) => {
+      await deleteScheduled(dependencies, request, params.channelId, params.scheduledId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/workspaces/:workspaceId/saved',
       async ({ request, params }) => await listSaved(dependencies, request, params.workspaceId),

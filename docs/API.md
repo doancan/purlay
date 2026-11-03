@@ -496,6 +496,13 @@ repaired. Nobody else hears it.
 | ○ | `DELETE` | `/api/channels/:channelId/bookmarks/:bookmarkId` | member — `204`; a bookmark not this channel's is `404 BOOKMARK_NOT_FOUND`. Tells the channel `BOOKMARKS_UPDATED` (D-218) |
 | ○ | `PUT` | `/api/messages/:messageId/pin` | Pins the message for its channel. `204`, idempotent: pinned already, nothing changes and nobody is told. A member's: a visible non-member is `403 NOT_A_CHANNEL_MEMBER`; a deleted message is `404`; past `PINS_MAX` pins of messages not deleted in the channel, `409 PINS_LIMIT`. The channel hears `PINS_UPDATED` (D-130) |
 | ○ | `DELETE` | `/api/messages/:messageId/pin` | Lets the pin go, a deleted message's included. `204`, idempotent; a member's, as pinning is; the channel hears `PINS_UPDATED` when there was one |
+| ○ | `PUT` | `/api/channels/:channelId/scheduled/:scheduledId` | `ScheduleMessageRequest`: replace an owned pending or failed scheduled message; returns `ScheduledMessage`. The UUID makes retries one draft. Requires channel membership. |
+| ○ | `DELETE` | `/api/channels/:channelId/scheduled/:scheduledId` | Cancel an owned unsent message, `204`; already sent is `409 SCHEDULED_MESSAGE_SENT`. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/scheduled` | `ScheduledMessageList`: the caller’s visible pending and failed drafts, ordered by send time, bounded by `SCHEDULED_MESSAGES_MAX` (100). |
+| ○ | `PUT` | `/api/messages/:messageId/hidden` | Delete for the caller only. Returns a `Message` with `hiddenForMe: true` and empty content. Idempotent; the shared message and other people’s data remain unchanged. |
+| ○ | `PUT` | `/api/messages/:messageId/reminder` | `SetMessageReminderRequest` (`remindAt`): create or replace the caller’s reminder; returns `MessageReminder`. |
+| ○ | `DELETE` | `/api/messages/:messageId/reminder` | Cancel only the caller’s pending reminder, `204` idempotently. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/reminders` | `MessageReminderList`: at most 100 pending reminders, from visible nondeleted messages, ordered by time. |
 | ○ | `PUT` | `/api/messages/:messageId/saved` | `{ state? }` (`SaveMessageRequest`): saves the message for the caller, or moves its save to `state`; without `state` a new save is `in_progress` and an existing one keeps its state. `204`, idempotent. A deleted message is `404`; past `SAVED_MAX` saves shown in the workspace, a new save is `409 SAVED_LIMIT`. The caller's devices are told `SAVED_UPDATED` (D-128) |
 | ○ | `DELETE` | `/api/messages/:messageId/saved` | Lets the caller's save go, a deleted message's included. `204`, idempotent; tells their devices `SAVED_UPDATED` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Unresolved roots with replies or explicitly marked questions, including zero replies (D-204). Visible channels only; optional `channelId`, `unanswered=yes`, `assigneeId`, `order=oldest` or `newest`. `before` is the continuation cursor in the chosen ordering; `after` retains forward replay. Keyset pagination, no deleted roots. |
@@ -659,3 +666,48 @@ Health endpoints expose no version, no dependency detail and no counts — they 
    that decides its channel-visibility test. (D-21, D-34, D-63, D-64)
 4. The handler validates, calls exactly one service, and serializes. No business logic in
    ingress. (`ARCHITECTURE.md` §1)
+
+### Scheduled messages
+
+Advertised by `capabilities.scheduledMessages`. `sendAt` must be an absolute timestamp at least five seconds
+and at most 365 days ahead. `content`, optional root `parentId`, and optional own uploaded `attachmentIds`
+follow ordinary send validation. PUT is a full replacement; `SCHEDULED_MESSAGE_LIMIT` refuses a new draft
+when the caller has 100 pending/failed drafts in the workspace. Other owners’ IDs return
+`SCHEDULED_MESSAGE_NOT_FOUND`. Sent IDs cannot be edited or cancelled.
+
+The API claims due rows every 15 seconds with `FOR UPDATE SKIP LOCKED`. It rechecks membership and the
+reply target, creates a UUIDv7 at delivery time, and atomically writes the message and sent marker.
+Reserved uploads cannot be discarded, swept or claimed by immediate sends. A domain refusal leaves
+`state: failed` with `failureCode`, editable for retry; transient database failures leave it pending.
+Sent/failed records expire after 30 days. Lists refresh on opening and while the native manager is open.
+Delivery continues without a desktop connection and catches up after a server restart; the requested
+time is a lower bound, not a guarantee while the server is unavailable.
+
+### Message reminders
+
+Advertised by `capabilities.messageReminders`. A reminder belongs only to its user, independently of saves.
+`remindAt` accepts the same time bounds as scheduled messages. Creating at the limit returns
+`VALIDATION_FAILED` with a `reminders` field; replacing an existing reminder remains possible.
+Changes publish `REMINDERS_UPDATED` on the caller’s private user topic. The API due loop creates one
+`reminder` inbox notification and removes the pending reminder in one transaction. Re-arming a delivered
+reminder creates a fresh unread notification when next due. Missing access or deleted messages cancel
+delivery. This notification does not inflate message unread counters. Web Push uses reminder wording;
+Deep Work suppresses the push. Native clients may also register the confirmed time with the operating
+system, allowing a local reminder after the application quits, subject to notification permissions.
+
+### Personal message deletion
+
+`capabilities.personalMessageDeletion` enables Delete for Me. It writes only a private `hidden_messages`
+record and removes the caller’s saves and pending reminders for that message, marks their notifications
+read, and corrects their unread counters. Only their user topic receives `MESSAGE_HIDDEN` with
+`workspaceId`, `channelId`, `messageId` and `hiddenAt`; their other devices refresh personal lists.
+The ordinary `DELETE /api/messages/:messageId` remains Delete for Everyone, restricted to the author
+or a workspace owner/admin. Personal deletion grants no additional moderation permission.
+
+A hidden root without replies leaves the caller’s feed; a root with replies keeps an empty personal
+tombstone so its replies remain reachable. Hidden replies are also personal tombstones. History, around,
+thread and change-replay reads project empty content, files, mentions, reactions and event data for the
+caller. Search, open topics, files, pins, saved lists and inbox omit their hidden items before pagination.
+Replay includes the caller’s private deletion timestamps, so reconnecting does not restore hidden words.
+Other readers retain the original content and attachments. This is a personal view operation, not an
+erasure of the server’s shared message or a revocation of its underlying access permission.

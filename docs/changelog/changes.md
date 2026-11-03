@@ -27,6 +27,9 @@ have it.
 
 - **Operations** — Nodes of a cluster that run different `MODULES` say so in their logs and keep serving, so a new set can roll out node by node (D-250)
 - **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
+- **Messages** — Schedule a message, with its files, to be sent later; the server sends it at its time even with every app closed (D-30)
+- **Messages** — Ask to be reminded of a message; the reminder arrives in the inbox when it is due (D-128)
+- **Messages** — Delete a message for yourself alone; everybody else keeps it as it was (D-103)
 - **Messages** — A face typed as text, like `:D` or `<3`, becomes its emoji at the next space; Backspace straight after takes it back (D-253)
 
 ### Changed

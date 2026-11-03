@@ -267,6 +267,8 @@ const uploadRefusal = (
     case 'INCIDENT_RESPONDERS_LIMIT':
     case 'INVALID_MESSAGE_ID':
     case 'INVITATION_NOT_FOUND':
+    case 'SCHEDULED_MESSAGE_SENT':
+    case 'SCHEDULED_MESSAGE_LIMIT':
     case 'LAST_CHANNEL_MEMBER':
     case 'RETENTION_TOO_SHORT':
     case 'WORKSPACE_DELETION_STARTED':
@@ -275,6 +277,7 @@ const uploadRefusal = (
     case 'SAVED_SEARCH_NOT_FOUND':
     case 'SAVED_SEARCH_LIMIT':
     case 'MESSAGE_ID_CONFLICT':
+    case 'SCHEDULED_MESSAGE_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
     case 'NATIVE_CODE_NOT_FOUND':

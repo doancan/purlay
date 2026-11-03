@@ -11,6 +11,7 @@
  * backed by the trigram index `idx_messages_search_folded` on the same expression, which is why a
  * search is at least three characters (`SEARCH_QUERY_MIN`): below a trigram the index cannot help.
  */
+import { notHiddenBy } from '../messages/hidden';
 import { sql, type Executor } from '@purlay/db';
 import {
   SEARCH_QUERY_MIN,
@@ -79,6 +80,7 @@ export const searchIn = async (
     .where('messages.workspace_id', '=', context.workspaceId)
     .where('messages.channel_id', 'in', channelIds)
     .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
     .orderBy('messages.id', 'desc')
     .limit(limit + 1);
   if (query.q !== '') {

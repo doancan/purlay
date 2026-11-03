@@ -31,9 +31,11 @@ export type MessageType = "system_event" | "text";
 
 export type NotificationLevel = "all" | "mentions" | "none";
 
-export type NotificationType = "channel_message" | "direct_message" | "mention" | "thread_reply" | "thread_resolved";
+export type NotificationType = "channel_message" | "direct_message" | "mention" | "reminder" | "thread_reply" | "thread_resolved";
 
 export type SavedState = "archived" | "completed" | "in_progress";
+
+export type ScheduledMessageState = "failed" | "pending" | "sent";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
@@ -243,6 +245,14 @@ export interface GithubUserAuthorizations {
   user_id: string;
 }
 
+export interface HiddenMessages {
+  channel_id: string;
+  hidden_at: Generated<Timestamp>;
+  message_id: string;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface IncidentResponders {
   added_at: Timestamp;
   added_by: string | null;
@@ -326,6 +336,16 @@ export interface MessageAttachments {
   attachment_id: string;
   channel_id: string;
   message_id: string;
+  workspace_id: string;
+}
+
+export interface MessageReminders {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  message_id: string;
+  remind_at: Timestamp;
+  user_id: string;
   workspace_id: string;
 }
 
@@ -470,6 +490,28 @@ export interface SavedSearches {
   id: string;
   name: string;
   query: Json;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface ScheduledMessageAttachments {
+  attachment_id: string;
+  scheduled_message_id: string;
+  workspace_id: string;
+}
+
+export interface ScheduledMessages {
+  channel_id: string;
+  content: string;
+  created_at: Generated<Timestamp>;
+  failure_code: string | null;
+  id: string;
+  parent_id: string | null;
+  revision: Generated<number>;
+  send_at: Timestamp;
+  sent_message_id: string | null;
+  state: Generated<ScheduledMessageState>;
+  updated_at: Generated<Timestamp>;
   user_id: string;
   workspace_id: string;
 }
@@ -670,6 +712,7 @@ export interface DB {
   github_operations: GithubOperations;
   github_repo_feeds: GithubRepoFeeds;
   github_user_authorizations: GithubUserAuthorizations;
+  hidden_messages: HiddenMessages;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
@@ -679,6 +722,7 @@ export interface DB {
   link_previews: LinkPreviews;
   mentions: Mentions;
   message_attachments: MessageAttachments;
+  message_reminders: MessageReminders;
   message_versions: MessageVersions;
   messages: Messages;
   missed_mail_letters: MissedMailLetters;
@@ -692,6 +736,8 @@ export interface DB {
   reactions: Reactions;
   saved_messages: SavedMessages;
   saved_searches: SavedSearches;
+  scheduled_message_attachments: ScheduledMessageAttachments;
+  scheduled_messages: ScheduledMessages;
   server_audit_log: ServerAuditLog;
   server_settings: ServerSettings;
   sessions: Sessions;

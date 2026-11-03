@@ -56,6 +56,7 @@ import {
   deepWorkChanged,
   messageCreated,
   messageRevised,
+  messageHidden,
   reactionsUpdated,
   readAgain,
   threadUpdated,
@@ -646,6 +647,9 @@ export const createEngine = (options: EngineOptions): Engine => {
           reactionsUpdated(client, frame.data.messageId, frame.data.reactions);
         }
         return;
+      case 'MESSAGE_HIDDEN':
+        messageHidden(client, frame.data.messageId, frame.data.hiddenAt);
+        return;
       case 'MESSAGE_REVISED':
         if (isNewest('revision', frame.data.messageId, frame.version)) {
           messageRevised(client, frame.data);
@@ -717,6 +721,8 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'CHANNELS_UPDATED':
         // No state in the frame (D-132): the person's channels here are read again.
         readAgain(client, keys.channels(frame.data.workspaceId));
+        return;
+      case 'REMINDERS_UPDATED':
         return;
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.
