@@ -235,11 +235,25 @@ describe('on a server that runs no chat', () => {
     expect(offered.some((row) => row.includes('Settings') || row.includes('Profile'))).toBe(true);
     // Chat's own settings pages are not offered either.
     expect(offered.some((row) => row.includes('Integrations'))).toBe(false);
-    // Typing offers no search of the messages: there are none.
-    const typed = await mount(noChat, '/w/acme');
-    fireEvent.change(typed.input(), { target: { value: 'deploy' } });
-    await settle();
-    expect(typed.options().some((row) => row.includes('Search messages'))).toBe(false);
+  });
+
+  test('typing offers no search of the messages where chat is not run, and does where it is', async () => {
+    const WORDS = 'prof';
+    const noChat = await mount(
+      apiWith({ me: () => Promise.resolve({ ...aSession(), modules: [] }) }),
+      '/w/acme',
+    );
+    await person().type(noChat.input(), WORDS);
+    // The typed words narrowed the list (a core row matches them), so an absent row is not an unread list.
+    expect(noChat.input().value).toBe(WORDS);
+    expect(noChat.options().some((row) => row.includes('Profile'))).toBe(true);
+    expect(noChat.options().some((row) => row.includes('Search messages'))).toBe(false);
+    noChat.view.unmount();
+
+    const withChat = await mount(apiWith(), '/w/acme');
+    await person().type(withChat.input(), WORDS);
+    expect(withChat.input().value).toBe(WORDS);
+    expect(withChat.options().at(-1)).toBe(`Search messages for “${WORDS}”`);
   });
 });
 

@@ -13333,4 +13333,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  drafts: null,',
     tests: ['apps/web/src/router/route-modules.test.ts', 'apps/web/src/app/app.test.tsx'],
   },
+  {
+    id: 'palette-offers-message-search-without-chat',
+    why: 'the palette offers a search of the messages on a server that does not run chat, a row that leads to a page that is not found (D-250)',
+    file: 'apps/web/src/features/palette/command-palette.tsx',
+    find: "    if (words === '' || !chat) return matched;",
+    replace: "    if (words === '') return matched;",
+    tests: ['apps/web/src/features/palette/command-palette.test.tsx'],
+  },
 ];
