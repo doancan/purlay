@@ -1,0 +1,48 @@
+{
+  "manifests": [
+    {
+      "id": "chat",
+      "requires": [],
+      "optional": [],
+      "provides": [],
+      "routes": [
+        "/api/channels/**",
+        "/api/github-app/**",
+        "/api/integrations/**",
+        "/api/messages/**",
+        "/api/missed-mail/stop",
+        "/api/notifications",
+        "/api/notifications/read",
+        "/api/webhooks/**",
+        "/api/workspaces/:workspaceId/archived-channels",
+        "/api/workspaces/:workspaceId/channels",
+        "/api/workspaces/:workspaceId/conversations",
+        "/api/workspaces/:workspaceId/dms",
+        "/api/workspaces/:workspaceId/github-app",
+        "/api/workspaces/:workspaceId/github-app/installation",
+        "/api/workspaces/:workspaceId/github-repositories",
+        "/api/workspaces/:workspaceId/integrations/github",
+        "/api/workspaces/:workspaceId/presence",
+        "/api/workspaces/:workspaceId/read",
+        "/api/workspaces/:workspaceId/reminders",
+        "/api/workspaces/:workspaceId/saved",
+        "/api/workspaces/:workspaceId/saved-searches",
+        "/api/workspaces/:workspaceId/saved-searches/:searchId",
+        "/api/workspaces/:workspaceId/saved/ids",
+        "/api/workspaces/:workspaceId/scheduled",
+        "/api/workspaces/:workspaceId/search",
+        "/api/workspaces/:workspaceId/unresolved"
+      ],
+      "jobs": [
+        "mail:missed"
+      ],
+      "frames": [
+        "MESSAGE_SEND",
+        "SUBSCRIBE",
+        "TYPING",
+        "UNSUBSCRIBE"
+      ]
+    }
+  ],
+  "exceptions": []
+}

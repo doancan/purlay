@@ -62,6 +62,7 @@
     "lint:fix": "eslint . --fix",
     "mutate": "bun run scripts/run-mutations.ts",
     "queue": "bun run scripts/queue.ts",
+    "manifests:snapshot": "bun run apps/api/src/cli/manifest-snapshot.ts",
     "release": "bun run scripts/release.ts",
     "schedule": "bun run apps/api/src/cli/schedule.ts",
     "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --path-ignore-patterns '**/*.integration.test.ts'",
