@@ -9,7 +9,8 @@
  * convention (`ARCHITECTURE.md` §4).
  */
 import { exportQueue } from './modules/export/queue';
-import { exportCatalogue, personalExportCatalogue } from './export-catalogue';
+import { compositionFor, type Composition } from './composition';
+import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -61,6 +62,17 @@ const plainLog = createLogger({ level: config.LOG_LEVEL });
 const { tracker: errorTracker, log } = errorTrackingFor(config, plainLog, systemClock);
 // Every entry this process writes to the trail is also a line of its log, ids only (D-222).
 sendAuditLinesTo(log);
+// The modules this process runs, named by `MODULES` (D-250): a setting that names none the build carries stops
+// the start here, before anything listens.
+const modules = ((): Composition => {
+  try {
+    return compositionFor(config.MODULES);
+  } catch (error) {
+    if (!(error instanceof ModuleConfigError)) throw error;
+    log.error('MODULES cannot be run; exiting', { problems: error.problems });
+    process.exit(1);
+  }
+})();
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.
@@ -130,8 +142,8 @@ const exports = exportQueue({
   clock: systemClock,
   log,
   storage,
-  catalogue: exportCatalogue,
-  personalCatalogue: personalExportCatalogue,
+  catalogue: modules.exportCatalogue,
+  personalCatalogue: modules.personalExportCatalogue,
 });
 
 // The transport this node's sockets hear on. Made here, rather than by the application, so that
@@ -179,6 +191,7 @@ const servicesFor = (
 ): RuntimeServices => runtimeServicesFrom(settings, runtimeBase, needsReentry, services.sends);
 
 const app = createApp({
+  composition: modules,
   auth: services.auth,
   services,
   // The setup's steps and, later, Administration → Server change the settings through this (D-179 §4.9).
@@ -275,6 +288,7 @@ const fromSettings = async (): Promise<RuntimeServices> => {
 if (config.MIGRATE_ON_START === true) {
   try {
     const applied = await migrateOnStart(connection, undefined, {
+      sets: modules.migrationSets,
       // A deadlock against live traffic ends the migration's attempt, not the start (D-86).
       onRetry: (retry) => {
         log.warn('a migration was ended as a deadlock victim and is being retried', {
@@ -292,7 +306,7 @@ if (config.MIGRATE_ON_START === true) {
   }
 } else {
   // Somebody else migrates — an operator, another node: the settings are read once they have.
-  await untilMigrated(database, log);
+  await untilMigrated(database, log, undefined, modules.migrationSets);
 }
 
 const runtime = await fromSettings();

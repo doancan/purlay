@@ -1647,6 +1647,11 @@ export type ClientCapabilities = Static<typeof ClientCapabilities>;
 
 export const ClientInfo = Type.Object({
   capabilities: Type.Optional(ClientCapabilities),
+  /**
+   * The modules this server runs, by the words an operator writes in `MODULES`, so a client draws only what is
+   * there. Absent from a server that predates modules: such a client assumes chat, as it always has (D-250).
+   */
+  modules: Type.Optional(Type.Array(Type.String())),
   server: Type.Object({ version: Type.String() }),
   contractVersion: Type.Integer({ minimum: 1 }),
   appUrl: Type.String(),

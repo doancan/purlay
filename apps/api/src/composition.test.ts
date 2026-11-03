@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { bundledModules, compose, composition, registry, type BundledModule } from './composition';
+import {
+  bundledModules,
+  compose,
+  composition,
+  compositionFor,
+  registry,
+  type BundledModule,
+} from './composition';
 import { chatModule } from './features/chat/module';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
 
@@ -48,5 +55,34 @@ describe('the application as its modules make it', () => {
     expect(() => compose([chatModule, another, second])).toThrow(
       "more than one module answers for a workspace's channels: chat, other, second",
     );
+  });
+
+  describe('for the MODULES setting', () => {
+    test('unset or blank runs every module; none runs the core alone', () => {
+      for (const setting of [undefined, '', '  ']) {
+        expect(compositionFor(setting).modules).toEqual(bundledModules);
+      }
+      expect(compositionFor('none').modules).toEqual([]);
+      expect(compositionFor('chat').modules).toEqual(bundledModules);
+    });
+
+    test('a module left out has no migration set, its routes and jobs are closed', () => {
+      const all = compositionFor(undefined);
+      expect(all.migrationSets.map((set) => set.id)).toEqual(['chat']);
+      expect(all.closed('/api/channels/c1')).toBe(false);
+      expect(all.closedJob('purge:retention')).toBe(false);
+
+      const alone = compositionFor('none');
+      expect(alone.migrationSets).toEqual([]);
+      expect(alone.closed('/api/channels/c1')).toBe(true);
+      expect(alone.closed('/api/workspaces/w1/members')).toBe(false);
+      expect(alone.closedJob('purge:retention')).toBe(true);
+      expect(alone.closedJob('mail:missed')).toBe(true);
+      expect(alone.closedJob('sweep:sessions')).toBe(false);
+    });
+
+    test('a module the build does not carry stops the start, naming it', () => {
+      expect(() => compositionFor('chat,calendar')).toThrow(/calendar/);
+    });
   });
 });

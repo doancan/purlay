@@ -25,10 +25,12 @@ export const clientPolicyOf = (config: Config): ClientPolicy => ({
 export const clientInfo = (
   config: Config,
   auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'google' | 'signUp' | 'signInPolicy'>,
+  modules: readonly string[],
 ): ClientInfo => {
   const { macos } = clientPolicyOf(config);
   return {
     capabilities: { notificationTypeFilters: true },
+    modules: [...modules],
     server: { version: SERVER_VERSION },
     contractVersion: CONTRACT_VERSION,
     appUrl: config.APP_URL,

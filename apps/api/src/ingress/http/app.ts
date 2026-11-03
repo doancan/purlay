@@ -275,7 +275,7 @@ import {
 } from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
-import { composition } from '../../composition';
+import { composition, type Composition } from '../../composition';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -372,6 +372,8 @@ export interface Dependencies {
   readonly workspaceChannels?: WorkspaceChannels;
   /** What the modules forget of a person whose account is erased, inside the erasure (D-250); absent, chat's. */
   readonly userErased?: UserErased;
+  /** The modules this process runs; absent, every one the build carries. A path of a module left out is a `404`. */
+  readonly composition?: Composition;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
   readonly collatedColumns?: readonly CollatedColumn[];
   /**
@@ -461,13 +463,21 @@ const answerSetup = <T>(
 const SETUP_PATH = /^\/setup(?:\/|$)/;
 
 export const createApp = (given: Dependencies): HttpApplication => {
+  // The modules this process runs (`composition.ts`): every one the build carries, unless a caller says otherwise.
+  const modules = given.composition ?? composition;
   const dependencies = {
     ...given,
-    workspaceCreated: given.workspaceCreated ?? composition.workspaceCreated,
-    workspaceChannels: given.workspaceChannels ?? composition.workspaceChannels,
-    userErased: given.userErased ?? composition.userErased,
-    collatedColumns: given.collatedColumns ?? composition.collatedColumns,
+    workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
+    workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    userErased: given.userErased ?? modules.userErased,
+    collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   };
+  /**
+   * A path of a module this process does not run is no route (`MODULES.md` §3): the `404` of any unknown path, with
+   * the generic body and no word that says *disabled*, which would tell a caller who has not signed in which modules
+   * this instance runs. Judged on the path as sent, which is the path the router matches (it does not decode `%6d`).
+   */
+  const closedRoute = (request: Request): boolean => modules.closed(new URL(request.url).pathname);
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
   /** One request's line on the page: never its path as sent, only the route it was registered as. */
@@ -492,6 +502,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
         [...CORE_COLLATED_COLUMNS, ...dependencies.collatedColumns],
         async () => await dependencies.auth.schemaProblem(),
         () => dependencies.shared?.problem(),
+        modules.migrationSets,
       ),
     dependencies.clock,
   );
@@ -697,6 +708,9 @@ export const createApp = (given: Dependencies): HttpApplication => {
     // Before the handler, after the body is parsed: the body is already bounded by the
     // server (`edge.ts`), and a malformed one is a 400 whoever sends it, with no lookup.
     .onBeforeHandle(async ({ request, server, set }) => {
+      if (closedRoute(request)) {
+        throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
+      }
       const wait = await admit(request, peerOf(server, request));
       if (wait === undefined) return;
       set.headers['retry-after'] = String(wait);
@@ -709,8 +723,9 @@ export const createApp = (given: Dependencies): HttpApplication => {
       if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK || path === GOOGLE_CALLBACK) {
         return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
       }
-      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246).
-      if (path === GITHUB_APP_CALLBACK) {
+      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246). Not when
+      // the module that owns it is not run: that path is no route, and says so like any other.
+      if (path === GITHUB_APP_CALLBACK && !modules.closed(path)) {
         if (refusal.status === 500) log.error('request failed', { err: error, path });
         set.status = 302;
         set.headers.location = '/?github=unavailable';
@@ -787,7 +802,13 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get('/auth/oidc', async ({ set }) => respond(set, await startSignIn(dependencies, 'oidc')))
     .get('/auth/google', async ({ set }) => respond(set, await startSignIn(dependencies, 'google')))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
-    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth))
+    .get('/api/client', () =>
+      clientInfo(
+        dependencies.config,
+        dependencies.auth,
+        modules.modules.map((module) => module.manifest.id),
+      ),
+    )
     // The native application's way in (D-191): the browser's page says yes, the application spends the code.
     .post(
       '/api/native/authorize',
