@@ -59,7 +59,7 @@ const channelsIn = (scope: Scope): RawBuilder<unknown> =>
 const messagesOf = (scope: Scope): RawBuilder<unknown> =>
   sql`select id from messages where workspace_id = ${scope.workspaceId} and channel_id in (${channelsIn(scope)})`;
 
-/** The files those messages carry, found through the link: the attachments' own `message_id` is no longer read (D-250). */
+/** The files those messages carry, found through chat's link of a file to its message (D-250). */
 const filesOf = (scope: Scope): RawBuilder<unknown> =>
   // The link is made by chat's own migration set: where it was never applied no message carried a file.
   preparedFor(scope).filesLinked
@@ -208,8 +208,6 @@ const tables = [
     {
       id: 'export',
       workspace_id: 'export',
-      channel_id: 'export',
-      message_id: 'export',
       uploader_id: 'export',
       file_name: 'export',
       mime_type: 'export',
@@ -225,6 +223,17 @@ const tables = [
       thumbnail_key: 'omit',
     },
     (s) => ({ where: sql`id in (${filesOf(s)})`, order: 'id' }),
+  ),
+  // Which message and channel a file was sent with: written by the file's table until it moved to chat's own.
+  tableExport(
+    'message_attachments',
+    {
+      attachment_id: 'export',
+      workspace_id: 'export',
+      message_id: 'export',
+      channel_id: 'export',
+    },
+    (s) => ({ where: sql`attachment_id in (${filesOf(s)})`, order: 'attachment_id' }),
   ),
   tableExport(
     'incidents',
@@ -348,7 +357,6 @@ export const chatExport: ExportContribution = {
 
 /** The tables of chat that are not in an export, and why. */
 export type ChatExcluded =
-  | 'message_attachments'
   | 'hidden_messages'
   | 'message_reminders'
   | 'scheduled_messages'
@@ -369,8 +377,6 @@ export type ChatExcluded =
   | 'link_previews';
 
 export const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
-  message_attachments:
-    'which message a file was sent with: written beside the file’s own `message_id` and `channel_id`, which the export carries, until those move here and this table is what carries them',
   hidden_messages: 'messages each person deleted for themselves alone: their own state',
   message_reminders: 'each person’s private reminders: their own state',
   scheduled_messages: 'each person’s private messages not yet sent: theirs until they are sent',

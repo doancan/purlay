@@ -129,8 +129,6 @@ const tables = [
     {
       id: 'export',
       workspace_id: 'export',
-      channel_id: 'export',
-      message_id: 'export',
       uploader_id: 'export',
       file_name: 'export',
       mime_type: 'export',
@@ -148,6 +146,19 @@ const tables = [
     async (userId, _workspaces, executor) => ({
       where: await theirFiles(userId, executor),
       order: 'id',
+    }),
+  ),
+  personalTableExport(
+    'message_attachments',
+    {
+      attachment_id: 'export',
+      workspace_id: 'export',
+      message_id: 'export',
+      channel_id: 'export',
+    },
+    (userId) => ({
+      where: sql`attachment_id in (select id from attachments where ${theirFiles(userId)})`,
+      order: 'attachment_id',
     }),
   ),
   personalTableExport(
@@ -218,7 +229,6 @@ export const chatPersonalExport: PersonalContribution = {
 
 /** The tables of chat that are not in a person's export, and why. */
 export type ChatPersonalExcluded =
-  | 'message_attachments'
   | 'hidden_messages'
   | 'message_reminders'
   | 'scheduled_messages'
@@ -244,8 +254,6 @@ export type ChatPersonalExcluded =
   | 'missed_mail_letters';
 
 export const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
-  message_attachments:
-    'which message a file was sent with: the file’s own `message_id` and `channel_id` carry it, until they move here',
   hidden_messages: 'markers of messages deleted for this person only: other people’s words, hidden',
   message_reminders: 'pending private reminders: transient, gone once they are delivered',
   scheduled_messages: 'pending unsent messages: transient, exported as messages once they are sent',

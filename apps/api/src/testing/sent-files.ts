@@ -1,7 +1,6 @@
 /**
  * An upload a test sends without sending a message: the file's own claim and chat's link to the message, as
- * `linkAttachments` writes them (D-250). The old columns, `message_id` and `channel_id`, are the caller's to set
- * until they are dropped; nothing reads them.
+ * `linkAttachments` writes them (D-250).
  */
 import { sql, type Executor } from '@purlay/db';
 
