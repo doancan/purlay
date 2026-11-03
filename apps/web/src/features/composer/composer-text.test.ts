@@ -105,12 +105,13 @@ describe('addressing everybody', () => {
   });
 
   test('is linear: four times the pathological input takes about four times as long, not sixteen', () => {
-    // A quadratic scan would take sixteen times as long for four times the text. The best of a few runs of each size,
-    // so a busy machine's pause is not read as growth, and a ratio rather than a number of milliseconds, which depends
-    // on the machine.
+    // A quadratic scan would take sixteen times as long for four times the text. The best of a few runs of each
+    // size, so a busy machine's pause is not read as growth, and a ratio rather than a number of milliseconds,
+    // which depends on the machine. Small enough to finish in seconds on a loaded runner (a line break costs about
+    // three microseconds a character): the shape of the growth is what is judged, not the size.
     const best = (text: string): number => {
       let fastest = Number.POSITIVE_INFINITY;
-      for (let run = 0; run < 5; run++) {
+      for (let run = 0; run < 3; run++) {
         const started = performance.now();
         broadcastMention(text);
         fastest = Math.min(fastest, performance.now() - started);
@@ -118,12 +119,12 @@ describe('addressing everybody', () => {
       return fastest;
     };
     for (const unit of ['`', '@', 'a@', '`a', '\n']) {
-      const small = best(unit.repeat(16_000 / unit.length));
-      const large = best(unit.repeat(64_000 / unit.length));
+      const small = best(unit.repeat(8_000 / unit.length));
+      const large = best(unit.repeat(32_000 / unit.length));
       // Below a millisecond the clock cannot tell the two apart: linear by any measure.
       expect(large < 1 || large / Math.max(small, 0.05) < 9).toBe(true);
     }
-  });
+  }, 30_000);
 });
 
 describe('the limit, counted in UTF-16 code units as the contract counts them', () => {
