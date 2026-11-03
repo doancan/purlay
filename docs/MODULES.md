@@ -262,15 +262,14 @@ request with behaviour unchanged:
    it does today (`saved_searches`, `saved_messages`, `thread_follows`, `notifications`, `missed_mail_letters`)
    in the same order; proved by the existing erasure tests, the rows of every table compared before and after on a
    seeded fixture, the SQL sequence captured before and after, and an erasure raced against sends;
-3. **The export catalogue as a manifest `data.export`** — its safety net, a test that freezes the files, their order, the
-   rows and the columns of each, for the operator's export and an owner's, is **built**; the move itself is not: chat supplies its tables, columns (typed per table, so a
-   column added to the schema fails the build), order, bounds, the fragments that name the people, and what is
-   excluded; the core keeps the cursor, the format, the snapshot and the archive, and runs the `prepare` that
-   reads the visible channels **outside** the snapshot where it runs today. The core's head (`workspaces`,
-   `users`, `workspace_members`), the modules, then its tail (`workspace_invitations`, `audit_log`) reproduces
-   today's file order. The catalogue test unions the core and **every** manifest, enabled or not, and compares it
-   with the database; a frozen list of the current order and a byte-for-byte comparison of the files on a seeded
-   fixture, for the operator's scope, an owner's and a person's, prove nothing moved;
+3. **The workspace export as contributions** (**built**): `modules/export/catalogue.ts` defines what a contribution is —
+   tables with their columns typed per table, how each is bounded, the people its rows name, what it covers,
+   its files, and its words on the trail — and assembles the core's (`core-export.ts`) and each module's
+   (`features/chat/export.ts`) in the order the files have always been written: the core's first three tables,
+   the modules', the core's last two. The composition root (`export-catalogue.ts`) holds the sum to the schema at
+   compile time, naming a table nobody decided, and the integration test holds it to the database. A frozen
+   shape of the files, rows and columns — the safety net, written first — passed unchanged through the move.
+   `attachments` is still described by chat, which bounds it by messages, until the link is chat's (step 8)
 4. **The personal export** the same way;
 5. **`COLLATED_COLUMNS`** in the readiness check: the core keeps its own three, the manifest adds the rest, and the test
    that scans the migrations for the collation compares with the core plus all manifests;
