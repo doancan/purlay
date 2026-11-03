@@ -94,10 +94,10 @@ describe('integration: an upload', () => {
       });
       const row = await db
         .selectFrom('attachments')
-        .select(['message_id', 'storage_key', 'uploader_id'])
+        .select(['claimed_at', 'storage_key', 'uploader_id'])
         .where('id', '=', id)
         .executeTakeFirstOrThrow();
-      expect(row.message_id).toBeNull();
+      expect(row.claimed_at).toBeNull();
       expect(row.uploader_id).toBe(who(room, 'alice'));
       expect(store.keys()).toEqual([row.storage_key]);
       expect(row.storage_key.startsWith(`w/${room.workspaceId}/`)).toBe(true);

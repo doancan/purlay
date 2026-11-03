@@ -108,11 +108,6 @@ const footprint = async (
     await requireWorkspaceMembership(db, who.userId, room.workspaceId),
     { id: file, name: `${who.username}.txt`, bytes: new TextEncoder().encode(words) },
   );
-  await db
-    .updateTable('attachments')
-    .set({ message_id: message, channel_id: room.channelId })
-    .where('id', '=', file)
-    .execute();
   await linkFile(db, {
     id: file,
     workspaceId: room.workspaceId,
@@ -548,7 +543,8 @@ describe('integration: a person’s export that fails', () => {
 /**
  * As written when this test was made, before the catalogue moved between modules. A change that is meant says so
  * by changing this, in the same pull request, with the reason. (`google_made` is the Google sign-in change's: a column of
- * `users` it added to a person's own export after this was first frozen.)
+ * `users` it added to a person's own export after this was first frozen; `message_attachments` is chat's link of a
+ * file to its message and channel, which `attachments` carried as two columns until chat/0005.)
  */
 const FROZEN_SHAPE: Record<string, unknown> = {
   order: [
@@ -560,6 +556,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'messages',
     'reactions',
     'attachments',
+    'message_attachments',
     'saved_messages',
     'saved_searches',
     'thread_follows',
@@ -572,6 +569,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'channel_members.ndjson',
     'channels.ndjson',
     'manifest.json',
+    'message_attachments.ndjson',
     'messages.ndjson',
     'reactions.ndjson',
     'saved_messages.ndjson',
@@ -668,19 +666,21 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     attachments: {
       rows: 2,
       columns: [
-        'channel_id',
         'created_at',
         'file_name',
         'height',
         'id',
         'kind',
-        'message_id',
         'mime_type',
         'size_bytes',
         'uploader_id',
         'width',
         'workspace_id',
       ],
+    },
+    message_attachments: {
+      rows: 2,
+      columns: ['attachment_id', 'channel_id', 'message_id', 'workspace_id'],
     },
     saved_messages: {
       rows: 2,

@@ -159,7 +159,7 @@ describe('integration: sending an upload, at once', () => {
       .selectFrom('attachments')
       .select('id')
       .where('workspace_id', '=', room.workspaceId)
-      .where('message_id', 'is', null)
+      .where('claimed_at', 'is', null)
       .execute();
     expect(waiting.map((row) => row.id)).toEqual([fresh]);
   });

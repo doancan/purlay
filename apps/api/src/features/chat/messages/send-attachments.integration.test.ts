@@ -123,11 +123,20 @@ describe('integration: a send carrying attachments', () => {
         message.attachments,
       );
       const linked = await db
+        .selectFrom('message_attachments')
+        .select(['message_id', 'channel_id'])
+        .where('attachment_id', 'in', [first, second])
+        .execute();
+      expect(linked).toEqual([
+        { message_id: id, channel_id: room.channelId },
+        { message_id: id, channel_id: room.channelId },
+      ]);
+      const claimed = await db
         .selectFrom('attachments')
-        .select('message_id')
+        .select('claimed_at')
         .where('id', 'in', [first, second])
         .execute();
-      expect(linked.map((row) => row.message_id)).toEqual([id, id]);
+      expect(claimed.every((row) => row.claimed_at !== null)).toBe(true);
       expect(await used(db, room)).toBe(12);
 
       // The same send again is the same message: nothing is linked or counted twice.
@@ -211,10 +220,16 @@ describe('integration: a send carrying attachments', () => {
       }
       const still = await db
         .selectFrom('attachments')
-        .select('message_id')
+        .select('claimed_at')
         .where('id', '=', mine)
         .executeTakeFirstOrThrow();
-      expect(still.message_id).toBeNull();
+      expect(still.claimed_at).toBeNull();
+      const linkedToIt = await db
+        .selectFrom('message_attachments')
+        .select('attachment_id')
+        .where('attachment_id', '=', mine)
+        .execute();
+      expect(linkedToIt).toEqual([]);
       expect(await used(db, room)).toBe(usedBefore);
     } finally {
       await cloned.drop();
