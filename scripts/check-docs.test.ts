@@ -8,10 +8,17 @@
  * exit status red — and the untouched copy must stay green, or "red" would mean
  * nothing either.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+/**
+ * Each test copies every tracked file and runs the whole check on the copy, which takes the better part of
+ * a second alone and several under the load of the full suite — more than the runner's five seconds, which
+ * failed a job and a local run for no fault of the check. The limit is the one a test that does this needs.
+ */
+setDefaultTimeout(60_000);
 
 const SCRIPT = resolve('scripts/check-docs.py');
 const copies: string[] = [];
