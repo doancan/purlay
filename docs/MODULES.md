@@ -230,7 +230,9 @@ unchanged and proved so:
    the two foreign keys leave the list of crossings; the code moves with the rest of chat in step 9. A generic core
    inbox waits for a second writer;
 6. the channel file list leaves `attachments` (**built**);
-7. the workspace purge's message and channel steps become a chat hook, and `REMAINING_TABLES` splits by owner;
+7. the workspace purge takes a `WorkspacePurge` — steps before the core's uploads and exports, steps after, and the
+   tables a module owns — and chat supplies its messages, channels and tables; the core's list holds its own
+   (**built**);
 8. the two foreign keys from `attachments` to `messages` are dropped, a reconciliation sweep in the orphan job
    takes their place, and the ownership list empties — a migration, and so rehearsed on a copy and the owner's
    call (D-250).
