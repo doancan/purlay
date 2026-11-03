@@ -12,7 +12,7 @@ import { fixedClock } from '../../platform/clock';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, counters, type Room } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from './messages';
 import { eraseContent, planContentErasure } from './content-erasure';
 
 afterAll(async () => {
