@@ -121,7 +121,9 @@ moves into that module.
   owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
   point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
-  with each module alone as well as with all of them.
+  with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
+  tables (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
+  module whose tables a combined schema would hide.
 
 ## 6. Web
 
@@ -168,14 +170,14 @@ until then it is a stated intent and not a guarantee.
 | `MODULES` is valid | `resolve`, at boot | 12 |
 | The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
 | Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
-| Disabled ⇒ no tables | the CI matrix, per cell | 12 |
+| Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; running the whole suite per cell is the CI matrix, which waits for step 12 | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
 | A core migration keeps module schemas valid | CI migrating each set from the last release | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
 | Shell chunk holds no module code | `budget:web` shape check | 11 |
-| This file lists the manifests | a test | 9 |
+| This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
 `modules/**`, `features/**`, `platform/**` or `packages/db/**` changes. It is the set of cells run, and the
@@ -322,3 +324,13 @@ places the core and chat share data — attachments, read state, notifications, 
 (I-3, I-4, I-7) — where "works without chat" is unproven until the real schema says so; moving the rows that
 cannot stay in the core into chat is the cost, and the core's claim is only as large as what is left. And the
 wire names, which installed clients read.
+
+## 11. The modules this build carries
+
+One row for each manifest in `bundledModules` (`composition.ts`): a module added there without its row, or a row for
+one that is not there, fails `module-listing.test.ts`. `—` is none. The rest of a module's section (§9) goes under
+its row's id as it is written.
+
+| Module | Requires | Optional | Provides |
+|---|---|---|---|
+| `chat` | — | — | — |
