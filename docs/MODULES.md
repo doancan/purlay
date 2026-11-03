@@ -121,7 +121,9 @@ moves into that module.
   owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
   point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
-  with each module alone as well as with all of them.
+  with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
+  tables (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
+  module whose tables a combined schema would hide.
 
 ## 6. Web
 
@@ -168,7 +170,7 @@ until then it is a stated intent and not a guarantee.
 | `MODULES` is valid | `resolve`, at boot | 12 |
 | The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
 | Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
-| Disabled ⇒ no tables | the CI matrix, per cell | 12 |
+| Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; running the whole suite per cell is the CI matrix, which waits for step 12 | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
 | A core migration keeps module schemas valid | CI migrating each set from the last release | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
