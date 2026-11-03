@@ -416,6 +416,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
         hasPassword: false,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       }),
@@ -442,6 +443,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: null,
           oidc: true,
+          google: false,
           twoFactor: false,
           twoFactorRequired: false,
         }),
@@ -458,6 +460,35 @@ describe('how you sign in (D-176, D-179 §5)', () => {
     view.unmount();
   });
 
+  test('an account linked to Google says so, with no button, and its address is Google’s', async () => {
+    const { view, card } = await opened({
+      mySignIn: () =>
+        Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: false,
+          hasPassword: false,
+          github: null,
+          oidc: false,
+          google: true,
+          twoFactor: false,
+          twoFactorRequired: false,
+        }),
+    });
+    expect(card.getByText('Google')).toBeDefined();
+    expect(card.getByText('Linked')).toBeDefined();
+    expect(card.getByText('You can sign in with this Google account.')).toBeDefined();
+    expect(card.getByText('Your Google account’s address. You sign in with Google.')).toBeDefined();
+    expect(card.queryByRole('button')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
+  test('without Google linked, nothing says Google', async () => {
+    const { view, card } = await opened(emailAccount);
+    expect(card.queryByText('Google')).toBeNull();
+    view.unmount();
+  });
+
   test('a linked account shows the login, read only', async () => {
     const { view, card } = await opened({
       mySignIn: () =>
@@ -467,6 +498,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: 'ada-gh' },
           oidc: false,
+          google: false,
           twoFactor: false,
           twoFactorRequired: false,
         }),
@@ -488,6 +520,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: null },
           oidc: false,
+          google: false,
           twoFactor: false,
           twoFactorRequired: false,
         }),
@@ -505,6 +538,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
           hasPassword: false,
           github: { login: 'ada' },
           oidc: false,
+          google: false,
           twoFactor: false,
           twoFactorRequired: false,
         }),
@@ -532,6 +566,7 @@ describe('how you sign in (D-176, D-179 §5)', () => {
               hasPassword: false,
               github: null,
               oidc: false,
+              google: false,
               twoFactor: false,
               twoFactorRequired: false,
             }),
@@ -565,6 +600,7 @@ describe('change password', () => {
         hasPassword: true,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       }),
@@ -585,6 +621,7 @@ describe('change password', () => {
           hasPassword: false,
           github: null,
           oidc: false,
+          google: false,
           twoFactor: false,
           twoFactorRequired: false,
         }),

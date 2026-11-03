@@ -2325,7 +2325,7 @@ checks a backup holds the bucket, and passes end to end; `backup.sh`'s hint name
   keeps what it was told, and somebody who joined after the message is told for the inbox only.
 - The row is locked before anything is decided: an edit that loses a race with a delete answers `404`
   and does not bring the deleted words back. The session is held live for the write (D-85).
-- The reading of a body is one function for a send and an edit (`modules/messages/body.ts`). Other
+- The reading of a body is one function for a send and an edit (`features/chat/messages/body.ts`). Other
   people see the edit on their next read; live, with the revision frame (#333).
 
 ### Infrastructure — 2026-10-11: the image can be published from a machine while the pipeline cannot
@@ -2824,7 +2824,7 @@ checks a backup holds the bucket, and passes end to end; `backup.sh`'s hint name
 
 ### Refactor — 2026-10-09: replay budgeting is a module; the casts that hid the frame union are gone
 
-- Replay caps and the cursor floor moved from `realtime/router.ts` to `modules/messages/replay.ts`.
+- Replay caps and the cursor floor moved from `realtime/router.ts` to `features/chat/messages/replay.ts`.
   `frame()` can no longer pair an event with another event's data, and the timer handle is typed.
 - Joining a private channel or a DM you are in answers 404; that branch is now tested (#245, D-47).
 

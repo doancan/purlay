@@ -145,7 +145,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
   await again.getByRole('link', { name: 'Continue with Acme SSO' }).click();
   await expect(again).toHaveURL(/\/sign-in\?error=email-unverified$/);
   await expect(
-    again.getByText('Single sign-on did not say your email address is verified', { exact: false }),
+    again.getByText('This sign-in didn’t prove the address is yours', { exact: false }),
   ).toBeVisible();
   expect((await again.request.get('/api/me')).status()).toBe(401);
   await refused.close();

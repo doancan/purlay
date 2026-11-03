@@ -62,6 +62,7 @@ import { endMySession, readMySessions } from './devices';
 import {
   AUTH_BASE_PATH,
   GITHUB_APP_CALLBACK,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
 } from '@purlay/types';
@@ -142,6 +143,7 @@ import {
   changeSignInPolicy,
   changeWorkspaceCreators,
   connectGitHubApp,
+  connectGoogleClient,
   connectOidcProvider,
   connectMailRelay,
   connectIssuesApp,
@@ -171,8 +173,11 @@ import {
   githubAppCaller,
   platformAppFetch,
   type GitHubAppFetch,
-} from '../../modules/integrations/github-app-api';
-import { latestReleaseCheck } from '../../modules/integrations/latest-release';
+} from '../../platform/github-app-api';
+import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
+import type { UserErased } from '../../modules/users/erasure';
+import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
+import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
   createWorkspaceChannel,
@@ -214,7 +219,13 @@ import {
   removeMessage,
 } from './messages';
 import { changeReaction } from './reactions';
-import { readiness, recentReadiness, type Readiness } from '../../platform/readiness';
+import {
+  CORE_COLLATED_COLUMNS,
+  readiness,
+  recentReadiness,
+  type CollatedColumn,
+  type Readiness,
+} from '../../platform/readiness';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
@@ -225,7 +236,11 @@ import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
-import { githubApi, inProcessPauses, type GitHubApi } from '../../modules/integrations/unfurl';
+import {
+  githubApi,
+  inProcessPauses,
+  type GitHubApi,
+} from '../../features/chat/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
@@ -263,6 +278,7 @@ import {
 } from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
+import { composition, type Composition } from '../../composition';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -312,6 +328,8 @@ export interface Dependencies {
   readonly githubApp?: () => GitHubAppSettings | undefined;
   /** How the App's calls reach GitHub; absent, the platform's `fetch`. A test hands its stand-in's. */
   readonly githubAppFetch?: GitHubAppFetch;
+  /** Where Google is, as the sign-in is told; absent, Google's own. A test's stand-in. */
+  readonly googleIssuer?: string;
   /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
   readonly externalFetch?: ExternalFetch;
   readonly log: Logger;
@@ -348,6 +366,19 @@ export interface Dependencies {
    * (`readWorkspaceCreators`, D-179 §6). A test about something else lets anybody.
    */
   readonly workspaceCreators?: (executor: Executor) => Promise<WorkspaceCreators>;
+  /**
+   * What the modules start a new workspace with, inside its transaction (D-250); absent, what chat starts
+   * one with — its first channel (D-174).
+   */
+  readonly workspaceCreated?: WorkspaceCreated;
+  /** The channels of a workspace, as the workspace code asks for them (D-250); absent, chat's. */
+  readonly workspaceChannels?: WorkspaceChannels;
+  /** What the modules forget of a person whose account is erased, inside the erasure (D-250); absent, chat's. */
+  readonly userErased?: UserErased;
+  /** The modules this process runs; absent, every one the build carries. A path of a module left out is a `404`. */
+  readonly composition?: Composition;
+  /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
+  readonly collatedColumns?: readonly CollatedColumn[];
   /**
    * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
    * absent, the application keeps one of its own — a test reads it through `/metrics`.
@@ -434,7 +465,22 @@ const answerSetup = <T>(
 /** The setup's paths, its client pages included: nothing under them is for a search engine. */
 const SETUP_PATH = /^\/setup(?:\/|$)/;
 
-export const createApp = (dependencies: Dependencies): HttpApplication => {
+export const createApp = (given: Dependencies): HttpApplication => {
+  // The modules this process runs (`composition.ts`): every one the build carries, unless a caller says otherwise.
+  const modules = given.composition ?? composition;
+  const dependencies = {
+    ...given,
+    workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
+    workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    userErased: given.userErased ?? modules.userErased,
+    collatedColumns: given.collatedColumns ?? modules.collatedColumns,
+  };
+  /**
+   * A path of a module this process does not run is no route (`MODULES.md` §3): the `404` of any unknown path, with
+   * the generic body and no word that says *disabled*, which would tell a caller who has not signed in which modules
+   * this instance runs. Judged on the path as sent, which is the path the router matches (it does not decode `%6d`).
+   */
+  const closedRoute = (request: Request): boolean => modules.closed(new URL(request.url).pathname);
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
   /** One request's line on the page: never its path as sent, only the route it was registered as. */
@@ -456,13 +502,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     async () =>
       await readiness(
         dependencies.database,
+        [...CORE_COLLATED_COLUMNS, ...dependencies.collatedColumns],
         async () => await dependencies.auth.schemaProblem(),
         () => dependencies.shared?.problem(),
+        modules.migrationSets,
       ),
     dependencies.clock,
   );
   // The reason a node is not ready is written once per check, not once per probe that hears it.
   let saidNotReady: Readiness | null = null;
+  /** The words an operator writes in `MODULES` for the modules this process runs. */
+  const moduleIds = modules.modules.map((module) => module.manifest.id);
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
@@ -517,6 +567,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const creating = {
     ...dependencies,
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
+    modules: moduleIds,
   };
   const delivering = { count: 0 };
   // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
@@ -663,6 +714,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     // Before the handler, after the body is parsed: the body is already bounded by the
     // server (`edge.ts`), and a malformed one is a 400 whoever sends it, with no lookup.
     .onBeforeHandle(async ({ request, server, set }) => {
+      if (closedRoute(request)) {
+        throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
+      }
       const wait = await admit(request, peerOf(server, request));
       if (wait === undefined) return;
       set.headers['retry-after'] = String(wait);
@@ -672,11 +726,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
       // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
-      if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK) {
+      if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK || path === GOOGLE_CALLBACK) {
         return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
       }
-      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246).
-      if (path === GITHUB_APP_CALLBACK) {
+      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246). Not when
+      // the module that owns it is not run: that path is no route, and says so like any other.
+      if (path === GITHUB_APP_CALLBACK && !modules.closed(path)) {
         if (refusal.status === 500) log.error('request failed', { err: error, path });
         set.status = 302;
         set.headers.location = '/?github=unavailable';
@@ -751,8 +806,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/auth/oidc', async ({ set }) => respond(set, await startSignIn(dependencies, 'oidc')))
+    .get('/auth/google', async ({ set }) => respond(set, await startSignIn(dependencies, 'google')))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
-    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth))
+    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth, moduleIds))
     // The native application's way in (D-191): the browser's page says yes, the application spends the code.
     .post(
       '/api/native/authorize',
@@ -870,6 +926,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, body }) => await connectOidcProvider(setup, request, body),
     )
     .post(
+      '/api/server/google',
+      async ({ request, body }) => await connectGoogleClient(setup, request, body),
+    )
+    .post(
       '/api/server/smtp',
       async ({ request, body }) => await connectMailRelay(setup, request, body),
     )
@@ -889,6 +949,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .delete('/api/server/oidc', async ({ request, set }) => {
       await disconnectChannel(setup, request, 'oidc');
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/server/google', async ({ request, set }) => {
+      await disconnectChannel(setup, request, 'google');
       set.status = 204;
       return '';
     })

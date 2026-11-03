@@ -65,9 +65,17 @@ export interface GitHubAppSettings {
   readonly webhookSecret: string;
 }
 
+/** Google's OAuth client (D-251): who this server is to Google. Its address is fixed, so nothing else is kept. */
+interface GoogleSettings {
+  readonly clientId: string;
+  readonly clientSecret: string;
+}
+
 /** Everything the server reads from its settings: what the sign-in library takes, and the rest. */
 export interface ServerSettings extends AuthSettings, SignInPolicy, SessionLifetime {
   readonly smtp: SmtpSettings | undefined;
+  /** Google's OAuth client (D-251), the secret opened; unset, Google is not a way in. */
+  readonly google: GoogleSettings | undefined;
   /** The GitHub App (D-246); unset, nothing of issues from conversations is offered. */
   readonly githubApp: GitHubAppSettings | undefined;
   /** Who may make a workspace (D-155, D-169). */
@@ -84,6 +92,7 @@ export interface SettingsPatch {
   readonly signUp?: AuthSettings['signUp'] | undefined;
   readonly github?: NonNullable<AuthSettings['github']> | null | undefined;
   readonly oidc?: NonNullable<AuthSettings['oidc']> | null | undefined;
+  readonly google?: GoogleSettings | null | undefined;
   readonly smtp?: SmtpSettings | null | undefined;
   readonly githubApp?: GitHubAppSettings | null | undefined;
   readonly workspaceCreators?: WorkspaceCreators | undefined;
@@ -103,6 +112,7 @@ export interface SettingsPatch {
 export interface SettingsSeed {
   readonly github?: NonNullable<AuthSettings['github']>;
   readonly oidc?: NonNullable<AuthSettings['oidc']>;
+  readonly google?: GoogleSettings;
   readonly smtp?: SmtpSettings;
   readonly githubApp?: GitHubAppSettings;
   readonly workspaceCreators: WorkspaceCreators;
@@ -115,6 +125,7 @@ export interface SettingsSeed {
 const SEALED_IN = {
   githubClientSecret: 'server_settings.github_client_secret_encrypted',
   oidcClientSecret: 'server_settings.oidc_client_secret_encrypted',
+  googleClientSecret: 'server_settings.google_client_secret_encrypted',
   smtpUrl: 'server_settings.smtp_url_encrypted',
   githubAppClientSecret: 'server_settings.github_app_client_secret_encrypted',
   githubAppPrivateKey: 'server_settings.github_app_private_key_encrypted',
@@ -126,6 +137,7 @@ const DEFAULTS: ServerSettings = {
   signUp: 'invite-only',
   github: undefined,
   oidc: undefined,
+  google: undefined,
   smtp: undefined,
   githubApp: undefined,
   workspaceCreators: { kind: 'first' },
@@ -245,6 +257,14 @@ const readWith = async (
           clientSecret: oidcSecret,
           name: row.oidc_name ?? undefined,
         };
+  const googleSecret =
+    row.google_client_id === null || row.google_client_secret_encrypted === null
+      ? undefined
+      : await open('google', row.google_client_secret_encrypted, SEALED_IN.googleClientSecret);
+  const google =
+    row.google_client_id === null || googleSecret === undefined
+      ? undefined
+      : { clientId: row.google_client_id, clientSecret: googleSecret };
   const smtpUrl =
     row.smtp_url_encrypted === null || row.mail_from === null
       ? undefined
@@ -257,6 +277,7 @@ const readWith = async (
     signUp: signUpOf(row.sign_up),
     github,
     oidc,
+    google,
     smtp,
     githubApp: await githubAppOf(row, open),
     workspaceCreators: creatorsOf(row.workspace_creators, row.workspace_creator_logins),
@@ -375,6 +396,8 @@ interface Written {
   oidc_client_id?: string | null;
   oidc_client_secret_encrypted?: string | null;
   oidc_name?: string | null;
+  google_client_id?: string | null;
+  google_client_secret_encrypted?: string | null;
   smtp_url_encrypted?: string | null;
   mail_from?: string | null;
   smtp_allow_plaintext?: boolean;
@@ -441,6 +464,20 @@ const columnsOf = async (cipher: CredentialCipher, patch: SettingsPatch): Promis
       SEALED_IN.oidcClientSecret,
     );
     written.oidc_name = name ?? null;
+  }
+  if (patch.google === null) {
+    written.google_client_id = null;
+    written.google_client_secret_encrypted = null;
+  } else if (patch.google !== undefined) {
+    if (patch.google.clientId === '' || patch.google.clientSecret === '') {
+      throw new Error('Google is a client id and a client secret, both');
+    }
+    written.google_client_id = patch.google.clientId;
+    written.google_client_secret_encrypted = await sealed(
+      cipher,
+      patch.google.clientSecret,
+      SEALED_IN.googleClientSecret,
+    );
   }
   if (patch.smtp === null) {
     written.smtp_url_encrypted = null;
@@ -557,6 +594,10 @@ export const settingsView = (settings: ServerSettings): ServerSettingsView => ({
           clientSecret: { set: true },
           name: settings.oidc.name ?? null,
         },
+  google:
+    settings.google === undefined
+      ? null
+      : { clientId: settings.google.clientId, clientSecret: { set: true } },
   smtp:
     settings.smtp === undefined
       ? null
@@ -594,6 +635,8 @@ type Seeding = Pick<
   | 'SMTP_URL'
   | 'MAIL_FROM'
   | 'SMTP_ALLOW_PLAINTEXT'
+  | 'GOOGLE_CLIENT_ID'
+  | 'GOOGLE_CLIENT_SECRET'
   | 'GITHUB_APP_ID'
   | 'GITHUB_APP_SLUG'
   | 'GITHUB_APP_CLIENT_ID'
@@ -624,6 +667,12 @@ export const envSeedOf = (config: Seeding): SettingsSeed => ({
           clientSecret: config.OIDC_CLIENT_SECRET,
           name: config.OIDC_NAME,
         },
+      }),
+  // Both or neither (the configuration checks it).
+  ...(config.GOOGLE_CLIENT_ID === undefined || config.GOOGLE_CLIENT_SECRET === undefined
+    ? {}
+    : {
+        google: { clientId: config.GOOGLE_CLIENT_ID, clientSecret: config.GOOGLE_CLIENT_SECRET },
       }),
   ...(config.SMTP_URL === undefined || config.MAIL_FROM === undefined
     ? {}
@@ -668,6 +717,8 @@ export const ignoredEnvironment = (config: Seeding): string[] =>
       ['OIDC_CLIENT_ID', config.OIDC_CLIENT_ID !== undefined],
       ['OIDC_CLIENT_SECRET', config.OIDC_CLIENT_SECRET !== undefined],
       ['OIDC_NAME', config.OIDC_NAME !== undefined],
+      ['GOOGLE_CLIENT_ID', config.GOOGLE_CLIENT_ID !== undefined],
+      ['GOOGLE_CLIENT_SECRET', config.GOOGLE_CLIENT_SECRET !== undefined],
       ['SMTP_URL', config.SMTP_URL !== undefined],
       ['MAIL_FROM', config.MAIL_FROM !== undefined],
       // A boolean with a default: only `true` is something the operator wrote.
@@ -704,6 +755,7 @@ export const importFromEnvOnce = async (
   const columns = await columnsOf(cipher, {
     github: seed.github ?? null,
     oidc: seed.oidc ?? null,
+    google: seed.google ?? null,
     smtp: seed.smtp ?? null,
     githubApp: seed.githubApp ?? null,
     workspaceCreators: seed.workspaceCreators,

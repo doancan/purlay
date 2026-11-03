@@ -37,7 +37,7 @@ import {
 } from '@purlay/types';
 import { createApp, type Dependencies, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
-import { REPLAY_BYTES_MAX } from '../modules/messages/replay';
+import { REPLAY_BYTES_MAX } from '../features/chat/messages/replay';
 import { createConnection } from 'node:net';
 import { aManualTimers, aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';

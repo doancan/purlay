@@ -8,7 +8,7 @@ import {
   cancelScheduledMessage,
   scheduleMessage,
   scheduledMessages,
-} from '../../modules/scheduled/scheduled';
+} from '../../features/chat/scheduled/scheduled';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import type { ChannelDependencies } from './channels';

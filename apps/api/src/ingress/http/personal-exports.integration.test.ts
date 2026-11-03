@@ -34,11 +34,12 @@ import {
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { aSession } from '../../testing/signed-in';
-import { sendMessage } from '../../modules/messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { exportQueue } from '../../modules/export/queue';
 import { sweepExports } from '../../modules/export/requests';
 import { endPersonalExports } from '../../modules/export/personal-requests';
 import { createApp } from './app';
+import { exportCatalogue, personalExportCatalogue } from '../../export-catalogue';
 
 let cloned: ClonedDatabase;
 
@@ -76,7 +77,14 @@ const aWorld = async (options: { readonly held?: boolean } = {}): Promise<World>
   const store = aMemoryStore();
   const clock = aMovableClock();
   const room = await aRoom(cloned.db, ['ada', 'bob']);
-  const queue = exportQueue({ database: cloned.db, clock, log: silent, storage: store });
+  const queue = exportQueue({
+    catalogue: exportCatalogue,
+    personalCatalogue: personalExportCatalogue,
+    database: cloned.db,
+    clock,
+    log: silent,
+    storage: store,
+  });
   const waiting: string[] = [];
   const app = createApp(
     testDependencies({
@@ -406,7 +414,14 @@ describe('integration: a person’s export of their own data', () => {
         },
       };
       if (refuses) world.store.failing('delete', new Error('the bucket refuses'));
-      const queue = exportQueue({ database: cloned.db, clock: world.clock, log, storage: store });
+      const queue = exportQueue({
+        catalogue: exportCatalogue,
+        personalCatalogue: personalExportCatalogue,
+        database: cloned.db,
+        clock: world.clock,
+        log,
+        storage: store,
+      });
       for (const id of world.waiting.splice(0)) queue.startPersonal(id);
       await queue.settled();
       expect(world.store.keys()).toHaveLength(refuses ? 1 : 0);
@@ -423,6 +438,8 @@ describe('integration: a person’s export of their own data', () => {
   test('a failure it cannot even record is logged, and the queue goes on', async () => {
     const { log, lines } = aRecordingLogger();
     const queue = exportQueue({
+      catalogue: exportCatalogue,
+      personalCatalogue: personalExportCatalogue,
       database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
       clock: aMovableClock(),
       log,

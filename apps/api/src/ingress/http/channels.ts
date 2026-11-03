@@ -27,7 +27,7 @@ import {
   type ReadChannelResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,
@@ -48,12 +48,12 @@ import {
   channelsVisibleIn,
   createChannel,
   joinChannel,
-} from '../../modules/channels/channels';
-import { openConversation, openDirectMessage } from '../../modules/channels/direct-messages';
-import { addMember } from '../../modules/channels/members';
-import { markAllRead, markRead, markUnread } from '../../modules/channels/read-state';
-import { setNotificationLevel } from '../../modules/channels/notification-level';
-import { readChannelRetention, setChannelRetention } from '../../modules/channels/retention';
+} from '../../features/chat/channels/channels';
+import { openConversation, openDirectMessage } from '../../features/chat/channels/direct-messages';
+import { addMember } from '../../features/chat/channels/members';
+import { markAllRead, markRead, markUnread } from '../../features/chat/channels/read-state';
+import { setNotificationLevel } from '../../features/chat/channels/notification-level';
+import { readChannelRetention, setChannelRetention } from '../../features/chat/channels/retention';
 import {
   archiveChannel,
   archivedChannels,
@@ -62,7 +62,7 @@ import {
   removeChannelMember,
   restoreChannel,
   updateChannel,
-} from '../../modules/channels/settings';
+} from '../../features/chat/channels/settings';
 import { requireSession } from './session';
 import { validated } from './validate';
 

@@ -158,9 +158,55 @@ const OIDC_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
   },
 };
 
+/**
+ * The same for Google's try (D-251): Google's address is fixed, so no reason points at an issuer field — a
+ * Google that cannot be reached or whose answer is wrong is not something the form can put right.
+ */
+const GOOGLE_REASONS: Partial<Record<ProbeReason, ReasonWords>> = {
+  'secret-rejected': {
+    what: 'setup.google.reason.secret-rejected.what',
+    fix: ['setup.google.reason.secret-rejected.fix1', 'setup.google.reason.secret-rejected.fix2'],
+    // Google's token endpoint answers `invalid_client` for an ID it does not know as for a wrong secret, so
+    // which of the two is wrong is not known: neither field is outlined (D-251 §7).
+    field: null,
+    stoppedAt: null,
+  },
+  'client-unknown': {
+    what: 'setup.google.reason.client-unknown.what',
+    fix: ['setup.google.reason.client-unknown.fix1', 'setup.google.reason.client-unknown.fix2'],
+    field: 'clientId',
+    stoppedAt: null,
+  },
+  unreachable: {
+    what: 'setup.google.reason.unreachable.what',
+    fix: ['setup.google.reason.unreachable.fix1', 'setup.google.reason.unreachable.fix2'],
+    field: null,
+    stoppedAt: null,
+  },
+  'tls-failed': {
+    what: 'setup.google.reason.tls-failed.what',
+    fix: ['setup.google.reason.tls-failed.fix1', 'setup.google.reason.tls-failed.fix2'],
+    field: null,
+    stoppedAt: null,
+  },
+  'unexpected-reply': {
+    what: 'setup.google.reason.unexpected-reply.what',
+    fix: ['setup.google.reason.unexpected-reply.fix1', 'setup.google.reason.unexpected-reply.fix2'],
+    field: 'clientSecret',
+    stoppedAt: null,
+  },
+};
+
 /** The words for a reason as it is said for one channel's try. */
-export const reasonWords = (reason: ProbeReason, channel: 'oidc' | undefined): ReasonWords =>
-  (channel === 'oidc' ? OIDC_REASONS[reason] : undefined) ?? REASONS[reason];
+export const reasonWords = (
+  reason: ProbeReason,
+  channel: 'oidc' | 'google' | undefined,
+): ReasonWords =>
+  (channel === 'oidc'
+    ? OIDC_REASONS[reason]
+    : channel === 'google'
+      ? GOOGLE_REASONS[reason]
+      : undefined) ?? REASONS[reason];
 
 /** The sentence for a call that failed: a plain one, or the wait `Retry-After` asked for, in minutes. */
 export const failureWords = (

@@ -19,7 +19,7 @@ import { useApi } from '../data/api-provider';
 import { keys } from '../data/keys';
 import { useClientStorage } from '../data/storage-provider';
 import { useChannels } from '../data/queries';
-import { useSession } from '../features/session/session';
+import { useRuns, useSession } from '../features/session/session';
 import { useWorkspace } from '../features/shell/workspace';
 import { systemClock } from '../system-clock';
 import type { Clock } from './clock';
@@ -57,7 +57,9 @@ export const RealtimeProvider = ({
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const storage = useClientStorage();
-  const channels = useChannels(workspace.id);
+  // The socket carries the core's frames too (a revoked session, a changed workspace), so it stays; which
+  // channels to watch is chat's to say, and a server without it has none.
+  const channels = useChannels(workspace.id, useRuns('chat'));
 
   const engine = useMemo(
     () =>

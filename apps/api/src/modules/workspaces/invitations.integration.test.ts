@@ -33,7 +33,8 @@ import {
 import { changeRole, removeMember } from './members';
 import type { Clock } from '../../platform/clock';
 import type { CreatedInvitation } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 /** The writing services take a transaction (#232); inside the harness's, one joins it. */
 const createInvitation = async (
@@ -237,7 +238,13 @@ describe('integration: joining by a link', () => {
       const person = other.members['in-person17']?.userId ?? '';
       clock.advance(1_000);
       await atomicallyOn(db)(async (transaction) => {
-        await removeMember(transaction, clock, await as(db, other, 'in-otherowner17'), person);
+        await removeMember(
+          transaction,
+          clock,
+          await as(db, other, 'in-otherowner17'),
+          person,
+          chatWorkspaceChannels,
+        );
       });
 
       expect((await acceptInvitation(db, clock, person, made.token)).membership.workspace.id).toBe(
@@ -414,7 +421,7 @@ describe('integration: joining by a link', () => {
       await acceptInvitation(db, clock, person.userId, old.token);
       clock.advance(1_000);
       await atomicallyOn(db)(async (transaction) => {
-        await removeMember(transaction, clock, owner, person.userId);
+        await removeMember(transaction, clock, owner, person.userId, chatWorkspaceChannels);
       });
 
       clock.advance(1_000);
@@ -554,7 +561,7 @@ describe('integration: revoking races', () => {
     const outcome = await raced(
       db,
       async (transaction) => {
-        await removeMember(transaction, clock, owner, gone);
+        await removeMember(transaction, clock, owner, gone, chatWorkspaceChannels);
       },
       async () => await refusal(acceptInvitation(db, clock, gone, made.token)),
     );

@@ -67,6 +67,7 @@ export interface AdminEmailVerification {
 
 export interface Attachments {
   channel_id: string | null;
+  claimed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   file_name: string;
   height: number | null;
@@ -74,7 +75,6 @@ export interface Attachments {
   kind: Generated<AttachmentKind>;
   message_id: string | null;
   mime_type: string;
-  scheduled_message_id: string | null;
   size_bytes: Int8;
   storage_key: string;
   thumbnail_key: string | null;
@@ -332,6 +332,13 @@ export interface Mentions {
   workspace_id: string;
 }
 
+export interface MessageAttachments {
+  attachment_id: string;
+  channel_id: string;
+  message_id: string;
+  workspace_id: string;
+}
+
 export interface MessageReminders {
   channel_id: string;
   created_at: Generated<Timestamp>;
@@ -487,6 +494,12 @@ export interface SavedSearches {
   workspace_id: string;
 }
 
+export interface ScheduledMessageAttachments {
+  attachment_id: string;
+  scheduled_message_id: string;
+  workspace_id: string;
+}
+
 export interface ScheduledMessages {
   channel_id: string;
   content: string;
@@ -523,6 +536,8 @@ export interface ServerSettings {
   github_app_webhook_secret_encrypted: string | null;
   github_client_id: string | null;
   github_client_secret_encrypted: string | null;
+  google_client_id: string | null;
+  google_client_secret_encrypted: string | null;
   id: Generated<boolean>;
   imported_from_env_at: Timestamp | null;
   mail_from: string | null;
@@ -602,6 +617,7 @@ export interface Users {
   github_connected_at: Timestamp | null;
   github_id: Int8 | null;
   github_login: string | null;
+  google_made: Generated<boolean>;
   id: Generated<string>;
   is_server_admin: Generated<boolean>;
   last_seen_at: Timestamp | null;
@@ -705,6 +721,7 @@ export interface DB {
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;
+  message_attachments: MessageAttachments;
   message_reminders: MessageReminders;
   message_versions: MessageVersions;
   messages: Messages;
@@ -718,6 +735,7 @@ export interface DB {
   rate_limits: RateLimits;
   reactions: Reactions;
   saved_messages: SavedMessages;
+  scheduled_message_attachments: ScheduledMessageAttachments;
   scheduled_messages: ScheduledMessages;
   saved_searches: SavedSearches;
   server_audit_log: ServerAuditLog;

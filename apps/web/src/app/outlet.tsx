@@ -25,6 +25,7 @@ import { SearchScreen } from '../features/search/search-screen';
 import { SessionGate } from '../features/session/session';
 import { Home } from '../features/shell/home';
 import { NotFound } from '../features/shell/not-found';
+import { ModuleGate } from '../features/shell/module-gate';
 import { Shell } from '../features/shell/shell';
 import { WorkspaceHome } from '../features/shell/workspace-home';
 import { SignInScreen } from '../features/sign-in/sign-in-screen';
@@ -119,43 +120,57 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
     case 'channel':
       return (
         <Shell slug={match.params.slug}>
-          <ChannelScreen channelId={match.params.channelId} />
+          <ModuleGate route="channel">
+            <ChannelScreen channelId={match.params.channelId} />
+          </ModuleGate>
         </Shell>
       );
     case 'questions':
       return (
         <Shell slug={match.params.slug}>
-          <QuestionsScreen />
+          <ModuleGate route="questions">
+            <QuestionsScreen />
+          </ModuleGate>
         </Shell>
       );
     case 'inbox':
       return (
         <Shell slug={match.params.slug}>
-          <InboxScreen />
+          <ModuleGate route="inbox">
+            <InboxScreen />
+          </ModuleGate>
         </Shell>
       );
     case 'search':
       return (
         <Shell slug={match.params.slug}>
-          <SearchScreen />
+          <ModuleGate route="search">
+            <SearchScreen />
+          </ModuleGate>
         </Shell>
       );
     case 'saved':
       return (
         <Shell slug={match.params.slug}>
-          <SavedScreen />
+          <ModuleGate route="saved">
+            <SavedScreen />
+          </ModuleGate>
         </Shell>
       );
     case 'drafts':
       return (
         <Shell slug={match.params.slug}>
-          <DraftsScreen />
+          <ModuleGate route="drafts">
+            <DraftsScreen />
+          </ModuleGate>
         </Shell>
       );
     case 'unreads':
       return (
         <Shell slug={match.params.slug}>
-          <UnreadsScreen />
+          <ModuleGate route="unreads">
+            <UnreadsScreen />
+          </ModuleGate>
         </Shell>
       );
     case 'welcome':

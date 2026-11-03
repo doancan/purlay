@@ -148,3 +148,13 @@ export const ActionRow = ({
     <RowContent {...content}>{children}</RowContent>
   </button>
 );
+
+/** A row that is only a name, where nothing is behind it to open: a person on a server that runs no conversations. */
+export const StaticRow = ({
+  children,
+  ...content
+}: Omit<ActionRowProps, 'onClick' | 'disabled'>): React.JSX.Element => (
+  <div className={cn(rowClasses, toneClasses[rowTone(false, content.unread)], 'text-left')}>
+    <RowContent {...content}>{children}</RowContent>
+  </div>
+);

@@ -158,5 +158,13 @@ export const EXEMPT: Readonly<Record<string, string>> = {
     'a fill; its legibility is `on-status` on it, and it never carries meaning without a label',
   success:
     'a fill; its legibility is `on-status` on it, and it never carries meaning without a label',
+  'brand-google-blue':
+    "a brand mark's slice of Google's \"G\", the same in every theme as Google's sign-in branding asks; it is drawn beside a label and carries no meaning or text",
+  'brand-google-green':
+    "a brand mark's slice of Google's \"G\", the same in every theme as Google's sign-in branding asks; it is drawn beside a label and carries no meaning or text",
+  'brand-google-yellow':
+    "a brand mark's slice of Google's \"G\", the same in every theme as Google's sign-in branding asks; it is drawn beside a label and carries no meaning or text",
+  'brand-google-red':
+    "a brand mark's slice of Google's \"G\", the same in every theme as Google's sign-in branding asks; it is drawn beside a label and carries no meaning or text",
   scrim: 'translucent, so it has the contrast of what it covers; it dims the page behind a layer',
 };

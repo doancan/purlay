@@ -28,7 +28,8 @@ import { aMemoryStore } from '../../testing/storage';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { aSession } from '../../testing/signed-in';
 import { createApp } from './app';
-import { purgeRetention, purgeWorkspace } from '../../modules/retention/purge';
+import { purgeRetention, purgeWorkspace } from '../../features/chat/messages/retention-purge';
+import { linkFile } from '../../testing/sent-files';
 
 let cloned: ClonedDatabase;
 
@@ -107,6 +108,12 @@ describe('integration: the purge against what happens at the same moment', () =>
           size_bytes: '100',
         })
         .execute();
+      await linkFile(cloned.db, {
+        id: id,
+        workspaceId: room.workspaceId,
+        messageId: message,
+        channelId: room.channelId,
+      });
     }
     await cloned.db
       .updateTable('workspaces')

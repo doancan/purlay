@@ -201,6 +201,7 @@ const withMail: Partial<Api> = {
       github: true,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     }),

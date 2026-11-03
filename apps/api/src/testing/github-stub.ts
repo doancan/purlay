@@ -16,9 +16,9 @@
  * The API calls take only a token this stub issued, as `Authorization: Bearer`.
  */
 import type { GithubFetch } from '../modules/auth/better-auth';
-import type { GitHubAppFetch } from '../modules/integrations/github-app-api';
+import type { GitHubAppFetch } from '../platform/github-app-api';
 import { answeredWithin, type GitHubAppStub } from './github-app-stub';
-import type { GitHubApi } from '../modules/integrations/unfurl';
+import type { GitHubApi } from '../features/chat/integrations/unfurl';
 
 /** A GitHub account as GitHub's API describes it. */
 export interface GitHubPerson {

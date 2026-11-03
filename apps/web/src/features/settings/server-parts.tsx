@@ -70,7 +70,7 @@ export const Inset = ({
 );
 
 /**
- * Disconnecting GitHub, single sign-on or the mail server, asked first. When the other way in is not there, the dialog
+ * Disconnecting GitHub, Google, single sign-on or the mail server, asked first. When the other way in is not there, the dialog
  * says before the button that this is the last one, and the button says it again; when the server
  * refuses for that reason although the page thought otherwise (somebody else changed it), the dialog
  * turns into that question and nothing has been taken.
@@ -84,7 +84,7 @@ export const DisconnectDialog = ({
   body,
   done,
 }: {
-  readonly channel: 'github' | 'smtp' | 'oidc';
+  readonly channel: 'github' | 'smtp' | 'oidc' | 'google';
   readonly view: ServerSettingsAnswer;
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
@@ -100,16 +100,18 @@ export const DisconnectDialog = ({
   const [failure, setFailure] = useState<unknown>(null);
   const [forced, setForced] = useState(false);
   // Another way in serves, or this is the last one: the page's own reading, which the server then confirms.
-  const otherServes = (['github', 'email', 'oidc'] as const).some(
+  const otherServes = (['github', 'email', 'oidc', 'google'] as const).some(
     (other) => other !== (channel === 'smtp' ? 'email' : channel) && view.channels[other],
   );
   const last = !otherServes || forced;
-  // Passwords are off and this is the last of GitHub and single sign-on: nobody could sign in, and the server
+  // Passwords are off and this is the last of GitHub, Google and single sign-on: nobody could sign in, and the server
   // refuses whatever is confirmed (D-239). Said before the button, which is not offered.
   const lastProvider =
     channel !== 'smtp' &&
     !view.settings.passwordSignIn &&
-    !(['github', 'oidc'] as const).some((other) => other !== channel && view.channels[other]);
+    !(['github', 'oidc', 'google'] as const).some(
+      (other) => other !== channel && view.channels[other],
+    );
 
   const disconnect = async (): Promise<void> => {
     setBusy(true);

@@ -1,0 +1,333 @@
+/**
+ * A thread, read and closed: its replies, resolving it, and the workspace's open
+ * questions (`UX.md` §4, D-99 §5).
+ *
+ * The resolvable thread is the product's argument, so the rules about it are
+ * written once, here, and every door reaches them through the same functions.
+ *
+ * **Resolution is a fact about the root.** Any member who can see the channel may
+ * close a thread or reopen it (`ARCHITECTURE.md` §7.4); only a root with at least
+ * one reply can be closed (I-8) — a resolved question with no answer would be a
+ * dismissal, and the database already refuses a reply that is resolved. The root row
+ * is locked for the change, so two people resolving at once are two sequential
+ * decisions and the second finds the thread already closed: a no-op that says so
+ * with the message and publishes nothing, because nothing changed.
+ */
+import { notHiddenBy } from './hidden';
+import { sql, type Executor } from '@purlay/db';
+import { type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
+import { AppError } from '../../../platform/errors';
+import { limitOf } from '../../../platform/pagination';
+import { requireChannelMember, requireMessageById, type VisibleMessage } from '../channels/guard';
+import type { Clock } from '../../../platform/clock';
+import type { WorkspaceContext } from '../../../platform/tenancy';
+import type { Atomically } from '../../../platform/transactions';
+import {
+  inboxPublications,
+  NO_LOG,
+  publication,
+  publishAfterCommit,
+  publishThreadUpdated,
+  type EventBus,
+} from '../../../platform/events';
+import type { Logger } from '../../../platform/logging';
+import { requireLiveSession } from '../../../modules/auth/sessions';
+import { stillSeeing } from './delivery';
+import { inDeepWork } from '../../../modules/workspaces/deep-work';
+import { buildMessages, MESSAGE_COLUMNS, readBuilt, readSummary, type MessageRow } from './reader';
+
+export interface PageQuery {
+  readonly before?: string | undefined;
+  readonly after?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
+/** Two directions at once has no meaning, and picking one silently is how a client reads a page it did not ask for. */
+const refuseBothDirections = (query: PageQuery): void => {
+  if (query.before !== undefined && query.after !== undefined) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'Ask for older or newer, not both.',
+      details: { fields: { before: 'cannot be combined with `after`' } },
+    });
+  }
+};
+
+/** A page of rows built into messages, and the cursor to continue in the direction travelled. */
+export const asPage = async (
+  executor: Executor,
+  rows: readonly MessageRow[],
+  limit: number,
+  userId?: string,
+): Promise<MessagePage> => {
+  const page = rows.slice(0, limit);
+  return {
+    data: await buildMessages(executor, page, userId),
+    nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+  };
+};
+
+/**
+ * A root's replies. **Oldest first** by default and with `after` — the order a thread
+ * is read in, and the order a reconnecting client appends in — and newest first with
+ * `before`, as every other page in this API is (`API.md` §1). A deleted reply is listed
+ * as its tombstone: it keeps its place in the thread, and the thread its count (D-103 §7).
+ */
+export const threadReplies = async (
+  executor: Executor,
+  root: VisibleMessage,
+  query: PageQuery = {},
+): Promise<MessagePage> => {
+  // A reply has no thread: asking for one is asking for a message that is not there.
+  if (root.parentId !== null) {
+    throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+  }
+  refuseBothDirections(query);
+  const limit = limitOf(query);
+  const backwards = query.before !== undefined;
+
+  let statement = executor
+    .selectFrom('messages')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
+    .select(MESSAGE_COLUMNS)
+    .where('messages.parent_id', '=', root.messageId)
+    .orderBy('messages.id', backwards ? 'desc' : 'asc')
+    .limit(limit + 1);
+  if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
+  if (query.after !== undefined) statement = statement.where('messages.id', '>', query.after);
+
+  return await asPage(executor, await statement.execute(), limit, root.context.userId);
+};
+
+/**
+ * The open-questions view: roots with at least one reply and no resolution, from the
+ * channels the caller can see and no others (D-34), newest first — backed by
+ * `idx_messages_unresolved`.
+ *
+ * `channelIds` is the visible set the route asked the guard for. Narrowing by it, not
+ * filtering afterwards, is what keeps a private conversation out of the answer and
+ * also what confines the scan to a handful of channels.
+ */
+export const unresolvedIn = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  channelIds: readonly string[],
+  query: UnresolvedQuery = {},
+): Promise<MessagePage> => {
+  refuseBothDirections(query);
+  if (channelIds.length === 0) return { data: [], nextCursor: null };
+  const limit = limitOf(query);
+  const forwards = query.order === 'oldest' || query.after !== undefined;
+
+  let statement = executor
+    .selectFrom('messages')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
+    .select(MESSAGE_COLUMNS)
+    .where('messages.workspace_id', '=', context.workspaceId)
+    .where('messages.channel_id', 'in', channelIds)
+    .where('messages.parent_id', 'is', null)
+    .where('messages.resolved_at', 'is', null)
+    .where((eb) =>
+      eb.or([eb('messages.thread_reply_count', '>', 0), eb('messages.is_question', '=', true)]),
+    )
+    .where('messages.deleted_at', 'is', null)
+    .where(notHiddenBy(context.userId))
+    .orderBy('messages.id', forwards ? 'asc' : 'desc')
+    .limit(limit + 1);
+  if (query.before !== undefined)
+    statement = statement.where('messages.id', query.order === 'oldest' ? '>' : '<', query.before);
+  if (query.after !== undefined) statement = statement.where('messages.id', '>', query.after);
+
+  if (query.unanswered === 'yes')
+    statement = statement.where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('messages as reply')
+            .select('reply.id')
+            .whereRef('reply.parent_id', '=', 'messages.id')
+            .where('reply.deleted_at', 'is', null),
+        ),
+      ),
+    );
+  if (query.assigneeId !== undefined)
+    statement = statement
+      .where('messages.question_assignee_id', '=', query.assigneeId)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('channel_members')
+            .select('user_id')
+            .whereRef('channel_members.channel_id', '=', 'messages.channel_id')
+            .whereRef('channel_members.user_id', '=', 'messages.question_assignee_id'),
+        ),
+      );
+  return await asPage(executor, await statement.execute(), limit, context.userId);
+};
+
+export interface ResolveDependencies {
+  readonly atomically: Atomically;
+  readonly clock: Clock;
+  readonly bus: EventBus;
+  /** Where a failed publish is written; the write it follows is already committed. */
+  readonly log?: Logger;
+}
+
+const notResolvable = (message: string): AppError =>
+  new AppError({ code: 'THREAD_NOT_RESOLVABLE', message });
+
+/**
+ * Closes or reopens a thread, and answers the root as it is now.
+ *
+ * Resolving tells the root's author (a `thread_resolved` notification, D-29) when
+ * somebody else did it, and moves no counter: a resolution is not a message, so
+ * counting it as one would put `unread_count` and what a recount finds in
+ * disagreement (D-99 §1). The room hears `THREAD_UPDATED` after the commit and only
+ * when something changed.
+ */
+export const setResolved = async (
+  dependencies: ResolveDependencies,
+  userId: string,
+  messageId: string,
+  resolved: boolean,
+  sessionId?: string,
+): Promise<Message> => {
+  const { atomically, clock, bus, log = NO_LOG } = dependencies;
+  const outcome = await atomically(async (transaction) => {
+    if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
+    const target = await requireMessageById(transaction, userId, messageId);
+    // Closing or reopening a thread changes what the channel's members see: theirs to do (D-156).
+    await requireChannelMember(
+      transaction,
+      target.context,
+      'Join the channel to resolve or reopen its threads.',
+    );
+    if (target.parentId !== null) {
+      throw notResolvable('Only the message that started a thread can be resolved.');
+    }
+
+    // Locked, so a second resolver waits and then finds the thread already closed.
+    const root = await transaction
+      .selectFrom('messages')
+      .select([
+        'sender_id',
+        'thread_reply_count',
+        'thread_last_reply_at',
+        'resolved_at',
+        'resolved_by',
+      ])
+      .where('id', '=', messageId)
+      // NO KEY UPDATE, as an edit and a delete take it (`edit.ts`): resolvers take turns, and a
+      // reply or a read position pointing here is not made to wait.
+      .forNoKeyUpdate()
+      .executeTakeFirstOrThrow();
+
+    if (resolved && root.thread_reply_count === 0) {
+      throw notResolvable('A thread with no replies has nothing to resolve.');
+    }
+
+    const changes = resolved ? root.resolved_at === null : root.resolved_at !== null;
+    let told: readonly string[] = [];
+    if (changes) {
+      const now = clock.now();
+      await transaction
+        .updateTable('messages')
+        .set({
+          ...(resolved
+            ? { resolved_at: now, resolved_by: userId, updated_at: now }
+            : { resolved_at: null, resolved_by: null, updated_at: now }),
+          // Counted with the change, under the root lock above (0015).
+          state_version: sql<number>`state_version + 1`,
+        })
+        .where('id', '=', messageId)
+        .execute();
+      // An event's thread has no author to tell (D-134 §6).
+      if (resolved && root.sender_id !== null && root.sender_id !== userId) {
+        told = await notifyResolved(transaction, target, root.sender_id, now);
+      }
+    }
+
+    const message = await readBuilt(transaction, messageId);
+    const columns = await transaction
+      .selectFrom('messages')
+      .select([
+        'thread_reply_count',
+        'thread_last_reply_at',
+        'resolved_at',
+        'resolved_by',
+        'state_version',
+      ])
+      .where('id', '=', messageId)
+      .executeTakeFirstOrThrow();
+    if (message === undefined) {
+      throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
+    }
+    return {
+      message,
+      changed: changes,
+      channelId: target.context.channelId,
+      workspaceId: target.context.workspaceId,
+      told,
+      summary: await readSummary(transaction, columns, messageId),
+      version: columns.state_version,
+    };
+  });
+
+  if (outcome.changed) {
+    await publishAfterCommit(log, [
+      [
+        publication('THREAD_UPDATED', () =>
+          publishThreadUpdated(
+            bus,
+            clock,
+            { channelId: outcome.channelId, messageId, thread: outcome.summary },
+            outcome.version,
+          ),
+        ),
+      ],
+      // The asker's inbox has it, though no counter of theirs moved (D-106).
+      inboxPublications(bus, clock, outcome.workspaceId, outcome.told),
+    ]);
+  }
+  return outcome.message;
+};
+
+/**
+ * The root's author is told their thread was closed — unless they muted the channel, or can
+ * no longer see it: a notification row names a conversation, and somebody removed from a
+ * private channel since asking must not learn it was resolved (D-34). Returns them when a
+ * notification was written, for their inbox to be told after the commit.
+ */
+const notifyResolved = async (
+  executor: Executor,
+  target: VisibleMessage,
+  authorId: string,
+  now: Date,
+): Promise<readonly string[]> => {
+  if (!(await stillSeeing(executor, target.context, [authorId])).has(authorId)) return [];
+  const membership = await executor
+    .selectFrom('channel_members')
+    .select('notification_level')
+    .where('channel_id', '=', target.context.channelId)
+    .where('user_id', '=', authorId)
+    .executeTakeFirst();
+  if (membership?.notification_level === 'none') return [];
+  const written = await executor
+    .insertInto('notifications')
+    .values({
+      user_id: authorId,
+      workspace_id: target.context.workspaceId,
+      channel_id: target.context.channelId,
+      message_id: target.messageId,
+      type: 'thread_resolved',
+      // Told when it was closed, by the clock that stamped the resolution (D-106 §1).
+      created_at: now,
+      suppressed_by_deep_work: (
+        await inDeepWork(executor, target.context.workspaceId, [authorId], now)
+      ).has(authorId),
+    })
+    .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
+    .returning('user_id')
+    .execute();
+  return written.map((row) => row.user_id);
+};

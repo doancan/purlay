@@ -19,7 +19,7 @@ import { recordGitHubSignIn } from '../auth/identity';
 import type { SignInLinks } from '../auth/better-auth';
 import { addressCounterKey, consumeSignInLink, requestSignInLink } from '../auth/magic-link';
 import { addressAttemptsPrefix, countAttempt } from '../auth/password-attempts';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { changeRole } from '../workspaces/members';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { eraseAccount } from './erasure';
@@ -28,6 +28,7 @@ import { tokenDigest } from '../../platform/tokens';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { inviterMailKey } from '../workspaces/invitation-mail';
 import { aUserRow } from '../../testing/users';
+import { chatUserErased } from '../../features/chat/channels/user-hooks';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -80,7 +81,7 @@ const linksOver = (
   const outbox = aRecordingOutbox();
   const links = aTestAuth(db, {
     mailer: outbox,
-    settings: { github: undefined, oidc: undefined, signUp: 'open' },
+    settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'open' },
   }).signInLinks;
   if (links === undefined) throw new Error('sign-in by link is not on');
   return { ...links, outbox };
@@ -103,7 +104,8 @@ const erase = async (
   db: Transaction,
   caller: { userId: string; sessionId: string },
   confirm: string,
-): ReturnType<typeof eraseAccount> => await eraseAccount(db, clock, caller, confirm);
+): ReturnType<typeof eraseAccount> =>
+  await eraseAccount(db, clock, caller, confirm, chatUserErased());
 
 describe('integration: erasing an account', () => {
   test('what said who they were is cleared; what the team holds stays under the anonymised row', async () => {

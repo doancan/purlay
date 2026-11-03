@@ -76,7 +76,9 @@ const SignInCard = (): React.JSX.Element => {
             description={
               signIn.data.emailLinks
                 ? t('settings.account.emailLinks')
-                : t('settings.account.emailGitHub')
+                : signIn.data.github === null && signIn.data.google
+                  ? t('settings.account.emailGoogle')
+                  : t('settings.account.emailGitHub')
             }
           >
             <span className="min-w-0 truncate text-label text-ink">{signIn.data.email}</span>
@@ -89,6 +91,17 @@ const SignInCard = (): React.JSX.Element => {
               <span className="flex min-w-0 items-center gap-2 text-label text-ink">
                 <Icon name="lock" />
                 <span className="truncate">{t('settings.account.oidcLinked')}</span>
+              </span>
+            </SettingsRow>
+          )}
+          {signIn.data.google && (
+            <SettingsRow
+              label={t('settings.account.google')}
+              description={t('settings.account.googleSignsIn')}
+            >
+              <span className="flex min-w-0 items-center gap-2 text-label text-ink">
+                <Icon name="google" />
+                <span className="truncate">{t('settings.account.googleLinked')}</span>
               </span>
             </SettingsRow>
           )}

@@ -7,7 +7,7 @@ import {
   type CreatedGitHubFeed,
   type GitHubFeedList,
 } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import type { CredentialCipher } from '../../platform/crypto';
 import { atomicallyOn } from '../../platform/transactions';
 import {
@@ -15,7 +15,7 @@ import {
   createFeed,
   regenerateSecret,
   removeFeed,
-} from '../../modules/integrations/feeds';
+} from '../../features/chat/integrations/feeds';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
 import { validated } from './validate';

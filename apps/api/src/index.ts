@@ -8,10 +8,12 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
-import { deliverReminders } from './modules/reminders/delivery';
-import { deliverScheduled } from './modules/scheduled/delivery';
-import { timedDeliveryLoop } from './modules/scheduled/loop';
+import { deliverReminders } from './features/chat/reminders/delivery';
+import { deliverScheduled } from './features/chat/scheduled/delivery';
+import { timedDeliveryLoop } from './features/chat/scheduled/loop';
 import { exportQueue } from './modules/export/queue';
+import { compositionFor, type Composition } from './composition';
+import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -35,6 +37,7 @@ import type { SealedSetting, ServerSettings } from './modules/setup/settings';
 import { credentialCipher } from './platform/crypto';
 import { inProcessBackplane } from './realtime/bus';
 import { bunRedisClient, connectRedis } from './platform/redis';
+import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
@@ -63,6 +66,17 @@ const plainLog = createLogger({ level: config.LOG_LEVEL });
 const { tracker: errorTracker, log } = errorTrackingFor(config, plainLog, systemClock);
 // Every entry this process writes to the trail is also a line of its log, ids only (D-222).
 sendAuditLinesTo(log);
+// The modules this process runs, named by `MODULES` (D-250): a setting that names none the build carries stops
+// the start here, before anything listens.
+const modules = ((): Composition => {
+  try {
+    return compositionFor(config.MODULES);
+  } catch (error) {
+    if (!(error instanceof ModuleConfigError)) throw error;
+    log.error('MODULES cannot be run; exiting', { problems: error.problems });
+    process.exit(1);
+  }
+})();
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.
@@ -127,7 +141,14 @@ log.info(push === undefined ? 'web push is off: no VAPID keys' : 'web push is on
 
 // An owner's exports, one at a time, made by this process after answering (D-140).
 const storage = storeFor(config);
-const exports = exportQueue({ database, clock: systemClock, log, storage });
+const exports = exportQueue({
+  database,
+  clock: systemClock,
+  log,
+  storage,
+  catalogue: modules.exportCatalogue,
+  personalCatalogue: modules.personalExportCatalogue,
+});
 
 // The transport this node's sockets hear on. Made here, rather than by the application, so that
 // the sign-in library publishes on it too: a session it ends closes the sockets it held (D-85).
@@ -146,6 +167,17 @@ log.info(
     : 'realtime state is shared through Redis',
 );
 const backplane = sharing?.backplane ?? inProcessBackplane();
+// Where nodes share state they also share the question of which modules each runs: a mismatch is said, never
+// acted on, so a rolling deploy of a new set passes (D-250).
+const moduleSet =
+  redis === undefined
+    ? undefined
+    : watchModuleSet({
+        link: redis,
+        nodeId: crypto.randomUUID(),
+        set: moduleSetOf(modules.modules.map((module) => module.manifest.id)),
+        log,
+      });
 
 // Who every request and socket is: sessions are resolved through Better Auth, signing with a secret
 // derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
@@ -200,6 +232,7 @@ const timedDelivery = timedDeliveryLoop(
 );
 
 const app = createApp({
+  composition: modules,
   auth: services.auth,
   services,
   // The setup's steps and, later, Administration → Server change the settings through this (D-179 §4.9).
@@ -242,7 +275,7 @@ installShutdown({
   // the reports of the shutdown itself — the error tracker still has its time — then the pool.
   closeDatabase: async () => {
     await timedDelivery.stop();
-    await closeAfterDrain({ push, services, errorTracker, database, redis })();
+    await closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet })();
   },
   log,
   process,
@@ -300,6 +333,7 @@ const fromSettings = async (): Promise<RuntimeServices> => {
 if (config.MIGRATE_ON_START === true) {
   try {
     const applied = await migrateOnStart(connection, undefined, {
+      sets: modules.migrationSets,
       // A deadlock against live traffic ends the migration's attempt, not the start (D-86).
       onRetry: (retry) => {
         log.warn('a migration was ended as a deadlock victim and is being retried', {
@@ -317,7 +351,7 @@ if (config.MIGRATE_ON_START === true) {
   }
 } else {
   // Somebody else migrates — an operator, another node: the settings are read once they have.
-  await untilMigrated(database, log);
+  await untilMigrated(database, log, undefined, modules.migrationSets);
 }
 
 const runtime = await fromSettings();
@@ -335,7 +369,8 @@ if (config.MIGRATE_ON_START === true) {
   }
 }
 services.settle(runtime);
-timedDelivery.start();
+// Scheduled messages and reminders are chat's (D-250): delivered by a process that runs chat, and by no other.
+if (modules.modules.some((module) => module.manifest.id === 'chat')) timedDelivery.start();
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
 log.info(
   runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',

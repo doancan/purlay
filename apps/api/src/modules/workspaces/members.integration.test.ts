@@ -21,6 +21,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { aRoom, type Room } from '../../testing/rooms';
 import { fixedClock } from '../../platform/clock';
 import { changeRole, removeMember } from './members';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
@@ -101,7 +102,9 @@ describe('integration: changing a role', () => {
       expect(await refusalOf(changeRole(db, clock, bob, idOf(room, 'alice'), 'member'))).toBe(
         'FORBIDDEN',
       );
-      expect(await refusalOf(removeMember(db, clock, bob, idOf(room, 'alice')))).toBe('FORBIDDEN');
+      expect(
+        await refusalOf(removeMember(db, clock, bob, idOf(room, 'alice'), chatWorkspaceChannels)),
+      ).toBe('FORBIDDEN');
     });
   });
 
@@ -115,7 +118,9 @@ describe('integration: changing a role', () => {
       expect(await refusalOf(changeRole(db, clock, bob, idOf(room, 'bob'), 'admin'))).toBe(
         'FORBIDDEN',
       );
-      expect(await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol')))).toBe('FORBIDDEN');
+      expect(
+        await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels)),
+      ).toBe('FORBIDDEN');
     });
   });
 
@@ -126,9 +131,9 @@ describe('integration: changing a role', () => {
       expect(await refusalOf(changeRole(db, clock, alice, idOf(room, 'alice'), 'member'))).toBe(
         'LAST_OWNER',
       );
-      expect(await refusalOf(removeMember(db, clock, alice, idOf(room, 'alice')))).toBe(
-        'LAST_OWNER',
-      );
+      expect(
+        await refusalOf(removeMember(db, clock, alice, idOf(room, 'alice'), chatWorkspaceChannels)),
+      ).toBe('LAST_OWNER');
       await changeRole(db, clock, alice, idOf(room, 'bob'), 'owner');
       await changeRole(db, clock, alice, idOf(room, 'alice'), 'member');
       expect([await roleOf(db, room, 'alice'), await roleOf(db, room, 'bob')]).toEqual([
@@ -146,7 +151,9 @@ describe('integration: changing a role', () => {
       expect(await refusalOf(changeRole(db, clock, alice, idOf(elsewhere, 'dave'), 'admin'))).toBe(
         'USER_NOT_FOUND',
       );
-      expect(await refusalOf(removeMember(db, clock, alice, 'not-a-uuid'))).toBe('USER_NOT_FOUND');
+      expect(
+        await refusalOf(removeMember(db, clock, alice, 'not-a-uuid', chatWorkspaceChannels)),
+      ).toBe('USER_NOT_FOUND');
     });
   });
 });
@@ -190,7 +197,13 @@ describe('integration: removing a member', () => {
         })
         .execute();
 
-      const removed = await removeMember(db, clock, await as(db, room, 'alice'), idOf(room, 'bob'));
+      const removed = await removeMember(
+        db,
+        clock,
+        await as(db, room, 'alice'),
+        idOf(room, 'bob'),
+        chatWorkspaceChannels,
+      );
       // What they could see: the public channels, joined or not, and the private ones they were in.
       expect([...removed.channelIds].sort()).toEqual(
         [room.channelId, theirSecret, publicUnjoined].sort(),
@@ -212,10 +225,10 @@ describe('integration: removing a member', () => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       await setRole(db, room, 'bob', 'admin');
       const bob = await as(db, room, 'bob');
-      await removeMember(db, clock, bob, idOf(room, 'carol'));
-      expect(await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol')))).toBe(
-        'USER_NOT_FOUND',
-      );
+      await removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels);
+      expect(
+        await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels)),
+      ).toBe('USER_NOT_FOUND');
     });
   });
 });

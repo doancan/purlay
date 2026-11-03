@@ -12,6 +12,8 @@ import { atomicallyOn } from '../../platform/transactions';
 import { aRoom, type Room } from '../../testing/rooms';
 import { twoColourPng } from '../../testing/png';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
+import { sendMessage } from '../../features/chat/messages/messages';
+import { fixedClock } from '../../platform/clock';
 import { storeUpload } from './uploads';
 
 afterAll(async () => {
@@ -157,6 +159,25 @@ describe('integration: the bounds', () => {
       expect(store.keys()).toHaveLength(PENDING_UPLOADS_MAX);
       // Somebody else's count is their own.
       expect((await upload(db, store, room, 'bob', {})).created).toBe(true);
+    });
+  });
+
+  test('a file that was sent no longer waits: it leaves the uploader room for another', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const store = aMemoryStore();
+      const ids: string[] = [];
+      for (let n = 0; n < PENDING_UPLOADS_MAX; n += 1) {
+        ids.push((await upload(db, store, room, 'alice', {})).attachment.id);
+      }
+      const alice = room.members['alice'];
+      if (alice === undefined) throw new Error('no alice');
+      await sendMessage(db, fixedClock(new Date(NOW)), alice.context, {
+        id: anId(),
+        content: 'with a file',
+        attachmentIds: ids.slice(0, 1),
+      });
+      expect((await upload(db, store, room, 'alice', {})).created).toBe(true);
     });
   });
 

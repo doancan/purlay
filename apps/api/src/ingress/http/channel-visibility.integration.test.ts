@@ -30,7 +30,7 @@ import {
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aGitHubStub } from '../../testing/github-stub';
-import { keepAuthorization } from '../../modules/integrations/github-app';
+import { keepAuthorization } from '../../features/chat/integrations/github-app';
 import { credentialCipher } from '../../platform/crypto';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';
@@ -348,6 +348,34 @@ const aWorld = async (db: Executor): Promise<World> => {
           workspace_id: workspaceId,
           channel_id: channelId,
           message_id: root,
+        })),
+      )
+      .execute();
+    // And both asked to be reminded of it, and scheduled a reply to it: what the reminders and the
+    // scheduled lists must not show the outsider from a channel they cannot see, their own included.
+    await db
+      .insertInto('message_reminders')
+      .values(
+        [owner.id, outsider.id].map((user) => ({
+          user_id: user,
+          workspace_id: workspaceId,
+          channel_id: channelId,
+          message_id: root,
+          remind_at: new Date(NOW.getTime() + 3_600_000),
+        })),
+      )
+      .execute();
+    await db
+      .insertInto('scheduled_messages')
+      .values(
+        [owner.id, outsider.id].map((user) => ({
+          id: Bun.randomUUIDv7(),
+          user_id: user,
+          workspace_id: workspaceId,
+          channel_id: channelId,
+          parent_id: root,
+          content: 'a reply for later',
+          send_at: new Date(NOW.getTime() + 3_600_000),
         })),
       )
       .execute();

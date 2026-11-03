@@ -79,24 +79,6 @@ export const transportOptions = (
 export const escapeHtml = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/**
- * A letter in plain text and the same as HTML, with `url` — which must appear in `text` — made a link.
- * Every character of the text is escaped for the HTML, so what a name says stays words.
- */
-export const textLetter = (
-  to: string,
-  subject: string,
-  text: string,
-  url: string,
-): MailMessage => ({
-  to,
-  subject,
-  text,
-  html: `<p>${escapeHtml(text)
-    .replace(escapeHtml(url), `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`)
-    .replace(/\n\n/g, '</p><p>')}</p>`,
-});
-
 /** What the relay is handed: the envelope names the one recipient, not a header parsed for one. */
 export const letter = (message: MailMessage, from: string): Mail.Options => ({
   from,

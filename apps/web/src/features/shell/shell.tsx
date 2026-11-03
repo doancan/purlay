@@ -22,6 +22,7 @@ import { UpdateBar } from './update-bar';
 import { DeepWorkBar, DeepWorkProvider } from './deep-work';
 import { ScheduledDeletions } from './scheduled-deletions';
 import { GlobalKeys } from './global-keys';
+import { WhenRun } from './module-gate';
 import { NotFound } from './not-found';
 import { NavProvider } from './nav';
 import { OverlayProvider } from './overlay';
@@ -50,10 +51,12 @@ export const Shell = ({
               <DeepWorkProvider>
                 <GlobalKeys />
                 <TabTitle />
-                <BackgroundAlerts />
-                <PresenceReader />
-                <AttentionReporter />
-                <LostSends />
+                <WhenRun module="chat">
+                  <BackgroundAlerts />
+                  <PresenceReader />
+                  <AttentionReporter />
+                  <LostSends />
+                </WhenRun>
                 <ReleaseNotesOnce />
                 <NavProvider>
                   <div className="flex h-screen bg-surface-100 text-ink">

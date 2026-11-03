@@ -10,7 +10,7 @@
  * has no bus to tell it (D-139 §7).
  */
 import { createDatabase } from '@purlay/db';
-import { eraseContent, planContentErasure } from '../modules/users/content-erasure';
+import { eraseContent, planContentErasure } from '../features/chat/messages/content-erasure';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';

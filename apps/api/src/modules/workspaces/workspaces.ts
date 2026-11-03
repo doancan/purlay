@@ -21,7 +21,6 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import {
-  DEFAULT_CHANNEL_NAME,
   type MeResponse,
   type Membership,
   type Workspace,
@@ -30,8 +29,8 @@ import {
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
+import type { Hooks } from '../../platform/hooks';
 import { recordAudit } from '../audit/audit';
-import { createChannel } from '../channels/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
@@ -57,9 +56,12 @@ export interface NewWorkspace {
   readonly slug: string;
 }
 
+/** What runs inside the transaction of a new workspace, once its owner is a member (D-250). */
+export type WorkspaceCreated = Hooks<[Transaction, Clock, WorkspaceContext]>;
+
 /**
- * Creates a workspace, makes its creator the owner and gives it its first channel
- * with the creator in it (D-174), **inside the caller's transaction**.
+ * Creates a workspace, makes its creator the owner and runs what the modules start it with — chat's first
+ * channel, with the creator in it (D-174) — **inside the caller's transaction**.
  *
  * The writes cannot be allowed to separate: a workspace with no owner
  * violates I-2 and cannot be recovered through any Phase 0 endpoint, because
@@ -72,6 +74,7 @@ export const createWorkspace = async (
   clock: Clock,
   creatorId: string,
   input: NewWorkspace,
+  hooks: WorkspaceCreated,
 ): Promise<Workspace> => {
   const taken = await executor
     .selectFrom('workspaces')
@@ -103,11 +106,10 @@ export const createWorkspace = async (
     })
     .execute();
 
-  // The channel it starts with (D-174): made as the creator would make one — through the guard their
-  // new membership now passes, in this transaction, on the trail as `channel.created` — so it is an
-  // ordinary channel from its first moment, and a workspace never exists without it.
+  // What the modules start a workspace with (D-174: chat's first channel), in this transaction: a hook that
+  // throws takes the workspace with it, so a workspace never exists without what they make.
   const context = await requireWorkspaceMembership(executor, creatorId, row.id);
-  await createChannel(executor, clock, context, { name: DEFAULT_CHANNEL_NAME });
+  await hooks.run(executor, clock, context);
 
   return asWorkspace(row);
 };
@@ -168,7 +170,7 @@ export const meOf = async (
   userId: string,
   creators: WorkspaceCreators,
   // Whether the person owes two-step verification is the sign-in policy's to say (D-239), not this module's.
-): Promise<Omit<MeResponse, 'mustEnrolTwoFactor'>> => {
+): Promise<Omit<MeResponse, 'mustEnrolTwoFactor' | 'modules'>> => {
   const user = await executor
     .selectFrom('users')
     .select([

@@ -23,122 +23,14 @@ import { recordAudit } from '../audit/audit';
 import { exportDirectory, type ExportDirectory } from './write';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import { sql, type RawBuilder } from '@purlay/db';
-import { COLUMNS, type ExportedTable } from './tables';
+import type { Catalogue, Scope, TableExport } from './catalogue';
 
 /** Rows one fetch of a cursor holds. */
 const PAGE = 1_000;
 
-/** In the order a reader re-importing them would want: parents before their children. */
-export const TABLE_ORDER: readonly ExportedTable[] = [
-  'workspaces',
-  'users',
-  'workspace_members',
-  'channels',
-  'channel_members',
-  'messages',
-  'reactions',
-  'mentions',
-  'message_versions',
-  'pinned_messages',
-  'channel_bookmarks',
-  'attachments',
-  'incidents',
-  'incident_updates',
-  'incident_responders',
-  'github_repo_feeds',
-  'github_links',
-  'workspace_invitations',
-  'audit_log',
-];
-
-/** What an export covers: the workspace, and the channels of it in the export. */
-export interface Scope {
-  readonly workspaceId: string;
-  readonly channelIds: readonly string[];
-  /** Every channel, for the operator; or those the asking owner can see (D-140 §1). */
-  readonly kind: ExportManifest['scope'];
-}
-
-/**
- * The scope's channels, as the database knows them: those of the workspace among the ids given. Every
- * bound goes through this, so an id of another workspace's channel, passed by mistake, selects nothing.
- */
-const channelsIn = (scope: Scope): RawBuilder<unknown> =>
-  sql`select id from channels where workspace_id = ${scope.workspaceId} and id = any(${scope.channelIds}::uuid[])`;
-
-/** The messages of the scope, which reactions are bounded by. */
-const messagesOf = (scope: Scope): RawBuilder<unknown> =>
-  sql`select id from messages where workspace_id = ${scope.workspaceId} and channel_id in (${channelsIn(scope)})`;
-
-const incidentsOf = (scope: Scope): RawBuilder<unknown> =>
-  sql`select id from incidents where workspace_id = ${scope.workspaceId} and channel_id in (${channelsIn(scope)})`;
-
-/**
- * The people the exported rows name — every column of an exported table that refers to a person,
- * bound to the catalogue's own list by `export.integration.test.ts`.
- */
-const PEOPLE = (scope: Scope): RawBuilder<unknown> => sql`
-  select user_id from workspace_members where workspace_id = ${scope.workspaceId}
-  union select created_by from workspaces where id = ${scope.workspaceId}
-  union select created_by from channels where id in (${channelsIn(scope)})
-  union select user_id from channel_members where channel_id in (${channelsIn(scope)})
-  union select sender_id from messages where id in (${messagesOf(scope)})
-  union select resolved_by from messages where id in (${messagesOf(scope)})
-  union select question_assignee_id from messages where id in (${messagesOf(scope)})
-  union select decision_updated_by from messages where id in (${messagesOf(scope)})
-  union select user_id from reactions where message_id in (${messagesOf(scope)})
-  union select mentioned_user_id from mentions where message_id in (${messagesOf(scope)})
-  union select pinned_by from pinned_messages where message_id in (${messagesOf(scope)})
-  union select added_by from channel_bookmarks where channel_id in (${channelsIn(scope)})
-  union select uploader_id from attachments where message_id in (${messagesOf(scope)})
-  union select declared_by from incidents where id in (${incidentsOf(scope)})
-  union select actor_id from incident_updates where incident_id in (${incidentsOf(scope)})
-  union select user_id from incident_responders where incident_id in (${incidentsOf(scope)})
-  union select added_by from incident_responders where incident_id in (${incidentsOf(scope)})
-  union select actor_user_id from audit_log where workspace_id = ${scope.workspaceId}
-  union select created_by from workspace_invitations where workspace_id = ${scope.workspaceId}
-  union select created_by from github_repo_feeds where channel_id in (${channelsIn(scope)})
-  union select created_by from github_links where channel_id in (${channelsIn(scope)})
-`;
-
-/** Each table's rows in the scope, and the order they are written in. */
-const BOUNDS: Readonly<
-  Record<ExportedTable, (scope: Scope) => { where: RawBuilder<unknown>; order: string }>
-> = {
-  workspaces: (s) => ({ where: sql`id = ${s.workspaceId}`, order: 'id' }),
-  users: (s) => ({ where: sql`id in (${PEOPLE(s)})`, order: 'id' }),
-  workspace_members: (s) => ({ where: sql`workspace_id = ${s.workspaceId}`, order: 'id' }),
-  channels: (s) => ({
-    where: sql`id in (${channelsIn(s)})`,
-    order: 'id',
-  }),
-  channel_members: (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
-  messages: (s) => ({ where: sql`id in (${messagesOf(s)})`, order: 'id' }),
-  reactions: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
-  mentions: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
-  message_versions: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
-  pinned_messages: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'message_id' }),
-  channel_bookmarks: (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
-  // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
-  attachments: (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
-  incidents: (s) => ({ where: sql`id in (${incidentsOf(s)})`, order: 'id' }),
-  incident_updates: (s) => ({ where: sql`incident_id in (${incidentsOf(s)})`, order: 'id' }),
-  incident_responders: (s) => ({
-    where: sql`incident_id in (${incidentsOf(s)})`,
-    order: 'incident_id, user_id',
-  }),
-  github_links: (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
-  github_repo_feeds: (s) => ({
-    where: sql`channel_id in (${channelsIn(s)})`,
-    order: 'id',
-  }),
-  workspace_invitations: (s) => ({ where: sql`workspace_id = ${s.workspaceId}`, order: 'id' }),
-  audit_log: (s) => ({ where: sql`workspace_id = ${s.workspaceId}`, order: 'id' }),
-};
-
 /** The columns of a table as the export writes them; a member-only column is empty for the rest. */
-const projection = (table: ExportedTable, scope: Scope): RawBuilder<unknown> => {
-  const parts = Object.entries(COLUMNS[table]).flatMap(([column, kind]) => {
+const projection = (table: TableExport, scope: Scope): RawBuilder<unknown> => {
+  const parts = Object.entries(table.columns).flatMap(([column, kind]) => {
     const name = sql.ref(column);
     if (kind === 'omit') return [];
     if (kind === 'export') return [name];
@@ -203,36 +95,33 @@ export const readTables = async (
   transaction: Transaction,
   scope: Scope,
   sink: LineSink,
-): Promise<Readonly<Record<ExportedTable, number>>> => {
-  const counted = {} as Record<ExportedTable, number>;
-  for (const table of TABLE_ORDER) {
-    counted[table] = await readTable(
+  catalogue: Catalogue,
+): Promise<Readonly<Record<string, number>>> => {
+  const counted: Record<string, number> = {};
+  const people = catalogue.people(scope);
+  for (const name of catalogue.order) {
+    const table = catalogue.table(name);
+    counted[name] = await readTable(
       transaction,
-      table,
-      { columns: projection(table, scope), ...BOUNDS[table](scope) },
+      name,
+      { columns: projection(table, scope), ...table.bounds(scope, people) },
       sink,
     );
   }
   return counted;
 };
 
-/** The shape every row was in, read inside the snapshot: the last migration the database had. */
+/**
+ * The shape every row was in, read inside the snapshot: the last migration the database had. A module's
+ * migrations are recorded as `<module>/<file>` and sort among the core's, so they are left out — the stamp
+ * names the core's shape, and a module that is off must not change it (D-250).
+ */
 export const schemaOf = async (transaction: Transaction): Promise<string> => {
   const latest = await sql<{ name: string }>`
-    select name from kysely_migration order by name desc limit 1
+    select name from kysely_migration where name not like '%/%' order by name desc limit 1
   `.execute(transaction);
   return latestMigration(latest.rows[0]?.name);
 };
-
-/** The channels an operator's export covers: every channel of the workspace, archived ones too. */
-export const everyChannel = async (executor: Executor, workspaceId: string): Promise<string[]> =>
-  (
-    await executor
-      .selectFrom('channels')
-      .select('id')
-      .where('workspace_id', '=', workspaceId)
-      .execute()
-  ).map((row) => row.id);
 
 /**
  * A file the export names: whose workspace it is, where the store keeps it, and how many bytes the row
@@ -249,14 +138,16 @@ export interface StoredFile {
 /** The files of the attachments `where` selects, read inside the snapshot. */
 export const filesOf = async (
   transaction: Transaction,
-  where: RawBuilder<unknown>,
+  where: RawBuilder<unknown> | undefined,
 ): Promise<StoredFile[]> =>
-  (
-    await sql<StoredFile>`
+  where === undefined
+    ? []
+    : (
+        await sql<StoredFile>`
       select id, workspace_id, storage_key, thumbnail_key, size_bytes::text as size_bytes
       from attachments where ${where} order by id
     `.execute(transaction)
-  ).rows;
+      ).rows;
 
 /**
  * Copies each file the snapshot named, after it committed. A file the store does not have is either
@@ -318,6 +209,8 @@ export const exportWorkspace = async (
     readonly clock: Clock;
     readonly log: Logger;
     readonly storage: ObjectStore;
+    /** What the export holds, assembled from the core's contribution and the modules' (D-250). */
+    readonly catalogue: Catalogue;
   },
   workspace: { readonly id: string; readonly slug: string; readonly name: string },
   scope: Scope,
@@ -328,13 +221,13 @@ export const exportWorkspace = async (
    */
   trail: 'here' | 'caller' = 'here',
 ): Promise<{ readonly path: string; readonly manifest: ExportManifest }> => {
-  const { database, clock, log, storage } = dependencies;
+  const { database, clock, log, storage, catalogue } = dependencies;
   const directory = await exportDirectory(target);
   try {
     const { tables, schema, objects } = await snapshotOn(database)(async (transaction) => ({
       schema: await schemaOf(transaction),
-      tables: await readTables(transaction, scope, directory.write),
-      objects: await filesOf(transaction, sql`message_id in (${messagesOf(scope)})`),
+      tables: await readTables(transaction, scope, directory.write, catalogue),
+      objects: await filesOf(transaction, catalogue.files(scope)),
     }));
     // The snapshot has committed: the files are copied outside it, however slow the store.
     const blobs = await copyObjects(database, storage, objects, directory);
@@ -347,7 +240,7 @@ export const exportWorkspace = async (
       tables,
       blobs,
     };
-    await directory.seal(manifest, TABLE_ORDER);
+    await directory.seal(manifest, catalogue.order);
     // On the trail before it takes its name: an export nobody can find a line for must not exist.
     if (trail === 'here')
       await atomicallyOn(database)(async (transaction) => {
@@ -357,7 +250,7 @@ export const exportWorkspace = async (
           action: 'workspace.exported',
           targetType: 'workspace',
           targetId: workspace.id,
-          metadata: { scope: scope.kind, messages: String(tables.messages) },
+          metadata: { scope: scope.kind, ...catalogue.audit(tables) },
         });
       });
     const path = await directory.publish();

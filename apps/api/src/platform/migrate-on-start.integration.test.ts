@@ -2,7 +2,15 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabase, dropDatabases, readMigrationFiles, sql } from '@purlay/db';
+import {
+  createDatabase,
+  dropDatabases,
+  migrationHistoryProblem,
+  pendingMigrations,
+  PRODUCT_MIGRATION_SETS,
+  readMigrationFiles,
+  sql,
+} from '@purlay/db';
 import type { Executor } from '@purlay/db';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
@@ -35,6 +43,20 @@ const freshDatabase = async (suffix: string): Promise<{ name: string; db: Execut
   created.push(name);
   return { name, db: createDatabase({ connectionString: urlFor(name), poolSize: 4 }) };
 };
+
+/** Every migration a process applies, in the order it applies them: the core's, then each module's set. */
+const everyMigration = async (): Promise<string[]> => [
+  ...(await readMigrationFiles()).map((file) => file.name),
+  ...(
+    await Promise.all(
+      PRODUCT_MIGRATION_SETS.map(
+        async (set) => await readMigrationFiles(set.directory, `${set.id}/`),
+      ),
+    )
+  )
+    .flat()
+    .map((file) => file.name),
+];
 
 const recorded = async (db: Executor): Promise<string[]> => {
   const { rows } = await sql<{
@@ -180,10 +202,45 @@ describe('integration: migrate on start', () => {
   test('an empty database is migrated to the latest, and starting again changes nothing', async () => {
     const { name, db } = await freshDatabase('one');
     try {
-      const files = (await readMigrationFiles()).map((file) => file.name);
+      const files = await everyMigration();
       expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual(files);
       expect(await recorded(db)).toEqual(files);
       expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual([]);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  test('with no module set the core alone is applied, and a module opened later brings its own', async () => {
+    const { name, db } = await freshDatabase('core-alone');
+    try {
+      const files = await everyMigration();
+      const core = files.filter((file) => !file.includes('/'));
+      expect(
+        await migrateOnStart({ connectionString: urlFor(name) }, undefined, { sets: [] }),
+      ).toEqual(core);
+      const tables = async (): Promise<string[]> =>
+        (
+          await sql<{ table_name: string }>`
+            select table_name from information_schema.tables where table_schema = current_schema()`.execute(
+            db,
+          )
+        ).rows.map((row) => row.table_name);
+      expect(await tables()).not.toContain('message_attachments');
+      // Nothing is pending for a process that runs no module, and one that runs chat sees chat's set waiting.
+      await untilMigrated(db, aRecordingLogger().log, 20, []);
+      expect(await pendingMigrations(db, undefined, PRODUCT_MIGRATION_SETS)).toEqual(
+        files.filter((file) => file.includes('/')),
+      );
+      // Opened later, chat's set is applied on top, and starting with it off again tolerates its rows.
+      expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual(
+        files.filter((file) => file.includes('/')),
+      );
+      expect(await tables()).toContain('message_attachments');
+      expect(
+        await migrateOnStart({ connectionString: urlFor(name) }, undefined, { sets: [] }),
+      ).toEqual([]);
+      expect(await migrationHistoryProblem(db, undefined, undefined, [])).toBeUndefined();
     } finally {
       await db.destroy();
     }
@@ -304,7 +361,7 @@ describe('integration: migrate on start', () => {
         return 0;
       };
       const answers = await Promise.all(ports.map(ready));
-      const files = (await readMigrationFiles()).map((file) => file.name);
+      const files = await everyMigration();
       // Both answered, neither exited (a node that cannot migrate exits 1), and every
       // migration is recorded once: `name` is the primary key, so twice is an error.
       expect({
@@ -366,6 +423,56 @@ describe('integration: migrate on start', () => {
     }
   }, 60_000);
 
+  test('a node run with MODULES=none migrates the core alone, is ready, and has no chat route', async () => {
+    const { name, db } = await freshDatabase('modules-none');
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MIGRATE_ON_START: 'true', MODULES: 'none' },
+    );
+    try {
+      expect(await until(port, '/health/ready', 200)).toBe(200);
+      expect(await recorded(db)).toEqual(
+        (await everyMigration()).filter((file) => !file.includes('/')),
+      );
+      // A route of a module that is not run is the answer to any path nobody serves.
+      expect(await answer(port, '/api/channels/anything')).toEqual([404, 'ROUTE_NOT_FOUND']);
+      expect(await answer(port, '/api/nothing-like-it')).toEqual([404, 'ROUTE_NOT_FOUND']);
+      const client = (await (
+        await fetch(`http://127.0.0.1:${String(port)}/api/client`)
+      ).json()) as {
+        modules?: string[];
+      };
+      expect(client.modules).toEqual([]);
+    } finally {
+      node.kill();
+      await node.exited;
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node whose MODULES names a module the build does not carry exits before it listens, naming it', async () => {
+    const { name, db } = await freshDatabase('modules-unknown');
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MIGRATE_ON_START: 'true', MODULES: 'chat,calendar' },
+    );
+    try {
+      const { code, said } = await exitOf(node);
+      expect(code).toBe(1);
+      expect(said).toContain('MODULES cannot be run; exiting');
+      expect(said).toContain('calendar');
+      expect(await recorded(db).catch(() => [])).toEqual([]);
+    } finally {
+      await db.destroy();
+    }
+  }, 60_000);
+
   test('a node that does not migrate waits for the migrations, answering busy meanwhile, then reads its settings', async () => {
     const { name, db } = await freshDatabase('waits');
     const port = freePort();
@@ -406,7 +513,14 @@ describe('integration: migrate on start', () => {
       expect(await until(port, '/health/ready', 200)).toBe(200);
       expect(await bodyOf(port, '/api/auth/methods')).toEqual([
         200,
-        { github: false, email: false, oidc: null, signUp: 'invite-only', password: true },
+        {
+          github: false,
+          google: false,
+          email: false,
+          oidc: null,
+          signUp: 'invite-only',
+          password: true,
+        },
       ]);
       // The button's address is a defined answer, never the library's thrown error.
       expect(await bodyOf(port, '/auth/github')).toEqual([
@@ -691,7 +805,14 @@ describe('integration: migrate on start', () => {
         expect(await until(restartedPort, '/health/ready', 200)).toBe(200);
         expect(await bodyOf(restartedPort, '/api/auth/methods')).toEqual([
           200,
-          { github: false, email: false, oidc: null, signUp: 'invite-only', password: true },
+          {
+            github: false,
+            google: false,
+            email: false,
+            oidc: null,
+            signUp: 'invite-only',
+            password: true,
+          },
         ]);
         expect((await bodyOf(restartedPort, '/auth/github'))[0]).toBe(404);
         expect(restarted.exitCode).toBeNull();

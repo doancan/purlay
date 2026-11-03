@@ -20,6 +20,7 @@ interface Shape {
   readonly connected?: boolean;
   readonly password?: boolean;
   readonly deleted?: boolean;
+  readonly googleMade?: boolean;
 }
 
 const made = async (db: Database, shape: Shape = {}): Promise<string> => {
@@ -33,6 +34,7 @@ const made = async (db: Database, shape: Shape = {}): Promise<string> => {
       github_id: shape.githubId ?? null,
       github_login: shape.githubLogin ?? null,
       github_connected_at: shape.connected === true ? new Date('2026-09-09T12:00:00Z') : null,
+      google_made: shape.googleMade === true,
       deleted_at: shape.deleted === true ? new Date('2026-09-09T12:00:00Z') : null,
     })
     .returning(['id', 'email'])
@@ -65,18 +67,20 @@ describe('integration: how an account signs in', () => {
     await withRollback(async (db) => {
       const without = await made(db);
       const withPassword = await made(db, { password: true });
-      expect(await mySignIn(db, without, NO_POLICY)).toMatchObject({
+      expect(await mySignIn(db, without, NO_POLICY, false)).toMatchObject({
         emailLinks: true,
         hasPassword: false,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
       });
-      expect(await mySignIn(db, withPassword, NO_POLICY)).toMatchObject({
+      expect(await mySignIn(db, withPassword, NO_POLICY, false)).toMatchObject({
         emailLinks: true,
         hasPassword: true,
         github: null,
         oidc: false,
+        google: false,
         twoFactor: false,
       });
     });
@@ -85,12 +89,13 @@ describe('integration: how an account signs in', () => {
   test('an account GitHub made has no link by email, and names its GitHub login', async () => {
     await withRollback(async (db) => {
       const id = await made(db, { githubId: '5001', githubLogin: 'octocat' });
-      expect(await mySignIn(db, id, NO_POLICY)).toEqual({
+      expect(await mySignIn(db, id, NO_POLICY, false)).toEqual({
         email: expect.stringContaining('@example.test') as string,
         emailLinks: false,
         hasPassword: false,
         github: { login: 'octocat' },
         oidc: false,
+        google: false,
         twoFactor: false,
         twoFactorRequired: false,
       });
@@ -100,7 +105,7 @@ describe('integration: how an account signs in', () => {
   test('an email account linked to GitHub keeps its links', async () => {
     await withRollback(async (db) => {
       const id = await made(db, { githubId: '5002', githubLogin: 'linked', connected: true });
-      expect(await mySignIn(db, id, NO_POLICY)).toMatchObject({
+      expect(await mySignIn(db, id, NO_POLICY, false)).toMatchObject({
         emailLinks: true,
         github: { login: 'linked' },
       });
@@ -119,8 +124,46 @@ describe('integration: how an account signs in', () => {
           provider_id: 'oidc',
         })
         .execute();
-      expect(await mySignIn(db, linked, NO_POLICY)).toMatchObject({ oidc: true });
-      expect(await mySignIn(db, other, NO_POLICY)).toMatchObject({ oidc: false });
+      expect(await mySignIn(db, linked, NO_POLICY, false)).toMatchObject({ oidc: true });
+      expect(await mySignIn(db, other, NO_POLICY, false)).toMatchObject({ oidc: false });
+    });
+  });
+
+  test('Google is named only for the account it is linked to, beside single sign-on or alone (D-251)', async () => {
+    await withRollback(async (db) => {
+      const linked = await made(db);
+      const both = await made(db);
+      const other = await made(db);
+      await db
+        .insertInto('accounts')
+        .values([
+          { user_id: linked, account_id: '104500000000000000001', provider_id: 'google' },
+          { user_id: both, account_id: '104500000000000000002', provider_id: 'google' },
+          { user_id: both, account_id: 'https://idp.example.test|sub-2', provider_id: 'oidc' },
+        ])
+        .execute();
+      expect(await mySignIn(db, linked, NO_POLICY, false)).toMatchObject({
+        google: true,
+        oidc: false,
+      });
+      expect(await mySignIn(db, both, NO_POLICY, false)).toMatchObject({
+        google: true,
+        oidc: true,
+      });
+      expect(await mySignIn(db, other, NO_POLICY, false)).toMatchObject({
+        google: false,
+        oidc: false,
+      });
+    });
+  });
+
+  test('an account Google made has no links while Google is connected, and has them again once it is not (D-251)', async () => {
+    await withRollback(async (db) => {
+      const id = await made(db, { googleMade: true });
+      const email = await made(db);
+      expect(await mySignIn(db, id, NO_POLICY, true)).toMatchObject({ emailLinks: false });
+      expect(await mySignIn(db, id, NO_POLICY, false)).toMatchObject({ emailLinks: true });
+      expect(await mySignIn(db, email, NO_POLICY, true)).toMatchObject({ emailLinks: true });
     });
   });
 
@@ -129,14 +172,18 @@ describe('integration: how an account signs in', () => {
       const withPassword = await made(db, { password: true });
       const without = await made(db);
       const required = { requireTwoFactor: true, passwordSignIn: true };
-      expect(await mySignIn(db, withPassword, required)).toMatchObject({ twoFactorRequired: true });
-      expect(await mySignIn(db, without, required)).toMatchObject({ twoFactorRequired: false });
-      expect(await mySignIn(db, withPassword, NO_POLICY)).toMatchObject({
+      expect(await mySignIn(db, withPassword, required, false)).toMatchObject({
+        twoFactorRequired: true,
+      });
+      expect(await mySignIn(db, without, required, false)).toMatchObject({
+        twoFactorRequired: false,
+      });
+      expect(await mySignIn(db, withPassword, NO_POLICY, false)).toMatchObject({
         twoFactorRequired: false,
       });
       // Passwords off: the password is no way in, so nothing is required of it.
       expect(
-        await mySignIn(db, withPassword, { requireTwoFactor: true, passwordSignIn: false }),
+        await mySignIn(db, withPassword, { requireTwoFactor: true, passwordSignIn: false }, false),
       ).toMatchObject({ twoFactorRequired: false });
     });
   });
@@ -144,8 +191,10 @@ describe('integration: how an account signs in', () => {
   test('an erased account and an unknown one are both not signed in', async () => {
     await withRollback(async (db) => {
       const erased = await made(db, { deleted: true });
-      expect(await refusal(mySignIn(db, erased, NO_POLICY))).toBe('UNAUTHENTICATED');
-      expect(await refusal(mySignIn(db, crypto.randomUUID(), NO_POLICY))).toBe('UNAUTHENTICATED');
+      expect(await refusal(mySignIn(db, erased, NO_POLICY, false))).toBe('UNAUTHENTICATED');
+      expect(await refusal(mySignIn(db, crypto.randomUUID(), NO_POLICY, false))).toBe(
+        'UNAUTHENTICATED',
+      );
     });
   });
 });

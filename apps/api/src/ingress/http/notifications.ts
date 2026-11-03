@@ -12,7 +12,7 @@ import {
   ReadThreadRequest,
   type NotificationPage,
 } from '@purlay/types';
-import { visibleChannelIds } from '../../platform/channels';
+import { visibleChannelIds } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,
@@ -26,7 +26,7 @@ import {
   readNotifications,
   readThreadNotifications,
   type Told,
-} from '../../modules/notifications/notifications';
+} from '../../features/chat/notifications/notifications';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';

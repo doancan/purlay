@@ -20,7 +20,7 @@
 import { CLIENT_ADDRESS_HEADER, type Auth, type AuthAnswer } from '../../modules/auth/better-auth';
 import { EraseAccountRequest, type MySignIn } from '@purlay/types';
 import { mySignIn } from '../../modules/auth/my-sign-in';
-import { eraseAccount } from '../../modules/users/erasure';
+import { eraseAccount, type UserErased } from '../../modules/users/erasure';
 import {
   publication,
   publishAfterCommit,
@@ -33,6 +33,7 @@ import { AppError } from '../../platform/errors';
 import type { Executor } from '@purlay/db';
 import {
   AUTH_BASE_PATH,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   SIGN_IN_PATH,
@@ -73,6 +74,11 @@ export interface SignOutDependencies extends AuthDependencies {
   readonly bus: EventBus;
 }
 
+/** Erasing an account also reaches what the modules keep of the person, through their hooks (D-250). */
+export interface EraseDependencies extends SignOutDependencies {
+  readonly userErased: UserErased;
+}
+
 /** What a handler decided. `location` set means a redirect; otherwise `204`. */
 export interface AuthResponse {
   /** Each a separate `Set-Cookie` header. */
@@ -84,25 +90,34 @@ export interface AuthResponse {
 const SOCIAL_SIGN_IN = `${AUTH_BASE_PATH}/sign-in/social`;
 
 /** The providers a sign-in can go through, by the name the library knows each by. */
-export type SignInProvider = 'github' | 'oidc';
+export type SignInProvider = 'github' | 'oidc' | 'google';
+
+const NOT_SET_UP: Readonly<Record<SignInProvider, string>> = {
+  github: 'GitHub sign-in is not set up on this server.',
+  oidc: 'Single sign-on is not set up on this server.',
+  google: 'Google sign-in is not set up on this server.',
+};
 
 /** What a start of a sign-in is answered where its provider is not connected (`API.md`). */
 const notSetUp = (provider: SignInProvider): AppError =>
-  new AppError({
-    code: 'ROUTE_NOT_FOUND',
-    message:
-      provider === 'github'
-        ? 'GitHub sign-in is not set up on this server.'
-        : 'Single sign-on is not set up on this server.',
-  });
+  new AppError({ code: 'ROUTE_NOT_FOUND', message: NOT_SET_UP[provider] });
 
 /** Whether `provider` is connected on this server's current instance. */
-const connected = (auth: Pick<Auth, 'github' | 'oidc'>, provider: SignInProvider): boolean =>
-  provider === 'github' ? auth.github : auth.oidc !== undefined;
+const connected = (
+  auth: Pick<Auth, 'github' | 'oidc' | 'google'>,
+  provider: SignInProvider,
+): boolean =>
+  provider === 'github' ? auth.github : provider === 'oidc' ? auth.oidc !== undefined : auth.google;
 
 /** The provider a callback path belongs to, or nothing for any other path. */
 const providerOfCallback = (pathname: string): SignInProvider | undefined =>
-  pathname === SIGN_IN_CALLBACK ? 'github' : pathname === OIDC_CALLBACK ? 'oidc' : undefined;
+  pathname === SIGN_IN_CALLBACK
+    ? 'github'
+    : pathname === OIDC_CALLBACK
+      ? 'oidc'
+      : pathname === GOOGLE_CALLBACK
+        ? 'google'
+        : undefined;
 
 /**
  * `GET /auth/github` — the sign-in screen's button, a full-page navigation: the library makes the
@@ -238,9 +253,35 @@ const OIDC_FAILURE_FOR_LIBRARY_CODE: typeof FAILURE_FOR_LIBRARY_CODE = {
   nonce_binding_missing: { failure: 'failed', level: 'error' },
 };
 
+/**
+ * What Google says differently (D-251): the OIDC core's words — Google is that core with a fixed issuer — but a
+ * code Google did not take is Google being unavailable.
+ */
+const GOOGLE_FAILURE_FOR_LIBRARY_CODE: typeof FAILURE_FOR_LIBRARY_CODE = {
+  ...OIDC_FAILURE_FOR_LIBRARY_CODE,
+  invalid_code: { failure: 'google-unavailable', level: 'warn' },
+};
+
+/** Each provider's own words over the library's reasons; GitHub's are the table's own. */
+const PROVIDER_FAILURE_FOR_LIBRARY_CODE: Readonly<
+  Record<SignInProvider, typeof FAILURE_FOR_LIBRARY_CODE>
+> = {
+  github: {},
+  oidc: OIDC_FAILURE_FOR_LIBRARY_CODE,
+  google: GOOGLE_FAILURE_FOR_LIBRARY_CODE,
+};
+
 const LABEL: Readonly<Record<SignInProvider, string>> = {
   github: 'a GitHub sign-in',
   oidc: 'a single sign-on',
+  google: 'a Google sign-in',
+};
+
+/** What the person is told when the provider did not answer the sign-in (`502` out of its calls). */
+const UNAVAILABLE: Readonly<Record<SignInProvider, SignInFailure>> = {
+  github: 'github-unavailable',
+  oidc: 'oidc-unavailable',
+  google: 'google-unavailable',
 };
 
 /** What the person is told for a reason the library gave, and the line the log keeps of it. */
@@ -254,9 +295,7 @@ const failureForLibraryCode = (
     table: typeof FAILURE_FOR_LIBRARY_CODE,
   ): (typeof FAILURE_FOR_LIBRARY_CODE)[string] | undefined =>
     Object.hasOwn(table, code) ? table[code] : undefined;
-  const known =
-    (provider === 'oidc' ? own(OIDC_FAILURE_FOR_LIBRARY_CODE) : undefined) ??
-    own(FAILURE_FOR_LIBRARY_CODE);
+  const known = own(PROVIDER_FAILURE_FOR_LIBRARY_CODE[provider]) ?? own(FAILURE_FOR_LIBRARY_CODE);
   // It arrived in a URL anybody can write; the log keeps a bounded piece of it.
   const said = { libraryError: code.slice(0, LOGGED_ERROR_LENGTH) };
   if (known === undefined) {
@@ -270,9 +309,10 @@ const failureForLibraryCode = (
 /** A failure answered by status, where the library answered something other than a redirect. */
 const failureForStatus = (log: Logger, status: number, provider: SignInProvider): SignInFailure => {
   if (status === 429 || status === 503) return 'busy';
-  if (status === 502) return provider === 'oidc' ? 'oidc-unavailable' : 'github-unavailable';
-  // The provider's own refusal to name a verified address, thrown out of its profile call (`oidc.ts`).
-  if (status === 403 && provider === 'oidc') return 'email-unverified';
+  if (status === 502) return UNAVAILABLE[provider];
+  // The provider's own refusal to name a verified address, thrown out of its profile call (`oidc.ts`) — and, for
+  // Google, of an address that is an account's and not Google's to vouch for (`better-auth.ts`, D-251).
+  if (status === 403 && provider !== 'github') return 'email-unverified';
   log.error(`${LABEL[provider]} failed for a reason nobody anticipated`, { status });
   return 'failed';
 };
@@ -443,7 +483,7 @@ export const answerAuth = async (
   // a 500 and an error in the log. The start of a sign-in is the route that does not exist; a callback
   // is a browser, which is told its try is over (D-121). A server with only one of the two connected
   // answers the other's callback the same way, for the same reason: it has no provider by that name.
-  if (url.pathname === SOCIAL_SIGN_IN && !auth.github && auth.oidc === undefined) {
+  if (url.pathname === SOCIAL_SIGN_IN && !auth.github && auth.oidc === undefined && !auth.google) {
     throw notSetUp('github');
   }
   if (provider !== undefined && !connected(auth, provider)) {
@@ -459,6 +499,7 @@ export const answerAuth = async (
     const said = declined.slice(0, LOGGED_ERROR_LENGTH);
     if (provider === 'oidc')
       log.warn('The single sign-on provider refused a sign-in', { oidcError: said });
+    else if (provider === 'google') log.warn('Google refused a sign-in', { googleError: said });
     else log.warn('GitHub refused a sign-in', { githubError: said });
     return asResponse(sentBack(config, 'failed'));
   }
@@ -476,7 +517,12 @@ export const readMySignIn = async (
   request: Request,
 ): Promise<MySignIn> => {
   const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
-  return await mySignIn(dependencies.database, userId, dependencies.auth.signInPolicy);
+  return await mySignIn(
+    dependencies.database,
+    userId,
+    dependencies.auth.signInPolicy,
+    dependencies.auth.google,
+  );
 };
 
 export const signOut = async (
@@ -503,7 +549,7 @@ export const signOutEverywhere = async (
  * after the commit their sockets ended and each workspace they were in told to read its members again.
  */
 export const eraseMyAccount = async (
-  dependencies: SignOutDependencies,
+  dependencies: EraseDependencies,
   request: Request,
   body: unknown,
 ): Promise<AuthResponse> => {
@@ -511,7 +557,8 @@ export const eraseMyAccount = async (
   const caller = await requireSession(dependencies.auth, request);
   const { confirm } = validated(EraseAccountRequest, body);
   const erased = await atomicallyOn(database)(
-    async (transaction) => await eraseAccount(transaction, clock, caller, confirm),
+    async (transaction) =>
+      await eraseAccount(transaction, clock, caller, confirm, dependencies.userErased),
   );
   // Each told on its own: one that fails is logged, and the rest are still told. The person's sockets
   // first — every one, whatever session it holds — then each workspace's members (D-139 §5).

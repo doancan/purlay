@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -7,19 +12,19 @@ import { userTopic, type EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aSession, aTestAuth } from '../../testing/signed-in';
-import { sendMessage } from '../../modules/messages/messages';
-import { hideMessage } from '../../modules/messages/hide';
-import { removeMessage } from '../../modules/messages/delete';
+import { sendMessage } from '../../features/chat/messages/messages';
+import { hideMessage } from '../../features/chat/messages/hide';
+import { removeMessage } from '../../features/chat/messages/delete';
 import { hideMyMessage } from './hidden';
 
 const clock = fixedClock(new Date('2026-10-28T12:00:00Z'));
 let cloned: ClonedDatabase;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
-});
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await cloned.drop();
-});
+}, DROP_HOOK_MS);
 
 const setup = async (): Promise<{
   db: ClonedDatabase['db'];

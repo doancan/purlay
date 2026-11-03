@@ -60,12 +60,17 @@ is rotated out (§4).
 | `messages` | What was written, who wrote it, question ownership, selected answer and decision note with its last writer (D-204) | The conversation | Retention; tombstoned by a delete or by content erasure (D-9, D-139 §7) |
 | `message_versions` | What a message said before each edit | Edit history (D-135) | With its message's words: a delete, content erasure or retention removes them; its author may remove one |
 | `attachments` | Each file's name, kind, size, and who uploaded it; the bytes in the object store | Files in the conversation (D-109) | With its message; an unsent upload after `ORPHAN_AGE_MS` (`sweep:orphans`); its bytes leave the store after the row (D-141) |
+| `message_attachments` | Which message a file was sent with, and in which channel: ids only | Files in the conversation (D-109, D-250) | With its message or its file, whichever goes first (both keys cascade) |
 | `mentions` | Who was mentioned in which message | Notifications and the inbox (D-12) | With its message |
 | `reactions` | Who reacted to what, with which emoji | Reactions | With its message |
 | `pinned_messages` | Who pinned a message | Pins (D-130) | With its message, or until unpinned |
 | `channel_bookmarks` | A link a channel keeps at hand, its name, and who added it | Bookmarks (D-218) | Until removed; with the channel; who added it is cleared on their erasure |
 | `saved_messages` | Which messages a person saved, and their state | Save for later (D-128) | Until unsaved; on erasure; with the message |
 | `saved_searches` | A person’s named search filters | Personal searches (D-204), never cached results | Until removed; on account erasure; with the workspace |
+| `scheduled_messages` | What a person wrote to be sent later, where, and when | Scheduled messages, delivered by the server while clients are closed | Until sent, cancelled or, once sent or failed, 30 days later; on erasure; with the channel |
+| `scheduled_message_attachments` | Which unsent scheduled message holds a file: ids only | The files a scheduled message will send (D-250) | Until it is sent, edited away or cancelled; with the message or its file |
+| `message_reminders` | When a person asked to be reminded of a message | Reminders, told in the inbox when due | Until delivered or removed; on erasure; with the message |
+| `hidden_messages` | Which messages a person deleted for themselves alone, and when | Deleting a message for oneself, without changing it for anybody else | On erasure; with the message |
 | `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |
 | `notifications` | What a person was told of, whether they read it, and when a letter mailed it (D-240) | The inbox (D-12), and email about what was missed | With its message; on erasure |
 | `incidents` | Who declared and resolved an incident; its runbook and postmortem | Incident channels (D-137) | For the life of the channel; not touched by content erasure (D-139 §7) |

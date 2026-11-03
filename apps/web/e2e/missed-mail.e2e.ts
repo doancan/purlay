@@ -164,7 +164,7 @@ test('turned on in Notifications, one letter about a direct message, and its lin
   const letter = await letterWith(mailbox, /Messages are waiting for you on Purlay/);
   expect(letter.to).toEqual(['ada@example.test']);
   // A direct message is named by who wrote it: her name made from her address, as nobody has set one.
-  expect(letter.text).toContain('Kokil Metal\nayse — 1 message');
+  expect(letter.text).toContain('Kokil Metal\n\nayse — 1 message');
   expect(letter.text).toContain('ayse: “Merhaba Ada, deploy kırmızı — bakar mısın?”');
   const link = linkIn(letter, new RegExp(`/w/kokil-metal/c/${dm.id}\\?message=${sentId}`));
   await page.goto(link);

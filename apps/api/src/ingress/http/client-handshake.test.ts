@@ -32,6 +32,11 @@ describe('GET /api/client', () => {
     expect(Value.Check(ClientInfo, await response.json())).toBe(true);
   });
 
+  test('names the modules the server runs, so a client draws only what is there', async () => {
+    const body = (await (await server()('/api/client')).json()) as ClientInfo;
+    expect(body.modules).toEqual(['chat']);
+  });
+
   test('advertises additive API support publicly even to a client below the configured minimum', async () => {
     for (const init of [
       undefined,
@@ -95,6 +100,7 @@ describe('GET /api/client', () => {
       github: true,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });

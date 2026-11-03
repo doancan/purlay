@@ -4,8 +4,8 @@ import {
   type MessageReminderList,
 } from '@purlay/types';
 import { requireLiveSession } from '../../modules/auth/sessions';
-import { cancelReminder, reminderList, setReminder } from '../../modules/reminders/reminders';
-import { requireMessageById } from '../../platform/channels';
+import { cancelReminder, reminderList, setReminder } from '../../features/chat/reminders/reminders';
+import { requireMessageById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,

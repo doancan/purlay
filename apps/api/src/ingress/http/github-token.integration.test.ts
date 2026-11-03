@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { GitHubIntegration } from '@purlay/types';
-import { githubApi } from '../../modules/integrations/unfurl';
+import { githubApi } from '../../features/chat/integrations/unfurl';
 import { aMovableClock, testDependencies } from '../../testing/doubles';
 import { aGitHubApiStub, type GitHubApiStub } from '../../testing/github-stub';
 import { aRoom } from '../../testing/rooms';

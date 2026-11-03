@@ -26,8 +26,7 @@ import {
   type Attachment,
   type AttachmentKind,
 } from '@purlay/types';
-import { attachmentNotFound } from '../../platform/channels';
-import { AppError } from '../../platform/errors';
+import { AppError, attachmentNotFound } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import {
   claimUploadKeys,
@@ -98,7 +97,7 @@ const conflict = (): AppError =>
   });
 
 /** The columns `asAttachment` reads. */
-export const ATTACHMENT_COLUMNS = [
+const ATTACHMENT_COLUMNS = [
   'id',
   'workspace_id',
   'uploader_id',
@@ -185,8 +184,7 @@ export const storeUpload = async (
         .select(sql<string>`count(*)`.as('mine'))
         .where('workspace_id', '=', context.workspaceId)
         .where('uploader_id', '=', context.userId)
-        .where('message_id', 'is', null)
-        .where('scheduled_message_id', 'is', null)
+        .where('claimed_at', 'is', null)
         .executeTakeFirstOrThrow();
       if (Number(waiting.mine) >= PENDING_UPLOADS_MAX) {
         throw new AppError({
@@ -253,8 +251,7 @@ export const discardUpload = async (
       .deleteFrom('attachments')
       .where('id', '=', attachmentId)
       .where('uploader_id', '=', userId)
-      .where('message_id', 'is', null)
-      .where('scheduled_message_id', 'is', null)
+      .where('claimed_at', 'is', null)
       .returning(['storage_key', 'thumbnail_key'])
       .executeTakeFirst();
     if (gone === undefined) throw attachmentNotFound();

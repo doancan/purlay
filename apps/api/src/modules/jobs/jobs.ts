@@ -84,7 +84,7 @@ export const runJob = async (
 
 /**
  * `sweep:orphans`: unsent uploads older than a day, their rows and then their objects. The delete
- * says `message_id IS NULL` itself, so an upload a send links while the sweep runs is re-read and
+ * says `claimed_at IS NULL` itself, so an upload a send links while the sweep runs is re-read and
  * kept, not taken from the message.
  */
 export const sweepOrphans = async (
@@ -99,16 +99,14 @@ export const sweepOrphans = async (
     const { count, keys } = await atomicallyOn(database)(async (transaction) => {
       const gone = await transaction
         .deleteFrom('attachments')
-        .where('message_id', 'is', null)
-        .where('scheduled_message_id', 'is', null)
+        .where('claimed_at', 'is', null)
         .where(
           'id',
           'in',
           transaction
             .selectFrom('attachments')
             .select('id')
-            .where('message_id', 'is', null)
-            .where('scheduled_message_id', 'is', null)
+            .where('claimed_at', 'is', null)
             .where('created_at', '<', cutoff)
             .orderBy('id')
             .limit(ORPHAN_BATCH),
@@ -131,8 +129,8 @@ export const sweepOrphans = async (
 };
 
 /**
- * `reconcile:storage` (I-7): each workspace's `storage_used_bytes` put back to the bytes its
- * messages carry. Its row is locked before the sum is read, so a send that links an upload either
+ * `reconcile:storage` (I-7): each workspace's `storage_used_bytes` put back to the bytes of its
+ * claimed uploads. Its row is locked before the sum is read, so a claim of an upload either
  * committed its increment first or waits and adds it after — a drift is never made by the cure.
  */
 export const reconcileStorage = async (dependencies: {
@@ -154,7 +152,7 @@ export const reconcileStorage = async (dependencies: {
         .selectFrom('attachments')
         .select(sql<string>`coalesce(sum(size_bytes), 0)::text`.as('bytes'))
         .where('workspace_id', '=', id)
-        .where('message_id', 'is not', null)
+        .where('claimed_at', 'is not', null)
         .executeTakeFirstOrThrow();
       if (BigInt(before) === BigInt(after)) return null;
       await transaction

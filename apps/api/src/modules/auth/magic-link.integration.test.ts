@@ -43,7 +43,7 @@ describe('integration: asking for a link, as decided', () => {
       const outbox = aRecordingOutbox();
       const links = aTestAuth(db, {
         mailer: outbox,
-        settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+        settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'invite-only' },
       }).signInLinks;
       if (links === undefined) throw new Error('sign-in by link is not on');
       // What is left for after the answer, held here and not run until the test says.
@@ -91,7 +91,7 @@ describe('integration: a link asked for by the native application (D-191)', () =
     const outbox = aRecordingOutbox();
     const links = aTestAuth(db, {
       mailer: outbox,
-      settings: { github: undefined, oidc: undefined, signUp: 'invite-only' },
+      settings: { github: undefined, oidc: undefined, google: undefined, signUp: 'invite-only' },
     }).signInLinks;
     if (links === undefined) throw new Error('sign-in by link is not on');
     const later: (() => Promise<void>)[] = [];
@@ -154,6 +154,7 @@ describe('integration: spending a link, as decided', () => {
       asked,
       signUp: 'open',
       oidc: false,
+      google: false,
       outbox: aRecordingOutbox(),
       issue: () => Promise.resolve(),
       spend: (token): Promise<readonly string[]> => {
@@ -229,6 +230,7 @@ describe('integration: an account single sign-on is linked to is signed into by 
               name: undefined,
             }
           : undefined,
+        google: undefined,
         signUp: 'invite-only',
       },
     }).signInLinks;
@@ -276,6 +278,7 @@ describe('integration: an account single sign-on is linked to is signed into by 
         asked: [],
         signUp: 'open',
         oidc: true,
+        google: false,
         outbox: aRecordingOutbox(),
         issue: () => Promise.resolve(),
         spend: (token): Promise<readonly string[]> => {
@@ -294,6 +297,118 @@ describe('integration: an account single sign-on is linked to is signed into by 
         })
         .execute();
       await linkedToSso(db, id);
+      const dependencies = { database: db, clock: fixedClock(NOW), links: library };
+      expect(await attempt(db, () => consumeSignInLink(dependencies, token, new Headers()))).toBe(
+        'SIGN_IN_LINK_NOT_FOUND',
+      );
+      expect(library.asked).toEqual([]);
+    });
+  });
+});
+
+describe('integration: an account Google made is told to use Google (D-251)', () => {
+  const anAccountGoogleMade = async (db: Executor, email: string): Promise<string> => {
+    const id = await anAccount(db, email, true);
+    await db.updateTable('users').set({ google_made: true }).where('id', '=', id).execute();
+    return id;
+  };
+
+  /** The messages asking for a link to the address sends, once what is left for after the answer has run. */
+  const posted = async (
+    db: Executor,
+    email: string,
+    locale: 'en' | 'tr',
+    connected = true,
+  ): Promise<readonly { readonly subject: string; readonly text: string }[]> => {
+    const outbox = aRecordingOutbox();
+    const links = aTestAuth(db, {
+      mailer: outbox,
+      settings: {
+        github: undefined,
+        oidc: undefined,
+        google: connected ? { clientId: 'c', clientSecret: 's' } : undefined,
+        signUp: 'invite-only',
+      },
+    }).signInLinks;
+    if (links === undefined) throw new Error('sign-in by link is not on');
+    const later: (() => Promise<void>)[] = [];
+    await requestSignInLink(
+      {
+        database: db,
+        clock: fixedClock(NOW),
+        log: aRecordingLogger().log,
+        appUrl: 'https://purlay.test',
+        links,
+        later: (work) => {
+          later.push(work);
+        },
+      },
+      { email, locale },
+      '203.0.113.9',
+    );
+    for (const work of later) await work();
+    return outbox.posted;
+  };
+
+  test('is sent no link but a letter naming the button, in each language', async () => {
+    await withRollback(async (db) => {
+      await anAccountGoogleMade(db, 'g@example.test');
+      const [en] = await posted(db, 'g@example.test', 'en');
+      expect(en?.subject).toBe('Signing in to Purlay');
+      expect(en?.text).toContain('Continue with Google');
+      expect(en?.text).not.toContain('#');
+      const [tr] = await posted(db, 'g@example.test', 'tr');
+      expect(tr?.text).toContain('Google ile devam et');
+      expect(tr?.text).not.toContain('#');
+    });
+  });
+
+  test('once Google is disconnected the account is sent a link again', async () => {
+    await withRollback(async (db) => {
+      await anAccountGoogleMade(db, 'gone@example.test');
+      const sent = await posted(db, 'gone@example.test', 'en', false);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.text).toMatch(/#[0-9a-f]{64}/);
+    });
+  });
+
+  test('an account made by email, later linked to Google, is sent a link', async () => {
+    await withRollback(async (db) => {
+      const id = await anAccount(db, 'linked@example.test', true);
+      await db
+        .insertInto('accounts')
+        .values({ user_id: id, provider_id: 'google', account_id: '104500000000000000009' })
+        .execute();
+      const sent = await posted(db, 'linked@example.test', 'en');
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.text).toMatch(/#[0-9a-f]{64}/);
+    });
+  });
+
+  test('a link sent before the account became Google’s is refused when spent, and the library never asked', async () => {
+    await withRollback(async (db) => {
+      const library: SignInLinks & { readonly asked: string[] } = {
+        asked: [],
+        signUp: 'open',
+        oidc: false,
+        google: true,
+        outbox: aRecordingOutbox(),
+        issue: () => Promise.resolve(),
+        spend: (token): Promise<readonly string[]> => {
+          library.asked.push(token);
+          return Promise.resolve(['a-session-cookie']);
+        },
+      };
+      const token = 'd'.repeat(64);
+      await anAccountGoogleMade(db, 'late-g@example.test');
+      await db
+        .insertInto('verifications')
+        .values({
+          identifier: `magic-link:${Buffer.from(await tokenDigest(token), 'hex').toString('base64url')}`,
+          value: JSON.stringify({ type: 'magic-link', email: 'late-g@example.test' }),
+          expires_at: new Date(Date.now() + 15 * 60_000),
+        })
+        .execute();
       const dependencies = { database: db, clock: fixedClock(NOW), links: library };
       expect(await attempt(db, () => consumeSignInLink(dependencies, token, new Headers()))).toBe(
         'SIGN_IN_LINK_NOT_FOUND',

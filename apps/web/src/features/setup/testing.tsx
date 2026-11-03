@@ -24,6 +24,7 @@ export const aState = (over: Partial<SetupState> = {}): SetupState => ({
     sessionMaxAgeDays: null,
     github: null,
     oidc: null,
+    google: null,
     smtp: null,
     githubApp: null,
     workspaceCreators: { kind: 'first' },

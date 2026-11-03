@@ -14,6 +14,7 @@ import { closeIntegrationDatabase, withRollback, type Transaction } from '@purla
 import { fixedClock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
+import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
 import { createWorkspace, membersIn, membershipsOf, meOf, workspaceIn } from './workspaces';
 import { workspaceCreatorsOf } from './creators';
 
@@ -39,7 +40,13 @@ const aWorkspaceOf = async (
   owner: string,
   name: string,
 ): Promise<{ id: string; name: string }> => {
-  const workspace = await createWorkspace(db, clock, owner, { name, slug: aUniqueSlug('ws') });
+  const workspace = await createWorkspace(
+    db,
+    clock,
+    owner,
+    { name, slug: aUniqueSlug('ws') },
+    chatWorkspaceHooks(),
+  );
   return { id: workspace.id, name };
 };
 

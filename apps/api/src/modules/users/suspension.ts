@@ -21,7 +21,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { revokeAllSessions } from '../auth/sessions';
 import { recordServerAudit } from '../audit/server-audit';
-import { literalPattern } from '../search/search';
+import { literalPattern } from '../../platform/like-pattern';
 import type { ServerAdminSession } from '../setup/setup';
 
 const accountNotFound = (): AppError =>

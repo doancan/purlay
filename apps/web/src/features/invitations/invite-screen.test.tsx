@@ -211,7 +211,13 @@ describe('an invitation, opened by somebody who is not signed in', () => {
       api: aSignedInApi({
         me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
         authMethods: () =>
-          Promise.resolve({ ...methods, oidc: null, signUp: 'invite-only', password: true }),
+          Promise.resolve({
+            ...methods,
+            oidc: null,
+            google: false,
+            signUp: 'invite-only',
+            password: true,
+          }),
         ...api,
       }),
     });
@@ -277,6 +283,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
           github: false,
           email: false,
           oidc: { name: 'Acme SSO' },
+          google: false,
           signUp: 'invite-only',
           password: true,
         }),
@@ -325,6 +332,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
               github: true,
               email: true,
               oidc: { name: null },
+              google: false,
               signUp: 'invite-only',
               password: true,
             }),
@@ -334,6 +342,50 @@ describe('an invitation, opened by somebody who is not signed in', () => {
       expect(view.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
       view.unmount();
     });
+  });
+
+  test('Google and mail: the email form is not alone, a rule parts it from the button', async () => {
+    const view = await asSignedOut({
+      authMethods: () =>
+        Promise.resolve({
+          github: false,
+          email: true,
+          oidc: null,
+          google: true,
+          signUp: 'invite-only',
+          password: true,
+        }),
+    });
+    const send = view.getByRole('button', { name: 'Email me a sign-in link' });
+    expect(send.closest('form')?.className).toContain('border-t-hairline');
+    expect(send.className).not.toContain('bg-accent');
+    view.unmount();
+  });
+
+  test('Google: the passport is asked for first, and only when it is given does the page leave for /auth/google', async () => {
+    const order: string[] = [];
+    const left = spyOn(leave, 'to').mockImplementation((url) => {
+      order.push(`leave ${url}`);
+    });
+    const view = await asSignedOut({
+      authMethods: () =>
+        Promise.resolve({
+          github: true,
+          email: false,
+          oidc: null,
+          google: true,
+          signUp: 'invite-only',
+          password: true,
+        }),
+      openInvitationPassport: async (input) => {
+        order.push(`passport ${JSON.stringify(input)}`);
+        await Promise.resolve();
+      },
+    });
+    await person().click(view.getByRole('link', { name: 'Continue with Google' }));
+    await settle();
+    expect(order).toEqual([`passport ${JSON.stringify({ token: TOKEN })}`, 'leave /auth/google']);
+    left.mockRestore();
   });
 
   test('a link that does not open is the page’s "does not open" state, forgotten, and nothing else happens', async () => {

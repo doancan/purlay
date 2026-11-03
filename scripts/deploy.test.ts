@@ -12,7 +12,7 @@
  * commit of THAT image: a deploy that starts the stack before it has switched, or that never switches,
  * reports the old commit and fails here, as it would on the server.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import {
   chmodSync,
   copyFileSync,
@@ -31,6 +31,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+
+/**
+ * Each test runs the real deploy script — a shell, its stubs, a sandboxed tree — and some run it twice: a second
+ * or two alone and several under the load of the full suite, past the runner's five seconds, which failed a local run
+ * for no fault of the script. The limit is the one a test that does this needs.
+ */
+setDefaultTimeout(60_000);
 
 const repo = join(import.meta.dir, '..');
 const OLD = 'a'.repeat(8);

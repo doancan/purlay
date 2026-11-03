@@ -8,10 +8,17 @@
  * exit status red — and the untouched copy must stay green, or "red" would mean
  * nothing either.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+/**
+ * Each test copies every tracked file and runs the whole check on the copy, which takes the better part of
+ * a second alone and several under the load of the full suite — more than the runner's five seconds, which
+ * failed a job and a local run for no fault of the check. The limit is the one a test that does this needs.
+ */
+setDefaultTimeout(60_000);
 
 const SCRIPT = resolve('scripts/check-docs.py');
 const copies: string[] = [];
@@ -117,5 +124,26 @@ describe('the document check', () => {
     const { status, output } = run(root);
     expect(status).toBe(1);
     expect(output).toContain('0007_message_content_limit.sql');
+  });
+
+  test('fails when a module’s migration is missing from SCHEMA.md, or SCHEMA.md names one that is not a file (D-250)', () => {
+    const missing = aCopy();
+    edit(missing, 'docs/SCHEMA.md', (text) =>
+      text.replace(/^chat\/0001_message_attachments\.sql.*$/m, ''),
+    );
+    const left = run(missing);
+    expect(left.status).toBe(1);
+    expect(left.output).toContain('chat/0001_message_attachments.sql');
+
+    const invented = aCopy();
+    edit(invented, 'docs/SCHEMA.md', (text) =>
+      text.replace(
+        /^(chat\/0001_message_attachments\.sql.*)$/m,
+        '$1\nchat/0002_a_file_nobody_wrote.sql  nothing',
+      ),
+    );
+    const named = run(invented);
+    expect(named.status).toBe(1);
+    expect(named.output).toContain('chat/0002_a_file_nobody_wrote.sql');
   });
 });

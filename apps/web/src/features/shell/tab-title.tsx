@@ -16,7 +16,7 @@ import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Translate } from '../../i18n/types';
 import { useRoute } from '../../router/router-provider';
-import { useSession } from '../session/session';
+import { useRuns, useSession } from '../session/session';
 import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
 import { FIRST_SECTION, sectionFor } from '../settings/sections';
 import { useDeepWork } from './deep-work';
@@ -59,7 +59,7 @@ export const TabTitle = (): null => {
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const { match } = useRoute();
-  const channels = useChannels(workspace.id).data ?? [];
+  const channels = useChannels(workspace.id, useRuns('chat')).data ?? [];
   // Deep Work started by hand, or the person's quiet hours (D-234): the page is quiet in either.
   const quietHours = useQuietHoursNow();
   const quiet = useDeepWork().until !== null || quietHours;

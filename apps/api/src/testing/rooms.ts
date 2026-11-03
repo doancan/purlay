@@ -8,7 +8,7 @@
  * only way one is made (D-34).
  */
 import type { Executor } from '@purlay/db';
-import { requireChannelById, type ChannelContext } from '../platform/channels';
+import { requireChannelById, type ChannelContext } from '../features/chat/channels/guard';
 import { aUniqueSlug, aUserRow } from './users';
 
 export interface Room {

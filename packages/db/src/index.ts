@@ -36,10 +36,13 @@ export {
   migrateToLatest,
   type MigrateOptions,
   MIGRATIONS_DIRECTORY,
+  PRODUCT_MIGRATION_SETS,
+  setsNamedBy,
   migrationHistoryProblem,
   pendingMigrations,
   readMigrationFiles,
   type MigrationFile,
+  type MigrationSet,
   type MigrationResult,
   type MigrationResultSet,
 } from './migrator';

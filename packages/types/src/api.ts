@@ -129,6 +129,12 @@ export const MeResponse = Type.Object({
    * Empty for anybody who owns none.
    */
   scheduledDeletions: Type.Array(WorkspaceDeletion),
+  /**
+   * The modules this server runs, by the words an operator writes in `MODULES` (D-250): the screens, routes and
+   * shortcuts of a module that is not here are not drawn. Asked here, not of the public `GET /api/client`, because
+   * the page already waits for this answer and a signed-out screen needs none of it.
+   */
+  modules: Type.Array(Type.String()),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -1653,6 +1659,8 @@ export const AuthMethods = Type.Object({
    * words in the person's language.
    */
   oidc: Type.Union([Type.Object({ name: Type.Union([Type.String(), Type.Null()]) }), Type.Null()]),
+  /** Whether Google is connected as a way in (D-251). */
+  google: Type.Boolean(),
   /** Who may make an account: anybody, or only the holder of an invitation (R51). */
   signUp: Type.Union([Type.Literal('open'), Type.Literal('invite-only')]),
   /**
@@ -1697,6 +1705,11 @@ export type ClientCapabilities = Static<typeof ClientCapabilities>;
 
 export const ClientInfo = Type.Object({
   capabilities: Type.Optional(ClientCapabilities),
+  /**
+   * The modules this server runs, by the words an operator writes in `MODULES`, so a client draws only what is
+   * there. Absent from a server that predates modules: such a client assumes chat, as it always has (D-250).
+   */
+  modules: Type.Optional(Type.Array(Type.String())),
   server: Type.Object({ version: Type.String() }),
   contractVersion: Type.Integer({ minimum: 1 }),
   appUrl: Type.String(),
@@ -1800,6 +1813,8 @@ export const MySignIn = Type.Object({
   ]),
   /** Whether the account is linked to the organisation's single sign-on (D-200); only ever the caller's own. */
   oidc: Type.Boolean(),
+  /** Whether the account is linked to a Google identity (D-251); only ever the caller's own. */
+  google: Type.Boolean(),
   /** Whether a password sign-in asks for a code from an authenticator app too (D-236). */
   twoFactor: Type.Boolean(),
   /**
@@ -1944,11 +1959,23 @@ export const ServerOidcRequest = FromClient({
 });
 export type ServerOidcRequest = Static<typeof ServerOidcRequest>;
 
+/**
+ * `POST /api/server/google` — Google's OAuth client (D-251), tried with these values and kept only if it
+ * works. The widths are the same as GitHub's: both are a client id and a secret an operator pastes.
+ */
+export const GOOGLE_CLIENT_ID_MAX = 128;
+export const GOOGLE_CLIENT_SECRET_MAX = 256;
+export const ServerGoogleRequest = FromClient({
+  clientId: Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_ID_MAX }),
+  clientSecret: Type.String({ minLength: 1, maxLength: GOOGLE_CLIENT_SECRET_MAX }),
+});
+export type ServerGoogleRequest = Static<typeof ServerGoogleRequest>;
+
 /** `POST /api/server/smtp` — the relay, tried with a test letter to the caller, kept only if it works. */
 export const ServerSmtpRequest = FromClient(SmtpRelay);
 export type ServerSmtpRequest = Static<typeof ServerSmtpRequest>;
 
-/** `DELETE /api/server/github`, `/smtp` and `/oidc` — the body is optional; `confirmLastChannel` is the only field. */
+/** `DELETE /api/server/github`, `/smtp`, `/oidc` and `/google` — the body is optional; `confirmLastChannel` is the only field. */
 export const ServerDisconnectRequest = FromClient({
   confirmLastChannel: Type.Optional(Type.Boolean()),
 });

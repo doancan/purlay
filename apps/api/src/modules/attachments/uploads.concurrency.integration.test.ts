@@ -20,7 +20,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { storeUpload } from './uploads';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));

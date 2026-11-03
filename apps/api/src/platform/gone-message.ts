@@ -22,8 +22,12 @@ export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
   'channel_members_last_read_channel_fkey',
   'github_links_root_id_fkey',
   'github_operations_root_id_fkey',
+  'hidden_messages_message_id_channel_id_fkey',
+  'message_attachments_message_channel_fkey',
+  'message_attachments_message_workspace_fkey',
   'mentions_message_channel_fkey',
   'mentions_message_id_fkey',
+  'message_reminders_message_id_channel_id_fkey',
   'message_versions_message_channel_fkey',
   'messages_parent_channel_fkey',
   'messages_accepted_answer_id_fkey',
@@ -32,6 +36,8 @@ export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
   'pinned_messages_message_channel_fkey',
   'reactions_message_id_fkey',
   'saved_messages_message_channel_fkey',
+  'scheduled_messages_parent_id_channel_id_fkey',
+  'scheduled_messages_sent_message_id_fkey',
   'thread_follows_message_channel_fkey',
 ]);
 

@@ -20,6 +20,8 @@ import {
   OIDC_NAME_MAX,
   ServerGitHubAppRequest,
   ServerGitHubRequest,
+  ServerGoogleRequest,
+  GOOGLE_ISSUER,
   ServerOidcRequest,
   ServerPolicyRequest,
   ServerSmtpRequest,
@@ -32,6 +34,7 @@ import {
   changePolicy,
   connectGitHub,
   connectGitHubIssuesApp,
+  connectGoogle,
   connectOidc,
   connectRelay,
   disconnect,
@@ -48,7 +51,7 @@ import {
   githubAppCaller,
   platformAppFetch,
   type GitHubAppFetch,
-} from '../../modules/integrations/github-app-api';
+} from '../../platform/github-app-api';
 import { oidcIssuerProblem, oidcNameProblem } from '../../platform/oidc-address';
 import { refusedField, said, swapping, type SetupDependencies } from './setup';
 import { validated } from './validate';
@@ -57,7 +60,11 @@ import { validated } from './validate';
  * What the routes need: the setup's own dependencies — the pool, the clock, the holder's swap — and, for a test,
  * how the GitHub App's own calls reach GitHub.
  */
-export type ServerDependencies = SetupDependencies & { readonly githubAppFetch?: GitHubAppFetch };
+export type ServerDependencies = SetupDependencies & {
+  readonly githubAppFetch?: GitHubAppFetch;
+  /** Where Google is, as the sign-in is told (`AuthDependencies.googleIssuer`); absent, Google's own. A test's stand-in. */
+  readonly googleIssuer?: string;
+};
 
 /** The guard, then the work, a refusal of the module said as the contract says it. */
 const asAdmin = async <T>(
@@ -203,6 +210,32 @@ export const connectOidcProvider = async (
     );
   });
 
+/**
+ * `POST /api/server/google` — Google's OAuth client tried (its discovery, its keys, the client); `200` with the
+ * outcome either way, and kept only if it worked (D-251).
+ */
+export const connectGoogleClient = async (
+  dependencies: ServerDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ProbeResult> =>
+  await asAdmin(dependencies, request, async (admin, module) => {
+    const input = validated(ServerGoogleRequest, body);
+    return await connectGoogle(
+      {
+        ...module,
+        googleIssuer: dependencies.googleIssuer ?? GOOGLE_ISSUER,
+        oidc: {
+          fetch: async (url, init) => await fetch(url, init),
+          appUrl: dependencies.config.APP_URL,
+          log: dependencies.log,
+        },
+      },
+      admin,
+      { clientId: input.clientId, clientSecret: input.clientSecret },
+    );
+  });
+
 /** `POST /api/server/smtp` — the relay tried with a test letter to the caller; kept only if it worked. */
 export const connectMailRelay = async (
   dependencies: ServerDependencies,
@@ -235,11 +268,11 @@ const confirmationIn = async (request: Request): Promise<boolean> => {
   return validated(ServerDisconnectRequest, body).confirmLastChannel === true;
 };
 
-/** `DELETE /api/server/github`, `/smtp` and `/oidc` — one way in disconnected; `204`. */
+/** `DELETE /api/server/github`, `/smtp`, `/oidc` and `/google` — one way in disconnected; `204`. */
 export const disconnectChannel = async (
   dependencies: ServerDependencies,
   request: Request,
-  channel: 'github' | 'smtp' | 'oidc',
+  channel: 'github' | 'smtp' | 'oidc' | 'google',
 ): Promise<void> => {
   await asAdmin(dependencies, request, async (admin, module) => {
     const confirmed = await confirmationIn(request);

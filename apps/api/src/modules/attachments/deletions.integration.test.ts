@@ -25,9 +25,9 @@ import { atomicallyOn } from '../../platform/transactions';
 import { NOW } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
-import { sendMessage } from '../messages/messages';
-import { dropFiles } from '../messages/tombstone';
+import { sendMessage } from '../../features/chat/messages/messages';
 import {
+  dropFilesById,
   drainObjectDeletions,
   enqueueObjectDeletions,
   sweepObjectDeletions,
@@ -53,7 +53,7 @@ const anId = (): string => messageId(new Date(NOW.getTime() + (tick += 1)));
 /** A message of ada's carrying one file, its object in the store; answers the message and its key. */
 const aFile = async (
   store: MemoryStore,
-): Promise<{ readonly room: Room; readonly message: string; readonly key: string }> => {
+): Promise<{ readonly room: Room; readonly file: string; readonly key: string }> => {
   const room = await aRoom(cloned.db, ['ada']);
   const ada = room.members['ada'];
   if (ada === undefined) throw new Error('no ada');
@@ -63,14 +63,14 @@ const aFile = async (
     await requireWorkspaceMembership(cloned.db, ada.userId, room.workspaceId),
     { id: fileId, name: 'notes.txt', bytes: new Uint8Array(4).fill(1) },
   );
-  const sent = await sendMessage(cloned.db, clock, ada.context, {
+  await sendMessage(cloned.db, clock, ada.context, {
     id: anId(),
     content: 'with a file',
     attachmentIds: [fileId],
   });
   const [key] = store.keys().filter((each) => each.startsWith(workspacePrefix(room.workspaceId)));
   if (key === undefined) throw new Error('no object');
-  return { room, message: sent.message.id, key };
+  return { room, file: fileId, key };
 };
 
 const queued = async (room: Room): Promise<{ storage_key: string; attempts: number }[]> =>
@@ -90,9 +90,9 @@ const drain = (store: ObjectStore): Parameters<typeof drainObjectDeletions>[0] =
 describe('integration: objects whose rows are gone', () => {
   test('a delete that fails after its files were queued takes the queue rows back with it', async () => {
     const store = aMemoryStore();
-    const { room, message, key } = await aFile(store);
+    const { room, file, key } = await aFile(store);
     const failed = await atomicallyOn(cloned.db)(async (transaction) => {
-      await dropFiles(transaction, room.workspaceId, [message]);
+      await dropFilesById(transaction, room.workspaceId, [file]);
       throw new Error('the rest of the batch failed');
     }).then(
       () => 'committed',
@@ -111,9 +111,9 @@ describe('integration: objects whose rows are gone', () => {
 
   test('queued with the rows’ delete; refused, it stays, counted; the sweep takes it later', async () => {
     const store = aMemoryStore();
-    const { room, message, key } = await aFile(store);
+    const { room, file, key } = await aFile(store);
     const keys = await atomicallyOn(cloned.db)(
-      async (transaction) => (await dropFiles(transaction, room.workspaceId, [message])).keys,
+      async (transaction) => (await dropFilesById(transaction, room.workspaceId, [file])).keys,
     );
     expect(keys).toEqual([key]);
     // Committed: the row is gone, and its object waits by name.
@@ -132,9 +132,9 @@ describe('integration: objects whose rows are gone', () => {
 
   test('a process that stopped between the commit and the delete: the sweep finds the key', async () => {
     const store = aMemoryStore();
-    const { room, message, key } = await aFile(store);
+    const { room, file, key } = await aFile(store);
     await atomicallyOn(cloned.db)(async (transaction) => {
-      await dropFiles(transaction, room.workspaceId, [message]);
+      await dropFilesById(transaction, room.workspaceId, [file]);
     });
     // No drain: the process stopped here.
     expect(store.keys()).toEqual([key]);

@@ -21,9 +21,9 @@ import {
 import { atomicallyOn } from '../../platform/transactions';
 import { aRecordingLogger, NOW } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
-import { sendMessage, send } from '../../modules/messages/messages';
-import { setResolved } from '../../modules/messages/threads';
-import { setReaction } from '../../modules/reactions/reactions';
+import { sendMessage, send } from '../../features/chat/messages/messages';
+import { setResolved } from '../../features/chat/messages/threads';
+import { setReaction } from '../../features/chat/reactions/reactions';
 import { aTestAuth, aSignedInUser } from '../../testing/signed-in';
 import { openDirectMessageWith, readUpTo } from './channels';
 import { aUniqueSlug } from '../../testing/users';

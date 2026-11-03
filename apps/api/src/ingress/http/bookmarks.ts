@@ -4,7 +4,7 @@
  */
 import type { BookmarkList, ChannelBookmark } from '@purlay/types';
 import { AddBookmarkRequest } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,
@@ -17,7 +17,7 @@ import {
   channelBookmarks,
   removeBookmark,
   type BookmarkChange,
-} from '../../modules/bookmarks/bookmarks';
+} from '../../features/chat/bookmarks/bookmarks';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { validated } from './validate';

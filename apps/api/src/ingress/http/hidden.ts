@@ -1,6 +1,6 @@
 import type { Message } from '@purlay/types';
 import { requireLiveSession } from '../../modules/auth/sessions';
-import { hideMessage } from '../../modules/messages/hide';
+import { hideMessage } from '../../features/chat/messages/hide';
 import {
   inboxPublications,
   NO_LOG,

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AUTH_BASE_PATH,
+  GOOGLE_CALLBACK,
+  GOOGLE_ISSUER,
+  GOOGLE_START_PATH,
   OIDC_CALLBACK,
   OIDC_START_PATH,
   SIGN_IN_CALLBACK,
@@ -22,6 +25,12 @@ describe('where GitHub sends the browser back (D-179, R13)', () => {
     expect(OIDC_START_PATH).toBe('/auth/oidc');
     expect(OIDC_CALLBACK).toBe('/auth/callback/oidc');
   });
+
+  test('and where Google does (D-251): a start of ours, the library’s callback, and Google’s issuer', () => {
+    expect(GOOGLE_START_PATH).toBe('/auth/google');
+    expect(GOOGLE_CALLBACK).toBe('/auth/callback/google');
+    expect(GOOGLE_ISSUER).toBe('https://accounts.google.com');
+  });
 });
 
 describe('the address a failed sign-in comes back to', () => {
@@ -34,6 +43,7 @@ describe('the address a failed sign-in comes back to', () => {
       'signup-closed',
       'github-unavailable',
       'oidc-unavailable',
+      'google-unavailable',
       'email-unverified',
       'busy',
       'failed',

@@ -17,11 +17,12 @@ import {
 import { systemClock } from '../../platform/clock';
 import { createLogger } from '../../platform/logging';
 import { PROBE_REASONS, type ProbeReason, type ProbeResult } from '@purlay/types';
-import { smtpTransport, textLetter, type SmtpTransportFactory } from '../../platform/mail';
+import { composeLetter } from '../../platform/letter';
+import { smtpTransport, type SmtpTransportFactory } from '../../platform/mail';
 import { aSelfSignedCertificate } from '../../testing/certificate';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from '../../testing/github-stub';
 import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from '../../testing/github-app-stub';
-import { githubAppApi, githubAppCaller } from '../integrations/github-app-api';
+import { githubAppApi, githubAppCaller } from '../../platform/github-app-api';
 import type { GitHubAppSettings } from './settings';
 import { aClosedPort, aScriptedRelay, type RelayScript } from '../../testing/smtp-relay';
 import { aGitHubPerson } from '../../testing/github-sign-in';
@@ -39,6 +40,7 @@ import {
   OIDC_PROBE_CODE,
   probeAppKey,
   probeGitHub,
+  probeGoogle,
   probeOidc,
   probeSmtp,
   RAW_MAX,
@@ -84,12 +86,15 @@ afterAll(async () => {
   await closeIntegrationDatabase();
 }, DROP_HOOK_MS);
 
-const LETTER = textLetter(
-  'ada@example.com',
-  'Confirm your address',
-  'Open https://purlay.example.com/setup/verify#abc to confirm.',
-  'https://purlay.example.com/setup/verify#abc',
-);
+const LETTER = composeLetter({
+  to: 'ada@example.com',
+  subject: 'Confirm your address',
+  locale: 'en',
+  blocks: [
+    { kind: 'paragraph', text: 'Confirm your address.' },
+    { kind: 'button', label: 'Confirm', url: 'https://purlay.example.com/setup/verify#abc' },
+  ],
+});
 
 const USER = 'relay-user@example.com';
 const PASS = 'p@ss:w/rd#1 secret';
@@ -126,6 +131,15 @@ const failure = (result: ProbeResult): { reason: ProbeReason; raw: string } => {
   if (result.ok) throw new Error('expected the try to fail');
   return { reason: result.reason, raw: result.raw };
 };
+
+/**
+ * How far a hostile server got before the probe stopped reading: the floods are 300 MiB, and a probe that read
+ * on to the end would leave `written()` at all of it. What is measured is how much the server handed to the
+ * socket by the time the close reached it, and on a loaded machine the kernel's buffers and the loopback let a
+ * few MiB through first, so the bound sits a decade below the flood rather than a hair above what a quiet
+ * machine writes. It still fails for a probe that keeps reading.
+ */
+const STOPPED_WELL_BEFORE_THE_FLOOD_ENDS = 32 * 1024 * 1024;
 
 describe('integration: trying a relay (D-179 §4.4)', () => {
   test('a relay that takes the login, the sender and the recipient is sent the one letter, as given', async () => {
@@ -523,7 +537,7 @@ describe('integration: a GitHub that redirects or floods (review, fix round 1)',
       raw: 'HTTP 200: a reply longer than 8 KB',
     });
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(4 * 1024 * 1024);
+    expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
   });
 
   test('a reply whose length says it is too long is not read at all', async () => {
@@ -531,7 +545,7 @@ describe('integration: a GitHub that redirects or floods (review, fix round 1)',
     stops.push(flooding.stop);
     expect(failure(await tryAt(flooding.url)).raw).toBe('HTTP 200: a reply longer than 8 KB');
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(4 * 1024 * 1024);
+    expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
   });
 });
 
@@ -762,6 +776,45 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
     expect(failure(await tryIt(issuer)).reason).toBe(reason);
   });
 
+  describe('Google (D-251)', () => {
+    const tryGoogle = async (issuer: string, clientSecret: string): Promise<ProbeResult> =>
+      await probeGoogle(
+        AUTHORITY,
+        { clientId: OIDC_STUB_CREDENTIALS.clientId, clientSecret },
+        issuer,
+        {
+          fetch: (url, init) => fetch(url, init),
+          appUrl: APP,
+          log: createLogger({ level: 'silent' }),
+        },
+      );
+
+    test('a client Google takes is ok, asked with a code nobody was given', async () => {
+      const { stub, issuer } = await provider();
+      expect(await tryGoogle(issuer, OIDC_STUB_CREDENTIALS.clientSecret)).toEqual({ ok: true });
+      expect(stub.refusals).toEqual(['invalid_grant']);
+      expect(stub.presentedCodes).toEqual([OIDC_PROBE_CODE]);
+    });
+
+    test('a secret Google refuses is secret-rejected, and the reply shows none of it', async () => {
+      const { issuer } = await provider();
+      const result = failure(await tryGoogle(issuer, 'S3CRET-google-wrong'));
+      expect(result.reason).toBe('secret-rejected');
+      expect(result.raw).not.toContain('S3CRET-google-wrong');
+    });
+
+    test('a Google nothing answers for is unreachable, and one that is not a provider is refused', async () => {
+      const closed = await aClosedPort();
+      expect(failure(await tryGoogle(`http://127.0.0.1:${String(closed)}`, 'x')).reason).toBe(
+        'unreachable',
+      );
+      const { issuer } = await provider({ discovery: 'issuer-mismatch' });
+      expect(failure(await tryGoogle(issuer, OIDC_STUB_CREDENTIALS.clientSecret)).reason).toBe(
+        'issuer-mismatch',
+      );
+    });
+  });
+
   test('a provider nothing answers for is unreachable', async () => {
     const closed = await aClosedPort();
     const result = failure(await tryIt(`http://127.0.0.1:${String(closed)}`));
@@ -800,7 +853,7 @@ describe('integration: trying a single sign-on provider (D-200 §2, D-179 §4.4)
     stops.push(flooding.stop);
     expect(failure(await tryIt(flooding.url)).reason).toBe('discovery-invalid');
     await Bun.sleep(100);
-    expect(flooding.written()).toBeLessThan(8 * 1024 * 1024);
+    expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
   });
 
   test('a token endpoint that redirects the secret elsewhere is unexpected-reply, and the secret goes nowhere', async () => {

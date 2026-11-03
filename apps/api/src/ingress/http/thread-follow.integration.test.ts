@@ -8,7 +8,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, type NotificationPage, type ThreadFollow } from '@purlay/types';
 import { createApp } from './app';
-import { THREAD_PARTICIPANTS_MAX } from '../../modules/messages/delivery';
+import { THREAD_PARTICIPANTS_MAX } from '../../features/chat/messages/delivery';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';

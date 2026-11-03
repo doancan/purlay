@@ -105,6 +105,12 @@ CREATE TABLE users (
     -- github_id: the first keeps its email link and its own names.
     github_connected_at TIMESTAMPTZ,
 
+    -- Whether Google made the account (D-251, 0078): its first way in was Google, not a link sent to its
+    -- address. While Google is connected such an account is sent no sign-in link, only a letter saying to use
+    -- Google (the rule D-138 §2 sets for GitHub's); email-made accounts keep their links. FALSE for every
+    -- account that existed before.
+    google_made BOOLEAN NOT NULL DEFAULT FALSE,
+
     -- Whether the address is one a provider vouched for, or a link sent to it was followed. Better Auth
     -- reads it: an address that is not verified is never linked to by one that is, and an invitation is
     -- accepted only by an account whose address is. FALSE until something says so. (D-179, 0047)
@@ -1143,6 +1149,38 @@ CREATE INDEX idx_attachments_uploader   ON attachments (uploader_id);
 CREATE INDEX idx_attachments_workspace  ON attachments (workspace_id);
 ```
 
+**The link to the message is moving into chat (D-250, `MODULES.md` §10, step 8).** `0079` adds `claimed_at`, which the
+core reads in place of `message_id IS NULL` — null until a module has taken the upload, set in the transaction that
+links it — and makes `(id, workspace_id)` unique so that a table of chat's can key to both. Chat's own migration set
+adds `message_attachments`, below, with the keys `attachments` has to `messages` and a key to `attachments`; it is backfilled
+from `message_id` and `channel_id`, and the two are written together. **`message_id`, `channel_id` and their keys stay for one
+release** — the release before reads them — and go in the next, once nothing does. The readers have moved: the core asks `claimed_at`,
+chat asks `message_attachments`, and a test fails if production code reads either column again; only the send still writes
+them, and the exports still write them as data. The columns go next release.
+
+```sql
+-- chat/0001_message_attachments.sql
+CREATE TABLE message_attachments (
+    attachment_id UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL,
+    message_id    UUID NOT NULL,
+    channel_id    UUID NOT NULL,
+    CONSTRAINT message_attachments_attachment_fkey
+        FOREIGN KEY (attachment_id, workspace_id) REFERENCES attachments (id, workspace_id) ON DELETE CASCADE,
+    -- The same two keys `attachments` has: its workspace and its channel are those of its message (I-1).
+    CONSTRAINT message_attachments_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id) ON DELETE CASCADE,
+    CONSTRAINT message_attachments_message_workspace_fkey
+        FOREIGN KEY (message_id, workspace_id) REFERENCES messages (id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_message_attachments_message ON message_attachments (message_id);
+CREATE INDEX idx_message_attachments_channel ON message_attachments (channel_id, message_id DESC, attachment_id DESC);
+```
+
+`packages/db/src/upgrade.integration.test.ts` builds the previous release's schema, puts attachments in it as that
+release wrote them, migrates to head the way a process does and checks the claim, the link, each key on its own and
+that starting again changes nothing.
+
 ### 7.3. `mentions`
 
 Resolved by the parser at write time, so notification fan-out never re-parses message bodies.
@@ -1388,6 +1426,110 @@ At most `BOOKMARKS_MAX` a channel, counted under the channel's row lock, so two 
 one at once cannot both get in. Added twice, the first stays and nothing changes. The workspace export
 carries them (D-140).
 
+### 7.9. `scheduled_messages` and `scheduled_message_attachments`
+
+A person's message written to be sent later (chat's set, `chat/0002`): a durable private draft the server delivers
+at `send_at` even while every client is closed. Delivery and the sent marker commit in one transaction; row locks
+serialize an edit, a cancellation and a delivery. One past its time and refused (the person left the channel, say)
+is `failed` with the refusal's code, and an edit makes it `pending` again. Sent and failed rows go 30 days after
+their last change.
+
+```sql
+CREATE TYPE scheduled_message_state AS ENUM ('pending', 'sent', 'failed');
+
+CREATE TABLE scheduled_messages (
+    id              UUID PRIMARY KEY,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id      UUID NOT NULL,
+    parent_id       UUID,
+    content         TEXT NOT NULL,
+    send_at         TIMESTAMPTZ NOT NULL,
+    state           scheduled_message_state NOT NULL DEFAULT 'pending',
+    revision        INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+    sent_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    failure_code    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (id, workspace_id),
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id, channel_id) REFERENCES messages(id, channel_id) ON DELETE CASCADE,
+    CHECK ((state = 'failed') = (failure_code IS NOT NULL))
+);
+CREATE INDEX idx_scheduled_messages_due       ON scheduled_messages (send_at, id) WHERE state = 'pending';
+CREATE INDEX idx_scheduled_messages_owner     ON scheduled_messages (user_id, workspace_id, state, send_at);
+CREATE INDEX idx_scheduled_messages_workspace ON scheduled_messages (workspace_id);
+CREATE INDEX idx_scheduled_messages_channel   ON scheduled_messages (channel_id, workspace_id);
+CREATE INDEX idx_scheduled_messages_parent    ON scheduled_messages (parent_id, channel_id) WHERE parent_id IS NOT NULL;
+CREATE INDEX idx_scheduled_messages_sent      ON scheduled_messages (sent_message_id) WHERE sent_message_id IS NOT NULL;
+CREATE INDEX idx_scheduled_messages_finished  ON scheduled_messages (updated_at) WHERE state <> 'pending';
+
+CREATE TABLE scheduled_message_attachments (
+    attachment_id        UUID PRIMARY KEY,
+    workspace_id         UUID NOT NULL,
+    scheduled_message_id UUID NOT NULL,
+    CONSTRAINT scheduled_message_attachments_attachment_fkey
+        FOREIGN KEY (attachment_id, workspace_id) REFERENCES attachments (id, workspace_id) ON DELETE CASCADE,
+    CONSTRAINT scheduled_message_attachments_schedule_fkey
+        FOREIGN KEY (scheduled_message_id, workspace_id) REFERENCES scheduled_messages (id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_scheduled_message_attachments_schedule
+    ON scheduled_message_attachments (scheduled_message_id, workspace_id);
+```
+
+**The files a draft will send are reserved in chat's table, not by a column of `attachments`** (D-250: keys run from a
+module to the core). A reserved upload is claimed (`claimed_at`), so the core neither sweeps it as an orphan nor lets
+it be sent or discarded elsewhere. The trigger `scheduled_message_attachments_release` gives the claim back whenever a
+reservation row goes — edited away, delivered (the send claims the file again as it links it), the draft cancelled, or
+the draft taken by a cascade — so an upload nobody then sends is the orphan sweep's, as before.
+
+### 7.10. `message_reminders`
+
+When a person asked to be reminded of a message (chat's set, `chat/0003`): private, one a person a message, told in
+their inbox as a `reminder` notification when due and deleted then. `notification_type` gains `reminder`.
+
+```sql
+CREATE TABLE message_reminders (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id   UUID NOT NULL,
+    message_id   UUID NOT NULL,
+    remind_at    TIMESTAMPTZ NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, message_id),
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id, channel_id) REFERENCES messages(id, channel_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_message_reminders_due       ON message_reminders (remind_at, id);
+CREATE INDEX idx_message_reminders_workspace ON message_reminders (workspace_id);
+CREATE INDEX idx_message_reminders_channel   ON message_reminders (channel_id, workspace_id);
+CREATE INDEX idx_message_reminders_message   ON message_reminders (message_id, channel_id);
+```
+
+### 7.11. `hidden_messages`
+
+A message a person deleted for themselves alone (chat's set, `chat/0004`): the shared message and its files are
+unchanged for everybody else. Personal lists leave it out before they page; a feed shows it as deleted, to that
+person only; `hidden_at` is what a client catching up (D-194) is told by.
+
+```sql
+CREATE TABLE hidden_messages (
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message_id   UUID NOT NULL,
+    channel_id   UUID NOT NULL,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    hidden_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, message_id),
+    FOREIGN KEY (message_id, channel_id) REFERENCES messages(id, channel_id) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_hidden_messages_workspace ON hidden_messages (workspace_id);
+CREATE INDEX idx_hidden_messages_message   ON hidden_messages (message_id, channel_id);
+CREATE INDEX idx_hidden_messages_channel   ON hidden_messages (channel_id, workspace_id);
+CREATE INDEX idx_hidden_messages_changes   ON hidden_messages (user_id, channel_id, hidden_at, message_id);
+```
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -1549,7 +1691,7 @@ CREATE INDEX idx_incoming_webhooks_created_by ON incoming_webhooks (created_by)
 ### 8.4. The GitHub App (D-246)
 
 The server's App is a row of `server_settings` (§9.5). What belongs to a workspace or a person is here, read and
-written by `modules/integrations/github-app*.ts`.
+written by `features/chat/integrations/github-app*.ts`.
 
 - **`github_app_installations`** — at most one installation per workspace, connected by an owner. GitHub's
   `installation_id` is **not** unique: two workspaces of one organisation may both connect it, so it is indexed for
@@ -1953,7 +2095,7 @@ CREATE INDEX idx_personal_exports_user ON personal_exports (user_id, id DESC);
 ### 9.4. `object_deletions`
 
 Objects in the store whose rows are gone, until the store has let them go (D-141). A key is written in
-the transaction that deletes the rows naming it — `dropFiles` for retention and erasure, the orphan
+the transaction that deletes the rows naming it — `dropFilesById` for retention and erasure, the orphan
 sweep, a discarded upload — so a refusal, or a process stopping between the commit and the delete, never
 loses it. The row goes once the store has deleted the object; `sweep:deletions` tries what is left
 every hour, in key order from where it got to. Instance-wide, like `job_runs`: an operator's table, read
@@ -2001,6 +2143,8 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   disconnected while it is — a rule the application weighs inside the transaction that saves the change, not
   a check here: a provider whose secret a rotated key cannot open is set in its columns and no way in, which
   only the application can tell. `bun run admin:reset-password` turns passwords on again.
+- **Google** (D-251, added by 0078) is a pair — client id and sealed client secret — or none, as GitHub's is;
+  its issuer is fixed (`GOOGLE_ISSUER`), so nothing else is stored.
 - **How long a session lives** (D-244, added by 0073): `session_idle_timeout_hours` signs out a session unused for
   that long, and `session_max_age_days` one that old since its sign-in, whatever its use; `NULL` is off, as every
   server was before. Which values may be chosen is `@purlay/types`' (`SESSION_IDLE_TIMEOUT_HOURS`,
@@ -2048,6 +2192,9 @@ CREATE TABLE server_settings (
     github_app_client_secret_encrypted  TEXT,
     github_app_private_key_encrypted    TEXT,
     github_app_webhook_secret_encrypted TEXT,
+    -- Google's OAuth client (D-251), added by 0078; the secret sealed as the others, a pair or nothing.
+    google_client_id                    TEXT,
+    google_client_secret_encrypted      TEXT,
 
     CONSTRAINT server_settings_one_row CHECK (id),
     CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
@@ -2067,6 +2214,10 @@ CREATE TABLE server_settings (
         CHECK (oidc_issuer <> '' AND oidc_client_id <> '' AND oidc_name <> ''),
     CONSTRAINT server_settings_oidc_name_needs_provider
         CHECK (oidc_name IS NULL OR oidc_issuer IS NOT NULL),
+    CONSTRAINT server_settings_google_pair
+        CHECK ((google_client_id IS NULL) = (google_client_secret_encrypted IS NULL)),
+    CONSTRAINT server_settings_google_not_blank
+        CHECK (google_client_id <> '' AND google_client_secret_encrypted <> ''),
     CONSTRAINT server_settings_session_lifetime_positive
         CHECK (session_idle_timeout_hours > 0 AND session_max_age_days > 0)
     CONSTRAINT server_settings_github_app_whole
@@ -2291,7 +2442,7 @@ CREATE INDEX idx_native_authorizations_expiry ON native_authorizations (expires_
 ### 9.10. `missed_mail_letters`
 
 Each letter the scheduled `mail:missed` sent a person about what they missed (D-240), read and written by
-`modules/notifications/missed-mail.ts`.
+`features/chat/notifications/missed-mail.ts`.
 
 - **The hour between two**: a person gets no letter while one of theirs has `sent_at` within the last hour, read
   under their row's lock.
@@ -2381,7 +2532,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
-| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window — its channel's window, which is the longer of the workspace's and the channel's own (`channels.retain_forever`, `channels.min_retention_days`), computed on every batch and never taken from a stored number (D-225). Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
+| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window — its channel's window, which is the longer of the workspace's and the channel's own (`channels.retain_forever`, `channels.min_retention_days`), computed on every batch and never taken from a stored number (D-225). Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `features/chat/messages/retention-purge.ts` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, no `github_login` and no `github_connected_at`, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5, D-176) | `modules/users/erasure.ts` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
@@ -2492,9 +2643,12 @@ file that leaves its transaction runs statement by statement and must be safe to
 0075_github_app.sql server_settings.github_app_*, github_app_installations, github_user_authorizations, github_app_handshakes, github_app_deliveries: the GitHub App, a workspace's installation, a person's own authorization  (D-246)
 0076_github_links.sql github_links, github_operations: what a thread points at on GitHub, and the bounded record that makes creating an issue recoverable  (D-246)
 0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
-0078_scheduled_messages.sql durable personal scheduled messages, attachment reservations and due-row indexes
-0079_message_reminders.sql private pending reminders, due indexes and the reminder notification type
-0080_hidden_messages.sql account-scoped personal deletion markers and replay timestamps
+0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-251)
+0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
+chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
+chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
+chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
+chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

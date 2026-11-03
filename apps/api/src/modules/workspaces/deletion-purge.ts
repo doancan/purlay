@@ -19,7 +19,7 @@
  *   deletion was asked for, and its sockets were told then), so no counter needs keeping and no lock order
  *   needs sharing with a writer — there is none.
  */
-import type { Executor, Transaction } from '@purlay/db';
+import type { Database, Executor, Transaction } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS } from '@purlay/types';
 import { DAY_MS } from '../../platform/clock';
 import type { ObjectStore } from '../../platform/storage';
@@ -27,41 +27,44 @@ import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
 import { recordServerAudit } from '../audit/server-audit';
 import type { JobDependencies } from '../jobs/jobs';
-import { dropFiles } from '../messages/tombstone';
 
-/** Messages or uploads one transaction takes. */
+/** Messages or uploads one transaction takes. Chat's steps are batched by it too. */
 export const WORKSPACE_PURGE_BATCH = 500;
-/** Channels one transaction takes: each takes its memberships, feeds, incidents and bookmarks with it. */
-const CHANNEL_BATCH = 100;
+/**
+ * What still names the workspace once its content, uploads, exports and structure are gone, emptied in this
+ * order. The core's own are here; a module adds the tables it owns through the `WorkspacePurge` it is given.
+ * Most are empty by then — what named a message or a channel went with it — and are listed so that nothing is
+ * left by an order nobody foresaw. `workspace-purge.integration.test.ts` holds both lists, with the steps and
+ * the trail kept, to every table the catalogue says refers to a workspace.
+ */
+export const CORE_REMAINING_TABLES = ['workspace_invitations'] as const;
+
+/** A table with a `workspace_id` to empty it by. */
+type WorkspaceTable = {
+  [Table in keyof Database]: 'workspace_id' extends keyof Database[Table] ? Table : never;
+}[keyof Database];
+
+/** A step of the purge: a batch until one comes back short. */
+interface PurgeStep {
+  readonly batch: (transaction: Transaction, workspaceId: string) => Promise<Batch>;
+  readonly size: number;
+  /** Whether the rows it takes are messages, which the purge counts. */
+  readonly messages: boolean;
+}
 
 /**
- * What still names the workspace once its messages, files, exports and channels are gone, emptied in this
- * order. Most are empty by then — what named a message or a channel went with it — and are listed so that
- * nothing is left by an order nobody foresaw. `workspace-purge.integration.test.ts` holds this list, with the
- * steps above and the trail kept, to every table the catalogue says refers to a workspace.
+ * What a module adds to the purge of a workspace (D-250): steps before the core's uploads and exports, steps
+ * after them, and the tables it owns that name a workspace. The core owns the order and the transaction of each
+ * batch, the drain of the keys, the claim, and the last transaction; it names no module's table.
  */
-export const REMAINING_TABLES = [
-  'mentions',
-  'notifications',
-  'saved_messages',
-  'pinned_messages',
-  'message_versions',
-  'thread_follows',
-  'channel_bookmarks',
-  'github_repo_feeds',
-  'incidents',
-  'saved_searches',
-  'github_integrations',
-  'github_app_installations',
-  'github_app_handshakes',
-  'github_links',
-  'github_operations',
-  'incoming_webhooks',
-  'workspace_invitations',
-] as const;
+export interface WorkspacePurge {
+  readonly before: readonly PurgeStep[];
+  readonly after: readonly PurgeStep[];
+  readonly tables: readonly WorkspaceTable[];
+}
 
 /** One batch's work, and the keys to drain once it has committed. */
-interface Batch {
+export interface Batch {
   readonly rows: number;
   readonly files: number;
   readonly keys: readonly string[];
@@ -73,26 +76,6 @@ const keysOf = (
   rows.flatMap((row) =>
     [row.storage_key, row.thumbnail_key ?? null].filter((key): key is string => key !== null),
   );
-
-/** A batch of the workspace's messages: replies while any is left, then roots. */
-const messageBatch =
-  (replies: boolean) =>
-  async (transaction: Transaction, workspaceId: string): Promise<Batch> => {
-    const ids = (
-      await transaction
-        .selectFrom('messages')
-        .select('id')
-        .where('workspace_id', '=', workspaceId)
-        .where('parent_id', replies ? 'is not' : 'is', null)
-        .orderBy('created_at')
-        .limit(WORKSPACE_PURGE_BATCH)
-        .execute()
-    ).map((row) => row.id);
-    if (ids.length === 0) return { rows: 0, files: 0, keys: [] };
-    const files = await dropFiles(transaction, workspaceId, ids);
-    await transaction.deleteFrom('messages').where('id', 'in', ids).execute();
-    return { rows: ids.length, files: files.count, keys: files.keys };
-  };
 
 /** A batch of uploads nobody sent: once the messages are gone, every file left is one. */
 const uploadBatch = async (transaction: Transaction, workspaceId: string): Promise<Batch> => {
@@ -129,22 +112,6 @@ const exportBatch = async (transaction: Transaction, workspaceId: string): Promi
   return { rows: gone.length, files: keys.length, keys };
 };
 
-const channelBatch = async (transaction: Transaction, workspaceId: string): Promise<Batch> => {
-  const gone = await transaction
-    .deleteFrom('channels')
-    .where(
-      'id',
-      'in',
-      transaction
-        .selectFrom('channels')
-        .select('id')
-        .where('workspace_id', '=', workspaceId)
-        .limit(CHANNEL_BATCH),
-    )
-    .executeTakeFirst();
-  return { rows: Number(gone.numDeletedRows), files: 0, keys: [] };
-};
-
 /** What the erasure of one workspace did. */
 export interface PurgedWorkspace {
   readonly messages: number;
@@ -159,19 +126,15 @@ export interface PurgedWorkspace {
 export const purgeWorkspaceContent = async (
   dependencies: JobDependencies & { readonly storage: ObjectStore },
   workspaceId: string,
+  purge: WorkspacePurge,
 ): Promise<PurgedWorkspace> => {
   const { database, clock, storage, log } = dependencies;
   const done = { messages: 0, files: 0, leftBehind: 0 };
-  const steps: readonly {
-    readonly batch: (transaction: Transaction, workspaceId: string) => Promise<Batch>;
-    readonly size: number;
-    readonly messages: boolean;
-  }[] = [
-    { batch: messageBatch(true), size: WORKSPACE_PURGE_BATCH, messages: true },
-    { batch: messageBatch(false), size: WORKSPACE_PURGE_BATCH, messages: true },
+  const steps: readonly PurgeStep[] = [
+    ...purge.before,
     { batch: uploadBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
     { batch: exportBatch, size: Number.POSITIVE_INFINITY, messages: false },
-    { batch: channelBatch, size: CHANNEL_BATCH, messages: false },
+    ...purge.after,
   ];
   for (const step of steps) {
     for (;;) {
@@ -196,7 +159,7 @@ export const purgeWorkspaceContent = async (
       .returning('id')
       .executeTakeFirst();
     if (marked === undefined) return;
-    for (const table of REMAINING_TABLES) {
+    for (const table of [...purge.tables, ...CORE_REMAINING_TABLES]) {
       await transaction.deleteFrom(table).where('workspace_id', '=', workspaceId).execute();
     }
     // Its people last: they were told it went when it was asked for, and their sessions stay — they may
@@ -234,6 +197,7 @@ const claimDue = async (database: Executor, now: Date): Promise<void> => {
  */
 export const purgeWorkspaces = async (
   dependencies: JobDependencies & { readonly storage: ObjectStore },
+  purge: WorkspacePurge,
 ): Promise<{ workspaces: number; messages: number; files: number; leftBehind: number }> => {
   const { database, clock } = dependencies;
   await claimDue(database, clock.now());
@@ -248,7 +212,7 @@ export const purgeWorkspaces = async (
   const failed: { readonly workspaceId: string; readonly error: unknown }[] = [];
   for (const { id } of claimed) {
     try {
-      const purged = await purgeWorkspaceContent(dependencies, id);
+      const purged = await purgeWorkspaceContent(dependencies, id, purge);
       total.messages += purged.messages;
       total.files += purged.files;
       total.leftBehind += purged.leftBehind;

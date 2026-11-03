@@ -34,6 +34,7 @@ import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
 import { LogoMark } from '../shell/notice';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
+import { GoogleButton } from './google-button';
 import { OidcButton } from './oidc-button';
 
 type SentenceKey =
@@ -45,6 +46,7 @@ type SentenceKey =
   | 'signIn.signupClosed'
   | 'signIn.githubUnavailable'
   | 'signIn.oidcUnavailable'
+  | 'signIn.googleUnavailable'
   | 'signIn.emailUnverified'
   | 'signIn.busy'
   | 'signIn.failed';
@@ -71,6 +73,8 @@ const sentenceFor = (failure: SignInFailure, mail: boolean): SentenceKey => {
       return 'signIn.githubUnavailable';
     case 'oidc-unavailable':
       return 'signIn.oidcUnavailable';
+    case 'google-unavailable':
+      return 'signIn.googleUnavailable';
     case 'email-unverified':
       return 'signIn.emailUnverified';
     case 'busy':
@@ -88,6 +92,7 @@ export const SignInScreen = (): React.JSX.Element => {
   // Each is offered only once the server has said it works (`EmailSignInForm` asks for itself).
   const mail = methods.data?.email === true;
   const github = methods.data?.github === true;
+  const google = methods.data?.google === true;
   const oidc = methods.data?.oidc ?? null;
   // The native application sent the person here and is waiting for their answer (D-191): say so.
   const [forNative] = useState(
@@ -130,7 +135,7 @@ export const SignInScreen = (): React.JSX.Element => {
           </LoadingStatus>
         ) : (
           <>
-            {!methods.isError && !github && oidc === null && !mail && (
+            {!methods.isError && !github && !google && oidc === null && !mail && (
               <div className="flex w-full flex-col items-center gap-3">
                 <h2 className="text-title">{t('signIn.notSetUp.title')}</h2>
                 <p className="text-balance text-body text-ink-muted">{t('signIn.notSetUp.body')}</p>
@@ -139,7 +144,7 @@ export const SignInScreen = (): React.JSX.Element => {
                 </a>
               </div>
             )}
-            {(oidc !== null || github || methods.isError) && (
+            {(oidc !== null || github || google || methods.isError) && (
               <div className="flex w-full flex-col items-center gap-3">
                 {oidc !== null && <OidcButton name={oidc.name} variant="secondary" />}
                 {(github || methods.isError) && (
@@ -148,12 +153,13 @@ export const SignInScreen = (): React.JSX.Element => {
                     <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
                   </>
                 )}
+                {google && <GoogleButton variant="secondary" />}
               </div>
             )}
             {/* The password unless the server turned it off (R30, D-239) — kept when the server could not be
                 asked; the link only where mail is on. */}
             <EmailSignInForm
-              alone={!github && oidc === null && !methods.isError && mail}
+              alone={!github && !google && oidc === null && !methods.isError && mail}
               withPassword={methods.data?.password !== false}
               mail={mail}
             />

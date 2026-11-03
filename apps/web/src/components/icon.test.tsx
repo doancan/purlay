@@ -36,6 +36,20 @@ describe('Icon', () => {
     expect(classes.split(' ').filter((name) => name.startsWith('size-icon-'))).toEqual([token]);
   });
 
+  test('the Google mark is filled in four brand colours, not the one text colour, and still hidden', () => {
+    const { container } = render(<Icon name="google" />);
+    const svg = container.querySelector('svg');
+    expect(svg?.getAttribute('aria-hidden')).toBe('true');
+    expect(svg?.getAttribute('fill')).toBeNull();
+    const fills = [...container.querySelectorAll('path')].map((path) => path.getAttribute('class'));
+    expect(fills).toEqual([
+      'fill-brand-google-blue',
+      'fill-brand-google-green',
+      'fill-brand-google-yellow',
+      'fill-brand-google-red',
+    ]);
+  });
+
   test('defaults to the medium size, the one that sits on a line of body text', () => {
     const { container } = render(<Icon name="search" />);
     expect(container.querySelector('svg')?.getAttribute('class')).toContain('size-icon-md');

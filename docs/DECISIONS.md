@@ -36,6 +36,9 @@ the cloud sells is *that we operate it*: backups, upgrades, monitoring, incident
 somebody to email. Crippling the free product to sell the paid one would destroy audience 3, and
 audience 3 is what makes audience 2 believe the data is portable.
 
+**Amended 2026-11-02 (D-250).** The cloud may price what it operates by the modules a customer runs. Nothing is held back from a
+self-hoster, who can run every module free; "the only thing the cloud sells" reads as *the operation of what the code does*.
+
 The billing and metering modules live in the same repository, ship disabled by default, and are
 inert in a self-hosted deployment.
 
@@ -80,7 +83,7 @@ Purlay wins on four axes, in this order:
 
 | Axis | Concrete meaning | How it is measured |
 |---|---|---|
-| **Simplicity** | No apps directory, no workflow builder, no huddles, no canvas, no AI summaries. One way to do each thing. | Feature count stays under a hard cap (`PRD.md` §6 non-goals) |
+| **Simplicity** | No apps directory, no workflow builder, no huddles, no canvas, no AI summaries. One way to do each thing. | Every feature pays an admission cost — a budget, a matrix cell, a removal condition (D-250); the non-goals in `PRD.md` §6 stand |
 | **Speed** | Typing→render is never blocked on the network. Cold load and interaction budgets in `PRD.md` §5. | Measured budgets, enforced in CI |
 | **Cost** | Self-hosted. No per-seat fee. **No message history limit** — Slack's free-tier 90-day cutoff is the single most cited pain. | $0 per seat; full history retained |
 | **Dev-native** | Code, diffs and GitHub links are first-class objects, not attachments-with-syntax-colors. | Qualitative, judged by dogfood team |
@@ -800,6 +803,9 @@ one seat over.
 Database row claims with `SKIP LOCKED` prevent duplicate sends across nodes, and the live process publishes
 through its normal backplane after commit. Shutdown drains the current transaction before closing the pool.
 This exception covers user-timed actions; maintenance sweeps retain their external scheduler.
+The delivery is chat's (D-250): only a process that runs chat starts it, its tables are in chat's migration set
+(`chat/0002`–`0004`), and the files a scheduled message holds are reserved in chat's own
+`scheduled_message_attachments` and claimed in the core's words (`claimed_at`), never by a column of `attachments`.
 
 Three periodic jobs were promised and none had anything to run it: the orphan attachment sweeper
 (`ARCHITECTURE.md` §9), the `link_previews` expiry sweep (D-23), and the `storage_used_bytes`
@@ -1667,7 +1673,7 @@ location, and a test runs it from another directory.
 **Amended 2026-10-09 (#245): the replay budget is a module's, and two casts went.** The byte and
 per-channel caps and the cursor floor were in `realtime/router.ts`; they decide how a reconnecting
 client catches up, not how a socket behaves, and nothing in them touches a connection. They are
-`modules/messages/replay.ts` (`replaySince`), and the router sends what it returns. The two
+`features/chat/messages/replay.ts` (`replaySince`), and the router sends what it returns. The two
 "casts that defeat the exhaustive union" were checked first: the `ServerFrame` one was real
 (`frame()` asserted `{event, data}` into the union), and is now built from a body that is itself
 one member of the union, so an event paired with another event's data does not compile; the
@@ -3391,6 +3397,17 @@ was adopted instead. **Rejected — ignoring comments in every checksum:** it wo
 recorded checksum means and makes any comment edit invisible, including a misleading one.
 
 ---
+
+*Amended 2026-11-02 — a module has a set of its own (D-250):* the migrator takes the core's directory and the
+sets of the enabled modules, each a directory of its own, and applies the core's first. A module's rows are
+recorded as `<module>/<file>`; **the rows that exist are left as they are and are the core's**, so no database is
+rewritten and the restore rehearsal's dump does not move. Order, checksum, a missing file and an out-of-order file
+are checked within a set, never across sets, so two sets may both have a `0001` and a module that was off for
+releases opens where it stopped. Rows of a module this run does not carry are not an error: the migrator hands
+their names to the caller to log. The lock stays one, taken once for the whole run. The schema stamp of an export
+reads the core's rows only, so a module that is off does not change it. **Rejected — renaming the existing rows to
+`chat/…`:** `0055` selects one by name and would silently update nothing on a fresh database, and the rename
+gains nothing a new file under a module's directory does not.
 
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
 
@@ -5614,7 +5631,7 @@ as §7.4 had it: one person could take a channel's history away from everyone in
 refusing a name typed with spaces or capitals**, as New channel did: it answered a person for typing
 the way they speak, and the fix it asked for was always the same one the field can make.
 
-**Cost of reversing:** a role check and a count in `modules/channels/settings.ts`, two rows of the
+**Cost of reversing:** a role check and a count in `features/chat/channels/settings.ts`, two rows of the
 permission table, and this paragraph; no data changes shape.
 
 ### D-124. What is the person's and what is the workspace's — #495, #496, #497
@@ -7303,7 +7320,7 @@ broadcast D-12 exists to prevent.
 not tell (D-99 §2's bound); the state is the person's relation to the thread, the bound is what one
 reply writes.
 
-**Cost of reversing:** `thread_follows` (migration `0044`), `modules/messages/follow.ts`, the choices
+**Cost of reversing:** `thread_follows` (migration `0044`), `features/chat/messages/follow.ts`, the choices
 read in `delivery.ts`, the two routes and their contract, the panel's `follow-toggle.tsx`, and their
 tests.
 
@@ -7532,7 +7549,7 @@ proceed, and is open to their reversal.
   there are in every case measured; an index is paid on every send (D-10).
 
 **Cost of reversing:** `senderId` in `SearchQuery`, the route's parameter list and one `where` in
-`modules/search/search.ts`; `?from=`, `features/search/author-picker.tsx` and the strings on the web.
+`features/chat/search/search.ts`; `?from=`, `features/search/author-picker.tsx` and the strings on the web.
 
 ### D-167. Browse says what a channel is before it is joined; a group has a face
 
@@ -7819,7 +7836,7 @@ who notice the mistake. *Refusing to remove oneself* — a second answer for a r
 exactly leaving. *Telling the rest of the channel* — nobody's screen depends on it; the members list is
 read when it is opened.
 
-**Cost of reversing:** `removeChannelMember` in `modules/channels/settings.ts`, its route, a reason in
+**Cost of reversing:** `removeChannelMember` in `features/chat/channels/settings.ts`, its route, a reason in
 the contract, a row on the audit page and the details' Remove; no table changes shape.
 
 ### D-173. A workspace's storage is shown to its owners; its quota stays the operator's
@@ -9871,6 +9888,9 @@ GitHub's is, and named in the log.
 turns away the people it should let in more often than it stops the ones it should not: then the rule changes, and
 this entry with it. Dropping the way in is `DELETE /api/server/oidc` and a migration that drops four columns.
 
+**Related:** D-251 gives Google a way in of its own, built on the same checks, so that this slot stays for an
+organisation's provider.
+
 ### D-201. The cloud's nodes share one Redis for the bus, the limiters and presence, chosen by `REDIS_URL` alone — builds on D-7, D-25, D-82, D-84, D-190, D-198
 
 **Context.** D-7 (amended) made the shared adapter a requirement of the cloud, and D-25 placed three seams for it so that
@@ -11423,9 +11443,9 @@ again; nothing else reads them.
 owner could export, and only a whole workspace, so a person exercising a right of access or portability (KVKK, GDPR)
 depended on an owner or the operator. A person now asks for a copy of their own data in Sessions & account.
 
-- **What goes is decided column by column** (`PERSONAL_COLUMNS` in `modules/export/tables.ts`), typed over the
+- **What goes is decided column by column** (the core's `modules/export/core-personal-export.ts` and chat's `features/chat/personal-export.ts`, assembled in `export-catalogue.ts`, D-250), typed over the
   generated schema as the workspace's classification is, with every other table named and its reason given
-  (`PERSONAL_EXCLUDED`) and a test that binds both to the catalogue: a column or a table a migration adds does not
+  (`CORE_PERSONAL_EXCLUDED`, `CHAT_PERSONAL_EXCLUDED`) and a test that binds both to the catalogue: a column or a table a migration adds does not
   compile until somebody decides whether a person's own copy carries it. Their account's row, every field (none is a
   secret: the password's hash, the second step's key and the sessions' tokens are other tables', and stay); their
   memberships and what they set on each — the notification level, stars, Deep Work, threads followed; every message
@@ -11872,7 +11892,7 @@ notes (`docs/changelog/v{x.y.z}.md`, D-185); neither reached a screen.
    shared address — an office, a proxy — spent the budget people sign in with, and the browser tests saw `429`. This route
    needs a session and is charged per person, to the costly reads. `GET /api/client` stays for the native applications,
    which ask it once before anybody has signed in, and no code of the browser's names it (a test holds that). The server makes one anonymous `GET {GITHUB_API_URL}/repos/doancan/purlay/releases/latest`
-   (`modules/integrations/latest-release.ts`), bounded as every call to GitHub is — a deadline, no redirect followed, the body
+   (`features/chat/integrations/latest-release.ts`), bounded as every call to GitHub is — a deadline, no redirect followed, the body
    checked against a schema, never throwing to the caller — and accepts only a tag of three numbers behind a `v` and a page on
    `https://github.com/`; a draft, a pre-release, a rate limit, a `5xx`, a redirect or anything else is `null` and one log line
    without the body. The page must be exactly this repository's page of that tag
@@ -11954,3 +11974,270 @@ the person said. *A workspace setting* — a number nobody would tune, and a sec
 
 **Cost of reversing.** Change the constant (or delete the check in `reactions.ts` and the toast's guard); nothing is
 stored.
+
+### D-250. Purlay is a set of modules over a small core, and chat is one of them — builds on D-1, D-2, D-7, D-24, D-43, D-86; amends D-1, D-2 and `PRD.md` §6
+
+**Context.** Purlay was team chat. The owner now means it to be an all-in-one workspace — chat, issues and projects,
+notes, mail — with more large features to follow, and four things have to stay true while it grows. An instance
+installed for chat alone is chat alone: no other feature's tables, routes, bundle or menu. Features work without one
+another and degrade, not break, when a partner is absent. The code stays one open repository, so a self-hoster can have
+any subset. And the cloud can sell the same subsets as packages. None of this holds today: `messages` is a hub that
+`integrations`, `workspaces`, `attachments` and `channels` import and are imported by; channel visibility, message
+erasure and the export catalogue live in the core; the wire unions (`Topic`, `ServerFrame`, `NotificationType`) are
+closed; the web app imports every screen statically; and the migrations are one line every instance runs whole.
+
+No standing decision forbids an issue tracker, notes or mail: none is in `PRD.md` §6's list, and D-204's "no task
+tracker" bounded that decision's own scope. What this decision changes is the *shape* the product grows in, and two
+sentences that would otherwise contradict it (below).
+
+**Decision.** A **core** and **modules**, in one process over one database (D-7 stands: a module is not a service, and
+there is no broker).
+
+1. **The core** is identity, workspaces and tenancy (`WorkspaceContext`), permissions, audit, the domain event bus,
+   notifications, attachments, the search fan-out, erasure and export as catalogues modules contribute to, and the
+   module registry. Nothing in it names a module. What names chat today — channel visibility, message erasure, the
+   messages in the export catalogue — moves to chat, and `MODULES.md` §9 steps 6–9 do it. Until then the sentence is
+   a goal, and a test of `platform/` holds it once they are done.
+2. **A module is a unit that registers itself**, through a manifest (`MODULES.md` §2). Chat is a module, not the base:
+   issues and notes run without it. Modules are **first-party code in this repository**. The manifest is not a trust
+   boundary, and loading a module from elsewhere is not supported — `PRD.md` §6 keeps "plugin directory" a non-goal.
+3. **One build; the modules an instance runs are a setting.** `MODULES` unset or blank means every bundled module, `none`
+   means the core alone. An unknown or repeated id, a missing requirement, a cycle, or an id that is a core path segment
+   stops the process at boot. A disabled module is not mounted and its web chunk is never requested; a request for it
+   gets the plain `404` of any unknown route, never a distinct answer.
+4. **Modules meet through the core, never through each other's code.** By events first; by a port the core defines
+   where there are two users or a test boundary; by asking whether a capability exists. A caller that finds it absent
+   hides the feature or does nothing. Importing another module is a lint error, and **reading another module's tables
+   is a lint error too**: a module is given a query handle typed with its own tables and the core's, and reads across
+   go through a port. Raw `sql` in a module is the way round a typed handle, so it is a lint error there too: a table is
+   named only in the manifest's `data` hooks, which are handed an executor of the module's own. An event is either a
+   *hint* (a UI nudge, may be lost) or a *fact* (a notification, an index update, a system message): a fact is also a
+   row written in the same transaction and drained by a sweeper, because delivery after commit is at most once (D-35).
+5. **A module's tables exist only while it is enabled, and disabling drops nothing.** Each module owns an ordered set of
+   migrations; a foreign key goes from a module to the core, never between modules. Disabled, the tables stay and are
+   inert. The manifest declares what the module's data needs — erasure of a person (D-139), the tables of an export
+   (D-140), retention, the audit actions it writes and the permissions it gates — and the core runs them for every
+   module whose tables exist, enabled or not, so closing a module never leaves a person's data out of an erasure.
+   Every table is owned by the core or one module, written down and tested; a foreign key across owners fails a test,
+   and a list of the ones that exist today may only shrink. A core migration never names a module's table.
+6. **Every combination that is run is tested; the rest are not promised.** CI boots and smoke-tests the core alone,
+   each module alone with what it requires, and everything, and a disabled module's route must be `404`. Promoting an
+   `optional` partner to `requires` is a breaking change, said in the release notes. A module is admitted only with a
+   section in `MODULES.md`, its own budget gate (initial bundle, lazy chunk, and the latency of every other module's
+   hot path measured with it busy), and the condition on which it is removed if nobody uses it. This replaces the hard
+   cap on the number of features in D-2's table with a cost every feature must pay.
+7. **Isolation is by budget, not by process.** A module gets a share of the connection pool, a deadline per request and
+   an error boundary around its handlers and jobs — **built before a second module ships, not after**: a cap on its
+   concurrent connections with a queue timeout, and a `statement_timeout` set inside its transactions. A search source
+   takes an abort signal and a deadline, and is skipped, and said to be, when it overruns. Every log line and metric carries the module.
+8. **A cluster runs one module set.** A node records its module set in the database at boot and refuses to serve beside a
+   live peer whose set differs. The release may differ, so a rolling deploy is not blocked. Nodes of different sets also
+   share no channel on the bus, so a typo in `MODULES` on one node cannot make it receive another set's frames.
+9. **Commercial model.** All code stays AGPL and in this repository (D-24); there is still no open core. A self-hosted
+   instance can run every module, free. The cloud may price what it operates by the modules a customer runs, never by
+   seat (D-43's other rules stand). **This amends** D-1's "the only thing the cloud sells is that we operate it" and
+   `PRD.md` §6's "never withheld capability": a package is priced by what we run for a customer, and nothing is
+   withheld from anyone who runs it themselves. A package is not sold before per-workspace enablement
+   exists, because a package per instance would make the cloud one deployment per customer and end D-1's small
+   operation. Until then a multi-tenant instance with mixed packages is unsupported and nothing is priced by module.
+   Disabling a module keeps its data for a stated period and then offers deletion, and the data stays exportable
+   throughout.
+
+**Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
+chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs
+the database executor and `WorkspaceContext` and so either imports the platform downward or copies it, with a manifest,
+a workspace entry and a gate per package for one consumer. *Build-time selection* — a smaller artefact, a build and a
+test matrix for every combination. *A feature flag over shared code* — a default-off flag is a dead path that knip does
+not see, and it does nothing for the bundle. *Every migration always applied* — simple, but an instance "for chat
+only" holds every other module's tables, and cross-module keys leak in unseen. *Closing some modules* — it would end
+"no open core" (D-1). *Dropping a module's tables when it is closed* — an erasure and an export would then depend on
+which modules happened to be on. *Third-party modules* — a process-wide manifest with the database role is not a
+sandbox, and a directory is a non-goal.
+
+**Cost of reversing.** Dear once the migrations are split and cheap before: until then the registry and manifest are
+types and a loop. After modules ship, removing one is dropping its manifest, and its tables stay until an operator
+drops them by hand (D-9).
+
+**Decided.** (a) *Existing installs:* the legacy migration rows stay as they are and count as the core's. A rename
+would change the rows `0055` selects by name and the dump the restore rehearsal compares, and gains nothing a new
+file cannot: only files added from now on go under `<module>/`. The cost is that the first 77 files always create
+chat's tables, even where chat is off — inert, which rule 5 already accepts. The release before the first prefixed
+row skips rows it has no file for and says so, so rolling back one release stays possible while module migrations are
+additive. (c) *Workspace-level enablement* is a precondition of selling a package (rule 9).
+
+**Open.** (b) *Wire names:* namespacing frame types (`chat.message.created`) breaks installed clients, so the old
+names stay as aliases for one release. That a client ignores a type it does not know is **verified** for the web
+client (D-82: `parseServerMessage` returns `unknown`, the connection drops it, `server-frame.test.ts` holds it); it
+is not verified for a native client, which is checked before the unions open. The unions open with the first module
+that has frames of its own, not before: a registry with no entries would be a shape nothing has tried.
+
+### D-251. Sign in with Google, as a way in of its own — builds on D-31, D-138, D-179, D-200, D-239
+
+**Context.** A person with a Google account and no wish to use GitHub had two ways in: a link by email, and the one
+generic single-sign-on slot of D-200 — which a server gives to its organisation's provider (Okta, Entra ID), and which
+holds one provider at a time. Google is where most of those people already are. The work is not the screen but three
+questions D-200 answered for a provider the operator chose and which are open again for one that every Google account
+holder can reach: which addresses Google may vouch for, what becomes of an account made by email once its owner comes
+in through Google, and whether a mailbox is a second door past a provider. Google does not open the server to
+everybody who can press the button: who is let in is still decided by the invitation passport, the sign-up policy and
+`WORKSPACE_CREATORS`.
+
+**Decision.** Google is a provider the server knows by name, `google`, with its own routes, its own settings and its
+own way of being believed — and the checks are D-200's, not a second copy of them.
+
+1. **One verification core, two definitions.** `createOidcProvider` (`modules/auth/oidc.ts`) takes an
+   `OidcDefinition`: a provider id, the messages of its refusals, an optional `acceptedIssuers` and an optional
+   admission rule. The generic provider's definition is what D-200 shipped, byte for byte, and every test of it passes
+   unchanged. Google's is fixed: issuer `https://accounts.google.com`, scopes exactly `openid email profile`, code
+   with PKCE, the `id_token` the only identity, no `picture` taken (D-200 §7), no discovery until somebody presses the
+   button or an administrator probes. `acceptedIssuers` lists only the *extra* spellings of a token's `iss` — Google
+   sends `accounts.google.com` as well, and says to accept both — and the configured issuer is always accepted; the
+   generic provider has none and keeps exact equality. `messages` gives Google its own refusal wording; the single
+   sign-on sentences are unchanged.
+2. **Who an account is.** `accounts.provider_id = 'google'`, `accounts.account_id = <sub>`, with no issuer prefix: the
+   issuer is fixed, and an `iss` that arrives in two spellings would make a prefixed key inconsistent. A person whose
+   `sub` is already linked signs in to its owner **whatever address the token carries now** — the subject decides, not
+   the address, as D-200 §3 — and `users.email` is never rewritten from Google's side. Routes are
+   `GET /auth/google` and `GET /auth/callback/google`; with Google not connected neither answers (`404
+   ROUTE_NOT_FOUND`), and `AuthMethods.google` is `false`.
+3. **When an existing account is linked by address.** Only if the token says `email_verified` and the account's own
+   `email_verified` is true (D-179 §5, D-200 §3) **and the address is one Google may vouch for**
+   (`authoritativeForGoogle`): its domain is `gmail.com` or `googlemail.com`, or the token carries `hd` and the
+   address's domain is exactly that `hd` (a subdomain is another domain; case does not count). A verified address at
+   any other domain is Google's word about a mailbox it does not run: the domain may have changed hands, and a
+   person who registered a Google account on it would be signed in as the person it was. That is refused as
+   `email-unverified`, and nothing is written. **No account at the address** is a sign-up and follows the server's own
+   rules, so a newcomer at an outside address may sign up: the question was never whether Google may vouch for
+   somebody's mailbox but whether it may be used to take another person's account. **The same rule says what an
+   account Google makes keeps**: `users.email_verified` is true only where the address is Google's to vouch for
+   (`OidcDefinition.emailVerified`, which the generic provider leaves out and so always tells the library `true`). An
+   account Google made at an outside address is therefore not one GitHub or single sign-on links into by that address
+   — the library's own gate refuses it (`email-taken`) — and nobody who later holds the address takes it that way;
+   Google signs it in by the `sub` as any other.
+4. **An account Google made is marked.** `users.google_made` (migration 0078) is set in the sign-up that Google's
+   callback makes, and nowhere else; an account made by email and later linked to Google keeps it false. It is the
+   same distinction `github_id` carries for GitHub's, and it is what §6 needs.
+5. **One identity, and not a way past single sign-on.** An account has one Google identity: a second `sub` carrying the
+   address of an account Google is already linked to is refused (`identity_conflict`), never added beside the first.
+   An account that has an `oidc` account row is not linked to Google by address either (`identity_conflict`), as
+   GitHub is not (D-200 §6): the provider that decides who still works there is not bypassed. The check is one
+   (`refusedIdentityConflict`) for the three providers.
+6. **A Google-made account is not sent a link while Google is connected.** The address's letter is the word "use
+   Google" (English and Turkish, `sign-in-letters.ts`) instead of a link, asked and answered `202` as for any
+   address, and a link already sent is refused when spent (`fateOf` is asked again). An account made by email keeps
+   its links when Google is later linked to it. Disconnect Google and the links return, so nobody is shut out by a way
+   in that is gone. *Accepted:* with Google down, a Google-made account has no fallback but its other ways in.
+7. **Configuration and the administrator's say, as GitHub's and single sign-on's are.** `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET` are a seed, read on the first start only: both or neither, or the server refuses to start;
+   the secret is sealed bound to its column name and redacted in logs. Afterwards `POST` and `DELETE /api/server/google`
+   (Administration → Server): the pair is **tried before it is kept** — the discovery document, the key set, and the
+   token endpoint sent the credentials with a code nobody was given — and kept only when it works. A non-admin gets
+   `404`, like every other administrator route. Google counts as a way in for the last-way-in rule
+   (`confirmLastChannel`) and for turning passwords off (D-239): the last provider is not disconnected while passwords
+   are off. Connecting and disconnecting are on the audit trail as `server.google_connected` and
+   `server.google_disconnected`, written in the saving transaction, never a value.
+8. **The setup wizard has no step for it**, as it has none for single sign-on (D-200 §4): the first person is set up
+   with a way in that proves who they are, and Google is connected from Administration → Server or by the seed on the
+   first start.
+9. **The button.** Order on the sign-in, sign-up and invitation screens: single sign-on (if connected), GitHub, Google,
+   email. *Continue with Google* / *Google ile devam et*, with Google's multicolour "G" drawn as an inline SVG in the
+   icon set and its four colours as brand tokens, the same in every theme (D-97). Nothing is loaded from Google by the
+   browser (D-39). The reasons that reach the person are the closed set of D-121; Google adds none.
+10. **No contract bump.** `AuthMethods.google` and the new paths are additions (D-186).
+
+**Rejected.**
+
+- *Google in the generic OIDC slot.* It would leave nothing for an organisation's own provider, allow one of the two
+  and not both, and make the "who vouches for this address" rule a property of whichever issuer is typed in.
+- *`hd` as a restriction on who may enter* (`only @company.com`). D-200 refused an allow-list: who may come in is the
+  invitation, the sign-up policy and `WORKSPACE_CREATORS`. Here `hd` only says whose domain an address is, for §3. A
+  restriction can be added without changing any of this.
+- *Trusting every verified address* — linking an existing account whenever Google says `email_verified`. Google
+  can vouch for an address at a domain it does not run only as far as it was once reached; a domain that changes
+  hands makes that a claim over somebody else's account (§3).
+- *A link for a Google-made account.* A second door past the way it was made in, and one that would let an account
+  Google created be taken by whoever holds the mailbox when Google is the provider the person chose (D-200 §6's
+  reasoning, as GitHub's). *Refusing links for every linked account* was rejected the other way: an account made by
+  email would lose its fallback because Google was added.
+- *Several OIDC slots.* A table, an ordering and a settings screen to choose between providers, for a need Google
+  alone raises; the fixed provider is smaller and nothing blocks the slots from being added.
+- *A monochrome mark.* Google's brand rules for the button ask for the multicolour "G"; a grey one is a button that
+  looks disabled beside GitHub's.
+- *A step in the setup wizard.* As for single sign-on (D-200): three screens for a way in set up after the first person
+  has signed in; the seed covers a one-command install.
+- *Taking the profile picture or reading the userinfo endpoint.* D-200 §7 and §2: an address of somebody else's every
+  viewer's browser would be sent to, and an unsigned answer.
+
+**Accepted.** A person whose `hd`-less address is outside Gmail cannot link an existing account by Google, and is told
+`email-unverified`: they sign in the way the account was made, or an administrator invites them. A Workspace address
+whose `hd` is missing from the token is treated as outside Gmail. An account Google made at an outside address has an
+unproven address (§3): it is signed into by Google alone, is sent no sign-in letter (`fateOf` answers nothing for an
+unproven address, as for any) — so with Google disconnected it has no way in of its own, unlike one at a Gmail or `hd`
+address, which gets its links back (§6) — and GitHub or single sign-on refuses it as `email-taken`. An account Google made at a
+Gmail or `hd` address is proven, so GitHub or single sign-on carrying the same verified address links into it, as
+either links into an account GitHub made. That order is not blocked: Google is refused an account single sign-on is
+linked to (§5), but single sign-on is not refused an account Google is linked to. Google may show an unpublished OAuth client only to
+its test users; the operator note in `CONFIG.md` says to publish it.
+
+**Cost of reversing.** Disconnect Google (`DELETE /api/server/google`) and no route answers, the button disappears and
+Google-made accounts are sent links again. Dropping the way in is that, the Google branches in
+`better-auth.ts`, `magic-link.ts` and `server-admin.ts`, and a migration that drops `google_client_id`,
+`google_client_secret_encrypted` and `users.google_made`; accounts' `provider_id = 'google'` rows are deleted with it.
+
+### D-252. Every letter is one short note with one button — builds on D-138, D-179 §5, D-240
+
+**Context.** Every letter the server sent was its plain text wrapped in `<p>` tags, with the address it was about
+written out in the middle of a sentence. It read as a machine's, the address was the biggest thing in it, and on a
+phone a sign-in link was a long line to aim a thumb at. Every team product's mail now has a button.
+
+**Decision.** All of them — the sign-in link, the word to an account GitHub or Google made, an invitation, the
+administrator's verification, the relay's test and the missed-messages letter — are composed by one function,
+`composeLetter` (`platform/letter.ts`), from blocks: paragraphs, headings, groups of lines, small notes and **at most
+one button** for the one thing to do. The page is a white one, a column at most 480 pixels wide, a dark button
+(`#18181b`, the interface's ink), small grey notes, signed *— Purlay*, and the button's address written out at the foot
+for a client that shows no buttons. The plain-text part says the same blocks in order, the button as its words and its
+address.
+
+1. **Every character is escaped**, as before: a block holds words and the server's own addresses, and nothing a
+   person typed becomes markup or a link. Names and excerpts are still `quotable` first.
+2. **Inline styles and tables only.** Gmail and Outlook drop a `<style>` block, and Outlook lays out nothing else
+   reliably; no class, no web font, no script.
+3. **No image.** Most clients block remote images until asked, and a logo that does not load is a broken box at the
+   top of a sign-in letter. The signature names Purlay instead.
+4. **Light only.** The page declares `color-scheme: light`, so a client in dark mode shows it as drawn rather than
+   inverting half of it.
+5. **The missed-messages letter** keeps its content (D-240): each conversation is a heading and its newest lines, each
+   line ending in a small *Open* link to that message; the button opens Purlay, and the link that stops the letters is
+   a note at the end.
+
+**Rejected.** *A card on a grey page with a coloured header* — the look of a newsletter, the one thing a sign-in letter
+should not resemble, and more for Outlook to break. *The brand blue button* — the interface's primary is blue, but
+in a letter a dark button reads as the one action without suggesting an advertisement. *An HTML template file per
+letter* — eight copies of the same page to keep escaping right in. *A logo* — see 3.
+
+**Cost of reversing.** One file: `composeLetter` decides the page; the letters only name their blocks.
+
+### D-253. A typed face becomes its emoji, and Backspace takes it back — builds on D-110, D-188
+
+**Context.** People type `:D` and `:)` out of habit, and in a chat those read as the emoji they mean in every other
+messenger. The composer already had a picker; it had no answer for the face typed by hand.
+
+**Decision.** In the composer (`features/composer/emoticons.ts`), a face from a fixed list — `:)` `:D` `;)` `:(`
+`:P` `:O` `:'(` `<3` `xD` and some thirty more — becomes its emoji **when the word ends**: at a space, a new line or
+the send.
+
+1. **Only a face that stands alone**: at the start of the text or after a space. `:Dosya`, `http://a.b:D` and `(:D`
+   are left as written. Case counts: `:d` and `xd` are not faces.
+2. **Never inside code** — an open fence, or an odd count of backticks earlier on the line — where `:)` is
+   somebody's syntax.
+3. **Backspace straight after** the change puts the face back as it was typed, with its space, and that one stays: the
+   space is already there, so nothing turns it again. Another face elsewhere still turns.
+4. **Only what is typed.** A paste, a draft brought back, or a message edited later is not touched; what is sent is
+   ordinary text, so the server, search and the other clients know nothing of it.
+
+**Rejected.** *Turning as soon as the face is complete* — `:Dosya` would become 😄osya before the person had finished
+the word. *A setting to turn it off* — Backspace answers the single time it is unwanted; a setting can come when
+somebody asks for one. *Turning it on the server* — it would change words people sent from any client, code
+included, without their seeing it first.
+
+**Cost of reversing.** One module and three lines in the composer.

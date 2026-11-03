@@ -12,7 +12,7 @@ import {
   type IncidentResponse,
   type IncidentUpdatePage,
 } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,
@@ -27,8 +27,8 @@ import {
   incidentUpdates,
   savePostmortem,
   type IncidentWrite,
-} from '../../modules/incidents/incidents';
-import { addResponder, removeResponder } from '../../modules/incidents/responders';
+} from '../../features/chat/incidents/incidents';
+import { addResponder, removeResponder } from '../../features/chat/incidents/responders';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';

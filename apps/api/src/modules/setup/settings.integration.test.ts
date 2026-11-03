@@ -38,6 +38,10 @@ const clock = fixedClock(new Date('2026-10-22T09:00:00.000Z'));
 const cipher = credentialCipher(DEVELOPMENT_ENCRYPTION_KEY);
 
 const GITHUB = { clientId: 'Iv1.app-id', clientSecret: 'gh-secret-0f3a9c' };
+const GOOGLE = {
+  clientId: '123-abc.apps.googleusercontent.com',
+  clientSecret: 'GOCSPX-secret-5d1e',
+};
 const SMTP = {
   smtpUrl: 'smtps://purlay%40example.com:relay-pw-77z@mail.example.com:465',
   from: 'purlay@example.com',
@@ -77,6 +81,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         signUp: 'invite-only',
         github: undefined,
         oidc: undefined,
+        google: undefined,
         smtp: undefined,
         githubApp: undefined,
         workspaceCreators: { kind: 'first' },
@@ -96,6 +101,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         signUp: 'open',
         github: GITHUB,
         oidc: undefined,
+        google: undefined,
         smtp: SMTP,
         githubApp: undefined,
         workspaceCreators: { kind: 'listed', logins: new Set(['Ada', 'grace-h']) },
@@ -105,6 +111,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         signUp: 'open',
         github: GITHUB,
         oidc: undefined,
+        google: undefined,
         smtp: SMTP,
         githubApp: undefined,
         // Lower case, as a login is compared (D-169).
@@ -204,6 +211,7 @@ describe('integration: the server settings (D-179 §6)', () => {
           signUp: 'open',
           github: undefined,
           oidc: undefined,
+          google: undefined,
           smtp: undefined,
           githubApp: undefined,
           workspaceCreators: { kind: 'anyone' },
@@ -286,6 +294,7 @@ describe('integration: the server settings (D-179 §6)', () => {
         signUp: 'open',
         github: GITHUB,
         oidc: undefined,
+        google: undefined,
         smtp: SMTP,
         githubApp: undefined,
         workspaceCreators: { kind: 'anyone' },
@@ -410,6 +419,7 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         signUp: 'invite-only',
         github: GITHUB,
         oidc: undefined,
+        google: undefined,
         smtp: { ...SMTP, allowPlaintext: true },
         githubApp: undefined,
         workspaceCreators: { kind: 'listed', logins: new Set(['ada', 'grace']) },
@@ -445,6 +455,7 @@ describe('integration: the environment is imported once (D-179 §6)', () => {
         signUp: 'invite-only',
         github: { clientId: 'client-id', clientSecret: 'client-secret' },
         oidc: undefined,
+        google: undefined,
         // A plaintext permission with no relay is nothing to keep.
         smtp: undefined,
         githubApp: undefined,
@@ -840,6 +851,99 @@ describe('integration: the GitHub App in the settings (D-246)', () => {
         'GITHUB_APP_PRIVATE_KEY',
         'GITHUB_APP_WEBHOOK_SECRET',
       ]);
+    });
+  });
+});
+
+describe('integration: Google in the settings (D-251)', () => {
+  const column = async (db: Executor): Promise<{ id: string | null; secret: string | null }> =>
+    await db
+      .selectFrom('server_settings')
+      .select(['google_client_id as id', 'google_client_secret_encrypted as secret'])
+      .where('id', '=', true)
+      .executeTakeFirstOrThrow();
+
+  test('is kept sealed, read back whole, shown as set and never as the secret, and cleared whole', async () => {
+    await withRollback(async (db) => {
+      expect((await readSettings(db, cipher)).google).toBeUndefined();
+      await saveSettings(db, cipher, clock, { google: GOOGLE });
+      const stored = await column(db);
+      expect(stored.id).toBe(GOOGLE.clientId);
+      expect(stored.secret).not.toBeNull();
+      expect(stored.secret).not.toContain(GOOGLE.clientSecret);
+      const settings = await readSettings(db, cipher);
+      expect(settings.google).toEqual(GOOGLE);
+      const view = settingsView(settings);
+      expect(view.google).toEqual({ clientId: GOOGLE.clientId, clientSecret: { set: true } });
+      expect(JSON.stringify(view)).not.toContain(GOOGLE.clientSecret);
+      await saveSettings(db, cipher, clock, { google: null });
+      expect(await column(db)).toEqual({ id: null, secret: null });
+      expect((await readSettings(db, cipher)).google).toBeUndefined();
+    });
+  });
+
+  test('refuses half a client', async () => {
+    await withRollback(async (db) => {
+      expect(
+        String(
+          await failure(
+            saveSettings(db, cipher, clock, { google: { ...GOOGLE, clientSecret: '' } }),
+          ),
+        ),
+      ).toContain('both');
+    });
+  });
+
+  test('a sealed secret copied into the other column does not open there', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { github: GITHUB, google: GOOGLE });
+      const { github } = await rawRow(db);
+      await db
+        .updateTable('server_settings')
+        .set({ google_client_secret_encrypted: github })
+        .execute();
+      expect(await failure(readSettings(db, cipher))).toBeInstanceOf(SealBroken);
+    });
+  });
+
+  test('a rotated key leaves Google unset and named at start', async () => {
+    await withRollback(async (db) => {
+      await saveSettings(db, cipher, clock, { google: GOOGLE });
+      const rotated = credentialCipher(
+        Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      );
+      const booted = await readSettingsToBoot(db, rotated);
+      expect(booted.needsReentry).toEqual(['google']);
+      expect(booted.settings.google).toBeUndefined();
+    });
+  });
+
+  test('the environment’s client is imported once, and named after as ignored', async () => {
+    await withRollback(async (db) => {
+      await db.deleteFrom('server_settings').execute();
+      const config = testConfig({
+        GOOGLE_CLIENT_ID: GOOGLE.clientId,
+        GOOGLE_CLIENT_SECRET: GOOGLE.clientSecret,
+      });
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(config))).toBe('imported');
+      expect((await column(db)).secret).not.toContain(GOOGLE.clientSecret);
+      expect((await readSettings(db, cipher)).google).toEqual(GOOGLE);
+      for (const name of ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']) {
+        expect(ignoredEnvironment(config)).toContain(name);
+      }
+      const changed = testConfig({ GOOGLE_CLIENT_ID: 'x', GOOGLE_CLIENT_SECRET: 'y' });
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(changed))).toBe('already');
+      expect((await readSettings(db, cipher)).google).toEqual(GOOGLE);
+    });
+  });
+
+  test('an environment with neither imports no client, and names none as ignored', async () => {
+    await withRollback(async (db) => {
+      await db.deleteFrom('server_settings').execute();
+      const config = testConfig({});
+      expect(await importFromEnvOnce(db, cipher, clock, envSeedOf(config))).toBe('imported');
+      expect((await readSettings(db, cipher)).google).toBeUndefined();
+      expect(ignoredEnvironment(config).filter((name) => name.startsWith('GOOGLE_'))).toEqual([]);
     });
   });
 });

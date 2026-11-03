@@ -37,11 +37,16 @@ export interface ServerClient {
     readonly clientSecret: string;
     readonly name: string;
   }) => Promise<ProbeResult>;
+  /** Google's OAuth client (D-251): tried with what is typed and kept only if it works. */
+  readonly google: (candidate: {
+    readonly clientId: string;
+    readonly clientSecret: string;
+  }) => Promise<ProbeResult>;
   readonly smtp: (candidate: RelayTry) => Promise<ProbeResult>;
   /** The GitHub App issues are written through (D-246): tried as its client and as itself, kept if both hold. */
   readonly githubApp: (candidate: ServerGitHubAppRequest) => Promise<ProbeResult>;
   readonly disconnect: (
-    channel: 'github' | 'smtp' | 'oidc' | 'github-app',
+    channel: 'github' | 'smtp' | 'oidc' | 'google' | 'github-app',
     confirmLastChannel: boolean,
   ) => Promise<void>;
   /** One rule of the sign-in policy: who may make an account, two-step verification, passwords (D-239). */
@@ -69,6 +74,7 @@ const isAnswer = (value: unknown): value is ServerSettingsAnswer =>
   typeof value['appUrl'] === 'string' &&
   typeof value['githubCallbackUrl'] === 'string' &&
   typeof value['oidcCallbackUrl'] === 'string' &&
+  typeof value['googleCallbackUrl'] === 'string' &&
   isRecord(value['githubApp']) &&
   typeof value['githubApp']['callbackUrl'] === 'string' &&
   typeof value['githubApp']['webhookUrl'] === 'string' &&
@@ -76,6 +82,7 @@ const isAnswer = (value: unknown): value is ServerSettingsAnswer =>
   typeof value['channels']['github'] === 'boolean' &&
   typeof value['channels']['email'] === 'boolean' &&
   typeof value['channels']['oidc'] === 'boolean' &&
+  typeof value['channels']['google'] === 'boolean' &&
   typeof value['adminEmail'] === 'string';
 
 export const createServerClient = (fetchFn: SetupFetch): ServerClient => {
@@ -93,6 +100,7 @@ export const createServerClient = (fetchFn: SetupFetch): ServerClient => {
     },
     github: (candidate) => probe('/api/server/github', candidate),
     oidc: (candidate) => probe('/api/server/oidc', candidate),
+    google: (candidate) => probe('/api/server/google', candidate),
     smtp: (candidate) => probe('/api/server/smtp', candidate),
     githubApp: (candidate) => probe('/api/server/github-app', candidate),
     disconnect: async (channel, confirmLastChannel): Promise<void> => {

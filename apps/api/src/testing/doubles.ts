@@ -25,6 +25,7 @@ import { aGitHubApiThatOnlyChecksTokens } from './github-stub';
 import { inProcessBackplane } from '../realtime/bus';
 import { NO_LOG } from '../platform/events';
 import type { ObjectStore } from '../platform/storage';
+import { chatWorkspaceChannels } from '../features/chat/channels/workspace-channels';
 
 /** A logger whose lines a test can read back, parsed. */
 export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown>[] } => {
@@ -195,6 +196,7 @@ export const testDependencies = ({
                     clientSecret: config.GITHUB_CLIENT_SECRET,
                   },
             oidc: undefined,
+            google: undefined,
             signUp,
           },
           mailer: mail,
@@ -252,6 +254,8 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
   // Anybody may make a workspace, so a test makes the ones it needs; who may is the creators' own
   // tests' (D-155), which read the server's setting.
   workspaceCreators: () => Promise.resolve({ kind: 'anyone' }),
+  // Chat is part of what a test runs against, as it is in the application.
+  workspaceChannels: chatWorkspaceChannels,
 });
 
 /**

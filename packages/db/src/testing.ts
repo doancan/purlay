@@ -14,7 +14,7 @@
  */
 import { Kysely, PostgresDialect, sql, type Transaction } from 'kysely';
 import pg from 'pg';
-import { migrateToLatest } from './migrator';
+import { migrateToLatest, PRODUCT_MIGRATION_SETS } from './migrator';
 import type { DB } from './schema';
 
 class Rollback extends Error {
@@ -218,7 +218,9 @@ export const buildIntegrationTemplate = async (name?: string): Promise<string> =
       if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
       const templateDb = connect<unknown>(onDatabase(source, template), 1);
       try {
-        const { error } = await migrateToLatest(templateDb);
+        const { error } = await migrateToLatest(templateDb, undefined, {
+          modules: PRODUCT_MIGRATION_SETS,
+        });
         if (error !== undefined)
           throw new Error('migrating the test template failed', { cause: error });
       } finally {
@@ -240,7 +242,9 @@ export const buildIntegrationTemplate = async (name?: string): Promise<string> =
 export const migrateIntegrationDatabase = async (connectionString?: string): Promise<void> => {
   const database = connect<unknown>(connectionString ?? integrationUrl(), 1);
   try {
-    const { error } = await migrateToLatest(database);
+    const { error } = await migrateToLatest(database, undefined, {
+      modules: PRODUCT_MIGRATION_SETS,
+    });
     if (error !== undefined) {
       throw new Error('migrating the test database failed', { cause: error });
     }

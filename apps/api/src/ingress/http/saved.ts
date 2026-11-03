@@ -11,7 +11,7 @@ import {
 } from '../../platform/events';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
-import { saveMessage, savedIds, savedPage, unsaveMessage } from '../../modules/saved/saved';
+import { saveMessage, savedIds, savedPage, unsaveMessage } from '../../features/chat/saved/saved';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';

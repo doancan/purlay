@@ -24,6 +24,7 @@ const signedOut = (open: boolean, calls: { status: number }): ReturnType<typeof 
         github: false,
         email: false,
         oidc: null,
+        google: false,
         signUp: 'invite-only',
         password: true,
       }),

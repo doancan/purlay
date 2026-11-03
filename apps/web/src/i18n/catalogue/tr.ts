@@ -131,6 +131,7 @@ export const tr = {
   'signIn.title': 'Purlay’e giriş yap',
   'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
+  'signIn.google': 'Google ile devam et',
   // Tek oturum açma (D-200). `{name}` düğmenin işletmece verilen adı ya da aşağıdaki varsayılandır.
   'signIn.oidc': '{name} ile devam et',
   'signIn.oidc.default': 'tek oturum açma',
@@ -148,8 +149,10 @@ export const tr = {
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden dene.',
   'signIn.oidcUnavailable':
     'Tek oturum açma hizmetine ulaşılamadı ya da bu sunucunun güvendiği bir kimlik vermedi — biraz bekleyip yeniden dene; sürerse sunucuyu yönetene haber ver.',
+  'signIn.googleUnavailable':
+    'Google yanıt vermedi. Biraz sonra yeniden dene ya da başka bir yolla gir.',
   'signIn.emailUnverified':
-    'Tek oturum açma e-posta adresinin doğrulanmış olduğunu söylemedi; bu yüzden seni giriş yaptıramaz. Kuruluşunun oturum açma sistemini yönetene adresini doğrulatmasını söyle.',
+    'Bu giriş adresin sana ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet iste.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
   'signIn.ended': 'Oturumun sona erdi. Devam etmek için yeniden giriş yap.',
@@ -157,7 +160,7 @@ export const tr = {
   'signIn.methods.retry': 'Yeniden dene',
   'signIn.notSetUp.title': 'Bu sunucu henüz kurulmadı',
   'signIn.notSetUp.body':
-    'GitHub ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+    'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
   'signIn.notSetUp.action': 'Bu sunucuyu kur',
   'signIn.scope': 'Purlay GitHub’dan yalnızca adını, kullanıcı adını ve e-postanı ister.',
   'signIn.email.label': 'E-posta adresi',
@@ -746,6 +749,8 @@ export const tr = {
   'state.channel.removed.title': 'Bu kanaldan çıkarıldın',
   'state.channel.removed.body':
     'Biri seni kanaldan çıkardı. Konuşması üyelerinde kalır; içlerinden biri seni yeniden ekleyebilir.',
+  'state.workspace.core.title': 'Çalışma alanın',
+  'state.workspace.core.body': 'Kişileri ve ayarları menüde.',
   'state.workspace.empty.title': 'Bir kanal seç',
   'state.workspace.empty.body': 'Listeden birini seç ya da ilkini oluştur.',
 
@@ -1844,6 +1849,10 @@ export const tr = {
   'settings.account.github': 'GitHub',
   'settings.account.githubSignsIn': 'Bu GitHub hesabıyla giriş yapabilirsin.',
   'settings.account.githubLinked': 'Bağlı',
+  'settings.account.emailGoogle': 'Google hesabının adresi. Google ile giriş yaparsın.',
+  'settings.account.google': 'Google',
+  'settings.account.googleSignsIn': 'Bu Google hesabıyla giriş yapabilirsin.',
+  'settings.account.googleLinked': 'Bağlı',
   'settings.account.oidc': 'Tek oturum açma',
   'settings.account.oidcSignsIn':
     'Kuruluşunun oturum açma sistemi bu hesaba bağlı; e-postayla gelen bağlantı artık bu hesaba giriş yaptırmaz.',
@@ -1868,7 +1877,7 @@ export const tr = {
   'settings.account.twoFactor.description':
     'Parolandan sonra, giriş yaparken telefonundaki bir doğrulama uygulamasının kodu da istenir.',
   'settings.account.twoFactor.otherWays':
-    'Parolanı korur. GitHub, çoklu oturum açma ya da e-postayla gelen bağlantıyla girişte o sağlayıcının kendi güvenliği geçerlidir.',
+    'Parolanı korur. GitHub, Google, tek oturum açma ya da e-postayla gelen bağlantıyla girişte o sağlayıcının kendi güvenliği geçerlidir.',
   'settings.account.twoFactor.required':
     'Bu sunucu parolası olan hesaplarda bunu zorunlu tutuyor; bu yüzden açık kalır.',
   'settings.account.twoFactor.status': 'Durum',
@@ -2401,6 +2410,30 @@ export const tr = {
     'Aşağıdaki yönlendirme adresinin sağlayıcıda bu istemci için kayıtlı olduğunu denetle.',
   'setup.oidc.reason.unexpected-reply.fix2':
     'Sürerse, aşağıdaki yanıt neyin cevap verdiğini söyler.',
+  'setup.google.reason.secret-rejected.what':
+    'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştır.',
+  'setup.google.reason.secret-rejected.fix1':
+    'İstemci kimliğini ve gizli anahtarını Google Cloud’daki OAuth istemcisi sayfasından yeniden kopyala.',
+  'setup.google.reason.secret-rejected.fix2':
+    'Anahtar devre dışı bırakılmış, değiştirilmiş ya da istemci silinmiş olabilir: yeni bir anahtar üretip ikisini de buraya yapıştır.',
+  'setup.google.reason.client-unknown.what': 'Google bu istemciyi tanımıyor.',
+  'setup.google.reason.client-unknown.fix1': 'İstemci kimliğini Google Cloud’dan yeniden kopyala.',
+  'setup.google.reason.client-unknown.fix2':
+    'OAuth istemcisi silinmiş olabilir ya da kimlik başka bir projeye ait olabilir.',
+  'setup.google.reason.unreachable.what': 'Google yanıt vermedi ya da süresinde vermedi.',
+  'setup.google.reason.unreachable.fix1': 'Biraz sonra yeniden dene.',
+  'setup.google.reason.unreachable.fix2':
+    'Bu sunucunun accounts.google.com adresine dışarıdan bağlanabildiğini denetle.',
+  'setup.google.reason.tls-failed.what': 'Google’a ulaşıldı ama güvenli bağlantı kurulamadı.',
+  'setup.google.reason.tls-failed.fix1':
+    'Bu sunucu ile Google arasında bir şey sertifikasını değiştiriyor olabilir.',
+  'setup.google.reason.tls-failed.fix2':
+    'Bu sunucu, sisteminin güvendiği sertifika otoritelerine güvenir.',
+  'setup.google.reason.unexpected-reply.what': 'Yanıt, Google’ın vereceği türden değil.',
+  'setup.google.reason.unexpected-reply.fix1':
+    'Aşağıdaki yönlendirme adresinin Google Cloud’da bu istemci için kayıtlı olduğunu denetle.',
+  'setup.google.reason.unexpected-reply.fix2':
+    'Sürerse, aşağıdaki yanıt neyin cevap verdiğini söyler.',
   'setup.failed.network': 'Sunucuya ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
   'setup.failed.rate': {
     other: 'Bu tarayıcıdan çok fazla deneme yapıldı. {count} dakika bekleyip yeniden dene.',
@@ -2509,6 +2542,29 @@ export const tr = {
   'settings.server.oidc.disconnectBody':
     'İnsanlar artık sağlayıcıyla giriş yapamaz. Açık oturumlar açık kalır; sağlayıcının oluşturduğu hesaplar diğer giriş yollarıyla çalışmaya devam eder.',
   'settings.server.oidc.disconnected': 'Tek oturum açma bağlantısı kesildi.',
+  'settings.server.google.title': 'Google ile giriş',
+  'settings.server.google.description':
+    'İnsanlar Google hesaplarıyla, Google Cloud’da sahibi olduğun bir OAuth istemcisi üzerinden giriş yapar.',
+  'settings.server.google.empty': 'Bir istemci bağlanana kadar kimse Google ile giriş yapamaz.',
+  'settings.server.google.clientId': 'İstemci kimliği {id}',
+  'settings.server.google.callback': 'Yönlendirme adresi',
+  'settings.server.google.callbackHint':
+    'Bunu Google Cloud’daki OAuth istemcisine yetkili yönlendirme adresi (redirect URI) olarak ekle.',
+  'settings.server.google.connect': 'Google’ı bağla',
+  'settings.server.google.replace': 'Kimlik bilgilerini değiştir',
+  'settings.server.google.clientIdLabel': 'İstemci kimliği',
+  'settings.server.google.clientSecretLabel': 'İstemci gizli anahtarı',
+  'settings.server.google.hint':
+    'Kaydetmeden önce Google’a istemci sorulur. Gizli anahtar şifreli saklanır ve bir daha gösterilmez.',
+  'settings.server.google.verifiedNote':
+    'Mevcut bir hesaba yalnızca Google adresin doğrulandığını söylediğinde, hesabın adresi de doğrulanmışsa ve adres bir Gmail adresiyse ya da kişinin girdiği Google Workspace alanına aitse bağlanılır.',
+  'settings.server.google.save': 'Bağlantıyı dene ve kaydet',
+  'settings.server.google.saved':
+    'Kaydedildi. Google ile giriş bundan sonra bu istemciyi kullanır.',
+  'settings.server.google.disconnectTitle': 'Google ile giriş bağlantısı kesilsin mi?',
+  'settings.server.google.disconnectBody':
+    'İnsanlar artık Google ile giriş yapamaz. Açık oturumlar açık kalır; Google’ın oluşturduğu hesaplar diğer giriş yollarıyla çalışmaya devam eder.',
+  'settings.server.google.disconnected': 'Google ile giriş bağlantısı kesildi.',
   'settings.server.email.title': 'E-posta',
   'settings.server.email.description':
     'Giriş bağlantıları ve davetler bu e-posta sunucusundan gönderilir.',
@@ -2548,7 +2604,7 @@ export const tr = {
     '{name} askıya alınsın mı? Bütün cihazlarda oturumu kapanır ve sen askıyı kaldırana kadar giriş yapamaz.',
   'settings.server.signIn.title': 'Giriş yöntemi',
   'settings.server.signIn.description':
-    'Parolayla giriş yapan hesaplar için kurallar. GitHub, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',
+    'Parolayla giriş yapan hesaplar için kurallar. GitHub, Google, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',
   'settings.server.signIn.twoFactor': 'İki adımlı doğrulama',
   'settings.server.signIn.twoFactor.off': 'İsteğe bağlı',
   'settings.server.signIn.twoFactor.off.body': 'Parolası olan herkes kendisi karar verir.',
@@ -2560,9 +2616,9 @@ export const tr = {
   'settings.server.signIn.passwords.on.body': 'E-posta adresi ve parolayla giriş yapılır.',
   'settings.server.signIn.passwords.off': 'Kapalı',
   'settings.server.signIn.passwords.off.body':
-    'Yalnızca GitHub ya da tek oturum açma. Bunlar çalışmazsa sunucu yöneticisi admin:reset-password ile parolaları yeniden açar.',
+    'Yalnızca GitHub, Google ya da tek oturum açma. Bunlar çalışmazsa sunucu yöneticisi admin:reset-password ile parolaları yeniden açar.',
   'settings.server.signIn.passwords.needsProvider':
-    'Önce GitHub’ı ya da tek oturum açmayı bağla: parolayla giriş ancak bunlardan biri çalışırken kapatılabilir.',
+    'Önce GitHub’ı, Google’ı ya da tek oturum açmayı bağla: parolayla giriş ancak bunlardan biri çalışırken kapatılabilir.',
   'settings.server.signIn.saved': 'Kaydedildi. Bir sonraki istekten itibaren geçerli.',
   'settings.server.lifetime.title': 'Bir oturum ne kadar sürer',
   'settings.server.lifetime.description':
@@ -2579,7 +2635,7 @@ export const tr = {
   'settings.server.lifetime.days': { other: '{count} gün' },
   'settings.server.lifetime.weeks': { other: '{count} hafta' },
   'settings.server.passwordsOffLast':
-    'Parolayla giriş kapalı ve bu, GitHub ile tek oturum açmanın sonuncusu: kimse giriş yapamaz. Önce parolaları aç.',
+    'Parolayla giriş kapalı ve bu, GitHub, Google ve tek oturum açmanın sonuncusu: kimse giriş yapamaz. Önce parolaları aç.',
   'settings.server.creators.title': 'Kimler çalışma alanı açabilir',
   'settings.server.creators.description':
     'Giriş açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',

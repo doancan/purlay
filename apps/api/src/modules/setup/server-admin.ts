@@ -14,12 +14,12 @@
  *   longer the one that was probed.
  * - **The relay's test letter goes to the administrator's own address**, as a plain test: this is a
  *   change made by someone who is signed in, not the proof of an address.
- * - **Never the only way in by accident.** Disconnecting GitHub or the relay is refused when no other
- *   way for other people to sign in would remain, unless the administrator says so
+ * - **Never the only way in by accident.** Disconnecting GitHub, Google, single sign-on or the relay is
+ *   refused when no other way for other people to sign in would remain, unless the administrator says so
  *   (`confirmLastChannel`). The rule is weighed inside the swap's own transaction, under its lock, from
  *   what that transaction saved — two disconnects at once cannot both pass it.
- * - **Never nobody's way in** (D-239). Password sign-in is turned off only while GitHub or single sign-on is
- *   connected, and the last of them is not disconnected while it is off — no confirmation lets it go. Both
+ * - **Never nobody's way in** (D-239). Password sign-in is turned off only while GitHub, Google or single
+ *   sign-on is connected, and the last of them is not disconnected while it is off — no confirmation lets it go. Both
  *   rules are weighed as the last way in is, inside the swap's transaction, from what that transaction saved:
  *   two administrators at once, one turning passwords off and one disconnecting the provider, cannot both pass.
  * - **Every change is on the trail** (`server_audit_log`), written in the transaction that saves it:
@@ -29,6 +29,7 @@ import type { Executor, Transaction } from '@purlay/db';
 import {
   GITHUB_APP_CALLBACK,
   GITHUB_APP_WEBHOOK,
+  GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
   type ProbeResult,
@@ -37,18 +38,15 @@ import {
   type ServerPolicyRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import {
-  smtpTransport,
-  textLetter,
-  type MailMessage,
-  type SmtpTransportFactory,
-} from '../../platform/mail';
+import { smtpTransport, type MailMessage, type SmtpTransportFactory } from '../../platform/mail';
+import { composeLetter } from '../../platform/letter';
 import { recordServerAudit, type ServerAuditAction } from '../audit/server-audit';
 import type { SignInLocale } from '../auth/sign-in-letters';
 import {
   candidateRefusal,
   GITHUB_PROBE_TIMEOUT_MS,
   probeGitHub,
+  probeGoogle,
   probeOidc,
   probeSmtp,
   SMTP_PROBE_TIMEOUT_MS,
@@ -70,7 +68,7 @@ import {
 } from './settings';
 import { setupStatus, type ServerAdminSession } from './setup';
 import { probeAppKey } from './probes';
-import type { GitHubAppApi } from '../integrations/github-app-api';
+import type { GitHubAppApi } from '../../platform/github-app-api';
 
 /**
  * The GitHub App issues are written through (D-246 §1), tried as the OAuth app is — its client id and secret
@@ -122,10 +120,11 @@ export const disconnectGitHubIssuesApp = async (
 };
 
 /** What each way in being disconnected is called on the trail. */
-const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc', ServerAuditAction>> = {
+const DISCONNECTED: Readonly<Record<'github' | 'smtp' | 'oidc' | 'google', ServerAuditAction>> = {
   github: 'server.github_disconnected',
   smtp: 'server.smtp_disconnected',
   oidc: 'server.oidc_disconnected',
+  google: 'server.google_disconnected',
 };
 
 /** Why a change was refused beyond a failed swap (`409 SERVER_CHANGE_REFUSED`). */
@@ -138,9 +137,9 @@ const SENTENCES: Record<ServerChangeRefusal, string> = {
   'not-connected': 'There is nothing of that kind connected.',
   'setup-unfinished': 'The setup is not finished yet; its steps change the settings until it is.',
   'no-provider':
-    'Password sign-in can be turned off only while GitHub or single sign-on is connected.',
+    'Password sign-in can be turned off only while GitHub, Google or single sign-on is connected.',
   'passwords-off':
-    'Password sign-in is off, and this is the last of GitHub and single sign-on: nobody could sign in. Turn passwords on first.',
+    'Password sign-in is off, and this is the last of GitHub, Google and single sign-on: nobody could sign in. Turn passwords on first.',
 };
 
 export class ServerChangeRefused extends Error {
@@ -202,6 +201,7 @@ export const serverSettingsOf = async (
     appUrl,
     githubCallbackUrl: `${appUrl}${SIGN_IN_CALLBACK}`,
     oidcCallbackUrl: `${appUrl}${OIDC_CALLBACK}`,
+    googleCallbackUrl: `${appUrl}${GOOGLE_CALLBACK}`,
     githubApp: {
       callbackUrl: `${appUrl}${GITHUB_APP_CALLBACK}`,
       webhookUrl: `${appUrl}${GITHUB_APP_WEBHOOK}`,
@@ -210,6 +210,7 @@ export const serverSettingsOf = async (
       github: current.auth.github,
       email: current.mail !== undefined,
       oidc: current.auth.oidc !== undefined,
+      google: current.auth.google,
     },
     adminEmail: (await addressOf(database, admin)).email,
   };
@@ -265,6 +266,31 @@ export const connectOidc = async (
   return result;
 };
 
+/**
+ * Google's OAuth client tried under the administrator's authority — Google's discovery, its keys and the
+ * client's credentials (`probeGoogle`, at the sign-in's own issuer) — and, only if it all worked, kept and
+ * served (D-251). The secret is sealed in the settings and never answered.
+ */
+export const connectGoogle = async (
+  dependencies: ServerAdminDependencies & {
+    readonly oidc: OidcProbeDependencies;
+    readonly googleIssuer: string;
+  },
+  admin: ServerAdminSession,
+  candidate: { readonly clientId: string; readonly clientSecret: string },
+): Promise<ProbeResult> => {
+  await afterTheSetup(dependencies.database);
+  const result = await probeGoogle(admin, candidate, dependencies.googleIssuer, dependencies.oidc);
+  if (!result.ok) return result;
+  await applySettings(
+    dependencies.database,
+    { google: candidate },
+    dependencies.change,
+    audited(dependencies, admin, 'server.google_connected'),
+  );
+  return result;
+};
+
 /** The relay tried with a plain test letter to the administrator and, only if it took it, kept and served. */
 export const connectRelay = async (
   dependencies: ServerAdminDependencies & {
@@ -296,28 +322,39 @@ const TEST_WORDS = {
   en: {
     subject: 'A test from your Purlay server',
     text: (server: string): string =>
-      `This is a test from the Purlay server at ${server}, sent because an administrator tried a mail relay: its mail works. There is nothing to do.\n\n${server}`,
+      `This is a test from the Purlay server at ${server}, sent because an administrator tried a mail relay: its mail works. There is nothing to do.`,
+    button: 'Open Purlay',
   },
   tr: {
     subject: 'Purlay sunucundan bir deneme',
     text: (server: string): string =>
-      `Bu, ${server} adresindeki Purlay sunucusundan bir deneme: bir yönetici bir e-posta sunucusunu denedi, e-posta çalışıyor. Yapacak bir şey yok.\n\n${server}`,
+      `Bu, ${server} adresindeki Purlay sunucusundan bir deneme: bir yönetici bir e-posta sunucusunu denedi, e-posta çalışıyor. Yapacak bir şey yok.`,
+    button: 'Purlay’ı aç',
   },
 } as const;
 
 const testLetter = (to: string, appUrl: string, locale: SignInLocale): MailMessage => {
   const server = new URL(appUrl).origin;
-  return textLetter(to, TEST_WORDS[locale].subject, TEST_WORDS[locale].text(server), server);
+  const words = TEST_WORDS[locale];
+  return composeLetter({
+    to,
+    subject: words.subject,
+    locale,
+    blocks: [
+      { kind: 'paragraph', text: words.text(server) },
+      { kind: 'button', label: words.button, url: server },
+    ],
+  });
 };
 
 /**
- * One of the three ways in disconnected. Refused when it is not connected, and — unless
+ * One of the four ways in disconnected. Refused when it is not connected, and — unless
  * `confirmLastChannel` — when it was the last way in for other people.
  */
 export const disconnect = async (
   dependencies: ServerAdminDependencies,
   admin: ServerAdminSession,
-  channel: 'github' | 'smtp' | 'oidc',
+  channel: 'github' | 'smtp' | 'oidc' | 'google',
   current: RuntimeServices,
   confirmLastChannel: boolean,
 ): Promise<void> => {
@@ -329,13 +366,19 @@ export const disconnect = async (
       github: current.settings.github !== undefined,
       smtp: current.settings.smtp !== undefined,
       oidc: current.settings.oidc !== undefined,
+      google: current.settings.google !== undefined,
     }[channel] || current.needsReentry.includes(channel);
   if (!connected) throw new ServerChangeRefused('not-connected');
   const record = audited(dependencies, admin, DISCONNECTED[channel]);
   try {
     await applySettings(
       dependencies.database,
-      { github: { github: null }, smtp: { smtp: null }, oidc: { oidc: null } }[channel],
+      {
+        github: { github: null },
+        smtp: { smtp: null },
+        oidc: { oidc: null },
+        google: { google: null },
+      }[channel],
       dependencies.change,
       async (transaction) => {
         // What this transaction saved, under the swap's lock: the other way is still there, or not.
@@ -347,7 +390,8 @@ export const disconnect = async (
           !confirmLastChannel &&
           settings.github === undefined &&
           settings.smtp === undefined &&
-          settings.oidc === undefined
+          settings.oidc === undefined &&
+          settings.google === undefined
         ) {
           throw new ServerChangeRefused('last-channel');
         }
@@ -366,12 +410,12 @@ const refusalOf = (error: unknown): unknown =>
     : error;
 
 /**
- * Whether a provider that is not the server's own signs people in: GitHub or single sign-on, read as the
+ * Whether a provider that is not the server's own signs people in: GitHub, Google or single sign-on, read as the
  * swap reads them — a secret the key cannot open is no way in (D-179 §6). Mail is not one: a link is the
  * server's own relay, and the administrator's address may be one a link does not sign into (D-239).
  */
 const hasProvider = (settings: ServerSettings): boolean =>
-  settings.github !== undefined || settings.oidc !== undefined;
+  settings.github !== undefined || settings.oidc !== undefined || settings.google !== undefined;
 
 /** What a change of one rule of `POST /api/server/policy` is called on the trail. */
 const policyChanged = (change: ServerPolicyRequest): ServerAuditAction => {
@@ -385,8 +429,8 @@ const policyChanged = (change: ServerPolicyRequest): ServerAuditAction => {
 /**
  * One rule of the sign-in policy, saved and served at once: who may make an account, whether a password
  * account must turn on two-step verification, whether a password signs in (D-239), how long a session may go
- * unused and live (D-244). Each on its own trail's action. Password sign-in is turned off only while GitHub or
- * single sign-on is connected, weighed in the swap's transaction from what it saved. A lifetime applies to the
+ * unused and live (D-244). Each on its own trail's action. Password sign-in is turned off only while GitHub, Google
+ * or single sign-on is connected, weighed in the swap's transaction from what it saved. A lifetime applies to the
  * sessions already open from their next request: nothing else is written.
  */
 export const changePolicy = async (

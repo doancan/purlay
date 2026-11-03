@@ -11,6 +11,7 @@ import { ApiError } from '../../data/errors';
 import { installDom } from '../../testing/dom';
 import { anApi } from '../../testing/fake-api';
 import { renderApp } from '../../testing/render';
+import { expectNoAxeViolations } from '../../testing/axe';
 import { systemClock } from '../../system-clock';
 import type { Locale } from '../../i18n/types';
 
@@ -30,7 +31,14 @@ const signedOut = (mail: boolean, github = true): ReturnType<typeof anApi> =>
   anApi({
     me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
     authMethods: () =>
-      Promise.resolve({ github, email: mail, oidc: null, signUp: 'invite-only', password: true }),
+      Promise.resolve({
+        github,
+        email: mail,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      }),
   });
 
 /** The one sentence the screen says about the way here, or null when it says none. */
@@ -152,6 +160,7 @@ describe('what the screen offers is what the server has connected', () => {
             github: false,
             email: false,
             oidc,
+            google: false,
             signUp: 'invite-only',
             password: true,
             ...over,
@@ -199,6 +208,93 @@ describe('what the screen offers is what the server has connected', () => {
     });
   });
 
+  describe('Google (D-251)', () => {
+    const withGoogle = (over: Partial<AuthMethods> = {}): ReturnType<typeof anApi> =>
+      anApi({
+        me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
+        authMethods: () =>
+          Promise.resolve({
+            github: false,
+            email: false,
+            oidc: null,
+            google: true,
+            signUp: 'invite-only',
+            password: true,
+            ...over,
+          }),
+      });
+
+    test('single sign-on, GitHub and Google are offered in that order', async () => {
+      const view = await open(withGoogle({ github: true, oidc: { name: null } }));
+      const links = [...view.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+        a.getAttribute('href'),
+      );
+      expect(links).toEqual(['/auth/oidc', '/auth/github', '/auth/google']);
+      await expectNoAxeViolations(view.container);
+      view.unmount();
+    });
+
+    test('with only Google and mail, the form is not alone: a rule parts it from the button', async () => {
+      const view = await open(withGoogle({ email: true }));
+      const form = view.getByRole('form', { name: 'Sign in with a password' });
+      expect(form.className).toContain('border-t-hairline');
+      view.unmount();
+    });
+
+    test('Google alone is the one button, and the server is not said to be unset', async () => {
+      const view = await open(withGoogle());
+      const links = [...view.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+        a.getAttribute('href'),
+      );
+      expect(links).toEqual(['/auth/google']);
+      expect(view.queryByText('This server is not set up yet')).toBeNull();
+      view.unmount();
+    });
+
+    for (const [locale, label, sentence] of [
+      [
+        'en',
+        'Continue with Google',
+        'Google did not answer. Try again in a moment, or sign in another way.',
+      ],
+      [
+        'tr',
+        'Google ile devam et',
+        'Google yanıt vermedi. Biraz sonra yeniden dene ya da başka bir yolla gir.',
+      ],
+    ] as const) {
+      test(`its label and its unavailable sentence, in ${locale}`, async () => {
+        const view = await open(withGoogle(), locale);
+        expect(view.getByRole('link', { name: label }).getAttribute('href')).toBe('/auth/google');
+        view.unmount();
+        expect(await saidAt(signInFailureHref('google-unavailable'), locale)).toBe(sentence);
+      });
+    }
+
+    for (const [locale, sentence] of [
+      [
+        'en',
+        'This sign-in didn’t prove the address is yours, so it can’t open the account that uses it. Sign in the way you did before, or ask for an invitation.',
+      ],
+      [
+        'tr',
+        'Bu giriş adresin sana ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet iste.',
+      ],
+    ] as const) {
+      test(`an address it does not vouch for is said without naming a provider, in ${locale}`, async () => {
+        expect(await saidAt(signInFailureHref('email-unverified'), locale)).toBe(sentence);
+      });
+    }
+
+    test('its mark is the four-colour G, hidden from assistive technology', async () => {
+      const view = await open(withGoogle());
+      const svg = view.getByRole('link', { name: 'Continue with Google' }).querySelector('svg');
+      expect(svg?.getAttribute('aria-hidden')).toBe('true');
+      expect(svg?.querySelectorAll('path').length).toBe(4);
+      view.unmount();
+    });
+  });
+
   test('a password manager is told which field is which', async () => {
     const view = await open(signedOut(false, false));
     expect(view.getByRole('textbox', { name: 'Email address' }).getAttribute('autocomplete')).toBe(
@@ -220,6 +316,7 @@ describe('what the screen offers is what the server has connected', () => {
             github: true,
             email: true,
             oidc: null,
+            google: false,
             signUp: policy,
             password: true,
           }),
@@ -239,13 +336,13 @@ describe('what the screen offers is what the server has connected', () => {
     [
       'en',
       'This server is not set up yet',
-      'Neither GitHub, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
+      'Neither GitHub, Google, single sign-on nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
       'Set up this server',
     ],
     [
       'tr',
       'Bu sunucu henüz kurulmadı',
-      'GitHub ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+      'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
       'Bu sunucuyu kur',
     ],
   ] as const) {
@@ -280,7 +377,14 @@ describe('what the screen offers is what the server has connected', () => {
     expect(view.queryByRole('link', { name: GITHUB })).toBeNull();
     expect(view.queryByText('This server is not set up yet')).toBeNull();
     await act(async () => {
-      answer({ github: true, email: false, oidc: null, signUp: 'invite-only', password: true });
+      answer({
+        github: true,
+        email: false,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      });
       await Promise.resolve();
     });
     await settle();
@@ -299,6 +403,7 @@ describe('what the screen offers is what the server has connected', () => {
               github: false,
               email: true,
               oidc: null,
+              google: false,
               signUp: 'invite-only',
               password: true,
             });
@@ -338,6 +443,7 @@ describe('what the screen offers is what the server has connected', () => {
               github: true,
               email: false,
               oidc: null,
+              google: false,
               signUp: 'invite-only',
               password: true,
             });

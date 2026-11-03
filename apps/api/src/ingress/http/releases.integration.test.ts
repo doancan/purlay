@@ -9,7 +9,7 @@ import { LatestReleaseAnswer } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
-import type { GitHubAppFetch } from '../../modules/integrations/github-app-api';
+import type { GitHubAppFetch } from '../../platform/github-app-api';
 import { SERVER_VERSION } from '../../platform/server-version';
 import { NOW, testConfig, testDependencies } from '../../testing/doubles';
 import { aSignedInUser } from '../../testing/signed-in';

@@ -33,7 +33,14 @@ describe('the ways in', () => {
   test('each of GitHub and email is on when the server has it, off when it has not — for anybody, signed in or not', async () => {
     expect(await ask(false)).toEqual([
       200,
-      { github: true, email: false, oidc: null, signUp: 'invite-only', password: true },
+      {
+        github: true,
+        email: false,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      },
     ]);
     const [status, body] = await ask(true);
     expect(status).toBe(200);
@@ -42,12 +49,20 @@ describe('the ways in', () => {
       github: true,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
     expect(await ask(true, false)).toEqual([
       200,
-      { github: false, email: true, oidc: null, signUp: 'invite-only', password: true },
+      {
+        github: false,
+        email: true,
+        oidc: null,
+        google: false,
+        signUp: 'invite-only',
+        password: true,
+      },
     ]);
   });
 
@@ -59,6 +74,7 @@ describe('the ways in', () => {
       github: false,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
@@ -70,6 +86,7 @@ describe('the ways in', () => {
         settings: {
           github: undefined,
           oidc: { issuer: 'https://idp.example.test', clientId: 'id', clientSecret: 's', name },
+          google: undefined,
           signUp: 'invite-only',
         },
       });
@@ -83,6 +100,7 @@ describe('the ways in', () => {
       github: false,
       email: false,
       oidc: { name: 'Acme SSO' },
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
@@ -90,9 +108,37 @@ describe('the ways in', () => {
       github: false,
       email: false,
       oidc: { name: null },
+      google: false,
       signUp: 'invite-only',
       password: true,
     });
+  });
+
+  test('Google is on when its client is connected, and asking connects to nobody (D-251)', async () => {
+    const stub = await anOidcStub({ sub: 's', email: 'a@gmail.com' });
+    const auth = aTestAuth(unconnectedDatabase(), {
+      settings: {
+        github: undefined,
+        oidc: undefined,
+        google: { clientId: 'id.apps.googleusercontent.com', clientSecret: 's' },
+        signUp: 'open',
+      },
+      fetch: stub.fetch,
+    });
+    const app = createApp(testDependencies({ database: unconnectedDatabase(), auth }));
+    const body: unknown = await (
+      await app.handle(new Request('https://purlay.test/api/auth/methods'))
+    ).json();
+    expect(Value.Check(AuthMethods, body)).toBe(true);
+    expect(body).toEqual({
+      github: false,
+      email: false,
+      oidc: null,
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    expect(stub.calls.urls).toEqual([]);
   });
 
   test('asking which ways are on connects to nobody: the provider is asked nothing until somebody presses its button', async () => {
@@ -106,6 +152,7 @@ describe('the ways in', () => {
           clientSecret: 'x',
           name: undefined,
         },
+        google: undefined,
         signUp: 'invite-only',
       },
       fetch: stub.fetch,

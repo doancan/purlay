@@ -16,7 +16,7 @@ import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { snapshotOn } from '../../platform/transactions';
 import { aRoom } from '../../testing/rooms';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { exportWorkspace, readTables } from './export';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,6 +24,8 @@ import { join } from 'node:path';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import { aMemoryStore } from '../../testing/storage';
 import { aRecordingLogger } from '../../testing/doubles';
+import { exportCatalogue } from '../../export-catalogue';
+import { linkFile } from '../../testing/sent-files';
 
 let cloned: ClonedDatabase;
 
@@ -52,7 +54,7 @@ describe('integration: an export’s snapshot', () => {
     await snapshotOn(cloned.db)(async (transaction) => {
       await readTables(
         transaction,
-        { kind: 'all', workspaceId: room.workspaceId, channelIds: [room.channelId] },
+        { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
         async (table, lines) => {
           if (table === 'messages' && !committed) {
             // Another connection, committed at once, while the export holds its snapshot.
@@ -64,6 +66,7 @@ describe('integration: an export’s snapshot', () => {
           }
           if (table === 'reactions') reactions.push(...lines);
         },
+        exportCatalogue,
       );
     });
     expect(committed).toBe(true);
@@ -102,6 +105,12 @@ describe('integration: an export’s snapshot', () => {
         size_bytes: '1',
       })
       .execute();
+    await linkFile(cloned.db, {
+      id: fileId,
+      workspaceId: room.workspaceId,
+      messageId: sent.message.id,
+      channelId: room.channelId,
+    });
     // The store is asked after the snapshot committed; by then a purge took the row and the object.
     const store = aMemoryStore();
     const removing: ObjectStore = {
@@ -117,13 +126,14 @@ describe('integration: an export’s snapshot', () => {
     const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'out');
     const { manifest } = await exportWorkspace(
       {
+        catalogue: exportCatalogue,
         database: cloned.db,
         clock: fixedClock(NOW),
         log: aRecordingLogger().log,
         storage: removing,
       },
       { id: room.workspaceId, slug: 'acme', name: 'Acme' },
-      { kind: 'all', workspaceId: room.workspaceId, channelIds: [room.channelId] },
+      { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
       target,
     );
     expect(manifest.blobs).toEqual({ count: 0, bytes: 0, removed: [fileId], missing: [] });

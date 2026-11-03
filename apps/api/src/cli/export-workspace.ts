@@ -8,7 +8,8 @@
  * Prints where it wrote and how many rows; never anybody's words.
  */
 import { createDatabase } from '@purlay/db';
-import { everyChannel, exportWorkspace } from '../modules/export/export';
+import { exportWorkspace } from '../modules/export/export';
+import { compositionFor } from '../composition';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
@@ -20,6 +21,7 @@ const config = loadConfig(process.env);
 const log = createLogger({ level: config.LOG_LEVEL });
 // Every entry this process writes to the trail is also a line of its log, ids only (D-222).
 sendAuditLinesTo(log);
+const { exportCatalogue } = compositionFor(config.MODULES);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 
 try {
@@ -38,13 +40,15 @@ try {
       process.exitCode = 2;
     } else {
       const { path, manifest } = await exportWorkspace(
-        { database, clock: systemClock, log, storage: storeFor(config) },
-        workspace,
         {
-          kind: 'all',
-          workspaceId: workspace.id,
-          channelIds: await everyChannel(database, workspace.id),
+          database,
+          clock: systemClock,
+          log,
+          storage: storeFor(config),
+          catalogue: exportCatalogue,
         },
+        workspace,
+        await exportCatalogue.scopeOf(database, { kind: 'all', workspaceId: workspace.id }),
         directory,
       );
       process.stdout.write(

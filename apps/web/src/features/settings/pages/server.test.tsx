@@ -16,6 +16,7 @@ import {
 } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import { en } from '../../../i18n/catalogue/en';
+import { tr } from '../../../i18n/catalogue/tr';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import { aSession, aSignedInApi } from '../../../testing/fixtures';
@@ -48,6 +49,7 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
     sessionMaxAgeDays: null,
     github: null,
     oidc: null,
+    google: null,
     smtp: null,
     githubApp: null,
     workspaceCreators: { kind: 'first' },
@@ -57,11 +59,12 @@ const anAnswer = (over: Partial<ServerSettingsAnswer> = {}): ServerSettingsAnswe
   appUrl: 'https://purlay.test',
   githubCallbackUrl: 'https://purlay.test/auth/callback/github',
   oidcCallbackUrl: 'https://purlay.test/auth/callback/oidc',
+  googleCallbackUrl: 'https://purlay.test/auth/callback/google',
   githubApp: {
     callbackUrl: 'https://purlay.test/api/github-app/callback',
     webhookUrl: 'https://purlay.test/api/webhooks/github-app',
   },
-  channels: { github: false, email: false, oidc: false },
+  channels: { github: false, email: false, oidc: false, google: false },
   adminEmail: 'admin@example.test',
   ...over,
 });
@@ -75,6 +78,7 @@ const CONNECTED = anAnswer({
     sessionMaxAgeDays: null,
     github: { clientId: 'Iv1.abc123', clientSecret: { set: true } },
     oidc: null,
+    google: null,
     smtp: {
       address: { set: true, host: 'smtp://mail.example.test:587' },
       from: 'purlay@example.test',
@@ -84,7 +88,7 @@ const CONNECTED = anAnswer({
     workspaceCreators: { kind: 'listed', logins: ['ada', 'grace'] },
     setupCompletedAt: '2026-10-01T00:00:00.000Z',
   },
-  channels: { github: true, email: true, oidc: false },
+  channels: { github: true, email: true, oidc: false, google: false },
 });
 
 const unexpected = (name: string) => (): Promise<never> =>
@@ -94,6 +98,7 @@ const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
   settings: () => Promise.resolve(anAnswer()),
   github: unexpected('github'),
   oidc: unexpected('oidc'),
+  google: unexpected('google'),
   smtp: unexpected('smtp'),
   githubApp: unexpected('githubApp'),
   disconnect: unexpected('disconnect'),
@@ -318,7 +323,7 @@ describe('Settings → Server', () => {
     const asked: [string, boolean][] = [];
     const only = anAnswer({
       settings: { ...CONNECTED.settings, smtp: null },
-      channels: { github: true, email: false, oidc: false },
+      channels: { github: true, email: false, oidc: false, google: false },
     });
     const view = await render(
       aClient({
@@ -430,7 +435,7 @@ describe('Settings → Server', () => {
     view.unmount();
   });
 
-  test('passwords cannot be turned off with neither GitHub nor single sign-on: said before, and the refusal in its words', async () => {
+  test('passwords cannot be turned off with none of GitHub, Google and single sign-on: said before, and the refusal in its words', async () => {
     const view = await render(
       aClient({
         policy: () =>
@@ -450,7 +455,7 @@ describe('Settings → Server', () => {
     view.unmount();
   });
 
-  test('with passwords off, the last of GitHub and single sign-on is not offered to be disconnected (D-239)', async () => {
+  test('with passwords off, the last of GitHub, Google and single sign-on is not offered to be disconnected (D-239)', async () => {
     const view = await render(
       aClient({
         settings: () =>
@@ -768,7 +773,7 @@ const OIDC_VIEW = {
 
 const WITH_OIDC = anAnswer({
   settings: { ...anAnswer().settings, oidc: OIDC_VIEW },
-  channels: { github: false, email: false, oidc: true },
+  channels: { github: false, email: false, oidc: true, google: false },
 });
 
 describe('Settings → Server — single sign-on (D-200)', () => {
@@ -933,7 +938,7 @@ describe('Settings → Server — single sign-on (D-200)', () => {
         settings: () =>
           Promise.resolve({
             ...WITH_OIDC,
-            channels: { github: true, email: false, oidc: true },
+            channels: { github: true, email: false, oidc: true, google: false },
           }),
         disconnect: (channel, confirm) => {
           asked.push([channel, confirm]);
@@ -966,6 +971,230 @@ describe('Settings → Server — single sign-on (D-200)', () => {
 
   test('has no axe violations connected or not', async () => {
     const view = await render(aClient({ settings: () => Promise.resolve(WITH_OIDC) }));
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+});
+
+const GOOGLE_VIEW = {
+  clientId: '1234-abc.apps.googleusercontent.com',
+  clientSecret: { set: true as const },
+};
+
+const WITH_GOOGLE = anAnswer({
+  settings: { ...anAnswer().settings, google: GOOGLE_VIEW },
+  channels: { github: false, email: false, oidc: false, google: true },
+});
+
+describe('Settings → Server — Google (D-251)', () => {
+  const GOOGLE_REASONS_A_TRY_GIVES = [
+    'secret-rejected',
+    'client-unknown',
+    'unreachable',
+    'tls-failed',
+    'unexpected-reply',
+  ] as const;
+
+  const fill = async (scope: Scope, secret = 'shh-google'): Promise<void> => {
+    await person().type(scope.getByLabelText('Client ID'), ' 1234-abc.apps.googleusercontent.com ');
+    await person().type(scope.getByLabelText('Client secret'), secret);
+  };
+
+  test('says nothing is connected, and shows the address to register, which copies', async () => {
+    const view = await render(aClient());
+    const google = card(view, 'Sign in with Google');
+    expect(google.getByText('Not connected')).toBeDefined();
+    expect(google.getByText(en['settings.server.google.empty'])).toBeDefined();
+    expect(google.getByRole('button', { name: 'Connect Google' })).toBeDefined();
+    expect(google.getByText('https://purlay.test/auth/callback/google')).toBeDefined();
+    await person().click(google.getByRole('button', { name: 'Copy' }));
+    await settle();
+    expect(await navigator.clipboard.readText()).toBe('https://purlay.test/auth/callback/google');
+    view.unmount();
+  });
+
+  test('a client that works is sent trimmed, both fields, the form closes, and the card says it is connected', async () => {
+    const sent: unknown[] = [];
+    let saved = false;
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(saved ? WITH_GOOGLE : anAnswer()),
+        google: (candidate) => {
+          sent.push(candidate);
+          saved = true;
+          return Promise.resolve({ ok: true });
+        },
+      }),
+    );
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(sent).toEqual([
+      { clientId: '1234-abc.apps.googleusercontent.com', clientSecret: 'shh-google' },
+    ]);
+    expect(google.getByText('Connected')).toBeDefined();
+    expect(google.getByText(en['settings.server.google.saved'])).toBeDefined();
+    expect(google.queryByLabelText('Client secret')).toBeNull();
+    expect(view.getByRole('main').textContent).not.toContain('shh-google');
+    view.unmount();
+  });
+
+  test.each(GOOGLE_REASONS_A_TRY_GIVES)(
+    'a try that fails for %s is said in words for Google, keeps what was typed, and offers another try',
+    async (reason) => {
+      const failed: ProbeResult = { ok: false, reason, raw: '<b>google said no</b>' };
+      const view = await render(aClient({ google: () => Promise.resolve(failed) }));
+      const google = card(view, 'Sign in with Google');
+      await person().click(google.getByRole('button', { name: 'Connect Google' }));
+      await fill(google);
+      await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+      await settle();
+      expect(google.getByText(en[reasonWords(reason, 'google').what])).toBeDefined();
+      expect(google.getByText('<b>google said no</b>')).toBeDefined();
+      expect(google.getByLabelText<HTMLInputElement>('Client secret').value).toBe('shh-google');
+      expect(google.getByRole('button', { name: 'Try again' })).toBeDefined();
+      view.unmount();
+    },
+  );
+
+  test('a call that failed outright is told as a failure, and keeps the form', async () => {
+    const view = await render(
+      aClient({ google: () => Promise.reject(new SetupFailure(500, 'INTERNAL', 'no')) }),
+    );
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(google.getByRole('alert')).toBeDefined();
+    expect(google.getByLabelText<HTMLInputElement>('Client secret').value).toBe('shh-google');
+    view.unmount();
+  });
+
+  test('cancelling closes the form and forgets the try', async () => {
+    const failed: ProbeResult = { ok: false, reason: 'secret-rejected', raw: 'no' };
+    const view = await render(aClient({ google: () => Promise.resolve(failed) }));
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    await person().click(google.getByRole('button', { name: 'Cancel' }));
+    expect(google.queryByLabelText('Client secret')).toBeNull();
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    expect(google.queryByText(en[reasonWords('secret-rejected', 'google').what])).toBeNull();
+    view.unmount();
+  });
+
+  test('a secret the key could not open says so, with the form already open and a way to let it go', async () => {
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve({ ...WITH_GOOGLE, needsReentry: ['google'] as const }),
+      }),
+    );
+    const google = card(view, 'Sign in with Google');
+    expect(google.getByText(en['settings.server.reentry'])).toBeDefined();
+    expect(google.getByLabelText('Client secret')).toBeDefined();
+    expect(google.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    await person().click(google.getByRole('button', { name: 'Disconnect' }));
+    expect(
+      within(view.getByRole('dialog')).getByText(en['settings.server.google.disconnectTitle']),
+    ).toBeDefined();
+    view.unmount();
+  });
+
+  test('a refused client is said in both languages as the ID and the secret together: Google answers a wrong ID as it does a wrong secret', () => {
+    const words = reasonWords('secret-rejected', 'google');
+    expect(en[words.what]).toBe(
+      'Google refused this client ID and secret. Check both against the Google Cloud console.',
+    );
+    expect(tr[words.what]).toBe(
+      'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştır.',
+    );
+    for (const key of [words.what, ...words.fix]) expect(tr[key]).not.toBe(en[key]);
+  });
+
+  test('a refused client outlines neither field: which of the two is wrong is not known', async () => {
+    const failed: ProbeResult = { ok: false, reason: 'secret-rejected', raw: 'invalid_client' };
+    const view = await render(aClient({ google: () => Promise.resolve(failed) }));
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(google.getByText(en[reasonWords('secret-rejected', 'google').what])).toBeDefined();
+    expect(google.getByLabelText('Client ID').getAttribute('aria-invalid')).toBeNull();
+    expect(google.getByLabelText('Client secret').getAttribute('aria-invalid')).toBeNull();
+    view.unmount();
+  });
+
+  test('disconnecting as the last way in asks first and says the strong thing, then sends it confirmed', async () => {
+    const asked: [string, boolean][] = [];
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(WITH_GOOGLE),
+        disconnect: (channel, confirm) => {
+          asked.push([channel, confirm]);
+          return Promise.resolve();
+        },
+      }),
+    );
+    await person().click(
+      card(view, 'Sign in with Google').getByRole('button', { name: 'Disconnect' }),
+    );
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.getByText(en['settings.server.google.disconnectBody'])).toBeDefined();
+    expect(dialog.getByText(en['settings.server.lastWay'])).toBeDefined();
+    await person().click(dialog.getByRole('button', { name: 'Disconnect anyway' }));
+    await settle();
+    expect(asked).toEqual([['google', true]]);
+    expect(
+      card(view, 'Sign in with Google').getByText(en['settings.server.google.disconnected']),
+    ).toBeDefined();
+    view.unmount();
+  });
+
+  test('Google counts as another way in for the others: disconnecting GitHub is the plain question', async () => {
+    const view = await render(
+      aClient({
+        settings: () =>
+          Promise.resolve({
+            ...WITH_GOOGLE,
+            settings: { ...WITH_GOOGLE.settings, github: CONNECTED.settings.github },
+            channels: { github: true, email: false, oidc: false, google: true },
+          }),
+      }),
+    );
+    await person().click(
+      card(view, 'Sign in with GitHub').getByRole('button', { name: 'Disconnect' }),
+    );
+    expect(within(view.getByRole('dialog')).queryByText(en['settings.server.lastWay'])).toBeNull();
+    view.unmount();
+  });
+
+  test('the sign-in policy counts Google as a provider: passwords may be turned off with only Google', async () => {
+    const asked: unknown[] = [];
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(WITH_GOOGLE),
+        policy: (change) => {
+          asked.push(change);
+          return Promise.resolve();
+        },
+      }),
+    );
+    const signIn = card(view, 'How people sign in');
+    expect(signIn.queryByText(en['settings.server.signIn.passwords.needsProvider'])).toBeNull();
+    await person().click(signIn.getByRole('radio', { name: /^Off/ }));
+    await settle();
+    expect(asked).toEqual([{ passwordSignIn: false }]);
+    view.unmount();
+  });
+
+  test('has no axe violations connected or not', async () => {
+    const view = await render(aClient({ settings: () => Promise.resolve(WITH_GOOGLE) }));
     await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();
   });

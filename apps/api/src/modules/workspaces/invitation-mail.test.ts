@@ -24,8 +24,10 @@ describe('the invitation letter', () => {
     expect(letter.text).toContain(`https://purlay.test/invite#${TOKEN}`);
     expect(letter.text).toContain('October 28, 2026 at 9:30 AM UTC');
     expect(letter.text).toContain('you can ignore it');
-    // The link in the html is the same link, made clickable.
-    expect(letter.html).toContain(`<a href="https://purlay.test/invite#${TOKEN}">`);
+    // The link is the letter's button, in the text and in the html.
+    expect(letter.text).toContain(`Accept the invitation:\nhttps://purlay.test/invite#${TOKEN}`);
+    expect(letter.html).toContain(`<a href="https://purlay.test/invite#${TOKEN}"`);
+    expect(letter.html).toContain('>Accept the invitation</a>');
   });
 
   test('is written in Turkish for a Turkish interface, with the same fixed subject', () => {
@@ -54,7 +56,8 @@ describe('the invitation letter', () => {
     expect(first).toBe(
       'Alice Pay now: https: evil.test invited you to join “Acme Team” on Purlay.',
     );
-    expect(letter.text.split('\n\n')).toHaveLength(4);
+    // The note, the button, the two small notes and the signature: nothing the names said added one.
+    expect(letter.text.split('\n\n')).toHaveLength(5);
     expect(letter.text).not.toContain('https://evil.test');
   });
 

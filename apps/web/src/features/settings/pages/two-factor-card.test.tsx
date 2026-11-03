@@ -43,6 +43,7 @@ const signIn = (overrides: Partial<MySignIn> = {}): MySignIn => ({
   hasPassword: true,
   github: null,
   oidc: false,
+  google: false,
   twoFactor: false,
   twoFactorRequired: false,
   ...overrides,
@@ -87,7 +88,7 @@ describe('two-step verification', () => {
     expect(here.getByText('Off')).toBeDefined();
     expect(
       here.getByText(
-        'It protects your password. Signing in with GitHub, single sign-on or an emailed link relies on that provider’s own security.',
+        'It protects your password. Signing in with GitHub, Google, single sign-on or an emailed link relies on that provider’s own security.',
       ),
     ).toBeDefined();
     expect(here.getByRole('button', { name: 'Turn on…' })).toBeDefined();

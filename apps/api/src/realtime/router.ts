@@ -34,10 +34,14 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../platform/errors';
-import { isChannelMember, requireChannelById, requireChannelsById } from '../platform/channels';
-import { send, type missedIn } from '../modules/messages/messages';
+import {
+  isChannelMember,
+  requireChannelById,
+  requireChannelsById,
+} from '../features/chat/channels/guard';
+import { send, type missedIn } from '../features/chat/messages/messages';
 import type { PushSender } from '../modules/push/sender';
-import { replaySince } from '../modules/messages/replay';
+import { replaySince } from '../features/chat/messages/replay';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { Logger } from '../platform/logging';

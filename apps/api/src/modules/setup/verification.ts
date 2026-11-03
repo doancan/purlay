@@ -18,7 +18,8 @@
  */
 import type { Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
-import { textLetter, type MailMessage } from '../../platform/mail';
+import { composeLetter } from '../../platform/letter';
+import type { MailMessage } from '../../platform/mail';
 import { atomicallyOn } from '../../platform/transactions';
 import { digestsEqual, randomToken, tokenDigest } from '../../platform/tokens';
 import type { SignInLocale } from '../auth/sign-in-letters';
@@ -200,17 +201,21 @@ export const verifyAdminEmail = async (
 const WORDS = {
   en: {
     subject: 'Confirm your address for Purlay',
-    text: (appUrl: string, url: string): string =>
+    text: (appUrl: string): string =>
       `You are setting up the Purlay server at ${appUrl}, with this address as its administrator's. ` +
-      `Open this link to confirm the address is yours. It works once, for ${String(TTL_HOURS)} hours:\n\n${url}\n\n` +
-      'If you are not setting up a Purlay server, you can ignore this message; nothing changes without the link.',
+      `Confirm the address is yours with the button below. It works once, for ${String(TTL_HOURS)} hours.`,
+    button: 'Confirm my address',
+    ignore:
+      'If you are not setting up a Purlay server, you can ignore this email; nothing changes without the link.',
   },
   tr: {
     subject: 'Purlay için adresini doğrula',
-    text: (appUrl: string, url: string): string =>
+    text: (appUrl: string): string =>
       `${appUrl} adresindeki Purlay sunucusunu kuruyorsun; yöneticinin adresi bu. ` +
-      `Adresin senin olduğunu doğrulamak için bu bağlantıyı aç. Bir kez ve ${String(TTL_HOURS)} saat boyunca çalışır:\n\n${url}\n\n` +
-      'Bir Purlay sunucusu kurmuyorsan bu mesajı görmezden gelebilirsin; bağlantı olmadan hiçbir şey değişmez.',
+      `Adresin senin olduğunu aşağıdaki düğmeyle doğrula. Bir kez ve ${String(TTL_HOURS)} saat boyunca çalışır.`,
+    button: 'Adresimi doğrula',
+    ignore:
+      'Bir Purlay sunucusu kurmuyorsan bu e-postayı görmezden gelebilirsin; bağlantı olmadan hiçbir şey değişmez.',
   },
 } as const;
 
@@ -230,24 +235,31 @@ export const adminVerificationLetter = ({
   const link = new URL(VERIFY_PATH, appUrl);
   link.hash = token;
   const server = new URL(appUrl).origin;
-  return textLetter(
+  const words = WORDS[locale];
+  return composeLetter({
     to,
-    WORDS[locale].subject,
-    WORDS[locale].text(server, link.toString()),
-    link.toString(),
-  );
+    subject: words.subject,
+    locale,
+    blocks: [
+      { kind: 'paragraph', text: words.text(server) },
+      { kind: 'button', label: words.button, url: link.toString() },
+      { kind: 'note', text: words.ignore },
+    ],
+  });
 };
 
 const TEST_WORDS = {
   en: {
     subject: 'A test from your Purlay server',
     text: (appUrl: string): string =>
-      `This is a test from the Purlay server at ${appUrl}: its mail works. Your address is verified already, so there is nothing to do.\n\n${appUrl}`,
+      `This is a test from the Purlay server at ${appUrl}: its mail works. Your address is verified already, so there is nothing to do.`,
+    button: 'Open Purlay',
   },
   tr: {
     subject: 'Purlay sunucundan bir deneme',
     text: (appUrl: string): string =>
-      `Bu, ${appUrl} adresindeki Purlay sunucusundan bir deneme: e-postası çalışıyor. Adresin zaten doğrulanmış, yapacak bir şey yok.\n\n${appUrl}`,
+      `Bu, ${appUrl} adresindeki Purlay sunucusundan bir deneme: e-postası çalışıyor. Adresin zaten doğrulanmış, yapacak bir şey yok.`,
+    button: 'Purlay’ı aç',
   },
 } as const;
 
@@ -265,7 +277,16 @@ export const relayTestLetter = ({
   readonly locale: SignInLocale;
 }): MailMessage => {
   const server = new URL(appUrl).origin;
-  return textLetter(to, TEST_WORDS[locale].subject, TEST_WORDS[locale].text(server), server);
+  const words = TEST_WORDS[locale];
+  return composeLetter({
+    to,
+    subject: words.subject,
+    locale,
+    blocks: [
+      { kind: 'paragraph', text: words.text(server) },
+      { kind: 'button', label: words.button, url: server },
+    ],
+  });
 };
 
 /**

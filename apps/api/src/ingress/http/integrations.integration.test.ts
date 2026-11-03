@@ -10,7 +10,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { UnfurlResponse } from '@purlay/types';
 import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
-import type { GitHubApi } from '../../modules/integrations/unfurl';
+import type { GitHubApi } from '../../features/chat/integrations/unfurl';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';

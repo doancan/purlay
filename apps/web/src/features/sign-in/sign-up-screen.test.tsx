@@ -51,7 +51,7 @@ describe('the sign-up screen', () => {
   test('open, with GitHub and mail: both ways, no password, and a way back to sign-in', async () => {
     const asked: EmailSignInRequest[] = [];
     const view = await visit(
-      { github: true, email: true, oidc: null, signUp: 'open', password: true },
+      { github: true, email: true, oidc: null, google: false, signUp: 'open', password: true },
       'en',
       asked,
     );
@@ -71,6 +71,7 @@ describe('the sign-up screen', () => {
       github: true,
       email: true,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -82,6 +83,7 @@ describe('the sign-up screen', () => {
       github: false,
       email: false,
       oidc: { name: null },
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -92,7 +94,14 @@ describe('the sign-up screen', () => {
     await expectNoAxeViolations(view.container);
     view.unmount();
     const tr = await visit(
-      { github: false, email: false, oidc: { name: null }, signUp: 'open', password: true },
+      {
+        github: false,
+        email: false,
+        oidc: { name: null },
+        google: false,
+        signUp: 'open',
+        password: true,
+      },
       'tr',
     );
     expect(tr.getByRole('link', { name: 'tek oturum açma ile devam et' })).toBeDefined();
@@ -101,6 +110,7 @@ describe('the sign-up screen', () => {
       github: true,
       email: true,
       oidc: { name: 'Acme SSO' },
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -108,11 +118,55 @@ describe('the sign-up screen', () => {
     expect(named.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
   });
 
+  test('open with Google alone: its button, after single sign-on and GitHub when they are there', async () => {
+    const alone = await visit({
+      github: false,
+      email: false,
+      oidc: null,
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    expect(alone.getByRole('link', { name: 'Continue with Google' }).getAttribute('href')).toBe(
+      '/auth/google',
+    );
+    expect(alone.queryByText(/not set up|nothing to sign up/i)).toBeNull();
+    alone.unmount();
+    const all = await visit({
+      github: true,
+      email: true,
+      oidc: { name: null },
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    const links = [...all.container.querySelectorAll('a[href^="/auth/"]')].map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(links).toEqual(['/auth/oidc', '/auth/github', '/auth/google']);
+  });
+
+  test('open with Google and mail, the email form is not alone: a rule parts it from the button', async () => {
+    const view = await visit({
+      github: false,
+      email: true,
+      oidc: null,
+      google: true,
+      signUp: 'open',
+      password: true,
+    });
+    const send = view.getByRole('button', { name: 'Email me a sign-in link' });
+    expect(send.closest('form')?.className).toContain('border-t-hairline');
+    expect(send.className).not.toContain('bg-accent');
+    view.unmount();
+  });
+
   test('open without mail: GitHub only, and no form', async () => {
     const view = await visit({
       github: true,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -125,6 +179,7 @@ describe('the sign-up screen', () => {
       github: false,
       email: false,
       oidc: null,
+      google: false,
       signUp: 'open',
       password: true,
     });
@@ -150,7 +205,14 @@ describe('the sign-up screen', () => {
   ] as const) {
     test(`invite-only: the notice in ${locale}, with the sign-in link and no form or button`, async () => {
       const view = await visit(
-        { github: true, email: true, oidc: null, signUp: 'invite-only', password: true },
+        {
+          github: true,
+          email: true,
+          oidc: null,
+          google: false,
+          signUp: 'invite-only',
+          password: true,
+        },
         locale,
       );
       expect(view.getByRole('heading', { level: 1, name: title })).toBeDefined();
@@ -178,6 +240,7 @@ describe('the sign-up screen, before the server has said what it offers', () => 
                 github: true,
                 email: false,
                 oidc: null,
+                google: false,
                 signUp: 'open',
                 password: true,
               });
@@ -216,6 +279,7 @@ describe('the sign-up screen, before the server has said what it offers', () => 
             github: true,
             email: true,
             oidc: null,
+            google: false,
             signUp: 'open',
             password: true,
           }),

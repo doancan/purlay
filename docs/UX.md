@@ -255,10 +255,10 @@ chat the team already uses.
   *this workspace has reached today's limit of 200 invitation emails*; *this server cannot send email*.
   The addresses refused stay in the field, so nothing leaves unsaid; the ones queued are cleared. A
   request that fails says *Could not send the invitations* above the link, keeps the addresses and
-  claims nothing. The letter is plain text in the interface's language: who invited (their display
-  name), the workspace, the link with its token after `#`, until when it works, and that it can be
-  ignored if unexpected; its subject is fixed text, and the names in it are cut, stripped of line breaks
-  and of anything that reads as a web address.
+  claims nothing. The letter (D-252) is in the interface's language: who invited (their display
+  name), the workspace, an **Accept the invitation** button whose link carries the token after `#`, until
+  when it works, and that it can be ignored if unexpected; its subject is fixed text, and the names in it
+  are cut, stripped of line breaks and of anything that reads as a web address.
 
 **Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
 with a role each: a labelled select where the person may change it, the role in words where they may
@@ -724,6 +724,10 @@ through it, `Enter` writes the emoji where the caret is and the focus goes back 
 with nothing written. The **preview** draws the draft as the message will be drawn; the text is still there
 under it, and Send works while it is open (D-181).
 
+A **face typed as text** — `:)`, `:D`, `;)`, `<3`, `xD` and the rest of the list in D-253 — becomes its emoji when
+the word ends: at a space, a new line or the send, and only when it stands alone, never inside code. `Backspace`
+straight after puts the face back as it was typed, and that one stays.
+
 | Key | Action |
 |---|---|
 | `Enter` | Send — except inside a code fence that is still open, where it is a newline (D-188) |
@@ -1081,9 +1085,9 @@ that is read again after every change and never polled:
   applied as it is chosen (*Saved. This applies from the next sign-up.*).
 - **How people sign in** (D-239) — *Two-step verification*: *Optional* or *Required* (anyone with a password
   must turn it on before anything else, the administrator included); *Password sign-in*: *On* or *Off* (only
-  GitHub or single sign-on; *admin:reset-password* turns it back on). Each applies as it is chosen (*Saved. It
-  applies from the next request.*). With neither GitHub nor single sign-on connected, the row says to connect
-  one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
+  GitHub, Google or single sign-on; *admin:reset-password* turns it back on). Each applies as it is chosen (*Saved.
+  It applies from the next request.*). With none of GitHub, Google and single sign-on connected, the row says to
+  connect one first, and the server's refusal says the same. Disconnecting the last of them while passwords are off is
   not offered: the dialog says why, and has no **Disconnect**.
 - **How long a session lasts** (D-244) — two selects, each applied as it is chosen (*Saved. It applies from the
   next request.*): *Sign out when unused for* — *Never*, *1 hour*, *8 hours*, *1 day*, *1 week* (using Purlay in
@@ -1176,10 +1180,22 @@ button like it, leaving for `/auth/oidc`; the sign-up screen and an invitation p
 (the invitation page asks for its passport first). A server whose only way in is single sign-on has the button, the
 password form and no *not set up* sentence. Two reasons are its own: *`oidc-unavailable`* — "Single sign-on could
 not be reached, or did not give an identity this server trusts — wait a moment and try again, and if it stays, tell
-whoever runs this server." — and *`email-unverified`* — "Single sign-on did not say your email address is verified,
-so it cannot sign you in. Ask whoever runs your organisation's sign-in to verify it." Neither says which check
-failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
+whoever runs this server." — and *`email-unverified`* — "This sign-in didn't prove the address is yours, so it can't
+open the account that uses it. Sign in the way you did before, or ask for an invitation." (*Bu giriş adresin sana ait
+olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet
+iste.*) — one sentence for single sign-on and Google alike, since either refuses by it: the provider did not say the
+address is verified, or (Google) the address belongs to an existing account and is not Google's to vouch for. Neither
+says which check failed. *Sessions & account* names it under *How you sign in* (*Single sign-on — Linked*), and says an emailed link no
 longer signs in to that account.
+
+**Google** (D-251) is a button of its own, *Continue with Google* (*Google ile devam et*), marked with Google's
+four-colour "G" (the four colours are brand tokens, the same in every theme; nothing is loaded from Google), after
+GitHub's and before the email form, leaving for `/auth/google`; the sign-up screen and an invitation page offer it
+as they offer GitHub (the invitation page asks for its passport first). A server whose only way in is Google has
+the button, the password form and no *not set up* sentence. Its one reason is *`google-unavailable`* — "Google did
+not answer. Try again in a moment, or sign in another way." (*Google yanıt vermedi. Biraz sonra yeniden dene ya da
+başka bir yolla gir.*); an address Google does not vouch for — unverified, or an existing account's at a domain
+that is neither Gmail nor the token's Workspace domain — is the shared *`email-unverified`* above.
 
 **When a GitHub sign-in did not finish**, one sentence says what happened and what to do, above the
 button, and never blames the person (D-121). Two are new with D-179 §5. *`signup-closed`* — an

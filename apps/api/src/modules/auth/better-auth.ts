@@ -35,6 +35,7 @@ import type { GithubOptions, GithubProfile } from 'better-auth/social-providers'
 import { runWithTransaction } from '@better-auth/core/context';
 import {
   AUTH_BASE_PATH,
+  GOOGLE_ISSUER,
   NATIVE_CHALLENGE_PATTERN,
   NATIVE_STATE_PATTERN,
   PASSWORD_MAX_LENGTH,
@@ -94,8 +95,10 @@ import {
   createOidcProvider,
   OIDC_PROVIDER_ID,
   type OidcCredentials,
+  type OidcDefinition,
   type OidcProfile,
 } from './oidc';
+import { authoritativeForGoogle, GOOGLE_PROVIDER_ID, googleDefinition } from './google';
 
 /** What the instance reads from the server's own settings, so a change takes a restart, not a deploy. */
 export interface AuthSettings {
@@ -105,6 +108,11 @@ export interface AuthSettings {
    * is sent to anybody. `name` labels the sign-in button; `undefined` is `Single sign-on`.
    */
   readonly oidc: (OidcCredentials & { readonly name: string | undefined }) | undefined;
+  /**
+   * Google's OAuth client (D-251): `undefined` is off — nothing is registered, and nothing is sent to Google.
+   * Where Google is, is not a setting: `AuthDependencies.googleIssuer`.
+   */
+  readonly google: { readonly clientId: string; readonly clientSecret: string } | undefined;
   readonly signUp: 'invite-only' | 'open';
 }
 
@@ -157,6 +165,11 @@ export interface AuthDependencies {
   readonly clock: Clock;
   /** What reaches GitHub; a test passes its own. Unset is the platform's `fetch`. */
   readonly fetch?: GithubFetch;
+  /**
+   * Google's issuer (D-251): `GOOGLE_ISSUER` unless a test stands a provider of its own somewhere else. The one
+   * value both the client's issuer and the definition's accepted issuers are made from, so they cannot differ.
+   */
+  readonly googleIssuer?: string;
   /**
    * Whether `schemaProblem` may compare the database with the mapping. On, always, but inside a
    * test's rolled-back transaction: the check refuses a Kysely `Transaction`. A test of its own
@@ -244,6 +257,8 @@ interface SignInRound {
   profile: GitHubProfile | undefined;
   /** The single sign-on account a verified token vouched for, as the library keeps it (D-200). */
   oidcAccountId?: string | undefined;
+  /** The Google account (its bare `sub`) a verified token vouched for (D-251). */
+  googleAccountId?: string | undefined;
   made: boolean;
   /** The person a request that ends sessions acts for, and the sessions they had before it ran. */
   ending?: { readonly userId: string; readonly sessionIds: readonly string[] };
@@ -403,11 +418,15 @@ const githubExchange = (exchange: ReturnType<typeof exchangeCode>): BetterAuthPl
 });
 
 /**
- * Registers the single sign-on provider with the library, beside GitHub's: a plugin's `init` may hand the context
- * its own values, and the library serves `/sign-in/social` and `/callback/:id` for whatever providers it holds.
+ * Registers a provider of the OIDC core — single sign-on (`purlay-oidc`), Google (`purlay-google`) — with the
+ * library, beside GitHub's: a plugin's `init` may hand the context its own values, and the library serves
+ * `/sign-in/social` and `/callback/:id` for whatever providers it holds.
  */
-const oidcRegistration = (provider: OAuthProvider<OidcProfile>): BetterAuthPlugin => ({
-  id: 'purlay-oidc',
+const oidcRegistration = (
+  id: 'purlay-oidc' | 'purlay-google',
+  provider: OAuthProvider<OidcProfile>,
+): BetterAuthPlugin => ({
+  id,
   init: (context) => ({
     context: { socialProviders: [...context.socialProviders, provider] },
   }),
@@ -807,18 +826,20 @@ export const admittedByPassport = async (
 };
 
 /**
- * Whom a provider's account may be added to (D-200 §3, §6; D-179 §3), decided where the library makes the row:
+ * Whom a provider's account may be added to (D-200 §3, §6; D-179 §3; D-251), decided where the library makes the
+ * row:
  *
  * - **An account has one single sign-on identity.** The library links a callback it does not know to the
  *   account whose address matches, and never asks whether that account already has an identity at the provider:
  *   a new subject carrying a recycled or changed address would be added beside the old one and sign in as the
  *   person who left. The subject decides, not the address — a second subject is refused.
+ * - **So has it one Google identity**, by the same rule: another `sub` of Google's on the address is refused.
  * - **So has it one GitHub identity**, by the same rule: a GitHub account is linked by its verified address
  *   only to an account that has none, its `github_id` null. Another GitHub id — beside an `accounts` row or the
  *   column `recordGitHubSignIn` would overwrite — is refused, or whoever takes over the address at GitHub
  *   signs in as the person it was.
- * - **GitHub is not a way past single sign-on.** An account single sign-on is linked to is signed into by it
- *   alone, as an emailed link is refused it (`magic-link.ts`): GitHub is not linked to one by address.
+ * - **Neither GitHub nor Google is a way past single sign-on.** An account single sign-on is linked to is signed
+ *   into by it alone, as an emailed link is refused it (`magic-link.ts`): neither is linked to one by address.
  *
  * Thrown, so the callback answers a reason of the library's (`identity_conflict`) and nothing is written.
  */
@@ -826,17 +847,29 @@ const refusedIdentityConflict = async (
   database: Executor,
   account: { readonly userId: string; readonly providerId: string; readonly accountId: string },
 ): Promise<void> => {
-  if (account.providerId !== OIDC_PROVIDER_ID && account.providerId !== 'github') return;
+  const { providerId } = account;
+  if (
+    providerId !== OIDC_PROVIDER_ID &&
+    providerId !== GOOGLE_PROVIDER_ID &&
+    providerId !== 'github'
+  )
+    return;
   const held = await database
     .selectFrom('accounts')
-    .select('account_id')
+    .select(['provider_id', 'account_id'])
     .where('user_id', '=', account.userId)
-    .where('provider_id', '=', OIDC_PROVIDER_ID)
+    .where('provider_id', 'in', [OIDC_PROVIDER_ID, GOOGLE_PROVIDER_ID])
     .execute();
+  const sso = held.filter((row) => row.provider_id === OIDC_PROVIDER_ID);
   const conflict =
-    account.providerId === OIDC_PROVIDER_ID
-      ? held.some((row) => row.account_id !== account.accountId)
-      : held.length > 0 || (await holdsAnotherGitHubIdentity(database, account));
+    providerId === OIDC_PROVIDER_ID
+      ? sso.some((row) => row.account_id !== account.accountId)
+      : providerId === GOOGLE_PROVIDER_ID
+        ? sso.length > 0 ||
+          held.some(
+            (row) => row.provider_id === GOOGLE_PROVIDER_ID && row.account_id !== account.accountId,
+          )
+        : sso.length > 0 || (await holdsAnotherGitHubIdentity(database, account));
   if (conflict) {
     throw new APIError('FORBIDDEN', {
       code: 'identity_conflict',
@@ -844,6 +877,44 @@ const refusedIdentityConflict = async (
     });
   }
 };
+
+/**
+ * Google's say before the library links or makes anything (D-251): an existing account is linked by its address
+ * only where the address is Google's to vouch for (`authoritativeForGoogle`) — a Gmail address, or one in the
+ * Workspace domain the token names in `hd`. Any other is refused as unverified (`GOOGLE_EMAIL_UNVERIFIED`, the
+ * person told `email-unverified`), and nothing is changed.
+ *
+ * - **A `sub` Google is already linked by is a sign-in, not a link**, whatever address it carries now: the library
+ *   finds the account by the `sub` first and never looks at the address, so neither is it weighed here. Its row is
+ *   looked for with any owner — the owner is who the library signs in.
+ * - **An address no account has** is a sign-up, which the server's own rules decide (the user hook).
+ * - **The address is matched as the library matches it**: lower-cased, against `users.email`, an erased account's
+ *   included, so no account the library would link to is one this did not weigh.
+ */
+const googleAdmission =
+  (database: Executor, log: Logger): NonNullable<OidcDefinition['admit']> =>
+  async (claims, email, accountId): Promise<void> => {
+    const linked = await database
+      .selectFrom('accounts')
+      .select('id')
+      .where('provider_id', '=', GOOGLE_PROVIDER_ID)
+      .where('account_id', '=', accountId)
+      .executeTakeFirst();
+    if (linked !== undefined) return;
+    const existing = await database
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', email.toLowerCase())
+      .executeTakeFirst();
+    if (existing === undefined || authoritativeForGoogle(email, claims['hd'])) return;
+    log.info(
+      "google sign-in: the address is another account's, and not Google's to vouch for; nothing linked",
+    );
+    throw new APIError('FORBIDDEN', {
+      code: 'GOOGLE_EMAIL_UNVERIFIED',
+      message: 'Google does not vouch for that address.',
+    });
+  };
 
 /** The account already has a GitHub identity, and it is not this one. */
 const holdsAnotherGitHubIdentity = async (
@@ -1051,6 +1122,8 @@ export interface SignInLinks {
    * only while it is — disconnected, the account's other ways back in are not closed by a provider that is gone.
    */
   readonly oidc: boolean;
+  /** Whether Google is connected now (D-251): an account Google made is answered by it, not by a link, while it is. */
+  readonly google: boolean;
   /** Where the library's mail goes, for the one message about signing in that is not a link. */
   readonly outbox: Outbox;
   /** A link to `email`, made by the library and mailed as `APP_URL/sign-in/email#<token>`. */
@@ -1114,6 +1187,11 @@ export type Auth = ReturnType<typeof betterAuth> & {
    * `GET /auth/oidc` is the route that does not exist.
    */
   readonly oidc: { readonly name: string | undefined } | undefined;
+  /**
+   * Whether Google is connected, so its provider is registered (D-251); where it is not, `GET /auth/google` is
+   * the route that does not exist.
+   */
+  readonly google: boolean;
   /** Who may make an account here: anybody (`open`) or only an invitation's holder (`invite-only`). */
   readonly signUp: AuthSettings['signUp'];
   /**
@@ -1353,6 +1431,34 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           },
         });
 
+  // Google, the same: built from the settings, asked nothing until somebody presses its button (D-251). Its issuer
+  // is one value, from which both the client's issuer and the issuers a token may name are made.
+  const googleIssuer = deps.googleIssuer ?? GOOGLE_ISSUER;
+  const googleProvider =
+    settings.google === undefined
+      ? undefined
+      : createOidcProvider(
+          { issuer: googleIssuer, ...settings.google },
+          'Google',
+          {
+            fetch: get,
+            clock: deps.clock,
+            log,
+            onIdentity: (accountId): void => {
+              const round = signInRounds.getStore();
+              // Outside the handler nothing would mark an account Google made as Google's, and it would pass
+              // for one made by email (D-251): refused, as GitHub's is.
+              if (round === undefined) {
+                throw new APIError('INTERNAL_SERVER_ERROR', {
+                  message: 'A Google sign-in is served only through the handler.',
+                });
+              }
+              round.googleAccountId = accountId;
+            },
+          },
+          googleDefinition(googleIssuer, googleAdmission(deps.database, log)),
+        );
+
   const options: BetterAuthOptions = {
     baseURL: deps.baseUrl,
     basePath: AUTH_BASE_PATH,
@@ -1430,6 +1536,15 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           input: false,
           returned: false,
           fieldName: 'github_login',
+        },
+        // Whether Google made the account (D-251), written by the user hook in the transaction that makes it, as
+        // GitHub's id is: an account Google made is never, even for a moment, one that looks made by email.
+        googleMade: {
+          type: 'boolean',
+          required: false,
+          input: false,
+          returned: false,
+          fieldName: 'google_made',
         },
         // Read so the session seam can refuse a soft-deleted account (D-139 §5, ARCHITECTURE.md); never
         // written by the library, and never taken from a client.
@@ -1633,7 +1748,12 @@ export const createAuth = (deps: AuthDependencies): Auth => {
               },
             }),
           ]),
-      ...(oidcProvider === undefined ? [] : [oidcRegistration(oidcProvider.provider)]),
+      ...(oidcProvider === undefined
+        ? []
+        : [oidcRegistration('purlay-oidc', oidcProvider.provider)]),
+      ...(googleProvider === undefined
+        ? []
+        : [oidcRegistration('purlay-google', googleProvider.provider)]),
       ...(settings.github === undefined
         ? []
         : [githubExchange(exchangeCode(settings.github, endpoints.token, get, log))]),
@@ -1689,7 +1809,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             const username = await availableUsername(deps.database, livingName(wanted), undefined);
             const round = signInRounds.getStore();
             const github = round?.profile;
-            if (round !== undefined && github !== undefined) round.made = true;
+            const google = round?.googleAccountId !== undefined;
+            if (round !== undefined && (github !== undefined || google)) round.made = true;
             return {
               data: {
                 ...user,
@@ -1700,6 +1821,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 // Whatever a client sent under these names is overwritten: they come from GitHub alone.
                 githubId: github === undefined ? null : String(github.id),
                 githubLogin: github === undefined ? null : github.login,
+                // The same, from Google's sign-in alone (D-251).
+                googleMade: google,
               },
             };
           },
@@ -1818,8 +1941,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   };
 
   /**
-   * The library answered `unable_to_create_user` for a GitHub sign-in, and the account this round's
-   * GitHub id signs in with exists now: another request of the same person made it in the meantime.
+   * The library answered `unable_to_create_user` for a sign-in through a provider — GitHub, single sign-on or
+   * Google — and the account this round's identity signs in with exists now: another request of the same person
+   * made it in the meantime.
    */
   const lostSignUpRace = async (round: SignInRound, response: Response): Promise<boolean> => {
     const location = response.headers.get('location');
@@ -1828,7 +1952,9 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         ? { providerId: 'github', accountId: String(round.profile.id) }
         : round.oidcAccountId !== undefined
           ? { providerId: OIDC_PROVIDER_ID, accountId: round.oidcAccountId }
-          : undefined;
+          : round.googleAccountId !== undefined
+            ? { providerId: GOOGLE_PROVIDER_ID, accountId: round.googleAccountId }
+            : undefined;
     if (key === undefined || location === null) return false;
     if (new URL(location, deps.baseUrl).searchParams.get('error') !== 'unable_to_create_user') {
       return false;
@@ -1862,6 +1988,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     return {
       signUp: settings.signUp,
       oidc: settings.oidc !== undefined,
+      google: settings.google !== undefined,
       outbox: mailer,
       issue: async (email, letter): Promise<void> => {
         await api.signInMagicLink({
@@ -1908,6 +2035,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     signInLinks,
     github: settings.github !== undefined,
     oidc: settings.oidc === undefined ? undefined : { name: settings.oidc.name },
+    google: settings.google !== undefined,
     signUp: settings.signUp,
     signInPolicy: policy,
     sessionLifetime: lifetime,

@@ -94,7 +94,7 @@ type SignInRule = 'requireTwoFactor' | 'passwordSignIn';
 /**
  * How people sign in (D-239): whether an account with a password must turn on two-step verification, and
  * whether a password signs in at all. Each applies as it is chosen, on its own. Passwords can be turned off
- * only while GitHub or single sign-on serves, and the server refuses it otherwise — said here in its words, as
+ * only while GitHub, Google or single sign-on serves, and the server refuses it otherwise — said here in its words, as
  * is a refusal because somebody else changed the page in between. Requiring the second step may hold the
  * administrator back too: the identity is read again, and the session gate says what to do.
  */
@@ -113,7 +113,7 @@ export const SignInPolicyCard = ({
   } | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
-  const providers = view.channels.github || view.channels.oidc;
+  const providers = view.channels.github || view.channels.oidc || view.channels.google;
 
   const change = async (rule: SignInRule, on: boolean): Promise<void> => {
     setPending({ rule, on });

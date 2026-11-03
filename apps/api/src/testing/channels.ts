@@ -6,7 +6,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { DEFAULT_CHANNEL_NAME } from '@purlay/types';
-import { requireChannelById, type ChannelContext } from '../platform/channels';
+import { requireChannelById, type ChannelContext } from '../features/chat/channels/guard';
 import { aUniqueSlug, aUserRow } from './users';
 
 /** A member of a workspace they own, with one public channel they are in — a writer's (D-156). */

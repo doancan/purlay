@@ -2509,3 +2509,52 @@ describe('slash commands (D-214)', () => {
     expect(short.view.world.history.stack).toEqual(['/']);
   });
 });
+
+describe('faces become emoji (D-253)', () => {
+  test('a face and a space turn into the emoji, the caret after it', async () => {
+    const { box, user } = await mount();
+    await user.type(box(), 'tamam :D ');
+    expect(box().value).toBe('tamam 😄 ');
+    expect(box().selectionStart).toBe(box().value.length);
+    await user.type(box(), 'devam');
+    expect(box().value).toBe('tamam 😄 devam');
+  });
+
+  test('Backspace straight after puts the face back as typed, and it stays', async () => {
+    const { box, sent, user } = await mount();
+    await user.type(box(), ':D ');
+    expect(box().value).toBe('😄 ');
+    await press(user, '{Backspace}');
+    expect(box().value).toBe(':D ');
+    await user.type(box(), 'and :) ');
+    expect(box().value).toBe(':D and 🙂 ');
+    await press(user, '{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: ':D and 🙂' }]);
+  });
+
+  test('Backspace after anything else deletes as it always has', async () => {
+    const { box, user } = await mount();
+    await user.type(box(), ':D x');
+    await press(user, '{Backspace}{Backspace}');
+    expect(box().value).toBe('😄');
+  });
+
+  test('a face that ends the message is sent as its emoji', async () => {
+    const { box, sent, user } = await mount();
+    await user.type(box(), 'görüşürüz ;)');
+    await press(user, '{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: 'görüşürüz 😉' }]);
+  });
+
+  test('a face inside a word or inside code is left as written', async () => {
+    const { box, user } = await mount();
+    await user.type(box(), ':Dosya `a :) ');
+    expect(box().value).toBe(':Dosya `a :) ');
+  });
+
+  test('a new line ends a face too', async () => {
+    const { box, user } = await mount();
+    await user.type(box(), '<3{Shift>}{Enter}{/Shift}x');
+    expect(box().value).toBe('❤️\nx');
+  });
+});
