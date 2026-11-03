@@ -34,6 +34,7 @@ import type { SealedSetting, ServerSettings } from './modules/setup/settings';
 import { credentialCipher } from './platform/crypto';
 import { inProcessBackplane } from './realtime/bus';
 import { bunRedisClient, connectRedis } from './platform/redis';
+import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
@@ -163,6 +164,17 @@ log.info(
     : 'realtime state is shared through Redis',
 );
 const backplane = sharing?.backplane ?? inProcessBackplane();
+// Where nodes share state they also share the question of which modules each runs: a mismatch is said, never
+// acted on, so a rolling deploy of a new set passes (D-250).
+const moduleSet =
+  redis === undefined
+    ? undefined
+    : watchModuleSet({
+        link: redis,
+        nodeId: crypto.randomUUID(),
+        set: moduleSetOf(modules.modules.map((module) => module.manifest.id)),
+        log,
+      });
 
 // Who every request and socket is: sessions are resolved through Better Auth, signing with a secret
 // derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
@@ -231,7 +243,7 @@ installShutdown({
   drain: drainRefusingChanges(services, app.drain),
   // Pushes for writes already committed, then the mail of every relay this process served with, then
   // the reports of the shutdown itself — the error tracker still has its time — then the pool.
-  closeDatabase: closeAfterDrain({ push, services, errorTracker, database, redis }),
+  closeDatabase: closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet }),
   log,
   process,
   deadlineMs: 10_000,
