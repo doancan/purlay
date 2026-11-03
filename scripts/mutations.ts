@@ -13022,4 +13022,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'true',
     tests: ['apps/web/src/app/app.test.tsx'],
   },
+  {
+    id: 'composition-data-of-a-module-not-run-forgotten',
+    why: 'an erased account, a deleted workspace and an export leave chat’s rows alone because MODULES left chat out: the data stays after the right to erase it (D-250 rule 5)',
+    file: 'apps/api/src/composition.ts',
+    find: '!modules.includes(module) && module.dataInCore',
+    replace: 'false',
+    tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
+  },
 ];
