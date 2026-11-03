@@ -724,6 +724,10 @@ through it, `Enter` writes the emoji where the caret is and the focus goes back 
 with nothing written. The **preview** draws the draft as the message will be drawn; the text is still there
 under it, and Send works while it is open (D-181).
 
+A **face typed as text** — `:)`, `:D`, `;)`, `<3`, `xD` and the rest of the list in D-253 — becomes its emoji when
+the word ends: at a space, a new line or the send, and only when it stands alone, never inside code. `Backspace`
+straight after puts the face back as it was typed, and that one stays.
+
 | Key | Action |
 |---|---|
 | `Enter` | Send — except inside a code fence that is still open, where it is a newline (D-188) |
