@@ -149,6 +149,7 @@ until then it is a stated intent and not a guarantee.
 |---|---|---|
 | No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |
 | The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
+| The core's modules import none of chat's, before chat has moved | the lint, from a list of which `modules/` folder is whose; a folder in neither stops the linter — **built** | 6–8 |
 | No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built** | 5 |
 | No read of another module's tables | the typed query handle, handed to a module with its own tables and the core's | 9 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
