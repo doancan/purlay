@@ -259,6 +259,7 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
+import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
@@ -1339,6 +1340,25 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/saved/ids',
       async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
     )
+    .get(
+      '/api/workspaces/:workspaceId/issues',
+      async ({ request, params }) => await listIssues(dependencies, request, params.workspaceId),
+    )
+    .post('/api/workspaces/:workspaceId/issues', async ({ request, params, body, set }) => {
+      const issue = await postIssue(dependencies, request, params.workspaceId, body);
+      set.status = 201;
+      return issue;
+    })
+    .patch(
+      '/api/workspaces/:workspaceId/issues/:issueId',
+      async ({ request, params, body }) =>
+        await patchIssue(dependencies, request, params.workspaceId, params.issueId, body),
+    )
+    .delete('/api/workspaces/:workspaceId/issues/:issueId', async ({ request, params, set }) => {
+      await removeIssue(dependencies, request, params.workspaceId, params.issueId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/channels/:channelId/github-feeds',
       async ({ request, params }) => await listFeeds(dependencies, request, params.channelId),

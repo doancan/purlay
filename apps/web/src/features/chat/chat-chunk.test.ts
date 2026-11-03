@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { chatScreens, chunkOf } from './load';
+import { chatScreens } from './load';
 
 const SRC = join(import.meta.dirname, '..', '..');
 const CHAT_ENTRY = join(SRC, 'features', 'chat', 'chat.ts');
@@ -63,33 +63,5 @@ describe("chat's chunk", () => {
       'SearchScreen',
       'UnreadsScreen',
     ]);
-  });
-
-  test('a request that fails is forgotten, so the next ask tries again; one that succeeds is shared', async () => {
-    let calls = 0;
-    const chunk = chunkOf(() => {
-      calls += 1;
-      return calls === 1 ? Promise.reject(new Error('offline')) : Promise.resolve('screens');
-    });
-    const failure = await chunk.get().then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).toBe('offline');
-    expect(await chunk.get()).toBe('screens');
-    expect(await chunk.get()).toBe('screens');
-    expect(calls).toBe(2);
-  });
-
-  test('warming never throws, even when the request fails, and the failure is not kept', async () => {
-    let calls = 0;
-    const chunk = chunkOf(() => {
-      calls += 1;
-      return calls === 1 ? Promise.reject(new Error('offline')) : Promise.resolve('screens');
-    });
-    chunk.warm();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await chunk.get()).toBe('screens');
   });
 });

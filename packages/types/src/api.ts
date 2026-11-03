@@ -851,6 +851,11 @@ export const AUDIT_ACTIONS = [
   'audit.exported',
   'workspace.deletion_requested',
   'workspace.deletion_cancelled',
+  /** An issue made, finished or opened again, given to somebody or taken back, or deleted: by id, never by its words (D-254). */
+  'issue.created',
+  'issue.status_changed',
+  'issue.assigned',
+  'issue.deleted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 /** One of the recorded actions, by name: what a filter on the trail names (D-222). */

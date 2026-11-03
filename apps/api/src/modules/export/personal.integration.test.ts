@@ -101,6 +101,17 @@ const footprint = async (
       added_by: who.userId,
     })
     .execute();
+  // An issue they made, given to somebody else, and the issue somebody else made for them: only the first is theirs.
+  await db
+    .insertInto('issues')
+    .values({
+      id: messageId(next()),
+      workspace_id: room.workspaceId,
+      title: `${words} issue`,
+      assignee_id: null,
+      created_by: who.userId,
+    })
+    .execute();
   // Stored as an upload is, so its key is the one production writes.
   const file = messageId(next());
   await storeUpload(
@@ -564,6 +575,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'saved_searches',
     'thread_follows',
     'channel_bookmarks',
+    'issues',
   ],
   files: [
     'attachments.ndjson',
@@ -571,6 +583,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'channel_bookmarks.ndjson',
     'channel_members.ndjson',
     'channels.ndjson',
+    'issues.ndjson',
     'manifest.json',
     'messages.ndjson',
     'reactions.ndjson',
@@ -706,6 +719,19 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     channel_bookmarks: {
       rows: 2,
       columns: ['added_at', 'added_by', 'channel_id', 'id', 'title', 'url', 'workspace_id'],
+    },
+    issues: {
+      rows: 2,
+      columns: [
+        'body',
+        'created_at',
+        'created_by',
+        'id',
+        'status',
+        'title',
+        'updated_at',
+        'workspace_id',
+      ],
     },
   },
 };

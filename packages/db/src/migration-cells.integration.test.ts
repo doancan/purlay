@@ -79,6 +79,18 @@ describe('integration: the cells of the matrix, migrated', () => {
   );
 
   test(
+    'issues has a table only where its set was applied: not on the core alone, not beside chat alone',
+    async () => {
+      expect(await tablesAfter(setsNamedBy('none'))).not.toContain('issues');
+      expect(await tablesAfter(setsNamedBy('chat'))).not.toContain('issues');
+      const alone = await tablesAfter(setsNamedBy('issues'));
+      expect(alone).toContain('issues');
+      expect(alone).not.toContain('scheduled_messages');
+    },
+    MIGRATING_MS,
+  );
+
+  test(
     'every set together is the core and what each set adds, no more',
     async () => {
       const core = await tablesAfter(setsNamedBy('none'));

@@ -11,6 +11,7 @@
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
+import { issuesModule } from './features/issues/module';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
 import { corePersonalExport } from './modules/export/core-personal-export';
@@ -39,7 +40,9 @@ export interface BundledModule {
    * erased does not wait for a setting. A module whose migration set makes some of its tables (chat's link between
    * a message and its files, its drafts, reminders and hidden messages) has those tables only where the set was
    * applied: the hooks ask `tableExists` before they name one, so a database migrated without the set is no failure
-   * and one that has it is still kept whole (`MODULES.md` §5).
+   * and one that has it is still kept whole (`MODULES.md` §5). Issues (D-254) is the case at its end: all of its data is
+   * in its own set, and it is held the same way, so a database that ran it and then turned it off is erased, purged and
+   * exported whole, and one that never had it is no failure.
    */
   readonly dataInCore?: boolean;
   /**
@@ -62,7 +65,7 @@ export interface BundledModule {
 }
 
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
-export const bundledModules: readonly BundledModule[] = [chatModule];
+export const bundledModules: readonly BundledModule[] = [chatModule, issuesModule];
 
 /** The modules of this build, checked: a malformed id, a repeat or a missing partner stops the build's own tests. */
 export const registry = moduleRegistry(bundledModules.map((module) => module.manifest));

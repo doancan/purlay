@@ -3,7 +3,7 @@
  * the core and never the other way, nor between modules, so that a module's tables can be left inert without
  * the core's pointing at them. `table-ownership.integration.test.ts` holds this list to the database.
  */
-export type TableOwner = 'core' | 'chat';
+export type TableOwner = 'core' | 'chat' | 'issues';
 
 export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   // Identity, tenancy, and what the core keeps for every module.
@@ -68,6 +68,9 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   saved_messages: 'chat',
   saved_searches: 'chat',
   thread_follows: 'chat',
+
+  // Issues: a workspace's issues (its own set, `migrations/issues/`).
+  issues: 'issues',
 };
 
 /**

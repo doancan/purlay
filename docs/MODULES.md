@@ -135,7 +135,7 @@ moves into that module.
   a part held only where the set is applied, would need the process to know the database's sets when it is composed,
   and a node that was composed before the set arrived would then miss rows that are there. A process that *runs* a
   module on a database without its set is not a cell: readiness refuses it. `module-lifecycle.integration.test.ts`
-  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own.
+  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own. Issues (D-254), whose one table is all in its own set, is held the same way, and its `ownSet` tells the exports which tables to skip.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
   first 77 files always create chat's tables, inert where chat is off. The release before the first prefixed row
@@ -202,7 +202,7 @@ until then it is a stated intent and not a guarantee.
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release`: no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
-| Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat | 11 |
+| Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
@@ -234,7 +234,7 @@ Each step ships alone and can be reverted.
 | 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |
-| 13 | Issues complete, the second module in full | new feature |
+| 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held only while it runs, its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
@@ -409,3 +409,32 @@ its row's id as it is written.
 | Module | Requires | Optional | Provides |
 |---|---|---|---|
 | `chat` | — | — | — |
+| `issues` | — | — | — |
+
+### `issues`
+
+The second module (D-254), the smallest that exercises every seam, and written so that the next one can be compared with
+it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no other module and no other module uses it.
+
+- **Migration set.** `migrations/issues/0001_issues.sql`, one table, `issues`, owned by `issues` in the ownership list, with
+  `SCHEMA.md` §7.12 and `DATA.md`. Its keys go to `workspaces` and `users` only; a core migration never names it.
+- **`data` hooks.** `userErased` takes an erased account off the issues assigned to it (what it made stays, under the
+  anonymised row); `workspacePurge` empties the table by name, because a purged workspace keeps its row as a tombstone and
+  the cascade never fires; `export` and `personalExport` write the table whole and the person's own. **All four are held
+  whether or not the module runs** (`dataInCore`), and each asks `tableExists` first, so a database that never had the
+  set is no failure and one that ran issues and was then turned off is erased, purged and exported whole: its rows stay
+  while the module is off, and the right to be erased and a deleted workspace's purge do not wait for a setting
+  (D-254 §4). The exports skip the table through the contribution's `ownSet`.
+- **Audit and permissions.** None: nothing it does is on the workspace's trail, and the role rule — any member makes and
+  changes, only the creator or an owner or an admin deletes — is in the service, tested through the route.
+- **Events and notifications.** None. An issue has no frame and tells nobody; a client reads again.
+- **Web.** The screen at `/w/:slug/issues`, one `import()` from `features/issues/load.tsx` into a chunk of its own; the rail
+  link and the palette entry only where the session lists the module. `budget:web` holds the shell chunk to carrying none of
+  the screen.
+- **Smoke test and matrix cell.** `module-lifecycle.integration.test.ts` for every lifecycle step in each state of the database (core alone, chat's set, issues' set, every set) against each process,
+  `modules-off.integration.test.ts` for the routes per cell, and a real process per `MODULES` in
+  `migrate-on-start.integration.test.ts`.
+- **Latency.** No hot path: it is not on the chat's send path, and a list of the workspace's issues is one indexed read.
+- **What a user sees for each partner that is absent.** There are no partners.
+- **Removal threshold.** Removed if no workspace of the dogfood team keeps an open issue in it for a quarter; its
+  table stays until an operator drops it (D-250 rule 5).

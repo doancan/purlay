@@ -489,6 +489,62 @@ describe('integration: migrate on start', () => {
     }
   }, 60_000);
 
+  for (const [setting, expected] of [
+    [
+      'chat',
+      {
+        sets: ['chat'],
+        issuesTable: false,
+        open: '/api/channels/anything',
+        closed: '/api/workspaces/x/issues',
+      },
+    ],
+    [
+      'issues',
+      {
+        sets: ['issues'],
+        issuesTable: true,
+        open: '/api/workspaces/x/issues',
+        closed: '/api/channels/anything',
+      },
+    ],
+  ] as const) {
+    test(`a node run with MODULES=${setting} migrates the core and that set only, is ready, and answers only its own routes`, async () => {
+      const { name, db } = await freshDatabase(`modules-${setting}`);
+      const port = freePort();
+      const node = aNode(
+        name,
+        port,
+        Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+        { MIGRATE_ON_START: 'true', MODULES: setting },
+      );
+      try {
+        expect(await until(port, '/health/ready', 200)).toBe(200);
+        expect(await recorded(db)).toEqual(
+          (await everyMigration()).filter(
+            (file) => !file.includes('/') || expected.sets.some((id) => file.startsWith(`${id}/`)),
+          ),
+        );
+        const { rows } = await sql<{ table_name: string }>`
+          select table_name from information_schema.tables
+          where table_schema = current_schema() and table_name = 'issues'`.execute(db);
+        expect(rows.length === 1).toBe(expected.issuesTable);
+        // What the module owns asks who is calling; what it does not is the answer to any path nobody serves.
+        expect(await answer(port, expected.open)).toEqual([401, 'UNAUTHENTICATED']);
+        expect(await answer(port, expected.closed)).toEqual([404, 'ROUTE_NOT_FOUND']);
+        const client = (await (
+          await fetch(`http://127.0.0.1:${String(port)}/api/client`)
+        ).json()) as Record<string, unknown>;
+        // The public handshake names no module: a signed-in caller reads `/api/me` (D-250).
+        expect(Object.keys(client)).not.toContain('modules');
+      } finally {
+        node.kill();
+        await node.exited;
+        await db.destroy();
+      }
+    }, 60_000);
+  }
+
   test('a node whose MODULES names a module the build does not carry exits before it listens, naming it', async () => {
     const { name, db } = await freshDatabase('modules-unknown');
     const port = freePort();

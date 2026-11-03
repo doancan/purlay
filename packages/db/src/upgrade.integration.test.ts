@@ -128,6 +128,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
         'chat/0004_hidden_messages',
+        'issues/0001_issues',
       ]);
 
       const links = await sql<{ attachment_id: string; message_id: string; channel_id: string }>`

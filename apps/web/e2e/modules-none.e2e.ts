@@ -10,9 +10,9 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { openNav, shellReady } from './support';
 
-/** The paths chat serves (`/api/workspaces/:id/channels`, `/api/channels/:id/messages`, …): none is asked for here. */
+/** The paths chat and issues serve (`/api/workspaces/:id/channels`, `/api/channels/:id/messages`, …): none is asked for here. */
 const CHAT_PATH =
-  /\/(channels|messages|presence|unresolved|saved|drafts|notifications|search|pins|bookmarks|threads|reminders|scheduled)(\/|\?|$)/;
+  /\/(channels|messages|presence|unresolved|saved|drafts|notifications|search|pins|bookmarks|threads|reminders|scheduled|issues)(\/|\?|$)/;
 
 /** What a page of this test must not do: every request to a chat route, and every error the console or the page reported. */
 const watch = (page: Page): { chat: string[]; errors: string[] } => {
@@ -58,7 +58,7 @@ test.describe('a server with no module', () => {
     // The rail and the sidebar.
     const sidebar = await openNav(page);
     const rail = page.getByRole('navigation', { name: 'Places' });
-    for (const name of ['Inbox', 'Saved', 'Drafts', 'Search', 'Open questions']) {
+    for (const name of ['Inbox', 'Saved', 'Drafts', 'Search', 'Open questions', 'Issues']) {
       await expect(rail.getByRole('link', { name })).toHaveCount(0);
       await expect(sidebar.getByRole('link', { name })).toHaveCount(0);
     }
@@ -72,6 +72,10 @@ test.describe('a server with no module', () => {
     await page.goto(`/w/${slug}/inbox`);
     await expect(page.getByRole('heading', { level: 1, name: 'Nothing here' })).toBeVisible();
     await expectNoAxe();
+    // And of issues, which is a module of its own.
+    await page.goto(`/w/${slug}/issues`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Nothing here' })).toBeVisible();
+    await page.goto(`/w/${slug}/inbox`);
     // Its way out leads somewhere that is drawn.
     await page.getByRole('link', { name: /Go to your/ }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeVisible();
@@ -83,7 +87,7 @@ test.describe('a server with no module', () => {
     const palette = page.getByRole('dialog', { name: 'Command palette' });
     await expect(palette).toBeVisible();
     await expect(
-      palette.getByRole('option', { name: /#|Inbox|Saved|Drafts|Search|channel/i }),
+      palette.getByRole('option', { name: /#|Inbox|Saved|Drafts|Search|channel|Issues/i }),
     ).toHaveCount(0);
     await expectNoAxe(palette);
     await page.keyboard.press('Escape');

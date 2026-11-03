@@ -94,6 +94,19 @@ const fill = async (
       added_by: member(room, other).userId,
     })
     .execute();
+  // Issues' own table: made by the author, given to the other, and never the other workspace's.
+  const issue = messageId(next());
+  await db
+    .insertInto('issues')
+    .values({
+      id: issue,
+      workspace_id: room.workspaceId,
+      title: 'Fix the runbook',
+      body: 'It says restart twice.',
+      assignee_id: member(room, other).userId,
+      created_by: author.userId,
+    })
+    .execute();
   // Stored as an upload is, so its key is the one production writes — not one a test made up (#84).
   const fileId = messageId(next());
   await storeUpload(
@@ -197,7 +210,7 @@ const fill = async (
     targetType: 'channel',
     targetId: room.channelId,
   });
-  return { secrets: [feedSecret, tokenHash, storageKey], ids: [id, fileId, incident] };
+  return { secrets: [feedSecret, tokenHash, storageKey], ids: [id, fileId, incident, issue] };
 };
 
 const lines = async (directory: string, table: string): Promise<Record<string, unknown>[]> =>
@@ -327,7 +340,11 @@ describe('integration: exporting a workspace', () => {
       ).toEqual([
         {
           actor_user_id: null,
-          metadata: { scope: 'all', messages: String(manifest.tables['messages']) },
+          metadata: {
+            scope: 'all',
+            messages: String(manifest.tables['messages']),
+            issues: String(manifest.tables['issues']),
+          },
         },
       ]);
     });
@@ -741,6 +758,7 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       'incident_responders.ndjson',
       'incident_updates.ndjson',
       'incidents.ndjson',
+      'issues.ndjson',
       'manifest.json',
       'mentions.ndjson',
       'message_versions.ndjson',
@@ -905,6 +923,20 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       incident_responders: {
         rows: 1,
         columns: ['added_at', 'added_by', 'channel_id', 'incident_id', 'user_id'],
+      },
+      issues: {
+        rows: 1,
+        columns: [
+          'assignee_id',
+          'body',
+          'created_at',
+          'created_by',
+          'id',
+          'status',
+          'title',
+          'updated_at',
+          'workspace_id',
+        ],
       },
       github_repo_feeds: {
         rows: 1,
@@ -973,6 +1005,7 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       'incident_responders.ndjson',
       'incident_updates.ndjson',
       'incidents.ndjson',
+      'issues.ndjson',
       'manifest.json',
       'mentions.ndjson',
       'message_versions.ndjson',
@@ -1137,6 +1170,20 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       incident_responders: {
         rows: 1,
         columns: ['added_at', 'added_by', 'channel_id', 'incident_id', 'user_id'],
+      },
+      issues: {
+        rows: 1,
+        columns: [
+          'assignee_id',
+          'body',
+          'created_at',
+          'created_by',
+          'id',
+          'status',
+          'title',
+          'updated_at',
+          'workspace_id',
+        ],
       },
       github_repo_feeds: {
         rows: 1,

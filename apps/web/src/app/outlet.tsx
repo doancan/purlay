@@ -42,6 +42,7 @@ import { useRoute } from '../router/router-provider';
 import { moduleOf } from '../router/routes';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
+import { LazyIssuesScreen } from '../features/issues/load';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
 import { LazySetupScreen, LazyVerifyScreen } from '../features/setup/load';
@@ -179,6 +180,14 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
         <Shell slug={match.params.slug}>
           <ModuleGate route="unreads">
             <LazyUnreadsScreen />
+          </ModuleGate>
+        </Shell>
+      );
+    case 'issues':
+      return (
+        <Shell slug={match.params.slug}>
+          <ModuleGate route="issues">
+            <LazyIssuesScreen />
           </ModuleGate>
         </Shell>
       );

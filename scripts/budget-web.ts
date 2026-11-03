@@ -17,7 +17,8 @@
  * It also judges the *shape* the budget exists to protect: no syntax-highlighting grammar
  * in the initial chunks (they load on first use, D-36), at most one locale catalogue
  * (the other is loaded only if asked for, D-41), the initial modules in one file and the
- * push worker in one of its own (D-163). Each is cheap to break and invisible until the
+ * push worker in one of its own (D-163), and no module's screen among them: a module is a chunk of its own, so a
+ * server that does not run it never asks for it (D-250). Each is cheap to break and invisible until the
  * number moves.
  *
  * **The shell holds no chat screen** (D-250, `docs/MODULES.md` §6): chat's screens are a chunk of their own,
@@ -143,6 +144,11 @@ const kb = (bytes: number): string => `${(bytes / 1024).toFixed(2)} KB`;
 const GRAMMAR = /\btextmate\b|"scopeName"|source\.(?:ts|js|python|rust|go)\b/;
 const LOCALE_CHUNK = /(?:^|\/)(?:en|tr)-[\w-]+\.js$/;
 const MODULE_CHUNK = /^assets\/[^/]+\.js$/;
+/**
+ * What each module's lazy screen carries that nothing else does, by module (`MODULES.md` §6, D-254): found in an initial
+ * chunk, the module is no longer a chunk of its own. The screen's file holds the word as `ISSUES_SCREEN`.
+ */
+const MODULE_SCREENS: Readonly<Record<string, string>> = { issues: 'screen-of-the-issues-module' };
 /** The push worker, an entry of its own that must stay one file (D-126). */
 const WORKER = 'push-worker.js';
 
@@ -168,6 +174,16 @@ export const shapeProblems = (dist: string, report: Report): string[] => {
     problems.push(
       `${WORKER} imports another file; a worker is one file of its own and shares no chunk with the page (D-126, D-163)`,
     );
+  }
+  for (const chunk of report.chunks) {
+    const text = readFileSync(join(dist, chunk.file), 'utf8');
+    for (const [module, marker] of Object.entries(MODULE_SCREENS)) {
+      if (text.includes(marker)) {
+        problems.push(
+          `${chunk.file} contains the ${module} module's screen; a module loads as a chunk of its own and the shell never carries it (D-250)`,
+        );
+      }
+    }
   }
   for (const chunk of report.chunks) {
     if (GRAMMAR.test(readFileSync(join(dist, chunk.file), 'utf8'))) {

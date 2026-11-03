@@ -118,6 +118,8 @@ export const keys = {
   pushKey: ['push-key'] as const,
   /** Every view of a person's saved messages in a workspace: the ids, and each state's pages. */
   saved: (workspaceId: string) => ['saved', workspaceId] as const,
+  /** A workspace's issues, every page of every status (D-254). */
+  issues: (workspaceId: string) => ['issues', workspaceId] as const,
   /** A channel's files, every page (D-129). */
   files: (channelId: string) => ['files', channelId] as const,
   /** A channel's pins: the list, and the ids that mark them (D-130). */

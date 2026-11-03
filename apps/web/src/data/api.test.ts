@@ -104,6 +104,70 @@ describe('the endpoints', () => {
     expect(remove.calls[0]?.method).toBe('DELETE');
     expect(remove.calls[0]?.url).toBe(`/api/workspaces/${ID}/saved-searches/${ID}`);
   });
+  test('the issues module’s four endpoints, each at its path with its method and body, decoded and refused', async () => {
+    const issue = {
+      id: ID,
+      title: 'Fix it',
+      body: '',
+      status: 'open' as const,
+      assigneeId: null,
+      createdBy: ID,
+      createdAt: WHEN,
+      updatedAt: WHEN,
+    };
+    const list = harness({ data: [issue], nextCursor: ID });
+    expect((await list.api.issues(ID)).data).toEqual([issue]);
+    expect(list.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/issues` });
+    const narrowed = harness({ data: [], nextCursor: null });
+    await narrowed.api.issues(ID, { status: 'done', before: ID });
+    expect(narrowed.calls[0]?.url).toBe(`/api/workspaces/${ID}/issues?status=done&before=${ID}`);
+
+    const make = harness(issue);
+    expect(await make.api.createIssue(ID, { title: 'Fix it' })).toEqual(issue);
+    expect(make.calls[0]).toEqual({
+      method: 'POST',
+      url: `/api/workspaces/${ID}/issues`,
+      body: { title: 'Fix it' },
+    });
+    const change = harness({ ...issue, status: 'done' });
+    expect((await change.api.updateIssue(ID, ID, { status: 'done' })).status).toBe('done');
+    expect(change.calls[0]).toEqual({
+      method: 'PATCH',
+      url: `/api/workspaces/${ID}/issues/${ID}`,
+      body: { status: 'done' },
+    });
+    const remove = harness(null);
+    await remove.api.deleteIssue(ID, ID);
+    expect(remove.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/workspaces/${ID}/issues/${ID}`,
+    });
+
+    // A refusal is an ApiError carrying the server's code, and a body that is no issue is refused too.
+    const refusing = createApi(
+      createHttp(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ error: { code: 'ISSUES_LIMIT', message: 'full', details: {} } }),
+            { status: 409 },
+          ),
+        ),
+      ),
+    );
+    const failure = await refusing.createIssue(ID, { title: 'x' }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(ApiError);
+    expect((failure as ApiError).code).toBe('ISSUES_LIMIT');
+    const malformed = harness({ id: ID });
+    expect(
+      await malformed.api.updateIssue(ID, ID, { title: 'x' }).then(
+        () => 'taken',
+        () => 'refused',
+      ),
+    ).toBe('refused');
+  });
   test('identity and workspaces', async () => {
     const me = harness({
       user: { ...user, email: 'a@example.test' },

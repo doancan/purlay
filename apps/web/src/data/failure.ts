@@ -34,6 +34,7 @@ export type FailureKey =
   | 'failure.tooLarge'
   | 'failure.refused'
   | 'failure.deletionStarted'
+  | 'failure.issuesLimit'
   | 'failure.savedLimit'
   | 'failure.pinsLimit'
   | 'failure.bookmarksLimit'
@@ -90,6 +91,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'MESSAGE_NOT_FOUND':
     case 'BOOKMARK_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
+    case 'ISSUE_NOT_FOUND':
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
     case 'SESSION_NOT_FOUND':
@@ -113,6 +115,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.refused';
     case 'SAVED_LIMIT':
       return 'failure.savedLimit';
+    case 'ISSUES_LIMIT':
+      return 'failure.issuesLimit';
     case 'PINS_LIMIT':
       return 'failure.pinsLimit';
     case 'BOOKMARKS_LIMIT':

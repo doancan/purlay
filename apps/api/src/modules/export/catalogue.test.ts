@@ -90,6 +90,7 @@ describe('the export catalogue', () => {
       workspaceId: 'w1',
       kind: 'all',
       prepared: { chat: 'channels of w1' },
+      absent: [],
     });
   });
 });

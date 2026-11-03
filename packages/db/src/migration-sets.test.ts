@@ -16,6 +16,8 @@ describe('the migration sets a MODULES setting names', () => {
   test('a list is the sets it names, whatever its spacing and order', () => {
     expect(setsNamedBy(' chat ').map((set) => set.id)).toEqual(['chat']);
     expect(setsNamedBy('chat,chat').map((set) => set.id)).toEqual(['chat']);
+    expect(setsNamedBy('issues, chat').map((set) => set.id)).toEqual(['chat', 'issues']);
+    expect(setsNamedBy('issues').map((set) => set.id)).toEqual(['issues']);
   });
 
   test('a word that names no set adds none: the API refuses the setting itself', () => {

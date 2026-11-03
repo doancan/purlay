@@ -198,6 +198,12 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   });
   expect(bookmark.status).toBe(201);
   const { id: bookmarkId } = (await bookmark.json()) as { id: string };
+  // An issue of the workspace (D-254).
+  const issue = await call(db, 'POST', `/api/workspaces/${workspaceId}/issues`, cookie, {
+    title: 'Crossing',
+  });
+  expect(issue.status).toBe(201);
+  const { id: issueId } = (await issue.json()) as { id: string };
   // An incoming webhook to revoke (D-245).
   const hook = await call(db, 'POST', `/api/channels/${channelId}/incoming-webhooks`, cookie, {
     name: 'CI',
@@ -261,6 +267,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     versionId: version.id,
     incidentId,
     bookmarkId,
+    issueId,
     webhookId,
     exportId,
   };
@@ -278,6 +285,7 @@ const NEVER_EXISTED: Ids = {
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
   bookmarkId: '00000000-0000-4000-8000-000000000000',
+  issueId: '00000000-0000-4000-8000-000000000000',
   webhookId: '00000000-0000-4000-8000-000000000000',
   exportId: '00000000-0000-4000-8000-000000000000',
 };
@@ -294,6 +302,7 @@ const NOT_A_UUID: Ids = {
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',
   bookmarkId: 'not-a-uuid',
+  issueId: 'not-a-uuid',
   webhookId: 'not-a-uuid',
   exportId: 'not-a-uuid',
 };

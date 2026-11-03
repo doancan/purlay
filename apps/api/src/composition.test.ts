@@ -8,6 +8,7 @@ import {
   type BundledModule,
 } from './composition';
 import { chatModule } from './features/chat/module';
+import { issuesModule } from './features/issues/module';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
 
 const another: BundledModule = {
@@ -16,9 +17,9 @@ const another: BundledModule = {
 };
 
 describe('the application as its modules make it', () => {
-  test('carries chat, and the registry of the build is sound', () => {
-    expect(bundledModules.map((module) => module.manifest.id)).toEqual(['chat']);
-    expect(registry.resolve(undefined).map((module) => module.id)).toEqual(['chat']);
+  test('carries chat and issues, and the registry of the build is sound', () => {
+    expect(bundledModules.map((module) => module.manifest.id)).toEqual(['chat', 'issues']);
+    expect(registry.resolve(undefined).map((module) => module.id)).toEqual(['chat', 'issues']);
   });
 
   test('in a build with no module at all, the core stands alone: no hook, nobody for the channels, a purge of its own, its own exports', () => {
@@ -50,6 +51,16 @@ describe('the application as its modules make it', () => {
     expect(notRun.collatedColumns).toContainEqual(['channels', 'name']);
   });
 
+  test('issues, whose data is all in a set of its own, is held whether or not it runs, as chat’s own-set tables are', () => {
+    for (const modules of [[], [chatModule], [issuesModule]]) {
+      const held = compose(modules);
+      expect(held.workspacePurge.tables).toContain('issues');
+      expect(held.exportCatalogue.order).toContain('issues');
+      expect(held.personalExportCatalogue.order).toContain('issues');
+    }
+    expect(compose([issuesModule]).workspacePurge.tables).toContain('mentions');
+  });
+
   test('with chat, it has chat’s hooks, answers, purge steps, tables and columns', () => {
     expect(composition.modules).toEqual(bundledModules);
     expect(composition.workspaceChannels).toBe(chatModule.workspaceChannels);
@@ -74,17 +85,33 @@ describe('the application as its modules make it', () => {
         expect(compositionFor(setting).modules).toEqual(bundledModules);
       }
       expect(compositionFor('none').modules).toEqual([]);
-      expect(compositionFor('chat').modules).toEqual(bundledModules);
+      expect(compositionFor('chat').modules).toEqual([chatModule]);
+      expect(compositionFor('issues').modules).toEqual([issuesModule]);
+      expect(compositionFor('issues, chat').modules).toEqual(bundledModules);
     });
 
     test('a module left out has no migration set, its routes and jobs are closed', () => {
       const all = compositionFor(undefined);
-      expect(all.migrationSets.map((set) => set.id)).toEqual(['chat']);
+      expect(all.migrationSets.map((set) => set.id)).toEqual(['chat', 'issues']);
       expect(all.closed('/api/channels/c1')).toBe(false);
+      expect(all.closed('/api/workspaces/w1/issues')).toBe(false);
+      expect(all.closed('/api/workspaces/w1/issues/i1')).toBe(false);
       expect(all.closedJob('mail:missed')).toBe(false);
+
+      const chatOnly = compositionFor('chat');
+      expect(chatOnly.migrationSets.map((set) => set.id)).toEqual(['chat']);
+      expect(chatOnly.closed('/api/workspaces/w1/issues')).toBe(true);
+      expect(chatOnly.closed('/api/workspaces/w1/issues/i1')).toBe(true);
+      expect(chatOnly.closed('/api/channels/c1')).toBe(false);
+      const issuesOnly = compositionFor('issues');
+      expect(issuesOnly.migrationSets.map((set) => set.id)).toEqual(['issues']);
+      expect(issuesOnly.closed('/api/workspaces/w1/issues')).toBe(false);
+      expect(issuesOnly.closed('/api/channels/c1')).toBe(true);
+      expect(issuesOnly.closed('/api/workspaces/w1/channels')).toBe(true);
 
       const alone = compositionFor('none');
       expect(alone.migrationSets).toEqual([]);
+      expect(alone.closed('/api/workspaces/w1/issues')).toBe(true);
       expect(alone.closed('/api/channels/c1')).toBe(true);
       expect(alone.closed('/api/workspaces/w1/members')).toBe(false);
       expect(alone.closedJob('mail:missed')).toBe(true);
