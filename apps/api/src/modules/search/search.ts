@@ -24,10 +24,7 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import { MESSAGE_COLUMNS } from '../messages/reader';
 import { asPage } from '../messages/threads';
 import { limitOf } from '../../platform/pagination';
-
-/** `%`, `_` and `\` are what a person typed, not a pattern: escaped for `ILIKE`'s default escape. */
-export const literalPattern = (words: string): string =>
-  `%${words.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+import { literalPattern } from '../../platform/like-pattern';
 
 /** Filters can stand alone, but an unbounded empty search is never implicit. */
 export const validateSearch = (query: SearchCriteria): void => {
