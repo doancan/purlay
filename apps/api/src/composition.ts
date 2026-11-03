@@ -26,6 +26,7 @@ import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspace
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
+import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
 import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
@@ -88,7 +89,10 @@ export const bundledModules = [
 ] as const satisfies readonly BundledModule[];
 
 /** The modules of this build, checked: a malformed id, a repeat or a missing partner stops the build's own tests. */
-export const registry = moduleRegistry(bundledModules.map((module) => module.manifest));
+export const registry = moduleRegistry(
+  bundledModules.map((module) => module.manifest),
+  CORE_CLAIMS,
+);
 
 export interface Composition {
   readonly modules: readonly BundledModule[];
@@ -200,7 +204,10 @@ export const composeFor = (
   carried: readonly BundledModule[],
   setting: string | undefined,
 ): Composition => {
-  const carriedRegistry = moduleRegistry(carried.map((module) => module.manifest));
+  const carriedRegistry = moduleRegistry(
+    carried.map((module) => module.manifest),
+    CORE_CLAIMS,
+  );
   const inResolvedOrder = (manifests: readonly ModuleManifest[]): BundledModule[] =>
     manifests.flatMap((manifest) => carried.filter((module) => module.manifest === manifest));
   return compose(

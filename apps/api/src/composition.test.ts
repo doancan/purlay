@@ -184,6 +184,18 @@ describe('the application as its modules make it', () => {
       expect(idsOf(composeFor(carried, 'none').modules)).toEqual([]);
     });
 
+    test('stops a build whose module claims a route the core has, or one another module has', () => {
+      const claiming = (id: string, routes: string[]): BundledModule => ({
+        manifest: { id, requires: [], optional: [], provides: [], routes },
+      });
+      expect(() => composeFor([claiming('notes', ['/api/me'])], undefined)).toThrow(
+        /"notes" owns the route "\/api\/me", which overlaps the core's/,
+      );
+      expect(() =>
+        composeFor([claiming('notes', ['/api/x/**']), claiming('todos', ['/api/x/y'])], undefined),
+      ).toThrow(/both own routes that overlap/);
+    });
+
     test('is the same for a build’s own modules whatever the setting', () => {
       expect(compositionFor(undefined).workspacePurge.tables).toEqual(
         compositionFor('issues').workspacePurge.tables,

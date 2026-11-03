@@ -12,7 +12,7 @@ import { MIGRATIONS_DIRECTORY, PRODUCT_MIGRATION_SETS, TABLE_OWNERS } from '@pur
 import { bundledModules } from './composition';
 
 const moduleIds = bundledModules.map((module) => module.manifest.id);
-const setIds = PRODUCT_MIGRATION_SETS.map((set) => set.id);
+const setIds: readonly string[] = PRODUCT_MIGRATION_SETS.map((set) => set.id);
 
 const subdirectories = (): string[] =>
   readdirSync(MIGRATIONS_DIRECTORY, { withFileTypes: true })
