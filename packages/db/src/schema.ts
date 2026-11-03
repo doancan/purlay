@@ -66,14 +66,12 @@ export interface AdminEmailVerification {
 }
 
 export interface Attachments {
-  channel_id: string | null;
   claimed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   file_name: string;
   height: number | null;
   id: string;
   kind: Generated<AttachmentKind>;
-  message_id: string | null;
   mime_type: string;
   size_bytes: Int8;
   storage_key: string;
