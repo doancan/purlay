@@ -28,6 +28,7 @@ import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion
 import { chatWorkspacePurge } from '../../features/chat/messages/workspace-purge';
 import { purgeWorkspaces } from '../../modules/workspaces/deletion-purge';
 import { createApp } from './app';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 let cloned: ClonedDatabase;
 
@@ -64,7 +65,7 @@ const aDoomedRoom = async (): Promise<Room> => {
     .execute();
   const context = await requireDeletionMembership(cloned.db, owner(room), room.workspaceId);
   await cloned.db.transaction().execute(async (transaction) => {
-    await askToDelete(transaction, clock, context, 'Room');
+    await askToDelete(transaction, clock, context, 'Room', chatWorkspaceChannels);
   });
   return room;
 };
@@ -116,7 +117,7 @@ describe('integration: a deletion taken back as its grace period ends', () => {
       taken = resolve;
     });
     const cancelling = cloned.db.transaction().execute(async (transaction) => {
-      await takeBackDeletion(transaction, clock, context);
+      await takeBackDeletion(transaction, clock, context, chatWorkspaceChannels);
       taken();
       await held;
     });

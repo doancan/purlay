@@ -54,6 +54,7 @@ import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion
 import { auditTrail } from '../../modules/audit/audit';
 import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
+import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
 import { readStorage } from '../../modules/attachments/quota';
 import {
   githubIntegrationOf,
@@ -82,6 +83,8 @@ export interface WorkspaceDependencies {
   readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
+  /** The channels of a workspace, as chat answers for them (D-250). */
+  readonly workspaceChannels: WorkspaceChannels;
 }
 
 /** What answers whether the caller may make a workspace (D-155): the server's setting (D-179 §6). */
@@ -247,7 +250,8 @@ export const removeWorkspaceMember = async (
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { channelIds } = await atomicallyOn(database)(
-    async (transaction) => await removeMember(transaction, clock, context, userId),
+    async (transaction) =>
+      await removeMember(transaction, clock, context, userId, dependencies.workspaceChannels),
   );
   await publishAfterCommit(log, [
     [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],
@@ -268,7 +272,8 @@ export const leaveWorkspaceMembership = async (
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { channelIds } = await atomicallyOn(database)(
-    async (transaction) => await leaveWorkspace(transaction, clock, context),
+    async (transaction) =>
+      await leaveWorkspace(transaction, clock, context, dependencies.workspaceChannels),
   );
   await publishAfterCommit(log, [
     [
@@ -295,7 +300,8 @@ export const requestWorkspaceDeletion = async (
   const context = await requireDeletionMembership(database, userId, workspaceId);
   const { confirm } = validated(DeleteWorkspaceRequest, body);
   const asked = await atomicallyOn(database)(
-    async (transaction) => await askToDelete(transaction, clock, context, confirm),
+    async (transaction) =>
+      await askToDelete(transaction, clock, context, confirm, dependencies.workspaceChannels),
   );
   await publishAfterCommit(log, [
     [
@@ -321,7 +327,8 @@ export const cancelWorkspaceDeletion = async (
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireDeletionMembership(database, userId, workspaceId);
   const { memberIds } = await atomicallyOn(database)(
-    async (transaction) => await takeBackDeletion(transaction, clock, context),
+    async (transaction) =>
+      await takeBackDeletion(transaction, clock, context, dependencies.workspaceChannels),
   );
   await publishAfterCommit(log, [
     [
@@ -382,7 +389,7 @@ export const readRetentionSetting = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await readRetention(database, context);
+  return await readRetention(database, context, dependencies.workspaceChannels);
 };
 
 /**
@@ -416,7 +423,14 @@ export const updateRetentionSetting = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const { retentionDays } = validated(SetRetentionRequest, body);
   return await atomicallyOn(database)(
-    async (transaction) => await setRetention(transaction, clock, context, retentionDays),
+    async (transaction) =>
+      await setRetention(
+        transaction,
+        clock,
+        context,
+        retentionDays,
+        dependencies.workspaceChannels,
+      ),
   );
 };
 

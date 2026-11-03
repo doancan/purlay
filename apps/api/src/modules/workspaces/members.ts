@@ -17,11 +17,11 @@
 import { sql, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type UserRole, type WorkspaceMember } from '@purlay/types';
-import { visibleChannelIds } from '../../platform/channels';
+import type { WorkspaceChannels } from './channels-port';
 import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import { AppError } from '../../platform/errors';
-import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
+import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, PROFILE_COLUMNS } from '../users/profile';
 
 /** Whether a caller of this role may move a member from one role to another, or remove them (`to` absent). */
@@ -140,18 +140,11 @@ export const changeRole = async (
  */
 const takeOut = async (
   executor: Executor,
+  channels: WorkspaceChannels,
   workspaceId: string,
   userId: string,
 ): Promise<readonly string[]> => {
-  const theirs = await requireWorkspaceMembership(executor, userId, workspaceId);
-  const channelIds = await visibleChannelIds(executor, theirs);
-  await executor
-    .deleteFrom('channel_members')
-    .where('user_id', '=', userId)
-    .where('channel_id', 'in', (eb) =>
-      eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
-    )
-    .execute();
+  const channelIds = await channels.leaveAll(executor, workspaceId, userId);
   await executor
     .deleteFrom('workspace_members')
     .where('workspace_id', '=', workspaceId)
@@ -166,13 +159,14 @@ export const removeMember = async (
   clock: Clock,
   context: WorkspaceContext,
   userId: string,
+  channels: WorkspaceChannels,
 ): Promise<{ readonly channelIds: readonly string[] }> => {
   if (context.role === 'member') throw forbidden();
   if (!Value.Check(Uuid, userId)) throw notFound();
   const { caller, target } = await rolesUnderLock(executor, context, userId);
   if (!mayManage(caller, target)) throw forbidden();
   if (target === 'owner') await keepAnOwner(executor, context);
-  const channelIds = await takeOut(executor, context.workspaceId, userId);
+  const channelIds = await takeOut(executor, channels, context.workspaceId, userId);
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
     actorUserId: context.userId,
@@ -193,6 +187,7 @@ export const leaveWorkspace = async (
   executor: Executor,
   clock: Clock,
   context: WorkspaceContext,
+  channels: WorkspaceChannels,
 ): Promise<{ readonly channelIds: readonly string[] }> => {
   await lockWorkspace(executor, context);
   const row = await executor
@@ -202,7 +197,7 @@ export const leaveWorkspace = async (
     .where('user_id', '=', context.userId)
     .executeTakeFirstOrThrow();
   if (row.role === 'owner') await keepAnOwner(executor, context);
-  const channelIds = await takeOut(executor, context.workspaceId, context.userId);
+  const channelIds = await takeOut(executor, channels, context.workspaceId, context.userId);
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
     actorUserId: context.userId,

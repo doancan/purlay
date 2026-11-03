@@ -12,6 +12,7 @@ import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import { userTopic, type EventBus } from '../../platform/events';
 import { joinByInvitation } from './invitations';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -80,7 +81,10 @@ describe('integration: invitations over HTTP', () => {
   test('joining refreshes every workspace member, once, and tells no outsider', async () => {
     await withRollback(async (db) => {
       const told: string[] = [];
-      const base = testDependencies({ database: db, clock });
+      const base = {
+        ...testDependencies({ database: db, clock }),
+        workspaceChannels: chatWorkspaceChannels,
+      };
       const bus: EventBus = {
         publish: (topic, frame): Promise<void> => {
           if (frame.event === 'WORKSPACE_UPDATED') told.push(topic);
@@ -120,7 +124,10 @@ describe('integration: invitations over HTTP', () => {
 
   test('a publication failure does not turn an accepted invitation into an error', async () => {
     await withRollback(async (db) => {
-      const base = testDependencies({ database: db, clock });
+      const base = {
+        ...testDependencies({ database: db, clock }),
+        workspaceChannels: chatWorkspaceChannels,
+      };
       const bus: EventBus = {
         publish: (): Promise<void> => Promise.reject(new Error('bus unavailable')),
         subscribe: () => false,

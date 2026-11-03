@@ -24,6 +24,7 @@ import { DAY_MS, type Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { workspaceNotFound, type DeletionContext } from '../../platform/tenancy';
 import { recordAudit } from '../audit/audit';
+import type { WorkspaceChannels } from './channels-port';
 
 const ownersOnly = (): AppError =>
   new AppError({ code: 'FORBIDDEN', message: 'Only an owner deletes the workspace.' });
@@ -74,6 +75,7 @@ const lockedRow = async (
 /** Everyone in it and every channel of it: who is told it went, or came back, after the commit. */
 const audience = async (
   executor: Executor,
+  channels: WorkspaceChannels,
   workspaceId: string,
 ): Promise<{ readonly memberIds: readonly string[]; readonly channelIds: readonly string[] }> => {
   const members = await executor
@@ -81,14 +83,9 @@ const audience = async (
     .select('user_id')
     .where('workspace_id', '=', workspaceId)
     .execute();
-  const channels = await executor
-    .selectFrom('channels')
-    .select('id')
-    .where('workspace_id', '=', workspaceId)
-    .execute();
   return {
     memberIds: members.map((member) => member.user_id),
-    channelIds: channels.map((channel) => channel.id),
+    channelIds: await channels.idsIn(executor, workspaceId),
   };
 };
 
@@ -110,6 +107,7 @@ export const askToDelete = async (
   clock: Clock,
   context: DeletionContext,
   confirm: string,
+  channels: WorkspaceChannels,
 ): Promise<Asked> => {
   const { workspace, deletedAt } = await lockedRow(executor, context);
   if (confirm.normalize('NFC') !== workspace.name.normalize('NFC')) {
@@ -141,7 +139,10 @@ export const askToDelete = async (
     targetId: context.workspaceId,
     metadata: { purgeAt },
   });
-  return { deletion: { workspace, purgeAt }, ...(await audience(executor, context.workspaceId)) };
+  return {
+    deletion: { workspace, purgeAt },
+    ...(await audience(executor, channels, context.workspaceId)),
+  };
 };
 
 /**
@@ -152,6 +153,7 @@ export const takeBackDeletion = async (
   executor: Transaction,
   clock: Clock,
   context: DeletionContext,
+  channels: WorkspaceChannels,
 ): Promise<{ readonly memberIds: readonly string[] }> => {
   const { deletedAt } = await lockedRow(executor, context);
   if (deletedAt === null) return { memberIds: [] };
@@ -167,7 +169,7 @@ export const takeBackDeletion = async (
     targetType: 'workspace',
     targetId: context.workspaceId,
   });
-  const { memberIds } = await audience(executor, context.workspaceId);
+  const { memberIds } = await audience(executor, channels, context.workspaceId);
   return { memberIds };
 };
 

@@ -9,6 +9,7 @@ import type { RetentionSetting } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
+import type { WorkspaceChannels } from './channels-port';
 import { recordAudit } from '../audit/audit';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 
@@ -24,6 +25,7 @@ const said = (days: number | null): string => (days === null ? 'forever' : Strin
 export const readRetention = async (
   executor: Executor,
   context: WorkspaceContext,
+  channels: WorkspaceChannels,
 ): Promise<RetentionSetting> => {
   if (context.role !== 'owner') throw ownersOnly();
   const row = await executor
@@ -34,30 +36,8 @@ export const readRetention = async (
     .executeTakeFirstOrThrow();
   return {
     retentionDays: row.retention_days,
-    channelsKeptLonger: await channelsKeptLonger(executor, context, row.retention_days),
+    channelsKeptLonger: await channels.keptLonger(executor, context, row.retention_days),
   };
-};
-
-/**
- * How many of the workspace's channels keep longer than its window (D-225): forever, or a floor past it.
- * Archived and private ones count — the purge keeps their history too. A workspace that keeps everything
- * has none: nothing is longer than forever.
- */
-const channelsKeptLonger = async (
-  executor: Executor,
-  context: WorkspaceContext,
-  retentionDays: number | null,
-): Promise<number> => {
-  if (retentionDays === null) return 0;
-  const row = await executor
-    .selectFrom('channels')
-    .select((eb) => eb.fn.countAll<string>().as('count'))
-    .where('workspace_id', '=', context.workspaceId)
-    .where((eb) =>
-      eb.or([eb('retain_forever', '=', true), eb('min_retention_days', '>', retentionDays)]),
-    )
-    .executeTakeFirstOrThrow();
-  return Number(row.count);
 };
 
 /**
@@ -69,6 +49,7 @@ export const setRetention = async (
   clock: Clock,
   context: WorkspaceContext,
   retentionDays: number | null,
+  channels: WorkspaceChannels,
 ): Promise<RetentionSetting> => {
   if (context.role !== 'owner') throw ownersOnly();
   const before = await executor
@@ -82,7 +63,7 @@ export const setRetention = async (
   if (now.role !== 'owner') throw ownersOnly();
   const answer = async (): Promise<RetentionSetting> => ({
     retentionDays,
-    channelsKeptLonger: await channelsKeptLonger(executor, context, retentionDays),
+    channelsKeptLonger: await channels.keptLonger(executor, context, retentionDays),
   });
   if (before.retention_days === retentionDays) return await answer();
   await executor

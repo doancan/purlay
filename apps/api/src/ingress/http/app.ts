@@ -173,6 +173,8 @@ import {
   type GitHubAppFetch,
 } from '../../platform/github-app-api';
 import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
 import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
@@ -356,6 +358,8 @@ export interface Dependencies {
    * one with — its first channel (D-174).
    */
   readonly workspaceCreated?: WorkspaceCreated;
+  /** The channels of a workspace, as the workspace code asks for them (D-250); absent, chat's. */
+  readonly workspaceChannels?: WorkspaceChannels;
   /**
    * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
    * absent, the application keeps one of its own — a test reads it through `/metrics`.
@@ -446,6 +450,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const dependencies = {
     ...given,
     workspaceCreated: given.workspaceCreated ?? chatWorkspaceHooks(),
+    workspaceChannels: given.workspaceChannels ?? chatWorkspaceChannels,
   };
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
