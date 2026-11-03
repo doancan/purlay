@@ -76,9 +76,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   for the rest, in the height of any row (D-167) —
   then the people, and your own row at the foot — your avatar with your own dot or ring, the name over the
   handle, and the up-and-down chevron — which opens the **account menu** (D-124, D-146, D-207): who
-  you are, as a card; **Set yourself as away** ("Uzakta görün"), which reads **Set yourself as active** ("Etkin görün") while it is on and
-  keeps the person away on every device until they turn it off (D-257); **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
-  tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  you are, as a card; **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
+  tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Set yourself as away** ("Uzakta görün"),
+  which reads **Set yourself as active** ("Etkin görün") while it is on and keeps the person away on every device until they turn it
+  off — the card's own ring or dot follows it on every page of theirs (D-257); **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
   and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
