@@ -129,18 +129,22 @@ purlay/
 │   │       ├── realtime/        the socket door: frame router, hub (connection lifecycle,
 │   │       │                  backpressure), the in-process EventBus, the rate limiter
 │   │       ├── features/        the modules of the product (D-250, `MODULES.md`): one folder each, below the
-│   │       │                  doors like `modules/`, importing no other feature; none exists yet
-│   │       ├── modules/         business rules; no HTTP or WS types cross this line
+│   │       │                  doors like `modules/`, importing no other feature and no `modules/` code the
+│   │       │                  other way round
+│   │       │   └── chat/        channels, messages, reactions, pins, saved, search, presence, bookmarks,
+│   │       │                  incidents, the GitHub integration and the inbox: what the product was before
+│   │       │                  it was a set of modules. It still writes raw SQL; the others may not
+│   │       ├── modules/         the core's business rules; no HTTP or WS types cross this line, and none of
+│   │       │                  it imports a feature
 │   │       │   ├── auth/        the sign-in library (Better Auth) and what sits on it: sessions (token SHA-256 at rest)
 │   │       │   ├── workspaces/  tenancy, membership, roles, Deep Work
 │   │       │   │              ownership is a membership row, never a column (D-22)
-│   │       │   ├── channels/    channels, DMs, membership, read state
-│   │       │   ├── messages/    messages, threads, resolution, mentions
-│   │       │   │              keyset on the id alone; OFFSET is a check, not advice
-│   │       │   ├── attachments/ upload, thumbnails, quota, a channel's files
-│   │       │   ├── notifications/
-│   │       │   ├── search/
-│   │       │   └── integrations/github/  unfurl, link_previews cache
+│   │       │   ├── users/       profiles, suspension, the erasure of an account
+│   │       │   ├── attachments/ upload, thumbnails, quota, the deletion of a stored object
+│   │       │   ├── audit/       the trail
+│   │       │   ├── setup/       the first-run wizard and the server's settings
+│   │       │   ├── export/ jobs/ push/ images/
+│   │       │   └── (chat's modules moved to `features/chat/` in step 9 of `MODULES.md`)
 │   │       ├── platform/        the bottom layer: config, clock, errors, tenancy, channel
 │   │       │                  visibility, the EventBus seam, the transaction boundary,
 │   │       │                  `module-kit/` — the manifest type and which modules a process runs
@@ -180,7 +184,7 @@ purlay/
 **Dependency rule, enforced by lint:** the two doors — `ingress/http` and `realtime` — call
 `features` and `modules`, `features` call `modules`, and `modules` call `platform`. A module or a
 feature never imports from either door, and `platform` imports from nothing above it. **The core —
-`modules` and `platform` — imports no feature, and no feature imports another** (D-250); the lint
+`modules` and `platform` — imports no feature, and no feature imports another** (D-250); the core's own tests may import a feature, to build a room to act in; the lint
 finds the folders under `features/` itself, so a new one is fenced on the day it is made. `realtime` never imports `ingress` (ingress composes it), and
 production code never imports `testing/` — both are lint rules. A route handler or frame handler validates, calls one service and
 serializes: sign-in, the `/me` read and the fan-out that ends a session's sockets are in `modules` and
@@ -829,7 +833,7 @@ The rules are D-109's; this is the path through the code.
    and adds to `storage_used_bytes`, in the same transaction.
 3. Every page of messages carries each message's attachments, read in one query for the page
    (`messages/sets.ts`); a tombstone carries none.
-4. `GET /api/channels/:channelId/files` → the channel's guard → `modules/channels/files.ts` reads
+4. `GET /api/channels/:channelId/files` → the channel's guard → `features/chat/channels/files.ts` reads
    the channel's files by the channel they carry, newest message first (D-129).
 5. Unsent uploads older than a day are swept by `bun run job sweep:orphans` (D-30), and the count is
    reconciled by `reconcile:storage`.

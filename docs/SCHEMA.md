@@ -1549,7 +1549,7 @@ CREATE INDEX idx_incoming_webhooks_created_by ON incoming_webhooks (created_by)
 ### 8.4. The GitHub App (D-246)
 
 The server's App is a row of `server_settings` (§9.5). What belongs to a workspace or a person is here, read and
-written by `modules/integrations/github-app*.ts`.
+written by `features/chat/integrations/github-app*.ts`.
 
 - **`github_app_installations`** — at most one installation per workspace, connected by an owner. GitHub's
   `installation_id` is **not** unique: two workspaces of one organisation may both connect it, so it is indexed for
@@ -2291,7 +2291,7 @@ CREATE INDEX idx_native_authorizations_expiry ON native_authorizations (expires_
 ### 9.10. `missed_mail_letters`
 
 Each letter the scheduled `mail:missed` sent a person about what they missed (D-240), read and written by
-`modules/notifications/missed-mail.ts`.
+`features/chat/notifications/missed-mail.ts`.
 
 - **The hour between two**: a person gets no letter while one of theirs has `sent_at` within the last hour, read
   under their row's lock.
@@ -2381,7 +2381,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
-| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window — its channel's window, which is the longer of the workspace's and the channel's own (`channels.retain_forever`, `channels.min_retention_days`), computed on every batch and never taken from a stored number (D-225). Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/messages/retention-purge.ts` |
+| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window — its channel's window, which is the longer of the workspace's and the channel's own (`channels.retain_forever`, `channels.min_retention_days`), computed on every batch and never taken from a stored number (D-225). Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `features/chat/messages/retention-purge.ts` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, no `github_login` and no `github_connected_at`, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5, D-176) | `modules/users/erasure.ts` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
