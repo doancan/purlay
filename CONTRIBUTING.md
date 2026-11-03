@@ -229,7 +229,7 @@ What belongs here is the discipline around them:
   in CI, with screenshots ignored and each engine's known limits skipped by name
   (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
   a measurement (`performance.e2e.ts`, `feed-scale.e2e.ts`), and `only` runs those alone, as CI does (D-227).
-  `bun run budget:web` fails above 400 KB of initial gzipped JavaScript and names what grew (D-196): a backstop against an accident, never a reason to cut or defer a feature.
+  `bun run budget:web` fails above 400 KB of initial gzipped JavaScript and names what grew (D-196): a backstop against an accident, never a reason to cut or defer a feature. It also fails when chat's screens are in the shell's chunk and needs the build's source map to say so: `bun run build:web:mapped` first (D-250).
 
 ---
 

@@ -93,9 +93,10 @@ jobs:
 
       # A client that does not build is a client nobody can ship, and it fails in
       # a way no typecheck sees — a missing asset, a plugin that stopped
-      # resolving, an entry that moved.
+      # resolving, an entry that moved. The source map is kept (and not shipped) so the budget
+      # below can show the shell holds none of chat's screens (D-250).
       - name: build the client
-        run: bun run build:web
+        run: bun run build:web:mapped
 
       # The initial JavaScript is measured from the build and blocks the merge above
       # 250 KB gzipped, naming the chunks. A budget nobody enforces is a hope (D-49, #140).

@@ -13097,4 +13097,21 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'true',
     tests: ['apps/web/src/features/shortcuts/shortcuts-dialog.test.tsx'],
   },
+  {
+    id: 'web-chat-screen-imported-statically',
+    why: 'a chat screen is imported at the top of the outlet again, so the shell carries chat whether or not the server runs it (D-250)',
+    file: 'apps/web/src/app/outlet.tsx',
+    find: "import { moduleOf } from '../router/routes';",
+    replace:
+      "import { moduleOf } from '../router/routes';\nimport { UnreadsScreen } from '../features/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
+    tests: ['apps/web/src/features/chat/chat-chunk.test.ts'],
+  },
+  {
+    id: 'budget-web-lets-chat-into-the-shell',
+    why: 'the budget no longer looks for chat’s screens in the initial chunks, so a static import passes the build (D-250)',
+    file: 'scripts/budget-web.ts',
+    find: '    if (found.length > 0) {',
+    replace: '    if (found.length > 1000) {',
+    tests: ['scripts/budget-web.test.ts'],
+  },
 ];

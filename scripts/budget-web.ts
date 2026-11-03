@@ -10,7 +10,7 @@
  * features (D-196).
  *
  * **A failure says what grew, not only that something did**: the chunks, largest first,
- * and — when the build kept a source map (`PURLAY_SOURCEMAP=1 bun run build:web`) — the
+ * and — when the build kept a source map (`bun run build:web:mapped`) — the
  * sources inside the largest one. A budget that only reports a number gets raised; one
  * that names the dependency that arrived gets a decision.
  *
@@ -19,12 +19,44 @@
  * (the other is loaded only if asked for, D-41), the initial modules in one file and the
  * push worker in one of its own (D-163). Each is cheap to break and invisible until the
  * number moves.
+ *
+ * **The shell holds no chat screen** (D-250, `docs/MODULES.md` §6): chat's screens are a chunk of their own,
+ * `assets/chat-*.js`, which the shell asks for with `import()` and which is not initial. The check reads the
+ * source maps of the initial chunks, so it needs `bun run build:web:mapped`, and fails — rather
+ * than passing unproven — when there is none. Two bounds go with it, set from the measured build
+ * (2026-11-03: shell 242.04 KB gzipped, chat 45.65 KB) with a margin for a feature or two: the shell's at
+ * 250 KB, 3% above what was measured, so the 400 KB backstop above is no longer what catches a screen that
+ * crept back; chat's at 50 KB, 10% above. They move up in a commit that says why, as the backstop does.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 export const BUDGET_BYTES = 400 * 1024;
+/** The shell's own bound: the initial JavaScript with chat's screens in their own chunk. */
+export const SHELL_BYTES = 250 * 1024;
+/** Chat's chunk, gzipped: the screens, the composer, the feed and the threads. */
+export const CHAT_BYTES = 50 * 1024;
+
+/**
+ * Chat's entry modules and the heavy ones under them. A source map of an initial chunk that lists any of these
+ * means a static import has put chat back into the shell. What is not listed (the sidebar's links, the read
+ * caches and the panels the frame hosts) is shared with the shell and stays in it.
+ */
+const CHAT_ONLY_SOURCES = [
+  'features/channel/channel-screen.tsx',
+  'features/inbox/inbox-screen.tsx',
+  'features/questions/questions-screen.tsx',
+  'features/search/search-screen.tsx',
+  'features/saved/saved-screen.tsx',
+  'features/drafts/drafts-screen.tsx',
+  'features/unreads/unreads-screen.tsx',
+  'features/composer/composer.tsx',
+  'features/channel/message-feed.tsx',
+  'features/messages/message-row.tsx',
+  'features/threads/thread.tsx',
+];
+const CHAT_CHUNK = /^chat-[\w-]+\.js$/;
 
 export interface Chunk {
   readonly file: string;
@@ -147,6 +179,50 @@ export const shapeProblems = (dist: string, report: Report): string[] => {
   return problems;
 };
 
+/** What is wrong with where chat's code is, one sentence each: its chunk, its bounds, and the shell's sources. */
+export const chatProblems = (dist: string, report: Report): string[] => {
+  const problems: string[] = [];
+  const assets = join(dist, 'assets');
+  const [chunk] = existsSync(assets) ? readdirSync(assets).filter((f) => CHAT_CHUNK.test(f)) : [];
+  if (chunk === undefined) {
+    problems.push(
+      "chat's screens have no chunk of their own (assets/chat-*.js); they are imported statically again, or the entry features/chat/chat.ts is gone (D-250)",
+    );
+  } else {
+    const gzip = gzipSync(readFileSync(join(assets, chunk))).length;
+    if (gzip > CHAT_BYTES) {
+      problems.push(
+        `assets/${chunk} is ${kb(gzip)} gzipped, over chat's ${kb(CHAT_BYTES)} bound; raise it in a commit that says what chat gained`,
+      );
+    }
+  }
+  if (report.totalGzip > SHELL_BYTES) {
+    problems.push(
+      `the shell is ${kb(report.totalGzip)} gzipped, over its ${kb(SHELL_BYTES)} bound; a screen that used to load later, or something new, loads first`,
+    );
+  }
+  for (const { file } of report.chunks) {
+    const sources = report.sources.get(file);
+    if (sources === undefined) {
+      if (file.startsWith('assets/index-')) {
+        problems.push(
+          `${file} has no source map, so the shell cannot be shown free of chat's screens; build it with "bun run build:web:mapped"`,
+        );
+      }
+      continue;
+    }
+    const found = CHAT_ONLY_SOURCES.filter((only) =>
+      sources.some(({ source }) => source.includes(`/src/${only}`)),
+    );
+    if (found.length > 0) {
+      problems.push(
+        `${file} contains chat's screens (${found.join(', ')}); they load from features/chat/chat.ts on demand and nothing in the shell may import them (D-250)`,
+      );
+    }
+  }
+  return problems;
+};
+
 export const describeReport = (report: Report, budget = BUDGET_BYTES): string => {
   const lines = [
     `initial JavaScript, gzipped: ${kb(report.totalGzip)} of ${kb(budget)} (${((report.totalGzip / budget) * 100).toFixed(0)}%)`,
@@ -185,7 +261,7 @@ export const main = (
   dist: string,
 ): { readonly out: string; readonly err: string; readonly code: number } => {
   const report = measure(dist);
-  const problems = [...shapeProblems(dist, report)];
+  const problems = [...shapeProblems(dist, report), ...chatProblems(dist, report)];
   const over = overBudget(report);
   if (over !== null) problems.unshift(over);
   return {
