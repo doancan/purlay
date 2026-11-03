@@ -409,3 +409,4 @@ its row's id as it is written.
 | Module | Requires | Optional | Provides |
 |---|---|---|---|
 | `chat` | — | — | — |
+| `issues` | — | — | — |

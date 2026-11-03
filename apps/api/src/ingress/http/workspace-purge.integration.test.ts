@@ -24,7 +24,7 @@ import {
   purgeWorkspaceContent,
   purgeWorkspaces,
 } from '../../modules/workspaces/deletion-purge';
-import { chatWorkspacePurge } from '../../features/chat/messages/workspace-purge';
+import { composition } from '../../composition';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -162,6 +162,10 @@ const aLivedInWorkspace = async (
     name: 'mine',
     query: { q: 'question' },
   });
+  await call('POST', `/api/workspaces/${workspaceId}/issues`, owner, {
+    title: 'Fix the runbook',
+    assigneeId: member.userId,
+  });
   await call('POST', `/api/workspaces/${workspaceId}/invitations`, owner);
   await call('PUT', `/api/workspaces/${workspaceId}/integrations/github`, owner, {
     token: 'ghp_deletion',
@@ -204,7 +208,7 @@ const askToDelete = async (db: Executor, seeded: Seeded): Promise<void> => {
 const runAt = (db: Executor, at: Date, store: MemoryStore): ReturnType<typeof purgeWorkspaces> =>
   purgeWorkspaces(
     { database: db, clock: fixedClock(at), log: aRecordingLogger().log, storage: store },
-    chatWorkspacePurge,
+    composition.workspacePurge,
   );
 
 const workspaceRow = async (
@@ -244,7 +248,7 @@ describe('integration: the workspace purge', () => {
         'workspace_exports',
         'channels',
         'workspace_members',
-        ...chatWorkspacePurge.tables,
+        ...composition.workspacePurge.tables,
         ...CORE_REMAINING_TABLES,
       ];
       expect(await referring(db)).toEqual([...emptied, 'audit_log', 'server_audit_log'].sort());
@@ -266,6 +270,7 @@ describe('integration: the workspace purge', () => {
           'channels',
           'github_integrations',
           'incidents',
+          'issues',
           'mentions',
           'messages',
           'notifications',
@@ -340,7 +345,7 @@ describe('integration: the workspace purge', () => {
       await purgeWorkspaceContent(
         { database: db, clock: fixedClock(DUE), log: aRecordingLogger().log, storage: store },
         doomed.workspaceId,
-        chatWorkspacePurge,
+        composition.workspacePurge,
       );
       expect(await serverLines(db, doomed.workspaceId)).toHaveLength(1);
     });

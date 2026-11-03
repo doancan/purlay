@@ -12241,3 +12241,55 @@ somebody asks for one. *Turning it on the server* — it would change words peop
 included, without their seeing it first.
 
 **Cost of reversing.** One module and three lines in the composer.
+
+### D-254. Issues, the second module, as small as it can be — builds on D-250
+
+**Context.** D-250 made the architecture and chat its first module, and a rule written for one module is a guess until
+a second one lives by it: chat's tables are the core's own migrations, so every seam that matters for a module with a
+set of its own — its tables absent, its hooks, its routes, its chunk — has so far been argued and never exercised.
+The owner chose to build the second module now, with the least product that touches every seam.
+
+**Decision.** An `issues` module (`features/issues`, `migrations/issues/`, `web/features/issues`) that holds one
+record and says no more.
+
+1. **The record.** A workspace's issue: a title (1 to 200 characters, one line), a markdown body (at most 10 000), a
+   status (`open` or `done`), an assignee (a current member or nobody), who made it, and two times. Listed newest first
+   in keyset pages, narrowed by status; made, changed and deleted. No comments, labels, attachments, notifications,
+   search, frames, or link to GitHub: none is needed to prove a seam, and each is a decision of its own.
+2. **Who may.** Any member makes an issue and changes any issue; the last write wins, there being no version worth
+   conflicting on. **Only its creator, or an owner or an admin, deletes it**, and deleting is for real: nothing hangs
+   off an issue, and a soft delete would be a column and a filter on every read for a record nobody asked to keep
+   (D-9 is about messages). The check is the server's, in the same transaction as the delete.
+3. **Data.** One table in the module's own set, `issues/0001_issues`, owned by `issues`: keys to `workspaces` (cascade)
+   and to `users` (`SET NULL`, as a channel's creator is), every key indexed, no key to another module. The assignee
+   being a member is the service's check under the membership's share lock, not a key: a member who leaves does not
+   rewrite their issues.
+4. **What its hooks do when its table was never made — decided here, as D-250 left it.** A module with a set of its own
+   is **held only while it runs**: its erasure, purge and export contributions are in the composition of a process that
+   runs it and in none that does not, so `MODULES=chat` or `none` on a database that never had the table asks nothing of
+   it. The cost is stated, not hidden: while the module is off its rows are skipped by an account's erasure (which only
+   clears an assignment, a thing meaningless to a person who is gone), by the exports, and by a workspace's purge — so
+   **a workspace deleted while issues is off keeps its issues in the database until the operator runs the purge with the
+   module on**, and a purge that has already marked the workspace purged will not come back to them. The way to close
+   that is for the process to read which sets its database has applied and hold the module's hooks when one has; it is
+   not built, because nothing in an issue is a person's own and the first module whose rows are would be the one to need
+   it.
+5. **An erased account** leaves its issues as it leaves its messages, under the anonymised row (D-139 §5), and is taken
+   off any it was assigned.
+6. **Routes** are `/api/workspaces/:workspaceId/issues` and `/…/issues/:issueId`, in the manifest, so a process that
+   does not run the module answers the plain `404` of any unknown path (D-250 rule 3). `GET /api/me` and
+   `GET /api/client` list `issues` where it runs.
+7. **The web** loads the screen as a chunk of the module's own, by one `import()` from `load.tsx`, drawn at
+   `/w/:slug/issues` behind `ModuleGate`, with a rail link and a palette entry only where the session lists the module.
+   `budget:web` fails a build whose initial chunks carry the screen's code.
+
+**Rejected.** *A richer first cut* (comments, labels, assignment by team): each would be argued for its own sake, and a
+module that proves a seam with six features proves it six times. *Soft delete*: above. *Dropping the key to the
+assignee in favour of the service's check alone*: the key is free and keeps the table honest; only the *membership* is
+the service's. *Making issues `dataInCore`*: it would put the module's rows in the core's migrations and defeat the
+first thing the module exists to show. *Holding its hooks when the set is absent by catching the missing table*: an
+error as control flow, and it would hide a real fault.
+
+**Cost of reversing.** Dropping the module is deleting its folders, its row in `bundledModules`, the set's directory and
+its entry in the owner list; its table stays until an operator drops it (D-250 rule 5).
+

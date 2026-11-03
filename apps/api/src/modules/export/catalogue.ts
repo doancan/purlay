@@ -56,6 +56,23 @@ export interface TableExport {
   readonly bounds: (scope: Scope, people: RawBuilder<unknown>) => Bounds;
 }
 
+/**
+ * The rows of a table that carries a `workspace_id` of its own, which is how a module's table says whose it is: the
+ * workspace's, in the order of its `id`. A module that bounds a table this way names no SQL of its own.
+ */
+export const inWorkspace = (scope: Scope): Bounds => ({
+  where: sql`workspace_id = ${scope.workspaceId}`,
+  order: 'id',
+});
+
+/** The people a column of such a table names, for `people`: each a `select <person's id> from …`. */
+export const namedInWorkspace = <T extends keyof Database>(
+  table: T,
+  column: keyof Database[T] & string,
+  scope: Scope,
+): RawBuilder<unknown> =>
+  sql`select ${sql.ref(column)} from ${sql.table(table)} where workspace_id = ${scope.workspaceId}`;
+
 /** Describes one table, its columns held to the schema's, and how it is bounded. */
 export const tableExport = <T extends keyof Database>(
   name: T,

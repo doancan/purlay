@@ -12,6 +12,8 @@ import {
   type ChatPersonalExcluded,
   type ChatPersonalWritten,
 } from './features/chat/personal-export';
+import type { IssuesWritten } from './features/issues/export';
+import type { IssuesPersonalWritten } from './features/issues/personal-export';
 import { CORE_EXCLUDED, type CoreExcluded, type CoreWritten } from './modules/export/core-export';
 import {
   CORE_PERSONAL_EXCLUDED,
@@ -19,7 +21,10 @@ import {
   type CorePersonalWritten,
 } from './modules/export/core-personal-export';
 
-type Undecided = Exclude<keyof Database, CoreWritten | CoreExcluded | ChatWritten | ChatExcluded>;
+type Undecided = Exclude<
+  keyof Database,
+  CoreWritten | CoreExcluded | ChatWritten | ChatExcluded | IssuesWritten
+>;
 /** True while every table is decided; while one is not, the next line does not compile, and names it. */
 type EveryTableDecided = [Undecided] extends [never] ? true : { readonly undecided: Undecided };
 const decided: EveryTableDecided = true;
@@ -36,7 +41,11 @@ export const exportCatalogue = composition.exportCatalogue;
 
 type PersonalUndecided = Exclude<
   keyof Database,
-  CorePersonalWritten | CorePersonalExcluded | ChatPersonalWritten | ChatPersonalExcluded
+  | CorePersonalWritten
+  | CorePersonalExcluded
+  | ChatPersonalWritten
+  | ChatPersonalExcluded
+  | IssuesPersonalWritten
 >;
 /** The same for a person's export: while a table is undecided there, the next line does not compile, and names it. */
 type EveryTableDecidedForPeople = [PersonalUndecided] extends [never]

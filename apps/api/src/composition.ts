@@ -11,6 +11,7 @@
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
+import { issuesModule } from './features/issues/module';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
 import { corePersonalExport } from './modules/export/core-personal-export';
@@ -62,7 +63,7 @@ export interface BundledModule {
 }
 
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
-export const bundledModules: readonly BundledModule[] = [chatModule];
+export const bundledModules: readonly BundledModule[] = [chatModule, issuesModule];
 
 /** The modules of this build, checked: a malformed id, a repeat or a missing partner stops the build's own tests. */
 export const registry = moduleRegistry(bundledModules.map((module) => module.manifest));

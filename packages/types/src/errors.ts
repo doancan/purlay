@@ -83,6 +83,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('MESSAGE_VERSION_NOT_FOUND'),
   /** An incident that is not there, or not this channel's (D-137). */
   Type.Literal('INCIDENT_NOT_FOUND'),
+  /** An issue that is not there, or not this workspace's (D-254, D-21). */
+  Type.Literal('ISSUE_NOT_FOUND'),
   /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
   Type.Literal('USER_NOT_FOUND'),
   // Conflict
@@ -289,6 +291,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   BOOKMARK_NOT_FOUND: 404,
   MESSAGE_VERSION_NOT_FOUND: 404,
   INCIDENT_NOT_FOUND: 404,
+  ISSUE_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,

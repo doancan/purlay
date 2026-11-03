@@ -48,6 +48,19 @@ export const personalTableExport = <T extends keyof Database>(
   bounds: PersonalTableExport['bounds'],
 ): PersonalTableExport & { readonly name: T } => ({ name, columns, bounds });
 
+/** The rows of a table whose `column` names the person, in the order of their `id`: what a person made or owns. */
+export const ownedBy =
+  (column: string): PersonalTableExport['bounds'] =>
+  (userId) => ({ where: sql`${sql.ref(column)} = ${userId}`, order: 'id' });
+
+/** The workspaces the rows of a table with a `workspace_id` of its own name, where `column` is the person: for `workspaces`. */
+export const workspacesOwnedBy = <T extends keyof Database>(
+  table: T,
+  column: keyof Database[T] & string,
+  userId: string,
+): RawBuilder<unknown> =>
+  sql`select workspace_id from ${sql.table(table)} where ${sql.ref(column)} = ${userId}`;
+
 /** What a module adds to a person's export. */
 export interface PersonalContribution {
   readonly id: string;

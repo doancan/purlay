@@ -15,6 +15,8 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
 
 export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
 
+export type IssueStatus = "done" | "open";
+
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -304,6 +306,18 @@ export interface InvitationPassports {
   id: string;
   invitation_id: string;
   kind: string;
+}
+
+export interface Issues {
+  assignee_id: string | null;
+  body: Generated<string>;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  id: string;
+  status: Generated<IssueStatus>;
+  title: string;
+  updated_at: Generated<Timestamp>;
+  workspace_id: string;
 }
 
 export interface JobRuns {
@@ -718,6 +732,7 @@ export interface DB {
   incidents: Incidents;
   incoming_webhooks: IncomingWebhooks;
   invitation_passports: InvitationPassports;
+  issues: Issues;
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;
