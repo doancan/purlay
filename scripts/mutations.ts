@@ -12972,6 +12972,17 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'absent-tables-never-found',
+    why: 'the question of which tables a database lacks answers none, so the exports read, and the purge empties, a module’s tables that are not there (D-250, MODULES.md §5)',
+    file: 'packages/db/src/table-exists.ts',
+    find: '    if (!(await tableExists(executor, table))) absent.push(table);\n',
+    replace: '    if (false) absent.push(table);\n',
+    tests: [
+      'packages/db/src/table-exists.integration.test.ts',
+      'apps/api/src/module-lifecycle.integration.test.ts',
+    ],
+  },
+  {
     id: 'composition-held-order-follows-the-list',
     why: 'what every module holds (purge tables, export tables, erasure hooks) follows the build’s list, not the resolved order, so a requirement is not honoured (D-250, MODULES.md §3.2)',
     file: 'apps/api/src/composition.ts',
@@ -13072,8 +13083,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'composition-data-of-a-module-not-run-forgotten',
     why: 'an erased account, a deleted workspace and an export leave chat’s rows alone because MODULES left chat out: the data stays after the right to erase it (D-250 rule 5)',
     file: 'apps/api/src/composition.ts',
-    find: '!modules.includes(module) && module.dataInCore',
-    replace: 'false',
+    find: 'const holding = [...bundled, ',
+    replace: 'const holding = [...bundled.filter((module) => modules.includes(module)), ',
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
@@ -13228,8 +13239,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'workspace-purge-empties-set-tables-unasked',
     why: 'the workspace purge empties every table a module lists without asking whether the database has it, so a deleted workspace on a MODULES=none install is never purged (D-250)',
     file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
-    find: '      if (!(await tableExists(transaction, table))) continue;\n',
-    replace: '',
+    find: '    const absent = await absentTables(transaction, named);\n',
+    replace: '    const absent: typeof named = [];\n',
     tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
   },
   {
@@ -13415,17 +13426,6 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "    .where('workspace_members.user_id', '=', assigneeId)\n",
     replace: "    .where('workspace_members.user_id', '<>', assigneeId)\n",
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
-  },
-  {
-    id: 'issues-not-held-while-off',
-    why: 'a database that ran issues and was then turned off to chat keeps a deleted workspace’s issues and an erased person’s assignments, and its exports leave them out (D-254)',
-    file: 'apps/api/src/features/issues/module.ts',
-    find: '  dataInCore: true,\n',
-    replace: '',
-    tests: [
-      'apps/api/src/composition.test.ts',
-      'apps/api/src/module-lifecycle.integration.test.ts',
-    ],
   },
   {
     id: 'issues-erasure-needs-its-table',

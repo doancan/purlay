@@ -19,7 +19,7 @@ export {
   type Transaction,
 } from './client';
 export { purgeDeadSessions } from './sessions';
-export { tableExists } from './table-exists';
+export { absentTables, tableExists } from './table-exists';
 export { TABLE_OWNERS, type TableOwner } from './table-owners';
 /**
  * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.

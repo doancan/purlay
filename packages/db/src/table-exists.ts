@@ -14,3 +14,19 @@ export const tableExists = async (executor: Executor, table: keyof DB): Promise<
     select to_regclass(${table}) is not null as present`.execute(executor);
   return rows[0]?.present === true;
 };
+
+/**
+ * Which of these tables the database does not have, in the order given: the same question as `tableExists`, for a
+ * place that decides about a list of them at once (the exports' catalogues, the workspace purge). Each is asked at the
+ * moment, as above.
+ */
+export const absentTables = async <Table extends keyof DB>(
+  executor: Executor,
+  tables: readonly Table[],
+): Promise<Table[]> => {
+  const absent: Table[] = [];
+  for (const table of tables) {
+    if (!(await tableExists(executor, table))) absent.push(table);
+  }
+  return absent;
+};

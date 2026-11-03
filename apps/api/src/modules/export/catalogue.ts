@@ -10,7 +10,7 @@
  * the schema: a table nobody decided is a compile error there, and `catalogue.integration.test.ts` holds it to
  * the database.
  */
-import { sql, tableExists, type Database, type Executor, type RawBuilder } from '@purlay/db';
+import { absentTables, sql, type Database, type Executor, type RawBuilder } from '@purlay/db';
 import type { ExportManifest } from '@purlay/types';
 import type { WorkspaceContext } from '../../platform/tenancy';
 
@@ -168,10 +168,10 @@ export const assembleCatalogue = (
           prepared[contribution.id] = await contribution.prepare(executor, request);
         }
       }
-      const absent: (keyof Database)[] = [];
-      for (const table of contributions.flatMap((contribution) => contribution.ownSet ?? [])) {
-        if (!(await tableExists(executor, table))) absent.push(table);
-      }
+      const absent = await absentTables(
+        executor,
+        contributions.flatMap((contribution) => contribution.ownSet ?? []),
+      );
       return { workspaceId: request.workspaceId, kind: request.kind, prepared, absent };
     },
     audit: (rows: Readonly<Record<string, number>>): Readonly<Record<string, string>> => {

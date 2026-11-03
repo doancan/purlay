@@ -4,8 +4,8 @@
  * set leaves it — each a real database of its own, migrated and dropped — against a process that runs chat and
  * one that does not (`compose([])`).
  *
- * Chat's own set (`chat/0001`–`0004`) makes five tables, and chat is `dataInCore`: its erasure, purge and export
- * answers apply to a process that does not run it, because a person's right to be erased does not wait for a
+ * Chat's own set (`chat/0001`–`0004`) makes five tables, and every bundled module is held whether or not it runs: its
+ * erasure, purge and export answers apply to a process that does not run it, because a person's right to be erased does not wait for a
  * setting. So what chat does with those five tables must hold where they are not there (a fresh install with
  * `MODULES=none`) and where they are (an existing install that turned chat off). Every step must succeed and
  * leave the right rows: nothing of the person where a table exists, nothing of the workspace after its purge, an

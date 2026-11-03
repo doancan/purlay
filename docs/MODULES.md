@@ -146,19 +146,24 @@ moves into that module.
 - A disabled module's applied rows are not "missing"; they are logged.
 - Erasure, export and retention run for every module whose tables exist, enabled or not (D-250 rule 5), so
   the export catalogue is assembled from the manifests and its test — a table in the database that no manifest
-  names fails it — keeps working. **Built** as `dataInCore`: a module whose tables the core's own migrations made
-  (chat) contributes its erasure, purge, export, retention and channel answers whether or not it runs, and only
-  what *acts* (its routes, its mail, what a new workspace starts with) waits for it to run. **A module's own set
-  makes some of those tables** (chat's `message_attachments`, `scheduled_messages`, `message_reminders`,
-  `hidden_messages` and `scheduled_message_attachments`), and a database migrated without the set — a fresh install
-  that runs `MODULES=none` — has none of them. Where they exist the hooks reach them whether or not the module runs, so
-  the right to be erased does not wait for a setting; where they do not there is nothing to reach, and each place
-  that names one asks `tableExists` (`@purlay/db`) first, at the moment it needs the table and never remembered, since
-  another node may apply the set while this one runs. The alternative, a contribution split into a part held always and
-  a part held only where the set is applied, would need the process to know the database's sets when it is composed,
-  and a node that was composed before the set arrived would then miss rows that are there. A process that *runs* a
-  module on a database without its set is not a cell: readiness refuses it. `module-lifecycle.integration.test.ts`
-  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own. Issues (D-254), whose one table is all in its own set, is held the same way, and its `ownSet` tells the exports which tables to skip.
+  names fails it — keeps working. **Built** without a flag: every bundled module's data
+  hooks are held always, whether or not it runs, in the resolved order of the build (`composeFor`) — its erasure, purge,
+  export, retention and channel answers — and only what *acts* (its routes, its mail, what a new workspace starts with,
+  the attachment reader) waits for it to run. There was a `dataInCore` flag for this, and it was dropped: every bundled
+  module set it, and a `false` would have made a person's erasure wait for a setting (rule 5), so it had no safe value.
+  **A module's own set makes some of those tables** (chat's `message_attachments`, `scheduled_messages`,
+  `message_reminders`, `hidden_messages` and `scheduled_message_attachments`; all of issues'), and a database migrated
+  without the set — a fresh install that runs `MODULES=none` — has none of them. Where they exist the hooks reach them
+  whether or not the module runs, so the right to be erased does not wait for a setting; where they do not there is
+  nothing to reach. **`tableExists` (`@purlay/db`) is the one primitive for that**, asked at the moment the table is
+  needed and never remembered, since another node may apply the set while this one runs; `absentTables` is its
+  list form, for the purge's tables and the exports' `ownSet`. `ownSet` stays because the catalogues need it for what
+  `tableExists` cannot say alone: which contribution's rows and people to leave out when its table is absent. The alternative,
+  a contribution split into a part held always and a part held only where the set is applied, would need the process to
+  know the database's sets when it is composed, and a node that was composed before the set arrived would then miss
+  rows that are there. A process that *runs* a module on a database without its set is not a cell: readiness refuses
+  it. `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment reader in each cell,
+  on a database of its own.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
   77 files that existed when this was decided always create chat's tables, inert where chat is off. The release before the first prefixed row
@@ -567,7 +572,7 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 - **`data` hooks.** `userErased` takes an erased account off the issues assigned to it (what it made stays, under the
   anonymised row); `workspacePurge` empties the table by name, because a purged workspace keeps its row as a tombstone and
   the cascade never fires; `export` and `personalExport` write the table whole and the person's own. **All four are held
-  whether or not the module runs** (`dataInCore`), and each asks `tableExists` first, so a database that never had the
+  whether or not the module runs** (every bundled module is, `composition.ts`), and each asks `tableExists` first, so a database that never had the
   set is no failure and one that ran issues and was then turned off is erased, purged and exported whole: its rows stay
   while the module is off, and the right to be erased and a deleted workspace's purge do not wait for a setting
   (D-254 §4). The exports skip the table through the contribution's `ownSet`.

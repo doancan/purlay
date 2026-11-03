@@ -19,7 +19,7 @@
  *   deletion was asked for, and its sockets were told then), so no counter needs keeping and no lock order
  *   needs sharing with a writer — there is none.
  */
-import { tableExists, type Database, type Executor, type Transaction } from '@purlay/db';
+import { absentTables, type Database, type Executor, type Transaction } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS } from '@purlay/types';
 import { DAY_MS } from '../../platform/clock';
 import type { ObjectStore } from '../../platform/storage';
@@ -159,9 +159,10 @@ export const purgeWorkspaceContent = async (
       .returning('id')
       .executeTakeFirst();
     if (marked === undefined) return;
-    for (const table of [...purge.tables, ...CORE_REMAINING_TABLES]) {
-      // A module's own migration set makes some of its tables: a database migrated without it has none to empty.
-      if (!(await tableExists(transaction, table))) continue;
+    const named = [...purge.tables, ...CORE_REMAINING_TABLES];
+    // A module's own migration set makes some of its tables: a database migrated without it has none to empty.
+    const absent = await absentTables(transaction, named);
+    for (const table of named.filter((name) => !absent.includes(name))) {
       await transaction.deleteFrom(table).where('workspace_id', '=', workspaceId).execute();
     }
     // Its people last: they were told it went when it was asked for, and their sessions stay — they may

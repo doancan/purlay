@@ -16,7 +16,7 @@
  * compile error where its table is described until somebody decides whether a person's own copy carries it. The
  * composition root (`export-catalogue.ts`) holds the sum to the schema.
  */
-import { sql, tableExists, type Database, type Executor, type RawBuilder } from '@purlay/db';
+import { absentTables, sql, type Database, type Executor, type RawBuilder } from '@purlay/db';
 import type { Bounds } from './catalogue';
 
 /** A column: in a person's export, or left out. */
@@ -130,13 +130,11 @@ export const assemblePersonalCatalogue = (
           .flatMap((contribution) => contribution.workspaces(userId)),
         sql` union `,
       ),
-    absent: async (executor: Executor): Promise<readonly (keyof Database)[]> => {
-      const absent: (keyof Database)[] = [];
-      for (const table of contributions.flatMap((contribution) => contribution.ownSet ?? [])) {
-        if (!(await tableExists(executor, table))) absent.push(table);
-      }
-      return absent;
-    },
+    absent: async (executor: Executor): Promise<readonly (keyof Database)[]> =>
+      await absentTables(
+        executor,
+        contributions.flatMap((contribution) => contribution.ownSet ?? []),
+      ),
     files: async (userId: string, executor: Executor): Promise<RawBuilder<unknown> | undefined> =>
       await modules.find((module) => module.files !== undefined)?.files?.(userId, executor),
   };

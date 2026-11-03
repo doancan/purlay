@@ -31,21 +31,18 @@ import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
 
-/** What a module may contribute: each slot is the core's, and a module fills the ones it has. */
+/**
+ * What a module may contribute: each slot is the core's, and a module fills the ones it has.
+ *
+ * What it contributes to the lifecycle of its data — an erased account's, a deleted workspace's, an export, who answers
+ * for the channels a member leaves, the columns readiness checks — applies even to a process that does not run it, and
+ * so does every bundled module's, always: a person's right to be erased does not wait for a setting, and a flag that
+ * could say otherwise has no safe value (D-250 rule 5). Only what *acts* (`workspaceCreated`, `readAttachment`,
+ * `pushNotices`, the routes) waits for the module to run. A table that may not exist — a module's own migration set
+ * not applied — is each hook's to ask about with `tableExists`, at the moment it needs the table (`MODULES.md` §5).
+ */
 export interface BundledModule {
   readonly manifest: ModuleManifest;
-  /**
-   * Its tables were made by the core's own migrations, so they exist whether or not the module runs. What the module
-   * contributes to the lifecycle of that data — an erased account's, a deleted workspace's, an export, who answers
-   * for the channels a member leaves — then applies even to a process that does not run it: a person's right to be
-   * erased does not wait for a setting. A module whose migration set makes some of its tables (chat's link between
-   * a message and its files, its drafts, reminders and hidden messages) has those tables only where the set was
-   * applied: the hooks ask `tableExists` before they name one, so a database migrated without the set is no failure
-   * and one that has it is still kept whole (`MODULES.md` §5). Issues (D-254) is the case at its end: all of its data is
-   * in its own set, and it is held the same way, so a database that ran it and then turned it off is erased, purged and
-   * exported whole, and one that never had it is no failure.
-   */
-  readonly dataInCore?: boolean;
   /**
    * Who may read a file, where the module holds files attached to what it owns. Asked only while the module runs: a
    * process without it answers for the core's own unsent uploads and for nothing else. Every running module's reader is
@@ -127,12 +124,9 @@ export const compose = (
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
-  // What a process acts with is the modules it runs; what it keeps whole is every module whose rows exist, in the same
+  // What a process acts with is the modules it runs; what it keeps whole is every module the build carries, in the same
   // order whichever of them run (a module given that the build does not carry follows the build's).
-  const holding = [
-    ...bundled.filter((module) => module.dataInCore || modules.includes(module)),
-    ...modules.filter((module) => !bundled.includes(module)),
-  ];
+  const holding = [...bundled, ...modules.filter((module) => !bundled.includes(module))];
   for (const module of modules) {
     if (module.workspaceCreated !== undefined) workspaceCreated.register(module.workspaceCreated);
   }

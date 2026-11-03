@@ -142,7 +142,6 @@ describe('the application as its modules make it', () => {
       requires: readonly string[],
       table: 'issues' | 'mentions' | 'channels',
     ): BundledModule => ({
-      dataInCore: true,
       manifest: { id, requires, optional: [], provides: [] },
       userErased: async () => {
         calls.push(id);

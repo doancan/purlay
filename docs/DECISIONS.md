@@ -12268,7 +12268,7 @@ record and says no more.
    rewrite their issues.
 4. **What its hooks do when its table was never made — decided here, as D-250 left it.** Issues is held **whether or not
    it runs**, as the tables of chat's own set are: its erasure, purge and export contributions are in every process's
-   composition (`dataInCore`), and each asks `tableExists` at the moment it needs the table, the purge for every table it
+   composition (no flag decides it: every bundled module is held, `composition.ts`), and each asks `tableExists` at the moment it needs the table, the purge for every table it
    names and the exports through the contribution's `ownSet`. So on a database that never had the set (`MODULES=chat` or
    `none` on a fresh install) there is nothing to reach and nothing fails, and on one where the set was applied and the
    module was then turned off the rows are still taken off an erased account's assignments, purged with a deleted
@@ -12308,7 +12308,7 @@ record and says no more.
 **Rejected.** *A richer first cut* (comments, labels, assignment by team): each would be argued for its own sake, and a
 module that proves a seam with six features proves it six times. *Soft delete*: above. *Dropping the key to the
 assignee in favour of the service's check alone*: the key is free and keeps the table honest; only the *membership* is
-the service's. *Making issues `dataInCore`*: it would put the module's rows in the core's migrations and defeat the
+the service's. *Putting issues' rows in the core's migrations* (what the `dataInCore` flag then named): it would put the module's rows in the core's migrations and defeat the
 first thing the module exists to show. *Holding its hooks only while it runs* (the first cut): it leaves a purged workspace's rows behind where the module was
 turned off, and an erased account's assignments. *Catching the error of a missing table*: an error as control flow, and
 it would hide a real fault.
