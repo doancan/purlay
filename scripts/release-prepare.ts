@@ -9,7 +9,9 @@
  *
  * - moves everything under `## Unreleased` in `docs/changelog/changes.md` into
  *   `docs/changelog/v<x.y.z>.md` and leaves Unreleased empty, and
- * - sets `"version"` in the root `package.json` — the one home of the version.
+ * - sets `"version"` in the root `package.json` — the one home of the version, and
+ * - writes the manifests of the modules as this release ships them to `released-manifests.json` and clears its
+ *   exceptions, which is what the next release's manifests are held against (`module-compat.test.ts`, D-250).
  *
  * **Merging it is the release.** The `deploy` workflow deploys every commit that lands on `main`;
  * when the version in `package.json` is one with no tag yet, it also tags that commit and
@@ -22,6 +24,9 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NOTHING, problemsIn } from './changelog';
+
+/** Where `bun run manifests:snapshot` writes; staged with the release. */
+const MANIFEST_SNAPSHOT = 'apps/api/src/released-manifests.json';
 
 export interface ExecResult {
   readonly code: number;
@@ -165,7 +170,9 @@ export const prepare = (options: PrepareOptions): Prepared => {
     writeFileSync(join(root, 'package.json'), setVersion(packageJson, version));
     writeFileSync(join(root, 'docs/changelog/changes.md'), rolled.changes);
     writeFileSync(join(root, `docs/changelog/v${version}.md`), rolled.notes);
-    run('git', 'add', 'package.json', 'docs/changelog');
+    // After the switch: the manifests are those of origin/main, which is what the release ships.
+    run('bun', 'run', 'manifests:snapshot');
+    run('git', 'add', 'package.json', 'docs/changelog', MANIFEST_SNAPSHOT);
     run('git', 'commit', '-m', `chore(release): v${version}`);
     run('git', 'push', '-u', 'origin', branch);
     pushed = true;
