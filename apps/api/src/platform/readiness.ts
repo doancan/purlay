@@ -68,12 +68,7 @@ export const readiness = async (
   sets: readonly MigrationSet[] = PRODUCT_MIGRATION_SETS,
 ): Promise<Readiness> => {
   try {
-    const history = await migrationHistoryProblem(
-      database,
-      undefined,
-      undefined,
-      sets,
-    );
+    const history = await migrationHistoryProblem(database, undefined, undefined, sets);
     if (history !== undefined) return { ready: false, reason: history };
 
     const pending = await pendingMigrations(database, undefined, sets);

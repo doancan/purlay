@@ -80,16 +80,9 @@ export const untilMigrated = async (
     let kind: string | undefined;
     let reason: string | undefined;
     try {
-      const history = await migrationHistoryProblem(
-        database,
-        undefined,
-        undefined,
-        sets,
-      );
+      const history = await migrationHistoryProblem(database, undefined, undefined, sets);
       const pending =
-        history === undefined
-          ? await pendingMigrations(database, undefined, sets)
-          : [];
+        history === undefined ? await pendingMigrations(database, undefined, sets) : [];
       if (history !== undefined) [kind, reason] = ['history', history];
       else if (pending.length > 0) {
         [kind, reason] = ['pending', `migrations not applied: ${pending.join(', ')}`];
