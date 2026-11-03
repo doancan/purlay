@@ -81,6 +81,11 @@ export const Environment = Type.Object({
    *  defaulted so the test configuration needs no new field. */
   MIGRATE_ON_START: Type.Optional(Type.Boolean()),
 
+  /** Which of the product's modules this process runs, by id, comma-separated (D-250, `MODULES.md` §3). Unset or
+   *  blank is every module the build carries; `none` is the core alone. Read as a string here and judged at boot,
+   *  where the modules the build carries are known: an unknown or repeated id or a missing requirement stops it. */
+  MODULES: Type.Optional(Type.String({ maxLength: 512 })),
+
   /** Where `error`-level lines are also reported, as a Sentry-compatible DSN. Unset
    *  means off and nothing leaves the process; there is no default (D-44, D-96). */
   ERROR_TRACKING_DSN: Type.Optional(Type.String({ minLength: 1 })),
