@@ -157,6 +157,30 @@ describe('integration: who hears that somebody came online', () => {
     });
   });
 
+  test('a choice made while the presence is read is paired with the version it was told at, never an older one (D-257)', async () => {
+    await withRollback(async (db) => {
+      const here = await aRoom(db, ['alice', 'bob']);
+      const alice = idOf(here, 'alice');
+      const context = await requireWorkspaceMembership(db, idOf(here, 'bob'), here.workspaceId);
+      // Alice chooses away as the online record is read: her version 7 is the retelling's, which
+      // carries the choice, so the snapshot must too — a client keeps the first it hears at a version.
+      const snapshot = await workspacePresence(db, context, {
+        onlineAmong: async (userIds) => {
+          await db
+            .updateTable('users')
+            .set({ away_chosen: true })
+            .where('id', '=', alice)
+            .execute();
+          return userIds.flatMap((userId) =>
+            userId === alice ? [{ userId, online: true, away: false, version: 7 }] : [],
+          );
+        },
+        version: () => 8,
+      });
+      expect(snapshot.online).toEqual([{ userId: alice, online: true, away: true, version: 7 }]);
+    });
+  });
+
   test('a workspace’s presence is its members online, and the version everyone else is offline at', async () => {
     await withRollback(async (db) => {
       const here = await aRoom(db, ['alice', 'bob']);

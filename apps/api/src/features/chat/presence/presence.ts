@@ -92,23 +92,36 @@ export const workspacePresence = async (
   context: WorkspaceContext,
   online: OnlineReader,
 ): Promise<PresenceSnapshot> => {
-  // The members and their choices, in one read: a member's away is their idleness or their choice.
   const members = await executor
     .selectFrom('workspace_members')
-    .innerJoin('users', 'users.id', 'workspace_members.user_id')
-    .select(['workspace_members.user_id', 'users.away_chosen'])
+    .select('user_id')
     .where('workspace_id', '=', context.workspaceId)
     .execute();
-  const chose = new Set(
-    members.filter((member) => member.away_chosen).map((member) => member.user_id),
-  );
   // The version first: anybody who goes online after it is heard by a frame at a later one.
   const version = await online.version();
+  const here = await online.onlineAmong(members.map((member) => member.user_id));
+  // The choices last (D-257). A choice stored before this read is seen here; one stored after it is
+  // told again at a version newer than any read above, which wins. Read before the record, a choice
+  // stored between the reads would pair the old choice with the retelling's version — and a client
+  // keeps the first it hears at a version, so the snapshot could stick until the next change.
+  const chose = new Set(
+    here.length === 0
+      ? []
+      : (
+          await executor
+            .selectFrom('users')
+            .select('id')
+            .where(
+              'id',
+              'in',
+              here.map((change) => change.userId),
+            )
+            .where('away_chosen', '=', true)
+            .execute()
+        ).map((user) => user.id),
+  );
   return {
-    online: (await online.onlineAmong(members.map((member) => member.user_id))).map((change) => ({
-      ...change,
-      away: change.away || chose.has(change.userId),
-    })),
+    online: here.map((change) => ({ ...change, away: change.away || chose.has(change.userId) })),
     version,
   };
 };
