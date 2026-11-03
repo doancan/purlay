@@ -5,6 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
+import { en } from '../../i18n/catalogue/en';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { isMacPlatform, keyLabels } from './platform';
@@ -17,7 +18,10 @@ const open = async (
   locale: 'en' | 'tr' = 'en',
   onOpenChange: (open: boolean) => void = () => undefined,
 ): ReturnType<typeof renderApp> =>
-  await renderApp(<ShortcutsDialog open mac={mac} onOpenChange={onOpenChange} />, { locale });
+  await renderApp(
+    <ShortcutsDialog open mac={mac} modules={['chat']} onOpenChange={onOpenChange} />,
+    { locale },
+  );
 
 describe('the reference', () => {
   test('is a dialog with a name and a description, in three groups', async () => {
@@ -133,5 +137,18 @@ describe('the platform', () => {
       enter: 'Enter',
       escape: 'Esc',
     });
+  });
+
+  test('lists only the core’s keys on a server that runs no chat', async () => {
+    const { getByRole, queryByText } = await renderApp(
+      <ShortcutsDialog open mac={false} modules={[]} onOpenChange={() => undefined} />,
+    );
+    expect(getByRole('dialog')).toBeDefined();
+    // The palette, the reference and the settings are the core's; the channels, the messages and the composer are chat's.
+    expect(queryByText(en['shortcuts.palette'])).not.toBeNull();
+    expect(queryByText(en['shortcuts.channels'])).toBeNull();
+    expect(queryByText(en['shortcuts.readAll'])).toBeNull();
+    expect(queryByText(en['shortcuts.group.composer'])).toBeNull();
+    expect(queryByText(en['shortcuts.group.messages'])).toBeNull();
   });
 });

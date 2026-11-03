@@ -4,12 +4,14 @@
  */
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
+import { useSession } from '../../session/session';
 import { isMacPlatform } from '../../shortcuts/platform';
 import { ShortcutList } from '../../shortcuts/shortcuts-dialog';
 import { SettingsCard, SettingsPage } from '../page';
 
 export const ShortcutsPage = (): React.JSX.Element => {
   const { t } = useI18n();
+  const { modules } = useSession();
   const mac = useMemo(() => isMacPlatform(navigator), []);
   return (
     <SettingsPage title={t('shortcuts.title')} description={t('shortcuts.description')}>
@@ -21,7 +23,7 @@ export const ShortcutsPage = (): React.JSX.Element => {
           tabIndex={0}
           className="flex flex-col gap-6 px-6 py-5 max-narrow:px-4"
         >
-          <ShortcutList mac={mac} level={2} />
+          <ShortcutList mac={mac} modules={modules} level={2} />
         </div>
       </SettingsCard>
     </SettingsPage>

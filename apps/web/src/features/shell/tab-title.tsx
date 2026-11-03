@@ -57,7 +57,7 @@ export const tabTitle = (
 export const TabTitle = (): null => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { user } = useSession();
+  const { user, modules } = useSession();
   const { match } = useRoute();
   const channels = useChannels(workspace.id, useRuns('chat')).data ?? [];
   // Deep Work started by hand, or the person's quiet hours (D-234): the page is quiet in either.
@@ -78,6 +78,7 @@ export const TabTitle = (): null => {
       match.name === 'settings' ? match.params.section : FIRST_SECTION,
       role,
       serverAdmin,
+      modules,
     );
     place =
       section === null
