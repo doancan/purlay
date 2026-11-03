@@ -141,4 +141,38 @@ describe('integration: an application with no module is the core alone', () => {
       expect(closed.body).toMatchObject({ error: { code: 'ROUTE_NOT_FOUND' } });
     });
   });
+
+  test('a chat webhook is no route: a missing or an oversized length is not refused before the path is judged', async () => {
+    await withRollback(async (db) => {
+      const post = async (
+        modules: typeof composition,
+        path: string,
+        headers: Record<string, string>,
+      ): Promise<{ status: number; body: string }> => {
+        const response = await createApp(
+          testDependencies({ database: db, clock, composition: modules }),
+        ).handle(new Request(`${ORIGIN}${path}`, { method: 'POST', headers }));
+        return { status: response.status, body: await response.text() };
+      };
+      const none = { 'content-type': 'application/json' };
+      const huge = { 'content-type': 'application/json', 'content-length': '99999999' };
+      const off = compose([]);
+      for (const [name, headers] of [
+        ['no length', none],
+        ['a huge length', huge],
+      ] as const) {
+        const unknown = await post(off, '/api/no-such-thing', headers);
+        for (const path of ['/api/webhooks/github/f1', '/api/webhooks/github-app']) {
+          expect({ name, path, ...(await post(off, path, headers)) }).toEqual({
+            name,
+            path,
+            ...unknown,
+          });
+        }
+      }
+      // With chat run the edge's refusals are unchanged.
+      expect((await post(composition, '/api/webhooks/github/f1', none)).status).toBe(411);
+      expect((await post(composition, '/api/webhooks/github-app', huge)).status).toBe(413);
+    });
+  });
 });

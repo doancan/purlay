@@ -13141,4 +13141,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'false',
     tests: ['apps/api/src/composition.test.ts'],
   },
+  {
+    id: 'webhook-length-refused-before-the-path-is-judged',
+    why: 'a webhook of a chat that is not run is refused 411 or 413 where an unknown path is not: an oracle on which modules run (D-250)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '} else if (isWebhookRequest(request) && !closedRoute(request)) {',
+    replace: '} else if (isWebhookRequest(request)) {',
+    tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
+  },
 ];

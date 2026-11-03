@@ -705,7 +705,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
       if (isUploadRequest(request)) {
         const refusal = uploadRefusal(request, ATTACHMENT_BYTES_MAX);
         if (refusal !== null) return turnedAway(edgeRefusalResponse(refusal, headers));
-      } else if (isWebhookRequest(request)) {
+      } else if (isWebhookRequest(request) && !closedRoute(request)) {
+        // A webhook of a module not run is no route: it falls to the body rules of any unknown path below.
         const refusal = webhookRefusal(request);
         if (refusal !== null) return turnedAway(edgeRefusalResponse(refusal, headers));
       } else {
