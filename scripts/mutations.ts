@@ -13014,4 +13014,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "modules: ['chat'],",
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
   },
+  {
+    id: 'web-module-gate-always-open',
+    why: 'the page draws a chat screen on a server that runs no chat, a screen whose every request answers 404 (D-250)',
+    file: 'apps/web/src/features/shell/module-gate.tsx',
+    find: 'owner === null || modules.includes(owner)',
+    replace: 'true',
+    tests: ['apps/web/src/app/app.test.tsx'],
+  },
 ];

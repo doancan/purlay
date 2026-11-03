@@ -22,7 +22,7 @@ import { en } from '../i18n/catalogue/en';
 import { ApiError } from '../data/errors';
 import type { Api } from '../data/api';
 import { anApi } from '../testing/fake-api';
-import { IDS, aSignedInApi } from '../testing/fixtures';
+import { IDS, aSession, aSignedInApi } from '../testing/fixtures';
 import { expectFocusOn } from '../testing/focus';
 import { NarrowPortContext, type NarrowPort } from '../features/shell/narrow';
 
@@ -121,6 +121,20 @@ describe('what an address shows', () => {
     expect(getByRole('heading', { level: 1, name: 'Nothing here' })).toBeDefined();
     expect(getByRole('link', { name: 'Go to your channels' }).getAttribute('href')).toBe('/');
   });
+
+  test.each(['/w/acme/inbox', '/w/acme/saved', `/w/acme/c/${IDS.api}`, '/w/acme/search'])(
+    '%s is not found where the server runs no chat, and the core’s own screens still are',
+    async (path) => {
+      const noChat = aSignedInApi({
+        me: () => Promise.resolve({ ...aSession(), modules: [] }),
+      });
+      const { getByRole, unmount } = await mounted(path, noChat);
+      expect(getByRole('heading', { level: 1, name: 'Nothing here' })).toBeDefined();
+      unmount();
+      const withChat = await mounted(path, aSignedInApi());
+      expect(withChat.queryByRole('heading', { level: 1, name: 'Nothing here' })).toBeNull();
+    },
+  );
 
   test('the gallery is not reachable in a build that does not have it', async () => {
     const { getByRole } = await mounted('/__gallery');

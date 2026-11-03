@@ -49,6 +49,37 @@ const ROUTES = {
 
 export type RouteName = keyof typeof ROUTES;
 
+/**
+ * The module whose screen each route is, by the id the server lists in `MODULES` (D-250); `null` is the core's.
+ * Every route is named, so a new one cannot be added without saying whose it is. A server that does not run the
+ * module answers none of its routes, so the page shows them as not found.
+ */
+const ROUTE_MODULES: Readonly<Record<RouteName, string | null>> = {
+  signIn: null,
+  signInEmail: null,
+  signInNative: null,
+  signUp: null,
+  invite: null,
+  mailStop: null,
+  setup: null,
+  setupVerify: null,
+  home: null,
+  workspace: null,
+  channel: 'chat',
+  questions: 'chat',
+  inbox: 'chat',
+  search: 'chat',
+  saved: 'chat',
+  drafts: 'chat',
+  unreads: 'chat',
+  welcome: null,
+  settingsHome: null,
+  settings: null,
+  gallery: null,
+};
+
+export const moduleOf = (name: RouteName): string | null => ROUTE_MODULES[name];
+
 type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`
   ? Name | ParamNames<Rest>
   : P extends `${string}:${infer Name}`
