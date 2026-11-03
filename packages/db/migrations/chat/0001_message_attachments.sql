@@ -9,7 +9,7 @@
 -- workspace and channel those of its message, and cascade with it. They are copied, not weakened.
 --
 -- Backfilled from the columns it replaces, which stay and are written as before until the release after this one
--- (see 0078). A message's file is found by `message_id`, a channel's by its own index in the order the list is read.
+-- (see 0079). A message's file is found by `message_id`, a channel's by its own index in the order the list is read.
 
 CREATE TABLE message_attachments (
     attachment_id uuid PRIMARY KEY,

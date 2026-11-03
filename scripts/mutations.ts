@@ -12797,7 +12797,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'attachment-claims-not-backfilled',
     why: "the files already sent are unclaimed after the upgrade, so the core's sweep would delete them as uploads nobody sent (D-250)",
-    file: 'packages/db/migrations/0078_attachment_claims.sql',
+    file: 'packages/db/migrations/0079_attachment_claims.sql',
     find: 'UPDATE attachments SET claimed_at = created_at\n    WHERE message_id IS NOT NULL AND claimed_at IS NULL;\n',
     replace: '',
     tests: ['packages/db/src/upgrade.integration.test.ts'],

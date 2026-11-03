@@ -196,7 +196,7 @@ const tables = [
       width: 'export',
       height: 'export',
       created_at: 'export',
-      // The core's note that a module has taken the file (0078): bookkeeping, not content.
+      // The core's note that a module has taken the file (0079): bookkeeping, not content.
       claimed_at: 'omit',
       // Where the object is kept on this server: the export names it by its id instead.
       storage_key: 'omit',
