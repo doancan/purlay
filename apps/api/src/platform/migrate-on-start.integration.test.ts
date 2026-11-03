@@ -149,7 +149,9 @@ const aSetOf = (id: string, table: string): { set: MigrationSet; remove: () => v
   writeFileSync(join(directory, '0001_table.sql'), `CREATE TABLE ${table} (id int);`);
   return {
     set: { id, directory },
-    remove: () => rmSync(directory, { recursive: true, force: true }),
+    remove: (): void => {
+      rmSync(directory, { recursive: true, force: true });
+    },
   };
 };
 
