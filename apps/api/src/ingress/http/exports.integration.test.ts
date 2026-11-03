@@ -39,6 +39,7 @@ import { exportQueue } from '../../modules/export/queue';
 import { sayAlive, sweepExports } from '../../modules/export/requests';
 import { createApp } from './app';
 import { exportCatalogue, personalExportCatalogue } from '../../export-catalogue';
+import { linkFile } from '../../testing/sent-files';
 
 let cloned: ClonedDatabase;
 
@@ -442,6 +443,12 @@ describe('integration: an owner’s export', () => {
         size_bytes: '10',
       })
       .execute();
+    await linkFile(cloned.db, {
+      id: fileId,
+      workspaceId: room.workspaceId,
+      messageId: sent,
+      channelId: room.channelId,
+    });
     const ask = await world.as('ada');
     const ready = await made(ask, world);
     expect(ready.status).toBe('ready');

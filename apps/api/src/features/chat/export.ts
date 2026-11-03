@@ -44,6 +44,10 @@ const channelsIn = (scope: Scope): RawBuilder<unknown> =>
 const messagesOf = (scope: Scope): RawBuilder<unknown> =>
   sql`select id from messages where workspace_id = ${scope.workspaceId} and channel_id in (${channelsIn(scope)})`;
 
+/** The files those messages carry, found through the link: the attachments' own `message_id` is no longer read (D-250). */
+const filesOf = (scope: Scope): RawBuilder<unknown> =>
+  sql`select attachment_id from message_attachments where workspace_id = ${scope.workspaceId} and message_id in (${messagesOf(scope)})`;
+
 const incidentsOf = (scope: Scope): RawBuilder<unknown> =>
   sql`select id from incidents where workspace_id = ${scope.workspaceId} and channel_id in (${channelsIn(scope)})`;
 
@@ -202,7 +206,7 @@ const tables = [
       storage_key: 'omit',
       thumbnail_key: 'omit',
     },
-    (s) => ({ where: sql`message_id in (${messagesOf(s)})`, order: 'id' }),
+    (s) => ({ where: sql`id in (${filesOf(s)})`, order: 'id' }),
   ),
   tableExport(
     'incidents',
@@ -308,7 +312,7 @@ export const chatExport: ExportContribution = {
     sql`select mentioned_user_id from mentions where message_id in (${messagesOf(scope)})`,
     sql`select pinned_by from pinned_messages where message_id in (${messagesOf(scope)})`,
     sql`select added_by from channel_bookmarks where channel_id in (${channelsIn(scope)})`,
-    sql`select uploader_id from attachments where message_id in (${messagesOf(scope)})`,
+    sql`select uploader_id from attachments where id in (${filesOf(scope)})`,
     sql`select declared_by from incidents where id in (${incidentsOf(scope)})`,
     sql`select actor_id from incident_updates where incident_id in (${incidentsOf(scope)})`,
     sql`select user_id from incident_responders where incident_id in (${incidentsOf(scope)})`,
@@ -317,7 +321,7 @@ export const chatExport: ExportContribution = {
     sql`select created_by from github_links where channel_id in (${channelsIn(scope)})`,
   ],
   // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
-  files: (scope) => sql`message_id in (${messagesOf(scope)})`,
+  files: (scope) => sql`id in (${filesOf(scope)})`,
   audit: (rows) => ({ messages: String(rows['messages'] ?? 0) }),
 };
 

@@ -25,7 +25,9 @@ const theirMessages = (userId: string): RawBuilder<unknown> =>
 
 /** The files they sent with those messages; one uploaded and never sent is gone within a day (D-109 §5). */
 const theirFiles = (userId: string): RawBuilder<unknown> =>
-  sql`uploader_id = ${userId} and message_id in (${theirMessages(userId)})`;
+  sql`uploader_id = ${userId} and id in (
+    select attachment_id from message_attachments where message_id in (${theirMessages(userId)})
+  )`;
 
 /** The channels the person's rows name, so each id in the export says which channel it was. */
 const theirChannels = (userId: string): RawBuilder<unknown> => sql`

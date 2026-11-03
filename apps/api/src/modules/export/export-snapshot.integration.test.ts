@@ -25,6 +25,7 @@ import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import { aMemoryStore } from '../../testing/storage';
 import { aRecordingLogger } from '../../testing/doubles';
 import { exportCatalogue } from '../../export-catalogue';
+import { linkFile } from '../../testing/sent-files';
 
 let cloned: ClonedDatabase;
 
@@ -104,6 +105,12 @@ describe('integration: an export’s snapshot', () => {
         size_bytes: '1',
       })
       .execute();
+    await linkFile(cloned.db, {
+      id: fileId,
+      workspaceId: room.workspaceId,
+      messageId: sent.message.id,
+      channelId: room.channelId,
+    });
     // The store is asked after the snapshot committed; by then a purge took the row and the object.
     const store = aMemoryStore();
     const removing: ObjectStore = {

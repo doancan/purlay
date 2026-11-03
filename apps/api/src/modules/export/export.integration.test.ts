@@ -32,6 +32,7 @@ import { exportWorkspace, schemaOf } from './export';
 import { everyChannel } from '../../features/chat/export';
 import { MIGRATOR_TABLES } from './tables';
 import { EVERY_TABLE_DECIDED, EXCLUDED_FROM_EXPORT, exportCatalogue } from '../../export-catalogue';
+import { linkFile } from '../../testing/sent-files';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -118,6 +119,12 @@ const fill = async (
       declared_at: next(),
     })
     .execute();
+  await linkFile(db, {
+    id: fileId,
+    workspaceId: room.workspaceId,
+    messageId: id,
+    channelId: room.channelId,
+  });
   await db
     .insertInto('incident_updates')
     .values({
@@ -435,11 +442,17 @@ describe('integration: exporting a workspace', () => {
         .insertInto('channel_members')
         .values({ channel_id: hidden.id, user_id: pat.userId, joined_at: NOW })
         .execute();
+      const hiddenFile = messageId(next());
+      await storeUpload(
+        { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log },
+        await requireWorkspaceMembership(db, pat.userId, a.workspaceId),
+        { id: hiddenFile, name: 'hidden.txt', bytes: new Uint8Array(3).fill(5) },
+      );
       const secret = await sendMessage(
         db,
         fixedClock(next()),
         { ...pat.context, channelId: hidden.id },
-        { id: messageId(next()), content: 'only in hidden' },
+        { id: messageId(next()), content: 'only in hidden', attachmentIds: [hiddenFile] },
       );
       await db
         .insertInto('reactions')
@@ -473,6 +486,7 @@ describe('integration: exporting a workspace', () => {
       for (const id of [
         hidden.id,
         secret.message.id,
+        hiddenFile,
         b.channelId,
         b.workspaceId,
         member(b, 'qui').userId,

@@ -16,6 +16,7 @@ import { aRoom, type Room } from '../../../testing/rooms';
 import { sendMessage, type Sent } from '../messages/messages';
 import { searchIn } from './search';
 import { setResolved } from '../messages/threads';
+import { linkFile } from '../../../testing/sent-files';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -113,6 +114,12 @@ describe('integration: what is found', () => {
           size_bytes: '1',
         })
         .execute();
+      await linkFile(db, {
+        id: attachmentId,
+        workspaceId: room.workspaceId,
+        messageId: file.message.id,
+        channelId: room.channelId,
+      });
       const find = async (filters: Omit<SearchQuery, 'q'>): Promise<string[]> =>
         (await search(db, room, alice.userId, '', filters)).contents;
       expect(await find({ kind: 'code' })).toEqual([code.message.content]);

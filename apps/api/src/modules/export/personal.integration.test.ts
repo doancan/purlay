@@ -36,6 +36,7 @@ import {
   EXCLUDED_FROM_PERSONAL_EXPORT,
   personalExportCatalogue,
 } from '../../export-catalogue';
+import { linkFile } from '../../testing/sent-files';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -112,6 +113,12 @@ const footprint = async (
     .set({ message_id: message, channel_id: room.channelId })
     .where('id', '=', file)
     .execute();
+  await linkFile(db, {
+    id: file,
+    workspaceId: room.workspaceId,
+    messageId: message,
+    channelId: room.channelId,
+  });
   return { message, file };
 };
 

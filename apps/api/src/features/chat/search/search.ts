@@ -135,9 +135,9 @@ export const searchIn = async (
     statement = statement.where((eb) =>
       eb.exists(
         eb
-          .selectFrom('attachments')
-          .select('attachments.id')
-          .whereRef('attachments.message_id', '=', 'messages.id'),
+          .selectFrom('message_attachments')
+          .select('message_attachments.attachment_id')
+          .whereRef('message_attachments.message_id', '=', 'messages.id'),
       ),
     );
   if (query.repository !== undefined) {

@@ -323,7 +323,7 @@ export const requireAttachmentById = async (
     .where((eb) =>
       eb.or([
         eb.and([
-          eb('attachments.message_id', 'is', null),
+          eb('attachments.claimed_at', 'is', null),
           eb('attachments.uploader_id', '=', userId),
           eb.exists(
             eb
@@ -340,7 +340,8 @@ export const requireAttachmentById = async (
           visibleChannels(executor, userId)
             .innerJoin('messages', 'messages.channel_id', 'channels.id')
             .select('messages.id')
-            .where('messages.id', '=', sql.ref<string>('attachments.message_id'))
+            .innerJoin('message_attachments', 'message_attachments.message_id', 'messages.id')
+            .where('message_attachments.attachment_id', '=', sql.ref<string>('attachments.id'))
             .where('messages.deleted_at', 'is', null),
         ),
       ]),
