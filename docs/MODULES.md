@@ -202,7 +202,7 @@ until then it is a stated intent and not a guarantee.
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release`: no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
-| Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat | 11 |
+| Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
@@ -234,7 +234,7 @@ Each step ships alone and can be reverted.
 | 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |
-| 13 | Issues complete, the second module in full | new feature |
+| 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held only while it runs, its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
@@ -410,3 +410,32 @@ its row's id as it is written.
 |---|---|---|---|
 | `chat` | — | — | — |
 | `issues` | — | — | — |
+
+### `issues`
+
+The second module (D-254), the smallest that exercises every seam, and written so that the next one can be compared with
+it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no other module and no other module uses it.
+
+- **Migration set.** `migrations/issues/0001_issues.sql`, one table, `issues`, owned by `issues` in the ownership list, with
+  `SCHEMA.md` §7.12 and `DATA.md`. Its keys go to `workspaces` and `users` only; a core migration never names it.
+- **`data` hooks.** `userErased` takes an erased account off the issues assigned to it (what it made stays, under the
+  anonymised row); `workspacePurge` empties the table by name, because a purged workspace keeps its row as a tombstone and
+  the cascade never fires; `export` and `personalExport` write the table whole and the person's own. **All four are held
+  only while the module runs** — it has no `dataInCore` — so with `MODULES=chat` or `none` on a database that never had
+  the table nothing asks for it, and the cell test proves it on a database each cell made. **Where it ran and was then
+  turned off**, its rows are skipped by all four until it runs again: a workspace deleted meanwhile keeps its issues, and the
+  purge does not come back for a workspace it has marked purged. Closing that needs the process to read which sets its
+  database has applied; it waits for a module whose rows are a person's (D-254 §4).
+- **Audit and permissions.** None: nothing it does is on the workspace's trail, and the role rule — any member makes and
+  changes, only the creator or an owner or an admin deletes — is in the service, tested through the route.
+- **Events and notifications.** None. An issue has no frame and tells nobody; a client reads again.
+- **Web.** The screen at `/w/:slug/issues`, one `import()` from `features/issues/load.tsx` into a chunk of its own; the rail
+  link and the palette entry only where the session lists the module. `budget:web` holds the shell chunk to carrying none of
+  the screen.
+- **Smoke test and matrix cell.** `composition-cells.integration.test.ts` for the core's lifecycle per cell,
+  `modules-off.integration.test.ts` for the routes per cell, and a real process per `MODULES` in
+  `migrate-on-start.integration.test.ts`.
+- **Latency.** No hot path: it is not on the chat's send path, and a list of the workspace's issues is one indexed read.
+- **What a user sees for each partner that is absent.** There are no partners.
+- **Removal threshold.** Removed if no workspace of the dogfood team keeps an open issue in it for a quarter; its
+  table stays until an operator drops it (D-250 rule 5).

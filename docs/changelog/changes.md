@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Issues** — A second module, off or on with `MODULES`: a workspace keeps a list of issues, each with a title, markdown details, open or done and somebody it is given to; any member makes and changes them, and only whoever made one, an owner or an admin deletes it (D-254)
 - **Operations** — Nodes of a cluster that run different `MODULES` say so in their logs and keep serving, so a new set can roll out node by node (D-250)
 - **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
 - **Messages** — Schedule a message, with its files, to be sent later; the server sends it at its time even with every app closed (D-30)
