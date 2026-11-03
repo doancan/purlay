@@ -233,9 +233,15 @@ unchanged and proved so:
 7. the workspace purge takes a `WorkspacePurge` — steps before the core's uploads and exports, steps after, and the
    tables a module owns — and chat supplies its messages, channels and tables; the core's list holds its own
    (**built**);
-8. the two foreign keys from `attachments` to `messages` are dropped, a reconciliation sweep in the orphan job
-   takes their place, and the ownership list empties — a migration, and so rehearsed on a copy and the owner's
-   call (D-250).
+8. the one crossing left, `attachments -> messages`, is **not** dropped for a sweep to stand in for: the two keys
+   are `ON DELETE CASCADE` and they are what makes an attachment's workspace and channel those of its message
+   (I-1), so a sweep would trade a guarantee of the schema for one of a job. The link is chat's instead: a
+   `message_attachments` table in chat's set (attachment, message, channel, with the same composite keys to
+   `messages`, and a key to the core's `attachments`), the columns `message_id` and `channel_id` leave
+   `attachments`, and the core's table holds a stored object, its uploader and its workspace and nothing of a
+   message. An upload nobody links is what the orphan sweep already removes after a day. It is a migration that
+   moves data and every reader of those two columns changes with it, so it is done with step 10, on a copy with
+   the dumps compared, and the ratchet keeps the crossing in view until then.
 
 The three behaviours that could change without a test failing: the default channel at workspace creation (an
 integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
