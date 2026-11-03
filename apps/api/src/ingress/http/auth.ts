@@ -20,7 +20,7 @@
 import { CLIENT_ADDRESS_HEADER, type Auth, type AuthAnswer } from '../../modules/auth/better-auth';
 import { EraseAccountRequest, type MySignIn } from '@purlay/types';
 import { mySignIn } from '../../modules/auth/my-sign-in';
-import { eraseAccount } from '../../modules/users/erasure';
+import { eraseAccount, type UserErased } from '../../modules/users/erasure';
 import {
   publication,
   publishAfterCommit,
@@ -71,6 +71,11 @@ export interface AuthDependencies {
 /** Signing out also reaches the sockets the revoked sessions hold. */
 export interface SignOutDependencies extends AuthDependencies {
   readonly bus: EventBus;
+}
+
+/** Erasing an account also reaches what the modules keep of the person, through their hooks (D-250). */
+export interface EraseDependencies extends SignOutDependencies {
+  readonly userErased: UserErased;
 }
 
 /** What a handler decided. `location` set means a redirect; otherwise `204`. */
@@ -503,7 +508,7 @@ export const signOutEverywhere = async (
  * after the commit their sockets ended and each workspace they were in told to read its members again.
  */
 export const eraseMyAccount = async (
-  dependencies: SignOutDependencies,
+  dependencies: EraseDependencies,
   request: Request,
   body: unknown,
 ): Promise<AuthResponse> => {
@@ -511,7 +516,8 @@ export const eraseMyAccount = async (
   const caller = await requireSession(dependencies.auth, request);
   const { confirm } = validated(EraseAccountRequest, body);
   const erased = await atomicallyOn(database)(
-    async (transaction) => await eraseAccount(transaction, clock, caller, confirm),
+    async (transaction) =>
+      await eraseAccount(transaction, clock, caller, confirm, dependencies.userErased),
   );
   // Each told on its own: one that fails is logged, and the rest are still told. The person's sockets
   // first — every one, whatever session it holds — then each workspace's members (D-139 §5).

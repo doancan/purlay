@@ -29,6 +29,7 @@ import { addressCounterKey } from '../auth/magic-link';
 import { passportAddressDigest } from '../workspaces/invitation-passport';
 import { addressAttemptsPrefix } from '../auth/password-attempts';
 import { revokeAllSessions } from '../auth/sessions';
+import type { Hooks } from '../../platform/hooks';
 
 /** What the ingress tells after the commit: whose sockets end, and which workspaces read again. */
 export interface Erased {
@@ -44,11 +45,15 @@ const invalid = (field: string, says: string): AppError =>
     details: { fields: { [field]: says } },
   });
 
+/** What runs inside the transaction of an erased account, for each module that keeps something of a person. */
+export type UserErased = Hooks<[Transaction, string]>;
+
 export const eraseAccount = async (
   executor: Transaction,
   clock: Clock,
   caller: { readonly userId: string; readonly sessionId: string },
   confirm: string,
+  userErased: UserErased,
 ): Promise<Erased> => {
   const now = clock.now();
   // Read first, locking nothing: the checks refuse before anything is held.
@@ -212,12 +217,9 @@ export const eraseAccount = async (
     .execute();
 
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
-  await executor.deleteFrom('saved_searches').where('user_id', '=', person.id).execute();
-  await executor.deleteFrom('saved_messages').where('user_id', '=', person.id).execute();
-  await executor.deleteFrom('thread_follows').where('user_id', '=', person.id).execute();
-  await executor.deleteFrom('notifications').where('user_id', '=', person.id).execute();
-  // And when they were last mailed about what they missed, with each letter's stop link (D-240).
-  await executor.deleteFrom('missed_mail_letters').where('user_id', '=', person.id).execute();
+  // What the modules keep for a person — chat's saved searches and messages, followed threads, inbox and
+  // missed-mail letters — forgotten by the hooks, here, in this transaction (D-250).
+  await userErased.run(executor, person.id);
   // A copy of their own data they asked for (D-241): no longer downloadable, its archive swept.
   await endPersonalExports(executor, clock, person.id);
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
