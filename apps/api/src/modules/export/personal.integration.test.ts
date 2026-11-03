@@ -506,6 +506,38 @@ describe('integration: the shape of a person’s export', () => {
   });
 });
 
+describe('integration: a person’s export that fails', () => {
+  test('is no export, and leaves nothing named as one: the directory is abandoned and the error is the store’s', async () => {
+    await withRollback(async (db) => {
+      const { store, pat } = await aPersonWithAFootprint(db);
+      const target = join(await mkdtemp(join(tmpdir(), 'purlay-personal-failed-')), 'out');
+      const error = new Error('the store is down');
+      store.failing('get', error);
+      const result = await exportPerson(
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+          personalCatalogue: personalExportCatalogue,
+        },
+        { id: pat.userId, username: pat.username },
+        target,
+      ).then(
+        () => null,
+        (failure: unknown) => failure,
+      );
+      expect(result).toBe(error);
+      expect(
+        await stat(target).then(
+          () => 'there',
+          () => 'absent',
+        ),
+      ).toBe('absent');
+    });
+  });
+});
+
 /**
  * As written when this test was made, before the catalogue moved between modules. A change that is meant says so
  * by changing this, in the same pull request, with the reason.
