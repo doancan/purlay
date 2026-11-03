@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Operations** — Nodes of a cluster that run different `MODULES` say so in their logs and keep serving, so a new set can roll out node by node (D-250)
 - **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
 - **Messages** — A face typed as text, like `:D` or `<3`, becomes its emoji at the next space; Backspace straight after takes it back (D-253)
 
