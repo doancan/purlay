@@ -522,6 +522,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     userWrites,
     metrics,
     closedFrame: modules.closedFrame,
+    closedEvent: modules.closedEvent,
   });
   metrics.registry.gauge(
     'purlay_websocket_connections',

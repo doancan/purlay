@@ -24,7 +24,7 @@ import { atomicallyOn, type Atomically } from '../../platform/transactions';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
 import { startLivenessSweep } from '../../realtime/liveness';
-import { onlinePresence, type OnlinePresence } from '../../realtime/online';
+import { offlinePresence, onlinePresence, type OnlinePresence } from '../../realtime/online';
 import { announcePresence } from '../../features/chat/presence/presence';
 import {
   inProcessRateLimiter,
@@ -59,6 +59,8 @@ export interface SocketDependencies {
   readonly userWrites: RateLimiter;
   /** The operations of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedFrame?: (op: string) => boolean;
+  /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
+  readonly closedEvent?: (event: string) => boolean;
   /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
@@ -142,19 +144,26 @@ const outboundBufferOf = (raw: object): (() => number) => {
 export const createSocketLifecycle = (dependencies: SocketDependencies): SocketLifecycle => {
   const { log, database, clock } = dependencies;
   const limits = dependencies.connectionLimits ?? SOCKET_CONNECTION_LIMITS;
-  // Who is online on this node (D-136): told by the hub's own count of each person's sockets.
-  const online = onlinePresence({
-    clock,
-    timers: dependencies.timers ?? systemTimers,
-    log,
-    announce: async (change) => {
-      await announcePresence({ database, bus, clock, log }, change);
-    },
-    ...(dependencies.shared === undefined ? {} : { directory: dependencies.shared.directory }),
-  });
+  // Who is online on this node (D-136): told by the hub's own count of each person's sockets. It is chat's news
+  // (`PRESENCE` is in its manifest): a process that does not run chat counts nobody, shares nothing and tells nobody.
+  const online =
+    dependencies.closedEvent?.('PRESENCE') === true
+      ? offlinePresence
+      : onlinePresence({
+          clock,
+          timers: dependencies.timers ?? systemTimers,
+          log,
+          announce: async (change) => {
+            await announcePresence({ database, bus, clock, log }, change);
+          },
+          ...(dependencies.shared === undefined
+            ? {}
+            : { directory: dependencies.shared.directory }),
+        });
   const hub = createSocketHub(dependencies.auth, clock, {
     log,
     presence: online,
+    ...(dependencies.closedEvent === undefined ? {} : { closedEvent: dependencies.closedEvent }),
     // Called from `hub.deliver`, which only runs after `bus` exists.
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);

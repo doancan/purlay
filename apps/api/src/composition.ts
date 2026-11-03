@@ -88,6 +88,8 @@ export interface Composition {
   readonly closedJob: (name: string) => boolean;
   /** Whether a client frame's operation belongs to a module this build carries and this process does not run. */
   readonly closedFrame: (op: string) => boolean;
+  /** Whether a server event belongs to a module this build carries and this process does not run. */
+  readonly closedEvent: (event: string) => boolean;
 }
 
 /**
@@ -156,6 +158,10 @@ export const compose = (
     closedFrame: (op) =>
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.frames ?? []).includes(op),
+      ),
+    closedEvent: (event) =>
+      bundled.some(
+        (module) => !modules.includes(module) && (module.manifest.events ?? []).includes(event),
       ),
   };
 };

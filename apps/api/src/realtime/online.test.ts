@@ -9,7 +9,7 @@ import { PRESENCE_GRACE_MS, type PresenceChange } from '@purlay/types';
 import type { Clock } from '../platform/clock';
 import { aRecordingLogger } from '../testing/doubles';
 import type { Timers } from './hub';
-import { onlinePresence } from './online';
+import { offlinePresence, onlinePresence } from './online';
 
 const timersRecorded = (): Timers & {
   readonly armed: { readonly ms: number; readonly fire: () => void; cleared: boolean }[];
@@ -244,5 +244,18 @@ describe('who is online on this node', () => {
     expect(w.lines.some((line) => line['msg'] === 'presence could not be told; trying again')).toBe(
       true,
     );
+  });
+});
+
+describe('the presence of a process that does not run what tells it', () => {
+  test('counts nobody, holds nothing, tells nobody, and settles at once', async () => {
+    offlinePresence.arrived('u1');
+    offlinePresence.left('u1');
+    expect(await offlinePresence.onlineAmong(['u1', 'u2'])).toEqual([]);
+    expect(await offlinePresence.version()).toBe(0);
+    expect(offlinePresence.held()).toEqual({ online: 0, leaving: 0 });
+    await offlinePresence.settled();
+    offlinePresence.stop();
+    expect(offlinePresence.held()).toEqual({ online: 0, leaving: 0 });
   });
 });

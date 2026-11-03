@@ -71,6 +71,17 @@ export interface OnlinePresence {
   readonly held: () => { readonly online: number; readonly leaving: number };
 }
 
+/** Presence of a process that does not run what tells it: nobody is online, nothing is held, nobody is told. */
+export const offlinePresence: OnlinePresence = {
+  arrived: () => undefined,
+  left: () => undefined,
+  onlineAmong: () => Promise.resolve([]),
+  version: () => 0,
+  stop: () => undefined,
+  settled: () => Promise.resolve(),
+  held: () => ({ online: 0, leaving: 0 }),
+};
+
 /** How many times a change that could not be told is tried again, and the first wait. */
 const PRESENCE_RETRIES = 3;
 const PRESENCE_RETRY_MS = 1_000;
