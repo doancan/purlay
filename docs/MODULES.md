@@ -1,13 +1,16 @@
 # Purlay — Modules (`MODULES.md`)
 
-> Authority: `DECISIONS.md` D-250 is binding on *why*. This file is binding on *how a module is built,
-> loaded, kept apart and removed*. **Status: partly built.** Chat is the one module, under `features/chat`, and
-> the core runs without it: `MODULES` is read at boot, a module's routes and jobs are left out when it is
-> not run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them), and the migration sets, the composition, the cluster check and the table-ownership list
-> exist. What is not built: a second module, the typed query handle and the per-module generated `schema.ts`,
-> the `contract` step of the attachment link, workspace-level enablement, and the matrix in CI. §8 says what
-> each rule is held by and which step builds it, and §10 the order; a line marked **built** there is, and one
-> not marked is intent.
+> Authority: `DECISIONS.md` D-250 is binding on *why*, and D-255 on what was decided in practice. This file is
+> binding on *how a module is built, loaded, kept apart and removed*. **Status: built for two modules, not
+> complete.** Chat (`features/chat`) and issues (`features/issues`, D-254) are the modules, and the core runs
+> without either: `MODULES` is read at boot, a module's routes, frames, events and jobs are closed when it is not
+> run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them, §3),
+> and the migration sets, the composition, the cluster record and the table-ownership list exist. What is not
+> built: the typed query handle and the per-module generated `schema.ts`, the `contract` step of the attachment link
+> (it lives in chat's own set, `chat/0005`, draft PR #961), workspace-level enablement, a module budget that any
+> process takes (§7), and a CI matrix that runs the whole suite per cell (§8 says what runs). §8 says what each rule
+> is held by, and §10 the order; a line marked **built** there is, and one not marked is intent. §9 is the
+> checklist for adding a module and §12 the glossary.
 
 ---
 
@@ -35,16 +38,18 @@ declares:
 
 - `id`, and `requires` (it will not start without them) and `optional` (used when present);
 - `provides`: the capabilities it offers;
-- `migrations`: its own ordered set;
-- `routes`: its HTTP routes, **at the paths the contract already gives them** — no `/api/<id>` prefix is added,
-  and a module's route table is code in `ingress/`, not a type in the manifest, so the manifest holds no HTTP
-  type (`ARCHITECTURE.md` §4);
-- `events`, `notifications`, `searchSources`: what it adds to the core's registries;
-- `jobs`, and the CLI commands it owns;
-- **`data`**: how its tables answer the core — the erasure of a person (D-139), the tables of an export
-  (D-140), retention, and the owner of an attachment it holds;
-- **`audit` and `permissions`**: the actions it writes to the audit log and the role-gated writes it registers
-  in the permission table.
+- `routes`: its HTTP routes as templates, **at the paths the contract already gives them** — no `/api/<id>` prefix is
+  added, and the route table itself is code in `ingress/`, so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
+- `frames`: the client operations on the socket it owns; `events`: the server events its services send; `jobs`: the
+  scheduled jobs that act for its users. A process that does not run the module closes all four (§3).
+
+That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. What a module
+contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `dataInCore`,
+`userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
+of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
+and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
+anything:** `notifications`, `searchSources`, retention as a declared hook, and the audit actions and permissions a module
+registers — the audit actions are in `modules/audit`, and the role rules are in each service.
 
 ## 3. Boot
 
@@ -52,17 +57,34 @@ declares:
    unknown or repeated id, an empty item, or a missing requirement stops the process before it listens; a
    cycle, a reserved id or a repeated capability are caught earlier, when the build's registry is made.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
-3. Record this node's module set in the database. A node whose set differs from a live peer's refuses to serve
-   (D-250 rule 8); the release may differ, so a rolling deploy passes, and nodes of different sets share no bus channel.
+3. Where nodes share Redis, record this node's module set in the shared record (`realtime/module-set.ts`) and
+   compare it with the live peers'. A difference is **said, never acted on** (D-250 rule 8 as amended by D-255): the
+   node logs it once, keeps serving, and readiness does not change, so a rolling deploy of a new set passes. Nodes of
+   different sets share the one bus channel, because a sign-out must reach every socket; what keeps a node's sockets
+   from hearing a module it does not run is the manifest's `events`, dropped at delivery (`closedEvent`).
 4. Run each enabled module's migrations (§5).
 5. Call each module's `register`, which writes into the core's registries. **Capabilities are fixed after this
    step**: a question about one has the same answer for the life of the process.
-6. Mount routes, then report ready — per module, so an operator sees which one is not.
+6. Register the routes, then report ready. Readiness is the node's, not a module's: a process that runs a module on a
+   database without its migration set has pending migrations and is not ready (`readiness.ts`).
 
 A failure in 4 or 5 is fatal at boot. A failure at runtime stays inside the module's error boundary and does
-not take the core down (§7). A disabled module is never mounted: a request for it is the plain `404` of any
-unknown route, with the generic body and no code that says *disabled* — which would tell a caller who has not
-signed in which modules an instance runs.
+not take the core down (§7). **A disabled module's routes are registered all the same and gated by path.** The
+application is one typed Elysia chain, and a route table added to or left out per process would break the type the
+web client reads; so every route of the build is registered, and `closed()` (`composition.ts`, built from the
+`routes` of the manifests of the modules not run) is asked before the rate limit and the session. The route-ownership
+test (`ingress/http/route-ownership.test.ts`) holds the manifests' lists and the routes the application registers together, so a
+route nobody owns, or one claimed by two, fails it. The effect is that a request for a closed path gets the plain
+`404` of any unknown route, with the generic body and no code that says *disabled* — which would tell a caller who has
+not signed in which modules an instance runs. A closed job exits `0` (`closedJob`), a closed frame is answered as an
+operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).
+
+**What an anonymous caller can still infer.** `GET /api/client` does not list modules (PR #963), but it carries
+`capabilities` flags derived from chat being run (`scheduledMessages`, `messageReminders`,
+`personalMessageDeletion`, D-58). They are the one thing a caller who has not signed in can read about the module set,
+and they stay because a native client needs them before it signs in. So "no oracle" is exact for paths, bodies and
+codes, and not for those three flags. A signed-in caller learns the list from `GET /api/me` (`modules`); the macOS
+client reading it is issue #958.
 
 That holds before any other judgement of the request: the edge's refusals of a body (a missing or an oversized
 `Content-Length` on a webhook) are asked only of a path that is a route, so a closed webhook answers as `/api/no-such-thing`
@@ -138,7 +160,7 @@ moves into that module.
   runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own. Issues (D-254), whose one table is all in its own set, is held the same way, and its `ownSet` tells the exports which tables to skip.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
-  first 77 files always create chat's tables, inert where chat is off. The release before the first prefixed row
+  77 files that existed when this was decided always create chat's tables, inert where chat is off. The release before the first prefixed row
   skips rows it has no file for and says so, so one release of rollback stays possible while module migrations are
   additive. Anything that reads the migration table for the core's schema stamp (the export's) filters to the
   core's rows.
@@ -152,10 +174,14 @@ moves into that module.
 
 ## 6. Web
 
-`apps/web/src/features/<id>/manifest.ts` declares routes, sidebar entry, palette commands, shortcuts and
-settings; the entry is a lazy import. The server answers which modules are enabled; the router, sidebar and
-palette are built from those manifests, so a disabled module has no route and no chunk. The shell chunk holds
-no module code; `budget:web` states a bound for it and one per module.
+A module's screens are `apps/web/src/features/<id>/`, loaded as **one chunk** by `load.tsx` (`chunkOf(() => import(…))`,
+`app/chunk.ts`), drawn behind `ModuleGate` in `app/outlet.tsx`. There is no web manifest file: the route's owner is the
+`ROUTE_MODULES` table in `router/routes.ts` (every route is named, so one cannot be added without saying whose it is),
+and everything else asks `useRuns(id)` or draws inside `WhenRun`. The session says which modules run: `GET /api/me`'s
+`modules`, not the public `GET /api/client`. So a module that is not run has no rail link, no palette entry, no shortcut,
+no section and no request, and its address is `NotFound`, as the server's is. The shell chunk holds no module code;
+`budget:web` holds a bound for the shell and one for chat's chunk, and a shape check that fails if a module's screen
+(chat's, or the marker of issues') is in an initial chunk (§8).
 
 ## 7. Isolation
 
@@ -188,34 +214,153 @@ until then it is a stated intent and not a guarantee.
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
-| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built**, a module is handed it when it is made | 5 |
+| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — the mechanism is **built** and tested alone, but nothing outside its tests imports it, so no process takes it yet: **pending** the operability work that wires it | 5 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
 | A bundle has no cycle, repeat or double capability | the registry, and mutations in `scripts/mutations.ts` | 1 |
-| `MODULES` is valid | `resolve`, at boot | 12 |
+| `MODULES` is valid | `resolve`, at boot: a process that cannot parse it logs `MODULES cannot be run; exiting` with every problem and exits `1` (`registry.test.ts`, `migrate-on-start.integration.test.ts`) — **built** | 12 |
 | The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
-| Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
-| Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; running the whole suite per cell is the CI matrix, which waits for step 12 | 12 |
+| Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, and `test:modules-none`, a browser spec run in the browser job — **built**; not a whole-suite matrix | 12 |
+| Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; the whole suite is **not** run per cell: no CI job does | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off; every lifecycle step in each cell of database state × process, on real migrated databases (`module-lifecycle.integration.test.ts`) — **built** | 10 |
-| A core migration keeps module schemas valid | CI migrating each set from the last release | 10 |
+| A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state; CI migrating each set from the *last release's* database is **not** built | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
-| Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release`: no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
-| Chat is not slowed by a module | `budget:latency` per module | 12 |
+| Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release` (`manifests:snapshot`): no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
+| Chat is not slowed by a module | `budget:latency` measures the hot paths and has no notion of a module; per-module cells and "with another module busy" are **pending** (operability work) | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
-**The matrix** — the core alone, each module alone with what it requires, everything — runs when
-`modules/**`, `features/**`, `platform/**` or `packages/db/**` changes. It is the set of cells run, and the
-only combinations promised (D-250 rule 6).
+**The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
+tests build: `module-lifecycle.integration.test.ts` (the database as the core alone, chat's set, issues' set or every
+set, against a process that runs none, each alone or both), `migration-cells.integration.test.ts`,
+`modules-off*.integration.test.ts`, a real process per `MODULES` in `migrate-on-start.integration.test.ts`, and
+`test:modules-none` in a browser. It is the set of cells run, and the only combinations promised (D-250 rule 6). It is
+not the whole suite once per cell.
 
 ## 9. Adding a module — the checklist
 
-A section in this file with its requires, optional partners and capabilities · its migration set, with the
-`SCHEMA.md` and `DATA.md` entries · its `data` hooks (erasure, export, retention) · its audit actions and
-permissions · its events and notifications · its web manifest and chunk bound · its smoke test and matrix cell
-· its latency measure · what a user sees for each partner that is absent · the threshold at which it is removed if
-nobody uses it (D-250 rule 6).
+Written from what building issues (D-254) needed, in the order a change is made. Each item names the file or test
+that fails if it is skipped; an item with no such thing is said to have none. `issues` is the worked example: read its
+commit beside this list.
+
+**1. Decide it.**
+
+- Take the next D-number in `DECISIONS.md` (`### D-N.`; the document check refuses a gap, a repeat and a decision
+  nothing else cites) and write the decision: what the module is, what it is **not** (D-254 §1 lists what issues left
+  out, each a decision of its own), the table, who may do what, what happens to its data when it is off, and the cost
+  of reversing it. A module is admitted only with this, a section under §11 and a removal rule (D-250 rule 6).
+- Add its row and its section to §11 below. `module-listing.test.ts` fails for a bundled module without a row, or a row
+  for one that is not bundled.
+
+**2. The manifest** (`features/<id>/module.ts`, the object in `bundledModules` in `composition.ts`).
+
+- `id`: lowercase letters, digits, hyphens, at most 32, and not a path the core owns (`RESERVED_MODULE_IDS`; the
+  registry refuses it, and a test holds the list to `API.md`).
+- `requires` (will not start without), `optional` (used when present; mutual optional partners are a cycle, one must be
+  the one that knows the other), `provides` (capability names like `chat.post-system-message`). Say what a user sees for
+  each absent partner. Promoting an `optional` to `requires` is a breaking change.
+- `routes`: every path template the module owns, as the paths the contract gives (`:name` is a segment, a trailing `**`
+  the rest). `route-ownership.test.ts` fails for a registered route no manifest claims or two claim.
+- `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
+  for its users. Leave out a job that only keeps rows tidy: rows outlive the module's being off. Chat's `events` are a
+  `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the module sends and does not list
+  would reach a process that does not run it.
+
+**3. The data.**
+
+- A **migration set** in `packages/db/migrations/<id>/0001_<name>.sql`, recorded as `<id>/0001_<name>`; registered in
+  `PRODUCT_MIGRATION_SETS` (`packages/db/src/migrator.ts`). Keys go module to core, never between modules; index every
+  key. `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
+  and `DATA.md`.
+- **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it.
+  `table-ownership.integration.test.ts` holds the list to the database, and a key across owners fails it. A core
+  migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
+- **Data hooks and the data-lifecycle rule.** Erasure, export and retention reach every module whose tables exist,
+  enabled or not (D-250 rule 5, D-255 §3). So a module whose data an erased account, a deleted workspace or an export
+  must reach sets `dataInCore: true` and gives `userErased`, `workspacePurge` (its table in `tables`, because a purged
+  workspace keeps its row as a tombstone and the cascade never fires), `export` and `personalExport`. Each hook that names
+  a table its own set makes asks `tableExists` first; the exports skip it through the contribution's `ownSet`. Add the
+  table to the compile-time decision in `export-catalogue.ts`: while a table is undecided it does not compile and names
+  the table. A module whose data is not personal or workspace data still decides it, as `excluded`.
+- **Audit and permissions**: an audit action is a value of `AuditAction` and its target a `targetType` in
+  `modules/audit/audit.ts`, written in the same transaction by id and never by words (D-222), with the sentence the
+  settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`). A role rule is in the service and tested
+  through the route.
+
+**4. The routes, in `ingress/`.**
+
+- Route handlers in `apps/api/src/ingress/http/<id>.ts` and their registration in `ingress/http/app.ts`; the
+  module's services do not import HTTP types. The wire types go in `packages/types/src/<id>.ts`, exported from `index.ts`,
+  with new error codes in `errors.ts` and the endpoint in `api.ts` and `API.md`.
+- **Cross-tenant classification.** The endpoints are read from `API.md`, and each must appear in `apps/api/src/testing/cross-tenant.ts`
+  with a case (what it answers for a workspace the caller is not in, `WORKSPACE_NOT_FOUND`, and how channel visibility
+  applies: `none`, with the reason, for a route that names no channel) or among the unscoped with the reason it has no
+  tenant to cross; `cross-tenant.test.ts` fails for one that is in neither, and `cross-tenant.integration.test.ts` runs
+  the crossings. A new path parameter name needs its id there too.
+- `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
+
+**5. The web.**
+
+- `apps/web/src/features/<id>/load.tsx`: one `import()` through `chunkOf` (`app/chunk.ts`) into the module's own chunk,
+  with a quiet skeleton while it comes. Nothing else imports the screen: not the shell, not another chunk.
+- The route: add it to `ROUTES` and to **`ROUTE_MODULES`** in `router/routes.ts` (the table is typed over every route, so
+  a route cannot be added without saying whose it is; `route-modules.test.ts` holds it), draw it in `app/outlet.tsx`
+  inside `ModuleGate`, so where the session does not list the module the address is `NotFound` as the server's is.
+- **Gating by `useRuns`** (or `WhenRun`) every place the module shows up: the rail link (`shell/rail.tsx`), the palette
+  entry (`palette/use-palette-items.ts`), any sidebar section, shortcut (`shell/global-keys.tsx`) and settings page, and
+  any request that would otherwise be answered with `404`. The icon (`components/icon.tsx`), the client (`data/api.ts`,
+  `data/keys.ts`), the failure words for its error codes (`data/failure.ts`, and the exhaustive switch in
+  `composer/uploads.tsx`) and the English and Turkish catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
+- **`budget:web` shape check**: a marker only the screen carries goes in `MODULE_SCREENS` in `scripts/budget-web.ts`, and
+  the screen's file holds it; the check fails if an initial chunk carries it. A bound for the chunk is added where the
+  budget lists chat's.
+
+**6. The tests that make it a module and not a folder.**
+
+- The **modules-off cell**: the module's routes are `404` in a process without it (`ingress/http/modules-off.integration.test.ts`)
+  and its frames and events are closed (`realtime/modules-off*.integration.test.ts`, if it has any).
+- The **migration cell**: `packages/db/src/migration-cells.integration.test.ts` finds the table beside its set and nowhere
+  else; `migration-sets.test.ts` lists the set.
+- The **lifecycle matrix cell**: `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment
+  reader with the module's set as a database state and the module alone as a process.
+- A **real process** per `MODULES` value in `platform/migrate-on-start.integration.test.ts`.
+- The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
+  out of the frame when the server runs none.
+- A **module-listing** row (§11, above) and `composition.test.ts` for what the module contributes.
+- **Mutations**: for each rule above the tests are the only guard of, a mutation in `scripts/mutations.ts` that breaks the
+  rule and names the test that must fail (issues added eleven; read `issues-*` there). Insert new entries after
+  `core-sweep-names-a-chat-table`, never at the end of the file.
+
+**7. The release.**
+
+- `bun run release` rewrites `apps/api/src/released-manifests.json` (`manifests:snapshot`), and from then on
+  `module-compat.test.ts` holds the module to it: no new requirement, no capability, route, job or frame gone, no id changed.
+  A break is a dated entry under `exceptions` in that file, where a reviewer sees it; the release clears them. Until a
+  release carries the module the snapshot does not name it.
+- `docs/changelog/changes.md` gets an entry under **Added**; the decision count in `README.md` follows.
+
+**8. The documents.** `MODULES.md` (§11 row and section, §8 if a rule is now held), `DECISIONS.md`, `SCHEMA.md` (the
+migration and the table), `DATA.md` (what personal data it holds and how it is erased and exported), `API.md`
+(routes, error codes), `CONFIG.md` (the `MODULES` row names it), `ARCHITECTURE.md` (the features tree) and
+`DEPLOY.md` (nothing to change unless the module needs configuration). `check:docs` and `module-listing.test.ts` fail for
+the ones they hold.
+
+**What a new module edits outside its own folder, counted on the issues commit (#962).** Source files, not tests and
+not documents; the list is here so that it can shrink, and each line says whether it has to.
+
+| Where | Files | Why, and whether it can go |
+|---|---|---|
+| `apps/api/src` | `composition.ts`, `ingress/http/app.ts`, `ingress/http/<id>.ts`, `export-catalogue.ts`, `modules/audit/audit.ts` | the module's row, its routes, the compile-time decision of its tables, the target type; the first two are the cost of one typed chain and one list |
+| `apps/api/src/modules/export` | `catalogue.ts`, `export.ts`, `personal-catalogue.ts`, `personal.ts` | paid once, by the first own-set module (`ownSet`, `absent`); the next one touches none |
+| `packages/db` | `migrations/<id>/0001`, `src/migrator.ts`, `src/table-owners.ts`, `src/schema.ts` | the set, its registration, its owner, the generated schema; the last is generated |
+| `packages/types/src` | `<id>.ts`, `api.ts`, `errors.ts`, `index.ts` | the wire; the module's own file is the module's |
+| `apps/web/src` | `router/routes.ts`, `app/outlet.tsx`, `shell/rail.tsx`, `palette/use-palette-items.ts`, `components/icon.tsx`, `data/api.ts`, `data/keys.ts`, `data/failure.ts`, `features/composer/uploads.tsx`, `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | twelve: the shell's list of screens, rail, palette, icon, client, keys, error words twice, audit words and the two catalogues. A web manifest that the router, rail and palette read would take about five of them; the two failure files are one switch written twice |
+| `scripts` | `budget-web.ts`, `mutations.ts` | the screen's marker and the mutations; the first can be derived from the module's folder |
+
+That is 27 source files that recur, plus the four of the export that were paid once, and eight documents. The
+architecture review's "about 12 source files and 3 documents" counted the places a module must be *wired*; counting every
+file an issues-sized module touches gives the larger number, and the web's twelve are most of it.
 
 ## 10. Order of work
 
@@ -225,16 +370,16 @@ Each step ships alone and can be reverted.
 |---|---|---|
 | 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
 | 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 12 | no |
-| 3 | *Folded into 12.* Reading `MODULES` at boot before anything can be turned off would accept a setting that does nothing — `MODULES=none` with chat still running — which `CONFIG.md` forbids: a variable is read when the feature that needs it is built. The server's list of modules and the web registry wait for the first module that has a screen (11) | — |
+| 3 | *Obsolete: folded into 12 and 11, both built.* Reading `MODULES` waited until something could be turned off, as `CONFIG.md` requires; the list of modules the web reads is `GET /api/me`'s `modules` | — |
 | 4 | Wire unions opened, with aliases, **with the first module that has frames of its own** (5b); the web client already ignores unknown frames (D-82, tested) and a native client is checked first; the replay rule; `skipped` in the search response | no |
 | 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
-| 5b | Issues' thin slice for the dogfood team — open an issue from a message, link back — to prove the ports with a real user before the moves | new feature |
+| 5b | *Superseded by 13.* It planned a thin slice that opened an issue from a message and linked back; D-254 §1 decided that issues has no link and no frame, so that slice was not built | — |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
-| 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
+| 10 | Migrations split by module; `data` hooks — **built** (`dataInCore`, `tableExists`, §5); the ownership ratchet is not at zero (it holds the crossings that are left, until the attachment link's contract step, `chat/0005`, draft PR #961, merges); codegen and `db:check` per module are **not built** | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
-| 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |
-| 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held only while it runs, its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
+| 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; **not built:** the whole-suite matrix and per-module budgets in CI (`budget:latency` has no module notion: pending) | **yes** |
+| 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
@@ -280,7 +425,7 @@ unchanged and proved so:
    message and channel through `message_attachments`, the workspace export's and the person's export's bounds read
    through the link, and `dropFiles` is the core's `dropFilesById` and chat's `dropMessageFiles`; a test,
    `attachment-readers.test.ts`, fails if production code reads `attachments.message_id` or `channel_id` again,
-   with an allow-list of the one place that still writes them); *contract* (**left**: the columns, their keys and
+   with an allow-list of the one place that still writes them); *contract* (**pending**: it lives in chat's own set, `chat/0005`, draft PR #961, not in the core's migrations; the columns, their keys and
    indexes go, the dual write and the allow-list with them, and the exports stop writing the two columns — which
    changes the frozen shape of an export, so it is its own change).
 
@@ -355,11 +500,11 @@ names none the build carries stops it before it listens; the migrations (`MIGRAT
 the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert.
 (c) *Routes, jobs and commands* (**built**): a module's manifest lists its route templates and its jobs; a path of a module that
 is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one that acts for its
-users (chat's missed-mail letter) exits `0` with a line saying so and is left out of the status report — its sweeps and the retention purge still run, the rows being there — and `GET /api/client` lists the modules the server runs.
+users (chat's missed-mail letter) exits `0` with a line saying so and is left out of the status report — its sweeps and the retention purge still run, the rows being there — and `GET /api/me` lists the modules the server runs (the public `GET /api/client` does not, PR #963).
 A scan holds every route the application registers to the core's list or a module's. (d) The web building its routes
-from the listed modules (step 11); (e) *the cluster check* (**built**): where nodes share Redis each keeps its set in one
+from the modules `GET /api/me` lists (step 11, **built**); (e) *the cluster check* (**built**): where nodes share Redis each keeps its set in one
 shared record, renewed and lapsing by itself, and a node that finds another set logs it once and again when the nodes agree;
-it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI.
+it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI (the cells of §8 are built; the whole suite per cell is not).
 
 **Step 11 in detail — chat's screens as a chunk (built; measured 2026-11-03).** The seven screens (channel, inbox,
 questions, search, saved, drafts, unreads) and what only they reach — the composer, the feed, messages and threads —
@@ -436,5 +581,58 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
   `migrate-on-start.integration.test.ts`.
 - **Latency.** No hot path: it is not on the chat's send path, and a list of the workspace's issues is one indexed read.
 - **What a user sees for each partner that is absent.** There are no partners.
-- **Removal threshold.** Removed if no workspace of the dogfood team keeps an open issue in it for a quarter; its
-  table stays until an operator drops it (D-250 rule 5).
+- **Removal threshold.** Decided by the owner at each release, against the measured use. A measurable rule is needed
+  before a package is sold (§10, *Before a package is sold*); there is none yet. Its table stays until an operator drops
+  it (D-250 rule 5).
+
+## 12. Glossary
+
+The terms of this file and of the code that carries it, as they are **now**. A line says where the word lives. Not a
+table, so that §11's listing test reads only the modules.
+
+- **Core** — what knows no module by name: identity, workspaces and tenancy, permissions, audit, the domain bus,
+  attachments, the registry, the erasure and export catalogues. `modules/` and `platform/`.
+- **Module** — a unit of product with a manifest, a migration set of its own, data hooks and a web chunk (§1).
+- **Manifest** — what a module says of itself to the registry: `id`, `requires`, `optional`, `provides`, `routes`,
+  `frames`, `events`, `jobs` (`platform/module-kit/manifest.ts`, §2). It is not a trust boundary.
+- **`BundledModule`** — a manifest plus what the module contributes to the places the core leaves open: the slots in
+  `composition.ts` (`userErased`, `workspacePurge`, `export`, `personalExport`, `workspaceCreated`, `workspaceChannels`,
+  `readAttachment`, `pushNotices`, `collatedColumns`, `dataInCore`).
+- **Bundled** — carried by this build: in `bundledModules`. A bundled module has a row in §11, a set in
+  `PRODUCT_MIGRATION_SETS` and routes the application registers, whether or not a process runs it.
+- **Run** — named by this process's `MODULES`. What a process *acts* with is the modules it runs; what it keeps whole is
+  more (see *holding*).
+- **Composition** — what the core's open places become for the modules a process runs (`compose` in `composition.ts`):
+  the hook lists, the purge, the catalogues, the migration sets and the four `closed` questions. `compositionFor(setting)`
+  is the one `MODULES` makes; with no module it is the core alone.
+- **Closed** — a path nobody has. For a module bundled and not run: a **closed route** is a path of its manifest's
+  `routes`, answered as an unknown path (`closed()`); a **closed job** is one of its `jobs`, which exits `0` with a line
+  (`closedJob`); a **closed frame** is a client operation of its `frames`, answered as one nobody has (`closedFrame`); a
+  **closed event** is a server event of its `events`, which a socket of this process is not sent, from its own services
+  or another node's (`closedEvent`). A path no module claims is not closed, it is the core's.
+- **Cell** — one combination the tests build: a database state (core alone, chat's set, issues' set, every set) against a
+  process (no module, each alone, both). §8.
+- **Migration set** — a module's ordered migrations in `packages/db/migrations/<id>/`, recorded as `<id>/<file>`; the
+  core's own are the legacy rows (D-250 decided a). Validated per set by the migrator (D-86).
+- **Table owner** — the core or one module, for every table, in `TABLE_OWNERS`; a foreign key across owners fails a test.
+- **`dataInCore`** — a flag of `BundledModule` meaning that what the module contributes to the lifecycle of its data is
+  held by every process's composition, whether or not it runs. Named for chat, whose tables the core's migrations made;
+  issues has the same flag with a table of its own set. **The compose-simplification work may remove this flag**
+  (holding every module whose rows may exist); until it merges, this is what the code does.
+- **Holding** — the modules whose contributions a composition keeps: those it runs plus every bundled module with
+  `dataInCore` (the local `holding` of `compose`). Erasure, purge, exports, retention and the columns readiness checks
+  read from it; the workspace's first hook and the routes do not, since they *act*.
+- **`ownSet`** — on an export contribution: the tables its module's own set makes. An export asks `tableExists` for each
+  and skips a contribution whose table is absent, so a database that never applied the set is no failure and its export
+  says nothing of it.
+- **`tableExists`** — `@purlay/db`: whether the database has a table, asked at the moment it is needed and never
+  remembered, because another node may apply the set while this one runs. The one primitive a hook uses to be held where
+  the set is applied and silent where it is not (D-255 §3).
+- **Tombstone** — a purged workspace's row, kept so that the cascade of its keys never fires; why a module's purge names
+  its tables itself.
+- **Hint and fact** — an event is a hint (a UI nudge, fine to lose) or a fact (written as a row in the same transaction
+  and drained by a sweeper), §4.
+- **Capability** — a name a module provides and another asks for (`capabilities.has`), fixed after `register`.
+- **Said, never acted on** — how a node reports a cluster whose members run different sets: one log line, nothing else
+  (D-255 §1).
+

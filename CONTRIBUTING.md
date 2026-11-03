@@ -144,6 +144,10 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 - **Errors:** one `AppError` with a stable machine-readable `code`. A caught error is handled
   or re-thrown. Logging it and continuing is prohibited — that is how silent failures are born.
 - **Never logged:** the list is `ARCHITECTURE.md` §10's, and lives there. Repeating it here is how one copy loses an entry.
+- **A new feature that is a product unit is a module, not a folder.** A module has a manifest, a migration set of its own,
+  data hooks, a lazy web chunk and cells in the module tests, and the steps are a checklist: `docs/MODULES.md` §9
+  (the next D-number; the manifest; the set, its owner and its hooks; the routes and their cross-tenant
+  classification; `bundledModules` and the §11 row; the web gating; the cells and mutations; the release).
 - **Services publish to the `EventBus`; they never touch a socket.** The socket hub subscribes;
   it never touches the database.
 

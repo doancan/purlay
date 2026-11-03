@@ -1,5 +1,5 @@
 /**
- * A fenced block of code (`UX.md` §8.2): the language, how long it is, a way to copy
+ * A fenced block of code (`UX.md` §3, the message row): the language, how long it is, a way to copy
  * exactly what was written, and — above twelve lines — a clamp with a control to open it.
  *
  * **What is copied is the raw text**, not what is drawn: the tokens are only colour, and a

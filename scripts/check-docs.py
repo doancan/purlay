@@ -250,6 +250,81 @@ for _a, _b in zip(_order, _order[1:]):
     if _b < _a:
         problems['decisions are out of order'].append(f"D-{_b} comes after D-{_a}")
 
+# ---- retired claims: sentences that were true once and are not now ----------
+# A document that keeps saying what the code stopped doing is the defect the module review found five of (D-255):
+# the cluster that "refuses to serve", a public handshake that "lists" modules, hooks "held only while it runs".
+# Each pattern is a sentence somebody wrote and the code contradicted; the check keeps it from coming back. A decision
+# is a dated record, so the sentences D-250 and D-254 decided are left standing there with a note that amends them
+# (D-255), and `DECISIONS.md` is exempt from the patterns that quote them. The changelog is history and is exempt from all.
+RETIRED_CLAIMS = [
+    (r'refuses to serve', {'docs/DECISIONS.md'},
+     'a node with another module set is told, never stopped (D-255 §1)'),
+    (r'share no (?:bus )?channel', {'docs/DECISIONS.md'},
+     'nodes of different sets share the one bus channel (D-255 §1)'),
+    (r'held only while it runs', set(),
+     'a module'"'"'s data hooks are held whether or not it runs (D-254 §4)'),
+    (r'`GET /api/client` lists?\b', {'docs/DECISIONS.md'},
+     'the public handshake names no module; `GET /api/me` lists them (D-255 §5)'),
+    (r'`MODULES\.md` §9 steps', set(),
+     'the steps are in `MODULES.md` §10; §9 is the checklist'),
+    (r'never mounted', set(),
+     'a module that is not run has its routes registered and closed by path (D-255 §2)'),
+    (r'\bfirst 77 files\b', {'docs/DECISIONS.md'},
+     'it is the 77 files that existed when this was decided'),
+]
+for _f, _body in docs.items():
+    if is_changelog(_f):
+        continue
+    for _pattern, _exempt, _why in RETIRED_CLAIMS:
+        if _f in _exempt:
+            continue
+        for _m in re.finditer(_pattern, _body):
+            _line = _body.count('\n', 0, _m.start()) + 1
+            problems['a retired claim is back'].append(f"{_f}:{_line}: {_m.group(0)!r} — {_why}")
+
+# ---- citations in source code resolve too ------------------------------------
+# A comment that cites `MODULES.md §11` or D-254 is a pointer a reader follows. The documents' own references are
+# checked above; the ones in source were not, and a renumbering left them pointing at nothing or at another thing.
+_SOURCE_SUFFIXES = {'.ts', '.tsx', '.mjs'}
+_SOURCE_SKIP = {'.git', 'node_modules', '.tsbuild', 'dist', 'coverage'} | PERSONAL
+_source_cite = re.compile(r'`?([A-Za-z]+\.md)`?\s+§+\s*(\d+(?:\.\d+)?)')
+_sources = 0
+for _p in sorted(pathlib.Path('.').rglob('*')):
+    if _p.suffix not in _SOURCE_SUFFIXES or _SOURCE_SKIP & set(_p.parts) or not _p.is_file():
+        continue
+    try:
+        _text = _p.read_text()
+    except UnicodeDecodeError:
+        continue
+    _sources += 1
+    for _doc, _sec in _source_cite.findall(_text):
+        _target = alias.get(_doc)
+        if _target and _sec not in TITLES[_target]:
+            problems['source cites a section that does not exist'].append(f"{_p.as_posix()} -> {_doc} §{_sec}")
+    for _n in sorted({int(m) for m in re.findall(r'\bD-(\d+)\b', _text)}):
+        if _n not in defined['D']:
+            problems['source cites a decision that does not exist'].append(f"{_p.as_posix()}: D-{_n}")
+# A scan that read nothing found nothing for the wrong reason (CONTRIBUTING §6.4).
+if _sources < 100:
+    problems['the source citation scan read almost nothing'].append(f"{_sources} files")
+
+# ---- every module the build carries is named where an operator and a reader look ---
+# `module-listing.test.ts` holds MODULES.md §11 to the manifests; ARCHITECTURE.md's folder tree and CONFIG.md's `MODULES`
+# row are the other two places a module is listed, and a module added to `bundledModules` without them is a document
+# that does not know it exists.
+_composition = pathlib.Path('apps/api/src/composition.ts').read_text()
+_bundle = re.search(r'bundledModules: readonly BundledModule\[\] = \[([^\]]*)\]', _composition)
+_bundled_ids = [re.sub(r'(?<!^)(?=[A-Z])', '-', n.strip()[:-len('Module')]).lower()
+                for n in (_bundle.group(1).split(',') if _bundle else []) if n.strip().endswith('Module')]
+if not _bundled_ids:
+    problems['the bundled modules could not be read from composition.ts'].append('bundledModules')
+_config_row = next((l for l in docs['docs/CONFIG.md'].split('\n') if l.startswith('| `MODULES` |')), '')
+for _id in _bundled_ids:
+    if not re.search(rf'[├└]── {re.escape(_id)}/', docs['docs/ARCHITECTURE.md']):
+        problems['a bundled module is missing from ARCHITECTURE.md'].append(f"{_id}: no `{_id}/` in the features tree")
+    if f'`{_id}`' not in _config_row:
+        problems['a bundled module is missing from CONFIG.md'].append(f"{_id}: not named in the `MODULES` row")
+
 print(f"decisions D-1..D-{max(defined['D'])} · invariants I-1..I-{max(defined['I'])} · open questions O-1..O-{max(defined['O'])}")
 print(f"migrations {mig[0]}..{mig[-1]}")
 print(f"{len(resolved)} cross-document references resolved\n")
