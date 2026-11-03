@@ -91,7 +91,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
   const isChatRoute = match.name !== 'notFound' && moduleOf(match.name) === 'chat';
   // Asked for in the first commit, beside the request for the session, so the chunk is not a second wait.
   useEffect(() => {
-    if (isChatRoute) preloadChat().catch(() => undefined);
+    if (isChatRoute) preloadChat();
   }, [isChatRoute]);
   switch (match.name) {
     case 'signIn':

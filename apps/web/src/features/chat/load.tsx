@@ -12,25 +12,41 @@ import { lazy, Suspense } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ScreenBar } from '../shell/screen-bar';
-import type * as Screens from './chat';
 
-let loading: Promise<typeof Screens> | null = null;
-
-export const preloadChat = (): Promise<typeof Screens> => {
-  loading ??= import('./chat').catch((error: unknown) => {
-    loading = null;
-    throw error;
-  });
-  return loading;
+/**
+ * One request for a chunk, shared by everybody who asks and forgotten when it fails, so the next ask tries again.
+ * `warm` asks without anybody waiting: a failure there is the doors' to meet when a screen is drawn.
+ */
+export const chunkOf = <T,>(
+  load: () => Promise<T>,
+): { readonly get: () => Promise<T>; readonly warm: () => void } => {
+  let loading: Promise<T> | null = null;
+  const get = (): Promise<T> => {
+    loading ??= load().catch((error: unknown) => {
+      loading = null;
+      throw error;
+    });
+    return loading;
+  };
+  return {
+    get,
+    warm: (): void => {
+      get().catch(() => undefined);
+    },
+  };
 };
 
-const Channel = lazy(async () => ({ default: (await preloadChat()).ChannelScreen }));
-const Drafts = lazy(async () => ({ default: (await preloadChat()).DraftsScreen }));
-const Inbox = lazy(async () => ({ default: (await preloadChat()).InboxScreen }));
-const Questions = lazy(async () => ({ default: (await preloadChat()).QuestionsScreen }));
-const Saved = lazy(async () => ({ default: (await preloadChat()).SavedScreen }));
-const Search = lazy(async () => ({ default: (await preloadChat()).SearchScreen }));
-const Unreads = lazy(async () => ({ default: (await preloadChat()).UnreadsScreen }));
+const chat = chunkOf(() => import('./chat'));
+export const preloadChat = chat.warm;
+export const chatScreens = chat.get;
+
+const Channel = lazy(async () => ({ default: (await chatScreens()).ChannelScreen }));
+const Drafts = lazy(async () => ({ default: (await chatScreens()).DraftsScreen }));
+const Inbox = lazy(async () => ({ default: (await chatScreens()).InboxScreen }));
+const Questions = lazy(async () => ({ default: (await chatScreens()).QuestionsScreen }));
+const Saved = lazy(async () => ({ default: (await chatScreens()).SavedScreen }));
+const Search = lazy(async () => ({ default: (await chatScreens()).SearchScreen }));
+const Unreads = lazy(async () => ({ default: (await chatScreens()).UnreadsScreen }));
 
 /**
  * What stands in for a chat screen while its chunk loads: the shell's bar, which holds the navigation toggle on a
