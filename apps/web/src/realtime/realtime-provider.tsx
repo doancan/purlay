@@ -178,14 +178,18 @@ export const usePending = (): readonly PendingMessage[] =>
   useStore(useEngine().store, (state) => state.pending);
 
 /**
- * Whether this person is online, as far as this client has heard (D-136): undefined when nothing has
- * been heard — drawn as nothing, never as offline. The person themselves is online while connected.
+ * How this person is, as far as this client has heard (D-136, D-257): `'active'` or `'away'` when
+ * online, undefined when offline or nothing has been heard — drawn as nothing, never as offline.
+ * The person themselves is what the server last said of them (the snapshot lists them too); before
+ * that is heard (or when it says offline), active while connected.
  */
-export const useOnline = (userId: string, meId: string): boolean | undefined => {
+export const usePresence = (userId: string, meId: string): 'active' | 'away' | undefined => {
   const engine = useEngine();
-  const heard = useStore(engine.store, (state) => state.presence[userId]?.online);
+  const heard = useStore(engine.store, (state) => state.presence[userId]);
   const connected = useStore(engine.store, (state) => state.status === 'open');
-  return userId === meId ? connected : heard;
+  if (heard?.online === true) return heard.away ? 'away' : 'active';
+  // Connected is online, whatever a snapshot read before the socket opened said of them.
+  return userId === meId && connected ? 'active' : undefined;
 };
 
 /** What a workspace's presence was last read for: a grace after each reconnect, it rises. */

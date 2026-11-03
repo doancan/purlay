@@ -1313,6 +1313,8 @@ export const en = {
 
   'presence.online': 'online',
   'presence.onlineNow': 'Online now',
+  'presence.away': 'away',
+  'presence.awayNow': 'Away',
   'diff.added': 'added',
   'diff.removed': 'removed',
   'diff.oldLine': 'Old line',

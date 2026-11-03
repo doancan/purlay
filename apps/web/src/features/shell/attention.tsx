@@ -3,7 +3,7 @@
  * — what they are looking at already says it.
  *
  * Only while the document is visible and focused, on the person's own input — a key, a pointer, a
- * touch — and as the page comes to the front; the engine rations it to one word a minute. A tab left
+ * touch, a moving pointer, the wheel (D-257) — and as the page comes to the front; the engine rations it to one word a minute. A tab left
  * open on a desk says nothing, so the phone in their pocket still buzzes.
  */
 import { useEffect } from 'react';
@@ -11,7 +11,7 @@ import { useEngine } from '../../realtime/realtime-provider';
 import { useWorkspace } from './workspace';
 
 /** What counts as the person being here: their own hand on it. */
-const INPUT = ['keydown', 'pointerdown', 'touchstart'] as const;
+const INPUT = ['keydown', 'pointerdown', 'touchstart', 'pointermove', 'wheel'] as const;
 
 export const AttentionReporter = (): null => {
   const engine = useEngine();

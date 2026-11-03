@@ -1306,6 +1306,8 @@ export const tr = {
 
   'presence.online': 'çevrimiçi',
   'presence.onlineNow': 'Şu an çevrimiçi',
+  'presence.away': 'uzakta',
+  'presence.awayNow': 'Uzakta',
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',
   'diff.oldLine': 'Eski satır',

@@ -11,7 +11,7 @@ import { PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { useSidePanel } from '../channel/side-panel';
 import { useLocalTime, useMember } from './local-time';
-import { useOnline } from '../../realtime/realtime-provider';
+import { usePresence } from '../../realtime/realtime-provider';
 import { useSession } from '../session/session';
 
 export const PROFILE_PANEL_ID = 'conversation-profile';
@@ -20,7 +20,7 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
   const { t } = useI18n();
   const { member, members } = useMember(person.id);
   const { user: me } = useSession();
-  const online = useOnline(person.id, me.id);
+  const presence = usePresence(person.id, me.id);
   const focus = usePanelFocus(
     members.isFetching,
     Math.max(members.dataUpdatedAt, members.errorUpdatedAt),
@@ -49,13 +49,17 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
           name={nameOf(person, t('user.erased'))}
           username={person.username}
           size="lg"
-          online={online}
+          presence={presence}
         />
         <div className="flex flex-col gap-1">
           <p className="text-title font-semibold text-ink">{nameOf(person, t('user.erased'))}</p>
           <p className="font-mono text-label text-ink-muted">{`@${person.username}`}</p>
-          {/* Said in words, beside the dot: never a colour alone (D-136). */}
-          {online === true && <p className="text-label text-ink">{t('presence.onlineNow')}</p>}
+          {/* Said in words, beside the dot or ring: never a colour alone (D-136). */}
+          {presence !== undefined && (
+            <p className="text-label text-ink">
+              {t(presence === 'away' ? 'presence.awayNow' : 'presence.onlineNow')}
+            </p>
+          )}
         </div>
         {members.isPending ? (
           <LoadingStatus label={t('profile.loading')} className="flex w-full flex-col gap-2">

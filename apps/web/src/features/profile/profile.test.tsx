@@ -120,7 +120,16 @@ describe('a conversation with one other person', () => {
     expect(within(panel).getByText('Online now')).toBeDefined();
     await expectNoAxeViolations(view.container);
     act(() => {
-      view.engine().applyPresence([{ userId: ALICE.id, online: false, away: false, version: 2 }]);
+      view.engine().applyPresence([{ userId: ALICE.id, online: true, away: true, version: 3 }]);
+    });
+    expect(dot()).toBeNull();
+    expect(header?.querySelector('[data-away]')).not.toBeNull();
+    expect(header?.textContent).toContain('away');
+    expect(panel.querySelector('[data-away]')).not.toBeNull();
+    expect(within(panel).getByText('Away')).toBeDefined();
+    expect(within(panel).queryByText('Online now')).toBeNull();
+    act(() => {
+      view.engine().applyPresence([{ userId: ALICE.id, online: false, away: false, version: 4 }]);
     });
     expect(dot()).toBeNull();
     expect(within(panel).queryByText('Online now')).toBeNull();

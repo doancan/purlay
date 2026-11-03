@@ -24,7 +24,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { VisuallyHidden } from '../../ui/visually-hidden';
-import { useOnline } from '../../realtime/realtime-provider';
+import { usePresence } from '../../realtime/realtime-provider';
 import type { User } from '@purlay/types';
 import { Button } from '../../ui/button';
 import { useToast } from '../../ui/toast';
@@ -49,11 +49,11 @@ const PersonAvatar = ({
     size="sm"
     name={user.displayName}
     username={user.username}
-    online={useOnline(user.id, meId)}
+    presence={usePresence(user.id, meId)}
   />
 );
 
-/** What the dot says, said to a screen reader beside the name. */
+/** What the dot or the ring says, said to a screen reader beside the name. */
 const OnlineWords = ({
   userId,
   meId,
@@ -62,9 +62,10 @@ const OnlineWords = ({
   readonly meId: string;
 }): React.JSX.Element | null => {
   const { t } = useI18n();
-  return useOnline(userId, meId) === true ? (
-    <VisuallyHidden>{`, ${t('presence.online')}`}</VisuallyHidden>
-  ) : null;
+  const presence = usePresence(userId, meId);
+  return presence === undefined ? null : (
+    <VisuallyHidden>{`, ${t(presence === 'away' ? 'presence.away' : 'presence.online')}`}</VisuallyHidden>
+  );
 };
 
 export const PeopleList = (): React.JSX.Element | null => {
