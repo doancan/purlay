@@ -15,7 +15,7 @@ import { visibleChannelIds } from './channels/guard';
 import { tableExport, type ExportContribution, type Scope } from '../../modules/export/catalogue';
 
 /** What `prepare` decided: the channels the export covers, and whether chat's link to the files is there to be read. */
-interface Prepared {
+export interface Prepared {
   readonly channels: readonly string[];
   readonly filesLinked: boolean;
 }
@@ -309,10 +309,60 @@ const tables = [
   ),
 ] as const;
 
-/** The tables chat writes into an export. */
-export type ChatWritten = (typeof tables)[number]['name'];
+/** The tables of chat that are not in an export, and why. */
+type ChatExcluded =
+  | 'message_attachments'
+  | 'hidden_messages'
+  | 'message_reminders'
+  | 'scheduled_messages'
+  | 'scheduled_message_attachments'
+  | 'github_integrations'
+  | 'github_deliveries'
+  | 'incoming_webhooks'
+  | 'github_app_installations'
+  | 'github_user_authorizations'
+  | 'github_app_handshakes'
+  | 'github_app_deliveries'
+  | 'github_operations'
+  | 'notifications'
+  | 'missed_mail_letters'
+  | 'saved_messages'
+  | 'saved_searches'
+  | 'thread_follows'
+  | 'link_previews';
 
-export const chatExport: ExportContribution = {
+const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
+  message_attachments:
+    'which message a file was sent with: written beside the file’s own `message_id` and `channel_id`, which the export carries, until those move here and this table is what carries them',
+  hidden_messages: 'messages each person deleted for themselves alone: their own state',
+  message_reminders: 'each person’s private reminders: their own state',
+  scheduled_messages: 'each person’s private messages not yet sent: theirs until they are sent',
+  scheduled_message_attachments:
+    'which unsent scheduled message holds a file: a person’s private draft, as the draft is',
+  github_integrations: 'the sealed GitHub token: a credential never leaves',
+  github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
+  incoming_webhooks:
+    'a channel’s incoming webhooks: each the digest of the secret its address carries, a credential, never exported; what they posted is in `messages`, under the name each posted with (D-245)',
+  github_app_installations:
+    'which installation of the server’s GitHub App the workspace connected: a connection to a credential the server holds, as the token is (D-246)',
+  github_user_authorizations:
+    'a person’s sealed GitHub App tokens: credentials, the person’s own, never exported (D-246)',
+  github_app_handshakes:
+    'digests of the state of a trip to GitHub and back, and its sealed verifier, for ten minutes: credentials (D-246)',
+  github_app_deliveries:
+    'an idempotency log of the GitHub App’s deliveries, nobody’s record (D-246)',
+  github_operations:
+    'the bounded record of one attempt to make an issue — its request id, a digest of what was asked, never the words: an idempotency record, nobody’s (D-246 §4)',
+  notifications: 'each person’s inbox, their own state',
+  missed_mail_letters:
+    'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',
+  saved_messages: 'each person’s saved items, their own state',
+  saved_searches: 'each person’s named filters, their own state',
+  thread_follows: 'which threads each person follows or let go, their own state',
+  link_previews: 'a cache of other sites’ pages',
+};
+
+export const chatExport = {
   id: 'chat',
   prepare: async (executor, request): Promise<Prepared> => ({
     channels:
@@ -344,57 +394,5 @@ export const chatExport: ExportContribution = {
   // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
   files: (scope) => sql`id in (${filesOf(scope)})`,
   audit: (rows) => ({ messages: String(rows['messages'] ?? 0) }),
-};
-
-/** The tables of chat that are not in an export, and why. */
-export type ChatExcluded =
-  | 'message_attachments'
-  | 'hidden_messages'
-  | 'message_reminders'
-  | 'scheduled_messages'
-  | 'scheduled_message_attachments'
-  | 'github_integrations'
-  | 'github_deliveries'
-  | 'incoming_webhooks'
-  | 'github_app_installations'
-  | 'github_user_authorizations'
-  | 'github_app_handshakes'
-  | 'github_app_deliveries'
-  | 'github_operations'
-  | 'notifications'
-  | 'missed_mail_letters'
-  | 'saved_messages'
-  | 'saved_searches'
-  | 'thread_follows'
-  | 'link_previews';
-
-export const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
-  message_attachments:
-    'which message a file was sent with: written beside the file’s own `message_id` and `channel_id`, which the export carries, until those move here and this table is what carries them',
-  hidden_messages: 'messages each person deleted for themselves alone: their own state',
-  message_reminders: 'each person’s private reminders: their own state',
-  scheduled_messages: 'each person’s private messages not yet sent: theirs until they are sent',
-  scheduled_message_attachments:
-    'which unsent scheduled message holds a file: a person’s private draft, as the draft is',
-  github_integrations: 'the sealed GitHub token: a credential never leaves',
-  github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
-  incoming_webhooks:
-    'a channel’s incoming webhooks: each the digest of the secret its address carries, a credential, never exported; what they posted is in `messages`, under the name each posted with (D-245)',
-  github_app_installations:
-    'which installation of the server’s GitHub App the workspace connected: a connection to a credential the server holds, as the token is (D-246)',
-  github_user_authorizations:
-    'a person’s sealed GitHub App tokens: credentials, the person’s own, never exported (D-246)',
-  github_app_handshakes:
-    'digests of the state of a trip to GitHub and back, and its sealed verifier, for ten minutes: credentials (D-246)',
-  github_app_deliveries:
-    'an idempotency log of the GitHub App’s deliveries, nobody’s record (D-246)',
-  github_operations:
-    'the bounded record of one attempt to make an issue — its request id, a digest of what was asked, never the words: an idempotency record, nobody’s (D-246 §4)',
-  notifications: 'each person’s inbox, their own state',
-  missed_mail_letters:
-    'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',
-  saved_messages: 'each person’s saved items, their own state',
-  saved_searches: 'each person’s named filters, their own state',
-  thread_follows: 'which threads each person follows or let go, their own state',
-  link_previews: 'a cache of other sites’ pages',
-};
+  excluded: CHAT_EXCLUDED,
+} satisfies ExportContribution;

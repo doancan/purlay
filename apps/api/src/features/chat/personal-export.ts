@@ -203,21 +203,8 @@ const tables = [
   ),
 ] as const;
 
-/** The tables chat writes into a person's export. */
-export type ChatPersonalWritten = (typeof tables)[number]['name'];
-
-export const chatPersonalExport: PersonalContribution = {
-  id: 'chat',
-  tables,
-  workspaces: (userId) => [
-    sql`select workspace_id from channels where id in (${theirChannels(userId)})`,
-    sql`select workspace_id from saved_searches where user_id = ${userId}`,
-  ],
-  files: theirFiles,
-};
-
 /** The tables of chat that are not in a person's export, and why. */
-export type ChatPersonalExcluded =
+type ChatPersonalExcluded =
   | 'message_attachments'
   | 'hidden_messages'
   | 'message_reminders'
@@ -243,7 +230,7 @@ export type ChatPersonalExcluded =
   | 'link_previews'
   | 'missed_mail_letters';
 
-export const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
+const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
   message_attachments:
     'which message a file was sent with: the file’s own `message_id` and `channel_id` carry it, until they move here',
   hidden_messages: 'markers of messages deleted for this person only: other people’s words, hidden',
@@ -278,3 +265,14 @@ export const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, strin
   missed_mail_letters:
     'when each letter about what they missed went, and its stop link’s digest: a credential (D-240)',
 };
+
+export const chatPersonalExport = {
+  id: 'chat',
+  tables,
+  workspaces: (userId) => [
+    sql`select workspace_id from channels where id in (${theirChannels(userId)})`,
+    sql`select workspace_id from saved_searches where user_id = ${userId}`,
+  ],
+  files: theirFiles,
+  excluded: CHAT_PERSONAL_EXCLUDED,
+} satisfies PersonalContribution;

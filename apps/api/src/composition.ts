@@ -82,7 +82,10 @@ const anyReader =
   };
 
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
-export const bundledModules: readonly BundledModule[] = [chatModule, issuesModule];
+export const bundledModules = [
+  chatModule,
+  issuesModule,
+] as const satisfies readonly BundledModule[];
 
 /** The modules of this build, checked: a malformed id, a repeat or a missing partner stops the build's own tests. */
 export const registry = moduleRegistry(bundledModules.map((module) => module.manifest));

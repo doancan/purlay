@@ -95,6 +95,11 @@ export interface ExportContribution {
    * there nothing is read from it and its people are not asked for: there is nothing to export (`MODULES.md` §5).
    */
   readonly ownSet?: readonly (keyof Database)[];
+  /**
+   * The tables of the module that no export of it writes, each with why: `export-catalogue.ts` holds `tables` and this to
+   * the schema, so a table nobody decided is a compile error that names it.
+   */
+  readonly excluded?: Readonly<Record<string, string>>;
   /** Each a `select <person's id> from …` over what the scope covers: the people its rows name. */
   readonly people: (scope: Scope) => readonly RawBuilder<unknown>[];
   /** Decides what it covers of the workspace, before the snapshot is taken. */

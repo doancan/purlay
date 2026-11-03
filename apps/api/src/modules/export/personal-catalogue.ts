@@ -68,6 +68,8 @@ export interface PersonalContribution {
   readonly tables: readonly PersonalTableExport[];
   /** The tables its own migration set makes, absent from a database migrated without the set: not read, and its workspaces not asked for. */
   readonly ownSet?: readonly (keyof Database)[];
+  /** The tables of the module that no export of a person writes, each with why (see `ExportContribution.excluded`). */
+  readonly excluded?: Readonly<Record<string, string>>;
   /** Each a `select <workspace's id> from …` over the person's rows: the workspaces they name. */
   readonly workspaces: (userId: string) => readonly RawBuilder<unknown>[];
   /** A bound on `attachments` selecting the files the person sent, whose bytes the export copies. */

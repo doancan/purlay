@@ -12972,6 +12972,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'export-excluded-of-modules-not-read',
+    why: 'the tables the modules leave out of an export are not read off the build’s modules, so the check that every table of the database is decided fails for them, or a new module’s are never counted (D-250)',
+    file: 'apps/api/src/export-catalogue.ts',
+    find: '  ...Object.fromEntries(carried.flatMap((module) => Object.entries(module.export?.excluded ?? {}))),\n',
+    replace: '',
+    tests: ['apps/api/src/modules/export/export.integration.test.ts'],
+  },
+  {
+    id: 'personal-export-excluded-of-modules-not-read',
+    why: 'the tables the modules leave out of a person’s export are not read off the build’s modules, so the check that every table is decided fails for them (D-250)',
+    file: 'apps/api/src/export-catalogue.ts',
+    find: '    carried.flatMap((module) => Object.entries(module.personalExport?.excluded ?? {})),\n',
+    replace: '    [],\n',
+    tests: ['apps/api/src/modules/export/personal.integration.test.ts'],
+  },
+  {
     id: 'absent-tables-never-found',
     why: 'the question of which tables a database lacks answers none, so the exports read, and the purge empties, a module’s tables that are not there (D-250, MODULES.md §5)',
     file: 'packages/db/src/table-exists.ts',

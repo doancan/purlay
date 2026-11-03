@@ -29,12 +29,9 @@ const tables = [
   ),
 ] as const;
 
-/** The tables issues writes into a person's export. */
-export type IssuesPersonalWritten = (typeof tables)[number]['name'];
-
-export const issuesPersonalExport: PersonalContribution = {
+export const issuesPersonalExport = {
   id: 'issues',
   tables,
   ownSet: ['issues'],
   workspaces: (userId) => [workspacesOwnedBy('issues', 'created_by', userId)],
-};
+} satisfies PersonalContribution;

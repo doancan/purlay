@@ -28,10 +28,7 @@ const tables = [
   ),
 ] as const;
 
-/** The tables issues writes into an export. */
-export type IssuesWritten = (typeof tables)[number]['name'];
-
-export const issuesExport: ExportContribution = {
+export const issuesExport = {
   id: 'issues',
   tables,
   ownSet: ['issues'],
@@ -40,4 +37,4 @@ export const issuesExport: ExportContribution = {
     namedInWorkspace('issues', 'assignee_id', scope),
   ],
   audit: (rows) => ({ issues: String(rows['issues'] ?? 0) }),
-};
+} satisfies ExportContribution;

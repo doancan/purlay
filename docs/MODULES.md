@@ -459,7 +459,9 @@ request with behaviour unchanged:
    its files, and its words on the trail — and assembles the core's (`core-export.ts`) and each module's
    (`features/chat/export.ts`) in the order the files have always been written: the core's first three tables,
    the modules', the core's last two. The composition root (`export-catalogue.ts`) holds the sum to the schema at
-   compile time, naming a table nobody decided, and the integration test holds it to the database. A frozen
+   compile time, naming a table nobody decided, and the integration test holds it to the database. The modules' side is read
+   off `bundledModules` itself — the names of each contribution's `tables` and the keys of its `excluded` — so a third module is held to
+   the schema, for both exports, without `export-catalogue.ts` being edited. A frozen
    shape of the files, rows and columns — the safety net, written first — passed unchanged through the move.
    `attachments` is still described by chat, which bounds it by messages, until the link is chat's (step 8)
 4. **The personal export** (**built**) the same way: `modules/export/personal-catalogue.ts` defines its contribution and
