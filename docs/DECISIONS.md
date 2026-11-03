@@ -12276,8 +12276,25 @@ record and says no more.
    runs every step in every state of the database (core alone, chat's set, issues' set, every set) against every
    process (no module, each alone, both). A process that *runs* issues on a database without its set is not a cell:
    readiness refuses it.
-5. **An erased account** leaves its issues as it leaves its messages, under the anonymised row (D-139 §5), and is taken
-   off any it was assigned.
+5. **An erased account** leaves its issues as it leaves its messages: the **text stays**, attributed to the anonymised
+   account (D-139 §5), because an issue is the workspace's record and not the person's — erasing it would take a team's
+   plan with its author — and the person's own data in it is only the id the anonymised row already is. **That is a
+   recorded decision, not an oversight**: a person who wants their words gone asks the operator for content erasure, which
+   does not reach issues today (it is about messages), so an issue's words are removed by deleting the issue. The account
+   is taken off any assignment.
+   - **What a title and a body may hold.** A title is one line and uses the `name` format — no newline, control character
+     or bidirectional override (`gpj<RLO>exe` would read as another word), something visible — and a body the
+     `plain-text` format, lines allowed, no NUL: the database cannot store one, and the answer is a `400` naming the
+     field, as chat's names and topics are.
+   - **What is on the trail.** Making, finishing or opening again, giving or taking back, and deleting are written to
+     the audit log in the same transaction (`issue.created`, `issue.status_changed`, `issue.assigned`, `issue.deleted`),
+     by id and by the two values of a change, never the words (D-222); a rewrite of the words is not an entry, since the
+     trail says who did what to whom and not what they wrote.
+   - **How many.** A workspace holds at most 10 000 issues (`ISSUES_PER_WORKSPACE_MAX`); the one after is
+     `409 ISSUES_LIMIT`. **A count, not bytes**: an issue is already bounded by its own limits, so a count bounds the
+     table's share of a workspace with one comparison, made under the workspace's row locked so that two makes at the
+     cap cannot both pass, where byte accounting would be a column every write keeps in step and a second number to
+     explain, for a record nobody keeps ten thousand of on purpose.
 6. **Routes** are `/api/workspaces/:workspaceId/issues` and `/…/issues/:issueId`, in the manifest, so a process that
    does not run the module answers the plain `404` of any unknown path (D-250 rule 3). `GET /api/me` and
    `GET /api/client` list `issues` where it runs.

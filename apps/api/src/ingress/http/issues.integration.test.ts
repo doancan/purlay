@@ -4,8 +4,15 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { ISSUE_BODY_MAX, ISSUE_TITLE_MAX, Issue, IssuePage, type UserRole } from '@purlay/types';
+import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import {
+  ISSUES_PER_WORKSPACE_MAX,
+  ISSUE_BODY_MAX,
+  ISSUE_TITLE_MAX,
+  Issue,
+  IssuePage,
+  type UserRole,
+} from '@purlay/types';
 import { composition } from '../../composition';
 import { fixedClock } from '../../platform/clock';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -400,6 +407,224 @@ describe('integration: issues over HTTP', () => {
       await db.updateTable('issues').set({ created_by: null }).where('id', '=', id).execute();
       expect(code(await call('DELETE', `${w.path}/${id}`, person(w, 'other')))).toBe('FORBIDDEN');
       expect((await call('DELETE', `${w.path}/${id}`, person(w, 'admin'))).status).toBe(204);
+    });
+  });
+});
+
+describe('integration: a session that has ended writes nothing', () => {
+  test('make, change and delete are refused with 401 when the session is no longer live where the write is made, and leave the issue as it was (D-85)', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { bob: 'member' });
+      const bob = person(w, 'bob');
+      const made = (await call('POST', w.path, bob, { title: 'Alive' })).body as Issue;
+      // The request is read as signed in, and by the time the transaction looks the session is past its end: the
+      // transaction's clock is a month beyond it (a revocation in that gap is the same row, gone).
+      const later = createApp(
+        testDependencies({
+          database: db,
+          clock: fixedClock(new Date(NOW.getTime() + 400 * 24 * 3_600_000)),
+          composition,
+        }),
+      );
+      for (const [method, path, body] of [
+        ['POST', w.path, { title: 'Late' }],
+        ['PATCH', `${w.path}/${made.id}`, { status: 'done' }],
+        ['DELETE', `${w.path}/${made.id}`, undefined],
+      ] as const) {
+        const response = await later.handle(
+          new Request(`${ORIGIN}${path}`, {
+            method,
+            headers: {
+              cookie: bob.cookie,
+              ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+            },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          }),
+        );
+        expect({ method, status: response.status }).toEqual({ method, status: 401 });
+      }
+      const rows = await db
+        .selectFrom('issues')
+        .select(['title', 'status'])
+        .where('workspace_id', '=', w.id)
+        .execute();
+      expect(rows).toEqual([{ title: 'Alive', status: 'open' }]);
+    });
+  });
+});
+
+describe('integration: who an issue may be given to', () => {
+  test('an erased account is refused as an assignee like a stranger, on make and on change', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { ada: 'owner', gone: 'member' });
+      const [ada, gone] = [person(w, 'ada'), person(w, 'gone')];
+      const made = (await call('POST', w.path, ada, { title: 'Open' })).body as Issue;
+      await db
+        .updateTable('users')
+        .set({ deleted_at: NOW })
+        .where('id', '=', gone.userId)
+        .execute();
+      const refused = [
+        await call('POST', w.path, ada, { title: 'x', assigneeId: gone.userId }),
+        await call('PATCH', `${w.path}/${made.id}`, ada, { assigneeId: gone.userId }),
+      ];
+      for (const answer of refused) {
+        expect({ status: answer.status, code: code(answer) }).toEqual({
+          status: 400,
+          code: 'VALIDATION_FAILED',
+        });
+        expect(JSON.stringify(answer.body)).toContain('assigneeId');
+      }
+    });
+  });
+});
+
+describe('integration: what a title and a body may hold', () => {
+  test('a NUL, which the database cannot store, is a 400 naming the field, on make and on change, and writes nothing', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { ada: 'owner' });
+      const ada = person(w, 'ada');
+      const made = (await call('POST', w.path, ada, { title: 'Keep' })).body as Issue;
+      for (const [field, body] of [
+        ['title', { title: 'a\u0000b' }],
+        ['body', { title: 't', body: 'a\u0000b' }],
+      ] as const) {
+        const answer = await call('POST', w.path, ada, body);
+        expect({ field, status: answer.status, code: code(answer) }).toEqual({
+          field,
+          status: 400,
+          code: 'VALIDATION_FAILED',
+        });
+        expect(JSON.stringify(answer.body)).toContain(field);
+        const changed = await call('PATCH', `${w.path}/${made.id}`, ada, { [field]: 'a\u0000b' });
+        expect({ field, status: changed.status, code: code(changed) }).toEqual({
+          field,
+          status: 400,
+          code: 'VALIDATION_FAILED',
+        });
+      }
+      const rows = await db
+        .selectFrom('issues')
+        .select('title')
+        .where('workspace_id', '=', w.id)
+        .execute();
+      expect(rows).toEqual([{ title: 'Keep' }]);
+    });
+  });
+
+  test('a title is one line without anything that reorders or hides: no newline, no bidi override, no control; a body may span lines', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { ada: 'owner' });
+      const ada = person(w, 'ada');
+      for (const title of [
+        'a\nb',
+        'a\r\nb',
+        'a\tb',
+        'gpj\u202Eexe',
+        'a\u2066b',
+        'a\u0085b',
+        'a\u2028b',
+      ]) {
+        const answer = await call('POST', w.path, ada, { title });
+        expect({ title, status: answer.status, code: code(answer) }).toEqual({
+          title,
+          status: 400,
+          code: 'VALIDATION_FAILED',
+        });
+      }
+      const fine = await call('POST', w.path, ada, {
+        title: 'Başlık — ünïcode',
+        body: 'one\n\ntwo\tthree',
+      });
+      expect(fine.status).toBe(201);
+      expect((fine.body as Issue).body).toBe('one\n\ntwo\tthree');
+    });
+  });
+});
+
+describe('integration: what issues leaves on the audit trail', () => {
+  test('making, finishing, giving and deleting are recorded by id, never by words; a rewrite of the words is not', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { ada: 'owner', bob: 'member' });
+      const [ada, bob] = [person(w, 'ada'), person(w, 'bob')];
+      const made = (
+        await call('POST', w.path, bob, { title: 'Secret plan', body: 'Secret details' })
+      ).body as Issue;
+      const path = `${w.path}/${made.id}`;
+      await call('PATCH', path, ada, { title: 'Rewritten secret', body: 'More secrets' });
+      await call('PATCH', path, ada, { status: 'done' });
+      await call('PATCH', path, ada, { status: 'done' });
+      await call('PATCH', path, ada, { assigneeId: bob.userId });
+      await call('PATCH', path, ada, { assigneeId: null });
+      await call('DELETE', path, bob);
+      // A refused change leaves nothing.
+      await call('PATCH', path, ada, { status: 'open' });
+      const trail = await db
+        .selectFrom('audit_log')
+        .select(['actor_user_id', 'action', 'target_type', 'target_id', 'metadata'])
+        .where('workspace_id', '=', w.id)
+        .orderBy('id')
+        .execute();
+      expect(trail.map((row) => [row.action, row.actor_user_id])).toEqual([
+        ['issue.created', bob.userId],
+        ['issue.status_changed', ada.userId],
+        ['issue.assigned', ada.userId],
+        ['issue.assigned', ada.userId],
+        ['issue.deleted', bob.userId],
+      ]);
+      expect(trail.every((row) => row.target_type === 'issue' && row.target_id === made.id)).toBe(
+        true,
+      );
+      expect(trail.map((row) => row.metadata)).toEqual([
+        {},
+        { from: 'open', to: 'done' },
+        { from: '', to: bob.userId },
+        { from: bob.userId, to: '' },
+        {},
+      ]);
+      expect(JSON.stringify(trail)).not.toMatch(/secret/i);
+    });
+  });
+});
+
+describe('integration: how many issues a workspace may hold', () => {
+  test('at the cap a new issue is refused with ISSUES_LIMIT, one deleted makes room, and another workspace is its own count', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { ada: 'owner' });
+      const other = await aWorkspace(db, { bob: 'owner' });
+      const ada = person(w, 'ada');
+      // Up to the cap in one statement, ids in the order they would have been made.
+      await sql`
+        insert into issues (id, workspace_id, title, created_by)
+        select ('0199155c-' || lpad(to_hex(n / 65536), 4, '0') || '-7b7f-8c11-' || lpad(to_hex(n % 65536), 12, '0'))::uuid,
+               ${w.id}, 'filler', ${ada.userId}
+        from generate_series(1, ${ISSUES_PER_WORKSPACE_MAX}) as n`.execute(db);
+      const refused = await call('POST', w.path, ada, { title: 'one too many' });
+      expect({ status: refused.status, code: code(refused) }).toEqual({
+        status: 409,
+        code: 'ISSUES_LIMIT',
+      });
+      // Changing and listing are not made worse by it.
+      expect(((await call('GET', `${w.path}?limit=1`, ada)).body as IssuePage).data).toHaveLength(
+        1,
+      );
+      expect((await call('POST', other.path, person(other, 'bob'), { title: 'mine' })).status).toBe(
+        201,
+      );
+      const gone = await db
+        .selectFrom('issues')
+        .select('id')
+        .where('workspace_id', '=', w.id)
+        .limit(1)
+        .executeTakeFirstOrThrow();
+      expect((await call('DELETE', `${w.path}/${gone.id}`, ada)).status).toBe(204);
+      expect((await call('POST', w.path, ada, { title: 'room again' })).status).toBe(201);
     });
   });
 });

@@ -73,6 +73,6 @@ export const removeIssue = async (
   await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
     const context = await requireWorkspaceMembership(transaction, userId, workspaceId);
-    await deleteIssue(transaction, context, issueId);
+    await deleteIssue(transaction, clock, context, issueId);
   });
 };

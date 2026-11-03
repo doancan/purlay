@@ -6,6 +6,14 @@ import { Type, type Static } from '@sinclair/typebox';
 import { PAGE_LIMIT } from './api';
 import { FromClient, Timestamp, Uuid } from './models';
 
+/**
+ * How many issues a workspace may hold. A count and not bytes: an issue is bounded by its own limits (a title and a body
+ * of a few kilobytes), so the count bounds the table's share of a workspace to tens of megabytes with one comparison
+ * under a lock the create already takes, where byte accounting would be a column kept in step by every write and a
+ * second number for the operator to reason about. Generous: nobody's list is this long on purpose (D-254).
+ */
+export const ISSUES_PER_WORKSPACE_MAX = 10_000;
+
 /** The longest title: one line, as a list shows it. */
 export const ISSUE_TITLE_MAX = 200;
 /** The longest body, in characters: markdown as long as a long message. */
@@ -46,8 +54,10 @@ export const IssueQuery = FromClient({
 });
 export type IssueQuery = Static<typeof IssueQuery>;
 
-const Title = Type.String({ minLength: 1, maxLength: ISSUE_TITLE_MAX });
-const Body = Type.String({ maxLength: ISSUE_BODY_MAX });
+/** One line a person can read as it is: what a name may be (no newline, control or bidi override, which spoof `gpj<RLO>exe`). */
+const Title = Type.String({ minLength: 1, maxLength: ISSUE_TITLE_MAX, format: 'name' });
+/** Text that may span lines, and that the database can store: no NUL, no lone surrogate. */
+const Body = Type.String({ maxLength: ISSUE_BODY_MAX, format: 'plain-text' });
 
 /** `POST /api/workspaces/:workspaceId/issues` — a new issue, open; the body defaults to empty, the assignee to nobody. */
 export const CreateIssueRequest = FromClient({

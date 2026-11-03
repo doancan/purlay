@@ -12,6 +12,7 @@
 import type { Executor, Transaction } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
+  ISSUES_PER_WORKSPACE_MAX,
   messageId as newId,
   type CreateIssueRequest,
   type Issue,
@@ -20,6 +21,7 @@ import {
   type UpdateIssueRequest,
   Uuid,
 } from '@purlay/types';
+import { recordAudit, type AuditEntry } from '../../modules/audit/audit';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { limitOf } from '../../platform/pagination';
@@ -73,12 +75,8 @@ const toIssue = (row: IssueRow): Issue => ({
   updatedAt: row.updated_at.toISOString(),
 });
 
-/** A title is one line as a list shows it: its edges are trimmed, and nothing but space is nothing. */
-const titleOf = (title: string): string => {
-  const trimmed = title.trim();
-  if (trimmed === '') throw invalid('title', 'Give the issue a title.');
-  return trimmed;
-};
+/** A title's edges are trimmed; the contract has already refused one with nothing visible in it (the `name` format). */
+const titleOf = (title: string): string => title.trim();
 
 const requireAssignable = async (
   transaction: Transaction,
@@ -98,6 +96,45 @@ const requireAssignable = async (
     throw invalid('assigneeId', 'Choose a current member of this workspace.');
 };
 
+/** What the trail says of an issue: who, what, which one, and for a change from what to what — never its words. */
+const audit = (
+  context: WorkspaceContext,
+  action: 'issue.created' | 'issue.status_changed' | 'issue.assigned' | 'issue.deleted',
+  issueId: string,
+  metadata: Readonly<Record<string, string>> = {},
+): AuditEntry => ({
+  workspaceId: context.workspaceId,
+  actorUserId: context.userId,
+  action,
+  targetType: 'issue',
+  targetId: issueId,
+  metadata,
+});
+
+/**
+ * Whether the workspace may hold one more, counted under the workspace's row locked so that two makes at the cap
+ * cannot both be the last. A count and not bytes: see `ISSUES_PER_WORKSPACE_MAX`.
+ */
+const requireRoom = async (transaction: Transaction, context: WorkspaceContext): Promise<void> => {
+  await transaction
+    .selectFrom('workspaces')
+    .select('id')
+    .where('id', '=', context.workspaceId)
+    .forNoKeyUpdate()
+    .executeTakeFirst();
+  const held = await transaction
+    .selectFrom('issues')
+    .select((builder) => builder.fn.countAll<string>().as('count'))
+    .where('workspace_id', '=', context.workspaceId)
+    .executeTakeFirstOrThrow();
+  if (Number(held.count) >= ISSUES_PER_WORKSPACE_MAX) {
+    throw new AppError({
+      code: 'ISSUES_LIMIT',
+      message: `A workspace holds at most ${String(ISSUES_PER_WORKSPACE_MAX)} issues; delete some first.`,
+    });
+  }
+};
+
 export const createIssue = async (
   transaction: Transaction,
   clock: Clock,
@@ -107,6 +144,7 @@ export const createIssue = async (
   const title = titleOf(input.title);
   const assigneeId = input.assigneeId ?? null;
   if (assigneeId !== null) await requireAssignable(transaction, context, assigneeId);
+  await requireRoom(transaction, context);
   const now = clock.now();
   const row = await transaction
     .insertInto('issues')
@@ -122,6 +160,7 @@ export const createIssue = async (
     })
     .returning(ISSUE_COLUMNS)
     .executeTakeFirstOrThrow();
+  await recordAudit(transaction, clock, audit(context, 'issue.created', row.id));
   return toIssue(row);
 };
 
@@ -165,14 +204,39 @@ export const updateIssue = async (
   if (input.assigneeId !== undefined && input.assigneeId !== null) {
     await requireAssignable(transaction, context, input.assigneeId);
   }
+  const before = await transaction
+    .selectFrom('issues')
+    .select(['status', 'assignee_id'])
+    .where('id', '=', issueId)
+    .where('workspace_id', '=', context.workspaceId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (before === undefined) throw issueNotFound();
   const row = await transaction
     .updateTable('issues')
     .set({ ...changes, updated_at: clock.now() })
+    // By id alone: the row is this workspace's and locked above.
     .where('id', '=', issueId)
-    .where('workspace_id', '=', context.workspaceId)
     .returning(ISSUE_COLUMNS)
     .executeTakeFirst();
   if (row === undefined) throw issueNotFound();
+  if (row.status !== before.status) {
+    await recordAudit(
+      transaction,
+      clock,
+      audit(context, 'issue.status_changed', row.id, { from: before.status, to: row.status }),
+    );
+  }
+  if (row.assignee_id !== before.assignee_id) {
+    await recordAudit(
+      transaction,
+      clock,
+      audit(context, 'issue.assigned', row.id, {
+        from: before.assignee_id ?? '',
+        to: row.assignee_id ?? '',
+      }),
+    );
+  }
   return toIssue(row);
 };
 
@@ -182,6 +246,7 @@ const mayDelete = (context: WorkspaceContext, createdBy: string | null): boolean
 
 export const deleteIssue = async (
   transaction: Transaction,
+  clock: Clock,
   context: WorkspaceContext,
   issueId: string,
 ): Promise<void> => {
@@ -201,4 +266,5 @@ export const deleteIssue = async (
     });
   }
   await transaction.deleteFrom('issues').where('id', '=', issueId).execute();
+  await recordAudit(transaction, clock, audit(context, 'issue.deleted', issueId));
 };

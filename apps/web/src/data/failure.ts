@@ -34,6 +34,7 @@ export type FailureKey =
   | 'failure.tooLarge'
   | 'failure.refused'
   | 'failure.deletionStarted'
+  | 'failure.issuesLimit'
   | 'failure.savedLimit'
   | 'failure.pinsLimit'
   | 'failure.bookmarksLimit'
@@ -114,6 +115,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.refused';
     case 'SAVED_LIMIT':
       return 'failure.savedLimit';
+    case 'ISSUES_LIMIT':
+      return 'failure.issuesLimit';
     case 'PINS_LIMIT':
       return 'failure.pinsLimit';
     case 'BOOKMARKS_LIMIT':
