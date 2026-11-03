@@ -252,7 +252,7 @@ after on a seeded fixture, with two erasures racing); and the nightly retention 
 files of the core still name its tables. Each is an edge with its own inversion, in this order, each its own pull
 request with behaviour unchanged:
 
-1. **`WorkspaceChannels`**, a port `modules/workspaces` defines with four methods — the channels a member could see
+1. **`WorkspaceChannels`** (**built**), a port `modules/workspaces` defines with four methods — the channels a member could see
    and taking them out of every channel (`members.ts`, in the workspace's transaction), how many keep longer than a
    window (`retention.ts`), and the channels of a workspace (`deletion.ts`) — and chat implements. A null object
    answers `[]` and 0 when chat is absent, which is its second implementation; the proof is that the existing
