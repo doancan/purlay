@@ -1,8 +1,13 @@
 # Purlay — Modules (`MODULES.md`)
 
 > Authority: `DECISIONS.md` D-250 is binding on *why*. This file is binding on *how a module is built,
-> loaded, kept apart and removed*. **Status: design.** Nothing here is implemented yet; §8 says what each
-> rule is held by, and which step builds that, and §10 the order.
+> loaded, kept apart and removed*. **Status: partly built.** Chat is the one module, under `features/chat`, and
+> the core runs without it: `MODULES` is read at boot, a module's routes and jobs are left out when it is
+> not run, the web draws only the modules `GET /api/client` lists, and the migration sets, the composition, the cluster check and the table-ownership list
+> exist. What is not built: a second module, the typed query handle and the per-module generated `schema.ts`,
+> the `contract` step of the attachment link, workspace-level enablement, and the matrix in CI. §8 says what
+> each rule is held by and which step builds it, and §10 the order; a line marked **built** there is, and one
+> not marked is intent.
 
 ---
 
@@ -58,6 +63,18 @@ A failure in 4 or 5 is fatal at boot. A failure at runtime stays inside the modu
 not take the core down (§7). A disabled module is never mounted: a request for it is the plain `404` of any
 unknown route, with the generic body and no code that says *disabled* — which would tell a caller who has not
 signed in which modules an instance runs.
+
+That holds before any other judgement of the request: the edge's refusals of a body (a missing or an oversized
+`Content-Length` on a webhook) are asked only of a path that is a route, so a closed webhook answers as `/api/no-such-thing`
+does, whatever its headers say. A file is judged by what it is attached to: one attached to a message is chat's, so with chat not run
+`GET /api/attachments/:id` and its `/thumbnail` answer `ATTACHMENT_NOT_FOUND` for it, as for an id that never existed, while an upload
+nobody attached (the core's) stays its uploader's to read and discard. The manifest's `readAttachment` is how a module widens the core's reader;
+the core names no module.
+
+**A workspace made while chat is not run has no first channel**, because the hook that makes it is chat's. Turning
+chat on later does not backfill one: no job or migration looks for workspaces without a channel. The chat front door
+(`workspace-home.tsx`) shows, for a member with no channel, "Choose one from the list, or create the first", and the sidebar's
+new-channel dialog is how; it is text and the sidebar's button, not a button on that screen.
 
 **Every command-line entry point loads the same parse.** A job or command whose module is disabled logs that
 and exits `0`; it never reaches for a table that is not there.

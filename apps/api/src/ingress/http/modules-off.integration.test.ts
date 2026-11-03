@@ -8,10 +8,14 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { messageId } from '@purlay/types';
 import { compose, composition } from '../../composition';
 import { fixedClock } from '../../platform/clock';
+import { theDefaultChannelOf } from '../../testing/channels';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { twoColourPng } from '../../testing/png';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { aMemoryStore } from '../../testing/storage';
 import { aUniqueSlug } from '../../testing/users';
 import { createApp } from './app';
 
@@ -139,6 +143,137 @@ describe('integration: an application with no module is the core alone', () => {
         ada,
       );
       expect(closed.body).toMatchObject({ error: { code: 'ROUTE_NOT_FOUND' } });
+    });
+  });
+
+  test('a chat webhook is no route: a missing or an oversized length is not refused before the path is judged', async () => {
+    await withRollback(async (db) => {
+      const post = async (
+        modules: typeof composition,
+        path: string,
+        headers: Record<string, string>,
+      ): Promise<{ status: number; body: string }> => {
+        const response = await createApp(
+          testDependencies({ database: db, clock, composition: modules }),
+        ).handle(new Request(`${ORIGIN}${path}`, { method: 'POST', headers }));
+        return { status: response.status, body: await response.text() };
+      };
+      const none = { 'content-type': 'application/json' };
+      const huge = { 'content-type': 'application/json', 'content-length': '99999999' };
+      const off = compose([]);
+      for (const [name, headers] of [
+        ['no length', none],
+        ['a huge length', huge],
+      ] as const) {
+        const unknown = await post(off, '/api/no-such-thing', headers);
+        for (const path of ['/api/webhooks/github/f1', '/api/webhooks/github-app']) {
+          expect({ name, path, ...(await post(off, path, headers)) }).toEqual({
+            name,
+            path,
+            ...unknown,
+          });
+        }
+      }
+      // With chat run the edge's refusals are unchanged.
+      expect((await post(composition, '/api/webhooks/github/f1', none)).status).toBe(411);
+      expect((await post(composition, '/api/webhooks/github-app', huge)).status).toBe(413);
+    });
+  });
+
+  test('a file attached to a message is chat’s: with chat not run it is nobody’s, and an unattached upload stays its uploader’s', async () => {
+    await withRollback(async (db) => {
+      const store = aMemoryStore();
+      const handle = async (
+        modules: typeof composition,
+        method: string,
+        path: string,
+        who: SignedInUser,
+        body?: Uint8Array | object,
+      ): Promise<Response> => {
+        const headers: Record<string, string> = { cookie: who.cookie };
+        let payload: Uint8Array | string | undefined;
+        if (body instanceof Uint8Array) {
+          headers['content-type'] = 'application/octet-stream';
+          headers['content-length'] = String(body.length);
+          payload = body;
+        } else if (body !== undefined) {
+          headers['content-type'] = 'application/json';
+          payload = JSON.stringify(body);
+        }
+        return await createApp(
+          testDependencies({ database: db, clock, composition: modules, storage: store }),
+        ).handle(
+          new Request(`${ORIGIN}${path}`, {
+            method,
+            headers,
+            ...(payload === undefined ? {} : { body: payload }),
+          }),
+        );
+      };
+      const status = async (
+        modules: typeof composition,
+        method: string,
+        path: string,
+        who: SignedInUser,
+      ): Promise<number> => (await handle(modules, method, path, who)).status;
+      const ada = await aSignedInUser(db, clock, 'att-ada');
+      const bob = await aSignedInUser(db, clock, 'att-bob');
+      const slug = aUniqueSlug('att');
+      const made = await handle(composition, 'POST', '/api/workspaces', ada, { name: slug, slug });
+      const workspaceId = ((await made.json()) as { id: string }).id;
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member', joined_at: NOW })
+        .execute();
+      const channelId = await theDefaultChannelOf(db, workspaceId);
+      await db
+        .insertInto('channel_members')
+        .values({ channel_id: channelId, user_id: bob.userId })
+        .execute();
+      let tick = 0;
+      const upload = async (name: string): Promise<string> => {
+        const id = messageId(new Date(NOW.getTime() - 60_000 + (tick += 1)));
+        const sent = await handle(
+          composition,
+          'POST',
+          `/api/workspaces/${workspaceId}/uploads?id=${id}&name=${name}`,
+          ada,
+          twoColourPng(64, 64),
+        );
+        expect(sent.status).toBe(201);
+        return id;
+      };
+      const attached = await upload('attached.png');
+      const loose = await upload('loose.png');
+      const sent = await handle(composition, 'POST', `/api/channels/${channelId}/messages`, ada, {
+        id: messageId(new Date(NOW.getTime() - 30_000)),
+        content: 'look',
+        attachmentIds: [attached],
+      });
+      expect(sent.status).toBe(201);
+
+      const off = compose([]);
+      const never = `/api/attachments/${messageId(new Date(NOW.getTime() - 1_000))}`;
+      const absent = await handle(off, 'GET', never, ada);
+      expect(absent.status).toBe(404);
+      const absentBody = await absent.text();
+      for (const suffix of ['', '/thumbnail']) {
+        for (const who of [ada, bob]) {
+          const answer = await handle(off, 'GET', `/api/attachments/${attached}${suffix}`, who);
+          expect({ who: who.userId, suffix, status: answer.status }).toEqual({
+            who: who.userId,
+            suffix,
+            status: 404,
+          });
+          expect(await answer.text()).toBe(absentBody);
+        }
+      }
+      expect(await status(off, 'DELETE', `/api/attachments/${attached}`, ada)).toBe(404);
+      // With chat run the member reads it; with chat not run the uploader still reads what was never attached.
+      expect(await status(composition, 'GET', `/api/attachments/${attached}`, bob)).toBe(200);
+      expect(await status(off, 'GET', `/api/attachments/${loose}`, ada)).toBe(200);
+      expect(await status(off, 'GET', `/api/attachments/${loose}`, bob)).toBe(404);
+      expect(await status(off, 'DELETE', `/api/attachments/${loose}`, ada)).toBe(204);
     });
   });
 });

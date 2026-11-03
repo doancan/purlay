@@ -16,7 +16,7 @@
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
-import { requireAttachmentById, type ReadableAttachment } from '../../features/chat/channels/guard';
+import type { AttachmentReader, ReadableAttachment } from '../../modules/attachments/readable';
 import { AppError, attachmentNotFound } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
@@ -31,6 +31,8 @@ export interface AttachmentRouteDependencies {
   readonly database: Executor;
   readonly clock: Clock;
   readonly storage: ObjectStore;
+  /** Who may read which file: the composition's (`composition.ts`), so a file of a module not run is nobody's. */
+  readonly readAttachment: AttachmentReader;
 }
 
 /** The original, or an image's thumbnail. */
@@ -85,7 +87,7 @@ export const downloadAttachment = async (
 ): Promise<Download> => {
   const { database, storage } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
-  const attachment = await requireAttachmentById(database, userId, attachmentId);
+  const attachment = await dependencies.readAttachment(database, userId, attachmentId);
   const key = variant === 'original' ? attachment.storageKey : attachment.thumbnailKey;
   // A file has no thumbnail: there is nothing at that address, for anyone.
   if (key === null) throw attachmentNotFound();
@@ -111,7 +113,7 @@ export const downloadAttachment = async (
 };
 
 export const discardAttachment = async (
-  dependencies: AttachmentRouteDependencies & {
+  dependencies: Omit<AttachmentRouteDependencies, 'readAttachment'> & {
     readonly atomically: Atomically;
     readonly log: Logger;
   },

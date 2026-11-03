@@ -9,6 +9,7 @@ import { chatExport } from './export';
 import { chatPersonalExport } from './personal-export';
 import { startWithTheDefaultChannel } from './channels/workspace-hooks';
 import { forgetWhatChatKeeps } from './channels/user-hooks';
+import { requireAttachmentById } from './channels/guard';
 import { chatWorkspaceChannels } from './channels/workspace-channels';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
 import { chatWorkspacePurge } from './messages/workspace-purge';
@@ -58,6 +59,8 @@ export const chatModule = {
       '/api/workspaces/:workspaceId/unresolved',
     ],
   },
+  // A file attached to a message is chat's: it is read through the channel the message is in.
+  readAttachment: requireAttachmentById,
   workspaceCreated: startWithTheDefaultChannel,
   userErased: forgetWhatChatKeeps,
   workspaceChannels: chatWorkspaceChannels,

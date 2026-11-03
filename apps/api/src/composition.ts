@@ -10,6 +10,7 @@
  */
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { chatModule } from './features/chat/module';
+import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
 import { corePersonalExport } from './modules/export/core-personal-export';
@@ -37,6 +38,11 @@ export interface BundledModule {
    * erased does not wait for a setting. A module with a migration set of its own is held only while it runs.
    */
   readonly dataInCore?: boolean;
+  /**
+   * Who may read a file, where the module holds files attached to what it owns. Asked only while the module runs: a
+   * process without it answers for the core's own unsent uploads and for nothing else.
+   */
+  readonly readAttachment?: AttachmentReader;
   /** Run inside the transaction of a new workspace, once its owner is a member. */
   readonly workspaceCreated?: (...args: Parameters<WorkspaceCreated['run']>) => Promise<void>;
   /** Run inside the transaction of an erased account. */
@@ -57,6 +63,8 @@ export const registry = moduleRegistry(bundledModules.map((module) => module.man
 
 export interface Composition {
   readonly modules: readonly BundledModule[];
+  /** The reader of `/api/attachments/:attachmentId`: the core's, widened by the modules that run. */
+  readonly readAttachment: AttachmentReader;
   readonly workspaceCreated: WorkspaceCreated;
   readonly userErased: UserErased;
   readonly workspaceChannels: WorkspaceChannels;
@@ -103,6 +111,9 @@ export const compose = (
   }
   return {
     modules,
+    readAttachment:
+      modules.find((module) => module.readAttachment !== undefined)?.readAttachment ??
+      requireOwnUpload,
     workspaceCreated,
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,
