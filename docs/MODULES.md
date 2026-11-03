@@ -262,7 +262,8 @@ request with behaviour unchanged:
    it does today (`saved_searches`, `saved_messages`, `thread_follows`, `notifications`, `missed_mail_letters`)
    in the same order; proved by the existing erasure tests, the rows of every table compared before and after on a
    seeded fixture, the SQL sequence captured before and after, and an erasure raced against sends;
-3. **The export catalogue as a manifest `data.export`**: chat supplies its tables, columns (typed per table, so a
+3. **The export catalogue as a manifest `data.export`** — its safety net, a test that freezes the files, their order, the
+   rows and the columns of each, for the operator's export and an owner's, is **built**; the move itself is not: chat supplies its tables, columns (typed per table, so a
    column added to the schema fails the build), order, bounds, the fragments that name the people, and what is
    excluded; the core keeps the cursor, the format, the snapshot and the archive, and runs the `prepare` that
    reads the visible channels **outside** the snapshot where it runs today. The core's head (`workspaces`,
