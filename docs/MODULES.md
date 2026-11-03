@@ -181,6 +181,7 @@ until then it is a stated intent and not a guarantee.
 | No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |
 | The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
 | The core's modules import none of chat's | the lint that keeps `modules/` and `platform/` from importing a feature, now that chat is `features/chat`; the core's tests may — **built** | 9 |
+| The core names none of chat's tables | `core-tables.test.ts`, reading the tables from `TABLE_OWNERS`, with an empty allow-list that may only shrink, and the mutation `core-sweep-names-a-chat-table` — **built** | 10 |
 | No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built** | 5 |
 | No read of another module's tables | the typed query handle, handed to a module with its own tables and the core's | 9 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
@@ -289,7 +290,7 @@ workspace); the erasure of a person's messages (the existing tests unchanged, an
 after on a seeded fixture, with two erasures racing); and the nightly retention (the counts on aged fixtures identical, held by the existing tests, which moved unmodified).
 
 **What is left of step 9 and step 10, measured on `main` after the move.** Nothing in the core imports chat, but eleven
-files of the core still name its tables. Each is an edge with its own inversion, in this order, each its own pull
+files of the core still named its tables. Each is an edge with its own inversion, in this order, each its own pull
 request with behaviour unchanged:
 
 1. **`WorkspaceChannels`** (**built**), a port `modules/workspaces` defines with four methods — the channels a member could see
@@ -325,8 +326,25 @@ request with behaviour unchanged:
    `attachmentNotFound`, a plain error, moved to `platform/errors.ts`, where the attachment code reaches it. Nothing
    in the core imports the guard now (one workspace test still does, which the lint allows);
 7. the message link of an attachment becomes chat's (step 8 above), with step 10;
-8. the lint then forbids a chat table's name in `modules/` and `platform/`, from an allow-list that has shrunk to
-   nothing.
+8. a test then forbids a chat table's name in `modules/` and `platform/` (**built**): `core-tables.test.ts` reads
+   the tables from `TABLE_OWNERS` (every table whose owner is not the core, so a module added later is covered) and
+   fails for a file of the core that names one where a query puts it — a builder method's table, SQL's `from`,
+   `join`, `into` or `update`, `table.column`, `Database['table']`, `tableExists` — with comments stripped; the
+   core's tests are left out, as the lint leaves them. Its allow-list is empty and may only shrink. It is a test
+   and not a lint rule because the lint configuration is plain JavaScript and the list of owners is TypeScript; a
+   test reads both, and the mutation `core-sweep-names-a-chat-table` shows it catches a chat table written back
+   into the core. Two places still named chat's tables when it was written, and were inverted with it. **The push
+   sender** joined `notifications`, `messages` and `channels` to find who to tell; it asks a `PushNotices` port
+   (`modules/push/notices.ts`), which chat implements (`features/chat/notifications/push-notices.ts`) and the
+   composition hands to it (`pushNotices`, with `noPushNotices` where chat is not run), and the sender keeps the
+   core's own joins (subscriptions, sessions, users, workspaces) — the same rows in the same order, with the chat
+   part in its own query. **The link-preview and delivery sweeps** (`sweep:link-previews`,
+   `sweep:github-deliveries`) deleted from five of chat's tables in `modules/jobs`; they are now
+   `features/chat/sweeps.ts`, which the job runner calls as it calls the retention purge. They are not in chat's
+   manifest `jobs` on purpose: the rows are in the core's migrations, so the sweeps must keep running with chat
+   off (`module-lifecycle.integration.test.ts` runs them in each cell), which a closed job would stop. What the
+   core still names are its own tables; the one seam in it that asks `tableExists`, the workspace purge, asks it
+   of the names a module contributes and writes none of its own.
 
 **Step 12, in the order it is built.** (a) *The composition* (**built**): `composition.ts` takes the modules a process runs
 and makes from them what the core leaves open — the workspace's first hook, the account's erasure hook, who answers
