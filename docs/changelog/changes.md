@@ -26,6 +26,7 @@ have it.
 ### Added
 
 - **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
+- **Messages** — A face typed as text, like `:D` or `<3`, becomes its emoji at the next space; Backspace straight after takes it back (D-253)
 
 ### Changed
 
