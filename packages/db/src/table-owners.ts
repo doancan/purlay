@@ -53,6 +53,9 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   // generic core inbox waits for a second module that writes to it.
   notifications: 'chat',
   message_versions: 'chat',
+  // Which message a file was sent with: made in chat's own migration set, with keys to the core's `attachments` and
+  // to chat's `messages`, so no key runs from the core to chat (`MODULES.md` §10, step 8).
+  message_attachments: 'chat',
   messages: 'chat',
   missed_mail_letters: 'chat',
   pinned_messages: 'chat',

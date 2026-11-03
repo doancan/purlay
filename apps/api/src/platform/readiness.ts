@@ -23,7 +23,13 @@
  * The answer to the caller is a word; the reason is the log's. Health endpoints
  * disclose nothing about dependencies (`API.md` §8).
  */
-import { migrationHistoryProblem, pendingMigrations, sql, type Executor } from '@purlay/db';
+import {
+  migrationHistoryProblem,
+  pendingMigrations,
+  PRODUCT_MIGRATION_SETS,
+  sql,
+  type Executor,
+} from '@purlay/db';
 import type { Clock } from './clock';
 
 /** A column a migration declares `COLLATE "C"`. */
@@ -60,10 +66,15 @@ export const readiness = async (
   shared?: SharedProblem,
 ): Promise<Readiness> => {
   try {
-    const history = await migrationHistoryProblem(database);
+    const history = await migrationHistoryProblem(
+      database,
+      undefined,
+      undefined,
+      PRODUCT_MIGRATION_SETS,
+    );
     if (history !== undefined) return { ready: false, reason: history };
 
-    const pending = await pendingMigrations(database);
+    const pending = await pendingMigrations(database, undefined, PRODUCT_MIGRATION_SETS);
     if (pending.length > 0) {
       return { ready: false, reason: `migrations not applied: ${pending.join(', ')}` };
     }

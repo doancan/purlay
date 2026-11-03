@@ -68,6 +68,15 @@ export interface MigrationSet {
 
 const SET_ID = /^[a-z][a-z0-9-]*$/;
 
+/**
+ * The sets of the modules this build carries (D-250): chat's, in `migrations/chat/`, applied after the core's and
+ * recorded as `chat/<file>`. Which of them a process applies is `MODULES`' to say once something can be turned
+ * off (`MODULES.md` §10, step 12); until then every caller that opens a database passes all of them.
+ */
+export const PRODUCT_MIGRATION_SETS: readonly MigrationSet[] = [
+  { id: 'chat', directory: join(MIGRATIONS_DIRECTORY, 'chat') },
+];
+
 export interface MigrationResult {
   readonly migrationName: string;
   readonly status: 'Success' | 'Error' | 'NotExecuted';
