@@ -105,6 +105,9 @@ const SETUP_WIZARD = 'apps/api/src/modules/setup/wizard.ts';
 const COOKIES = 'apps/api/src/platform/cookies.ts';
 
 const PERSONAL_EXPORT = 'apps/api/src/modules/export/personal.ts';
+const PERSONAL_CHAT = 'apps/api/src/features/chat/personal-export.ts';
+const PERSONAL_CATALOGUE = 'apps/api/src/modules/export/personal-catalogue.ts';
+const PERSONAL_CATALOGUE_TESTS = 'apps/api/src/modules/export/personal-catalogue.test.ts';
 const PERSONAL_EXPORT_TESTS = 'apps/api/src/modules/export/personal.integration.test.ts';
 const PERSONAL_REQUESTS = 'apps/api/src/modules/export/personal-requests.ts';
 const PERSONAL_HTTP_TESTS = 'apps/api/src/ingress/http/personal-exports.integration.test.ts';
@@ -11559,7 +11562,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'personal-export-offers-deleted-words',
     why: 'a person’s export offers back the words of messages they deleted (D-241, D-9)',
-    file: PERSONAL_EXPORT,
+    file: PERSONAL_CHAT,
     find: '  sql`select id from messages where sender_id = ${userId} and deleted_at is null`;\n',
     replace: '  sql`select id from messages where sender_id = ${userId}`;\n',
     tests: [PERSONAL_EXPORT_TESTS],
@@ -11567,16 +11570,16 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'personal-export-carries-others-reactions',
     why: 'a person’s export carries the reactions other people left on their messages (D-241)',
-    file: PERSONAL_EXPORT,
-    find: "  reactions: (u) => ({ where: sql`user_id = ${u}`, order: 'id' }),\n",
+    file: PERSONAL_CHAT,
+    find: "      emoji: 'export',\n      created_at: 'export',\n    },\n    (userId) => ({ where: sql`user_id = ${userId}`, order: 'id' }),\n",
     replace:
-      "  reactions: (u) => ({ where: sql`message_id in (${theirMessages(u)})`, order: 'id' }),\n",
+      "      emoji: 'export',\n      created_at: 'export',\n    },\n    (userId) => ({ where: sql`message_id in (${theirMessages(userId)})`, order: 'id' }),\n",
     tests: [PERSONAL_EXPORT_TESTS],
   },
   {
     id: 'personal-export-carries-others-files',
     why: 'a person’s export carries every file of a channel they wrote in, other people’s too (D-241)',
-    file: PERSONAL_EXPORT,
+    file: PERSONAL_CHAT,
     find: '  sql`uploader_id = ${userId} and message_id in (${theirMessages(userId)})`;\n',
     replace:
       '  sql`message_id in (select id from messages where channel_id in (select channel_id from messages where sender_id = ${userId}))`;\n',
@@ -12744,5 +12747,45 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'Object.assign(added, contribution.audit?.(rows));',
     replace: 'void rows;',
     tests: ['apps/api/src/modules/export/catalogue.test.ts'],
+  },
+  {
+    id: 'personal-catalogue-order-scrambled',
+    why: "the files of a person's export are written with the core's last tables before the modules', so a reader meets children before their parents (D-241, D-250)",
+    file: PERSONAL_CATALOGUE,
+    find: '[...core.head, ...modules.flatMap((module) => module.tables), ...core.tail]',
+    replace: '[...modules.flatMap((module) => module.tables), ...core.head, ...core.tail]',
+    tests: [PERSONAL_CATALOGUE_TESTS],
+  },
+  {
+    id: 'personal-catalogue-table-twice',
+    why: "a table named by two modules is written twice in a person's export, and the second file overwrites the first (D-241, D-250)",
+    file: PERSONAL_CATALOGUE,
+    find: 'if (byName.size !== tables.length) {',
+    replace: 'if (false) {',
+    tests: [PERSONAL_CATALOGUE_TESTS],
+  },
+  {
+    id: 'personal-catalogue-core-workspaces-unasked',
+    why: "the workspaces the person is a member of are left out of the workspaces file when the core's own rows are not asked (D-241, D-250)",
+    file: PERSONAL_CATALOGUE,
+    find: 'contributions.flatMap((contribution) => contribution.workspaces(userId)),',
+    replace: 'modules.flatMap((contribution) => contribution.workspaces(userId)),',
+    tests: [PERSONAL_CATALOGUE_TESTS],
+  },
+  {
+    id: 'personal-catalogue-forgets-files',
+    why: 'the files a person sent are not copied into their export, though their rows say they were (D-241, D-250)',
+    file: PERSONAL_CATALOGUE,
+    find: 'modules.find((module) => module.files !== undefined)?.files?.(userId),',
+    replace: 'undefined,',
+    tests: [PERSONAL_CATALOGUE_TESTS, PERSONAL_EXPORT_TESTS],
+  },
+  {
+    id: 'personal-export-table-undecided',
+    why: "a table of the schema that no contribution to a person's export decides on goes unseen until somebody exports it (D-241, D-250)",
+    file: 'apps/api/src/modules/export/core-personal-export.ts',
+    find: "  job_runs: 'the scheduler’s own record',\n",
+    replace: '',
+    tests: [PERSONAL_EXPORT_TESTS],
   },
 ];
