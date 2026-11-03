@@ -540,7 +540,8 @@ describe('integration: a person’s export that fails', () => {
 
 /**
  * As written when this test was made, before the catalogue moved between modules. A change that is meant says so
- * by changing this, in the same pull request, with the reason.
+ * by changing this, in the same pull request, with the reason. (`google_made` is the Google sign-in change's: a column of
+ * `users` it added to a person's own export after this was first frozen.)
  */
 const FROZEN_SHAPE: Record<string, unknown> = {
   order: [
@@ -586,6 +587,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
         'github_connected_at',
         'github_id',
         'github_login',
+        'google_made',
         'id',
         'is_server_admin',
         'last_seen_at',
