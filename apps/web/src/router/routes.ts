@@ -15,8 +15,11 @@ import { SearchFilters } from '@purlay/types';
  * is a poor price for matching a path and calling `history.pushState`.
  */
 import { SIGN_IN_PATH } from '@purlay/types';
+import type { ParamNames } from '../modules/manifest';
+import { MODULES, type ModuleRoutes } from '../modules/registry';
 
-const ROUTES = {
+/** The core's routes. A module's are in its manifest (D-250), and the table below is both. */
+const CORE_ROUTES = {
   // The API sends a failed sign-in back here, so the contract spells it (D-121).
   signIn: SIGN_IN_PATH,
   // A sign-in link's page; its token is in the fragment, never the path (D-138 §4).
@@ -33,14 +36,6 @@ const ROUTES = {
   setupVerify: '/setup/verify',
   home: '/',
   workspace: '/w/:slug',
-  channel: '/w/:slug/c/:channelId',
-  questions: '/w/:slug/questions',
-  inbox: '/w/:slug/inbox',
-  search: '/w/:slug/search',
-  saved: '/w/:slug/saved',
-  drafts: '/w/:slug/drafts',
-  unreads: '/w/:slug/unreads',
-  issues: '/w/:slug/issues',
   welcome: '/w/:slug/welcome',
   // Settings are a page with a navigation of its own (D-146); the bare address opens Profile.
   settingsHome: '/w/:slug/settings',
@@ -48,45 +43,32 @@ const ROUTES = {
   gallery: '/__gallery',
 } as const;
 
+// The manifests' route records are spread into one; the cast is the type the manifests already have, merged.
+const MODULE_ROUTES = Object.assign({}, ...MODULES.map((module) => module.routes)) as ModuleRoutes;
+
+const ROUTES: Readonly<typeof CORE_ROUTES & ModuleRoutes> = { ...CORE_ROUTES, ...MODULE_ROUTES };
+
 export type RouteName = keyof typeof ROUTES;
+
+/** The routes a module's manifest declares; the outlet draws these from the registry and the core's by name. */
+export type ModuleRouteName = keyof ModuleRoutes;
 
 /**
  * The module whose screen each route is, by the id the server lists in `MODULES` (D-250); `null` is the core's.
- * Every route is named, so a new one cannot be added without saying whose it is. A server that does not run the
- * module answers none of its routes, so the page shows them as not found.
+ * A module's routes are the ones its manifest declares, so a route cannot be a module's without saying so there. A
+ * server that does not run the module answers none of its routes, so the page shows them as not found.
  */
-const ROUTE_MODULES: Readonly<Record<RouteName, string | null>> = {
-  signIn: null,
-  signInEmail: null,
-  signInNative: null,
-  signUp: null,
-  invite: null,
-  mailStop: null,
-  setup: null,
-  setupVerify: null,
-  home: null,
-  workspace: null,
-  channel: 'chat',
-  questions: 'chat',
-  inbox: 'chat',
-  search: 'chat',
-  saved: 'chat',
-  drafts: 'chat',
-  unreads: 'chat',
-  issues: 'issues',
-  welcome: null,
-  settingsHome: null,
-  settings: null,
-  gallery: null,
-};
+const ROUTE_MODULES: ReadonlyMap<string, string> = new Map(
+  MODULES.flatMap((module) => Object.keys(module.routes).map((name) => [name, module.id] as const)),
+);
 
-export const moduleOf = (name: RouteName): string | null => ROUTE_MODULES[name];
+export const moduleOf = (name: RouteName): string | null => ROUTE_MODULES.get(name) ?? null;
 
-type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`
-  ? Name | ParamNames<Rest>
-  : P extends `${string}:${infer Name}`
-    ? Name
-    : never;
+/** An address that means a module's screen: the outlet draws it from the registry, and the core's by name. */
+export type ModuleMatch = Extract<Match, { readonly name: ModuleRouteName }>;
+
+export const isModuleMatch = (match: Match): match is ModuleMatch =>
+  match.name !== 'notFound' && moduleOf(match.name) !== null;
 
 export type RouteParams<N extends RouteName> = Readonly<
   Record<ParamNames<(typeof ROUTES)[N]>, string>

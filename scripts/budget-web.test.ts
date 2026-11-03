@@ -16,6 +16,7 @@ import {
   initialAssets,
   main,
   measure,
+  moduleIds,
   overBudget,
   shapeProblems,
 } from './budget-web';
@@ -169,21 +170,43 @@ describe('the shape the budget protects', () => {
     expect(problems[0]).toContain('assets/index-aaa.js contains syntax-highlighting code');
   });
 
-  test('a module’s screen in an initial chunk is named, and the word it is found by is the screen’s own', () => {
-    const dist = aBuild({
-      'assets/index-aaa.js': 'h("div",{"data-screen":"screen-of-the-issues-module"})',
-      'theme-init.js': 'x',
-    });
-    const problems = shapeProblems(dist, measure(dist));
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain("assets/index-aaa.js contains the issues module's screen");
+  test('a module’s screen in an initial chunk is named, for every module that has a manifest, and the word it is found by is the screen’s own', () => {
+    for (const id of moduleIds()) {
+      const dist = aBuild({
+        'assets/index-aaa.js': `h("div",{"data-screen":"screen-of-the-${id}-module"})`,
+        'theme-init.js': 'x',
+      });
+      const problems = shapeProblems(dist, measure(dist));
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain(`assets/index-aaa.js contains the ${id} module's screen`);
+    }
     const clean = aBuild({ 'assets/index-aaa.js': 'const shell = 1;', 'theme-init.js': 'x' });
     expect(shapeProblems(clean, measure(clean))).toEqual([]);
-    const screen = readFileSync(
-      join(import.meta.dirname, '../apps/web/src/features/issues/issues-screen.tsx'),
-      'utf8',
-    );
-    expect(screen).toContain("export const ISSUES_SCREEN = 'screen-of-the-issues-module';");
+    // The word lives in the screen's file, not in a manifest the shell carries. Chat is found by its sources instead.
+    for (const id of moduleIds().filter((module) => module !== 'chat')) {
+      const screen = readFileSync(
+        join(import.meta.dirname, `../apps/web/src/features/${id}/${id}-screen.tsx`),
+        'utf8',
+      );
+      expect(screen).toContain(`'screen-of-the-${id}-module'`);
+    }
+  });
+
+  test('the modules are the ids their manifests declare, found by the folder they sit in', () => {
+    expect(moduleIds().sort()).toEqual(['chat', 'issues']);
+    const folders = mkdtempSync(join(tmpdir(), 'features-'));
+    made.push(folders);
+    for (const [name, text] of [
+      ['a/manifest.ts', "export const a = defineModule({\n  id: 'alpha-beta',\n  load: x,\n});"],
+      ['b/other.ts', 'x'],
+      ['c/manifest.ts', 'export const c = {};'],
+    ] as const) {
+      mkdirSync(join(folders, name.split('/')[0] ?? ''), { recursive: true });
+      writeFileSync(join(folders, name), text);
+    }
+    expect(() => moduleIds(folders)).toThrow('declares no');
+    rmSync(join(folders, 'c'), { recursive: true });
+    expect(moduleIds(folders)).toEqual(['alpha-beta']);
   });
 
   test('two locale catalogues in the initial chunks is named; one is allowed', () => {

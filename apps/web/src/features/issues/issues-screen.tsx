@@ -10,7 +10,7 @@
  * - **The details are shown as the text they are**, a few lines of them: rendering markdown is chat's work, and the
  *   module does not borrow it.
  *
- * This file is the module's chunk (`load.tsx`): nothing the shell loads first imports it, and `budget:web` looks for
+ * This file is the module's chunk (`manifest.ts`): nothing the shell loads first imports it, and `budget:web` looks for
  * `ISSUES_SCREEN` in the initial chunks.
  */
 import { useId, useMemo, useState } from 'react';
@@ -49,6 +49,7 @@ import { useSession } from '../session/session';
 import { useWorkspaceRole } from '../settings/role';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
+import type { IssuesScreens } from './manifest';
 
 /** What `budget:web` looks for in the initial chunks: this screen's code must never be among them. */
 export const ISSUES_SCREEN = 'screen-of-the-issues-module';
@@ -512,3 +513,6 @@ export const IssuesScreen = (): React.JSX.Element => {
     </div>
   );
 };
+
+/** What the manifest's `load` reads: the screen of each of the module's routes. */
+export const screens: IssuesScreens = { issues: IssuesScreen };
