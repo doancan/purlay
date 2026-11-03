@@ -12,6 +12,7 @@ import { forgetWhatChatKeeps } from './channels/user-hooks';
 import { requireAttachmentById } from './channels/guard';
 import { chatWorkspaceChannels } from './channels/workspace-channels';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
+import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
 export const chatModule = {
@@ -61,6 +62,8 @@ export const chatModule = {
   },
   // A file attached to a message is chat's: it is read through the channel the message is in.
   readAttachment: requireAttachmentById,
+  // What a message told, for the push sender: the notifications are chat's.
+  pushNotices: chatPushNotices,
   workspaceCreated: startWithTheDefaultChannel,
   userErased: forgetWhatChatKeeps,
   workspaceChannels: chatWorkspaceChannels,

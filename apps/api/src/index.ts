@@ -124,6 +124,7 @@ const push =
         clock: systemClock,
         log,
         attention,
+        notices: modules.pushNotices,
         failures: metrics.pushFailures,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
         post: async (url, headers, body) =>

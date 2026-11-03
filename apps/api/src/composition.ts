@@ -18,6 +18,7 @@ import {
   assemblePersonalCatalogue,
   type PersonalContribution,
 } from './modules/export/personal-catalogue';
+import { noPushNotices, type PushNotices } from './modules/push/notices';
 import type { UserErased } from './modules/users/erasure';
 import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspaces/channels-port';
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
@@ -46,6 +47,8 @@ export interface BundledModule {
    * process without it answers for the core's own unsent uploads and for nothing else.
    */
   readonly readAttachment?: AttachmentReader;
+  /** What a write told, for the push sender: asked only while the module runs. */
+  readonly pushNotices?: PushNotices;
   /** Run inside the transaction of a new workspace, once its owner is a member. */
   readonly workspaceCreated?: (...args: Parameters<WorkspaceCreated['run']>) => Promise<void>;
   /** Run inside the transaction of an erased account. */
@@ -68,6 +71,8 @@ export interface Composition {
   readonly modules: readonly BundledModule[];
   /** The reader of `/api/attachments/:attachmentId`: the core's, widened by the modules that run. */
   readonly readAttachment: AttachmentReader;
+  /** What the push sender is told by: the module's, or nothing where none runs. */
+  readonly pushNotices: PushNotices;
   readonly workspaceCreated: WorkspaceCreated;
   readonly userErased: UserErased;
   readonly workspaceChannels: WorkspaceChannels;
@@ -117,6 +122,8 @@ export const compose = (
     readAttachment:
       modules.find((module) => module.readAttachment !== undefined)?.readAttachment ??
       requireOwnUpload,
+    pushNotices:
+      modules.find((module) => module.pushNotices !== undefined)?.pushNotices ?? noPushNotices,
     workspaceCreated,
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,
