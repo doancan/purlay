@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { aRecordingLogger, testDependencies } from '../../testing/doubles';
 import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
-import { githubAppApi, githubAppCaller } from '../../modules/integrations/github-app-api';
+import { githubAppApi, githubAppCaller } from '../../platform/github-app-api';
 import { DELIVERIES_AT_ONCE } from './webhooks';
 import { receiveAppWebhook } from './github-app';
 

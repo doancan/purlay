@@ -21,7 +21,7 @@ import { smtpTransport, textLetter, type SmtpTransportFactory } from '../../plat
 import { aSelfSignedCertificate } from '../../testing/certificate';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from '../../testing/github-stub';
 import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from '../../testing/github-app-stub';
-import { githubAppApi, githubAppCaller } from '../integrations/github-app-api';
+import { githubAppApi, githubAppCaller } from '../../platform/github-app-api';
 import type { GitHubAppSettings } from './settings';
 import { aClosedPort, aScriptedRelay, type RelayScript } from '../../testing/smtp-relay';
 import { aGitHubPerson } from '../../testing/github-sign-in';
