@@ -11,7 +11,7 @@ const ROOT = join(import.meta.dir, '..', '..');
 
 /** Each place that may join the sender on the inside, and why only people's messages reach it. */
 const PEOPLE_ONLY: Readonly<Record<string, string>> = {
-  'modules/attachments/files.ts': 'only a person’s message carries files; an event has none',
+  'modules/channels/files.ts': 'only a person’s message carries files; an event has none',
   'modules/push/sender.ts': 'a push is for a notification, and an event never notifies (D-134 §7)',
 };
 

@@ -829,7 +829,7 @@ The rules are D-109's; this is the path through the code.
    and adds to `storage_used_bytes`, in the same transaction.
 3. Every page of messages carries each message's attachments, read in one query for the page
    (`messages/sets.ts`); a tombstone carries none.
-4. `GET /api/channels/:channelId/files` → the channel's guard → `modules/attachments/files.ts` reads
+4. `GET /api/channels/:channelId/files` → the channel's guard → `modules/channels/files.ts` reads
    the channel's files by the channel they carry, newest message first (D-129).
 5. Unsent uploads older than a day are swept by `bun run job sweep:orphans` (D-30), and the count is
    reconciled by `reconcile:storage`.

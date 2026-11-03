@@ -1945,7 +1945,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'files-of-every-channel',
     why: 'a channel’s files list every file of the workspace, a private channel’s among them',
-    file: 'apps/api/src/modules/attachments/files.ts',
+    file: 'apps/api/src/modules/channels/files.ts',
     find: "    .where('attachments.channel_id', '=', context.channelId)\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
@@ -1953,7 +1953,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'files-of-deleted-messages',
     why: 'a deleted message’s files stay listed, though its tombstone hides them',
-    file: 'apps/api/src/modules/attachments/files.ts',
+    file: 'apps/api/src/modules/channels/files.ts',
     find: "    .where('messages.deleted_at', 'is', null)\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
@@ -1961,7 +1961,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'files-cursor-from-anywhere',
     why: 'a cursor naming another channel’s file pages this channel from that file’s message',
-    file: 'apps/api/src/modules/attachments/files.ts',
+    file: 'apps/api/src/modules/channels/files.ts',
     find: "    .where('id', '=', before)\n    .where('channel_id', '=', context.channelId)\n",
     replace: "    .where('id', '=', before)\n",
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
@@ -1969,7 +1969,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'files-cursor-gone-with-its-message',
     why: 'a message deleted while someone pages stops the list there with a refusal',
-    file: 'apps/api/src/modules/attachments/files.ts',
+    file: 'apps/api/src/modules/channels/files.ts',
     find: "    .where('channel_id', '=', context.channelId)\n    .executeTakeFirst();\n",
     replace:
       "    .where('channel_id', '=', context.channelId)\n    .where((eb) => eb.exists(eb.selectFrom('messages').select('id').whereRef('messages.id', '=', 'attachments.message_id').where('messages.deleted_at', 'is', null)))\n    .executeTakeFirst();\n",
@@ -1978,7 +1978,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'files-last-page-not-last',
     why: 'a page exactly as long as what is left says there is more',
-    file: 'apps/api/src/modules/attachments/files.ts',
+    file: 'apps/api/src/modules/channels/files.ts',
     find: 'nextCursor: rows.length > limit ?',
     replace: 'nextCursor: rows.length >= limit ?',
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
