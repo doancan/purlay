@@ -38,12 +38,8 @@ import {
   type ServerPolicyRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import {
-  smtpTransport,
-  textLetter,
-  type MailMessage,
-  type SmtpTransportFactory,
-} from '../../platform/mail';
+import { smtpTransport, type MailMessage, type SmtpTransportFactory } from '../../platform/mail';
+import { composeLetter } from '../../platform/letter';
 import { recordServerAudit, type ServerAuditAction } from '../audit/server-audit';
 import type { SignInLocale } from '../auth/sign-in-letters';
 import {
@@ -326,18 +322,29 @@ const TEST_WORDS = {
   en: {
     subject: 'A test from your Purlay server',
     text: (server: string): string =>
-      `This is a test from the Purlay server at ${server}, sent because an administrator tried a mail relay: its mail works. There is nothing to do.\n\n${server}`,
+      `This is a test from the Purlay server at ${server}, sent because an administrator tried a mail relay: its mail works. There is nothing to do.`,
+    button: 'Open Purlay',
   },
   tr: {
     subject: 'Purlay sunucundan bir deneme',
     text: (server: string): string =>
-      `Bu, ${server} adresindeki Purlay sunucusundan bir deneme: bir yönetici bir e-posta sunucusunu denedi, e-posta çalışıyor. Yapacak bir şey yok.\n\n${server}`,
+      `Bu, ${server} adresindeki Purlay sunucusundan bir deneme: bir yönetici bir e-posta sunucusunu denedi, e-posta çalışıyor. Yapacak bir şey yok.`,
+    button: 'Purlay’ı aç',
   },
 } as const;
 
 const testLetter = (to: string, appUrl: string, locale: SignInLocale): MailMessage => {
   const server = new URL(appUrl).origin;
-  return textLetter(to, TEST_WORDS[locale].subject, TEST_WORDS[locale].text(server), server);
+  const words = TEST_WORDS[locale];
+  return composeLetter({
+    to,
+    subject: words.subject,
+    locale,
+    blocks: [
+      { kind: 'paragraph', text: words.text(server) },
+      { kind: 'button', label: words.button, url: server },
+    ],
+  });
 };
 
 /**

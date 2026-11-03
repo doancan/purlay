@@ -17,7 +17,8 @@ import {
 import { systemClock } from '../../platform/clock';
 import { createLogger } from '../../platform/logging';
 import { PROBE_REASONS, type ProbeReason, type ProbeResult } from '@purlay/types';
-import { smtpTransport, textLetter, type SmtpTransportFactory } from '../../platform/mail';
+import { composeLetter } from '../../platform/letter';
+import { smtpTransport, type SmtpTransportFactory } from '../../platform/mail';
 import { aSelfSignedCertificate } from '../../testing/certificate';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from '../../testing/github-stub';
 import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from '../../testing/github-app-stub';
@@ -85,12 +86,15 @@ afterAll(async () => {
   await closeIntegrationDatabase();
 }, DROP_HOOK_MS);
 
-const LETTER = textLetter(
-  'ada@example.com',
-  'Confirm your address',
-  'Open https://purlay.example.com/setup/verify#abc to confirm.',
-  'https://purlay.example.com/setup/verify#abc',
-);
+const LETTER = composeLetter({
+  to: 'ada@example.com',
+  subject: 'Confirm your address',
+  locale: 'en',
+  blocks: [
+    { kind: 'paragraph', text: 'Confirm your address.' },
+    { kind: 'button', label: 'Confirm', url: 'https://purlay.example.com/setup/verify#abc' },
+  ],
+});
 
 const USER = 'relay-user@example.com';
 const PASS = 'p@ss:w/rd#1 secret';

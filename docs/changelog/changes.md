@@ -27,6 +27,10 @@ have it.
 
 - **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
 
+### Changed
+
+- **Email** — Every email the server sends is a short letter with one button, instead of plain text with the link in it (D-252)
+
 ### Security
 
 - **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)
