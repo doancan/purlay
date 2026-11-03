@@ -246,10 +246,35 @@ describe('the Issues screen', () => {
     const title = view.getByRole('textbox', { name: 'Title' });
     await person().clear(title);
     await person().type(title, 'Renamed');
+    await person().type(view.getByRole('textbox', { name: 'Details' }), ' more');
     await person().selectOptions(view.getByRole('combobox', { name: 'Assignee' }), IDS.bob);
     await person().click(view.getByRole('button', { name: 'Save' }));
     await settle();
-    expect(changes).toEqual([[anIssue(1).id, { title: 'Renamed', assigneeId: IDS.bob }]]);
+    expect(changes).toEqual([
+      [anIssue(1).id, { title: 'Renamed', body: 'old more', assigneeId: IDS.bob }],
+    ]);
+    view.unmount();
+  });
+
+  test('an issue given to somebody who has left keeps saying so in the form, and can be given to nobody', async () => {
+    const changes: unknown[] = [];
+    const view = await visit({
+      issues: () =>
+        Promise.resolve(page([anIssue(1, { assigneeId: '00000000-0000-4000-8000-00000000ffff' })])),
+      updateIssue: (_workspace, id, input) => {
+        changes.push([id, input]);
+        return Promise.resolve(anIssue(1));
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Edit' }));
+    const select = view.getByRole('combobox', { name: 'Assignee' });
+    expect(
+      within(select).getByRole('option', { name: 'Assigned to a former member' }),
+    ).toBeDefined();
+    await person().selectOptions(select, '');
+    await person().click(view.getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(changes).toEqual([[anIssue(1).id, { assigneeId: null }]]);
     view.unmount();
   });
 

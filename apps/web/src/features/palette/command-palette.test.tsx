@@ -270,6 +270,15 @@ describe('issues, a module of its own', () => {
     }
   });
 
+  test('choosing it goes to the issues screen of the workspace', async () => {
+    const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules: ['issues'] }) });
+    const { input, here } = await mount(where, '/w/acme');
+    await person().type(input(), 'issues');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/issues');
+  });
+
   test('is not offered where the server does not run it', async () => {
     const { options } = await mount(apiWith(), '/w/acme');
     expect(options().some((text) => text.startsWith('Issues'))).toBe(false);
