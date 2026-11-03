@@ -56,6 +56,7 @@ export const aSession = (): MeResponse => ({
   nameFromGitHub: false,
   mustEnrolTwoFactor: false,
   scheduledDeletions: [],
+  modules: ['chat'],
 });
 
 export const aChannel = (

@@ -93,6 +93,8 @@ export interface CreatorDependencies extends WorkspaceDependencies {
   readonly workspaceCreators: (executor: Executor) => Promise<WorkspaceCreators>;
   /** What the modules start a new workspace with, in its transaction (D-250). */
   readonly workspaceCreated: WorkspaceCreated;
+  /** The ids of the modules this process runs, which `GET /api/me` tells the client. */
+  readonly modules: readonly string[];
 }
 
 /**
@@ -109,7 +111,11 @@ export const readMe = async (
   const { database, clock } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
   const me = await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
-  return { ...me, mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId) };
+  return {
+    ...me,
+    mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId),
+    modules: [...dependencies.modules],
+  };
 };
 
 export const listMyWorkspaces = async (

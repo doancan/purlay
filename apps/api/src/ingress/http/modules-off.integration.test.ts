@@ -77,6 +77,16 @@ describe('integration: an application with no module is the core alone', () => {
     });
   });
 
+  test('the caller is told which modules this server runs, so the page draws only those', async () => {
+    await withRollback(async (db) => {
+      const ada = await aSignedInUser(db, clock, 'off-me');
+      const modulesOf = async (modules: typeof composition): Promise<unknown> =>
+        ((await caller(db, modules)('GET', '/api/me', ada)).body as { modules: unknown }).modules;
+      expect(await modulesOf(compose([]))).toEqual([]);
+      expect(await modulesOf(composition)).toEqual(['chat']);
+    });
+  });
+
   test('what chat owns is the 404 of any unknown path, signed in or not, whatever the method', async () => {
     await withRollback(async (db) => {
       const call = caller(db, compose([]));
