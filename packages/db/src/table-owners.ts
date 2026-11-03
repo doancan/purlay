@@ -1,7 +1,8 @@
 /**
  * Who owns each table (D-250, `MODULES.md` §5): the core, or one module. A foreign key goes from a module to
  * the core and never the other way, nor between modules, so that a module's tables can be left inert without
- * the core's pointing at them. `table-ownership.integration.test.ts` holds this list to the database.
+ * the core's pointing at them. `table-ownership.integration.test.ts` holds this list to the database, and the
+ * keys to the rule: it has no exceptions (the last, `attachments -> messages`, went with `chat/0005`).
  */
 export type TableOwner = 'core' | 'chat';
 
@@ -69,10 +70,3 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   saved_searches: 'chat',
   thread_follows: 'chat',
 };
-
-/**
- * The foreign keys that break the rule today, as `child -> parent`. **This list may only shrink**: the test
- * fails for a key that is not here, and for one that is here and no longer exists, so removing a line is
- * what a fix looks like. Steps 6–10 of the plan empty it.
- */
-export const CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> messages'];

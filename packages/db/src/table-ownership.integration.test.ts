@@ -4,7 +4,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import { closeIntegrationDatabase, integrationDatabase } from './testing';
-import { CROSS_OWNER_FOREIGN_KEYS, TABLE_OWNERS } from './table-owners';
+import { TABLE_OWNERS } from './table-owners';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -20,7 +20,7 @@ describe('integration: who owns each table', () => {
     expect(Object.keys(TABLE_OWNERS).sort()).toEqual(rows.map((row) => row.name));
   });
 
-  test('a foreign key goes from a module to the core or within its owner, and the exceptions only shrink', async () => {
+  test('a foreign key goes from a module to the core or within its owner, with no exception', async () => {
     const { rows } = await sql<{ child: string; parent: string }>`
       select c.conrelid::regclass::text as child, c.confrelid::regclass::text as parent
       from pg_constraint c
@@ -35,6 +35,6 @@ describe('integration: who owns each table', () => {
         return from !== to && to !== 'core';
       })
       .map(({ child, parent }) => `${child} -> ${parent}`);
-    expect([...new Set(crossing)].sort()).toEqual([...CROSS_OWNER_FOREIGN_KEYS].sort());
+    expect([...new Set(crossing)].sort()).toEqual([]);
   });
 });
