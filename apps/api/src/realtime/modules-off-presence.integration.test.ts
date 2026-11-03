@@ -220,6 +220,9 @@ describe('integration: the socket of a process that does not run chat, and who i
     // The control: the same publication reaches Bob where chat is run.
     const bobWithChat = await connect(chatting, bob.cookie);
     await arriving.close();
+    // The close is handled after the client has seen it end: wait until the node holds her in her grace, or the
+    // timers are run before there is one.
+    await bobWithChat.until(() => chatting.app.held().leaving === 1, 'alice inside her grace');
     chatting.timers.runAll();
     await bobWithChat.until((f) => presenceOf(f, alice.userId).includes(false), 'alice offline');
     await bobWithChat.close();
