@@ -76,7 +76,7 @@ describe('who is online on this node', () => {
     await w.online.settled();
     expect(w.told.map((c) => [c.userId, c.online])).toEqual([['alice', true]]);
     expect(await w.online.onlineAmong(['alice', 'bob'])).toEqual([
-      { userId: 'alice', online: true, version: w.told[0]?.version ?? -1 },
+      { userId: 'alice', online: true, away: false, version: w.told[0]?.version ?? -1 },
     ]);
   });
 

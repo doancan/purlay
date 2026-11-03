@@ -121,7 +121,7 @@ describe('integration: who is online across nodes', () => {
     expect(await b.join(user)).toBeNull();
     expect(await a.join(user)).toBeNull();
     expect(await b.among([user, unique('nobody')])).toEqual([
-      { userId: user, online: true, version: first ?? 0 },
+      { userId: user, online: true, away: false, version: first ?? 0 },
     ]);
 
     expect(await a.leave(user)).toBeNull();

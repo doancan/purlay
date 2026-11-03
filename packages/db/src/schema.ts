@@ -623,6 +623,7 @@ export interface TwoFactors {
 
 export interface Users {
   avatar_url: string | null;
+  away_chosen: Generated<boolean>;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   display_name: string;

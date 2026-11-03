@@ -81,8 +81,8 @@ describe('who is online, shared', () => {
     link.behaviour.script = (): unknown => [0, 42, 0, 43];
     const directory = redisPresenceDirectory(link, 'node-a');
     expect(await directory.among(['a', 'b', 'c', 'd'])).toEqual([
-      { userId: 'b', online: true, version: 42 },
-      { userId: 'd', online: true, version: 43 },
+      { userId: 'b', online: true, away: false, version: 42 },
+      { userId: 'd', online: true, away: false, version: 43 },
     ]);
     expect(link.scripts).toHaveLength(1);
     expect(await directory.among([])).toEqual([]);
@@ -121,8 +121,8 @@ describe('who is online, shared', () => {
     expect(link.scripts[0]?.args).toEqual(['node-a', 'u1']);
     link.behaviour.script = (): unknown => ['u1', 77, 'u2', 78];
     expect(await directory.sweep()).toEqual([
-      { userId: 'u1', online: false, version: 77 },
-      { userId: 'u2', online: false, version: 78 },
+      { userId: 'u1', online: false, away: false, version: 77 },
+      { userId: 'u2', online: false, away: false, version: 78 },
     ]);
     expect(link.scripts.at(-1)?.keys).toEqual([LAPSE_INDEX]);
     expect(link.scripts.at(-1)?.args[0]).toBe(ONLINE_PREFIX);

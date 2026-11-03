@@ -223,7 +223,7 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
       if (typeof userId !== 'string' || typeof version !== 'number') {
         throw new Error('the presence script answered something else');
       }
-      gone.push({ userId, online: false, version });
+      gone.push({ userId, online: false, away: false, version });
     }
     return gone;
   },
@@ -241,7 +241,7 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
       const version: unknown = answers[index];
       if (typeof version !== 'number')
         throw new Error('the presence script answered something else');
-      return version === 0 ? [] : [{ userId, online: true, version }];
+      return version === 0 ? [] : [{ userId, online: true, away: false, version }];
     });
   },
   version: async (): Promise<number> => {

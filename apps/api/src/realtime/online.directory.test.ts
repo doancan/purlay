@@ -66,7 +66,7 @@ const sharedRecord = (
         for (const userId of [...due]) {
           if (live(userId) > 0) continue;
           due.delete(userId);
-          gone.push({ userId, online: false, version: bump(userId) });
+          gone.push({ userId, online: false, away: false, version: bump(userId) });
         }
         return gone;
       },
@@ -74,7 +74,9 @@ const sharedRecord = (
         await Promise.resolve();
         guard();
         return userIds.flatMap((userId): PresenceChange[] =>
-          live(userId) > 0 ? [{ userId, online: true, version: versions.get(userId) ?? 0 }] : [],
+          live(userId) > 0
+            ? [{ userId, online: true, away: false, version: versions.get(userId) ?? 0 }]
+            : [],
         );
       },
       version: async (): Promise<number> => {

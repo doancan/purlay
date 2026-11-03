@@ -302,7 +302,7 @@ describe('the people section', () => {
       });
     const told = (userId: string, online: boolean, version: number): ServerFrame => ({
       event: 'PRESENCE',
-      data: { changes: [{ userId, online, version }] },
+      data: { changes: [{ userId, online, away: false, version }] },
       ts: 0,
     });
 
@@ -311,7 +311,7 @@ describe('the people section', () => {
         aSignedInApi({
           presence: () =>
             Promise.resolve({
-              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
               version: 9,
             }),
         }),
@@ -331,7 +331,7 @@ describe('the people section', () => {
         aSignedInApi({
           presence: () =>
             Promise.resolve({
-              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
               version: 9,
             }),
         }),
@@ -390,7 +390,10 @@ describe('the people section', () => {
     };
     const CAROL = aUser('carol', '0199155c-6200-7b7f-8c11-0000000000c7');
     const aliceOnline = (): Promise<PresenceSnapshot> =>
-      Promise.resolve({ online: [{ userId: ALICE.id, online: true, version: 5 }], version: 9 });
+      Promise.resolve({
+        online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
+        version: 9,
+      });
     const nobody = (): Promise<PresenceSnapshot> => Promise.resolve({ online: [], version: 20 });
 
     test('read once as the page loads, and not again while nothing happens', async () => {
@@ -467,7 +470,7 @@ describe('the people section', () => {
         aliceOnline,
         (): Promise<PresenceSnapshot> =>
           Promise.resolve({
-            online: [{ userId: CAROL.id, online: true, version: 12 }],
+            online: [{ userId: CAROL.id, online: true, away: false, version: 12 }],
             version: 13,
           }),
       ]);
@@ -508,7 +511,7 @@ describe('the people section', () => {
         api: aSignedInApi({
           presence: () =>
             Promise.resolve({
-              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
               version: 9,
             }),
         }),

@@ -179,6 +179,7 @@ describe('the endpoints', () => {
       mustEnrolTwoFactor: false,
       scheduledDeletions: [],
       modules: ['chat'],
+      awayChosen: false,
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
@@ -1250,7 +1251,10 @@ describe('the endpoints', () => {
   });
 
   test('who is online in a workspace is read with the version everyone else is offline at (D-136)', async () => {
-    const snapshot = { online: [{ userId: ID, online: true, version: 4 }], version: 4 };
+    const snapshot = {
+      online: [{ userId: ID, online: true, away: false, version: 4 }],
+      version: 4,
+    };
     const presence = harness(snapshot);
     expect(await presence.api.presence(ID)).toEqual(snapshot);
     expect(presence.calls[0]).toMatchObject({

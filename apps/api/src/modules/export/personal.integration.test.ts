@@ -559,7 +559,7 @@ describe('integration: a person’s export that fails', () => {
 /**
  * As written when this test was made, before the catalogue moved between modules. A change that is meant says so
  * by changing this, in the same pull request, with the reason. (`google_made` is the Google sign-in change's: a column of
- * `users` it added to a person's own export after this was first frozen.)
+ * `users` it added to a person's own export after this was first frozen; `away_chosen` is away presence's, D-257.)
  */
 const FROZEN_SHAPE: Record<string, unknown> = {
   order: [
@@ -599,6 +599,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
       rows: 1,
       columns: [
         'avatar_url',
+        'away_chosen',
         'created_at',
         'deleted_at',
         'display_name',

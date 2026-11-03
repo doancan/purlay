@@ -57,6 +57,7 @@ export const aSession = (): MeResponse => ({
   mustEnrolTwoFactor: false,
   scheduledDeletions: [],
   modules: ['chat'],
+  awayChosen: false,
 });
 
 export const aChannel = (
