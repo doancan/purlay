@@ -139,3 +139,35 @@ export const sweepObjectDeletions = async (
   if (left > 0) throw new Error(`${String(left)} object(s) could not be deleted from storage`);
   return { removed };
 };
+
+/**
+ * The files of these messages: rows deleted, their bytes off the workspace, their keys queued for the
+ * store in the same transaction (D-141) and returned, for the caller to delete once it has committed.
+ */
+export const dropFiles = async (
+  transaction: Transaction,
+  workspaceId: string,
+  messageIds: readonly string[],
+): Promise<{ readonly count: number; readonly keys: readonly string[] }> => {
+  if (messageIds.length === 0) return { count: 0, keys: [] };
+  const gone = await transaction
+    .deleteFrom('attachments')
+    .where('message_id', 'in', messageIds)
+    .returning(['size_bytes', 'storage_key', 'thumbnail_key'])
+    .execute();
+  if (gone.length > 0) {
+    const bytes = gone.reduce((sum, row) => sum + BigInt(row.size_bytes), 0n);
+    await transaction
+      .updateTable('workspaces')
+      .set({
+        storage_used_bytes: sql<string>`greatest(storage_used_bytes - ${bytes.toString()}::bigint, 0)`,
+      })
+      .where('id', '=', workspaceId)
+      .execute();
+  }
+  const keys = gone.flatMap((row) =>
+    row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
+  );
+  await enqueueObjectDeletions(transaction, keys);
+  return { count: gone.length, keys };
+};
