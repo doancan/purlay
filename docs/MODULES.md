@@ -357,8 +357,23 @@ gzipped (entry 292.63 → 241.43), chat's chunk 45.65 KB; the bounds are 250 KB 
 chat (10% over), and the 400 KB backstop stays. Time to the first message row, cold cache at 10 Mbit/s and 40 ms,
 median of nine, in-page timer: 1444–1474 ms before, 1471–1476 ms after (run twice; the runs differ by as much as
 the two builds do) and 1509 ms with the chunk not asked for early; with a warm cache 124 ms before, 124–130 ms after.
-The repo's own cold-load test stops at the frame, which chat's chunk does not gate, so the first-row timer was a
-temporary spec, not kept.
+The repo's own cold-load test (`budget:browser`) stops at the frame, which on a narrow window *is* gated by the
+chunk: the navigation toggle is in the screen's bar. The first version's fallback had no bar and the narrow cold
+load regressed from 122.8 to 201.9–238.3 ms in CI (and the toggle was missing after the front door moved the
+person); the fallback now draws the shell's `ScreenBar` first. The first-row timer was a temporary spec, not kept.
+
+**What is left of chat in the shell, measured and left alone (2026-11-03).** About 1.17 MB of source is in the
+initial chunk's source map; the chat-only UI the frame draws only inside `WhenRun module="chat"` (inbox panel,
+rail links, the sidebar's channel, starred, unread and conversation lists, the jump field) is about 55 KB of source,
+and the rest of what is chat-named is imported by the shell's panel host, the composer providers and the tab title,
+so a lazy boundary cannot take it out without restructuring them. A second lazy chunk of the frame's chat pieces
+was built and measured: the shell went from 242.62 to 237.80 KB gzipped (2%), narrow cold load unchanged
+(63.4 vs 62.4 ms mean of three medians of five, local), wide about 4 ms slower on average, inside the 60–78 ms
+spread but pointing the wrong way in five of six runs. Not worth a second layout-fallback surface, so it was
+reverted; the helpers that merely live in chat folders (`messages/author`, `palette/channels`, `composer/outbox`,
+`channel/feed-ports`) save no bytes when moved and stay. The shape check therefore names the screens and the
+heavy modules, not every chat-named file; a module with a larger share of its code in the shell would earn the
+second chunk.
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The
