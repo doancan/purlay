@@ -13317,4 +13317,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'set: moduleSetOf([]),',
     tests: ['apps/api/src/realtime/module-set.redis.integration.test.ts'],
   },
+  {
+    id: 'unreads-route-is-no-module-screen',
+    why: "the unreads screen is no longer chat's, so a server that does not run chat still shows it instead of 'nothing here' (D-250)",
+    file: 'apps/web/src/router/routes.ts',
+    find: "  unreads: 'chat',",
+    replace: '  unreads: null,',
+    tests: ['apps/web/src/router/route-modules.test.ts', 'apps/web/src/app/app.test.tsx'],
+  },
+  {
+    id: 'drafts-route-is-no-module-screen',
+    why: "the drafts screen is no longer chat's, so a server that does not run chat still shows it instead of 'nothing here' (D-250)",
+    file: 'apps/web/src/router/routes.ts',
+    find: "  drafts: 'chat',",
+    replace: '  drafts: null,',
+    tests: ['apps/web/src/router/route-modules.test.ts', 'apps/web/src/app/app.test.tsx'],
+  },
 ];
