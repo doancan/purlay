@@ -70,12 +70,26 @@ const SET_ID = /^[a-z][a-z0-9-]*$/;
 
 /**
  * The sets of the modules this build carries (D-250): chat's, in `migrations/chat/`, applied after the core's and
- * recorded as `chat/<file>`. Which of them a process applies is `MODULES`' to say once something can be turned
- * off (`MODULES.md` §10, step 12); until then every caller that opens a database passes all of them.
+ * recorded as `chat/<file>`. A process applies the ones its `MODULES` names (`setsNamedBy`, `MODULES.md` §3).
  */
 export const PRODUCT_MIGRATION_SETS: readonly MigrationSet[] = [
   { id: 'chat', directory: join(MIGRATIONS_DIRECTORY, 'chat') },
 ];
+
+/**
+ * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every
+ * set this build carries, `none` the core alone, otherwise the ones listed. A word that names no set is not this
+ * command's to judge — a module may have no tables — and the API refuses the setting in full when it boots.
+ */
+export const setsNamedBy = (setting: string | undefined): readonly MigrationSet[] => {
+  const words = (setting ?? '')
+    .split(',')
+    .map((word) => word.trim())
+    .filter((word) => word !== '');
+  if (words.length === 0) return PRODUCT_MIGRATION_SETS;
+  if (words.length === 1 && words[0] === 'none') return [];
+  return PRODUCT_MIGRATION_SETS.filter((set) => words.includes(set.id));
+};
 
 export interface MigrationResult {
   readonly migrationName: string;

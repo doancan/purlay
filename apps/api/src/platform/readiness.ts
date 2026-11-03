@@ -29,6 +29,7 @@ import {
   PRODUCT_MIGRATION_SETS,
   sql,
   type Executor,
+  type MigrationSet,
 } from '@purlay/db';
 import type { Clock } from './clock';
 
@@ -64,17 +65,18 @@ export const readiness = async (
   collatedColumns: readonly CollatedColumn[],
   signIn?: ReadinessCheck,
   shared?: SharedProblem,
+  sets: readonly MigrationSet[] = PRODUCT_MIGRATION_SETS,
 ): Promise<Readiness> => {
   try {
     const history = await migrationHistoryProblem(
       database,
       undefined,
       undefined,
-      PRODUCT_MIGRATION_SETS,
+      sets,
     );
     if (history !== undefined) return { ready: false, reason: history };
 
-    const pending = await pendingMigrations(database, undefined, PRODUCT_MIGRATION_SETS);
+    const pending = await pendingMigrations(database, undefined, sets);
     if (pending.length > 0) {
       return { ready: false, reason: `migrations not applied: ${pending.join(', ')}` };
     }

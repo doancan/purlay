@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import {
   createDatabase,
   dropDatabases,
+  migrationHistoryProblem,
+  pendingMigrations,
   PRODUCT_MIGRATION_SETS,
   readMigrationFiles,
   sql,
@@ -209,6 +211,41 @@ describe('integration: migrate on start', () => {
     }
   });
 
+  test('with no module set the core alone is applied, and a module opened later brings its own', async () => {
+    const { name, db } = await freshDatabase('core-alone');
+    try {
+      const files = await everyMigration();
+      const core = files.filter((file) => !file.includes('/'));
+      expect(
+        await migrateOnStart({ connectionString: urlFor(name) }, undefined, { sets: [] }),
+      ).toEqual(core);
+      const tables = async (): Promise<string[]> =>
+        (
+          await sql<{ table_name: string }>`
+            select table_name from information_schema.tables where table_schema = current_schema()`.execute(
+            db,
+          )
+        ).rows.map((row) => row.table_name);
+      expect(await tables()).not.toContain('message_attachments');
+      // Nothing is pending for a process that runs no module, and one that runs chat sees chat's set waiting.
+      await untilMigrated(db, aRecordingLogger().log, 20, []);
+      expect(await pendingMigrations(db, undefined, PRODUCT_MIGRATION_SETS)).toEqual(
+        files.filter((file) => file.includes('/')),
+      );
+      // Opened later, chat's set is applied on top, and starting with it off again tolerates its rows.
+      expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual(
+        files.filter((file) => file.includes('/')),
+      );
+      expect(await tables()).toContain('message_attachments');
+      expect(
+        await migrateOnStart({ connectionString: urlFor(name) }, undefined, { sets: [] }),
+      ).toEqual([]);
+      expect(await migrationHistoryProblem(db, undefined, undefined, [])).toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
   test('a migration that fails stops the start, naming it and keeping the cause', async () => {
     const { name, db } = await freshDatabase('bad');
     const directory = mkdtempSync(join(tmpdir(), 'migrations-'));
@@ -382,6 +419,56 @@ describe('integration: migrate on start', () => {
     } finally {
       node.kill();
       await node.exited;
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node run with MODULES=none migrates the core alone, is ready, and has no chat route', async () => {
+    const { name, db } = await freshDatabase('modules-none');
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MIGRATE_ON_START: 'true', MODULES: 'none' },
+    );
+    try {
+      expect(await until(port, '/health/ready', 200)).toBe(200);
+      expect(await recorded(db)).toEqual(
+        (await everyMigration()).filter((file) => !file.includes('/')),
+      );
+      // A route of a module that is not run is the answer to any path nobody serves.
+      expect(await answer(port, '/api/channels/anything')).toEqual([404, 'ROUTE_NOT_FOUND']);
+      expect(await answer(port, '/api/nothing-like-it')).toEqual([404, 'ROUTE_NOT_FOUND']);
+      const client = (await (
+        await fetch(`http://127.0.0.1:${String(port)}/api/client`)
+      ).json()) as {
+        modules?: string[];
+      };
+      expect(client.modules).toEqual([]);
+    } finally {
+      node.kill();
+      await node.exited;
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node whose MODULES names a module the build does not carry exits before it listens, naming it', async () => {
+    const { name, db } = await freshDatabase('modules-unknown');
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MIGRATE_ON_START: 'true', MODULES: 'chat,calendar' },
+    );
+    try {
+      const { code, said } = await exitOf(node);
+      expect(code).toBe(1);
+      expect(said).toContain('MODULES cannot be run; exiting');
+      expect(said).toContain('calendar');
+      expect(await recorded(db).catch(() => [])).toEqual([]);
+    } finally {
       await db.destroy();
     }
   }, 60_000);
