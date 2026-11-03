@@ -14,3 +14,6 @@ packages/tokens/src/generated/
 LICENSE
 NOTICE
 bun.lock
+
+# Written by `bun run manifests:snapshot` at release time, with the arrays as the script lays them out.
+apps/api/src/released-manifests.json

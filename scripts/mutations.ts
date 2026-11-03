@@ -13157,4 +13157,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'bundled.find((module) => module.readAttachment !== undefined)',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
   },
+  {
+    id: 'chat-drops-a-route-silently',
+    why: 'a module stops owning a route a deployed client calls, and nothing says so between releases (D-250)',
+    file: 'apps/api/src/features/chat/module.ts',
+    find: "      '/api/notifications/read',\n",
+    replace: '',
+    tests: ['apps/api/src/module-compat.test.ts'],
+  },
 ];
