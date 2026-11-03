@@ -11425,9 +11425,9 @@ again; nothing else reads them.
 owner could export, and only a whole workspace, so a person exercising a right of access or portability (KVKK, GDPR)
 depended on an owner or the operator. A person now asks for a copy of their own data in Sessions & account.
 
-- **What goes is decided column by column** (`PERSONAL_COLUMNS` in `modules/export/tables.ts`), typed over the
+- **What goes is decided column by column** (the core's `modules/export/core-personal-export.ts` and chat's `features/chat/personal-export.ts`, assembled in `export-catalogue.ts`, D-250), typed over the
   generated schema as the workspace's classification is, with every other table named and its reason given
-  (`PERSONAL_EXCLUDED`) and a test that binds both to the catalogue: a column or a table a migration adds does not
+  (`CORE_PERSONAL_EXCLUDED`, `CHAT_PERSONAL_EXCLUDED`) and a test that binds both to the catalogue: a column or a table a migration adds does not
   compile until somebody decides whether a person's own copy carries it. Their account's row, every field (none is a
   secret: the password's hash, the second step's key and the sessions' tokens are other tables', and stay); their
   memberships and what they set on each — the notification level, stars, Deep Work, threads followed; every message

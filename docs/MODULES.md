@@ -270,7 +270,11 @@ request with behaviour unchanged:
    compile time, naming a table nobody decided, and the integration test holds it to the database. A frozen
    shape of the files, rows and columns — the safety net, written first — passed unchanged through the move.
    `attachments` is still described by chat, which bounds it by messages, until the link is chat's (step 8)
-4. **The personal export** the same way;
+4. **The personal export** (**built**) the same way: `modules/export/personal-catalogue.ts` defines its contribution and
+   assembles the core's (`core-personal-export.ts`: the account, the workspaces its rows name, the memberships)
+   and chat's (`features/chat/personal-export.ts`: channels, messages, reactions, saved items and the rest) in
+   the order the files have always been written; the composition root holds the sum to the schema at compile
+   time, and a frozen shape of the files, rows and columns, written first, passed unchanged through the move;
 5. **`COLLATED_COLUMNS`** in the readiness check (**built**): the core keeps `CORE_COLLATED_COLUMNS` (`users.email`,
    `users.username`, `workspaces.slug`); chat's list (`features/chat/collated-columns.ts`: `channels.name` and the
    `github_*` digests) is handed in where the application is put together, `createApp`'s `collatedColumns`, defaulting
