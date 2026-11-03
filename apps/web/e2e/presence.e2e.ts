@@ -38,4 +38,34 @@ test.describe('who is online', () => {
     await expect(row).toContainText('Alice Chen, online');
     await expectNoAxe(section);
   });
+
+  test('somebody who sets themselves away is a ring for the others, and a dot again when active (D-257)', async ({
+    page,
+    signIn,
+    room,
+    asPerson,
+  }) => {
+    const made = await room();
+    await signIn();
+    await page.goto(made.path);
+    const section = await people(page);
+
+    const alice = await asPerson('alice');
+    await alice.goto(made.path);
+    const row = section.locator('li', { hasText: 'Alice' });
+    await expect(row.locator('[data-online]')).toHaveCount(1);
+
+    // She chooses it from her account menu; the server tells the others, who see the ring.
+    await (await openNav(alice)).getByRole('button', { name: /^Account:/ }).click();
+    await alice.getByRole('menuitem', { name: 'Set yourself as away' }).click();
+    await expect(row.locator('[data-away]')).toHaveCount(1);
+    await expect(row.locator('[data-online]')).toHaveCount(0);
+    await expect(row).toContainText('Alice Chen, away');
+
+    // And back: the item says so, and the dot returns.
+    await (await openNav(alice)).getByRole('button', { name: /^Account:/ }).click();
+    await alice.getByRole('menuitem', { name: 'Set yourself as active' }).click();
+    await expect(row.locator('[data-online]')).toHaveCount(1);
+    await expect(row.locator('[data-away]')).toHaveCount(0);
+  });
 });

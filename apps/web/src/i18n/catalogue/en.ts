@@ -2100,6 +2100,9 @@ export const en = {
 
   // ── Account ─────────────────────────────────────────────────────────────
   'user.menu': 'Account',
+  'user.setAway': 'Set yourself as away',
+  'user.setActive': 'Set yourself as active',
+  'user.awayFailed': 'Your status was not changed.',
   'user.signOut': 'Sign out',
   'user.signOutEverywhere': 'Sign out everywhere',
   'user.signOutEverywhere.entry': 'Sign out everywhere…',

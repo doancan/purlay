@@ -37,7 +37,11 @@ const session = (deepWorkUntil: string | null): MeResponse => {
 
 type View = Awaited<ReturnType<typeof renderApp>>;
 
-const open = async (api: Partial<Api> = {}, deepWorkUntil: string | null = null): Promise<View> => {
+const open = async (
+  api: Partial<Api> = {},
+  deepWorkUntil: string | null = null,
+  awayChosen = false,
+): Promise<View> => {
   const view = await renderApp(
     <>
       <Outlet />
@@ -45,7 +49,10 @@ const open = async (api: Partial<Api> = {}, deepWorkUntil: string | null = null)
     </>,
     {
       path: `/w/acme/c/${IDS.api}`,
-      api: aSignedInApi({ me: () => Promise.resolve(session(deepWorkUntil)), ...api }),
+      api: aSignedInApi({
+        me: () => Promise.resolve({ ...session(deepWorkUntil), awayChosen }),
+        ...api,
+      }),
     },
   );
   await settle();
@@ -65,11 +72,12 @@ const whiles = async (view: View): Promise<void> => {
 const here = (view: View): string => view.world.history.stack.at(-1) ?? '';
 
 describe('the account menu', () => {
-  test('offers Deep Work for a while, Settings, the shortcuts and signing out — nothing that is a page of Settings', async () => {
+  test('offers Deep Work for a while, away, Settings, the shortcuts and signing out — nothing that is a page of Settings', async () => {
     const view = await open();
     await menu(view);
     expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Deep Work',
+      'Set yourself as away',
       expect.stringMatching(/^Settings/) as unknown as string,
       expect.stringMatching(/^Keyboard shortcuts/) as unknown as string,
       'Sign out',
@@ -170,6 +178,69 @@ describe('the account menu', () => {
     await settle();
     expect(asked).toEqual([{ active: false }]);
     expect(view.queryByText(/Deep Work until/)).toBeNull();
+    view.unmount();
+  });
+});
+
+describe('away (D-257)', () => {
+  test('offers Set yourself as away when not chosen, and Set yourself as active when chosen', async () => {
+    const view = await open();
+    await menu(view);
+    expect(view.getByRole('menuitem', { name: 'Set yourself as away' })).toBeDefined();
+    expect(view.queryByRole('menuitem', { name: 'Set yourself as active' })).toBeNull();
+    view.unmount();
+    const chosen = await open({}, null, true);
+    await menu(chosen);
+    expect(chosen.getByRole('menuitem', { name: 'Set yourself as active' })).toBeDefined();
+    expect(chosen.queryByRole('menuitem', { name: 'Set yourself as away' })).toBeNull();
+    chosen.unmount();
+  });
+
+  test('choosing calls the route, and the label flips', async () => {
+    const asked: boolean[] = [];
+    const view = await open({
+      setAway: (away) => {
+        asked.push(away);
+        return Promise.resolve({ away });
+      },
+    });
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Set yourself as away' }));
+    await settle();
+    expect(asked).toEqual([true]);
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Set yourself as active' }));
+    await settle();
+    expect(asked).toEqual([true, false]);
+    await menu(view);
+    expect(view.getByRole('menuitem', { name: 'Set yourself as away' })).toBeDefined();
+    view.unmount();
+  });
+
+  test('a failed call says so and keeps the label', async () => {
+    const view = await open({
+      setAway: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+    });
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Set yourself as away' }));
+    await settle();
+    expect(view.getByText(/^Your status was not changed\./)).toBeDefined();
+    await menu(view);
+    expect(view.getByRole('menuitem', { name: 'Set yourself as away' })).toBeDefined();
+    view.unmount();
+  });
+
+  test('the own avatar shows the ring when the own entry says away', async () => {
+    const view = await open({
+      presence: () =>
+        Promise.resolve({
+          online: [{ userId: IDS.me, online: true, away: true, version: 5 }],
+          version: 9,
+        }),
+    });
+    const door = view.getByRole('button', { name: /^Account: Dogancan @/ });
+    expect(door.querySelector('[data-away]')).not.toBeNull();
+    expect(door.querySelector('[data-online]')).toBeNull();
     view.unmount();
   });
 });

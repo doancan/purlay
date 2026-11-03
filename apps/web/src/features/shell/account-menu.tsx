@@ -16,11 +16,17 @@
  * in a submenu, so the four of them do not outnumber everything else in it.
  */
 import { useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { MeResponse } from '@purlay/types';
+import { useApi } from '../../data/api-provider';
+import { useDescribeFailure } from '../../data/failure';
+import { keys } from '../../data/keys';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
+import { useToast } from '../../ui/toast';
 import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from '../../ui/menu';
 import { usePresence } from '../../realtime/realtime-provider';
 import { useSession } from '../session/session';
@@ -89,9 +95,39 @@ const Identity = ({
   </div>
 );
 
+/**
+ * The one item that says how you appear (D-257): "Set yourself as away" until you have, then "Set
+ * yourself as active". The server's answer is written into the session at once; the ring itself
+ * changes when the server's presence frame comes back, not before — it is what everyone is told.
+ */
+const AwayItem = ({ chosen }: { readonly chosen: boolean }): React.JSX.Element => {
+  const { t } = useI18n();
+  const api = useApi();
+  const client = useQueryClient();
+  const { show } = useToast();
+  const describe = useDescribeFailure();
+  const choose = (): void => {
+    api.setAway(!chosen).then(
+      ({ away }) => {
+        client.setQueryData<MeResponse>(keys.me, (me) =>
+          me === undefined ? me : { ...me, awayChosen: away },
+        );
+      },
+      (failure: unknown) => {
+        show({ message: `${t('user.awayFailed')} ${describe(failure)}` });
+      },
+    );
+  };
+  return (
+    <MenuItem glyph="person" onSelect={choose}>
+      {t(chosen ? 'user.setActive' : 'user.setAway')}
+    </MenuItem>
+  );
+};
+
 export const AccountMenu = (): React.JSX.Element => {
   const { t } = useI18n();
-  const { user } = useSession();
+  const { user, awayChosen } = useSession();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   const leave = useSignOut();
@@ -135,6 +171,7 @@ export const AccountMenu = (): React.JSX.Element => {
       <Identity name={user.displayName} username={user.username} presence={presence} />
       <MenuSeparator />
       <DeepWorkItems />
+      <AwayItem chosen={awayChosen} />
       <MenuItem
         glyph="settings"
         shortcut={`${mod},`}

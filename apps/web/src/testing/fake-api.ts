@@ -155,6 +155,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   channelMembers: unexpected('channelMembers'),
   setNotificationLevel: unexpected('setNotificationLevel'),
   star: unexpected('star'),
+  setAway: unexpected('setAway'),
   setDeepWork: unexpected('setDeepWork'),
   deleteMessage: unexpected('deleteMessage'),
   eraseAccount: unexpected('eraseAccount'),
