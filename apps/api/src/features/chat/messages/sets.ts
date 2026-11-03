@@ -10,7 +10,7 @@
  */
 import { sql, type Executor } from '@purlay/db';
 import type { Attachment, Reaction } from '@purlay/types';
-import { ATTACHMENT_COLUMNS, asAttachment } from '../../../modules/attachments/uploads';
+import { asAttachment } from '../../../modules/attachments/uploads';
 
 /**
  * Reactions by message, each emoji's people in the order they reacted and the
@@ -73,11 +73,22 @@ export const attachmentSets = async (
   const sets = new Map<string, Attachment[]>();
   if (messageIds.length === 0) return sets;
   const rows = await executor
-    .selectFrom('attachments')
-    // Asked for by message, so every row has one.
-    .select([...ATTACHMENT_COLUMNS, sql<string>`message_id`.as('carried_by')])
-    .where('message_id', 'in', messageIds)
-    .orderBy('id')
+    .selectFrom('message_attachments')
+    .innerJoin('attachments', 'attachments.id', 'message_attachments.attachment_id')
+    .select([
+      'attachments.id',
+      'attachments.workspace_id',
+      'attachments.uploader_id',
+      'attachments.file_name',
+      'attachments.mime_type',
+      'attachments.size_bytes',
+      'attachments.kind',
+      'attachments.width',
+      'attachments.height',
+      'message_attachments.message_id as carried_by',
+    ])
+    .where('message_attachments.message_id', 'in', messageIds)
+    .orderBy('attachments.id')
     .execute();
   for (const row of rows) {
     const list = sets.get(row.carried_by) ?? [];

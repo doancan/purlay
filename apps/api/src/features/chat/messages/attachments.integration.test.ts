@@ -19,6 +19,7 @@ import { storeUpload } from '../../../modules/attachments/uploads';
 import { removeMessage } from './delete';
 import { messageHistory, sendMessage } from './messages';
 import { threadReplies } from './threads';
+import { linkFile } from '../../../testing/sent-files';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -59,6 +60,12 @@ const attach = async (
     }))
     .where('id', '=', id)
     .execute();
+  await linkFile(db, {
+    id: id,
+    workspaceId: room.workspaceId,
+    messageId: to,
+    channelId: room.channelId,
+  });
   return id;
 };
 

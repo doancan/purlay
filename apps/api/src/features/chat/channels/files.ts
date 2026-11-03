@@ -2,8 +2,8 @@
  * A channel's files (#485, D-129): every attachment of a message in it, newest message first.
  *
  * - **Only the channel's, and only through its context.** The caller reached the channel through
- *   `ChannelContext`; the rows are found by `attachments.channel_id`, which the link sets and a key
- *   binds to the message's own channel (I-1).
+ *   `ChannelContext`; the rows are found by `message_attachments.channel_id`, which the link sets and a
+ *   key binds to the message's own channel (I-1).
  * - **What the channel shows.** An unattached upload is its uploader's alone and is never listed; a
  *   deleted message's files go with its words, as the tombstone hides them (D-109 §6).
  * - **Keyset on the message, then the file.** A message carries several (`ATTACHMENTS_PER_MESSAGE_MAX`),
@@ -25,12 +25,12 @@ const cursorOf = async (
   before: string,
 ): Promise<string> => {
   const row = await executor
-    .selectFrom('attachments')
+    .selectFrom('message_attachments')
     .select('message_id')
-    .where('id', '=', before)
+    .where('attachment_id', '=', before)
     .where('channel_id', '=', context.channelId)
     .executeTakeFirst();
-  if (row?.message_id == null) {
+  if (row === undefined) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
       message: 'That file is not in this channel.',
@@ -47,8 +47,9 @@ export const channelFiles = async (
 ): Promise<FilePage> => {
   const limit = limitOf(query);
   let statement = executor
-    .selectFrom('attachments')
-    .innerJoin('messages', 'messages.id', 'attachments.message_id')
+    .selectFrom('message_attachments')
+    .innerJoin('attachments', 'attachments.id', 'message_attachments.attachment_id')
+    .innerJoin('messages', 'messages.id', 'message_attachments.message_id')
     // Only a person's message carries files (an event has none), so the join keeps every one.
     .innerJoin('users', 'users.id', 'messages.sender_id')
     .select([
@@ -69,15 +70,15 @@ export const channelFiles = async (
       'users.display_name',
       'users.avatar_url',
     ])
-    .where('attachments.channel_id', '=', context.channelId)
+    .where('message_attachments.channel_id', '=', context.channelId)
     .where('messages.deleted_at', 'is', null)
-    .orderBy('attachments.message_id', 'desc')
-    .orderBy('attachments.id', 'desc')
+    .orderBy('message_attachments.message_id', 'desc')
+    .orderBy('message_attachments.attachment_id', 'desc')
     .limit(limit + 1);
   if (query.before !== undefined) {
     const message = await cursorOf(executor, context, query.before);
     statement = statement.where(
-      sql<boolean>`(attachments.message_id, attachments.id) < (${message}, ${query.before})`,
+      sql<boolean>`(message_attachments.message_id, message_attachments.attachment_id) < (${message}, ${query.before})`,
     );
   }
   const rows = await statement.execute();
