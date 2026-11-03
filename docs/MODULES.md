@@ -220,12 +220,15 @@ unchanged and proved so:
 
 1. leaf moves — the GitHub client and the `ILIKE` escape to `platform/` (**built**);
 2. a `workspaceCreated` hook list; chat registers the creation of the default channel, and a hook that throws
-   rolls the whole workspace back;
-3. `dropFiles` to `attachments`, taking the ids of the messages it drops;
-4. erasure and retention hooks: the core keeps the loop, the drain and the audit line, chat the tombstoning;
-5. notifications: they are written only by messages and point at channels and messages, so they move to chat as
-   `mention_notifications`; a generic core inbox waits for a second writer;
-6. the channel file list leaves `attachments`;
+   rolls the whole workspace back (**built**);
+3. `dropFiles` to `attachments`, taking the ids of the messages it drops (**built**);
+4. erasure and retention: both turned out to be whole commands about messages that nothing in the core calls, so
+   they moved to `messages/` and no hook was needed (**built**);
+5. notifications: they are written only by messages and point at channels and messages, and their module is read
+   by the doors and one command only, so they are chat's — **built** as an ownership, the table keeps its name and
+   the two foreign keys leave the list of crossings; the code moves with the rest of chat in step 9. A generic core
+   inbox waits for a second writer;
+6. the channel file list leaves `attachments` (**built**);
 7. the workspace purge's message and channel steps become a chat hook, and `REMAINING_TABLES` splits by owner;
 8. the two foreign keys from `attachments` to `messages` are dropped, a reconciliation sweep in the orphan job
    takes their place, and the ownership list empties — a migration, and so rehearsed on a copy and the owner's
@@ -234,8 +237,7 @@ unchanged and proved so:
 The three behaviours that could change without a test failing: the default channel at workspace creation (an
 integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
 workspace); the erasure of a person's messages (the existing tests unchanged, and the rows compared before and
-after on a seeded fixture, with two erasures racing); and the nightly retention (a test that the hook is
-registered when chat is on, and the counts on aged fixtures identical).
+after on a seeded fixture, with two erasures racing); and the nightly retention (the counts on aged fixtures identical, held by the existing tests, which moved unmodified).
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The
