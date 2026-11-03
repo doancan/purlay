@@ -7,7 +7,7 @@
 import type { Executor } from '@purlay/db';
 
 /** One notification still to be pushed: the person told, why, and the channel it happened in. */
-export interface PushNotice {
+interface PushNotice {
   readonly userId: string;
   /** The notification's reason, as the person's inbox names it. */
   readonly type: string;
