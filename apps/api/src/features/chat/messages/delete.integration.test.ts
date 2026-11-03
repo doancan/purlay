@@ -9,7 +9,7 @@ import { messageId } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import { markRead } from '../channels/read-state';
-import { requireChannelById, requireMessageById } from '../../../platform/channels';
+import { requireChannelById, requireMessageById } from '../channels/guard';
 import { aRoom, counters, notificationsOf, type Room } from '../../../testing/rooms';
 import { deleteMessage, removeMessage } from './delete';
 import { aSession } from '../../../testing/signed-in';

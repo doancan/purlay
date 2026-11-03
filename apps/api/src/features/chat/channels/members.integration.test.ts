@@ -6,7 +6,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { requireChannelById, visibleChannelIds } from '../../../platform/channels';
+import { requireChannelById, visibleChannelIds } from './guard';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';
 import { aRoom, type Room } from '../../../testing/rooms';

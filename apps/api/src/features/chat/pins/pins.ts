@@ -22,7 +22,7 @@ import {
   requireChannelMember,
   requireMessageById,
   type ChannelContext,
-} from '../../../platform/channels';
+} from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
 

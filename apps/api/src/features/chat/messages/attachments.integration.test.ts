@@ -7,7 +7,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import { requireMessageById } from '../../../platform/channels';
+import { requireMessageById } from '../channels/guard';
 import { fixedClock } from '../../../platform/clock';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';

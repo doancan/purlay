@@ -14,7 +14,7 @@ import {
 } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../../platform/clock';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { missedIn } from './messages';
 

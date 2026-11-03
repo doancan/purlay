@@ -27,7 +27,7 @@ import {
   type ReadChannelResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,

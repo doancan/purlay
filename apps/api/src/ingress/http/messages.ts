@@ -31,9 +31,9 @@ import {
   messageNotFound,
   requireChannelById,
   requireMessageById,
-} from '../../platform/channels';
+} from '../../features/chat/channels/guard';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { visibleChannelIds } from '../../platform/channels';
+import { visibleChannelIds } from '../../features/chat/channels/guard';
 import {
   messageHistory,
   messageWindow,

@@ -10,7 +10,7 @@ import {
   type IncomingWebhookAnswer,
   type IncomingWebhookList,
 } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import { AppError } from '../../platform/errors';
 import { atomicallyOn } from '../../platform/transactions';
 import {

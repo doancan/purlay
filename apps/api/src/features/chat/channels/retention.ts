@@ -14,7 +14,7 @@
 import type { Transaction, Executor } from '@purlay/db';
 import type { ChannelRetention, ChannelRetentionFloor } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import { channelNotFound, type ChannelContext } from '../../../platform/channels';
+import { channelNotFound, type ChannelContext } from './guard';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { recordAudit } from '../../../modules/audit/audit';

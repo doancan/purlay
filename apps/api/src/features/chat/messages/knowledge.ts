@@ -1,7 +1,7 @@
 import { sql } from '@purlay/db';
 import type { Message, SetKnowledgeRequest } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import { requireMessageById, requireChannelMember } from '../../../platform/channels';
+import { requireMessageById, requireChannelMember } from '../channels/guard';
 import {
   NO_LOG,
   publication,

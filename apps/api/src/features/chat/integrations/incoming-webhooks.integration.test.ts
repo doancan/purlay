@@ -14,7 +14,7 @@ import {
   type Transaction,
 } from '@purlay/db';
 import { INCOMING_WEBHOOKS_PER_CHANNEL_MAX, type ServerFrame } from '@purlay/types';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import { channelTopic, type EventBus } from '../../../platform/events';

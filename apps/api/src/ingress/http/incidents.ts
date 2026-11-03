@@ -12,7 +12,7 @@ import {
   type IncidentResponse,
   type IncidentUpdatePage,
 } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,

@@ -6,7 +6,7 @@
 import type { Executor } from '@purlay/db';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import { requireChannelMember, type ChannelContext } from '../../../platform/channels';
+import { requireChannelMember, type ChannelContext } from './guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { AppError } from '../../../platform/errors';
 import { recordAudit } from '../../../modules/audit/audit';

@@ -8,7 +8,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { messageId, type SearchQuery } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { requireChannelById, visibleChannelIds } from '../../../platform/channels';
+import { requireChannelById, visibleChannelIds } from '../channels/guard';
 import { atomicallyOn } from '../../../platform/transactions';
 import { NO_LOG, type EventBus } from '../../../platform/events';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';

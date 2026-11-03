@@ -3,7 +3,7 @@
  * they are in. A change tells the caller's other tabs to read their channels again, after it is
  * written; nobody else hears anything.
  */
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,

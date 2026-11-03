@@ -36,7 +36,7 @@ import {
   requireChannelMember,
   type ChannelContext,
   type VisibleMessage,
-} from '../../../platform/channels';
+} from '../channels/guard';
 import {
   channelTopic,
   inboxPublications,

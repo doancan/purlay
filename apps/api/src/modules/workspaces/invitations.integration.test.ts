@@ -33,7 +33,7 @@ import {
 import { changeRole, removeMember } from './members';
 import type { Clock } from '../../platform/clock';
 import type { CreatedInvitation } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 /** The writing services take a transaction (#232); inside the harness's, one joins it. */

@@ -36,3 +36,7 @@ export class AppError extends Error {
     return { error: this.body };
   }
 }
+
+/** The one refusal for an attachment that is not there for the caller. */
+export const attachmentNotFound = (): AppError =>
+  new AppError({ code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found.' });

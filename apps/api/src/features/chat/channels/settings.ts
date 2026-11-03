@@ -30,7 +30,7 @@ import {
   isChannelMember,
   requireChannelMember,
   type ChannelContext,
-} from '../../../platform/channels';
+} from './guard';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { channelFor } from './channels';

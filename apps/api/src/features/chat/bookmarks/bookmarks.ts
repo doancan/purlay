@@ -18,7 +18,7 @@ import {
 } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { Uuid } from '@purlay/types';
-import { requireChannelMember, type ChannelContext } from '../../../platform/channels';
+import { requireChannelMember, type ChannelContext } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 

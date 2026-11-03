@@ -15,7 +15,7 @@
 import { sql, type Executor } from '@purlay/db';
 import { REACTIONS_PER_PERSON_MAX, type ReactionsResponse } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import { requireChannelMember, requireMessageById } from '../../../platform/channels';
+import { requireChannelMember, requireMessageById } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import {
   NO_LOG,

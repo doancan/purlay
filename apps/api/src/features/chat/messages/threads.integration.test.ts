@@ -15,11 +15,11 @@ import {
 import { messageId, type ServerFrame } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { fixedClock } from '../../../platform/clock';
-import { requireMessageById } from '../../../platform/channels';
+import { requireMessageById } from '../channels/guard';
 import { atomicallyOn } from '../../../platform/transactions';
 import type { EventBus } from '../../../platform/events';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
-import { visibleChannelIds } from '../../../platform/channels';
+import { visibleChannelIds } from '../channels/guard';
 import { aRoom, counters, notificationsOf, type Room } from '../../../testing/rooms';
 import { sendMessage, type OutgoingMessage, type Sent } from './messages';
 import { setResolved, threadReplies, unresolvedIn } from './threads';

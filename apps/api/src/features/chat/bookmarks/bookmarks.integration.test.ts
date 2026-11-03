@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { BOOKMARKS_MAX, messageId } from '@purlay/types';
-import { requireChannelById, type ChannelContext } from '../../../platform/channels';
+import { requireChannelById, type ChannelContext } from '../channels/guard';
 import { fixedClock } from '../../../platform/clock';
 import { attempt } from '../../../testing/attempt';
 import { aRoom, type Room } from '../../../testing/rooms';

@@ -18,7 +18,7 @@ import {
 } from '@purlay/db';
 import { INCIDENT_RESPONDERS_MAX, messageId } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { aRoom } from '../../../testing/rooms';
 import { changeIncident, declareIncident, incidentUpdates, savePostmortem } from './incidents';

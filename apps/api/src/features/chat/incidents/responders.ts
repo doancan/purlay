@@ -16,7 +16,7 @@ import { Value } from '@sinclair/typebox/value';
 import type { Transaction } from '@purlay/db';
 import { INCIDENT_RESPONDERS_MAX, Uuid } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import {
   incidentNotFound,

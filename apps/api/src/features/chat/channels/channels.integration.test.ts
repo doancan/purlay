@@ -5,7 +5,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { fixedClock } from '../../../platform/clock';
-import { requireChannelById } from '../../../platform/channels';
+import { requireChannelById } from './guard';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { aChannelWith, aConversation, aMessageIn } from '../../../testing/conversations';
 import { channelFor, channelIn, channelsVisibleIn, createChannel, joinChannel } from './channels';

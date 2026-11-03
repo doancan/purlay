@@ -10,7 +10,7 @@ import {
   type Transaction,
 } from '@purlay/db';
 import { fixedClock } from '../../../platform/clock';
-import { requireChannelById, type ChannelContext } from '../../../platform/channels';
+import { requireChannelById, type ChannelContext } from './guard';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { aChannelWith, aConversation, aMessageIn } from '../../../testing/conversations';
 import type { TestUser } from '../../../testing/users';

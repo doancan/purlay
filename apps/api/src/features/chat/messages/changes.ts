@@ -14,7 +14,7 @@
 import { sql, type Executor } from '@purlay/db';
 import { CHANGES_OVERLAP_MS, PAGE_LIMIT, type ChangePage, type ChangesQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { buildMessages, MESSAGE_COLUMNS } from './reader';
 
 /** The database's own clock, to the millisecond a stamp is kept to. */

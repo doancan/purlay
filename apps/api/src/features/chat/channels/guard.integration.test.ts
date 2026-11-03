@@ -10,9 +10,9 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { AppError } from './errors';
-import { requireChannelById, requireMessageById, visibleChannelIds } from './channels';
-import { requireWorkspaceMembership } from './tenancy';
+import { AppError } from '../../../platform/errors';
+import { requireChannelById, requireMessageById, visibleChannelIds } from './guard';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

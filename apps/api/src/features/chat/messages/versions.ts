@@ -18,11 +18,7 @@ import {
   type MessageVersionPage,
   type OlderPageQuery,
 } from '@purlay/types';
-import {
-  messageNotFound,
-  requireMessageById,
-  type ChannelContext,
-} from '../../../platform/channels';
+import { messageNotFound, requireMessageById, type ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
 

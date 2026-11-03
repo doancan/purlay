@@ -7,11 +7,11 @@
  * happening, TypeScript reports the unused directive and the build fails.
  *
  * That the type is inhabited is proved by `channels.ts` compiling — it builds
- * one. The runtime half is `channels.integration.test.ts`.
+ * one. The runtime half is `guard.integration.test.ts`.
  */
 import { describe, expect, test } from 'bun:test';
-import type { ChannelContext } from './channels';
-import type { WorkspaceContext } from './tenancy';
+import type { ChannelContext } from './guard';
+import type { WorkspaceContext } from '../../../platform/tenancy';
 
 const channelScopedRead = (context: ChannelContext): string => context.channelId;
 
