@@ -34,6 +34,7 @@ export type IssuesWritten = (typeof tables)[number]['name'];
 export const issuesExport: ExportContribution = {
   id: 'issues',
   tables,
+  ownSet: ['issues'],
   people: (scope) => [
     namedInWorkspace('issues', 'created_by', scope),
     namedInWorkspace('issues', 'assignee_id', scope),

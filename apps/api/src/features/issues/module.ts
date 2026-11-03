@@ -1,15 +1,15 @@
 /**
- * Issues, as a module (D-254, `MODULES.md` §11): the second one, with a migration set of its own, so its table
- * exists only where the module has run. It contributes to the places the core leaves open what it has: what an
- * erased account leaves of it, what a deleted workspace's purge takes, and the tables of the two exports.
+ * Issues, as a module (D-254, `MODULES.md` §11): the second one, with a migration set of its own, so its table exists
+ * only where the set was applied. It contributes to the places the core leaves open what it has: what an erased
+ * account leaves of it, what a deleted workspace's purge takes, and the tables of the two exports.
  *
- * **Held only while it runs** (`dataInCore` is absent): a process that does not run issues does not run these either,
- * because the table may not be there to run them on — `MODULES=chat` is a database that never had it. The consequence,
- * stated where it is decided (D-254): while the module is off, a workspace's purge and the exports leave its issues
- * alone, and an operator who turns it off after using it, and deletes a workspace meanwhile, runs the purge with the
- * module on to have it erased.
+ * **Held whether or not it runs** (`dataInCore`), as chat's own-set tables are: where the set was applied and the
+ * module was then turned off, a deleted workspace's titles and bodies are still purged, an export still holds them, and
+ * an erased account is still taken off its assignments. Where the set was never applied there is no table, and each hook
+ * asks `tableExists` at the moment it needs it (the purge does so for every table it names, the exports through
+ * `ownSet`). `module-lifecycle.integration.test.ts` runs every step in every database state and process.
  */
-import type { Transaction } from '@purlay/db';
+import { tableExists, type Transaction } from '@purlay/db';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { issuesExport } from './export';
 import { issuesPersonalExport } from './personal-export';
@@ -19,6 +19,7 @@ import { issuesPersonalExport } from './personal-export';
  * goes is the assignment, which means nothing to a person who is no longer there to do it.
  */
 const unassignErasedPerson = async (transaction: Transaction, userId: string): Promise<void> => {
+  if (!(await tableExists(transaction, 'issues'))) return;
   await transaction
     .updateTable('issues')
     .set({ assignee_id: null })
@@ -30,6 +31,8 @@ const unassignErasedPerson = async (transaction: Transaction, userId: string): P
 const issuesWorkspacePurge: WorkspacePurge = { before: [], after: [], tables: ['issues'] };
 
 export const issuesModule = {
+  // Its table is made by its own set, but what it contributes is held without it (see above).
+  dataInCore: true,
   manifest: {
     id: 'issues',
     requires: [],

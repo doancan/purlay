@@ -16,7 +16,7 @@
  * compile error where its table is described until somebody decides whether a person's own copy carries it. The
  * composition root (`export-catalogue.ts`) holds the sum to the schema.
  */
-import { sql, type Database, type Executor, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type Database, type Executor, type RawBuilder } from '@purlay/db';
 import type { Bounds } from './catalogue';
 
 /** A column: in a person's export, or left out. */
@@ -66,6 +66,8 @@ export interface PersonalContribution {
   readonly id: string;
   /** Its tables, in the order they are written: parents before their children. */
   readonly tables: readonly PersonalTableExport[];
+  /** The tables its own migration set makes, absent from a database migrated without the set: not read, and its workspaces not asked for. */
+  readonly ownSet?: readonly (keyof Database)[];
   /** Each a `select <workspace's id> from …` over the person's rows: the workspaces they name. */
   readonly workspaces: (userId: string) => readonly RawBuilder<unknown>[];
   /** A bound on `attachments` selecting the files the person sent, whose bytes the export copies. */
@@ -87,7 +89,12 @@ export interface PersonalCatalogue {
   readonly order: readonly (keyof Database)[];
   readonly table: (name: keyof Database) => PersonalTableExport;
   /** The workspaces any of the person's exported rows name. */
-  readonly workspaces: (userId: string) => RawBuilder<unknown>;
+  readonly workspaces: (
+    userId: string,
+    absent?: readonly (keyof Database)[],
+  ) => RawBuilder<unknown>;
+  /** Which of the modules' own tables this database does not have: asked once, when the export starts. */
+  readonly absent: (executor: Executor) => Promise<readonly (keyof Database)[]>;
   /** The files the person sent, for the bound on `attachments`; none when nothing contributes one. */
   readonly files: (userId: string, executor: Executor) => Promise<RawBuilder<unknown> | undefined>;
 }
@@ -114,11 +121,22 @@ export const assemblePersonalCatalogue = (
         throw new Error(`the personal export catalogue has no table ${name}`);
       return found;
     },
-    workspaces: (userId: string): RawBuilder<unknown> =>
+    workspaces: (userId: string, absent = []): RawBuilder<unknown> =>
       sql.join(
-        contributions.flatMap((contribution) => contribution.workspaces(userId)),
+        contributions
+          .filter(
+            (contribution) => !(contribution.ownSet ?? []).some((own) => absent.includes(own)),
+          )
+          .flatMap((contribution) => contribution.workspaces(userId)),
         sql` union `,
       ),
+    absent: async (executor: Executor): Promise<readonly (keyof Database)[]> => {
+      const absent: (keyof Database)[] = [];
+      for (const table of contributions.flatMap((contribution) => contribution.ownSet ?? [])) {
+        if (!(await tableExists(executor, table))) absent.push(table);
+      }
+      return absent;
+    },
     files: async (userId: string, executor: Executor): Promise<RawBuilder<unknown> | undefined> =>
       await modules.find((module) => module.files !== undefined)?.files?.(userId, executor),
   };

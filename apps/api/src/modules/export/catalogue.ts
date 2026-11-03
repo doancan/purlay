@@ -10,7 +10,7 @@
  * the schema: a table nobody decided is a compile error there, and `catalogue.integration.test.ts` holds it to
  * the database.
  */
-import { sql, type Database, type Executor, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type Database, type Executor, type RawBuilder } from '@purlay/db';
 import type { ExportManifest } from '@purlay/types';
 import type { WorkspaceContext } from '../../platform/tenancy';
 
@@ -29,6 +29,11 @@ export interface Scope {
   readonly kind: ExportManifest['scope'];
   /** What each contribution's `prepare` answered, by its id. */
   readonly prepared: Readonly<Record<string, unknown>>;
+  /**
+   * The tables of a module's own set that this database does not have, found when the scope was made: they are not read,
+   * and what the module says of the people they name is left out (`ExportContribution.ownSet`).
+   */
+  readonly absent?: readonly (keyof Database)[];
 }
 
 /** Who asks, as far as what is covered depends on it. */
@@ -85,6 +90,11 @@ export interface ExportContribution {
   readonly id: string;
   /** Its tables, in the order they are written: parents before their children. */
   readonly tables: readonly TableExport[];
+  /**
+   * The tables its own migration set makes, which a database migrated without the set does not have. Where one is not
+   * there nothing is read from it and its people are not asked for: there is nothing to export (`MODULES.md` §5).
+   */
+  readonly ownSet?: readonly (keyof Database)[];
   /** Each a `select <person's id> from …` over what the scope covers: the people its rows name. */
   readonly people: (scope: Scope) => readonly RawBuilder<unknown>[];
   /** Decides what it covers of the workspace, before the snapshot is taken. */
@@ -117,6 +127,12 @@ export interface Catalogue {
   readonly audit: (rows: Readonly<Record<string, number>>) => Readonly<Record<string, string>>;
 }
 
+/** Whether any of a module's own tables is among those a database lacks. */
+const lacks = (
+  own: readonly (keyof Database)[] | undefined,
+  absent: readonly (keyof Database)[] | undefined,
+): boolean => (own ?? []).some((table) => absent?.includes(table) === true);
+
 export const assembleCatalogue = (
   core: CoreExportContribution,
   modules: readonly ExportContribution[],
@@ -138,7 +154,9 @@ export const assembleCatalogue = (
     },
     people: (scope: Scope): RawBuilder<unknown> =>
       sql.join(
-        contributions.flatMap((contribution) => contribution.people(scope)),
+        contributions
+          .filter((contribution) => !lacks(contribution.ownSet, scope.absent))
+          .flatMap((contribution) => contribution.people(scope)),
         sql` union `,
       ),
     files: (scope: Scope): RawBuilder<unknown> | undefined =>
@@ -150,7 +168,11 @@ export const assembleCatalogue = (
           prepared[contribution.id] = await contribution.prepare(executor, request);
         }
       }
-      return { workspaceId: request.workspaceId, kind: request.kind, prepared };
+      const absent: (keyof Database)[] = [];
+      for (const table of contributions.flatMap((contribution) => contribution.ownSet ?? [])) {
+        if (!(await tableExists(executor, table))) absent.push(table);
+      }
+      return { workspaceId: request.workspaceId, kind: request.kind, prepared, absent };
     },
     audit: (rows: Readonly<Record<string, number>>): Readonly<Record<string, string>> => {
       const added: Record<string, string> = {};

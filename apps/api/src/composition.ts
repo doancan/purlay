@@ -40,7 +40,9 @@ export interface BundledModule {
    * erased does not wait for a setting. A module whose migration set makes some of its tables (chat's link between
    * a message and its files, its drafts, reminders and hidden messages) has those tables only where the set was
    * applied: the hooks ask `tableExists` before they name one, so a database migrated without the set is no failure
-   * and one that has it is still kept whole (`MODULES.md` §5).
+   * and one that has it is still kept whole (`MODULES.md` §5). Issues (D-254) is the case at its end: all of its data is
+   * in its own set, and it is held the same way, so a database that ran it and then turned it off is erased, purged and
+   * exported whole, and one that never had it is no failure.
    */
   readonly dataInCore?: boolean;
   /**

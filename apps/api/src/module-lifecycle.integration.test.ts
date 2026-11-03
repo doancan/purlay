@@ -32,7 +32,7 @@ import {
   type Transaction,
 } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS, isErased, messageId } from '@purlay/types';
-import { compose, composition, type Composition } from './composition';
+import { compose, composition, compositionFor, type Composition } from './composition';
 import {
   EVERY_TABLE_DECIDED,
   EVERY_TABLE_DECIDED_FOR_PEOPLE,
@@ -74,6 +74,9 @@ const CHAT_SET_TABLES = [
   'scheduled_messages',
 ] as const;
 
+/** The one table issues' own set makes. */
+const ISSUES_SET_TABLES = ['issues'] as const;
+
 /** Every table chat keeps of a person, by the column that names them. */
 const CHAT_PERSONAL_TABLES = [
   'hidden_messages',
@@ -91,23 +94,35 @@ interface DatabaseState {
   readonly sets: readonly MigrationSet[];
   /** Whether chat's own set has been applied: whether its five tables are there. */
   readonly chatSet: boolean;
+  /** Whether issues' set has been applied: whether its table is there. */
+  readonly issuesSet: boolean;
 }
 
 const DATABASE_STATES: readonly DatabaseState[] = [
-  { name: 'fresh, the core alone', sets: setsNamedBy('none'), chatSet: false },
-  { name: 'fresh, with chat’s set', sets: setsNamedBy('chat'), chatSet: true },
-  { name: 'legacy-shaped, every set applied', sets: setsNamedBy(undefined), chatSet: true },
+  { name: 'fresh, the core alone', sets: setsNamedBy('none'), chatSet: false, issuesSet: false },
+  { name: 'fresh, with chat’s set', sets: setsNamedBy('chat'), chatSet: true, issuesSet: false },
+  { name: 'fresh, with issues’ set', sets: setsNamedBy('issues'), chatSet: false, issuesSet: true },
+  {
+    name: 'legacy-shaped, every set applied',
+    sets: setsNamedBy(undefined),
+    chatSet: true,
+    issuesSet: true,
+  },
 ];
 
 interface Run {
   readonly name: string;
   readonly composition: Composition;
-  readonly runsChat: boolean;
+  /** The modules it runs, whose sets its database must have: readiness refuses it otherwise. */
+  readonly runs: readonly ('chat' | 'issues')[];
 }
 
+/** Every process the matrix promises: the core alone, each module alone, and everything. */
 const RUNS: readonly Run[] = [
-  { name: 'chat not run', composition: compose([]), runsChat: false },
-  { name: 'chat run', composition, runsChat: true },
+  { name: 'no module run', composition: compose([]), runs: [] },
+  { name: 'chat run', composition: compositionFor('chat'), runs: ['chat'] },
+  { name: 'issues run', composition: compositionFor('issues'), runs: ['issues'] },
+  { name: 'chat and issues run', composition, runs: ['chat', 'issues'] },
 ];
 
 const urlOf = (name: string): string => {
@@ -174,6 +189,8 @@ interface World {
     readonly recentFile: string;
     readonly oldFile: string;
   };
+  /** Issues': undefined where its table is not there. `bobsOnAda` is bob's issue given to ada, `adas` ada's given to bob. */
+  readonly issues?: { readonly bobsOnAda: string; readonly adas: string };
   /** An upload nobody sent. */
   readonly unsentFile: string;
   readonly store: MemoryStore;
@@ -205,14 +222,14 @@ const upload = async (
  * keeps: messages, files sent with them, and each person's own reminders, drafts and hidden messages. Where they
  * are not, no message can have been written — chat never ran — so none is.
  */
-const seed = async (database: Executor, chatSet: boolean): Promise<World> =>
+const seed = async (database: Executor, state: DatabaseState): Promise<World> =>
   await database.transaction().execute(async (tx) => {
     const store = aMemoryStore();
     let workspaceId: string;
     let ada: Person;
     let bob: Person;
     let room: Room | undefined;
-    if (chatSet) {
+    if (state.chatSet) {
       room = await aRoom(tx, ['bob', 'ada']);
       workspaceId = room.workspaceId;
       ada = person(room, 'ada');
@@ -259,9 +276,41 @@ const seed = async (database: Executor, chatSet: boolean): Promise<World> =>
       .values({ sent_at: NOW, stop_digest: crypto.randomUUID(), user_id: ada.userId })
       .execute();
     const unsentFile = await upload(tx, store, workspaceId, ada.userId);
+    // What issues keeps, where its table is there: an issue each made and gave to the other.
+    let issues: World['issues'];
+    if (state.issuesSet) {
+      const make = async (by: Person, to: Person, title: string): Promise<string> =>
+        (
+          await tx
+            .insertInto('issues')
+            .values({
+              id: anId(),
+              workspace_id: workspaceId,
+              title,
+              body: 'details',
+              created_by: by.userId,
+              assignee_id: to.userId,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow()
+        ).id;
+      issues = {
+        bobsOnAda: await make(bob, ada, 'bob made, ada has it'),
+        adas: await make(ada, bob, 'ada made, bob has it'),
+      };
+    }
 
     if (room === undefined) {
-      return { workspaceId, workspaceSlug, ada, bob, sessionId, unsentFile, store };
+      return {
+        workspaceId,
+        workspaceSlug,
+        ada,
+        bob,
+        sessionId,
+        unsentFile,
+        store,
+        ...(issues === undefined ? {} : { issues }),
+      };
     }
     const channel = room.channelId;
     const say = async (who: 'ada' | 'bob', at: Date, content: string): Promise<string> => {
@@ -351,6 +400,7 @@ const seed = async (database: Executor, chatSet: boolean): Promise<World> =>
       unsentFile,
       store,
       chat: { room, recent, old, bobs, recentFile, oldFile },
+      ...(issues === undefined ? {} : { issues }),
     };
   });
 
@@ -417,22 +467,28 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
         await database.destroy();
       });
 
-      test('chat’s set tables are there exactly where its set was applied', () => {
+      test('each set’s tables are there exactly where its set was applied', () => {
         for (const table of CHAT_SET_TABLES) {
           expect(present.includes(table)).toBe(state.chatSet);
+        }
+        for (const table of ISSUES_SET_TABLES) {
+          expect(present.includes(table)).toBe(state.issuesSet);
         }
       });
 
       for (const run of RUNS) {
-        if (run.runsChat && !state.chatSet) {
-          test(`${run.name}: readiness refuses a process that runs chat without its set`, async () => {
+        const lacking = run.runs.filter((id) => !(id === 'chat' ? state.chatSet : state.issuesSet));
+        if (lacking.length > 0) {
+          test(`${run.name}: readiness refuses a process that runs ${lacking.join(' and ')} without its set`, async () => {
             const pending = await pendingMigrations(
               database,
               undefined,
               run.composition.migrationSets,
             );
             expect(pending.length).toBeGreaterThan(0);
-            expect(pending.every((migration) => migration.startsWith('chat/'))).toBe(true);
+            expect(
+              pending.every((migration) => lacking.some((id) => migration.startsWith(`${id}/`))),
+            ).toBe(true);
             const verdict = await readiness(
               database,
               run.composition.collatedColumns,
@@ -460,7 +516,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           });
 
           test('(a) erasing an account forgets the person in every table there is, and keeps the team’s', async () => {
-            const world = await seed(database, state.chatSet);
+            const world = await seed(database, state);
             const erased = await database
               .transaction()
               .execute(
@@ -487,6 +543,25 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
                 `${table}: ${String(await countWhere(database, table, 'user_id', world.ada.userId))}`,
               ).toBe(`${table}: 0`);
             }
+            if (world.issues !== undefined) {
+              // Taken off what was given to them; what they made stays, under the anonymised row; bob's is bob's.
+              const issue = async (
+                id: string,
+              ): Promise<{ assignee_id: string | null; created_by: string | null }> =>
+                await database
+                  .selectFrom('issues')
+                  .select(['assignee_id', 'created_by'])
+                  .where('id', '=', id)
+                  .executeTakeFirstOrThrow();
+              expect(await issue(world.issues.bobsOnAda)).toEqual({
+                assignee_id: null,
+                created_by: world.bob.userId,
+              });
+              expect(await issue(world.issues.adas)).toEqual({
+                assignee_id: world.bob.userId,
+                created_by: world.ada.userId,
+              });
+            }
             if (world.chat !== undefined) {
               // The team keeps its words under the anonymised row, and bob keeps what is bob's.
               expect(await countWhere(database, 'messages', 'sender_id', world.ada.userId)).toBe(2);
@@ -501,8 +576,8 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           });
 
           test('(b) a deleted workspace, once its grace is over, is purged to nothing, beside a control untouched', async () => {
-            const doomed = await seed(database, state.chatSet);
-            const control = await seed(database, state.chatSet);
+            const doomed = await seed(database, state);
+            const control = await seed(database, state);
             const before = await footprint(database, doomed.workspaceId);
             expect(total(before)).toBeGreaterThan(0);
             const controlBefore = await footprint(database, control.workspaceId);
@@ -531,7 +606,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           });
 
           test('(c) the workspace’s export and a person’s hold what is there, and every table is decided', async () => {
-            const world = await seed(database, state.chatSet);
+            const world = await seed(database, state);
             expect(EVERY_TABLE_DECIDED).toBe(true);
             expect(EVERY_TABLE_DECIDED_FOR_PEOPLE).toBe(true);
             const catalogue = processes.exportCatalogue;
@@ -541,6 +616,9 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
             const expected = (decided: readonly string[]): string[] =>
               decided
                 .filter((table) => state.chatSet || !CHAT_SET_TABLES.some((own) => own === table))
+                .filter(
+                  (table) => state.issuesSet || !ISSUES_SET_TABLES.some((own) => own === table),
+                )
                 .sort();
             expect(held).toEqual(
               expected([...catalogue.order, ...Object.keys(EXCLUDED_FROM_EXPORT)]),
@@ -569,6 +647,10 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
               world.chat === undefined ? 0 : 2,
             );
             expect(workspaceExport.manifest.blobs.count).toBe(world.chat === undefined ? 0 : 2);
+            // Issues' rows leave with the workspace where its table is there, whatever the process runs; where not, none.
+            expect(workspaceExport.manifest.tables['issues']).toBe(
+              world.issues === undefined ? 0 : 2,
+            );
 
             const personExport = await exportPerson(
               { database, clock, log, storage: world.store, personalCatalogue: personal },
@@ -581,10 +663,12 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
               world.chat === undefined ? 0 : 2,
             );
             expect(personExport.manifest.blobs.count).toBe(world.chat === undefined ? 0 : 2);
+            // Only the issues the person made.
+            expect(personExport.manifest.tables['issues']).toBe(world.issues === undefined ? 0 : 1);
           });
 
           test('(d) the retention purge and the sweeps that run with chat off leave the right rows', async () => {
-            const world = await seed(database, state.chatSet);
+            const world = await seed(database, state);
             await database
               .updateTable('workspaces')
               .set({ retention_days: 30 })
@@ -671,7 +755,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           });
 
           test('(d) the operator’s content erasure empties what the person wrote where chat’s tables are, and nothing where not', async () => {
-            const world = await seed(database, state.chatSet);
+            const world = await seed(database, state);
             const [done] = await eraseContent(
               { database, clock, log, storage: world.store },
               world.ada.userId,
@@ -694,7 +778,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           });
 
           test('(e) the process’s attachment reader (chat’s, or the core’s own) reads a file whether or not the link table is there', async () => {
-            const world = await seed(database, state.chatSet);
+            const world = await seed(database, state);
             // An upload nobody sent is its uploader's, and no one else’s.
             const mine = await processes.readAttachment(
               database,
@@ -709,7 +793,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
                 (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
               );
             expect(refusal).toBe('ATTACHMENT_NOT_FOUND');
-            if (world.chat !== undefined && run.runsChat) {
+            if (world.chat !== undefined && run.runs.includes('chat')) {
               // Only chat knows what was sent with a message: one sent is anyone's who can see the channel.
               const theirs = await processes.readAttachment(
                 database,
@@ -736,6 +820,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
       const database = createDatabase({ connectionString: urlOf(name), poolSize: 2 });
       try {
         const none = compose([]);
+        const chatOnly = compositionFor('chat');
         const first = await migrateOnStart({ connectionString: urlOf(name) }, undefined, {
           sets: none.migrationSets,
         });
@@ -756,19 +841,21 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           (
             await readiness(
               database,
-              composition.collatedColumns,
+              chatOnly.collatedColumns,
               undefined,
               undefined,
-              composition.migrationSets,
+              chatOnly.migrationSets,
             )
           ).ready,
         ).toBe(false);
         const second = await migrateOnStart({ connectionString: urlOf(name) }, undefined, {
-          sets: composition.migrationSets,
+          sets: chatOnly.migrationSets,
         });
         expect(second.length).toBeGreaterThan(0);
         expect(second.every((migration) => migration.startsWith('chat/'))).toBe(true);
-        for (const run of RUNS) {
+        expect(second.some((migration) => migration.startsWith('issues/'))).toBe(false);
+        // Issues' set was never applied here, so only the processes that do not run issues are ready.
+        for (const run of RUNS.filter((each) => !each.runs.includes('issues'))) {
           expect(
             (
               await readiness(

@@ -12264,16 +12264,18 @@ record and says no more.
    and to `users` (`SET NULL`, as a channel's creator is), every key indexed, no key to another module. The assignee
    being a member is the service's check under the membership's share lock, not a key: a member who leaves does not
    rewrite their issues.
-4. **What its hooks do when its table was never made — decided here, as D-250 left it.** A module with a set of its own
-   is **held only while it runs**: its erasure, purge and export contributions are in the composition of a process that
-   runs it and in none that does not, so `MODULES=chat` or `none` on a database that never had the table asks nothing of
-   it. The cost is stated, not hidden: while the module is off its rows are skipped by an account's erasure (which only
-   clears an assignment, a thing meaningless to a person who is gone), by the exports, and by a workspace's purge — so
-   **a workspace deleted while issues is off keeps its issues in the database until the operator runs the purge with the
-   module on**, and a purge that has already marked the workspace purged will not come back to them. The way to close
-   that is for the process to read which sets its database has applied and hold the module's hooks when one has; it is
-   not built, because nothing in an issue is a person's own and the first module whose rows are would be the one to need
-   it.
+4. **What its hooks do when its table was never made — decided here, as D-250 left it.** Issues is held **whether or not
+   it runs**, as the tables of chat's own set are: its erasure, purge and export contributions are in every process's
+   composition (`dataInCore`), and each asks `tableExists` at the moment it needs the table, the purge for every table it
+   names and the exports through the contribution's `ownSet`. So on a database that never had the set (`MODULES=chat` or
+   `none` on a fresh install) there is nothing to reach and nothing fails, and on one where the set was applied and the
+   module was then turned off the rows are still taken off an erased account's assignments, purged with a deleted
+   workspace and exported. This closes what the first cut of this decision left open — holding the hooks only while the
+   module runs, which would have left a deleted workspace's titles and bodies in the database for good — and it costs
+   what chat's cost: a check per hook, and a catalogue that names a table some databases lack. `module-lifecycle.integration.test.ts`
+   runs every step in every state of the database (core alone, chat's set, issues' set, every set) against every
+   process (no module, each alone, both). A process that *runs* issues on a database without its set is not a cell:
+   readiness refuses it.
 5. **An erased account** leaves its issues as it leaves its messages, under the anonymised row (D-139 §5), and is taken
    off any it was assigned.
 6. **Routes** are `/api/workspaces/:workspaceId/issues` and `/…/issues/:issueId`, in the manifest, so a process that
@@ -12287,8 +12289,9 @@ record and says no more.
 module that proves a seam with six features proves it six times. *Soft delete*: above. *Dropping the key to the
 assignee in favour of the service's check alone*: the key is free and keeps the table honest; only the *membership* is
 the service's. *Making issues `dataInCore`*: it would put the module's rows in the core's migrations and defeat the
-first thing the module exists to show. *Holding its hooks when the set is absent by catching the missing table*: an
-error as control flow, and it would hide a real fault.
+first thing the module exists to show. *Holding its hooks only while it runs* (the first cut): it leaves a purged workspace's rows behind where the module was
+turned off, and an erased account's assignments. *Catching the error of a missing table*: an error as control flow, and
+it would hide a real fault.
 
 **Cost of reversing.** Dropping the module is deleting its folders, its row in `bundledModules`, the set's directory and
 its entry in the owner list; its table stays until an operator drops it (D-250 rule 5).

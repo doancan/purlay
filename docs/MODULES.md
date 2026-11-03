@@ -135,7 +135,7 @@ moves into that module.
   a part held only where the set is applied, would need the process to know the database's sets when it is composed,
   and a node that was composed before the set arrived would then miss rows that are there. A process that *runs* a
   module on a database without its set is not a cell: readiness refuses it. `module-lifecycle.integration.test.ts`
-  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own.
+  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own. Issues (D-254), whose one table is all in its own set, is held the same way, and its `ownSet` tells the exports which tables to skip.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
   first 77 files always create chat's tables, inert where chat is off. The release before the first prefixed row
@@ -421,18 +421,17 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 - **`data` hooks.** `userErased` takes an erased account off the issues assigned to it (what it made stays, under the
   anonymised row); `workspacePurge` empties the table by name, because a purged workspace keeps its row as a tombstone and
   the cascade never fires; `export` and `personalExport` write the table whole and the person's own. **All four are held
-  only while the module runs** — it has no `dataInCore` — so with `MODULES=chat` or `none` on a database that never had
-  the table nothing asks for it, and the cell test proves it on a database each cell made. **Where it ran and was then
-  turned off**, its rows are skipped by all four until it runs again: a workspace deleted meanwhile keeps its issues, and the
-  purge does not come back for a workspace it has marked purged. Closing that needs the process to read which sets its
-  database has applied; it waits for a module whose rows are a person's (D-254 §4).
+  whether or not the module runs** (`dataInCore`), and each asks `tableExists` first, so a database that never had the
+  set is no failure and one that ran issues and was then turned off is erased, purged and exported whole: its rows stay
+  while the module is off, and the right to be erased and a deleted workspace's purge do not wait for a setting
+  (D-254 §4). The exports skip the table through the contribution's `ownSet`.
 - **Audit and permissions.** None: nothing it does is on the workspace's trail, and the role rule — any member makes and
   changes, only the creator or an owner or an admin deletes — is in the service, tested through the route.
 - **Events and notifications.** None. An issue has no frame and tells nobody; a client reads again.
 - **Web.** The screen at `/w/:slug/issues`, one `import()` from `features/issues/load.tsx` into a chunk of its own; the rail
   link and the palette entry only where the session lists the module. `budget:web` holds the shell chunk to carrying none of
   the screen.
-- **Smoke test and matrix cell.** `composition-cells.integration.test.ts` for the core's lifecycle per cell,
+- **Smoke test and matrix cell.** `module-lifecycle.integration.test.ts` for every lifecycle step in each state of the database (core alone, chat's set, issues' set, every set) against each process,
   `modules-off.integration.test.ts` for the routes per cell, and a real process per `MODULES` in
   `migrate-on-start.integration.test.ts`.
 - **Latency.** No hot path: it is not on the chat's send path, and a list of the workspace's issues is one indexed read.

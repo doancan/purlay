@@ -51,18 +51,14 @@ describe('the application as its modules make it', () => {
     expect(notRun.collatedColumns).toContainEqual(['channels', 'name']);
   });
 
-  test('issues, which has a set of its own, is held only while it runs: nothing of it applies where it does not', () => {
-    const issuesNotRun = compose([chatModule]);
-    expect(issuesNotRun.workspacePurge.tables).not.toContain('issues');
-    expect(issuesNotRun.exportCatalogue.order).not.toContain('issues');
-    expect(issuesNotRun.personalExportCatalogue.order).not.toContain('issues');
-    expect(compose([]).workspacePurge.tables).not.toContain('issues');
-
-    const run = compose([issuesModule]);
-    expect(run.workspacePurge.tables).toContain('issues');
-    expect(run.workspacePurge.tables).toContain('mentions');
-    expect(run.exportCatalogue.order).toContain('issues');
-    expect(run.personalExportCatalogue.order).toContain('issues');
+  test('issues, whose data is all in a set of its own, is held whether or not it runs, as chat’s own-set tables are', () => {
+    for (const modules of [[], [chatModule], [issuesModule]]) {
+      const held = compose(modules);
+      expect(held.workspacePurge.tables).toContain('issues');
+      expect(held.exportCatalogue.order).toContain('issues');
+      expect(held.personalExportCatalogue.order).toContain('issues');
+    }
+    expect(compose([issuesModule]).workspacePurge.tables).toContain('mentions');
   });
 
   test('with chat, it has chat’s hooks, answers, purge steps, tables and columns', () => {

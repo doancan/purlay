@@ -13382,15 +13382,39 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
-    id: 'issues-held-while-off',
-    why: 'a process that does not run issues reaches for a table its database may never have had, in an erasure, a purge and both exports (D-254)',
+    id: 'issues-not-held-while-off',
+    why: 'a database that ran issues and was then turned off to chat keeps a deleted workspace’s issues and an erased person’s assignments, and its exports leave them out (D-254)',
     file: 'apps/api/src/features/issues/module.ts',
-    find: 'export const issuesModule = {\n',
-    replace: 'export const issuesModule = {\n  dataInCore: true,\n',
+    find: '  dataInCore: true,\n',
+    replace: '',
     tests: [
       'apps/api/src/composition.test.ts',
-      'apps/api/src/composition-cells.integration.test.ts',
+      'apps/api/src/module-lifecycle.integration.test.ts',
     ],
+  },
+  {
+    id: 'issues-erasure-needs-its-table',
+    why: 'erasing an account fails on a database that never had issues’ set, as every process that does not run it would (D-254)',
+    file: 'apps/api/src/features/issues/module.ts',
+    find: "  if (!(await tableExists(transaction, 'issues'))) return;\n",
+    replace: '',
+    tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
+  },
+  {
+    id: 'issues-export-reads-a-missing-table',
+    why: 'a workspace’s export fails on a database that never had issues’ set (D-254)',
+    file: 'apps/api/src/features/issues/export.ts',
+    find: "  ownSet: ['issues'],\n",
+    replace: '',
+    tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
+  },
+  {
+    id: 'issues-personal-export-reads-a-missing-table',
+    why: 'a person’s export of their own data fails on a database that never had issues’ set (D-254)',
+    file: 'apps/api/src/features/issues/personal-export.ts',
+    find: "  ownSet: ['issues'],\n",
+    replace: '',
+    tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
   },
   {
     id: 'issues-purge-forgets-its-table',
@@ -13400,7 +13424,7 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'tables: []',
     tests: [
       'apps/api/src/ingress/http/workspace-purge.integration.test.ts',
-      'apps/api/src/composition-cells.integration.test.ts',
+      'apps/api/src/module-lifecycle.integration.test.ts',
     ],
   },
   {

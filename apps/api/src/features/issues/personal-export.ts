@@ -35,5 +35,6 @@ export type IssuesPersonalWritten = (typeof tables)[number]['name'];
 export const issuesPersonalExport: PersonalContribution = {
   id: 'issues',
   tables,
+  ownSet: ['issues'],
   workspaces: (userId) => [workspacesOwnedBy('issues', 'created_by', userId)],
 };
