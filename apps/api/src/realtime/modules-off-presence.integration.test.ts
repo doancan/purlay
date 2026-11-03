@@ -223,6 +223,9 @@ describe('integration: the socket of a process that does not run chat, and who i
     expect(watching.frames.filter((frame) => frame.event === 'PRESENCE')).toEqual([]);
     // The control: the same publication reaches Bob where chat is run.
     const bobWithChat = await connect(chatting, bob.cookie);
+    // The client sees the socket open before the node has finished holding it and listening on Bob's own topic: a
+    // change published before that is not heard. Wait until the node holds both.
+    await bobWithChat.until(() => chatting.app.held().connections === 2, 'both sockets held');
     await arriving.close();
     // The close is handled after the client has seen it end: wait until the node holds her in her grace, or the
     // timers are run before there is one.
