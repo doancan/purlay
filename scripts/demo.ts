@@ -5,6 +5,7 @@
  *   bun run demo                       build, seed, serve on http://localhost:4173
  *   bun run demo -- --no-build         serve the build that is already in apps/web/dist
  *   bun run demo -- --port 4200 --db purlay_demo_two --manifest /tmp/world.json
+ *   bun run demo -- --modules none     serve the core alone (D-250): the seed is still made with every module
  *
  * **It can only ever touch a database it created.** The name must start with
  * `purlay_demo` or `purlay_e2e`, and it is dropped and recreated on every start — so
@@ -35,6 +36,8 @@ const databaseName = flag('--db') ?? 'purlay_demo';
 const port = Number(flag('--port') ?? 4173);
 const apiPort = port + 1;
 const manifestPath = flag('--manifest');
+// Only the served API runs this set: the seed drives chat's routes and needs them, so it is made with every module.
+const servedModules = flag('--modules');
 const build = !has('--no-build');
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 
@@ -162,6 +165,7 @@ const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], 
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
     // A sandbox: the browser tests' outsiders make workspaces of their own (D-124, D-155).
     WORKSPACE_CREATORS: '*',
+    ...(servedModules === undefined ? {} : { MODULES: servedModules }),
     ...(files === null ? {} : { STORAGE_DIRECTORY: files }),
     // The API serves the build itself, as the image does (D-61).
     CLIENT_DIST: join(root, 'apps/web/dist'),
