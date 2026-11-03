@@ -149,11 +149,13 @@ until then it is a stated intent and not a guarantee.
 |---|---|---|
 | No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |
 | The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
-| No read of another module's tables | typed query handle; a lint ban on raw `sql` in `features/` | 5 |
+| No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built** | 5 |
+| No read of another module's tables | the typed query handle, handed to a module with its own tables and the core's | 9 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
+| Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
-| A module cannot starve the others of connections | a per-module cap and `statement_timeout`; a test with one module saturated | 5 |
+| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built**, a module is handed it when it is made | 5 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
@@ -206,6 +208,34 @@ module a written removal threshold — active workspaces, retention, support loa
 **Between modules** a table of module pair × experience (mention, link, notification, search, attachment,
 permission, onboarding) says what a user sees when the partner is absent: shown, hidden, or plain text. It is part
 of each module's section (§9).
+
+**Steps 6–8 in detail** — measured from the imports, not guessed. Nine imports in seven files go from a core
+module to a chat one; the other mutual pairs (`messages`↔`workspaces`, `integrations`↔`setup`) are chat reaching
+the core, which is allowed, and end when the core's side is inverted. Four ways to remove an edge, in the order to
+try them: move the symbol to the side that owns it; a port the core defines and a module implements; a list of
+**in-transaction hooks** that modules register at the composition root and the core runs inside its own
+transaction (the domain bus cannot do this: it is after commit and at most once, and a workspace must never exist
+without its first channel); the domain bus for what may be lost. Each is its own pull request, with behaviour
+unchanged and proved so:
+
+1. leaf moves — the GitHub client and the `ILIKE` escape to `platform/` (**built**);
+2. a `workspaceCreated` hook list; chat registers the creation of the default channel, and a hook that throws
+   rolls the whole workspace back;
+3. `dropFiles` to `attachments`, taking the ids of the messages it drops;
+4. erasure and retention hooks: the core keeps the loop, the drain and the audit line, chat the tombstoning;
+5. notifications: they are written only by messages and point at channels and messages, so they move to chat as
+   `mention_notifications`; a generic core inbox waits for a second writer;
+6. the channel file list leaves `attachments`;
+7. the workspace purge's message and channel steps become a chat hook, and `REMAINING_TABLES` splits by owner;
+8. the two foreign keys from `attachments` to `messages` are dropped, a reconciliation sweep in the orphan job
+   takes their place, and the ownership list empties — a migration, and so rehearsed on a copy and the owner's
+   call (D-250).
+
+The three behaviours that could change without a test failing: the default channel at workspace creation (an
+integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
+workspace); the erasure of a person's messages (the existing tests unchanged, and the rows compared before and
+after on a seeded fixture, with two erasures racing); and the nightly retention (a test that the hook is
+registered when chat is on, and the counts on aged fixtures identical).
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The

@@ -24,7 +24,7 @@ import {
   githubAppCaller,
   readChecked,
   type GitHubAppFetch,
-} from './github-app-api';
+} from '../../platform/github-app-api';
 
 /** How long a good answer is kept, and a failure. */
 const RELEASE_KEPT_MS = 6 * HOUR_MS;

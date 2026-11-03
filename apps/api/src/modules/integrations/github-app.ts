@@ -44,7 +44,7 @@ import {
   type GitHubAppApi,
   type GitHubAppUrls,
   type UserTokens,
-} from './github-app-api';
+} from '../../platform/github-app-api';
 import { appJwt } from '../../platform/github-app-key';
 
 /** How long a trip to GitHub and back may take: GitHub's own codes last ten minutes. */

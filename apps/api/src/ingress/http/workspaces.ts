@@ -37,6 +37,7 @@ import { requireDeletionMembership, requireWorkspaceMembership } from '../../pla
 import { atomicallyOn } from '../../platform/transactions';
 import {
   createWorkspace,
+  type WorkspaceCreated,
   meOf,
   membersIn,
   membershipsOf,
@@ -87,6 +88,8 @@ export interface WorkspaceDependencies {
 export interface CreatorDependencies extends WorkspaceDependencies {
   /** Who may, as read through this executor: inside the transaction that makes the workspace. */
   readonly workspaceCreators: (executor: Executor) => Promise<WorkspaceCreators>;
+  /** What the modules start a new workspace with, in its transaction (D-250). */
+  readonly workspaceCreated: WorkspaceCreated;
 }
 
 /**
@@ -129,7 +132,7 @@ export const createMyWorkspace = async (
       await dependencies.workspaceCreators(transaction),
       userId,
     );
-    return await createWorkspace(transaction, clock, userId, input);
+    return await createWorkspace(transaction, clock, userId, input, dependencies.workspaceCreated);
   });
 };
 

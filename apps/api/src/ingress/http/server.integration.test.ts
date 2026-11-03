@@ -39,6 +39,7 @@ import { NO_LOG } from '../../platform/events';
 import { createLogger, type Logger } from '../../platform/logging';
 import { deriveAuthSecret } from '../../modules/auth/better-auth';
 import { createWorkspace } from '../../modules/workspaces/workspaces';
+import { chatWorkspaceHooks } from '../../modules/channels/workspace-hooks';
 import { atomicallyOn } from '../../platform/transactions';
 import { inProcessEventBus } from '../../realtime/bus';
 import type { RateBudget } from '../../realtime/rate-limiter';
@@ -170,10 +171,13 @@ const aServer = async (
   if (options.noWorkspace !== true) {
     await atomicallyOn(cloned.db)(
       async (transaction) =>
-        await createWorkspace(transaction, systemClock, owner.userId, {
-          name: 'Owned',
-          slug: aUniqueSlug('owned'),
-        }),
+        await createWorkspace(
+          transaction,
+          systemClock,
+          owner.userId,
+          { name: 'Owned', slug: aUniqueSlug('owned') },
+          chatWorkspaceHooks(),
+        ),
     );
   }
   if (options.unreadableGitHub === true) {

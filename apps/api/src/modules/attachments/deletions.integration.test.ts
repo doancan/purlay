@@ -26,8 +26,8 @@ import { NOW } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { sendMessage } from '../messages/messages';
-import { dropFiles } from '../messages/tombstone';
 import {
+  dropFiles,
   drainObjectDeletions,
   enqueueObjectDeletions,
   sweepObjectDeletions,

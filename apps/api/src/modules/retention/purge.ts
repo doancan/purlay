@@ -42,12 +42,12 @@ import { DAY_MS } from '../../platform/clock';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions } from '../attachments/deletions';
+import { dropFiles } from '../attachments/deletions';
 import { recordAudit } from '../audit/audit';
 import type { JobDependencies } from '../jobs/jobs';
 import {
   REMOVED_COLUMNS as COLUMNS,
   channelsOf,
-  dropFiles,
   lockMemberships,
   takeBackLive,
   tombstoneRows,

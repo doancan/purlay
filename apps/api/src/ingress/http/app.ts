@@ -171,7 +171,9 @@ import {
   githubAppCaller,
   platformAppFetch,
   type GitHubAppFetch,
-} from '../../modules/integrations/github-app-api';
+} from '../../platform/github-app-api';
+import { chatWorkspaceHooks } from '../../modules/channels/workspace-hooks';
+import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import { latestReleaseCheck } from '../../modules/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
@@ -346,6 +348,11 @@ export interface Dependencies {
    */
   readonly workspaceCreators?: (executor: Executor) => Promise<WorkspaceCreators>;
   /**
+   * What the modules start a new workspace with, inside its transaction (D-250); absent, what chat starts
+   * one with — its first channel (D-174).
+   */
+  readonly workspaceCreated?: WorkspaceCreated;
+  /**
    * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
    * absent, the application keeps one of its own — a test reads it through `/metrics`.
    */
@@ -431,7 +438,11 @@ const answerSetup = <T>(
 /** The setup's paths, its client pages included: nothing under them is for a search engine. */
 const SETUP_PATH = /^\/setup(?:\/|$)/;
 
-export const createApp = (dependencies: Dependencies): HttpApplication => {
+export const createApp = (given: Dependencies): HttpApplication => {
+  const dependencies = {
+    ...given,
+    workspaceCreated: given.workspaceCreated ?? chatWorkspaceHooks(),
+  };
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
   /** One request's line on the page: never its path as sent, only the route it was registered as. */

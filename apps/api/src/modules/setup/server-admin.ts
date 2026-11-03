@@ -70,7 +70,7 @@ import {
 } from './settings';
 import { setupStatus, type ServerAdminSession } from './setup';
 import { probeAppKey } from './probes';
-import type { GitHubAppApi } from '../integrations/github-app-api';
+import type { GitHubAppApi } from '../../platform/github-app-api';
 
 /**
  * The GitHub App issues are written through (D-246 §1), tried as the OAuth app is — its client id and secret

@@ -14,7 +14,7 @@ import type { FilePage, FileQuery } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { ChannelContext } from '../../platform/channels';
 import { limitOf } from '../../platform/pagination';
-import { asAttachment } from './uploads';
+import { asAttachment } from '../attachments/uploads';
 
 const at = (value: Date | string): string => new Date(value).toISOString();
 

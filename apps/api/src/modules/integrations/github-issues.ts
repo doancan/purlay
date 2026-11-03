@@ -51,7 +51,7 @@ import {
   GitHubUnauthorized,
   GitHubUnavailable,
   type IssueOnGitHub,
-} from './github-app-api';
+} from '../../platform/github-app-api';
 import { keepAuthorization, requireApp, sealedIn, type GitHubAppDependencies } from './github-app';
 import { workLinkOf } from './github-work';
 import { announce, tell } from './github-work-events';
