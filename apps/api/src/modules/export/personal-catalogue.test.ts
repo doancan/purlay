@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { sql, type RawBuilder } from '@purlay/db';
+import { sql, unconnectedDatabase, type RawBuilder } from '@purlay/db';
 import {
   assemblePersonalCatalogue,
   personalTableExport,
@@ -29,7 +29,7 @@ const chat: PersonalContribution = {
   id: 'chat',
   tables: [table('channels'), table('messages')],
   workspaces: () => [sql`select 2`, sql`select 3`],
-  files: () => sql`message_id is not null`,
+  files: () => Promise.resolve(sql`message_id is not null`),
 };
 
 /** Workspaces that say they were asked for, so a test can see who is asked and in what order. */
@@ -52,10 +52,10 @@ describe('the personal export catalogue', () => {
     ]);
   });
 
-  test('is the core’s alone when no module is carried', () => {
+  test('is the core’s alone when no module is carried', async () => {
     const alone = assemblePersonalCatalogue(core, []);
     expect(alone.order).toEqual(['users', 'workspaces']);
-    expect(alone.files('u')).toBeUndefined();
+    expect(await alone.files('u', unconnectedDatabase())).toBeUndefined();
   });
 
   test('refuses a table named twice, and names it', () => {
@@ -69,13 +69,15 @@ describe('the personal export catalogue', () => {
     );
   });
 
-  test('asks every contribution for the workspaces it names, the core first, and takes a module’s files', () => {
+  test('asks every contribution for the workspaces it names, the core first, and takes a module’s files', async () => {
     const asked: string[] = [];
     const spying = assemblePersonalCatalogue({ ...core, workspaces: asking(asked, 'core') }, [
       { ...chat, workspaces: asking(asked, 'chat') },
     ]);
     spying.workspaces('u');
     expect(asked).toEqual(['core', 'chat']);
-    expect(assemblePersonalCatalogue(core, [chat]).files('u')).toBeDefined();
+    expect(
+      await assemblePersonalCatalogue(core, [chat]).files('u', unconnectedDatabase()),
+    ).toBeDefined();
   });
 });

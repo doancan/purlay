@@ -257,7 +257,9 @@ describe('integration: exporting a workspace', () => {
         {
           kind: 'all',
           workspaceId: a.workspaceId,
-          prepared: { chat: await everyChannel(db, a.workspaceId) },
+          prepared: {
+            chat: { channels: await everyChannel(db, a.workspaceId), filesLinked: true },
+          },
         },
         target,
       );
@@ -349,7 +351,9 @@ describe('integration: exporting a workspace', () => {
         {
           kind: 'all',
           workspaceId: a.workspaceId,
-          prepared: { chat: await everyChannel(db, a.workspaceId) },
+          prepared: {
+            chat: { channels: await everyChannel(db, a.workspaceId), filesLinked: true },
+          },
         },
         target,
       );
@@ -412,7 +416,11 @@ describe('integration: exporting a workspace', () => {
           storage: store,
         },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: a.workspaceId, prepared: { chat: [] } },
+        {
+          kind: 'all',
+          workspaceId: a.workspaceId,
+          prepared: { chat: { channels: [], filesLinked: true } },
+        },
         target,
       ).then(
         () => null,
@@ -475,7 +483,7 @@ describe('integration: exporting a workspace', () => {
         {
           kind: 'visible-to-owner',
           workspaceId: a.workspaceId,
-          prepared: { chat: [a.channelId, b.channelId] },
+          prepared: { chat: { channels: [a.channelId, b.channelId], filesLinked: true } },
         },
         target,
       );
@@ -513,7 +521,11 @@ describe('integration: exporting a workspace', () => {
           storage: store,
         },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: a.workspaceId, prepared: { chat: [a.channelId] } },
+        {
+          kind: 'all',
+          workspaceId: a.workspaceId,
+          prepared: { chat: { channels: [a.channelId], filesLinked: true } },
+        },
         join(tmpdir(), `purlay-no-such-${crypto.randomUUID()}`, 'out'),
       ).then(
         () => null,
@@ -537,7 +549,11 @@ describe('integration: exporting a workspace', () => {
           storage: store,
         },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: a.workspaceId, prepared: { chat: [a.channelId] } },
+        {
+          kind: 'all',
+          workspaceId: a.workspaceId,
+          prepared: { chat: { channels: [a.channelId], filesLinked: true } },
+        },
         join(shared, 'out'),
       ).then(
         () => null,
@@ -567,7 +583,11 @@ describe('integration: exporting a workspace', () => {
           storage: store,
         },
         { id: room.workspaceId, slug: 'acme', name: 'Acme' },
-        { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
+        {
+          kind: 'all',
+          workspaceId: room.workspaceId,
+          prepared: { chat: { channels: [room.channelId], filesLinked: true } },
+        },
         target,
       ).then(
         (done) => done,
@@ -689,7 +709,9 @@ describe('integration: the shape of an export', () => {
           {
             kind,
             workspaceId: room.workspaceId,
-            prepared: { chat: await everyChannel(db, room.workspaceId) },
+            prepared: {
+              chat: { channels: await everyChannel(db, room.workspaceId), filesLinked: true },
+            },
           },
           target,
         );

@@ -11,7 +11,7 @@
  * messages `SKIP LOCKED` — with what each message added taken back first by the delete's own rule. A
  * process with no bus tells no socket: an open screen keeps the words until it reloads (D-139 §7).
  */
-import { sql, type Executor, type Transaction } from '@purlay/db';
+import { sql, tableExists, type Executor, type Transaction } from '@purlay/db';
 import type { ObjectStore } from '../../../platform/storage';
 import { atomicallyOn } from '../../../platform/transactions';
 import { drainObjectDeletions } from '../../../modules/attachments/deletions';
@@ -43,6 +43,8 @@ const eraseBatch = async (
   workspaceId: string,
   userId: string,
 ): Promise<Batch> => {
+  // Chat's own set makes the link, and a database migrated without it has no message to carry a file.
+  const linked = await tableExists(transaction, 'message_attachments');
   const candidates = await transaction
     .selectFrom('messages')
     .select(['id', 'channel_id'])
@@ -51,12 +53,16 @@ const eraseBatch = async (
     .where((eb) =>
       eb.or([
         eb('deleted_at', 'is', null),
-        eb.exists(
-          eb
-            .selectFrom('message_attachments')
-            .select('message_attachments.attachment_id')
-            .whereRef('message_attachments.message_id', '=', 'messages.id'),
-        ),
+        ...(linked
+          ? [
+              eb.exists(
+                eb
+                  .selectFrom('message_attachments')
+                  .select('message_attachments.attachment_id')
+                  .whereRef('message_attachments.message_id', '=', 'messages.id'),
+              ),
+            ]
+          : []),
       ]),
     )
     .orderBy('id')

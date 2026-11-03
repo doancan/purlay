@@ -37,6 +37,10 @@ have it.
 - **Email** — Every email the server sends is a short letter with one button, instead of plain text with the link in it (D-252)
 - **Performance** — The first page load fetches about a sixth less JavaScript, because the channel and message screens load beside the session answer rather than inside the first file (D-250)
 
+### Fixed
+
+- **Operations** — A fresh install started with `MODULES=none` can erase an account, purge a deleted workspace, export and run its nightly jobs; they failed on tables only chat's own migrations make (D-250)
+
 ### Security
 
 - **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)

@@ -16,7 +16,7 @@
  * compile error where its table is described until somebody decides whether a person's own copy carries it. The
  * composition root (`export-catalogue.ts`) holds the sum to the schema.
  */
-import { sql, type Database, type RawBuilder } from '@purlay/db';
+import { sql, type Database, type Executor, type RawBuilder } from '@purlay/db';
 import type { Bounds } from './catalogue';
 
 /** A column: in a person's export, or left out. */
@@ -33,7 +33,12 @@ type PersonalColumnsOf<T extends keyof Database> = {
 export interface PersonalTableExport {
   readonly name: keyof Database;
   readonly columns: Readonly<Record<string, PersonalColumn>>;
-  readonly bounds: (userId: string, workspaces: RawBuilder<unknown>) => Bounds;
+  /** Given the executor of the snapshot, for a bound that depends on which of a module's tables the database has. */
+  readonly bounds: (
+    userId: string,
+    workspaces: RawBuilder<unknown>,
+    executor: Executor,
+  ) => Bounds | Promise<Bounds>;
 }
 
 /** Describes one table, its columns held to the schema's, and how it is bounded to the person. */
@@ -51,7 +56,7 @@ export interface PersonalContribution {
   /** Each a `select <workspace's id> from …` over the person's rows: the workspaces they name. */
   readonly workspaces: (userId: string) => readonly RawBuilder<unknown>[];
   /** A bound on `attachments` selecting the files the person sent, whose bytes the export copies. */
-  readonly files?: (userId: string) => RawBuilder<unknown>;
+  readonly files?: (userId: string, executor: Executor) => Promise<RawBuilder<unknown>>;
 }
 
 /**
@@ -71,7 +76,7 @@ export interface PersonalCatalogue {
   /** The workspaces any of the person's exported rows name. */
   readonly workspaces: (userId: string) => RawBuilder<unknown>;
   /** The files the person sent, for the bound on `attachments`; none when nothing contributes one. */
-  readonly files: (userId: string) => RawBuilder<unknown> | undefined;
+  readonly files: (userId: string, executor: Executor) => Promise<RawBuilder<unknown> | undefined>;
 }
 
 export const assemblePersonalCatalogue = (
@@ -101,7 +106,7 @@ export const assemblePersonalCatalogue = (
         contributions.flatMap((contribution) => contribution.workspaces(userId)),
         sql` union `,
       ),
-    files: (userId: string): RawBuilder<unknown> | undefined =>
-      modules.find((module) => module.files !== undefined)?.files?.(userId),
+    files: async (userId: string, executor: Executor): Promise<RawBuilder<unknown> | undefined> =>
+      await modules.find((module) => module.files !== undefined)?.files?.(userId, executor),
   };
 };

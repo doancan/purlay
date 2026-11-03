@@ -125,9 +125,17 @@ moves into that module.
   the export catalogue is assembled from the manifests and its test — a table in the database that no manifest
   names fails it — keeps working. **Built** as `dataInCore`: a module whose tables the core's own migrations made
   (chat) contributes its erasure, purge, export, retention and channel answers whether or not it runs, and only
-  what *acts* (its routes, its mail, what a new workspace starts with) waits for it to run. A module with a set of
-  its own is held only while it runs; what its hooks do when its tables were never made is decided with the first
-  such module.
+  what *acts* (its routes, its mail, what a new workspace starts with) waits for it to run. **A module's own set
+  makes some of those tables** (chat's `message_attachments`, `scheduled_messages`, `message_reminders`,
+  `hidden_messages` and `scheduled_message_attachments`), and a database migrated without the set — a fresh install
+  that runs `MODULES=none` — has none of them. Where they exist the hooks reach them whether or not the module runs, so
+  the right to be erased does not wait for a setting; where they do not there is nothing to reach, and each place
+  that names one asks `tableExists` (`@purlay/db`) first, at the moment it needs the table and never remembered, since
+  another node may apply the set while this one runs. The alternative, a contribution split into a part held always and
+  a part held only where the set is applied, would need the process to know the database's sets when it is composed,
+  and a node that was composed before the set arrived would then miss rows that are there. A process that *runs* a
+  module on a database without its set is not a cell: readiness refuses it. `module-lifecycle.integration.test.ts`
+  runs erasure, purge, exports, jobs and the attachment reader in each cell, on a database of its own.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
   first 77 files always create chat's tables, inert where chat is off. The release before the first prefixed row
@@ -188,7 +196,7 @@ until then it is a stated intent and not a guarantee.
 | The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
 | Disabled ⇒ `404`, no distinct body | the CI matrix | 12 |
 | Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; running the whole suite per cell is the CI matrix, which waits for step 12 | 12 |
-| Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
+| Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off; every lifecycle step in each cell of database state × process, on real migrated databases (`module-lifecycle.integration.test.ts`) — **built** | 10 |
 | A core migration keeps module schemas valid | CI migrating each set from the last release | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release`: no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
