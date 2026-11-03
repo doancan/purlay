@@ -326,6 +326,41 @@ describe('the people section', () => {
       await expectNoAxeViolations(peopleOf(view));
     });
 
+    test('away peers show the ring and are said away; yourself is the heard state, else active while connected (D-257)', async () => {
+      const view = await open(
+        aSignedInApi({
+          presence: () =>
+            Promise.resolve({
+              online: [
+                { userId: ALICE.id, online: true, away: true, version: 5 },
+                { userId: ME.id, online: true, away: true, version: 6 },
+              ],
+              version: 9,
+            }),
+        }),
+      );
+      const rings = [...peopleOf(view).querySelectorAll('[data-avatar]')]
+        .filter((avatar) => avatar.querySelector('[data-away]') !== null)
+        .map((avatar) => avatar.textContent);
+      expect(rings).toEqual(['AL', 'DO']);
+      expect(dotted(view)).toEqual([]);
+      expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you, away']);
+      // Connected, yourself is still what the server said: away.
+      act(() => {
+        view.world.sockets.open();
+      });
+      expect(dotted(view)).toEqual([]);
+    });
+
+    test('yourself, with nothing heard, is active while connected', async () => {
+      const view = await open(aSignedInApi());
+      expect(dotted(view)).toEqual([]);
+      act(() => {
+        view.world.sockets.open();
+      });
+      expect(dotted(view)).toEqual(['DO']);
+    });
+
     test('a frame moves the dot; one older than what was heard changes nothing', async () => {
       const view = await open(
         aSignedInApi({

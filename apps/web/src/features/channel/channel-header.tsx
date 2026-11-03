@@ -29,7 +29,7 @@ import { NotificationLevelMenu } from './notification-level-menu';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
 import { StarToggle } from './star-toggle';
-import { useOnline } from '../../realtime/realtime-provider';
+import { usePresence } from '../../realtime/realtime-provider';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
 /**
@@ -98,7 +98,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const group = direct && channel.peers.length >= 2;
   // Adding people and a group's details are in the deferred chunk (D-163).
   const deferred = useDeferred([adding, setAdding], [group && details, setDetailsOpen]);
-  const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
+  const peerPresence = usePresence(channel.peer?.id ?? '', me.id);
   const openText =
     open !== null && open.count > 0 ? `${format.number(open.count)}${open.more ? '+' : ''}` : null;
   const views = !direct || openText !== null;
@@ -114,7 +114,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             name={nameOf(channel.peer, t('user.erased'))}
             username={channel.peer.username}
             size="sm"
-            online={peerOnline}
+            presence={peerPresence}
           />
         ) : group ? (
           // A group shows the faces it is named by, as its sidebar row does (D-167).
@@ -152,8 +152,12 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
         ) : direct && channel.peer !== null ? (
           <>
             <PeerHeading peer={channel.peer} title={title} />
-            {/* The dot is the avatar's, which a screen reader skips: said here instead (D-136). */}
-            {peerOnline === true && <VisuallyHidden>{t('presence.online')}</VisuallyHidden>}
+            {/* The dot or ring is the avatar's, which a screen reader skips: said here instead (D-136). */}
+            {peerPresence !== undefined && (
+              <VisuallyHidden>
+                {t(peerPresence === 'away' ? 'presence.away' : 'presence.online')}
+              </VisuallyHidden>
+            )}
           </>
         ) : direct ? (
           <h1 className="min-w-0 truncate text-title text-ink">{title}</h1>
