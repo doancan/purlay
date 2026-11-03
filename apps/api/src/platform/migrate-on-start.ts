@@ -23,6 +23,7 @@ import {
   pendingMigrations,
   type Executor,
   type MigrateOptions,
+  type MigrationSet,
   type MigrationConnection,
 } from '@purlay/db';
 import type { Logger } from './logging';
@@ -35,13 +36,13 @@ import type { Logger } from './logging';
 export const migrateOnStart = async (
   connection: MigrationConnection,
   directory?: string,
-  options: Pick<MigrateOptions, 'onRetry'> = {},
+  options: Pick<MigrateOptions, 'onRetry'> & { readonly sets?: readonly MigrationSet[] } = {},
 ): Promise<readonly string[]> => {
   const database = createMigrationDatabase(connection);
   const { error, results } = await migrateToLatest(database, directory, {
     // A directory given is a test's own; the product's own is its core and every module's set.
-    modules: directory === undefined ? PRODUCT_MIGRATION_SETS : [],
-    ...options,
+    modules: directory === undefined ? (options.sets ?? PRODUCT_MIGRATION_SETS) : [],
+    ...(options.onRetry === undefined ? {} : { onRetry: options.onRetry }),
   }).finally(async () => {
     await database.destroy();
   });
@@ -72,22 +73,16 @@ export const untilMigrated = async (
   database: Executor,
   log: Logger,
   pollMs: number = MIGRATED_POLL_MS,
+  sets: readonly MigrationSet[] = PRODUCT_MIGRATION_SETS,
 ): Promise<void> => {
   let said: string | undefined;
   for (;;) {
     let kind: string | undefined;
     let reason: string | undefined;
     try {
-      const history = await migrationHistoryProblem(
-        database,
-        undefined,
-        undefined,
-        PRODUCT_MIGRATION_SETS,
-      );
+      const history = await migrationHistoryProblem(database, undefined, undefined, sets);
       const pending =
-        history === undefined
-          ? await pendingMigrations(database, undefined, PRODUCT_MIGRATION_SETS)
-          : [];
+        history === undefined ? await pendingMigrations(database, undefined, sets) : [];
       if (history !== undefined) [kind, reason] = ['history', history];
       else if (pending.length > 0) {
         [kind, reason] = ['pending', `migrations not applied: ${pending.join(', ')}`];

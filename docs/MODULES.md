@@ -301,9 +301,14 @@ request with behaviour unchanged:
 and makes from them what the core leaves open — the workspace's first hook, the account's erasure hook, who answers
 for the channels, the purge's steps and tables, the two catalogues, the columns readiness checks; a module is its manifest
 and what it contributes (`features/chat/module.ts`), and a process with no module has the core alone, shown on a real
-database. (b) Reading `MODULES` at boot and handing the composition only the modules it names; (c) the routes of a module
-mounted only when it runs, a disabled module's plain `404`, and its jobs and commands exiting `0`; (d) the server naming
-the enabled modules and the web building its routes from them; (e) the matrix in CI and the cluster check.
+database. (b) *`MODULES` read at boot* (**built**): `compositionFor(setting)` hands the process only the modules it names, and a setting that
+names none the build carries stops it before it listens; the migrations (`MIGRATE_ON_START`, `db:migrate`, readiness and
+the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert.
+(c) *Routes, jobs and commands* (**built**): a module's manifest lists its route templates and its jobs; a path of a module that
+is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one exits `0`
+with a line saying so and is left out of the status report, and `GET /api/client` lists the modules the server runs.
+A scan holds every route the application registers to the core's list or a module's. (d) The web building its routes
+from the listed modules (step 11); (e) the matrix in CI and the cluster check.
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The

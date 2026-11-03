@@ -8,6 +8,7 @@
  * With no module the core stands alone: no hook runs, nobody answers for channels, the purge takes the core's
  * tables, the exports hold the core's.
  */
+import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
@@ -22,6 +23,7 @@ import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
 import { moduleRegistry } from './platform/module-kit/registry';
+import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
 
@@ -55,9 +57,22 @@ export interface Composition {
   readonly exportCatalogue: ReturnType<typeof assembleCatalogue>;
   readonly personalExportCatalogue: ReturnType<typeof assemblePersonalCatalogue>;
   readonly collatedColumns: readonly CollatedColumn[];
+  /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
+  readonly migrationSets: readonly MigrationSet[];
+  /** Whether a path is one a module this build carries owns and this process does not run: the `404` of an unknown route. */
+  readonly closed: (path: string) => boolean;
+  /** Whether a job belongs to a module this build carries and this process does not run. */
+  readonly closedJob: (name: string) => boolean;
 }
 
-export const compose = (modules: readonly BundledModule[]): Composition => {
+/**
+ * The composition of the modules given. `bundled` is every module the build carries, so that a path of one that is
+ * not run is known to be closed: with chat left out, its routes are not routes.
+ */
+export const compose = (
+  modules: readonly BundledModule[],
+  bundled: readonly BundledModule[] = bundledModules,
+): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
   for (const module of modules) {
@@ -89,8 +104,29 @@ export const compose = (modules: readonly BundledModule[]): Composition => {
       modules.flatMap((module) => module.personalExport ?? []),
     ),
     collatedColumns: modules.flatMap((module) => module.collatedColumns ?? []),
+    migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
+      modules.some((module) => module.manifest.id === set.id),
+    ),
+    closed: ownsPath(
+      bundled
+        .filter((module) => !modules.includes(module))
+        .flatMap((module) => module.manifest.routes ?? []),
+    ),
+    closedJob: (name) =>
+      bundled.some(
+        (module) => !modules.includes(module) && (module.manifest.jobs ?? []).includes(name),
+      ),
   };
 };
 
 /** What a process runs when nothing says otherwise: every module this build carries. */
 export const composition: Composition = compose(bundledModules);
+
+/**
+ * The composition for an operator's `MODULES` setting: unset is every module the build carries, `none` the core
+ * alone. Throws `ModuleConfigError` naming every problem, for the process to stop on before it listens.
+ */
+export const compositionFor = (setting: string | undefined): Composition => {
+  const named = new Set(registry.resolve(setting).map((module) => module.id));
+  return compose(bundledModules.filter((module) => named.has(module.manifest.id)));
+};

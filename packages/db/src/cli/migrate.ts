@@ -8,13 +8,16 @@
  * recovered from point-in-time recovery (D-44). See `migrator.ts`.
  */
 import { createMigrationDatabase, tlsFromEnvironment } from '../client';
-import { migrateToLatest, PRODUCT_MIGRATION_SETS } from '../migrator';
+import { migrateToLatest, setsNamedBy } from '../migrator';
 
 const connectionString = process.env['DATABASE_URL'];
 if (connectionString === undefined || connectionString === '') {
   console.error('DATABASE_URL is not set. See docs/CONFIG.md.');
   process.exit(1);
 }
+
+// The modules this installation runs (`MODULES`, D-250): the core's migrations always, and each named module's.
+const modules = setsNamedBy(process.env['MODULES']);
 
 // The same TLS settings as the application, so a managed database that refuses a
 // clear connection is migrated by the command that starts it (D-86), on the connection
@@ -28,7 +31,7 @@ const db = createMigrationDatabase({
 });
 
 const { error, results } = await migrateToLatest(db, undefined, {
-  modules: PRODUCT_MIGRATION_SETS,
+  modules,
   onRetry: (retry) => {
     console.warn(
       `  retrying ${retry.migration}: attempt ${String(retry.attempt)} was ended as a deadlock victim; ` +

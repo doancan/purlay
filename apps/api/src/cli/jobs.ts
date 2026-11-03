@@ -20,7 +20,7 @@
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { purgeRetention } from '../features/chat/messages/retention-purge';
-import { composition } from '../composition';
+import { compositionFor } from '../composition';
 import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
@@ -50,6 +50,7 @@ import { storeFor } from '../platform/storage';
 const SESSION_BATCH = 1_000;
 
 const config = loadConfig(process.env);
+const composition = compositionFor(config.MODULES);
 // A job's failure is logged at `error`, and so reported as the API's errors are (#635).
 const { tracker, log } = errorTrackingFor(
   config,
@@ -138,23 +139,27 @@ const runOne = async (
   );
 
 const name = process.argv[2] ?? '';
+// A job of a module this process does not run is not overdue and has nothing to do (`MODULES.md` §3).
+const running = Object.keys(jobs).filter((job) => !composition.closedJob(job));
 try {
   if (name === 'jobs:status') {
-    const report = jobReport(Object.keys(jobs), await records(), clock.now());
+    const report = jobReport(running, await records(), clock.now());
     process.stdout.write(`${report.lines.join('\n')}\n`);
     process.exitCode = report.healthy ? 0 : 1;
   } else if (name === FIRST_RUN) {
     // One after another, as the plan would: a failure is told by the exit code, and the rest still run.
-    for (const job of neverSucceeded(Object.keys(jobs), await records())) {
+    for (const job of neverSucceeded(running, await records())) {
       const work = jobs[job];
       if (work === undefined) throw new Error(`no job named "${job}" to run first`);
       if (!(await runOne(job, work))) process.exitCode = 1;
     }
+  } else if (composition.closedJob(name)) {
+    log.info('the job belongs to a module that is not run; nothing to do', { job: name });
   } else {
     const work = jobs[name];
     if (work === undefined) {
       process.stderr.write(
-        `No job named "${name}". Jobs: ${[...Object.keys(jobs), 'jobs:status', FIRST_RUN].join(', ')}\n`,
+        `No job named "${name}". Jobs: ${[...running, 'jobs:status', FIRST_RUN].join(', ')}\n`,
       );
       process.exitCode = 2;
     } else if (!(await runOne(name, work))) {

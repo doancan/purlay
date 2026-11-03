@@ -9,7 +9,7 @@
  */
 import { createDatabase } from '@purlay/db';
 import { exportWorkspace } from '../modules/export/export';
-import { exportCatalogue } from '../export-catalogue';
+import { compositionFor } from '../composition';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
@@ -21,6 +21,7 @@ const config = loadConfig(process.env);
 const log = createLogger({ level: config.LOG_LEVEL });
 // Every entry this process writes to the trail is also a line of its log, ids only (D-222).
 sendAuditLinesTo(log);
+const { exportCatalogue } = compositionFor(config.MODULES);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 
 try {

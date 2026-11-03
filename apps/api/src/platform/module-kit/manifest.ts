@@ -17,4 +17,15 @@ export interface ModuleManifest {
   readonly optional: readonly string[];
   /** Capabilities this module offers, asked for by name through the core (`MODULES.md` §4). */
   readonly provides: readonly string[];
+  /**
+   * The HTTP routes the module owns, as path templates: `:name` is one segment and a trailing `**` is the rest.
+   * A module that is not run has no route, so a request for one is the `404` of any unknown path
+   * (`MODULES.md` §3). No method: a path is a module's whole.
+   */
+  readonly routes?: readonly string[];
+  /**
+   * The scheduled jobs (`bun run job <name>`) that are about the module's data. A scheduler that still runs one of a
+   * module that is not run is answered with success and a line saying so: there is nothing for it to do.
+   */
+  readonly jobs?: readonly string[];
 }

@@ -14,7 +14,42 @@ import { CHAT_COLLATED_COLUMNS } from './collated-columns';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
 export const chatModule = {
-  manifest: { id: 'chat', requires: [], optional: [], provides: [] },
+  manifest: {
+    id: 'chat',
+    requires: [],
+    optional: [],
+    provides: [],
+    // Every route that is about channels, messages and what hangs off them. The ones that are the workspace's own
+    // (its members, invitations, exports, retention window, deletion, uploads) and the account's are the core's, and
+    // `routes.test.ts` of the door holds the two lists to the routes the application registers.
+    jobs: ['purge:retention', 'mail:missed', 'sweep:link-previews', 'sweep:github-deliveries'],
+    routes: [
+      '/api/channels/**',
+      '/api/messages/**',
+      '/api/notifications',
+      '/api/notifications/read',
+      '/api/missed-mail/stop',
+      '/api/webhooks/**',
+      '/api/github-app/**',
+      '/api/integrations/**',
+      '/api/workspaces/:workspaceId/channels',
+      '/api/workspaces/:workspaceId/archived-channels',
+      '/api/workspaces/:workspaceId/conversations',
+      '/api/workspaces/:workspaceId/dms',
+      '/api/workspaces/:workspaceId/github-app',
+      '/api/workspaces/:workspaceId/github-app/installation',
+      '/api/workspaces/:workspaceId/github-repositories',
+      '/api/workspaces/:workspaceId/integrations/github',
+      '/api/workspaces/:workspaceId/presence',
+      '/api/workspaces/:workspaceId/read',
+      '/api/workspaces/:workspaceId/saved',
+      '/api/workspaces/:workspaceId/saved/ids',
+      '/api/workspaces/:workspaceId/saved-searches',
+      '/api/workspaces/:workspaceId/saved-searches/:searchId',
+      '/api/workspaces/:workspaceId/search',
+      '/api/workspaces/:workspaceId/unresolved',
+    ],
+  },
   workspaceCreated: startWithTheDefaultChannel,
   userErased: forgetWhatChatKeeps,
   workspaceChannels: chatWorkspaceChannels,
