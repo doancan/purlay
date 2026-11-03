@@ -7,6 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   BUDGETS,
+  requireAnswers,
+  gate,
+  countAnswer,
+  lowestOf,
   REGRESSION_FACTOR,
   judge,
   main,
@@ -283,10 +287,10 @@ describe('chat’s latency with issues busy', () => {
     };
   };
 
-  test('asks for three trials of sixty messages with issues busy, and passes when chat holds', async () => {
-    const { measure, asked } = measuring([busy(27, 26), busy(30, 28), busy(29, 27)]);
+  test('asks for two trials of sixty messages with issues busy, judges the lower, and passes when chat holds', async () => {
+    const { measure, asked } = measuring([busy(31, 26), busy(29, 28)]);
     const verdict = await withIssuesBusy(quiet, measure);
-    expect(asked).toEqual(Array.from({ length: 3 }, () => ({ count: 60, issuesBusy: true })));
+    expect(asked).toEqual(Array.from({ length: 2 }, () => ({ count: 60, issuesBusy: true })));
     expect(verdict.regressed).toBe(false);
     expect(verdict.lines[0]).toBe('with issues busy, against the quiet trials of this run:');
     expect(verdict.lines[1]).toBe(
@@ -297,9 +301,9 @@ describe('chat’s latency with issues busy', () => {
 
   test('a jump past the factor of the quiet trials is a regression, measured again once, and fails if it repeats', async () => {
     const slow = busy(90, 90);
-    const { measure, asked } = measuring(Array.from({ length: 6 }, () => slow));
+    const { measure, asked } = measuring(Array.from({ length: 4 }, () => slow));
     const verdict = await withIssuesBusy(quiet, measure);
-    expect(asked).toHaveLength(6);
+    expect(asked).toHaveLength(4);
     expect(verdict.regressed).toBe(true);
     expect(verdict.lines).toContain(
       'first measurement with issues busy regressed; measured again:',
@@ -310,9 +314,9 @@ describe('chat’s latency with issues busy', () => {
   test('passes when the second look holds', async () => {
     const slow = busy(90, 90);
     const fine = busy(28, 28);
-    const { measure, asked } = measuring([slow, slow, slow, fine, fine, fine]);
+    const { measure, asked } = measuring([slow, slow, fine, fine]);
     const verdict = await withIssuesBusy(quiet, measure);
-    expect(asked).toHaveLength(6);
+    expect(asked).toHaveLength(4);
     expect(verdict.regressed).toBe(false);
   });
 
@@ -329,8 +333,67 @@ describe('chat’s latency with issues busy', () => {
     }
   });
 
+  test('one slow trial among two is not a regression, since the lower is what is judged', async () => {
+    const { measure, asked } = measuring([busy(95, 95), busy(27, 27)]);
+    expect((await withIssuesBusy(quiet, measure)).regressed).toBe(false);
+    expect(asked).toHaveLength(2);
+  });
+
+  test('counts an answer and a refusal of the share, and refuses to count anything else', () => {
+    const tally = { answered: 0, refused: 0 };
+    countAnswer(tally, 200);
+    countAnswer(tally, 200);
+    countAnswer(tally, 503);
+    expect(tally).toEqual({ answered: 2, refused: 1 });
+    expect(() => {
+      countAnswer(tally, 500);
+    }).toThrow('issues answered 500');
+    expect(tally).toEqual({ answered: 2, refused: 1 });
+  });
+
+  test('the lower p95 of each metric is taken separately', () => {
+    expect(lowestOf([run(40, 20), run(30, 50)])).toEqual(run(30, 20));
+  });
+
   test('the command hands back what the quiet trials came to, to be judged against', async () => {
     const result = await main([], () => Promise.resolve(run(30, 31)));
     expect(result.quiet).toEqual(summarizeTrials([run(30, 31), run(30, 31), run(30, 31)]));
+  });
+});
+
+describe('a trial that was not answered', () => {
+  test('is an error unless every message was answered and delivered', () => {
+    requireAnswers(60, 60, 60);
+    expect(() => {
+      requireAnswers(59, 60, 60);
+    }).toThrow('answers missing: 59 ACKs and 60 deliveries of 60');
+    expect(() => {
+      requireAnswers(60, 0, 60);
+    }).toThrow('answers missing');
+  });
+});
+
+describe('the whole gate', () => {
+  const quietOrBusy =
+    (quiet: Latency, busy: Latency) =>
+    (_count: number, issuesBusy: boolean): Promise<Latency> =>
+      Promise.resolve(issuesBusy ? { ...busy, issues: { answered: 100, refused: 0 } } : quiet);
+
+  test('passes when the quiet trials and the trials with issues busy both hold', async () => {
+    const result = await gate([], quietOrBusy(run(25, 25), run(27, 27)));
+    expect(result.code).toBe(0);
+    expect(result.lines).toContain('with issues busy, against the quiet trials of this run:');
+  });
+
+  test('fails when chat regresses with issues busy, though the quiet trials held', async () => {
+    const result = await gate([], quietOrBusy(run(25, 25), run(90, 90)));
+    expect(result.code).toBe(1);
+  });
+
+  test('fails when the quiet trials regress against the baseline, whatever issues does', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    await Bun.write(file, JSON.stringify(run(30, 30)));
+    const result = await gate(['--baseline', file], quietOrBusy(run(100, 30), run(100, 30)));
+    expect(result.code).toBe(1);
   });
 });

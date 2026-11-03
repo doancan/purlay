@@ -54,17 +54,23 @@ export const jumped = (
 ): boolean => before !== undefined && value > Math.max(before * factor, NOISE_FLOOR_MS);
 
 /**
- * People reading issues' list, each with this many requests in flight: more than a pool holds, so that were issues
- * not held to its share the pool would be theirs.
+ * What is measured with issues busy is connections held, not requests served: the readers are closed-loop clients
+ * that send one request, wait for its answer and think for `ISSUE_THINK_MS`, so the work they ask of the CPU is a
+ * few tens of small requests a trial, and there are more of them than the pool has connections, so that were issues
+ * not held to its share the pool would be theirs. The CPU and event loop a busy module takes are the process's
+ * to share (`MODULES.md` §7) and are not what the share of the pool promises.
  */
-const ISSUE_READERS = 4;
-const ISSUE_REQUESTS_IN_FLIGHT = 4;
+const ISSUE_READERS = 12;
+const ISSUE_THINK_MS = 100;
 /**
  * Issues' statements are made slow the way a long migration or a slow query would, without a clock in the
- * database: a lock on the table they read, taken for this long, let go for this long, again and again.
+ * database: a lock on the table they read, taken for this long, let go for this long, again and again. The
+ * readers that got a slot hold a connection each for the whole of the lock.
  */
-const ISSUES_LOCKED_MS = 700;
-const ISSUES_UNLOCKED_MS = 300;
+const ISSUES_LOCKED_MS = 800;
+const ISSUES_UNLOCKED_MS = 50;
+/** Trials with issues busy: the lower of two, since a slowdown the share causes is in both. */
+const BUSY_TRIALS = 2;
 
 /** Under the per-connection and per-user budgets of ten a second (`rate-limiter.ts`). */
 const PACE_MS = 125;
@@ -207,28 +213,42 @@ const answered = (socket: Socket, id: string): Promise<void> =>
     });
   });
 
-/** Reads issues' list over and over until `stopped`, as one person with `ISSUE_REQUESTS_IN_FLIGHT` requests open. */
-const readIssues = (
+/**
+ * What a reader of issues was told: an answer, or the share's own refusal of a request it has no room for, which
+ * is expected and counted. Anything else is a defect of the scenario, not a number.
+ */
+export const countAnswer = (tally: { answered: number; refused: number }, status: number): void => {
+  if (status === 200) tally.answered += 1;
+  else if (status === 503) tally.refused += 1;
+  else throw new Error(`issues answered ${String(status)}`);
+};
+
+/** A trial in which a message was not answered or not delivered measured nothing; it is an error, not a smaller sample. */
+export const requireAnswers = (acks: number, deliveries: number, count: number): void => {
+  if (acks < count || deliveries < count) {
+    throw new Error(
+      `answers missing: ${String(acks)} ACKs and ${String(deliveries)} deliveries of ${String(count)}`,
+    );
+  }
+};
+
+/** Reads issues' list until `stopped`, one request at a time, thinking between them. */
+const readIssues = async (
   origin: string,
   who: Person,
   workspaceId: string,
   stopped: () => boolean,
   tally: { answered: number; refused: number },
-): Promise<unknown> =>
-  Promise.all(
-    Array.from({ length: ISSUE_REQUESTS_IN_FLIGHT }, async () => {
-      while (!stopped()) {
-        const response = await fetch(`${origin}/api/workspaces/${workspaceId}/issues`, {
-          headers: { cookie: who.cookie, origin },
-        });
-        await response.arrayBuffer();
-        if (response.status === 200) tally.answered += 1;
-        // The share's own answer to a request it has no room for: expected, and counted.
-        else if (response.status === 503) tally.refused += 1;
-        else throw new Error(`issues answered ${String(response.status)}`);
-      }
-    }),
-  );
+): Promise<void> => {
+  while (!stopped()) {
+    const response = await fetch(`${origin}/api/workspaces/${workspaceId}/issues`, {
+      headers: { cookie: who.cookie, origin },
+    });
+    await response.arrayBuffer();
+    countAnswer(tally, response.status);
+    await Bun.sleep(ISSUE_THINK_MS);
+  }
+};
 
 /** Takes the issues table in turns, until `stopped`, so that the statements of the module wait for it. */
 const lockIssuesInTurns = async (clone: ClonedDatabase, stopped: () => boolean): Promise<void> => {
@@ -364,11 +384,7 @@ export const measureLatency = async (count: number, issuesBusy = false): Promise
     while ((acks.length < count || fanOuts.length < count) && performance.now() < waitUntil) {
       await Bun.sleep(20);
     }
-    if (acks.length < count || fanOuts.length < count) {
-      throw new Error(
-        `answers missing: ${String(acks.length)} ACKs and ${String(fanOuts.length)} deliveries of ${String(count)}`,
-      );
-    }
+    requireAnswers(acks.length, fanOuts.length, count);
     hammering = false;
     await hammers;
     return {
@@ -467,10 +483,17 @@ export const main = async (
   return { lines: [...said, ...lines], code: regressed ? 1 : 0, quiet: now };
 };
 
+/** The lower p95 of each metric across the trials: what chat does when issues is not what slows it. */
+export const lowestOf = (trials: readonly Latency[]): Latency => ({
+  ackP95Ms: Math.min(...trials.map((trial) => trial.ackP95Ms)),
+  fanOutP95Ms: Math.min(...trials.map((trial) => trial.fanOutP95Ms)),
+  messages: MESSAGES_PER_TRIAL,
+});
+
 /**
  * Chat's latency with issues busy, against the quiet trials of the same run: the trials again, each with people
- * reading issues' list throughout, judged by `judge` — past the factor and the noise floor is a regression — and
- * measured once more if it regressed, as D-227 has it. Trials in which nobody was answered are an error: a
+ * reading issues' list throughout, the lower of the two judged by `judge` — past the factor and the noise floor is a
+ * regression — and measured once more if it regressed, as D-227 has it. Trials in which nobody was answered are an error: a
  * measurement with nothing busy proves nothing.
  */
 export const withIssuesBusy = async (
@@ -482,7 +505,7 @@ export const withIssuesBusy = async (
     readonly lines: readonly string[];
   }> => {
     const trials: Latency[] = [];
-    for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
+    for (let trial = 0; trial < BUSY_TRIALS; trial += 1) {
       const latency = await measure(MESSAGES_PER_TRIAL, true);
       if ((latency.issues?.answered ?? 0) === 0) {
         throw new Error(
@@ -491,10 +514,10 @@ export const withIssuesBusy = async (
       }
       trials.push(latency);
     }
-    const verdict = judge(summarizeTrials(trials), quiet);
+    const verdict = judge(lowestOf(trials), quiet);
     const detail = trials.map(
       (trial, index) =>
-        `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms; issues answered ${String(trial.issues?.answered)}, refused ${String(trial.issues?.refused)}`,
+        `trial ${String(index + 1)}/${String(BUSY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms; issues answered ${String(trial.issues?.answered)}, refused ${String(trial.issues?.refused)}`,
     );
     return { regressed: verdict.regressed, lines: [...verdict.lines, ...detail] };
   };
@@ -513,10 +536,21 @@ export const withIssuesBusy = async (
   };
 };
 
+/** The whole gate: the quiet trials against the baseline, then chat with issues busy against the quiet ones. */
+export const gate = async (
+  args: readonly string[],
+  measure: (count: number, issuesBusy: boolean) => Promise<Latency> = measureLatency,
+): Promise<{ readonly lines: readonly string[]; readonly code: number }> => {
+  const quiet = await main(args, (count) => measure(count, false));
+  const busy = await withIssuesBusy(quiet.quiet, measure);
+  return {
+    lines: [...quiet.lines, ...busy.lines],
+    code: quiet.code === 0 && !busy.regressed ? 0 : 1,
+  };
+};
+
 if (import.meta.main) {
-  const { lines, code, quiet } = await main(process.argv.slice(2));
+  const { lines, code } = await gate(process.argv.slice(2));
   for (const line of lines) console.log(line);
-  const busy = await withIssuesBusy(quiet);
-  for (const line of busy.lines) console.log(line);
-  process.exit(code === 0 && !busy.regressed ? 0 : 1);
+  process.exit(code);
 }

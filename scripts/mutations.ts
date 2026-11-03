@@ -13151,11 +13151,27 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/db/src/migration-sets.test.ts'],
   },
   {
+    id: 'latency-gate-ignores-issues-busy',
+    why: 'the gate passes whatever chat’s latency is with issues busy, so a module that holds the pool is never caught (O3)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'code: quiet.code === 0 && !busy.regressed ? 0 : 1,',
+    replace: 'code: quiet.code === 0 ? 0 : 1,',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-trial-with-missing-answers-accepted',
+    why: 'a trial in which messages were never answered or delivered is taken as a measurement, so a stalled chat reads as fast (O3)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'if (acks < count || deliveries < count) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
     id: 'latency-issues-busy-judged-against-nothing',
     why: 'the trials with issues busy are timed and never compared, so chat can be slowed by issues and the gate passes (O3)',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: 'const verdict = judge(summarizeTrials(trials), quiet);',
-    replace: 'const verdict = judge(summarizeTrials(trials), null);',
+    find: 'const verdict = judge(lowestOf(trials), quiet);',
+    replace: 'const verdict = judge(lowestOf(trials), null);',
     tests: ['apps/api/src/cli/budget-latency.test.ts'],
   },
   {
@@ -13173,7 +13189,10 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "    atomically: budgeted(\n      'issues',\n      issuesBudget(dependencies.config.DATABASE_POOL_MAX),\n      dependencies.database,\n    ),",
     replace:
       '    atomically: async (body) => await dependencies.database.transaction().execute(body),',
-    tests: ['apps/api/src/ingress/http/issues-budget.integration.test.ts'],
+    tests: [
+      'apps/api/src/ingress/http/issues-budget.integration.test.ts',
+      'scripts/budget-latency.integration.test.ts',
+    ],
   },
   {
     id: 'issues-share-is-the-whole-pool',
@@ -13181,7 +13200,10 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/budget.ts',
     find: 'Math.min(Math.floor(poolMax / POOL_SHARE_DIVISOR), poolMax - 1)',
     replace: 'poolMax',
-    tests: ['apps/api/src/ingress/http/issues-budget.integration.test.ts'],
+    tests: [
+      'apps/api/src/ingress/http/issues-budget.integration.test.ts',
+      'scripts/budget-latency.integration.test.ts',
+    ],
   },
   {
     id: 'metrics-modules-info-names-every-module',
