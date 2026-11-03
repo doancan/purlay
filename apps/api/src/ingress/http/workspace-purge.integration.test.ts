@@ -19,11 +19,12 @@ import { aUniqueSlug } from '../../testing/users';
 import { sweepObjectDeletions } from '../../modules/attachments/deletions';
 import { atomicallyOn } from '../../platform/transactions';
 import {
-  REMAINING_TABLES,
+  CORE_REMAINING_TABLES,
   WORKSPACE_PURGE_BATCH,
   purgeWorkspaceContent,
   purgeWorkspaces,
 } from '../../modules/workspaces/deletion-purge';
+import { chatWorkspacePurge } from '../../modules/messages/workspace-purge';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -201,12 +202,10 @@ const askToDelete = async (db: Executor, seeded: Seeded): Promise<void> => {
 };
 
 const runAt = (db: Executor, at: Date, store: MemoryStore): ReturnType<typeof purgeWorkspaces> =>
-  purgeWorkspaces({
-    database: db,
-    clock: fixedClock(at),
-    log: aRecordingLogger().log,
-    storage: store,
-  });
+  purgeWorkspaces(
+    { database: db, clock: fixedClock(at), log: aRecordingLogger().log, storage: store },
+    chatWorkspacePurge,
+  );
 
 const workspaceRow = async (
   db: Executor,
@@ -245,7 +244,8 @@ describe('integration: the workspace purge', () => {
         'workspace_exports',
         'channels',
         'workspace_members',
-        ...REMAINING_TABLES,
+        ...chatWorkspacePurge.tables,
+        ...CORE_REMAINING_TABLES,
       ];
       expect(await referring(db)).toEqual([...emptied, 'audit_log', 'server_audit_log'].sort());
     });
@@ -340,6 +340,7 @@ describe('integration: the workspace purge', () => {
       await purgeWorkspaceContent(
         { database: db, clock: fixedClock(DUE), log: aRecordingLogger().log, storage: store },
         doomed.workspaceId,
+        chatWorkspacePurge,
       );
       expect(await serverLines(db, doomed.workspaceId)).toHaveLength(1);
     });

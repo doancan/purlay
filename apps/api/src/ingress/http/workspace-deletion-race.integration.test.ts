@@ -25,6 +25,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aSession } from '../../testing/signed-in';
 import { aMemoryStore } from '../../testing/storage';
 import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
+import { chatWorkspacePurge } from '../../modules/messages/workspace-purge';
 import { purgeWorkspaces } from '../../modules/workspaces/deletion-purge';
 import { createApp } from './app';
 
@@ -92,12 +93,15 @@ const messagesOf = async (room: Room): Promise<number> =>
   ).length;
 
 const purge = (): ReturnType<typeof purgeWorkspaces> =>
-  purgeWorkspaces({
-    database: cloned.db,
-    clock: fixedClock(DUE),
-    log: aRecordingLogger().log,
-    storage: aMemoryStore(),
-  });
+  purgeWorkspaces(
+    {
+      database: cloned.db,
+      clock: fixedClock(DUE),
+      log: aRecordingLogger().log,
+      storage: aMemoryStore(),
+    },
+    chatWorkspacePurge,
+  );
 
 describe('integration: a deletion taken back as its grace period ends', () => {
   test('taken back first: the job waits, then finds nothing to claim, and the workspace is whole', async () => {
