@@ -21,8 +21,8 @@ describe('the application as its modules make it', () => {
     expect(registry.resolve(undefined).map((module) => module.id)).toEqual(['chat']);
   });
 
-  test('with no module, the core stands alone: no hook, nobody for the channels, a purge of its own, its own exports', () => {
-    const alone = compose([]);
+  test('in a build with no module at all, the core stands alone: no hook, nobody for the channels, a purge of its own, its own exports', () => {
+    const alone = compose([], []);
     expect(alone.workspaceChannels).toBe(noWorkspaceChannels);
     expect(alone.workspacePurge).toEqual({ before: [], after: [], tables: [] });
     expect(alone.collatedColumns).toEqual([]);
@@ -37,6 +37,17 @@ describe('the application as its modules make it', () => {
     expect(
       alone.exportCatalogue.files({ workspaceId: 'w', kind: 'all', prepared: {} }),
     ).toBeUndefined();
+  });
+
+  test('chat not run still keeps its rows whole: its erasure, purge, exports, channel answers and columns apply', () => {
+    const notRun = compose([]);
+    expect(notRun.modules).toEqual([]);
+    expect(notRun.workspaceChannels).toBe(chatModule.workspaceChannels);
+    expect(notRun.workspacePurge.before).toHaveLength(2);
+    expect(notRun.workspacePurge.tables).toContain('mentions');
+    expect(notRun.exportCatalogue.order).toContain('messages');
+    expect(notRun.personalExportCatalogue.order).toContain('messages');
+    expect(notRun.collatedColumns).toContainEqual(['channels', 'name']);
   });
 
   test('with chat, it has chat’s hooks, answers, purge steps, tables and columns', () => {
@@ -70,14 +81,15 @@ describe('the application as its modules make it', () => {
       const all = compositionFor(undefined);
       expect(all.migrationSets.map((set) => set.id)).toEqual(['chat']);
       expect(all.closed('/api/channels/c1')).toBe(false);
-      expect(all.closedJob('purge:retention')).toBe(false);
+      expect(all.closedJob('mail:missed')).toBe(false);
 
       const alone = compositionFor('none');
       expect(alone.migrationSets).toEqual([]);
       expect(alone.closed('/api/channels/c1')).toBe(true);
       expect(alone.closed('/api/workspaces/w1/members')).toBe(false);
-      expect(alone.closedJob('purge:retention')).toBe(true);
       expect(alone.closedJob('mail:missed')).toBe(true);
+      // Keeping rows within their retention does not wait for a module to run.
+      expect(alone.closedJob('purge:retention')).toBe(false);
       expect(alone.closedJob('sweep:sessions')).toBe(false);
     });
 

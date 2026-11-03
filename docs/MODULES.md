@@ -106,7 +106,11 @@ moves into that module.
 - A disabled module's applied rows are not "missing"; they are logged.
 - Erasure, export and retention run for every module whose tables exist, enabled or not (D-250 rule 5), so
   the export catalogue is assembled from the manifests and its test — a table in the database that no manifest
-  names fails it — keeps working.
+  names fails it — keeps working. **Built** as `dataInCore`: a module whose tables the core's own migrations made
+  (chat) contributes its erasure, purge, export, retention and channel answers whether or not it runs, and only
+  what *acts* (its routes, its mail, what a new workspace starts with) waits for it to run. A module with a set of
+  its own is held only while it runs; what its hooks do when its tables were never made is decided with the first
+  such module.
 - **Existing installs are not touched** (D-250, decided a): the legacy rows stay as the core's, and only files
   added from now on live under `packages/db/migrations/<module>/` and record as `<module>/<file>`. The core's
   first 77 files always create chat's tables, inert where chat is off. The release before the first prefixed row
@@ -305,8 +309,8 @@ database. (b) *`MODULES` read at boot* (**built**): `compositionFor(setting)` ha
 names none the build carries stops it before it listens; the migrations (`MIGRATE_ON_START`, `db:migrate`, readiness and
 the wait for another node's) are the core's and the named modules' sets, and the rows of a set that is off stay inert.
 (c) *Routes, jobs and commands* (**built**): a module's manifest lists its route templates and its jobs; a path of a module that
-is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one exits `0`
-with a line saying so and is left out of the status report, and `GET /api/client` lists the modules the server runs.
+is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one that acts for its
+users (chat's missed-mail letter) exits `0` with a line saying so and is left out of the status report — its sweeps and the retention purge still run, the rows being there — and `GET /api/client` lists the modules the server runs.
 A scan holds every route the application registers to the core's list or a module's. (d) The web building its routes
 from the listed modules (step 11); (e) the matrix in CI and the cluster check.
 
