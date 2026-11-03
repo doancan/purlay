@@ -17,8 +17,9 @@
  * they were not in.
  */
 import { Value } from '@sinclair/typebox/value';
-import { Uuid, type AttachmentKind, type ChannelType } from '@purlay/types';
+import { Uuid, type ChannelType } from '@purlay/types';
 import { sql, type Database, type Executor, type SelectQueryBuilder } from '@purlay/db';
+import { isUnsentUploadOf, type ReadableAttachment } from '../../../modules/attachments/readable';
 import { AppError, attachmentNotFound } from '../../../platform/errors';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 
@@ -284,16 +285,6 @@ export const requireMessageById = async (
   };
 };
 
-/** An attachment the caller may read, with where its bytes are. */
-export interface ReadableAttachment {
-  readonly id: string;
-  readonly storageKey: string;
-  /** An image's thumbnail; null for a file. */
-  readonly thumbnailKey: string | null;
-  readonly fileName: string;
-  readonly kind: AttachmentKind;
-}
-
 /**
  * For a route that names an attachment (`/api/attachments/:attachmentId`, D-109 §6): **one query**,
  * so an id that never existed, somebody else's unsent upload, one in a channel the caller cannot
@@ -322,19 +313,7 @@ export const requireAttachmentById = async (
     .where('attachments.id', '=', attachmentId)
     .where((eb) =>
       eb.or([
-        eb.and([
-          eb('attachments.claimed_at', 'is', null),
-          eb('attachments.uploader_id', '=', userId),
-          eb.exists(
-            eb
-              .selectFrom('workspace_members')
-              .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
-              .select('workspace_members.user_id')
-              .whereRef('workspace_members.workspace_id', '=', 'attachments.workspace_id')
-              .where('workspace_members.user_id', '=', userId)
-              .where('workspaces.deleted_at', 'is', null),
-          ),
-        ]),
+        isUnsentUploadOf(eb, userId),
         // Correlated, so it looks at this attachment's one message, not every visible one.
         eb.exists(
           visibleChannels(executor, userId)

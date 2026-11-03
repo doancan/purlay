@@ -470,6 +470,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const modules = given.composition ?? composition;
   const dependencies = {
     ...given,
+    readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
     userErased: given.userErased ?? modules.userErased,
