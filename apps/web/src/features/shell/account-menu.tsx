@@ -98,7 +98,8 @@ const Identity = ({
 /**
  * The one item that says how you appear (D-257): "Set yourself as away" until you have, then "Set
  * yourself as active". The server's answer is written into the session at once; the ring itself
- * changes when the server's presence frame comes back, not before — it is what everyone is told.
+ * changes when the server's presence frame comes back, not before — the server tells the person their
+ * own change as it tells everyone else, so every page of theirs shows what everyone is told.
  */
 const AwayItem = ({ chosen }: { readonly chosen: boolean }): React.JSX.Element => {
   const { t } = useI18n();

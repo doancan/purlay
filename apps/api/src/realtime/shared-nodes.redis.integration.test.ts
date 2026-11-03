@@ -262,7 +262,8 @@ describe('integration: a frame crosses nodes', () => {
     const socket = await connect(b, alice.cookie);
     expect((await http(a, 'POST', '/auth/logout', alice.cookie)).status).toBe(204);
     expect(await socket.ended).toBe(CLOSE_CODES.SESSION_ENDED);
-    expect(socket.frames).toMatchObject([
+    // A person hears their own presence (D-257); the only other word is why the socket closes.
+    expect(socket.frames.filter((f) => f.event !== 'PRESENCE')).toMatchObject([
       { event: 'SESSION_ENDED', data: { reason: 'signed-out' } },
     ]);
   });

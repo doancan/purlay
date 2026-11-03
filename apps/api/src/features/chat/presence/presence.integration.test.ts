@@ -1,7 +1,8 @@
 /**
  * Who hears that somebody came online (#480, D-136), against the database: the people who share a
- * workspace with them, and nobody else — not a stranger, not somebody removed a moment ago, not the
- * person themselves. A workspace's presence is its members online, at the version said.
+ * workspace with them, and the person themselves, whose own avatar shows their own state (D-257) —
+ * nobody else: not a stranger, not somebody removed a moment ago. A workspace's presence is its
+ * members online, at the version said.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
@@ -55,7 +56,7 @@ const listening = (
 };
 
 describe('integration: who hears that somebody came online', () => {
-  test('everybody who shares a workspace with them, once; never they themselves', async () => {
+  test('everybody who shares a workspace with them, once, and they themselves (D-257)', async () => {
     await withRollback(async (db) => {
       const here = await aRoom(db, ['alice', 'bob'], { outsiders: ['erin'] });
       const alice = idOf(here, 'alice');
@@ -65,7 +66,8 @@ describe('integration: who hears that somebody came online', () => {
       expect(node.heard(idOf(here, 'bob'))).toEqual([change]);
       // In the workspace, not in the channel: presence is the workspace's, not a channel's.
       expect(node.heard(idOf(here, 'erin'))).toEqual([change]);
-      expect(node.heard(alice)).toEqual([]);
+      // Her own state, on her own topic: every page of hers draws her own avatar from it.
+      expect(node.heard(alice)).toEqual([change]);
     });
   });
 
@@ -75,8 +77,11 @@ describe('integration: who hears that somebody came online', () => {
       const there = await aRoom(db, ['carol', 'dave']);
       const carol = idOf(there, 'carol');
       const node = listening(db);
-      await node.announce({ userId: idOf(here, 'alice'), online: true, away: false, version: 1 });
+      const alice = { userId: idOf(here, 'alice'), online: true, away: false, version: 1 };
+      await node.announce(alice);
       expect(node.heard(carol)).toEqual([]);
+      // Telling Alice herself reaches nobody new.
+      expect(node.heard(idOf(here, 'alice'))).toEqual([alice]);
       // The control: the same socket does hear somebody she shares a workspace with.
       const dave = { userId: idOf(there, 'dave'), online: true, away: false, version: 2 };
       await node.announce(dave);
@@ -98,6 +103,8 @@ describe('integration: who hears that somebody came online', () => {
         .execute();
       await node.announce({ userId: idOf(here, 'alice'), online: false, away: false, version: 2 });
       expect(node.heard(bob)).toHaveLength(1);
+      // The control: the change was told, to Alice herself.
+      expect(node.heard(idOf(here, 'alice'))).toHaveLength(2);
     });
   });
 
@@ -117,6 +124,8 @@ describe('integration: who hears that somebody came online', () => {
         { userId: alice, online: true, away: true, version: 2 },
         { userId: alice, online: false, away: false, version: 3 },
       ]);
+      // She hears her own, choice and all: the same changes Bob does.
+      expect(node.heard(alice)).toEqual(node.heard(bob));
     });
   });
 

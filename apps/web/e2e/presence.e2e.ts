@@ -39,7 +39,7 @@ test.describe('who is online', () => {
     await expectNoAxe(section);
   });
 
-  test('somebody who sets themselves away is a ring for the others, and a dot again when active (D-257)', async ({
+  test('somebody who sets themselves away is a ring for the others and for themself, and a dot again when active (D-257)', async ({
     page,
     signIn,
     room,
@@ -55,17 +55,26 @@ test.describe('who is online', () => {
     const row = section.locator('li', { hasText: 'Alice' });
     await expect(row.locator('[data-online]')).toHaveCount(1);
 
-    // She chooses it from her account menu; the server tells the others, who see the ring.
-    await (await openNav(alice)).getByRole('button', { name: /^Account:/ }).click();
+    /** Her own avatar, on the account menu's button: what the server tells her of herself. */
+    const own = async (): Promise<Locator> =>
+      (await openNav(alice)).getByRole('button', { name: /^Account:/ });
+    await expect((await own()).locator('[data-online]')).toHaveCount(1);
+
+    // She chooses it from her account menu; the server tells the others, who see the ring — and her.
+    await (await own()).click();
     await alice.getByRole('menuitem', { name: 'Set yourself as away' }).click();
     await expect(row.locator('[data-away]')).toHaveCount(1);
     await expect(row.locator('[data-online]')).toHaveCount(0);
     await expect(row).toContainText('Alice Chen, away');
+    await expect((await own()).locator('[data-away]')).toHaveCount(1);
+    await expect((await own()).locator('[data-online]')).toHaveCount(0);
 
-    // And back: the item says so, and the dot returns.
-    await (await openNav(alice)).getByRole('button', { name: /^Account:/ }).click();
+    // And back: the item says so, and the dot returns, for the others and for her.
+    await (await own()).click();
     await alice.getByRole('menuitem', { name: 'Set yourself as active' }).click();
     await expect(row.locator('[data-online]')).toHaveCount(1);
     await expect(row.locator('[data-away]')).toHaveCount(0);
+    await expect((await own()).locator('[data-online]')).toHaveCount(1);
+    await expect((await own()).locator('[data-away]')).toHaveCount(0);
   });
 });

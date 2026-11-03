@@ -4,7 +4,10 @@
  * **Told to the people who share a workspace with them**, each on their own `user:` topic, as a
  * workspace change is (D-124): membership is read as the change is told, so somebody who shares no
  * workspace — or was removed a moment ago — hears nothing. What they hear is that the person has
- * Purlay open, never which workspace: a socket is no workspace's (D-136 §1).
+ * Purlay open, never which workspace: a socket is no workspace's (D-136 §1). **And to the person
+ * themselves**, on their own topic: it is their own state, so nothing new is told to anybody, and
+ * every page of theirs draws their own avatar from what the server says of them — away by choice
+ * from another device, or idle, which only the server knows (D-257).
  *
  * **A workspace's presence** is its members online now, for a member of it; anybody else is told the
  * workspace does not exist, as for every workspace route (D-34).
@@ -66,7 +69,8 @@ export const announcePresence = async (
   },
   change: PresenceChange,
 ): Promise<void> => {
-  const told = await coMembers(database, change.userId);
+  // The person last: their own pages follow their own state, as everybody else's do (D-257).
+  const told = [...(await coMembers(database, change.userId)), change.userId];
   const chosen = change.online && (await awayChosen(database, change.userId));
   const state: PresenceChange = { ...change, away: change.online && (change.away || chosen) };
   await publishAfterCommit(log, [

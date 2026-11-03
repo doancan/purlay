@@ -223,7 +223,8 @@ describe('integration: a session that ends on another node', () => {
     expect((await http('POST', '/auth/logout', alice.cookie)).status).toBe(204);
 
     expect(await socket.ended).toBe(CLOSE_CODES.SESSION_ENDED);
-    expect(socket.frames).toMatchObject([
+    // A person hears their own presence (D-257); the only other word is why the socket closes.
+    expect(socket.frames.filter((f) => f.event !== 'PRESENCE')).toMatchObject([
       { event: 'SESSION_ENDED', data: { reason: 'signed-out' } },
     ]);
   });
@@ -237,7 +238,7 @@ describe('integration: a session that ends on another node', () => {
     await publishUserDeleted(publisher, clock, alice.userId);
 
     expect(await socket.ended).toBe(CLOSE_CODES.SESSION_ENDED);
-    expect(socket.frames).toMatchObject([
+    expect(socket.frames.filter((f) => f.event !== 'PRESENCE')).toMatchObject([
       { event: 'SESSION_ENDED', data: { reason: 'account-deleted' } },
     ]);
     // The control: the same publish left someone else's socket open and usable.

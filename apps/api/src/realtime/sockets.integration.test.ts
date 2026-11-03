@@ -1326,8 +1326,9 @@ describe('integration: two real sockets', () => {
         // Bob hearing it is the control: it was told, and told to whom it was for.
         await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
         await own.settled();
-        expect(outsider.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
-        expect(erin.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+        // Each hears their own state (D-257), and nothing of hers.
+        expect(presenceOf(outsider.frames, room.aliceId)).toEqual([]);
+        expect(presenceOf(erin.frames, room.aliceId)).toEqual([]);
         await Promise.all([alice.close(), bob.close(), outsider.close(), erin.close()]);
       } finally {
         await own.stop(true);
