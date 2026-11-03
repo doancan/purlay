@@ -77,6 +77,7 @@ import { composerKey, useComposerInbox } from './quote';
 import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
 import { useSlashRunner } from './slash-run';
 import { EmojiPicker } from './emoji-picker';
+import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
 
@@ -135,6 +136,12 @@ const Inner = ({
   const caret = useRef<number | null>(null);
   const composing = useComposition(field);
   const latest = useRef(text);
+  /** The face the last space turned into an emoji, and where the caret was then: Backspace there undoes it (D-253). */
+  const madeEmoji = useRef<{
+    readonly face: Emoticon;
+    readonly space: string;
+    readonly caret: number;
+  } | null>(null);
   latest.current = text;
   const pasteToast = useRef<number | null>(null);
   useEffect(
@@ -232,6 +239,24 @@ const Inner = ({
     change(next.text);
   };
 
+  /**
+   * Backspace straight after a face became an emoji: the face comes back as it was typed, with its
+   * space, and stays — the space is already there, so nothing turns it again (D-253).
+   */
+  const undoEmoji = (box: HTMLTextAreaElement): boolean => {
+    const made = madeEmoji.current;
+    madeEmoji.current = null;
+    if (made?.caret !== box.selectionStart || box.selectionEnd !== box.selectionStart) return false;
+    const { face, space } = made;
+    const start = face.start;
+    if (text.slice(start, made.caret) !== face.emoji + space) return false;
+    const back = start + face.typed.length + space.length;
+    inserted.current = { start: back, end: back };
+    setCaretAt(back);
+    change(text.slice(0, start) + face.typed + space + text.slice(made.caret));
+    return true;
+  };
+
   /** An emoji from the picker: text where the caret is, as a key would type it. */
   const insertEmoji = (emoji: string): void => {
     const box = field.current;
@@ -304,7 +329,8 @@ const Inner = ({
 
   /** Sends what is written — or, from a command, the words it wrote (`/me`, `/shrug`). */
   const send = (written?: string): void => {
-    const typed = written ?? trimEnd(text);
+    // A face that ends the message becomes its emoji, as the space after it would have made it (D-253).
+    const typed = written ?? withClosingEmoji(trimEnd(text));
     // A line that starts with `/` asks for a command (D-214) — unless files go with it, when it is words.
     const line = written === undefined && uploads.items.length === 0 ? parseSlash(typed) : null;
     if (line?.kind === 'unknown') {
@@ -392,6 +418,10 @@ const Inner = ({
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
     // by the flag the composition events keep.
     if (duringComposition(event, composing)) return;
+    if (event.key === 'Backspace' && undoEmoji(event.currentTarget)) {
+      event.preventDefault();
+      return;
+    }
     if (commandsOpen) {
       const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -928,6 +958,20 @@ const Inner = ({
               className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
               onChange={(event) => {
                 const { value, selectionStart } = event.target;
+                madeEmoji.current = null;
+                // A space or a new line after a face makes it an emoji (D-253); not while an IME is composing.
+                const made = composing.current ? null : typedAfterFace(text, value, selectionStart);
+                if (made !== null) {
+                  madeEmoji.current = {
+                    face: made.face,
+                    space: value.charAt(selectionStart - 1),
+                    caret: made.caret,
+                  };
+                  inserted.current = { start: made.caret, end: made.caret };
+                  setCaretAt(made.caret);
+                  change(made.text);
+                  return;
+                }
                 change(value);
                 setCaretAt(selectionStart);
                 // The `@` that was dismissed is gone: the next one opens again.
