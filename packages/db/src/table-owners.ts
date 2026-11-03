@@ -14,7 +14,6 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   invitation_passports: 'core',
   job_runs: 'core',
   native_authorizations: 'core',
-  notifications: 'core',
   object_deletions: 'core',
   personal_exports: 'core',
   push_subscriptions: 'core',
@@ -50,6 +49,9 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
   incoming_webhooks: 'chat',
   link_previews: 'chat',
   mentions: 'chat',
+  // Written only by messages (a mention, a reply) and pointing at channels and messages: chat's own inbox. A
+  // generic core inbox waits for a second module that writes to it.
+  notifications: 'chat',
   message_versions: 'chat',
   messages: 'chat',
   missed_mail_letters: 'chat',
@@ -65,8 +67,4 @@ export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
  * fails for a key that is not here, and for one that is here and no longer exists, so removing a line is
  * what a fix looks like. Steps 6–10 of the plan empty it.
  */
-export const CROSS_OWNER_FOREIGN_KEYS: readonly string[] = [
-  'attachments -> messages',
-  'notifications -> channels',
-  'notifications -> messages',
-];
+export const CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> messages'];
