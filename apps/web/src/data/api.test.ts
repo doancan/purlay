@@ -109,7 +109,7 @@ describe('the endpoints', () => {
       id: ID,
       title: 'Fix it',
       body: '',
-      status: 'open',
+      status: 'open' as const,
       assigneeId: null,
       createdBy: ID,
       createdAt: WHEN,

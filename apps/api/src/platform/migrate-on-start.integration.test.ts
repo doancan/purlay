@@ -534,8 +534,9 @@ describe('integration: migrate on start', () => {
         expect(await answer(port, expected.closed)).toEqual([404, 'ROUTE_NOT_FOUND']);
         const client = (await (
           await fetch(`http://127.0.0.1:${String(port)}/api/client`)
-        ).json()) as { modules?: string[] };
-        expect(client.modules).toEqual([setting]);
+        ).json()) as Record<string, unknown>;
+        // The public handshake names no module: a signed-in caller reads `/api/me` (D-250).
+        expect(Object.keys(client)).not.toContain('modules');
       } finally {
         node.kill();
         await node.exited;
