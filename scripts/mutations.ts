@@ -13061,8 +13061,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'set-table-owned-by-the-core',
     why: 'a table a module’s set creates is claimed by the core, which then promises it in a database where the module is off (D-250)',
     file: 'packages/db/src/table-owners.ts',
-    find: "message_attachments: 'chat',",
-    replace: "message_attachments: 'core',",
+    find: "\n  message_attachments: 'chat',",
+    replace: "\n  message_attachments: 'core',",
     tests: ['packages/db/src/migration-cells.integration.test.ts'],
   },
   {
