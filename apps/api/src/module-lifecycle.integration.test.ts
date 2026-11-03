@@ -18,8 +18,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
+  CLONE_HOOK_MS,
   closeIntegrationDatabase,
   createDatabase,
+  DROP_HOOK_MS,
+  dropDatabases,
   migrateToLatest,
   pendingMigrations,
   setsNamedBy,
@@ -139,13 +142,9 @@ const freshDatabase = async (sets: readonly MigrationSet[]): Promise<string> => 
 };
 
 afterAll(async () => {
-  const admin = administration();
-  for (const name of created) {
-    await sql`drop database if exists ${sql.id(name)} with (force)`.execute(admin);
-  }
-  await admin.destroy();
+  await dropDatabases(created);
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 /** Later than anything the database wrote with its own clock, so that a job's cutoffs are all in the past. */
 const NOW = new Date(Date.now() + 2 * DAY_MS);
@@ -413,7 +412,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
         name = await freshDatabase(state.sets);
         database = createDatabase({ connectionString: urlOf(name), poolSize: 4 });
         present = await presentTables(database);
-      });
+      }, CLONE_HOOK_MS);
       afterAll(async () => {
         await database.destroy();
       });

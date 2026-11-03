@@ -122,7 +122,15 @@ describe('what an address shows', () => {
     expect(getByRole('link', { name: 'Go to your channels' }).getAttribute('href')).toBe('/');
   });
 
-  test.each(['/w/acme/inbox', '/w/acme/saved', `/w/acme/c/${IDS.api}`, '/w/acme/search'])(
+  test.each([
+    `/w/acme/c/${IDS.api}`,
+    '/w/acme/questions',
+    '/w/acme/inbox',
+    '/w/acme/search',
+    '/w/acme/saved',
+    '/w/acme/drafts',
+    '/w/acme/unreads',
+  ])(
     '%s is not found where the server runs no chat, and the core’s own screens still are',
     async (path) => {
       const noChat = aSignedInApi({

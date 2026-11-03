@@ -4,14 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createDatabase,
+  createMigrationDatabase,
   dropDatabases,
+  migrateToLatest,
   migrationHistoryProblem,
   pendingMigrations,
   PRODUCT_MIGRATION_SETS,
   readMigrationFiles,
   sql,
 } from '@purlay/db';
-import type { Executor } from '@purlay/db';
+import type { Executor, MigrationSet } from '@purlay/db';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
 import { aRecordingLogger } from '../testing/doubles';
@@ -132,6 +134,41 @@ const answer = async (port: number, path: string): Promise<[number, string | und
   }
 };
 
+/** Waits until `condition` holds, for as long as a slow runner may take; says so when it never does. */
+const waitUntil = async (condition: () => boolean, what: string): Promise<void> => {
+  const deadline = Date.now() + 20_000;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error(`gave up waiting for ${what}`);
+    await Bun.sleep(10);
+  }
+};
+
+/** A module set of its own, one table, for a test that needs a set that is not every product set. */
+const aSetOf = (id: string, table: string): { set: MigrationSet; remove: () => void } => {
+  const directory = mkdtempSync(join(tmpdir(), 'migration-set-'));
+  writeFileSync(join(directory, '0001_table.sql'), `CREATE TABLE ${table} (id int);`);
+  return {
+    set: { id, directory },
+    remove: (): void => {
+      rmSync(directory, { recursive: true, force: true });
+    },
+  };
+};
+
+/** Applies the core and these sets to a database, as a process that runs those modules does. */
+const migrateWith = async (name: string, sets: readonly MigrationSet[]): Promise<void> => {
+  const database = createMigrationDatabase({ connectionString: urlFor(name) });
+  try {
+    const { error } = await migrateToLatest(database, undefined, { modules: sets });
+    if (error !== undefined)
+      throw new Error('migrating the test database failed', { cause: error });
+  } finally {
+    await database.destroy();
+  }
+};
+
+const WAITING = 'waiting for the migrations before reading the settings';
+
 /** Waits for a path to answer this status; answers what it last saw. */
 const until = async (port: number, path: string, status: number): Promise<number> => {
   let last = 0;
@@ -209,7 +246,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('with no module set the core alone is applied, and a module opened later brings its own', async () => {
     const { name, db } = await freshDatabase('core-alone');
@@ -244,7 +281,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('a migration that fails stops the start, naming it and keeping the cause', async () => {
     const { name, db } = await freshDatabase('bad');
@@ -258,7 +295,7 @@ describe('integration: migrate on start', () => {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   /**
    * The application's pool cancels a statement after 30 s (D-87), and the migrator is not
@@ -287,7 +324,7 @@ describe('integration: migrate on start', () => {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('the connection it opens is closed when it is done, whether or not it succeeded', async () => {
     const { name, db } = await freshDatabase('closed');
@@ -304,7 +341,7 @@ describe('integration: migrate on start', () => {
     // A closed connection's server process leaves `pg_stat_activity` a moment after the client
     // hangs up, so the count is waited on to reach zero; a connection left open never does.
     const settled = async (): Promise<number> => {
-      const deadline = Date.now() + 5_000;
+      const deadline = Date.now() + 20_000;
       let open = await sessions();
       while (open > 0 && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 25));
@@ -322,7 +359,7 @@ describe('integration: migrate on start', () => {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('two API processes started at the same instant migrate once, and both become ready', async () => {
     const { name, db } = await freshDatabase('race');
@@ -495,6 +532,56 @@ describe('integration: migrate on start', () => {
     } finally {
       node.kill();
       await node.exited;
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node run with MODULES=none that does not migrate is ready on a database migrated core-alone', async () => {
+    const { name, db } = await freshDatabase('wait-none');
+    await migrateWith(name, []);
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MODULES: 'none' },
+    );
+    try {
+      expect(await until(port, '/health/ready', 200)).toBe(200);
+      expect(node.exitCode).toBeNull();
+    } finally {
+      node.kill();
+      await node.exited;
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node that runs chat and does not migrate is not ready on that database until chat’s set is applied', async () => {
+    const { name, db } = await freshDatabase('wait-chat');
+    await migrateWith(name, []);
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MODULES: 'chat' },
+    );
+    let said = '';
+    const reading = (async (): Promise<void> => {
+      const decoder = new TextDecoder();
+      for await (const chunk of node.stdout) said += decoder.decode(chunk, { stream: true });
+    })();
+    try {
+      await waitUntil(() => said.includes(WAITING), 'the node to say it waits for the migrations');
+      expect(said).toContain('chat/');
+      expect((await answer(port, '/health/ready'))[0]).toBe(503);
+      expect(node.exitCode).toBeNull();
+      await migrateWith(name, PRODUCT_MIGRATION_SETS);
+      expect(await until(port, '/health/ready', 200)).toBe(200);
+    } finally {
+      node.kill();
+      await node.exited;
+      await reading;
       await db.destroy();
     }
   }, 60_000);
@@ -678,7 +765,10 @@ describe('integration: migrate on start', () => {
       done = true;
     });
     try {
-      await Bun.sleep(200);
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
       expect(done).toBe(false);
       await migrateOnStart({ connectionString: urlFor(name) });
       await waiting;
@@ -691,7 +781,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('waiting for the migrations survives a database that does not answer, says so once, and ends when it does', async () => {
     const { name, db } = await freshDatabase('unreachable');
@@ -710,7 +800,10 @@ describe('integration: migrate on start', () => {
       done = true;
     });
     try {
-      await Bun.sleep(200);
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
       expect(done).toBe(false);
       answering = true;
       await waiting;
@@ -723,7 +816,91 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
+
+  test('waiting for the migrations is for the sets it is given: a database that has exactly those is waited on no longer', async () => {
+    const { name, db } = await freshDatabase('until-partial');
+    const extra = aSetOf('extra', 'extra_things');
+    try {
+      // The core and one set that is not the product's: neither the product's chat set nor its absence counts.
+      await migrateWith(name, [extra.set]);
+      const { log, lines } = aRecordingLogger();
+      const outcome = await Promise.race([
+        untilMigrated(db, log, 20, [extra.set]).then(() => 'resolved' as const),
+        Bun.sleep(10_000).then(() => 'still waiting' as const),
+      ]);
+      expect({ outcome, said: lines.filter((line) => line['msg'] === WAITING) }).toEqual({
+        outcome: 'resolved',
+        said: [],
+      });
+    } finally {
+      extra.remove();
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('waiting for the migrations keeps waiting for a set of the list that is not applied, saying so once', async () => {
+    const { name, db } = await freshDatabase('until-missing');
+    const extra = aSetOf('extra', 'extra_things');
+    try {
+      await migrateWith(name, []);
+      const { log, lines } = aRecordingLogger();
+      let done = false;
+      const waiting = untilMigrated(db, log, 20, [extra.set]).then(() => {
+        done = true;
+      });
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
+      // Several polls have gone by once the line is written and its reason is read again.
+      await Bun.sleep(100);
+      expect(done).toBe(false);
+      const said = lines.filter((line) => line['msg'] === WAITING);
+      expect(said).toHaveLength(1);
+      expect(String(said[0]?.['reason'])).toContain('extra/0001_table');
+      await migrateWith(name, [extra.set]);
+      await waiting;
+      expect(done).toBe(true);
+    } finally {
+      extra.remove();
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('waiting for the migrations judges the history of the sets it is given: one edited after it was applied is waited on', async () => {
+    const { name, db } = await freshDatabase('until-edited');
+    const extra = aSetOf('extra', 'extra_things');
+    try {
+      await migrateWith(name, [extra.set]);
+      const { rows } = await sql<{ checksum: string }>`
+        select checksum from kysely_migration where name = 'extra/0001_table'`.execute(db);
+      const checksum = rows[0]?.checksum ?? '';
+      await sql`update kysely_migration set checksum = repeat('0', 64)
+        where name = 'extra/0001_table'`.execute(db);
+      const { log, lines } = aRecordingLogger();
+      let done = false;
+      const waiting = untilMigrated(db, log, 20, [extra.set]).then(() => {
+        done = true;
+      });
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
+      await Bun.sleep(100);
+      expect(done).toBe(false);
+      const said = lines.filter((line) => line['msg'] === WAITING);
+      expect(said).toHaveLength(1);
+      expect(String(said[0]?.['reason'])).toContain('extra/0001_table was edited');
+      await sql`update kysely_migration set checksum = ${checksum}
+        where name = 'extra/0001_table'`.execute(db);
+      await waiting;
+      expect(done).toBe(true);
+    } finally {
+      extra.remove();
+      await db.destroy();
+    }
+  }, 60_000);
 
   test('an SMTP address no transport can be built from refuses the start and stores nothing; corrected, the next start imports it', async () => {
     const { name, db } = await freshDatabase('badsmtp');

@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createDatabase, sql } from '@purlay/db';
+import { CLONE_HOOK_MS, createDatabase, DROP_HOOK_MS, sql } from '@purlay/db';
 import { bunRedisClient, connectRedis } from '../platform/redis';
 import { createLogger } from '../platform/logging';
 import { redisUrlForTests } from '../testing/redis';
@@ -96,7 +96,7 @@ const nodes: Node[] = [];
 beforeAll(async () => {
   await sql`create database ${sql.id(NAME)}`.execute(admin);
   await redis.send('DEL', [MODULE_SET_KEY]);
-});
+}, CLONE_HOOK_MS);
 
 afterAll(async () => {
   for (const node of nodes) node.process.kill();
@@ -105,7 +105,7 @@ afterAll(async () => {
   redis.close();
   await sql`drop database if exists ${sql.id(NAME)} with (force)`.execute(admin);
   await admin.destroy();
-});
+}, DROP_HOOK_MS);
 
 describe('integration: a cluster whose nodes run different module sets', () => {
   test('each node says so and serves on, and says when the nodes agree again', async () => {

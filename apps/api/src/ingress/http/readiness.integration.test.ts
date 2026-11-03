@@ -16,6 +16,7 @@ import {
   withRollback,
   type Executor,
 } from '@purlay/db';
+import { bundledModules, compose, type Composition } from '../../composition';
 import { createApp } from './app';
 import {
   aDatabaseThatMustNotBeTouched,
@@ -29,11 +30,12 @@ afterAll(async () => {
 
 const ready = async (
   database: Executor,
+  composition?: Composition,
 ): Promise<{ status: number; body: unknown; reasons: unknown[] }> => {
   const { log, lines } = aRecordingLogger();
-  const response = await createApp(testDependencies({ database, log })).handle(
-    new Request('https://purlay.test/health/ready'),
-  );
+  const response = await createApp(
+    testDependencies({ database, log, ...(composition === undefined ? {} : { composition }) }),
+  ).handle(new Request('https://purlay.test/health/ready'));
   return {
     status: response.status,
     body: await response.json(),
@@ -145,5 +147,40 @@ describe('integration: readiness', () => {
     expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
     expect(String(answer.reasons[0])).toContain('did not answer');
     expect(JSON.stringify(answer.body)).not.toContain('answer');
+  });
+
+  /**
+   * Readiness waits for the migrations of the modules this process runs and no others (D-250): the set a
+   * database has applied is the other half of the check, so a database is made to lack chat's here.
+   */
+  test('a process that runs chat is not ready on a database where chat’s set is not applied', async () => {
+    await withRollback(async (db) => {
+      await sql`delete from kysely_migration where name like 'chat/%'`.execute(db);
+      const answer = await ready(db, compose(bundledModules));
+      expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
+      expect(String(answer.reasons[0])).toContain('chat/');
+    });
+  });
+
+  test('a process that runs chat is ready once the set is applied', async () => {
+    await withRollback(async (db) => {
+      expect(await ready(db, compose(bundledModules))).toEqual({
+        status: 200,
+        body: { status: 'ready' },
+        reasons: [],
+      });
+    });
+  });
+
+  test('a process that runs no module is ready on a database where chat’s set is not applied, and where it is', async () => {
+    await withRollback(async (db) => {
+      expect(await ready(db, compose([]))).toMatchObject({ status: 200 });
+      await sql`delete from kysely_migration where name like 'chat/%'`.execute(db);
+      expect(await ready(db, compose([]))).toEqual({
+        status: 200,
+        body: { status: 'ready' },
+        reasons: [],
+      });
+    });
   });
 });
