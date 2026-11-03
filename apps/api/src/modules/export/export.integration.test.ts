@@ -578,3 +578,520 @@ describe('integration: the schema an export is stamped with', () => {
     });
   });
 });
+
+/**
+ * The shape of what an export writes, held still so that moving the catalogue between modules (D-250) cannot
+ * change a file unseen: the files in their order, and for each table how many rows the fixture gives it and
+ * the columns of those rows. The values are random or time-bound; the shape is not. The operator's export and
+ * an owner's differ only where a bound or a column says they do.
+ */
+const shapeOf = async (directory: string): Promise<Record<string, unknown>> => {
+  const shape: Record<string, unknown> = {};
+  for (const table of TABLE_ORDER) {
+    const rows = await lines(directory, table);
+    shape[table] = { rows: rows.length, columns: Object.keys(rows[0] ?? {}).sort() };
+  }
+  return { files: (await readdir(directory)).sort(), tables: shape };
+};
+
+describe('integration: the shape of an export', () => {
+  test('is the one the catalogue has always written, for the operator and for an owner', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['pat', 'ann']);
+      await fill(db, room, 'pat', 'ann');
+      const workspace = await db
+        .selectFrom('workspaces')
+        .select(['id', 'slug', 'name'])
+        .where('id', '=', room.workspaceId)
+        .executeTakeFirstOrThrow();
+      const shapes: Record<string, unknown> = {};
+      for (const kind of ['all', 'visible-to-owner'] as const) {
+        const target = join(await mkdtemp(join(tmpdir(), 'purlay-shape-')), kind);
+        await exportWorkspace(
+          { database: db, clock, log: aRecordingLogger().log, storage: store },
+          workspace,
+          {
+            kind,
+            workspaceId: room.workspaceId,
+            channelIds: await everyChannel(db, room.workspaceId),
+          },
+          target,
+        );
+        shapes[kind] = await shapeOf(target);
+      }
+      expect(shapes).toEqual(FROZEN_SHAPES);
+    });
+  });
+});
+
+/**
+ * As written when this test was made, by the catalogue before it moved between modules. A change that is meant
+ * says so by changing this, in the same pull request, with the reason. (`audit_log` has one row more in the
+ * second export: the first records that it was made.)
+ */
+const FROZEN_SHAPES: Record<string, unknown> = {
+  all: {
+    files: [
+      'attachments.ndjson',
+      'audit_log.ndjson',
+      'blobs',
+      'channel_bookmarks.ndjson',
+      'channel_members.ndjson',
+      'channels.ndjson',
+      'github_links.ndjson',
+      'github_repo_feeds.ndjson',
+      'incident_responders.ndjson',
+      'incident_updates.ndjson',
+      'incidents.ndjson',
+      'manifest.json',
+      'mentions.ndjson',
+      'message_versions.ndjson',
+      'messages.ndjson',
+      'pinned_messages.ndjson',
+      'reactions.ndjson',
+      'users.ndjson',
+      'workspace_invitations.ndjson',
+      'workspace_members.ndjson',
+      'workspaces.ndjson',
+    ],
+    tables: {
+      workspaces: {
+        rows: 1,
+        columns: [
+          'avatar_url',
+          'created_at',
+          'created_by',
+          'deleted_at',
+          'id',
+          'name',
+          'retention_days',
+          'slug',
+          'storage_quota_bytes',
+          'storage_used_bytes',
+          'updated_at',
+        ],
+      },
+      users: {
+        rows: 2,
+        columns: [
+          'avatar_url',
+          'created_at',
+          'deleted_at',
+          'display_name',
+          'email',
+          'id',
+          'status_text',
+          'time_zone',
+          'title',
+          'username',
+        ],
+      },
+      workspace_members: {
+        rows: 2,
+        columns: ['id', 'joined_at', 'role', 'user_id', 'workspace_id'],
+      },
+      channels: {
+        rows: 1,
+        columns: [
+          'created_at',
+          'created_by',
+          'deleted_at',
+          'dm_key',
+          'id',
+          'last_message_at',
+          'min_retention_days',
+          'name',
+          'only_admins_post',
+          'retain_forever',
+          'topic',
+          'type',
+          'updated_at',
+          'workspace_id',
+        ],
+      },
+      channel_members: {
+        rows: 2,
+        columns: ['channel_id', 'id', 'joined_at', 'user_id'],
+      },
+      messages: {
+        rows: 1,
+        columns: [
+          'accepted_answer_id',
+          'channel_id',
+          'content',
+          'created_at',
+          'decision_note',
+          'decision_updated_by',
+          'decision_url',
+          'deleted_at',
+          'edited_at',
+          'id',
+          'is_question',
+          'message_type',
+          'metadata',
+          'parent_id',
+          'question_assignee_id',
+          'resolved_at',
+          'resolved_by',
+          'sender_id',
+          'thread_last_reply_at',
+          'thread_reply_count',
+          'updated_at',
+          'workspace_id',
+        ],
+      },
+      reactions: {
+        rows: 1,
+        columns: ['created_at', 'emoji', 'id', 'message_id', 'user_id'],
+      },
+      mentions: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'id',
+          'mentioned_user_id',
+          'message_id',
+          'workspace_id',
+        ],
+      },
+      message_versions: {
+        rows: 1,
+        columns: ['channel_id', 'content', 'id', 'message_id', 'replaced_at', 'workspace_id'],
+      },
+      pinned_messages: {
+        rows: 1,
+        columns: ['channel_id', 'message_id', 'pinned_at', 'pinned_by', 'workspace_id'],
+      },
+      channel_bookmarks: {
+        rows: 1,
+        columns: ['added_at', 'added_by', 'channel_id', 'id', 'title', 'url', 'workspace_id'],
+      },
+      attachments: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'file_name',
+          'height',
+          'id',
+          'kind',
+          'message_id',
+          'mime_type',
+          'size_bytes',
+          'uploader_id',
+          'width',
+          'workspace_id',
+        ],
+      },
+      incidents: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'declared_at',
+          'declared_by',
+          'id',
+          'postmortem',
+          'postmortem_version',
+          'resolved_at',
+          'runbook_url',
+          'severity',
+          'status',
+          'workspace_id',
+        ],
+      },
+      incident_updates: {
+        rows: 1,
+        columns: ['actor_id', 'at', 'from_value', 'id', 'incident_id', 'kind', 'to_value'],
+      },
+      incident_responders: {
+        rows: 1,
+        columns: ['added_at', 'added_by', 'channel_id', 'incident_id', 'user_id'],
+      },
+      github_repo_feeds: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'created_by',
+          'events',
+          'id',
+          'last_delivery_at',
+          'last_failure',
+          'last_failure_at',
+          'repository_full_name',
+          'repository_id',
+          'workspace_id',
+        ],
+      },
+      github_links: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'created_by',
+          'id',
+          'kind',
+          'number',
+          'origin',
+          'repository_full_name',
+          'repository_id',
+          'root_id',
+          'state',
+          'state_at',
+          'title',
+          'workspace_id',
+        ],
+      },
+      workspace_invitations: {
+        rows: 1,
+        columns: ['created_at', 'created_by', 'expires_at', 'id', 'revoked_at', 'workspace_id'],
+      },
+      audit_log: {
+        rows: 1,
+        columns: [
+          'action',
+          'actor_user_id',
+          'created_at',
+          'id',
+          'metadata',
+          'target_id',
+          'target_type',
+          'workspace_id',
+        ],
+      },
+    },
+  },
+  'visible-to-owner': {
+    files: [
+      'attachments.ndjson',
+      'audit_log.ndjson',
+      'blobs',
+      'channel_bookmarks.ndjson',
+      'channel_members.ndjson',
+      'channels.ndjson',
+      'github_links.ndjson',
+      'github_repo_feeds.ndjson',
+      'incident_responders.ndjson',
+      'incident_updates.ndjson',
+      'incidents.ndjson',
+      'manifest.json',
+      'mentions.ndjson',
+      'message_versions.ndjson',
+      'messages.ndjson',
+      'pinned_messages.ndjson',
+      'reactions.ndjson',
+      'users.ndjson',
+      'workspace_invitations.ndjson',
+      'workspace_members.ndjson',
+      'workspaces.ndjson',
+    ],
+    tables: {
+      workspaces: {
+        rows: 1,
+        columns: [
+          'avatar_url',
+          'created_at',
+          'created_by',
+          'deleted_at',
+          'id',
+          'name',
+          'retention_days',
+          'slug',
+          'storage_quota_bytes',
+          'storage_used_bytes',
+          'updated_at',
+        ],
+      },
+      users: {
+        rows: 2,
+        columns: [
+          'avatar_url',
+          'created_at',
+          'deleted_at',
+          'display_name',
+          'email',
+          'id',
+          'status_text',
+          'time_zone',
+          'title',
+          'username',
+        ],
+      },
+      workspace_members: {
+        rows: 2,
+        columns: ['id', 'joined_at', 'role', 'user_id', 'workspace_id'],
+      },
+      channels: {
+        rows: 1,
+        columns: [
+          'created_at',
+          'created_by',
+          'deleted_at',
+          'dm_key',
+          'id',
+          'last_message_at',
+          'min_retention_days',
+          'name',
+          'only_admins_post',
+          'retain_forever',
+          'topic',
+          'type',
+          'updated_at',
+          'workspace_id',
+        ],
+      },
+      channel_members: {
+        rows: 2,
+        columns: ['channel_id', 'id', 'joined_at', 'user_id'],
+      },
+      messages: {
+        rows: 1,
+        columns: [
+          'accepted_answer_id',
+          'channel_id',
+          'content',
+          'created_at',
+          'decision_note',
+          'decision_updated_by',
+          'decision_url',
+          'deleted_at',
+          'edited_at',
+          'id',
+          'is_question',
+          'message_type',
+          'metadata',
+          'parent_id',
+          'question_assignee_id',
+          'resolved_at',
+          'resolved_by',
+          'sender_id',
+          'thread_last_reply_at',
+          'thread_reply_count',
+          'updated_at',
+          'workspace_id',
+        ],
+      },
+      reactions: {
+        rows: 1,
+        columns: ['created_at', 'emoji', 'id', 'message_id', 'user_id'],
+      },
+      mentions: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'id',
+          'mentioned_user_id',
+          'message_id',
+          'workspace_id',
+        ],
+      },
+      message_versions: {
+        rows: 1,
+        columns: ['channel_id', 'content', 'id', 'message_id', 'replaced_at', 'workspace_id'],
+      },
+      pinned_messages: {
+        rows: 1,
+        columns: ['channel_id', 'message_id', 'pinned_at', 'pinned_by', 'workspace_id'],
+      },
+      channel_bookmarks: {
+        rows: 1,
+        columns: ['added_at', 'added_by', 'channel_id', 'id', 'title', 'url', 'workspace_id'],
+      },
+      attachments: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'file_name',
+          'height',
+          'id',
+          'kind',
+          'message_id',
+          'mime_type',
+          'size_bytes',
+          'uploader_id',
+          'width',
+          'workspace_id',
+        ],
+      },
+      incidents: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'declared_at',
+          'declared_by',
+          'id',
+          'postmortem',
+          'postmortem_version',
+          'resolved_at',
+          'runbook_url',
+          'severity',
+          'status',
+          'workspace_id',
+        ],
+      },
+      incident_updates: {
+        rows: 1,
+        columns: ['actor_id', 'at', 'from_value', 'id', 'incident_id', 'kind', 'to_value'],
+      },
+      incident_responders: {
+        rows: 1,
+        columns: ['added_at', 'added_by', 'channel_id', 'incident_id', 'user_id'],
+      },
+      github_repo_feeds: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'created_by',
+          'events',
+          'id',
+          'last_delivery_at',
+          'last_failure',
+          'last_failure_at',
+          'repository_full_name',
+          'repository_id',
+          'workspace_id',
+        ],
+      },
+      github_links: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'created_by',
+          'id',
+          'kind',
+          'number',
+          'origin',
+          'repository_full_name',
+          'repository_id',
+          'root_id',
+          'state',
+          'state_at',
+          'title',
+          'workspace_id',
+        ],
+      },
+      workspace_invitations: {
+        rows: 1,
+        columns: ['created_at', 'created_by', 'expires_at', 'id', 'revoked_at', 'workspace_id'],
+      },
+      audit_log: {
+        rows: 2,
+        columns: [
+          'action',
+          'actor_user_id',
+          'created_at',
+          'id',
+          'metadata',
+          'target_id',
+          'target_type',
+          'workspace_id',
+        ],
+      },
+    },
+  },
+};
