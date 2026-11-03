@@ -23,16 +23,26 @@ const another: BundledModule = {
 /** A reader that answers for the files it is given and refuses every other, as a module's reader does. */
 const readerOf =
   (...files: readonly string[]): AttachmentReader =>
-  async (_executor, _userId, attachmentId) => {
-    if (!files.includes(attachmentId)) throw attachmentNotFound();
-    return {
-      id: attachmentId,
-      storageKey: `key/${attachmentId}`,
-      thumbnailKey: null,
-      fileName: attachmentId,
-      kind: 'file',
-    };
-  };
+  (_executor, _userId, attachmentId) =>
+    files.includes(attachmentId)
+      ? Promise.resolve({
+          id: attachmentId,
+          storageKey: `key/${attachmentId}`,
+          thumbnailKey: null,
+          fileName: attachmentId,
+          kind: 'file',
+        })
+      : Promise.reject(attachmentNotFound());
+
+/** How a reading ended: the file's id, the refusal's code, or the failure's message. */
+const outcomeOf = async (reading: Promise<{ readonly id: string }>): Promise<string> => {
+  try {
+    return (await reading).id;
+  } catch (error: unknown) {
+    if (error instanceof AppError) return error.body.code;
+    return error instanceof Error ? error.message : 'not an error';
+  }
+};
 
 const moduleReading = (id: string, reader: AttachmentReader): BundledModule => ({
   manifest: { id, requires: [], optional: [], provides: [] },
@@ -109,29 +119,29 @@ describe('the application as its modules make it', () => {
 
     test('is whoever any running module’s reader says may, not the first module’s alone', async () => {
       const both = compose([first, second], [first, second]);
-      expect((await both.readAttachment(database, 'u', 'in-first')).id).toBe('in-first');
-      expect((await both.readAttachment(database, 'u', 'in-second')).id).toBe('in-second');
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'in-first'))).toBe('in-first');
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'in-second'))).toBe('in-second');
     });
 
     test('is refused as any attachment nobody answers for is, once every reader has said no', async () => {
       const both = compose([first, second], [first, second]);
-      const refused = await both.readAttachment(database, 'u', 'nowhere').catch((error) => error);
-      expect(refused).toBeInstanceOf(AppError);
-      expect(refused.body.code).toBe('ATTACHMENT_NOT_FOUND');
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'nowhere'))).toBe(
+        'ATTACHMENT_NOT_FOUND',
+      );
     });
 
     test('does not ask a module that is not run, and keeps a reader’s own failure a failure', async () => {
-      expect(
-        await compose([first], [first, second])
-          .readAttachment(database, 'u', 'in-second')
-          .catch((error) => error.body.code),
-      ).toBe('ATTACHMENT_NOT_FOUND');
-      const broken = moduleReading('broken', async () => {
-        throw new Error('the database is gone');
-      });
-      await expect(
-        compose([broken, second], [broken, second]).readAttachment(database, 'u', 'in-second'),
-      ).rejects.toThrow('the database is gone');
+      const onlyFirst = compose([first], [first, second]);
+      expect(await outcomeOf(onlyFirst.readAttachment(database, 'u', 'in-second'))).toBe(
+        'ATTACHMENT_NOT_FOUND',
+      );
+      const broken = moduleReading('broken', () =>
+        Promise.reject(new Error('the database is gone')),
+      );
+      const withBroken = compose([broken, second], [broken, second]);
+      expect(await outcomeOf(withBroken.readAttachment(database, 'u', 'in-second'))).toBe(
+        'the database is gone',
+      );
     });
   });
 
@@ -143,8 +153,9 @@ describe('the application as its modules make it', () => {
       table: 'issues' | 'mentions' | 'channels',
     ): BundledModule => ({
       manifest: { id, requires, optional: [], provides: [] },
-      userErased: async () => {
+      userErased: (): Promise<void> => {
         calls.push(id);
+        return Promise.resolve();
       },
       workspacePurge: { before: [], after: [], tables: [table] },
     });

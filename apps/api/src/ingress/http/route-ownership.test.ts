@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { bundledModules } from '../../composition';
+import { bundledModules, type BundledModule } from '../../composition';
 import { CORE_ROUTES } from '../../platform/module-kit/core-claims';
 import { ownsPath } from '../../platform/module-kit/routes';
 
@@ -22,8 +22,10 @@ const registered = (): string[] => {
   ].sort();
 };
 
+const carried: readonly BundledModule[] = bundledModules;
+
 describe('who owns each route', () => {
-  const owners = bundledModules.map((module) => ({
+  const owners = carried.map((module) => ({
     id: module.manifest.id,
     owns: ownsPath(module.manifest.routes ?? []),
   }));
@@ -45,7 +47,7 @@ describe('who owns each route', () => {
   test('the core’s list holds no route that is gone, and no module’s template matches nothing', () => {
     const paths = registered();
     expect(CORE_ROUTES.filter((path) => !paths.includes(path))).toEqual([]);
-    for (const module of bundledModules) {
+    for (const module of carried) {
       const dead = (module.manifest.routes ?? []).filter((template) => {
         const owns = ownsPath([template]);
         return !paths.some((path) => owns(path));

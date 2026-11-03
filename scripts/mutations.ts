@@ -13009,7 +13009,7 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/platform/module-kit/core-claims.ts',
     find: "export const CORE_FRAMES: readonly string[] = ['PING', 'ACTIVE'];",
     replace: "export const CORE_FRAMES: readonly string[] = ['PING'];",
-    tests: ['apps/api/src/platform/module-kit/core-claims.test.ts'],
+    tests: ['apps/api/src/core-claims.test.ts'],
   },
   {
     id: 'module-set-not-registered',
@@ -13280,8 +13280,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'attached-file-read-whether-or-not-its-module-runs',
     why: 'a file attached to a message is still read through the channel with chat not run, a door the module list says is shut (D-250)',
     file: 'apps/api/src/composition.ts',
-    find: 'modules.find((module) => module.readAttachment !== undefined)',
-    replace: 'bundled.find((module) => module.readAttachment !== undefined)',
+    find: '      ...modules.flatMap((module) => module.readAttachment ?? []),\n',
+    replace: '      ...bundled.flatMap((module) => module.readAttachment ?? []),\n',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
   },
   {

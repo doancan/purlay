@@ -19,16 +19,16 @@ import {
 
 type Bundled = (typeof bundledModules)[number];
 /** What a module's contribution to the export under `Slot` writes and what it leaves out, as table names. */
-type WrittenBy<Slot extends 'export' | 'personalExport', Module> = Module extends {
-  readonly [S in Slot]: { readonly tables: readonly { readonly name: infer Name }[] };
-}
-  ? Name
-  : never;
-type ExcludedBy<Slot extends 'export' | 'personalExport', Module> = Module extends {
-  readonly [S in Slot]: { readonly excluded: infer Excluded };
-}
-  ? keyof Excluded
-  : never;
+type WrittenBy<Slot extends 'export' | 'personalExport', Module> =
+  Module extends Readonly<
+    Record<Slot, { readonly tables: readonly { readonly name: infer Name }[] }>
+  >
+    ? Name
+    : never;
+type ExcludedBy<Slot extends 'export' | 'personalExport', Module> =
+  Module extends Readonly<Record<Slot, { readonly excluded: infer Excluded }>>
+    ? keyof Excluded
+    : never;
 
 type Undecided = Exclude<
   keyof Database,

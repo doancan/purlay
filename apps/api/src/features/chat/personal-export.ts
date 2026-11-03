@@ -269,7 +269,7 @@ const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
 export const chatPersonalExport = {
   id: 'chat',
   tables,
-  workspaces: (userId) => [
+  workspaces: (userId: string): RawBuilder<unknown>[] => [
     sql`select workspace_id from channels where id in (${theirChannels(userId)})`,
     sql`select workspace_id from saved_searches where user_id = ${userId}`,
   ],

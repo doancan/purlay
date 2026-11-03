@@ -372,7 +372,7 @@ export const chatExport = {
     filesLinked: await tableExists(executor, 'message_attachments'),
   }),
   tables,
-  people: (scope) => [
+  people: (scope: Scope): RawBuilder<unknown>[] => [
     sql`select created_by from channels where id in (${channelsIn(scope)})`,
     sql`select user_id from channel_members where channel_id in (${channelsIn(scope)})`,
     sql`select sender_id from messages where id in (${messagesOf(scope)})`,
@@ -392,7 +392,9 @@ export const chatExport = {
     sql`select created_by from github_links where channel_id in (${channelsIn(scope)})`,
   ],
   // An upload not yet sent is the uploader's until then, and gone in a day (D-109 §5).
-  files: (scope) => sql`id in (${filesOf(scope)})`,
-  audit: (rows) => ({ messages: String(rows['messages'] ?? 0) }),
+  files: (scope: Scope): RawBuilder<unknown> => sql`id in (${filesOf(scope)})`,
+  audit: (rows: Readonly<Record<string, number>>): Record<string, string> => ({
+    messages: String(rows['messages'] ?? 0),
+  }),
   excluded: CHAT_EXCLUDED,
 } satisfies ExportContribution;

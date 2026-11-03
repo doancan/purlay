@@ -3,11 +3,13 @@
  * the team's, so nothing of it is a person's own state to leave out. The two people it names are named in the
  * export's people, so a reader can say who made it and who it was for.
  */
+import type { RawBuilder } from '@purlay/db';
 import {
   inWorkspace,
   namedInWorkspace,
   tableExport,
   type ExportContribution,
+  type Scope,
 } from '../../modules/export/catalogue';
 
 const tables = [
@@ -32,9 +34,11 @@ export const issuesExport = {
   id: 'issues',
   tables,
   ownSet: ['issues'],
-  people: (scope) => [
+  people: (scope: Scope): RawBuilder<unknown>[] => [
     namedInWorkspace('issues', 'created_by', scope),
     namedInWorkspace('issues', 'assignee_id', scope),
   ],
-  audit: (rows) => ({ issues: String(rows['issues'] ?? 0) }),
+  audit: (rows: Readonly<Record<string, number>>): Record<string, string> => ({
+    issues: String(rows['issues'] ?? 0),
+  }),
 } satisfies ExportContribution;
