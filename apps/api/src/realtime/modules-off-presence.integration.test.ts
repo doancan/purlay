@@ -4,7 +4,7 @@
  * own business only — it counts nobody online, tells nobody, and hears none of chat's news published by a node that
  * does run it — and still carries the core's frames. Over real sockets, with a process that runs chat as the control.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   type ClonedDatabase,
@@ -28,6 +28,10 @@ const origin = 'https://purlay.test';
 let cloned: ClonedDatabase;
 let db: Executor;
 const apps: HttpApplication[] = [];
+
+// Each test opens sockets on two nodes and waits for frames that a grace timer and a backplane carry: seconds on a
+// loaded runner, so the 5 s default is not its budget.
+setDefaultTimeout(60_000);
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
