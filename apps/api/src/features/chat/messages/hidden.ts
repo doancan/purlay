@@ -8,7 +8,7 @@ export const notHiddenBy = (
 ): RawBuilder<boolean> =>
   sql<boolean>`not exists (select 1 from hidden_messages h where h.user_id = ${userId} and h.message_id = ${message})`;
 
-export const hiddenMessage = (message: Message, at: string): Message => ({
+const hiddenMessage = (message: Message, at: string): Message => ({
   ...message,
   hiddenForMe: true,
   content: '',
