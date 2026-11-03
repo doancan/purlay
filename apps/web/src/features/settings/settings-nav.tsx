@@ -12,6 +12,7 @@ import { Link, useRoute } from '../../router/router-provider';
 import { cn } from '../../ui/cn';
 import { useWorkspace } from '../shell/workspace';
 import { FIRST_SECTION, sectionsFor, type SettingsSection } from './sections';
+import { useSession } from '../session/session';
 import { useIsServerAdmin, useWorkspaceRole } from './role';
 
 const rowClasses =
@@ -70,7 +71,7 @@ export const SettingsNav = (): React.JSX.Element => {
       : match.name === 'settingsHome'
         ? FIRST_SECTION
         : null;
-  const sections = sectionsFor(role, useIsServerAdmin());
+  const sections = sectionsFor(role, useIsServerAdmin(), useSession().modules);
   return (
     <>
       <div className="flex flex-col gap-1 px-4 pt-3 pb-2">

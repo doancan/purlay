@@ -207,6 +207,42 @@ describe('what is on offer before anything is typed', () => {
   });
 });
 
+describe('on a server that runs no chat', () => {
+  test('offers only the core’s: its settings pages, the theme and the language; no view, channel, person or read-all', async () => {
+    const asked: string[] = [];
+    const noChat = apiWith({
+      me: () => Promise.resolve({ ...aSession(), modules: [] }),
+      channels: () => {
+        asked.push('channels');
+        return Promise.resolve(withDm());
+      },
+    });
+    const { options } = await mount(noChat, '/w/acme');
+    const offered = options();
+    expect(offered.length).toBeGreaterThan(0);
+    expect(asked).toEqual([]);
+    for (const chat of [
+      'Open questions',
+      'Inbox',
+      'Saved',
+      'Drafts',
+      'api',
+      'Bob',
+      'Mark all as read',
+    ]) {
+      expect(offered.some((row) => row.includes(chat))).toBe(false);
+    }
+    expect(offered.some((row) => row.includes('Settings') || row.includes('Profile'))).toBe(true);
+    // Chat's own settings pages are not offered either.
+    expect(offered.some((row) => row.includes('Integrations'))).toBe(false);
+    // Typing offers no search of the messages: there are none.
+    const typed = await mount(noChat, '/w/acme');
+    fireEvent.change(typed.input(), { target: { value: 'deploy' } });
+    await settle();
+    expect(typed.options().some((row) => row.includes('Search messages'))).toBe(false);
+  });
+});
+
 describe('a row has a tile', () => {
   test('a person has their avatar and everything else has its glyph, none of it read aloud', async () => {
     const { view } = await mount();

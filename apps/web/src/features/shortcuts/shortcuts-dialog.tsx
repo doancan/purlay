@@ -17,6 +17,8 @@ export interface ShortcutsDialogProps {
   readonly onOpenChange: (open: boolean) => void;
   /** Whether to print ⌘ ⇧ ⌥ rather than Ctrl, Shift, Alt. */
   readonly mac: boolean;
+  /** The modules the server runs (D-250): the keys of one that is not run are not listed. */
+  readonly modules: readonly string[];
 }
 
 type RowKey =
@@ -53,11 +55,17 @@ type GroupKey =
 
 interface Row {
   readonly label: RowKey;
+  /** The module whose key it is; absent is the core's. */
+  readonly module?: 'chat';
   /** Alternatives; each is the keys pressed together, in order. */
   readonly keys: (k: KeyLabels) => readonly (readonly string[])[];
 }
 
-const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[] }[] = [
+const GROUPS: readonly {
+  readonly title: GroupKey;
+  readonly module?: 'chat';
+  readonly rows: readonly Row[];
+}[] = [
   {
     title: 'shortcuts.group.navigation',
     rows: [
@@ -67,18 +75,20 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
       { label: 'shortcuts.close', keys: (k) => [[k.escape]] },
       {
         label: 'shortcuts.channels',
+        module: 'chat',
         keys: (k) => [
           [k.alt, '↑'],
           [k.alt, '↓'],
         ],
       },
-      { label: 'shortcuts.rowMenu', keys: (k) => [[k.shift, 'F10']] },
+      { label: 'shortcuts.rowMenu', module: 'chat', keys: (k) => [[k.shift, 'F10']] },
       { label: 'shortcuts.deepWork', keys: (k) => [[k.mod, k.shift, 'D']] },
-      { label: 'shortcuts.readAll', keys: (k) => [[k.shift, k.escape]] },
+      { label: 'shortcuts.readAll', module: 'chat', keys: (k) => [[k.shift, k.escape]] },
     ],
   },
   {
     title: 'shortcuts.group.messages',
+    module: 'chat',
     rows: [
       { label: 'shortcuts.move', keys: () => [['↑'], ['↓']] },
       { label: 'shortcuts.thread', keys: () => [['T']] },
@@ -89,6 +99,7 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
   },
   {
     title: 'shortcuts.group.composer',
+    module: 'chat',
     rows: [
       { label: 'shortcuts.send', keys: (k) => [[k.enter]] },
       { label: 'shortcuts.newline', keys: (k) => [[k.shift, k.enter]] },
@@ -111,9 +122,11 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
 /** The reference itself: the groups and their rows, as the dialog and the settings page both show it. */
 export const ShortcutList = ({
   mac,
+  modules,
   level = 3,
 }: {
   readonly mac: boolean;
+  readonly modules: readonly string[];
   /** The groups' heading level: below a dialog's title, or a page's. */
   readonly level?: 2 | 3;
 }): React.JSX.Element => {
@@ -122,32 +135,36 @@ export const ShortcutList = ({
   const Heading = level === 2 ? 'h2' : 'h3';
   return (
     <>
-      {GROUPS.map((group) => (
-        <section key={group.title} aria-labelledby={group.title} className="flex flex-col gap-2">
-          <Heading id={group.title} className="text-label text-ink-muted">
-            {t(group.title)}
-          </Heading>
-          <ul className="flex flex-col gap-2">
-            {group.rows.map((row) => (
-              <li key={row.label} className="flex items-center justify-between gap-4">
-                <span className="text-body text-ink">{t(row.label)}</span>
-                <span className="flex items-center gap-2">
-                  {row.keys(labels).map((sequence, at) => (
-                    <span key={sequence.join('+')} className="flex items-center gap-1">
-                      {at > 0 && (
-                        <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
-                      )}
-                      {sequence.map((key) => (
-                        <Kbd key={key}>{key}</Kbd>
+      {GROUPS.filter((group) => group.module === undefined || modules.includes(group.module)).map(
+        (group) => (
+          <section key={group.title} aria-labelledby={group.title} className="flex flex-col gap-2">
+            <Heading id={group.title} className="text-label text-ink-muted">
+              {t(group.title)}
+            </Heading>
+            <ul className="flex flex-col gap-2">
+              {group.rows
+                .filter((row) => row.module === undefined || modules.includes(row.module))
+                .map((row) => (
+                  <li key={row.label} className="flex items-center justify-between gap-4">
+                    <span className="text-body text-ink">{t(row.label)}</span>
+                    <span className="flex items-center gap-2">
+                      {row.keys(labels).map((sequence, at) => (
+                        <span key={sequence.join('+')} className="flex items-center gap-1">
+                          {at > 0 && (
+                            <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
+                          )}
+                          {sequence.map((key) => (
+                            <Kbd key={key}>{key}</Kbd>
+                          ))}
+                        </span>
                       ))}
                     </span>
-                  ))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ),
+      )}
     </>
   );
 };
@@ -156,6 +173,7 @@ export const ShortcutsDialog = ({
   open,
   onOpenChange,
   mac,
+  modules,
 }: ShortcutsDialogProps): React.JSX.Element => {
   const { t } = useI18n();
   return (
@@ -175,7 +193,7 @@ export const ShortcutsDialog = ({
         aria-label={t('shortcuts.title')}
         className="flex flex-col gap-4"
       >
-        <ShortcutList mac={mac} />
+        <ShortcutList mac={mac} modules={modules} />
       </div>
     </Dialog>
   );

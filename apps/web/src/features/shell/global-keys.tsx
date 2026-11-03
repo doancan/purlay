@@ -49,9 +49,10 @@ interface GlobalKeysProps {
 export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { user } = useSession();
+  const { user, modules } = useSession();
   const { match, navigate } = useRoute();
-  const channels = useChannels(workspace.id, useRuns('chat')).data;
+  const chat = useRuns('chat');
+  const channels = useChannels(workspace.id, chat).data;
   const { overlay, setOverlay } = useOverlay();
   const markAllRead = useMarkAllRead();
   const [announcement, setAnnouncement] = useState('');
@@ -131,7 +132,7 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
         (event.key === 'ArrowUp' || event.key === 'ArrowDown')
       ) {
         event.preventDefault();
-        if (overlay !== null) return;
+        if (overlay !== null || !chat) return;
         const target = stepUnread(
           inSidebarOrder(channels ?? []),
           currentId,
@@ -150,7 +151,7 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
     return (): void => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [navigate, setOverlay, slug, t, user.id]);
+  }, [navigate, setOverlay, slug, t, user.id, chat]);
 
   return (
     <>
@@ -160,6 +161,7 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
           <deferred.ShortcutsDialog
             open={overlay === 'shortcuts'}
             mac={mac}
+            modules={modules}
             onOpenChange={shortcuts}
           />
         </>

@@ -8,7 +8,7 @@ import { SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from '@purlay/types';
 import { useChannels, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Translate } from '../../i18n/types';
-import { useSession } from '../session/session';
+import { useRuns, useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import {
   asTyped,
@@ -35,7 +35,7 @@ export const useSearchOperators = (): SearchOperators => {
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const { format } = useI18n();
-  const channels = useChannels(workspace.id).data;
+  const channels = useChannels(workspace.id, useRuns('chat')).data;
   const members = useMembers(workspace.id).data;
   return useMemo(() => {
     const directory: Directory = {
