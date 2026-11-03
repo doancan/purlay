@@ -534,6 +534,56 @@ describe('integration: migrate on start', () => {
     }
   }, 60_000);
 
+  test('a node run with MODULES=none that does not migrate is ready on a database migrated core-alone', async () => {
+    const { name, db } = await freshDatabase('wait-none');
+    await migrateWith(name, []);
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MODULES: 'none' },
+    );
+    try {
+      expect(await until(port, '/health/ready', 200)).toBe(200);
+      expect(node.exitCode).toBeNull();
+    } finally {
+      node.kill();
+      await node.exited;
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node that runs chat and does not migrate is not ready on that database until chat’s set is applied', async () => {
+    const { name, db } = await freshDatabase('wait-chat');
+    await migrateWith(name, []);
+    const port = freePort();
+    const node = aNode(
+      name,
+      port,
+      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      { MODULES: 'chat' },
+    );
+    let said = '';
+    const reading = (async (): Promise<void> => {
+      const decoder = new TextDecoder();
+      for await (const chunk of node.stdout) said += decoder.decode(chunk, { stream: true });
+    })();
+    try {
+      await waitUntil(() => said.includes(WAITING), 'the node to say it waits for the migrations');
+      expect(said).toContain('chat/');
+      expect((await answer(port, '/health/ready'))[0]).toBe(503);
+      expect(node.exitCode).toBeNull();
+      await migrateWith(name, PRODUCT_MIGRATION_SETS);
+      expect(await until(port, '/health/ready', 200)).toBe(200);
+    } finally {
+      node.kill();
+      await node.exited;
+      await reading;
+      await db.destroy();
+    }
+  }, 60_000);
+
   test('a fresh server with no GitHub and no mail variable at all boots into setup mode, imports a row without GitHub, and serves', async () => {
     const { name, db } = await freshDatabase('zeroenv');
     const key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64');

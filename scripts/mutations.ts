@@ -13293,4 +13293,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'await pendingMigrations(database)',
     tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
   },
+  {
+    id: 'start-waits-for-every-set-not-the-ones-it-runs',
+    why: 'a node that does not migrate waits for every migration set the build carries, not the modules it runs, so a MODULES=none node on a database migrated core-alone never becomes ready (D-250)',
+    file: 'apps/api/src/index.ts',
+    find: 'await untilMigrated(database, log, undefined, modules.migrationSets);',
+    replace: 'await untilMigrated(database, log);',
+    tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
+  },
+  {
+    id: 'start-waits-for-no-set',
+    why: "a node that does not migrate waits for no module's migrations, so one that runs chat serves on a database where chat's tables are not made (D-250)",
+    file: 'apps/api/src/index.ts',
+    find: 'await untilMigrated(database, log, undefined, modules.migrationSets);',
+    replace: 'await untilMigrated(database, log, undefined, []);',
+    tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
+  },
+  {
+    id: 'node-announces-the-core-alone',
+    why: 'a node tells the cluster it runs no module whatever MODULES says, so a rolling deploy of a new set is never noticed and a mismatch is never said (D-250)',
+    file: 'apps/api/src/index.ts',
+    find: 'set: moduleSetOf(modules.modules.map((module) => module.manifest.id)),',
+    replace: 'set: moduleSetOf([]),',
+    tests: ['apps/api/src/realtime/module-set.redis.integration.test.ts'],
+  },
 ];
