@@ -248,6 +248,42 @@ describe('integration: away by choice (D-257)', () => {
     }
   });
 
+  test('her own sockets hear her own away and active, chosen and idle, so her own avatar shows it', async () => {
+    const { node, timers, listening } = aNode();
+    try {
+      const room = await aRoom(node);
+      const alice = await connect(room.alice.cookie, listening);
+      const second = await connect(room.alice.cookie, listening);
+      await Promise.all([alice.handled(), second.handled()]);
+      await node.settled();
+      /** Waits until both of her pages have heard one more change of hers, and gives what they heard. */
+      const next = async (what: string): Promise<{ online: boolean; away: boolean }> => {
+        const seen = [alice, second].map((page) => heardOf(page.frames, room.alice.id).length);
+        await alice.until((f) => heardOf(f, room.alice.id).length > (seen[0] ?? 0), what);
+        await second.until((f) => heardOf(f, room.alice.id).length > (seen[1] ?? 0), what);
+        const last = heardOf(alice.frames, room.alice.id).at(-1);
+        expect(heardOf(second.frames, room.alice.id).at(-1)).toEqual(last);
+        if (last === undefined) throw new Error(`nothing heard for ${what}`);
+        return { online: last.online, away: last.away };
+      };
+      await choose(node, room.alice, true);
+      expect(await next('her choice of away')).toEqual({ online: true, away: true });
+      await choose(node, room.alice, false);
+      expect(await next('her choice of active')).toEqual({ online: true, away: false });
+      // Five quiet minutes: idle, and told to her too.
+      timers.runUpTo(AWAY_AFTER_MS);
+      expect(await next('her idleness')).toEqual({ online: true, away: true });
+      alice.send({ id: messageId(NOW), op: 'ACTIVE', payload: { workspaceId: room.workspaceId } });
+      expect(await next('her word ending the idle')).toEqual({ online: true, away: false });
+      const versions = heardOf(alice.frames, room.alice.id).map((change) => change.version);
+      expect(versions).toEqual([...versions].sort((a, b) => a - b));
+      expect(new Set(versions).size).toBe(versions.length);
+      await Promise.all([alice.close(), second.close()]);
+    } finally {
+      await node.stop(true);
+    }
+  });
+
   test('the choice holds through activity and a new socket', async () => {
     const { node, timers, listening } = aNode();
     try {
@@ -364,7 +400,13 @@ describe('integration: away by choice (D-257)', () => {
       await bob.until((f) => heardOf(f, room.alice.id).length === 2, 'bob hears alice away');
       await node.settled();
       expect(heardOf(erin.frames, room.alice.id)).toHaveLength(1);
-      expect(outsider.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+      // The stranger hears only of himself (D-257): nothing of Alice.
+      expect(heardOf(outsider.frames, room.alice.id)).toEqual([]);
+      // Telling Alice herself is the only reach added, and she did hear it.
+      await alice.until(
+        (f) => heardOf(f, room.alice.id).some((c) => c.away),
+        'alice hears her away',
+      );
       await Promise.all([alice.close(), bob.close(), outsider.close(), erin.close()]);
     } finally {
       await node.stop(true);

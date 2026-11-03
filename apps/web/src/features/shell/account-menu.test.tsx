@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import type { MeResponse, SetDeepWorkRequest } from '@purlay/types';
+import type { MeResponse, ServerFrame, SetDeepWorkRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
@@ -230,7 +230,7 @@ describe('away (D-257)', () => {
     view.unmount();
   });
 
-  test('the own avatar shows the ring when the own entry says away', async () => {
+  test('the own avatar shows the ring when the own entry says away, once connected', async () => {
     const view = await open({
       presence: () =>
         Promise.resolve({
@@ -239,7 +239,46 @@ describe('away (D-257)', () => {
         }),
     });
     const door = view.getByRole('button', { name: /^Account: Dogancan @/ });
+    // Not connected: nothing is drawn for yourself, rather than what was last heard.
+    expect(door.querySelector('[data-away]')).toBeNull();
+    expect(door.querySelector('[data-online]')).toBeNull();
+    act(() => {
+      view.world.sockets.open();
+    });
     expect(door.querySelector('[data-away]')).not.toBeNull();
+    expect(door.querySelector('[data-online]')).toBeNull();
+    view.unmount();
+  });
+
+  test('the own avatar follows the server: the ring when your own frame says away, the dot when it says active', async () => {
+    const view = await open();
+    const told = (away: boolean, version: number): ServerFrame => ({
+      event: 'PRESENCE',
+      data: { changes: [{ userId: IDS.me, online: true, away, version }] },
+      ts: 0,
+    });
+    act(() => {
+      view.world.sockets.open();
+    });
+    const door = view.getByRole('button', { name: /^Account: Dogancan @/ });
+    expect(door.querySelector('[data-online]')).not.toBeNull();
+    // Chosen on another device, or idle, which only the server knows: it says so to every page.
+    act(() => {
+      view.world.sockets.deliver(told(true, 3));
+    });
+    expect(door.querySelector('[data-away]')).not.toBeNull();
+    expect(door.querySelector('[data-online]')).toBeNull();
+    act(() => {
+      view.world.sockets.deliver(told(false, 4));
+    });
+    expect(door.querySelector('[data-away]')).toBeNull();
+    expect(door.querySelector('[data-online]')).not.toBeNull();
+    // Disconnected, yourself is drawn as nothing, not the last state heard.
+    act(() => {
+      view.world.sockets.deliver(told(true, 5));
+      view.world.sockets.sockets.at(-1)?.handlers.closed(1006);
+    });
+    expect(door.querySelector('[data-away]')).toBeNull();
     expect(door.querySelector('[data-online]')).toBeNull();
     view.unmount();
   });

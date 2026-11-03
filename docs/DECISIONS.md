@@ -12462,12 +12462,17 @@ green dot is, and said "away" to a screen reader. Others do not see whether it w
    arrival after being offline starts active: opening Purlay is an act.
 4. **Away by choice** (`PUT /api/me/away`, `users.away_chosen`) is stored on the person, wins over activity, holds on
    every device and workspace and through restarts, and is read by a socket before its first word. The route writes,
-   then tells it again at a new version from the same source as the others, to co-members only (D-136 §1, §3).
+   then tells it again at a new version from the same source as the others, to co-members only (D-136 §1, §3)
+   and to the person themselves.
    Offline always wins: a choice made offline is stored and tells nobody. `GET /api/me` carries `awayChosen`, and the
    account menu offers *Set yourself as away* / *Uzakta görün*, and the reverse.
-5. **Accepted edge**: with Redis unreachable for more than five minutes, a person who is speaking can be shown away for
+5. **Your own state is told to you**: every presence change also goes to the person's own `user:` topic, so the avatar
+   on every page of theirs — account menu, People — shows what everybody else is told, chosen on another device or
+   idle, which only the server knows. It is their own state, so nobody new hears anything. Disconnected, a page draws
+   nothing for them rather than the last state it heard.
+6. **Accepted edge**: with Redis unreachable for more than five minutes, a person who is speaking can be shown away for
    up to a minute after it comes back, until their next word.
-6. Unchanged: D-136 §2 to §4 and §7, Deep Work (it does not change away, nor away it), and the push rule (D-143).
+7. Unchanged: D-136 §2 to §4 and §7, Deep Work (it does not change away, nor away it), and the push rule (D-143).
 
 **Rejected.** *An idle threshold set per person* — one value is enough for a state, and a setting is a request that
 can come. *"Last seen"* — a clock about a person, the thing D-136 refused. *The page deciding its own idleness* —

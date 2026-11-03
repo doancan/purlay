@@ -522,8 +522,9 @@ export const PresenceChange = Type.Object(
 export type PresenceChange = Static<typeof PresenceChange>;
 
 /**
- * People came online or went offline (D-136): on the `user:` topic of each person who shares a
- * workspace with them, so a stranger never hears it. A list, so changes can be told together.
+ * People came online or went offline, or away or active (D-136, D-257): on the `user:` topic of each
+ * person who shares a workspace with them, and on the person's own, so a stranger never hears it and
+ * the person's own avatar follows it. A list, so changes can be told together.
  */
 export const PresenceFrame = Type.Object({
   event: Type.Literal('PRESENCE'),
