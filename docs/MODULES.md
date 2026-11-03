@@ -173,6 +173,9 @@ moves into that module.
 - **Every table has one owner**, core or a module, in a list a test holds to the database; a foreign key across
   owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
   point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
+  An owner is `core` or the id of a registered migration set (`TableOwner` is derived from `PRODUCT_MIGRATION_SETS`, and the list
+  covers every table of the generated schema or does not compile); `module-sets.test.ts` holds the sets to the bundled modules and
+  to `migrations/<id>/`, so a directory with no registered set, or a set with no module, fails a test.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
   with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
   tables (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a

@@ -12972,6 +12972,31 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'module-set-not-registered',
+    why: 'a bundled module has a directory of migrations that no registered set names, so no database ever migrates it (D-250)',
+    file: 'packages/db/src/migrator.ts',
+    find: "  { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },\n",
+    replace: '',
+    tests: ['apps/api/src/module-sets.test.ts'],
+  },
+  {
+    id: 'module-set-without-a-module',
+    why: 'a migration set is registered for a name no bundled module has, and no directory holds its files (D-250)',
+    file: 'packages/db/src/migrator.ts',
+    find: "  { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },\n",
+    replace:
+      "  { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },\n  { id: 'ghost', directory: join(MIGRATIONS_DIRECTORY, 'ghost') },\n",
+    tests: ['apps/api/src/module-sets.test.ts'],
+  },
+  {
+    id: 'table-owned-by-no-module',
+    why: 'a table is owned by a name that is neither the core nor a module of the build with a set (D-250)',
+    file: 'packages/db/src/table-owners.ts',
+    find: "  issues: 'issues',\n",
+    replace: "  issues: 'ghost',\n",
+    tests: ['apps/api/src/module-sets.test.ts'],
+  },
+  {
     id: 'export-excluded-of-modules-not-read',
     why: 'the tables the modules leave out of an export are not read off the build’s modules, so the check that every table of the database is decided fails for them, or a new module’s are never counted (D-250)',
     file: 'apps/api/src/export-catalogue.ts',

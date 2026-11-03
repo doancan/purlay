@@ -2,10 +2,17 @@
  * Who owns each table (D-250, `MODULES.md` §5): the core, or one module. A foreign key goes from a module to
  * the core and never the other way, nor between modules, so that a module's tables can be left inert without
  * the core's pointing at them. `table-ownership.integration.test.ts` holds this list to the database.
+ *
+ * An owner is the core or the id of a migration set (`PRODUCT_MIGRATION_SETS`), so there is no list of module names to
+ * keep beside the sets: a module whose tables are in the list has a set, and a set is a module of the build
+ * (`composition.test.ts` holds the sets to the bundled modules). Every table of the schema must be in the list, or the
+ * file does not compile.
  */
-export type TableOwner = 'core' | 'chat' | 'issues';
+import type { PRODUCT_MIGRATION_SETS } from './migrator';
+import type { DB } from './schema';
+export type TableOwner = 'core' | (typeof PRODUCT_MIGRATION_SETS)[number]['id'];
 
-export const TABLE_OWNERS: Readonly<Record<string, TableOwner>> = {
+export const TABLE_OWNERS: Readonly<Record<keyof DB, TableOwner>> = {
   // Identity, tenancy, and what the core keeps for every module.
   accounts: 'core',
   admin_email_verification: 'core',

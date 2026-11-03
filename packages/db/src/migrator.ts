@@ -72,10 +72,10 @@ const SET_ID = /^[a-z][a-z0-9-]*$/;
  * The sets of the modules this build carries (D-250), one directory each under `migrations/`, applied after the
  * core's and recorded as `<module>/<file>`. A process applies the ones its `MODULES` names (`setsNamedBy`, `MODULES.md` §3).
  */
-export const PRODUCT_MIGRATION_SETS: readonly MigrationSet[] = [
+export const PRODUCT_MIGRATION_SETS = [
   { id: 'chat', directory: join(MIGRATIONS_DIRECTORY, 'chat') },
   { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },
-];
+] as const satisfies readonly MigrationSet[];
 
 /**
  * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every
