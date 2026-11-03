@@ -126,4 +126,18 @@ describe('nodes that run different sets', () => {
     expect(view.clock.pending()).toBe(0);
     expect(view.link.sent).toEqual([{ command: 'HDEL', args: [MODULE_SET_KEY, 'node-a'] }]);
   });
+
+  test('a node that cannot take its entry out says so at debug and still stops', async () => {
+    const view = aWatch(() => ['chat']);
+    view.link.behaviour.send = (): number => {
+      throw new Error('redis is gone');
+    };
+    await settle();
+    await view.watch.stop();
+
+    expect(view.clock.pending()).toBe(0);
+    expect(
+      view.said('debug').some((line) => String(line['msg']).includes('could not be taken out')),
+    ).toBe(true);
+  });
 });
