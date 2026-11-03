@@ -53,6 +53,8 @@ registers — the audit actions are in `modules/audit`, and the role rules are i
 
 ## 3. Boot
 
+**What `MODULES` does not do: it does not shrink the process.** The build loads the code of every module it carries, whatever is run, so `MODULES=none` measured the same resident memory as every module (63.7 MiB unset, 65.5 MiB `none`, one development start each; 111.5 and 112.6 MiB in an independent review). The benefit is reachability and data scope: a module that is off has no route, job, frame or table in this process, and its data is held whole all the same (§5). It is not a way to run a smaller server.
+
 1. Parse `MODULES` (`module-kit`'s `resolve`). Unset or blank means every bundled module (a blank variable is read as unset everywhere in the configuration); `none` means the core alone. An
    unknown or repeated id, an id outside the grammar (lowercase letters, digits and hyphens: `CHAT`, `None` and
    `chat;issues` are refused, never corrected), an empty item, `none` listed with another id (it must stand alone),
