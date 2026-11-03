@@ -13151,6 +13151,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/db/src/migration-sets.test.ts'],
   },
   {
+    id: 'latency-starvation-judged-as-a-regression',
+    why: 'chat with issues busy is held to the baseline rule of one and a half times, so a shared runner’s ordinary two or three times fails the gate for a reason the pool share does not promise (O3)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'judge(lowest, quiet, STARVATION_FACTOR)',
+    replace: 'judge(lowest, quiet)',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-starvation-factor-too-wide',
+    why: 'the starvation factor is so wide that chat can wait for the pool for seconds and the gate passes (O3)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'export const STARVATION_FACTOR = 8;',
+    replace: 'export const STARVATION_FACTOR = 80;',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
     id: 'latency-gate-ignores-issues-busy',
     why: 'the gate passes whatever chat’s latency is with issues busy, so a module that holds the pool is never caught (O3)',
     file: 'apps/api/src/cli/budget-latency.ts',
@@ -13170,8 +13186,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'latency-issues-busy-judged-against-nothing',
     why: 'the trials with issues busy are timed and never compared, so chat can be slowed by issues and the gate passes (O3)',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: 'const verdict = judge(lowestOf(trials), quiet);',
-    replace: 'const verdict = judge(lowestOf(trials), null);',
+    find: 'const verdict = judge(lowest, quiet, STARVATION_FACTOR);',
+    replace: 'const verdict = judge(lowest, null, STARVATION_FACTOR);',
     tests: ['apps/api/src/cli/budget-latency.test.ts'],
   },
   {

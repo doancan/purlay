@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   BUDGETS,
+  STARVATION_FACTOR,
   requireAnswers,
   gate,
   countAnswer,
@@ -299,8 +300,8 @@ describe('chat’s latency with issues busy', () => {
     expect(verdict.lines.join('\n')).toContain('issues answered 900, refused 12');
   });
 
-  test('a jump past the factor of the quiet trials is a regression, measured again once, and fails if it repeats', async () => {
-    const slow = busy(90, 90);
+  test('starvation, past the factor of the quiet trials, is measured again once, and fails if it repeats', async () => {
+    const slow = busy(250, 250);
     const { measure, asked } = measuring(Array.from({ length: 4 }, () => slow));
     const verdict = await withIssuesBusy(quiet, measure);
     expect(asked).toHaveLength(4);
@@ -311,9 +312,9 @@ describe('chat’s latency with issues busy', () => {
     expect(verdict.lines.filter((line) => line.endsWith('— REGRESSED'))).toHaveLength(4);
   });
 
-  test('passes when the second look holds', async () => {
-    const slow = busy(90, 90);
-    const fine = busy(28, 28);
+  test('passes when the second look holds, even at a few times the quiet p95', async () => {
+    const slow = busy(250, 250);
+    const fine = busy(70, 70);
     const { measure, asked } = measuring([slow, slow, fine, fine]);
     const verdict = await withIssuesBusy(quiet, measure);
     expect(asked).toHaveLength(4);
@@ -333,10 +334,31 @@ describe('chat’s latency with issues busy', () => {
     }
   });
 
-  test('one slow trial among two is not a regression, since the lower is what is judged', async () => {
-    const { measure, asked } = measuring([busy(95, 95), busy(27, 27)]);
+  test('one starved trial among two is not starvation, since the lower is what is judged', async () => {
+    const { measure, asked } = measuring([busy(250, 250), busy(70, 70)]);
     expect((await withIssuesBusy(quiet, measure)).regressed).toBe(false);
     expect(asked).toHaveLength(2);
+  });
+
+  test('the factor is judged on the ratio to the quiet p95, with the noise floor under it', async () => {
+    const verdictFor = async (quietMs: number, busyMs: number): Promise<boolean> => {
+      const { measure } = measuring(Array.from({ length: 4 }, () => busy(busyMs, busyMs)));
+      return (await withIssuesBusy(run(quietMs, quietMs), measure)).regressed;
+    };
+    // Just under and just over eight times a quiet 25 ms.
+    expect(await verdictFor(25, 25 * STARVATION_FACTOR - 0.1)).toBe(false);
+    expect(await verdictFor(25, 25 * STARVATION_FACTOR + 0.1)).toBe(true);
+    // A quiet 1 ms makes eight times 8 ms, which is noise: only the floor of 20 ms counts.
+    expect(await verdictFor(1, 19.9)).toBe(false);
+    expect(await verdictFor(1, 20.1)).toBe(true);
+  });
+
+  test('says the ratio to the quiet p95 and the factor that is starvation', async () => {
+    const { measure } = measuring([busy(50, 75), busy(60, 80)]);
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(verdict.lines).toContain(
+      'ratio to the quiet p95: ACK 2.0x, fan-out 3.0x; starved past 8x',
+    );
   });
 
   test('counts an answer and a refusal of the share, and refuses to count anything else', () => {
@@ -386,7 +408,7 @@ describe('the whole gate', () => {
   });
 
   test('fails when chat regresses with issues busy, though the quiet trials held', async () => {
-    const result = await gate([], quietOrBusy(run(25, 25), run(90, 90)));
+    const result = await gate([], quietOrBusy(run(25, 25), run(250, 250)));
     expect(result.code).toBe(1);
   });
 

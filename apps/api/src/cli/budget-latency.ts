@@ -46,6 +46,17 @@ export const REGRESSION_FACTOR = 1.5;
 /** Below this a jump is noise: a p95 of 4 ms becoming 7 ms is not a regression anyone feels. */
 const NOISE_FLOOR_MS = 20;
 
+/**
+ * Starvation, not slowness: with issues busy chat's p95 may be this many times the quiet p95 of the same run before
+ * the gate says the pool was taken. Evidence, in the order it was measured: on a two-core CI runner, with the budget
+ * in place, a busy issues module cost chat 2.4 to 3.7 times (database backends and the shared host's CPU, not the
+ * pool); on a laptop with the budget removed, the same scenario cost 727 to 774 ms against 36 ms quiet, about 20
+ * to 23 times. Eight is past the first and well under the second. What a CI runner does without the budget is not
+ * measured here; it is expected to be at least as bad as the laptop, since the readers then hold the whole pool.
+ * The noise floor of `jumped` still applies, so a quiet p95 of a few milliseconds does not make the ratio meaningless.
+ */
+export const STARVATION_FACTOR = 8;
+
 /** D-49's one rule for a noisy number: it regressed when it is past both the factor and the floor. */
 export const jumped = (
   value: number,
@@ -126,6 +137,7 @@ export const p95 = (samples: readonly number[]): number => {
 export const judge = (
   now: Latency,
   baseline: Latency | null,
+  factor: number = REGRESSION_FACTOR,
 ): { readonly regressed: boolean; readonly lines: readonly string[] } => {
   const rows = [
     ['ACK round-trip', now.ackP95Ms, baseline?.ackP95Ms, BUDGETS.ackMs],
@@ -133,7 +145,7 @@ export const judge = (
   ] as const;
   let regressed = false;
   const lines = rows.map(([name, value, before, budget]) => {
-    const worse = jumped(value, before);
+    const worse = jumped(value, before, factor);
     if (worse) regressed = true;
     const against = before === undefined ? '' : `, was ${before.toFixed(1)} ms`;
     const verdict = worse ? ' — REGRESSED' : value < budget ? '' : ' — over the budget';
@@ -492,8 +504,8 @@ export const lowestOf = (trials: readonly Latency[]): Latency => ({
 
 /**
  * Chat's latency with issues busy, against the quiet trials of the same run: the trials again, each with people
- * reading issues' list throughout, the lower of the two judged by `judge` — past the factor and the noise floor is a
- * regression — and measured once more if it regressed, as D-227 has it. Trials in which nobody was answered are an error: a
+ * reading issues' list throughout, the lower of the two judged by `judge` at `STARVATION_FACTOR` — past it and the noise floor is
+ * starvation — and measured once more if it regressed, as D-227 has it. Trials in which nobody was answered are an error: a
  * measurement with nothing busy proves nothing.
  */
 export const withIssuesBusy = async (
@@ -514,12 +526,14 @@ export const withIssuesBusy = async (
       }
       trials.push(latency);
     }
-    const verdict = judge(lowestOf(trials), quiet);
+    const lowest = lowestOf(trials);
+    const verdict = judge(lowest, quiet, STARVATION_FACTOR);
     const detail = trials.map(
       (trial, index) =>
         `trial ${String(index + 1)}/${String(BUSY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms; issues answered ${String(trial.issues?.answered)}, refused ${String(trial.issues?.refused)}`,
     );
-    return { regressed: verdict.regressed, lines: [...verdict.lines, ...detail] };
+    const ratios = `ratio to the quiet p95: ACK ${(lowest.ackP95Ms / quiet.ackP95Ms).toFixed(1)}x, fan-out ${(lowest.fanOutP95Ms / quiet.fanOutP95Ms).toFixed(1)}x; starved past ${String(STARVATION_FACTOR)}x`;
+    return { regressed: verdict.regressed, lines: [...verdict.lines, ratios, ...detail] };
   };
   const first = await once();
   const heading = 'with issues busy, against the quiet trials of this run:';
