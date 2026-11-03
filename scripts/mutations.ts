@@ -3461,10 +3461,10 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'search-pattern-not-escaped',
     why: 'a search for 100% finds every message with 100 in it, and _ matches any character: the words are read as a pattern',
-    file: SEARCH,
+    file: 'apps/api/src/platform/like-pattern.ts',
     find: '`%${words.replace(/[\\\\%_]/g, (character) => `\\\\${character}`)}%`',
     replace: '`%${words}%`',
-    tests: SEARCH_TESTS,
+    tests: [...SEARCH_TESTS, 'apps/api/src/platform/like-pattern.test.ts'],
   },
   {
     id: 'search-finds-deleted-messages',
