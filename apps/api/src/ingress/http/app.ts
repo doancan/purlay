@@ -175,6 +175,8 @@ import {
 import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
+import { chatUserErased } from '../../features/chat/channels/user-hooks';
+import type { UserErased } from '../../modules/users/erasure';
 import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
@@ -360,6 +362,8 @@ export interface Dependencies {
   readonly workspaceCreated?: WorkspaceCreated;
   /** The channels of a workspace, as the workspace code asks for them (D-250); absent, chat's. */
   readonly workspaceChannels?: WorkspaceChannels;
+  /** What the modules forget of a person whose account is erased, inside the erasure (D-250); absent, chat's. */
+  readonly userErased?: UserErased;
   /**
    * The process's one registry (D-221), which the push sender and the mail outbox were handed too;
    * absent, the application keeps one of its own — a test reads it through `/metrics`.
@@ -451,6 +455,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     ...given,
     workspaceCreated: given.workspaceCreated ?? chatWorkspaceHooks(),
     workspaceChannels: given.workspaceChannels ?? chatWorkspaceChannels,
+    userErased: given.userErased ?? chatUserErased(),
   };
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();

@@ -28,6 +28,7 @@ import { tokenDigest } from '../../platform/tokens';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { inviterMailKey } from '../workspaces/invitation-mail';
 import { aUserRow } from '../../testing/users';
+import { chatUserErased } from '../../features/chat/channels/user-hooks';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -103,7 +104,8 @@ const erase = async (
   db: Transaction,
   caller: { userId: string; sessionId: string },
   confirm: string,
-): ReturnType<typeof eraseAccount> => await eraseAccount(db, clock, caller, confirm);
+): ReturnType<typeof eraseAccount> =>
+  await eraseAccount(db, clock, caller, confirm, chatUserErased());
 
 describe('integration: erasing an account', () => {
   test('what said who they were is cleared; what the team holds stays under the anonymised row', async () => {
