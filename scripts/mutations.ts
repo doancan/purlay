@@ -660,7 +660,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'deletions-not-queued-with-the-rows',
     why: 'a file retention or erasure removed is forgotten when the store refuses it, or the process stops',
-    file: 'apps/api/src/modules/messages/tombstone.ts',
+    file: 'apps/api/src/modules/attachments/deletions.ts',
     find: '  await enqueueObjectDeletions(transaction, keys);\n',
     replace: '',
     tests: ['apps/api/src/modules/attachments/deletions.integration.test.ts'],
@@ -1097,7 +1097,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'retention-keeps-the-bytes',
     why: 'the workspace’s storage count keeps the bytes of files that are gone (I-7)',
-    file: 'apps/api/src/modules/messages/tombstone.ts',
+    file: 'apps/api/src/modules/attachments/deletions.ts',
     find: '        storage_used_bytes: sql<string>`greatest(storage_used_bytes - ${bytes.toString()}::bigint, 0)`,\n',
     replace: '        storage_used_bytes: sql<string>`storage_used_bytes`,\n',
     tests: ['apps/api/src/modules/retention/purge.integration.test.ts'],
