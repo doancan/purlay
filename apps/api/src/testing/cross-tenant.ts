@@ -75,6 +75,8 @@ export interface Ids {
   readonly incidentId: string;
   /** A bookmark of the channel: what removing one acts on (D-218). */
   readonly bookmarkId: string;
+  /** An issue of the workspace: what changing and deleting one act on (D-254). */
+  readonly issueId: string;
   /** An incoming webhook of the channel: what revoking one acts on (D-245). */
   readonly webhookId: string;
   /** An owner's export of the workspace (D-140). */
@@ -104,6 +106,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'versionId') return ids.versionId;
     if (name === 'incidentId') return ids.incidentId;
     if (name === 'bookmarkId') return ids.bookmarkId;
+    if (name === 'issueId') return ids.issueId;
     if (name === 'webhookId') return ids.webhookId;
     if (name === 'exportId') return ids.exportId;
     if (name === 'emoji') return CROSSING_EMOJI;
@@ -497,6 +500,24 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/messages/:messageId/reminder': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
+  },
+  'GET /api/workspaces/:workspaceId/issues': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own list; no channel is named or listed' },
+  },
+  'POST /api/workspaces/:workspaceId/issues': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ title: 'Crossing' }),
+    visibility: { kind: 'none', reason: 'the workspace’s own list; no channel is named or listed' },
+  },
+  'PATCH /api/workspaces/:workspaceId/issues/:issueId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ status: 'done' }),
+    visibility: { kind: 'none', reason: 'the workspace’s own list; no channel is named or listed' },
+  },
+  'DELETE /api/workspaces/:workspaceId/issues/:issueId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own list; no channel is named or listed' },
   },
   'GET /api/workspaces/:workspaceId/reminders': {
     refusal: 'WORKSPACE_NOT_FOUND',
