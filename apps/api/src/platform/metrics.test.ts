@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   HTTP_DURATION_BUCKETS,
   createMetricsRegistry,
+  modulesInfoFamily,
   renderMetrics,
   serverMetrics,
 } from './metrics';
@@ -130,5 +131,20 @@ describe("the server's instruments", () => {
     const page = readExposition(renderMetrics(serverMetrics()));
     expect(sampleOf(page, 'purlay_process_uptime_seconds')).toBeGreaterThan(0);
     expect(sampleOf(page, 'purlay_process_resident_memory_bytes')).toBeGreaterThan(1024 * 1024);
+  });
+});
+
+describe('the modules on the page', () => {
+  test('are one series of 1 per module, named by the module label', () => {
+    expect(modulesInfoFamily(['chat', 'issues'])).toEqual({
+      name: 'purlay_modules_info',
+      help: 'The modules this process runs, one series of value 1 each.',
+      type: 'gauge',
+      samples: [
+        { suffix: '', labels: { module: 'chat' }, value: 1 },
+        { suffix: '', labels: { module: 'issues' }, value: 1 },
+      ],
+    });
+    expect(modulesInfoFamily([]).samples).toEqual([]);
   });
 });

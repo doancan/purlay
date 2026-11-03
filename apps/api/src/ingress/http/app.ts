@@ -226,7 +226,7 @@ import {
   type CollatedColumn,
   type Readiness,
 } from '../../platform/readiness';
-import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import { modulesInfoFamily, serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
 import { PLAN } from '../../modules/jobs/schedule';
@@ -809,7 +809,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
     // the 404 of a path nothing serves.
     .get('/metrics', async ({ request, set }) => {
       const page = await answerMetrics(
-        { token: dependencies.config.METRICS_TOKEN, metrics, read: readJobs, log },
+        {
+          token: dependencies.config.METRICS_TOKEN,
+          metrics,
+          read: async () => [modulesInfoFamily(moduleIds), ...(await readJobs())],
+          log,
+        },
         request,
       );
       set.headers['content-type'] = EXPOSITION_CONTENT_TYPE;

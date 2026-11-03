@@ -64,6 +64,7 @@ registers — the audit actions are in `modules/audit`, and the role rules are i
    `requires` of another is the API's to check, since only the manifests say so. `module-setting-pair.test.ts`
    holds the two as a pair over a table of inputs.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
+   The boot then logs one `info` line, `the modules this process runs`, with `running` and `notRun` (the modules the build carries and this process leaves out), and `/metrics` carries `purlay_modules_info{module="…"} 1` for each running module.
 3. Where nodes share Redis, record this node's module set in the shared record (`realtime/module-set.ts`) and
    compare it with the live peers'. A difference is **said, never acted on** (D-250 rule 8 as amended by D-255): the
    node logs it once, keeps serving, and readiness does not change, so a rolling deploy of a new set passes. Nodes of

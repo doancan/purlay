@@ -7,6 +7,7 @@
  * this file; the page is answered all the same, which is the partial failure it is built for.
  */
 import { describe, expect, test } from 'bun:test';
+import { compositionFor, type Composition } from '../../composition';
 import { createApp, type HttpApplication } from './app';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { aRecordingLogger, testConfig, testDependencies } from '../../testing/doubles';
@@ -24,7 +25,7 @@ const TOKEN = 'b1946ac92492d2347c6235b4d2611184b1946ac92492d2347c6235b4d2611184'
 const ORIGIN = 'https://purlay.test';
 
 const anApp = (
-  { token }: { token: string | undefined } = { token: TOKEN },
+  { token, modules }: { token: string | undefined; modules?: Composition } = { token: TOKEN },
 ): { app: HttpApplication; metrics: ServerMetrics; lines: Record<string, unknown>[] } => {
   const metrics = serverMetrics();
   const { log, lines } = aRecordingLogger();
@@ -32,6 +33,7 @@ const anApp = (
     testDependencies({
       metrics,
       log,
+      ...(modules === undefined ? {} : { composition: modules }),
       config: testConfig(token === undefined ? {} : { METRICS_TOKEN: token }),
     }),
   );
@@ -173,6 +175,40 @@ describe('metrics, switched on', () => {
     const nothing = await asSeen(await get(app, '/no-such-page'));
     expect(await asSeen(await get(app, '/metrics/'))).toEqual(nothing);
     expect(await asSeen(await get(app, '/metrics/x'))).toEqual(nothing);
+  });
+});
+
+describe('the modules this process runs, on the page', () => {
+  const modulesOf = async (setting: string | undefined): Promise<string[]> => {
+    const { app } = anApp({ token: TOKEN, modules: compositionFor(setting) });
+    const page = await pageOf(app);
+    expect(page.types.get('purlay_modules_info')).toBe('gauge');
+    return page.samples
+      .filter((sample) => sample.name === 'purlay_modules_info')
+      .map((sample) => {
+        expect(sample.value).toBe(1);
+        return sample.labels['module'] ?? '';
+      })
+      .sort();
+  };
+
+  test('is one series of 1 per running module, and the family alone when none runs', async () => {
+    expect(await modulesOf(undefined)).toEqual(['chat', 'issues']);
+    expect(await modulesOf('issues')).toEqual(['issues']);
+    expect(await modulesOf('chat')).toEqual(['chat']);
+    expect(await modulesOf('none')).toEqual([]);
+  });
+
+  test('is behind the token as the rest of the page is, and the health answers say none of it', async () => {
+    const { app } = anApp({ token: TOKEN, modules: compositionFor('chat') });
+    const nothing = await asSeen(await get(app, '/no-such-page'));
+    expect(await asSeen(await get(app, '/metrics'))).toEqual(nothing);
+    const health = await get(app, '/health');
+    expect(await health.json()).toEqual({ status: 'ok' });
+    // The database here throws, so the node is not ready, in the words it always used.
+    const ready = await get(app, '/health/ready');
+    expect(ready.status).toBe(503);
+    expect(await ready.json()).toEqual({ status: 'not ready' });
   });
 });
 

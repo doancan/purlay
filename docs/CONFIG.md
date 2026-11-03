@@ -619,7 +619,10 @@ never through the public origin. A scrape refused for its token is the same `404
 off, and the API's log says `a request for metrics was refused` at `info`. A database that cannot be read
 leaves the rest of the page and says `purlay_jobs_status_readable 0` — alert on it, and on
 `time() - purlay_job_last_success_timestamp_seconds > 172800`, the age past which `jobs:status` calls a job
-overdue. With several API nodes each is its own target; Prometheus adds them up.
+overdue. `purlay_modules_info{module="…"} 1` has one series for each module the process runs, so
+`count by (module) (purlay_modules_info)` is how many nodes run each one during a rolling deploy of a new
+`MODULES`; the boot log says the same once, as `the modules this process runs`, with `running` and `notRun`.
+With several API nodes each is its own target; Prometheus adds them up.
 
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
 never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run

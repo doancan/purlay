@@ -5,6 +5,7 @@ import {
   composition,
   compositionFor,
   composeFor,
+  moduleReport,
   registry,
   type BundledModule,
 } from './composition';
@@ -274,6 +275,23 @@ describe('the application as its modules make it', () => {
 
     test('a module the build does not carry stops the start, naming it', () => {
       expect(() => compositionFor('chat,calendar')).toThrow(/calendar/);
+    });
+  });
+});
+
+describe('what the boot says about modules', () => {
+  test('names the ones a process runs and the ones the build carries and it does not', () => {
+    expect(moduleReport(compositionFor(undefined))).toEqual({
+      running: ['chat', 'issues'],
+      notRun: [],
+    });
+    expect(moduleReport(compositionFor('issues'))).toEqual({
+      running: ['issues'],
+      notRun: ['chat'],
+    });
+    expect(moduleReport(compositionFor('none'))).toEqual({
+      running: [],
+      notRun: ['chat', 'issues'],
     });
   });
 });
