@@ -16,9 +16,6 @@ import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/te
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number];
 
-// The first port of the run; each project takes the next. Overridable so two checkouts (or a
-// person's own `bun run demo`) each have their harness.
-const BASE_PORT = Number(process.env['PURLAY_E2E_PORT'] ?? 4173);
 const ci = process.env['CI'] !== undefined;
 
 /**
@@ -66,6 +63,22 @@ if (!PERFORMANCE_MODES.includes(performanceMode)) {
     `PURLAY_E2E_PERFORMANCE is ${performanceMode}; it takes skip or only, or nothing`,
   );
 }
+
+/**
+ * The server with no module (D-250), apart from the rest: `PURLAY_E2E_MODULES=none bun run test:modules-none`
+ * serves the same seeded world with `MODULES=none` and runs `modules-none.e2e.ts` alone; every other run
+ * leaves that file out, so the suite's servers and time are what they were. A value other than `none` refuses to run.
+ */
+const MODULES_NONE = '**/modules-none.e2e.ts';
+const e2eModules = process.env['PURLAY_E2E_MODULES'] ?? '';
+if (e2eModules !== '' && e2eModules !== 'none') {
+  throw new Error(`PURLAY_E2E_MODULES is ${e2eModules}; it takes none, or nothing`);
+}
+const coreOnly = e2eModules === 'none';
+// The first port of the run; each project takes the next. Overridable so two checkouts (or a
+// person's own `bun run demo`) each have their harness.
+// With no module it has its own ports by default: a server of the full suite left running (`reuseExistingServer`) must never answer for it.
+const BASE_PORT = Number(process.env['PURLAY_E2E_PORT'] ?? (coreOnly ? 4673 : 4173));
 
 // A harness uses its port for the web origin and the next one for the API: a hundred apart keeps clear of whatever else is listening nearby.
 const portOf = (index: number): number => BASE_PORT + index * 100;
@@ -118,8 +131,11 @@ const engineProject = (engine: keyof typeof ENGINES, index: number): Project => 
 export default defineConfig({
   testDir: './e2e',
   // Not `.spec.ts`: `bun test` discovers that name and would try to run Playwright's tests.
-  testMatch: performanceMode === 'only' ? MEASURING : '**/*.e2e.ts',
-  ...(performanceMode === 'skip' ? { testIgnore: MEASURING } : {}),
+  testMatch: coreOnly ? MODULES_NONE : performanceMode === 'only' ? MEASURING : '**/*.e2e.ts',
+  testIgnore: [
+    ...(coreOnly ? [] : [MODULES_NONE]),
+    ...(performanceMode === 'skip' ? MEASURING : []),
+  ],
   // One folder per project, so a light screenshot is never compared with a dark one.
   // The platform is in the path: `system-ui` is a different face on every operating system, so a
   // baseline photographed on one is not a baseline for another. Each platform keeps its own, and
@@ -152,7 +168,7 @@ export default defineConfig({
   ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
   webServer: servers.map((name, index) => ({
-    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
+    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
     url: `http://localhost:${String(portOf(index))}/health`,

@@ -66,6 +66,7 @@
     "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --path-ignore-patterns '**/*.integration.test.ts'",
     "test:all": "bun --no-env-file --env-file=.env.test run scripts/test-all.ts",
     "test:e2e": "bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
+    "test:modules-none": "PURLAY_E2E_MODULES=none bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
     "test:e2e:install": "bunx playwright install --with-deps chromium",
     "test:e2e:update": "bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e:update",
     "test:integration": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --test-name-pattern '^integration'",
