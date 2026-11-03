@@ -9,12 +9,34 @@ import {
 } from './composition';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
+import type { AttachmentReader } from './modules/attachments/readable';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
+import { attachmentNotFound, AppError } from './platform/errors';
+import { aDatabaseThatMustNotBeTouched } from './testing/doubles';
 
 const another: BundledModule = {
   manifest: { id: 'other', requires: [], optional: [], provides: [] },
   workspaceChannels: { ...noWorkspaceChannels },
 };
+
+/** A reader that answers for the files it is given and refuses every other, as a module's reader does. */
+const readerOf =
+  (...files: readonly string[]): AttachmentReader =>
+  async (_executor, _userId, attachmentId) => {
+    if (!files.includes(attachmentId)) throw attachmentNotFound();
+    return {
+      id: attachmentId,
+      storageKey: `key/${attachmentId}`,
+      thumbnailKey: null,
+      fileName: attachmentId,
+      kind: 'file',
+    };
+  };
+
+const moduleReading = (id: string, reader: AttachmentReader): BundledModule => ({
+  manifest: { id, requires: [], optional: [], provides: [] },
+  readAttachment: reader,
+});
 
 describe('the application as its modules make it', () => {
   test('carries chat and issues, and the registry of the build is sound', () => {
@@ -77,6 +99,39 @@ describe('the application as its modules make it', () => {
     expect(() => compose([chatModule, another, second])).toThrow(
       "more than one module answers for a workspace's channels: chat, other, second",
     );
+  });
+
+  describe('who may read an attachment', () => {
+    const database = aDatabaseThatMustNotBeTouched();
+    const first = moduleReading('first', readerOf('in-first'));
+    const second = moduleReading('second', readerOf('in-second'));
+
+    test('is whoever any running module’s reader says may, not the first module’s alone', async () => {
+      const both = compose([first, second], [first, second]);
+      expect((await both.readAttachment(database, 'u', 'in-first')).id).toBe('in-first');
+      expect((await both.readAttachment(database, 'u', 'in-second')).id).toBe('in-second');
+    });
+
+    test('is refused as any attachment nobody answers for is, once every reader has said no', async () => {
+      const both = compose([first, second], [first, second]);
+      const refused = await both.readAttachment(database, 'u', 'nowhere').catch((error) => error);
+      expect(refused).toBeInstanceOf(AppError);
+      expect(refused.body.code).toBe('ATTACHMENT_NOT_FOUND');
+    });
+
+    test('does not ask a module that is not run, and keeps a reader’s own failure a failure', async () => {
+      expect(
+        await compose([first], [first, second])
+          .readAttachment(database, 'u', 'in-second')
+          .catch((error) => error.body.code),
+      ).toBe('ATTACHMENT_NOT_FOUND');
+      const broken = moduleReading('broken', async () => {
+        throw new Error('the database is gone');
+      });
+      await expect(
+        compose([broken, second], [broken, second]).readAttachment(database, 'u', 'in-second'),
+      ).rejects.toThrow('the database is gone');
+    });
   });
 
   describe('for the MODULES setting', () => {

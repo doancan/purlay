@@ -12972,6 +12972,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'composition-attachment-first-reader-only',
+    why: 'a second running module’s attachments are unreadable: only the first reader is asked (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: '      ...modules.flatMap((module) => module.readAttachment ?? []),\n',
+    replace: '      ...modules.flatMap((module) => module.readAttachment ?? []).slice(0, 1),\n',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-attachment-failure-swallowed',
+    why: 'a reader that fails (not refuses) is taken for a no, and the file is called missing (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: '        if (!refusal) throw error;',
+    replace: '        if (refusal && !refusal) throw error;',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'composition-two-answers-allowed',
     why: 'two modules answer for the channels and the first silently wins (D-250)',
     file: 'apps/api/src/composition.ts',

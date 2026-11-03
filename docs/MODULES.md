@@ -91,7 +91,8 @@ That holds before any other judgement of the request: the edge's refusals of a b
 does, whatever its headers say. A file is judged by what it is attached to: one attached to a message is chat's, so with chat not run
 `GET /api/attachments/:id` and its `/thumbnail` answer `ATTACHMENT_NOT_FOUND` for it, as for an id that never existed, while an upload
 nobody attached (the core's) stays its uploader's to read and discard. The manifest's `readAttachment` is how a module widens the core's reader;
-the core names no module.
+the core names no module. Every running module's reader is asked in turn, the core's own last, and a file is readable if any says so (a reader says no with
+`attachmentNotFound`; any other failure stays a failure). Composed, not exclusive, because a reader only answers for what its module holds and so two modules never contradict.
 
 **A workspace made while chat is not run has no first channel**, because the hook that makes it is chat's. Turning
 chat on later does not backfill one: no job or migration looks for workspaces without a channel. The chat front door

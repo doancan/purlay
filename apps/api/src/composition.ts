@@ -11,6 +11,7 @@
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
+import { AppError, attachmentNotFound } from './platform/errors';
 import { issuesModule } from './features/issues/module';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
@@ -47,7 +48,8 @@ export interface BundledModule {
   readonly dataInCore?: boolean;
   /**
    * Who may read a file, where the module holds files attached to what it owns. Asked only while the module runs: a
-   * process without it answers for the core's own unsent uploads and for nothing else.
+   * process without it answers for the core's own unsent uploads and for nothing else. Every running module's reader is
+   * asked in turn and a file is readable if any says so; a reader says no by throwing `attachmentNotFound`.
    */
   readonly readAttachment?: AttachmentReader;
   /** What a write told, for the push sender: asked only while the module runs. */
@@ -63,6 +65,24 @@ export interface BundledModule {
   readonly personalExport?: PersonalContribution;
   readonly collatedColumns?: readonly CollatedColumn[];
 }
+
+/**
+ * One reader out of several: a file is readable if any of them says so, and a reader's refusal is its
+ * `attachmentNotFound`. Any other failure is a failure, not a no.
+ */
+const anyReader =
+  (readers: readonly AttachmentReader[]): AttachmentReader =>
+  async (executor, userId, attachmentId) => {
+    for (const read of readers) {
+      try {
+        return await read(executor, userId, attachmentId);
+      } catch (error) {
+        const refusal = error instanceof AppError && error.body.code === 'ATTACHMENT_NOT_FOUND';
+        if (!refusal) throw error;
+      }
+    }
+    throw attachmentNotFound();
+  };
 
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
 export const bundledModules: readonly BundledModule[] = [chatModule, issuesModule];
@@ -124,9 +144,10 @@ export const compose = (
   }
   return {
     modules,
-    readAttachment:
-      modules.find((module) => module.readAttachment !== undefined)?.readAttachment ??
+    readAttachment: anyReader([
+      ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,
+    ]),
     pushNotices:
       modules.find((module) => module.pushNotices !== undefined)?.pushNotices ?? noPushNotices,
     workspaceCreated,
