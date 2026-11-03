@@ -6,9 +6,12 @@
  */
 import { lazy, Suspense } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
+import { chunkOf } from '../../app/chunk';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 
-const Screen = lazy(async () => ({ default: (await import('./issues-screen')).IssuesScreen }));
+const issues = chunkOf(() => import('./issues-screen'));
+
+const Screen = lazy(async () => ({ default: (await issues.get()).IssuesScreen }));
 
 const Waiting = (): React.JSX.Element => {
   const { t } = useI18n();
