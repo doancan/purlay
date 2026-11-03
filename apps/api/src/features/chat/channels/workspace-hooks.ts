@@ -9,11 +9,16 @@ import { hookList, type HookList } from '../../../platform/hooks';
 import type { WorkspaceCreated } from '../../../modules/workspaces/workspaces';
 import { createChannel } from './channels';
 
+/** The hook itself: what the workspace code runs, in its transaction, for a module that starts a workspace with something. */
+export const startWithTheDefaultChannel = async (
+  ...[transaction, clock, context]: Parameters<WorkspaceCreated['run']>
+): Promise<void> => {
+  await createChannel(transaction, clock, context, { name: DEFAULT_CHANNEL_NAME });
+};
+
 /** The hooks chat registers on a new workspace, in a list ready to hand to the code that makes one. */
 export const chatWorkspaceHooks = (): HookList<Parameters<WorkspaceCreated['run']>> => {
   const hooks = hookList<Parameters<WorkspaceCreated['run']>>();
-  hooks.register(async (transaction, clock, context) => {
-    await createChannel(transaction, clock, context, { name: DEFAULT_CHANNEL_NAME });
-  });
+  hooks.register(startWithTheDefaultChannel);
   return hooks;
 };

@@ -20,7 +20,7 @@
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { purgeRetention } from '../features/chat/messages/retention-purge';
-import { chatWorkspacePurge } from '../features/chat/messages/workspace-purge';
+import { composition } from '../composition';
 import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
@@ -107,7 +107,10 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
   'purge:retention': async () =>
     await purgeRetention({ database, clock, log, storage: storeFor(config) }),
   'purge:workspaces': async () =>
-    await purgeWorkspaces({ database, clock, log, storage: storeFor(config) }, chatWorkspacePurge),
+    await purgeWorkspaces(
+      { database, clock, log, storage: storeFor(config) },
+      composition.workspacePurge,
+    ),
   'sweep:deletions': async () =>
     await sweepObjectDeletions({
       database,

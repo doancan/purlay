@@ -7,15 +7,20 @@
 import { hookList, type HookList } from '../../../platform/hooks';
 import type { UserErased } from '../../../modules/users/erasure';
 
+/** The hook itself: what chat deletes of a person, in the erasure's transaction. */
+export const forgetWhatChatKeeps = async (
+  ...[transaction, userId]: Parameters<UserErased['run']>
+): Promise<void> => {
+  await transaction.deleteFrom('saved_searches').where('user_id', '=', userId).execute();
+  await transaction.deleteFrom('saved_messages').where('user_id', '=', userId).execute();
+  await transaction.deleteFrom('thread_follows').where('user_id', '=', userId).execute();
+  await transaction.deleteFrom('notifications').where('user_id', '=', userId).execute();
+  // And when they were last mailed about what they missed, with each letter's stop link (D-240).
+  await transaction.deleteFrom('missed_mail_letters').where('user_id', '=', userId).execute();
+};
+
 export const chatUserErased = (): HookList<Parameters<UserErased['run']>> => {
   const hooks = hookList<Parameters<UserErased['run']>>();
-  hooks.register(async (transaction, userId) => {
-    await transaction.deleteFrom('saved_searches').where('user_id', '=', userId).execute();
-    await transaction.deleteFrom('saved_messages').where('user_id', '=', userId).execute();
-    await transaction.deleteFrom('thread_follows').where('user_id', '=', userId).execute();
-    await transaction.deleteFrom('notifications').where('user_id', '=', userId).execute();
-    // And when they were last mailed about what they missed, with each letter's stop link (D-240).
-    await transaction.deleteFrom('missed_mail_letters').where('user_id', '=', userId).execute();
-  });
+  hooks.register(forgetWhatChatKeeps);
   return hooks;
 };
