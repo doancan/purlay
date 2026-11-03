@@ -7,7 +7,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { messageId, type NotificationLevel } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { requireChannelById } from '../../../platform/channels';
+import { requireChannelById } from './guard';
 import { aRoom, counters, notificationsOf, type Room } from '../../../testing/rooms';
 import { sendMessage, type Sent } from '../messages/messages';
 import { reviseMessage } from '../messages/edit';

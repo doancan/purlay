@@ -16,12 +16,8 @@
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
-import {
-  attachmentNotFound,
-  requireAttachmentById,
-  type ReadableAttachment,
-} from '../../platform/channels';
-import { AppError } from '../../platform/errors';
+import { requireAttachmentById, type ReadableAttachment } from '../../features/chat/channels/guard';
+import { AppError, attachmentNotFound } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
 import type { Atomically } from '../../platform/transactions';

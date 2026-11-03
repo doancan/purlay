@@ -20,7 +20,7 @@ import { sql, type RawBuilder, type Transaction } from '@purlay/db';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
-import { visibleChannelsIn, type ChannelContext } from '../../../platform/channels';
+import { visibleChannelsIn, type ChannelContext } from './guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 
 /**

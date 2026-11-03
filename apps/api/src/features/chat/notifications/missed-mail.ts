@@ -30,7 +30,7 @@ import {
   type StopMissedMailRequest,
 } from '@purlay/types';
 import { DAY_MS, HOUR_MS, type Clock } from '../../../platform/clock';
-import { visibleChannelIds } from '../../../platform/channels';
+import { visibleChannelIds } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import type { Logger } from '../../../platform/logging';
 import { codeOf, type MailMessage, type SendMail } from '../../../platform/mail';

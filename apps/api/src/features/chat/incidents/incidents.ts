@@ -35,11 +35,7 @@ import {
   erasedPerson,
 } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import {
-  channelNotFound,
-  requireChannelMember,
-  type ChannelContext,
-} from '../../../platform/channels';
+import { channelNotFound, requireChannelMember, type ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
 

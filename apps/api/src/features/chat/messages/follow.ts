@@ -16,7 +16,7 @@ import type { Executor } from '@purlay/db';
 import type { ThreadFollow } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
-import type { VisibleMessage } from '../../../platform/channels';
+import type { VisibleMessage } from '../channels/guard';
 
 /** A reply has no thread: asking about one is asking about a message that is not there. */
 const requireRoot = (root: VisibleMessage): void => {

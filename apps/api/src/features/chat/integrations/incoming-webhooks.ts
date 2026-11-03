@@ -28,7 +28,7 @@ import {
   type IncomingWebhook,
   type IncomingWebhookList,
 } from '@purlay/types';
-import { channelNotFound, type ChannelContext } from '../../../platform/channels';
+import { channelNotFound, type ChannelContext } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { EventBus } from '../../../platform/events';

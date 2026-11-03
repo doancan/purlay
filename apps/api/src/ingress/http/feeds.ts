@@ -7,7 +7,7 @@ import {
   type CreatedGitHubFeed,
   type GitHubFeedList,
 } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import type { CredentialCipher } from '../../platform/crypto';
 import { atomicallyOn } from '../../platform/transactions';
 import {

@@ -11,7 +11,7 @@
  * link it still has; it moves with the link when that becomes chat's (`MODULES.md` §10, step 8).
  */
 import { sql, type Executor, type RawBuilder } from '@purlay/db';
-import { visibleChannelIds } from '../../platform/channels';
+import { visibleChannelIds } from './channels/guard';
 import { tableExport, type ExportContribution, type Scope } from '../../modules/export/catalogue';
 
 /** The channels the export covers, as `prepare` decided. */

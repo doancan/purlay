@@ -14,7 +14,7 @@ import {
   requireChannelMember,
   requireMessageById,
   type ChannelContext,
-} from '../../../platform/channels';
+} from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import {
   inboxPublications,

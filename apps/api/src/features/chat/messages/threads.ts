@@ -17,11 +17,7 @@ import { sql, type Executor } from '@purlay/db';
 import { type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
-import {
-  requireChannelMember,
-  requireMessageById,
-  type VisibleMessage,
-} from '../../../platform/channels';
+import { requireChannelMember, requireMessageById, type VisibleMessage } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import type { Atomically } from '../../../platform/transactions';

@@ -8,7 +8,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { AppError } from '../../../platform/errors';
-import { requireMessageById } from '../../../platform/channels';
+import { requireMessageById } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import {
   NO_LOG,

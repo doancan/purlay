@@ -16,7 +16,7 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { GITHUB_FEEDS_PER_CHANNEL_MAX } from '@purlay/types';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { fixedClock } from '../../../platform/clock';
 import { credentialCipher } from '../../../platform/crypto';
 import { AppError } from '../../../platform/errors';

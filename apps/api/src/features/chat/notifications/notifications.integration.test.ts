@@ -19,7 +19,7 @@ import {
 } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { visibleChannelIds } from '../../../platform/channels';
+import { visibleChannelIds } from '../channels/guard';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { aRoom, counters, type Room } from '../../../testing/rooms';
 import { sendMessage, type Sent } from '../messages/messages';

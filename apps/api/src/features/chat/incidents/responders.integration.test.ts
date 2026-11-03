@@ -8,7 +8,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Transaction } from '@purlay/db';
 import { INCIDENT_RESPONDERS_MAX, messageId } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
-import { requireChannelById, type ChannelContext } from '../../../platform/channels';
+import { requireChannelById, type ChannelContext } from '../channels/guard';
 import { attempt } from '../../../testing/attempt';
 import { aRoom, type Room } from '../../../testing/rooms';
 import { changeIncident, declareIncident, incidentUpdates } from './incidents';

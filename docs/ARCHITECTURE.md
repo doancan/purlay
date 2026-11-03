@@ -708,7 +708,7 @@ Two entry points, one rule: a caller holding a `WorkspaceContext` names a channe
 route that names a channel and nothing else derives the workspace from the resource and verifies
 membership first. Both refuse identically.
 
-`platform/channels.ts`
+`features/chat/channels/guard.ts`
 
 ---
 

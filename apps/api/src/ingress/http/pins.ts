@@ -3,7 +3,7 @@
  * watching the channel (`PINS_UPDATED`), after the commit, and only when it was one.
  */
 import type { PinList } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById } from '../../features/chat/channels/guard';
 import { NO_LOG, publication, publishAfterCommit, publishPinsUpdated } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import {

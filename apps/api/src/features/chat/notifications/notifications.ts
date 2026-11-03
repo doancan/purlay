@@ -27,7 +27,7 @@ import { excerptOf } from '@purlay/markdown';
 import { NEEDS_YOU, THREAD_EXCERPT_MAX, NotificationType } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { requireMessageById } from '../../../platform/channels';
+import { requireMessageById } from '../channels/guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';

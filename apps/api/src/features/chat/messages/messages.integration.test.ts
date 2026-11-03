@@ -14,7 +14,7 @@ import {
 import { isMessageIdShape, messageId, PAGE_LIMIT, type ServerFrame } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { fixedClock } from '../../../platform/clock';
-import { requireChannelById, type ChannelContext } from '../../../platform/channels';
+import { requireChannelById, type ChannelContext } from '../channels/guard';
 import type { EventBus } from '../../../platform/events';
 import { atomicallyOn } from '../../../platform/transactions';
 import { aChannel } from '../../../testing/channels';

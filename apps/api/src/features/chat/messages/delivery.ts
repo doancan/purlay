@@ -22,7 +22,7 @@
  */
 import { sql, type Executor } from '@purlay/db';
 import type { ChannelState, NEEDS_YOU } from '@purlay/types';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
 

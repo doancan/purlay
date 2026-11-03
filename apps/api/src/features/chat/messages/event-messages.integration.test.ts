@@ -7,7 +7,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import { requireChannelById, requireMessageById } from '../../../platform/channels';
+import { requireChannelById, requireMessageById } from '../channels/guard';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { channelPins, pinMessage } from '../pins/pins';
 import { saveMessage, savedPage } from '../saved/saved';

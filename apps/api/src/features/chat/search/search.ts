@@ -19,7 +19,7 @@ import {
   type SearchCriteria,
 } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import { channelNotFound } from '../../../platform/channels';
+import { channelNotFound } from '../channels/guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { MESSAGE_COLUMNS } from '../messages/reader';
 import { asPage } from '../messages/threads';

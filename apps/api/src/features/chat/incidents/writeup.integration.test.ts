@@ -9,7 +9,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Transaction } from '@purlay/db';
 import { MESSAGE_CONTENT_MAX, RUNBOOK_URL_MAX, messageId } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { attempt } from '../../../testing/attempt';
 import { aRoom, type Room } from '../../../testing/rooms';
 import { changeIncident, declareIncident, incidentUpdates, savePostmortem } from './incidents';

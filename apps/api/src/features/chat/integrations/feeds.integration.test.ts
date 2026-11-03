@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { GITHUB_FEEDS_PER_CHANNEL_MAX, type CreateGitHubFeedRequest } from '@purlay/types';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from '../channels/guard';
 import { fixedClock } from '../../../platform/clock';
 import { credentialCipher, SealBroken } from '../../../platform/crypto';
 import { AppError } from '../../../platform/errors';

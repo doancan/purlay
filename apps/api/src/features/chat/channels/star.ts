@@ -12,7 +12,7 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../../platform/clock';
-import { channelNotFound, type ChannelContext } from '../../../platform/channels';
+import { channelNotFound, type ChannelContext } from './guard';
 
 /** Whether the star changed: false when it was already as asked. */
 export const setStarred = async (

@@ -20,8 +20,8 @@ import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
-import type { ChannelContext } from '../../../platform/channels';
-import { visibleChannelIds } from '../../../platform/channels';
+import type { ChannelContext } from './guard';
+import { visibleChannelIds } from './guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 
 interface ChannelRow {

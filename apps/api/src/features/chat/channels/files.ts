@@ -12,7 +12,7 @@
 import { sql, type Executor } from '@purlay/db';
 import type { FilePage, FileQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import type { ChannelContext } from '../../../platform/channels';
+import type { ChannelContext } from './guard';
 import { limitOf } from '../../../platform/pagination';
 import { asAttachment } from '../../../modules/attachments/uploads';
 

@@ -19,7 +19,7 @@ import {
   type GitHubFeed,
   type GitHubFeedList,
 } from '@purlay/types';
-import { channelNotFound, type ChannelContext } from '../../../platform/channels';
+import { channelNotFound, type ChannelContext } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import type { CredentialCipher } from '../../../platform/crypto';
 import { AppError } from '../../../platform/errors';

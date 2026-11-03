@@ -4,7 +4,7 @@
  * stopped naming chat's tables.
  */
 import type { Executor } from '@purlay/db';
-import { visibleChannelIds } from '../../../platform/channels';
+import { visibleChannelIds } from './guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import type { WorkspaceChannels } from '../../../modules/workspaces/channels-port';
 

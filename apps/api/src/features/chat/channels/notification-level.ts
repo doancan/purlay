@@ -8,7 +8,7 @@
  */
 import type { Executor } from '@purlay/db';
 import type { NotificationLevel } from '@purlay/types';
-import { channelNotFound, type ChannelContext } from '../../../platform/channels';
+import { channelNotFound, type ChannelContext } from './guard';
 
 export const setNotificationLevel = async (
   executor: Executor,

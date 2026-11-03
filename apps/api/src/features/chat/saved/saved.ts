@@ -27,7 +27,7 @@ import {
   type SavedQuery,
 } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import { requireMessageById, visibleChannelIds } from '../../../platform/channels';
+import { requireMessageById, visibleChannelIds } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';

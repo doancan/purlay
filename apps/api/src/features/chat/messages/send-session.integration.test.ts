@@ -22,7 +22,7 @@ import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import { atomicallyOn } from '../../../platform/transactions';
 import type { EventBus } from '../../../platform/events';
-import { requireChannelById } from '../../../platform/channels';
+import { requireChannelById } from '../channels/guard';
 import { NOW } from '../../../testing/doubles';
 import { aUniqueSlug, aUserRow } from '../../../testing/users';
 import { requireLiveSession, revokeSession } from '../../../modules/auth/sessions';

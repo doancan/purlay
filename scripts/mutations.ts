@@ -4208,7 +4208,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'attachment-unsent-readable-by-anyone',
     why: 'an upload nobody has sent yet is read by any member who learns its id',
-    file: 'apps/api/src/platform/channels.ts',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
     find: "          eb('attachments.uploader_id', '=', userId),\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
@@ -4216,7 +4216,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'attachment-unsent-readable-after-leaving',
     why: 'somebody removed from a workspace still reads what they uploaded into it',
-    file: 'apps/api/src/platform/channels.ts',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
     find: "              .where('workspace_members.user_id', '=', userId)\n              .where('workspaces.deleted_at', 'is', null),\n",
     replace: "              .where('workspaces.deleted_at', 'is', null),\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
@@ -4224,7 +4224,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'attachment-unsent-readable-in-a-deleted-workspace',
     why: 'an upload in a workspace that was deleted is still read by its id',
-    file: 'apps/api/src/platform/channels.ts',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
     find: "              .where('workspace_members.user_id', '=', userId)\n              .where('workspaces.deleted_at', 'is', null),\n",
     replace: "              .where('workspace_members.user_id', '=', userId),\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
@@ -4232,7 +4232,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'attachment-of-a-deleted-message-readable',
     why: 'what a tombstone hides is still downloaded by its id',
-    file: 'apps/api/src/platform/channels.ts',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
     find: "            .where('messages.deleted_at', 'is', null),\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
@@ -11267,7 +11267,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'read-all-crosses-workspaces',
     why: "marking every channel read reads the person's channels in their other workspaces too (D-238)",
-    file: 'apps/api/src/platform/channels.ts',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
     find: '  (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map((channel) =>',
     replace: '  (await visible(executor, context.userId, {})).map((channel) =>',
     tests: ['apps/api/src/features/chat/channels/read-state.integration.test.ts'],

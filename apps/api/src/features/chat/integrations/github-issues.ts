@@ -36,11 +36,7 @@ import {
   type GitHubWorkLink,
   type LinkGitHubWorkRequest,
 } from '@purlay/types';
-import {
-  requireChannelMember,
-  requireMessageById,
-  type VisibleMessage,
-} from '../../../platform/channels';
+import { requireChannelMember, requireMessageById, type VisibleMessage } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import type { EventBus } from '../../../platform/events';
 import { appJwt } from '../../../platform/github-app-key';

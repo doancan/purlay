@@ -11,7 +11,7 @@ import {
 } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import type { WorkspaceContext } from '../../../platform/tenancy';
-import { channelNotFound, visibleChannelIds } from '../../../platform/channels';
+import { channelNotFound, visibleChannelIds } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
 import { validateSearch } from './search';

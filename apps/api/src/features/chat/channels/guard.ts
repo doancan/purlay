@@ -19,8 +19,8 @@
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type AttachmentKind, type ChannelType } from '@purlay/types';
 import { sql, type Database, type Executor, type SelectQueryBuilder } from '@purlay/db';
-import { AppError } from './errors';
-import type { WorkspaceContext } from './tenancy';
+import { AppError, attachmentNotFound } from '../../../platform/errors';
+import type { WorkspaceContext } from '../../../platform/tenancy';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const visibility: unique symbol = Symbol('ChannelContext');
@@ -293,10 +293,6 @@ export interface ReadableAttachment {
   readonly fileName: string;
   readonly kind: AttachmentKind;
 }
-
-/** The one refusal for an attachment that is not there for the caller. */
-export const attachmentNotFound = (): AppError =>
-  new AppError({ code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found.' });
 
 /**
  * For a route that names an attachment (`/api/attachments/:attachmentId`, D-109 §6): **one query**,

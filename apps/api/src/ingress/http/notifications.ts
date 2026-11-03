@@ -12,7 +12,7 @@ import {
   ReadThreadRequest,
   type NotificationPage,
 } from '@purlay/types';
-import { visibleChannelIds } from '../../platform/channels';
+import { visibleChannelIds } from '../../features/chat/channels/guard';
 import {
   NO_LOG,
   publication,

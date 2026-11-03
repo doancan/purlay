@@ -26,8 +26,7 @@ import {
   type Attachment,
   type AttachmentKind,
 } from '@purlay/types';
-import { attachmentNotFound } from '../../platform/channels';
-import { AppError } from '../../platform/errors';
+import { AppError, attachmentNotFound } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import {
   claimUploadKeys,
