@@ -4,7 +4,7 @@
  */
 import { OlderPageQuery, type MessageVersionPage } from '@purlay/types';
 import { atomicallyOn } from '../../platform/transactions';
-import { messageVersions, removeVersion } from '../../modules/messages/versions';
+import { messageVersions, removeVersion } from '../../features/chat/messages/versions';
 import {
   NO_LOG,
   publication,

@@ -39,20 +39,20 @@ import {
   messageWindow,
   send,
   type SendDependencies,
-} from '../../modules/messages/messages';
-import { changesIn } from '../../modules/messages/changes';
-import { buildMessages, readMessage } from '../../modules/messages/reader';
-import { edit } from '../../modules/messages/edit';
-import { deleteMessage } from '../../modules/messages/delete';
+} from '../../features/chat/messages/messages';
+import { changesIn } from '../../features/chat/messages/changes';
+import { buildMessages, readMessage } from '../../features/chat/messages/reader';
+import { edit } from '../../features/chat/messages/edit';
+import { deleteMessage } from '../../features/chat/messages/delete';
 import {
   setResolved,
   threadReplies,
   unresolvedIn,
   type ResolveDependencies,
-} from '../../modules/messages/threads';
-import { followState, setFollowing } from '../../modules/messages/follow';
-import { searchIn } from '../../modules/search/search';
-import { channelFiles } from '../../modules/channels/files';
+} from '../../features/chat/messages/threads';
+import { followState, setFollowing } from '../../features/chat/messages/follow';
+import { searchIn } from '../../features/chat/search/search';
+import { channelFiles } from '../../features/chat/channels/files';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
 

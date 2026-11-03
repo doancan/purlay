@@ -1,7 +1,7 @@
 /**
  * The GitHub App over HTTP (D-246, `API.md` §7): a workspace's installation, a person's own authorization,
  * GitHub's callback and the App's deliveries. Each route validates, calls one function of
- * `modules/integrations/github-app*.ts`, and answers; the App is the settings' as this request pinned them.
+ * `features/chat/integrations/github-app*.ts`, and answers; the App is the settings' as this request pinned them.
  */
 import {
   GitHubAuthorizationRequest,
@@ -17,12 +17,12 @@ import {
   startAuthorization,
   startInstallation,
   type GitHubAppDependencies,
-} from '../../modules/integrations/github-app';
+} from '../../features/chat/integrations/github-app';
 import {
   receiveAppDelivery,
   requireAppAddress,
   type AppOutcome,
-} from '../../modules/integrations/github-app-webhook';
+} from '../../features/chat/integrations/github-app-webhook';
 import { AppError } from '../../platform/errors';
 import type { EventBus } from '../../platform/events';
 import { requireWorkspaceMembership } from '../../platform/tenancy';

@@ -4,8 +4,8 @@
  * root, a reply or an edit by each door a message comes in by.
  *
  * The race between a demotion and a send is held open in
- * `modules/messages/announcement.concurrency.integration.test.ts`; a GitHub feed's event in such a
- * channel is `modules/integrations/webhook.integration.test.ts`'s.
+ * `features/chat/messages/announcement.concurrency.integration.test.ts`; a GitHub feed's event in such a
+ * channel is `features/chat/integrations/webhook.integration.test.ts`'s.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

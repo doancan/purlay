@@ -24,7 +24,7 @@ import {
   purgeWorkspaceContent,
   purgeWorkspaces,
 } from '../../modules/workspaces/deletion-purge';
-import { chatWorkspacePurge } from '../../modules/messages/workspace-purge';
+import { chatWorkspacePurge } from '../../features/chat/messages/workspace-purge';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

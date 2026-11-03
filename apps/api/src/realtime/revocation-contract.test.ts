@@ -129,12 +129,12 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   },
   // Moves a read position and recounts what is unread. It changes what a person has
   // read, not what they may see, so no socket's access is affected (D-99 §4, #25).
-  'apps/api/src/modules/channels/read-state.ts#markRead': {
+  'apps/api/src/features/chat/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
   },
   // "Mark unread from here" moves the same position back and recounts (D-212): what the person has read,
   // not what they may see.
-  'apps/api/src/modules/channels/read-state.ts#markUnread': {
+  'apps/api/src/features/chat/channels/read-state.ts#markUnread': {
     none: 'moves a read position back and recounts; nobody gains or loses sight of a channel (#25)',
   },
   // Deep Work is a member's own quiet; it changes what interrupts them, not what they may see
@@ -143,33 +143,33 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     none: 'sets a member’s own Deep Work; nobody gains or loses sight of anything (#59)',
   },
   // Setting a notification level changes what a member is told, not what they may see (D-107, #52).
-  'apps/api/src/modules/channels/notification-level.ts#setNotificationLevel': {
+  'apps/api/src/features/chat/channels/notification-level.ts#setNotificationLevel': {
     none: 'sets what an existing member is told about; nobody gains or loses sight of a channel (#52)',
   },
   // A star is a member's own mark on their membership: it changes where the channel is listed for
   // them, not who may see it (D-132).
-  'apps/api/src/modules/channels/star.ts#setStarred': {
+  'apps/api/src/features/chat/channels/star.ts#setStarred': {
     none: 'marks an existing member’s own row; nobody gains or loses sight of a channel (#489)',
   },
   // Reading the inbox, or a thread, recounts the counters of the channels it touched. It changes
   // no membership, so nobody's access moves (D-106, D-147, #58).
-  'apps/api/src/modules/notifications/notifications.ts#readAndCount': {
+  'apps/api/src/features/chat/notifications/notifications.ts#readAndCount': {
     none: 'recounts the counters of existing memberships and changes no access (#58)',
   },
   // A new message raises the unread counters of the channel's existing memberships. It
   // adds, removes and changes no membership, so nobody's access moves (D-99, #58).
   // Where a person's message and a feed's event both count (D-134 §6).
-  'apps/api/src/modules/messages/delivery.ts#countArrival': {
+  'apps/api/src/features/chat/messages/delivery.ts#countArrival': {
     none: 'raises the unread counters of existing memberships and changes no access (#58)',
   },
   // An edit that names somebody for the first time raises their unread mention count. It
   // changes no membership, so nobody's access moves (D-103 §5, #47).
-  'apps/api/src/modules/messages/edit.ts#countMentions': {
+  'apps/api/src/features/chat/messages/edit.ts#countMentions': {
     none: 'raises the mention counters of existing memberships and changes no access (#47)',
   },
   // A deleted, purged or erased message takes back the unread counters it added. It changes no
   // membership, so nobody's access moves (D-103 §7, D-139 §2, #47).
-  'apps/api/src/modules/messages/tombstone.ts#takeBack': {
+  'apps/api/src/features/chat/messages/tombstone.ts#takeBack': {
     none: 'lowers the unread counters of existing memberships and changes no access (#47)',
   },
   // The \`sweep:sessions\` job calls it (D-30). It deletes rows that are already revoked
@@ -186,24 +186,24 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
   },
   // Out of one channel, by their own hand: their sockets stop receiving it and are told they left.
-  'apps/api/src/modules/channels/settings.ts#leaveChannel': {
+  'apps/api/src/features/chat/channels/settings.ts#leaveChannel': {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/channels.ts',
   },
   // Out of one channel by somebody else's hand (D-172): their sockets stop receiving it and are told
   // they were removed. Naming oneself is leaving, through `leaveChannel` above.
-  'apps/api/src/modules/channels/settings.ts#removeChannelMember': {
+  'apps/api/src/features/chat/channels/settings.ts#removeChannelMember': {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/channels.ts',
   },
   // Archived: everyone watching it stops receiving it, on the channel's topic (D-123).
-  'apps/api/src/modules/channels/settings.ts#archiveChannel': {
+  'apps/api/src/features/chat/channels/settings.ts#archiveChannel': {
     publishes: 'publishChannelRevoked',
     calledFrom: 'apps/api/src/ingress/http/channels.ts',
   },
   // Brought back (D-232): it gives access back and takes none away. Its members are told on their own
   // topics to read their channels again (`CHANNELS_UPDATED`), which no revocation rule covers.
-  'apps/api/src/modules/channels/settings.ts#restoreChannel': {
+  'apps/api/src/features/chat/channels/settings.ts#restoreChannel': {
     none: 'it restores access and revokes none: its members read their channels again on CHANNELS_UPDATED (#846)',
   },
   // An account erased: its sessions revoked and the row soft-deleted in one transaction; the
@@ -246,7 +246,7 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   },
   // The erasure of a workspace whose deletion was asked for a grace period ago (D-242): its channels and
   // memberships go, but nobody could reach them since the deletion was asked for, when every socket was told.
-  'apps/api/src/modules/messages/workspace-purge.ts#channelBatch': {
+  'apps/api/src/features/chat/messages/workspace-purge.ts#channelBatch': {
     none: 'a job with no bus, deleting the channels of a workspace whose sockets were told when its deletion was asked for (#870)',
   },
   'apps/api/src/modules/workspaces/deletion-purge.ts#purgeWorkspaceContent': {

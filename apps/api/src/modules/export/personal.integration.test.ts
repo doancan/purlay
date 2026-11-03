@@ -22,7 +22,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aSession } from '../../testing/signed-in';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { exportPerson, PERSONAL_TABLE_ORDER } from './personal';
 import { MIGRATOR_TABLES, PERSONAL_COLUMNS, PERSONAL_EXCLUDED, type PersonalTable } from './tables';
 

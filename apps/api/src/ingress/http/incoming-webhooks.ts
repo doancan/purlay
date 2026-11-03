@@ -19,7 +19,7 @@ import {
   receivePost,
   revokeWebhook,
   type IncomingPostDependencies,
-} from '../../modules/integrations/incoming-webhooks';
+} from '../../features/chat/integrations/incoming-webhooks';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
 import { validated } from './validate';

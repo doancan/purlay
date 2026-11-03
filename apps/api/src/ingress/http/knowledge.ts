@@ -8,9 +8,9 @@ import {
 } from '@purlay/types';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { requireLiveSession } from '../../modules/auth/sessions';
-import { setKnowledge } from '../../modules/messages/knowledge';
-import { listSearches, saveSearch, removeSearch } from '../../modules/search/saved-searches';
-import type { ResolveDependencies } from '../../modules/messages/threads';
+import { setKnowledge } from '../../features/chat/messages/knowledge';
+import { listSearches, saveSearch, removeSearch } from '../../features/chat/search/saved-searches';
+import type { ResolveDependencies } from '../../features/chat/messages/threads';
 import type { HistoryDependencies } from './messages';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';

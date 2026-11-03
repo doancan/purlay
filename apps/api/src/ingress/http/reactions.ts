@@ -11,7 +11,7 @@ import { Type } from '@sinclair/typebox';
 import type { Executor } from '@purlay/db';
 import { Reaction, type ReactionsResponse } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { setReaction, type ReactionDependencies } from '../../modules/reactions/reactions';
+import { setReaction, type ReactionDependencies } from '../../features/chat/reactions/reactions';
 import { requireSession } from './session';
 import { validated } from './validate';
 

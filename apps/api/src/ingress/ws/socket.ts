@@ -25,7 +25,7 @@ import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
 import { startLivenessSweep } from '../../realtime/liveness';
 import { onlinePresence, type OnlinePresence } from '../../realtime/online';
-import { announcePresence } from '../../modules/presence/presence';
+import { announcePresence } from '../../features/chat/presence/presence';
 import {
   inProcessRateLimiter,
   SOCKET_CONNECTION_LIMITS,

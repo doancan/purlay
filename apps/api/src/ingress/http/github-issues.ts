@@ -1,7 +1,7 @@
 /**
  * GitHub issues from a thread over HTTP (D-246 §2, `API.md` §7): the repositories a person may choose and the
  * creation of an issue. Each route takes the session, validates, calls one function of
- * `modules/integrations/github-issues.ts` and says which of the four outcomes it came to.
+ * `features/chat/integrations/github-issues.ts` and says which of the four outcomes it came to.
  */
 import {
   CreateGitHubIssueRequest,
@@ -15,7 +15,7 @@ import {
   createIssue,
   linkWork,
   type GitHubIssueDependencies,
-} from '../../modules/integrations/github-issues';
+} from '../../features/chat/integrations/github-issues';
 import type { Auth } from '../../modules/auth/better-auth';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { requireSession } from './session';

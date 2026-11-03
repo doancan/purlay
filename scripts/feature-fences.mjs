@@ -16,7 +16,7 @@ export const featureIds = (dir) =>
  * no other feature. One block each, because ESLint replaces a rule rather than merging it and the rule has
  * to name the others.
  */
-export const featureFences = (dir, ids, noTransportTypes, paths) =>
+export const featureFences = (dir, ids, noTransportTypes, pathsFor) =>
   ids.map((id) => {
     const others = ids.filter((other) => other !== id);
     return {
@@ -36,7 +36,7 @@ export const featureFences = (dir, ids, noTransportTypes, paths) =>
                     },
                   ]),
             ],
-            paths,
+            paths: pathsFor(id),
           },
         ],
       },

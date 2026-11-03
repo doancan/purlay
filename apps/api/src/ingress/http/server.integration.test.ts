@@ -39,7 +39,7 @@ import { NO_LOG } from '../../platform/events';
 import { createLogger, type Logger } from '../../platform/logging';
 import { deriveAuthSecret } from '../../modules/auth/better-auth';
 import { createWorkspace } from '../../modules/workspaces/workspaces';
-import { chatWorkspaceHooks } from '../../modules/channels/workspace-hooks';
+import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
 import { atomicallyOn } from '../../platform/transactions';
 import { inProcessEventBus } from '../../realtime/bus';
 import type { RateBudget } from '../../realtime/rate-limiter';

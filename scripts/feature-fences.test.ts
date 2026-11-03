@@ -34,7 +34,7 @@ describe('the fence of a feature', () => {
       'apps/api/src/features',
       ['issues', 'notes', 'mail'],
       transport,
-      [database],
+      () => [database],
     );
     expect(issues?.files).toEqual(['apps/api/src/features/issues/**/*.ts']);
     const options = optionsOf(issues);
@@ -48,7 +48,16 @@ describe('the fence of a feature', () => {
   });
 
   test('a lone feature has no one to be kept from', () => {
-    const [only] = featureFences('d', ['chat'], transport, [database]);
+    const [only] = featureFences('d', ['chat'], transport, () => [database]);
     expect(optionsOf(only).patterns).toEqual([transport]);
+  });
+
+  test('may give one feature other paths than the rest', () => {
+    const exempt = { name: 'x', message: 'x' };
+    const fences = featureFences('d', ['chat', 'notes'], transport, (id) =>
+      id === 'chat' ? [database] : [database, exempt],
+    );
+    expect(optionsOf(fences[0]).paths).toEqual([database]);
+    expect(optionsOf(fences[1]).paths).toEqual([database, exempt]);
   });
 });

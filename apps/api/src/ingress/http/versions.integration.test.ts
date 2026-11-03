@@ -9,8 +9,8 @@ import { fixedClock } from '../../platform/clock';
 import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { aTestAuth, aSession } from '../../testing/signed-in';
-import { reviseMessage } from '../../modules/messages/edit';
-import { sendMessage } from '../../modules/messages/messages';
+import { reviseMessage } from '../../features/chat/messages/edit';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { aRoom } from '../../testing/rooms';
 import { deleteVersion } from './versions';
 

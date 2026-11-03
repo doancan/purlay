@@ -16,7 +16,7 @@ import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { snapshotOn } from '../../platform/transactions';
 import { aRoom } from '../../testing/rooms';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { exportWorkspace, readTables } from './export';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -23,7 +23,7 @@ import { inProcessEventBus } from './bus';
 import { channelTopic } from '../platform/events';
 import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
-import { REPLAY_BYTES_MAX, replayPerChannel } from '../modules/messages/replay';
+import { REPLAY_BYTES_MAX, replayPerChannel } from '../features/chat/messages/replay';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
 import { admitSocket } from './upgrade';

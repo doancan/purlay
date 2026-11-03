@@ -19,7 +19,7 @@ import { recordGitHubSignIn } from '../auth/identity';
 import type { SignInLinks } from '../auth/better-auth';
 import { addressCounterKey, consumeSignInLink, requestSignInLink } from '../auth/magic-link';
 import { addressAttemptsPrefix, countAttempt } from '../auth/password-attempts';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { changeRole } from '../workspaces/members';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { eraseAccount } from './erasure';

@@ -21,7 +21,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { recordAudit } from '../audit/audit';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { everyChannel, exportWorkspace, schemaOf, TABLE_ORDER } from './export';
 import { COLUMNS, EXCLUDED, MIGRATOR_TABLES, type ExportedTable } from './tables';
 

@@ -1,6 +1,6 @@
 /**
  * Who the `@` list may offer in one channel — the people a mention written there would reach
- * (`resolveMentions`, `apps/api/src/modules/messages/delivery.ts`).
+ * (`resolveMentions`, `apps/api/src/features/chat/messages/delivery.ts`).
  *
  * - **A public channel:** everybody in the workspace. The server resolves a name there workspace-wide.
  * - **A direct message:** the other person.
