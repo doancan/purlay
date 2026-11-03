@@ -48,7 +48,7 @@ import {
   githubAppCaller,
   platformAppFetch,
   type GitHubAppFetch,
-} from '../../modules/integrations/github-app-api';
+} from '../../platform/github-app-api';
 import { oidcIssuerProblem, oidcNameProblem } from '../../platform/oidc-address';
 import { refusedField, said, swapping, type SetupDependencies } from './setup';
 import { validated } from './validate';

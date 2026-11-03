@@ -56,7 +56,7 @@ import {
   GitHubUnauthorized,
   GitHubUnavailable,
   type GitHubAppApi,
-} from '../integrations/github-app-api';
+} from '../../platform/github-app-api';
 import type { GitHubAppSettings, SmtpSettings } from './settings';
 import type { ServerAdminSession, SetupSession } from './setup';
 

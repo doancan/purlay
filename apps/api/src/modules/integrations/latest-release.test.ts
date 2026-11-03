@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { HOUR_MS, type Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
-import type { GitHubAppFetch } from './github-app-api';
+import type { GitHubAppFetch } from '../../platform/github-app-api';
 import { latestReleaseCheck } from './latest-release';
 
 const START = new Date('2026-11-01T12:00:00.000Z');

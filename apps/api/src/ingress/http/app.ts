@@ -171,7 +171,7 @@ import {
   githubAppCaller,
   platformAppFetch,
   type GitHubAppFetch,
-} from '../../modules/integrations/github-app-api';
+} from '../../platform/github-app-api';
 import { latestReleaseCheck } from '../../modules/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
