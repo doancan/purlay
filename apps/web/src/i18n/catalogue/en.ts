@@ -748,6 +748,8 @@ export const en = {
   'state.channel.removed.title': 'You were removed from this channel',
   'state.channel.removed.body':
     'Somebody took you out of it. Its conversation stays with its members, and one of them can bring you back.',
+  'state.workspace.core.title': 'Your workspace',
+  'state.workspace.core.body': 'Its people and its settings are in the menu.',
   'state.workspace.empty.title': 'Pick a channel',
   'state.workspace.empty.body': 'Choose one from the list, or create the first.',
 

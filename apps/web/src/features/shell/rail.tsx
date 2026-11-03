@@ -16,6 +16,7 @@ import { DraftsLink } from '../drafts/drafts-link';
 import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { RailItemContent, railItemClasses } from './rail-item';
+import { WhenRun } from './module-gate';
 import { useWorkspace } from './workspace';
 
 /** The conversations: the workspace's front door, which opens the channel you were last in. */
@@ -81,12 +82,14 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
       <div className="h-drag w-full shrink-0" />
       {/* The first place sits level with the workspace's name in the sidebar's header. */}
       <div className="flex flex-col items-center gap-4 pt-1">
-        <ChannelsLink />
-        <InboxLink />
-        <OpenQuestionsLink />
-        <SearchLink />
-        <SavedLink />
-        <DraftsLink />
+        <WhenRun module="chat">
+          <ChannelsLink />
+          <InboxLink />
+          <OpenQuestionsLink />
+          <SearchLink />
+          <SavedLink />
+          <DraftsLink />
+        </WhenRun>
       </div>
       <div className="mt-auto">
         <SettingsLink />
