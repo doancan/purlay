@@ -248,6 +248,38 @@ integration test through the route and through `createWorkspace`, and one with t
 workspace); the erasure of a person's messages (the existing tests unchanged, and the rows compared before and
 after on a seeded fixture, with two erasures racing); and the nightly retention (the counts on aged fixtures identical, held by the existing tests, which moved unmodified).
 
+**What is left of step 9 and step 10, measured on `main` after the move.** Nothing in the core imports chat, but eleven
+files of the core still name its tables. Each is an edge with its own inversion, in this order, each its own pull
+request with behaviour unchanged:
+
+1. **`WorkspaceChannels`**, a port `modules/workspaces` defines with four methods — the channels a member could see
+   and taking them out of every channel (`members.ts`, in the workspace's transaction), how many keep longer than a
+   window (`retention.ts`), and the channels of a workspace (`deletion.ts`) — and chat implements. A null object
+   answers `[]` and 0 when chat is absent, which is its second implementation; the proof is that the existing
+   tests pass unmodified with chat's, that the same channel ids still reach the fan-out after the commit, and
+   that nothing breaks with the null one;
+2. **`userErased`**, a hook list run in the account's erasure transaction, where chat registers the five deletes
+   it does today (`saved_searches`, `saved_messages`, `thread_follows`, `notifications`, `missed_mail_letters`)
+   in the same order; proved by the existing erasure tests, the rows of every table compared before and after on a
+   seeded fixture, the SQL sequence captured before and after, and an erasure raced against sends;
+3. **The export catalogue as a manifest `data.export`**: chat supplies its tables, columns (typed per table, so a
+   column added to the schema fails the build), order, bounds, the fragments that name the people, and what is
+   excluded; the core keeps the cursor, the format, the snapshot and the archive, and runs the `prepare` that
+   reads the visible channels **outside** the snapshot where it runs today. The core's head (`workspaces`,
+   `users`, `workspace_members`), the modules, then its tail (`workspace_invitations`, `audit_log`) reproduces
+   today's file order. The catalogue test unions the core and **every** manifest, enabled or not, and compares it
+   with the database; a frozen list of the current order and a byte-for-byte comparison of the files on a seeded
+   fixture, for the operator's scope, an owner's and a person's, prove nothing moved;
+4. **The personal export** the same way;
+5. **`COLLATED_COLUMNS`** in the readiness check: the core keeps its own three, the manifest adds the rest, and the test
+   that scans the migrations for the collation compares with the core plus all manifests;
+6. **`platform/channels.ts`** — the channel guard, 26 mentions of chat's tables — moves whole to
+   `features/chat/channels/guard.ts`, last of these, once nothing in the core imports it; `attachmentNotFound` stays
+   in the core. The three imports from `modules/` are what steps 1 and 3 remove;
+7. the message link of an attachment becomes chat's (step 8 above), with step 10;
+8. the lint then forbids a chat table's name in `modules/` and `platform/`, from an allow-list that has shrunk to
+   nothing.
+
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The
 places the core and chat share data — attachments, read state, notifications, which reference messages by key
