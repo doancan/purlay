@@ -14,6 +14,7 @@ import { testDependencies } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { createApp } from './app';
 import { updateMyProfile } from './profile';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -38,7 +39,14 @@ describe('integration: PATCH /api/me/profile', () => {
         unsubscribe: () => undefined,
         forget: () => undefined,
       };
-      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
+      const dependencies = {
+        auth: aTestAuth(db),
+        database: db,
+        clock,
+        bus,
+        log: NO_LOG,
+        workspaceChannels: chatWorkspaceChannels,
+      };
       const request = (): Request =>
         new Request('https://purlay.test/api/me/profile', {
           method: 'PATCH',

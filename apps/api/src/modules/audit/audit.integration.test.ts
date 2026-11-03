@@ -15,6 +15,7 @@ import { changeRole, removeMember } from '../workspaces/members';
 import { auditTrail, recordAudit } from './audit';
 import { aSession } from '../../testing/signed-in';
 import { withinRequest } from '../../platform/logging';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -70,11 +71,13 @@ describe('integration: the audit trail', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const alice = await requireWorkspaceMembership(db, idOf(room, 'alice'), room.workspaceId);
-      await removeMember(db, clock, alice, idOf(room, 'alice')).catch((error: unknown) => {
-        if (!(error instanceof AppError)) throw error;
-      });
+      await removeMember(db, clock, alice, idOf(room, 'alice'), chatWorkspaceChannels).catch(
+        (error: unknown) => {
+          if (!(error instanceof AppError)) throw error;
+        },
+      );
       expect(await trail(db, room)).toEqual([]);
-      await removeMember(db, clock, alice, idOf(room, 'bob'));
+      await removeMember(db, clock, alice, idOf(room, 'bob'), chatWorkspaceChannels);
       expect((await trail(db, room)).map((row) => [row.action, row.target_id])).toEqual([
         ['member.removed', idOf(room, 'bob')],
       ]);
