@@ -12,6 +12,7 @@ import { requireWorkspaceMembership, type WorkspaceContext } from '../../platfor
 import { atomicallyOn } from '../../platform/transactions';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { operateQuota, readStorage } from './quota';
 import { storeUpload } from './uploads';
 
@@ -71,6 +72,34 @@ describe('integration: a workspace’s storage, as its owner is shown it', () =>
         if (error instanceof AppError && 'details' in error.body) remaining = error.body.details;
       });
       expect(remaining).toEqual({ remainingBytes: shown.quotaBytes - shown.usedBytes });
+    });
+  });
+
+  test('counts a file once: sent, it is in what the workspace keeps, and no longer one that waits', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      await setQuota(db, room, 100, 0);
+      const alice = room.members['alice'];
+      if (alice === undefined) throw new Error('no alice');
+      const id = messageId(new Date(NOW + (tick += 1)));
+      await storeUpload(
+        { atomically: atomicallyOn(db), storage: aMemoryStore(), log: aRecordingLogger().log },
+        await contextOf(db, room, 'alice'),
+        { id, name: 'notes.txt', bytes: new Uint8Array(30).fill(7) },
+      );
+      expect(await readStorage(db, await contextOf(db, room, 'alice'))).toEqual({
+        usedBytes: 30,
+        quotaBytes: 100,
+      });
+      await sendMessage(db, CLOCK, alice.context, {
+        id: messageId(new Date(NOW + (tick += 1))),
+        content: 'with a file',
+        attachmentIds: [id],
+      });
+      expect(await readStorage(db, await contextOf(db, room, 'alice'))).toEqual({
+        usedBytes: 30,
+        quotaBytes: 100,
+      });
     });
   });
 

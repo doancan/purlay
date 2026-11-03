@@ -41,7 +41,7 @@ export const storageOf = async (
     .selectFrom('attachments')
     .select(sql<string>`coalesce(sum(size_bytes), 0)`.as('bytes'))
     .where('workspace_id', '=', workspaceId)
-    .where('message_id', 'is', null)
+    .where('claimed_at', 'is', null)
     .executeTakeFirstOrThrow();
   // BIGINT arrives as text: summed as integers, never as strings.
   return {
