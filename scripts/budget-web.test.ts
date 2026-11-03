@@ -9,6 +9,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   BUDGET_BYTES,
+  CHAT_BYTES,
+  SHELL_BYTES,
+  chatProblems,
   describeReport,
   initialAssets,
   main,
@@ -44,6 +47,17 @@ ${preload.map((href) => `<link rel="modulepreload" crossorigin href="/${href}">`
 /** Bytes that do not compress, so a "fat chunk" really is fat once gzipped. */
 const incompressible = (bytes: number): Buffer =>
   Buffer.from(crypto.getRandomValues(new Uint8Array(bytes)));
+
+/** The files of a build whose shell has a source map listing `sources`, and whose chat chunk is `chat`. */
+const aShell = (
+  sources: string[],
+  chat: Buffer | string | null = 'x',
+): Record<string, string | Buffer> => ({
+  'assets/index-aaa.js': 'x',
+  'assets/index-aaa.js.map': JSON.stringify({ sources, sourcesContent: sources.map(() => 'x') }),
+  'theme-init.js': 'x',
+  ...(chat === null ? {} : { 'assets/chat-ccc.js': chat }),
+});
 
 describe('which files are initial', () => {
   test('the entry script and the preloads, local only, and not the stylesheet or an outside script', () => {
@@ -207,9 +221,74 @@ describe('the files the first page is cut into', () => {
   });
 });
 
+describe("where chat's code is", () => {
+  const problemsOf = (files: Record<string, string | Buffer>): string[] => {
+    const dist = aBuild(files);
+    return chatProblems(dist, measure(dist));
+  };
+
+  test("a shell with the other features and a chunk of chat's own passes", () => {
+    expect(
+      problemsOf(
+        aShell([
+          '../../src/features/sidebar/sidebar.tsx',
+          '../../src/features/channel/feed-ports.tsx',
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  test('a chat screen or the composer in the shell is named, and the shared files are not', () => {
+    const [problem, ...rest] = problemsOf(
+      aShell([
+        '../../src/features/channel/channel-screen.tsx',
+        '../../src/features/composer/composer.tsx',
+        '../../src/features/channel/feed-ports.tsx',
+      ]),
+    );
+    expect(rest).toEqual([]);
+    expect(problem).toContain("assets/index-aaa.js contains chat's screens");
+    expect(problem).toContain(
+      'features/channel/channel-screen.tsx, features/composer/composer.tsx',
+    );
+    expect(problem).not.toContain('feed-ports');
+  });
+
+  test('a shell with no source map is a failure that says how to build one, not a pass', () => {
+    const [problem] = problemsOf({
+      'assets/index-aaa.js': 'x',
+      'theme-init.js': 'x',
+      'assets/chat-ccc.js': 'x',
+    });
+    expect(problem).toContain('no source map');
+    expect(problem).toContain('bun run build:web:mapped');
+  });
+
+  test("a build with no chunk of chat's own is named", () => {
+    const [problem] = problemsOf(aShell([], null));
+    expect(problem).toContain('no chunk of their own (assets/chat-*.js)');
+  });
+
+  test('a shell over its bound, and a chat chunk over its own, are named', () => {
+    const shell = problemsOf({
+      ...aShell([]),
+      'assets/index-aaa.js': incompressible(SHELL_BYTES + 5_000),
+    });
+    expect(shell).toHaveLength(1);
+    expect(shell[0]).toContain('the shell is');
+    const chat = problemsOf(aShell([], incompressible(CHAT_BYTES + 5_000)));
+    expect(chat).toHaveLength(1);
+    expect(chat[0]).toContain("over chat's 50.00 KB bound");
+  });
+
+  test('the shell bound sits under the backstop', () => {
+    expect(SHELL_BYTES).toBeLessThan(BUDGET_BYTES);
+  });
+});
+
 describe('the command', () => {
   test('passes quietly inside the budget, with the report on stdout', () => {
-    const dist = aBuild({ 'assets/index-aaa.js': incompressible(10_000), 'theme-init.js': 'x' });
+    const dist = aBuild(aShell([]));
     const result = main(dist);
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
@@ -218,16 +297,24 @@ describe('the command', () => {
 
   test('fails with the reason, the shape problem and the table when something is wrong', () => {
     const dist = aBuild({
+      ...aShell([]),
       'assets/index-aaa.js': Buffer.concat([
         incompressible(BUDGET_BYTES + 5_000),
         Buffer.from('"scopeName"'),
       ]),
-      'theme-init.js': 'x',
     });
     const result = main(dist);
     expect(result.code).toBe(1);
     expect(result.err).toContain('over the 400.00 KB budget');
     expect(result.err).toContain('syntax-highlighting');
     expect(result.out).toContain('assets/index-aaa.js');
+  });
+
+  test('fails when a chat screen is back in the shell, and says where it loads from', () => {
+    const dist = aBuild(aShell(['../../src/features/unreads/unreads-screen.tsx']));
+    const result = main(dist);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('features/unreads/unreads-screen.tsx');
+    expect(result.err).toContain('features/chat/chat.ts');
   });
 });

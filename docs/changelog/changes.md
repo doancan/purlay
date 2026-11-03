@@ -35,6 +35,7 @@ have it.
 ### Changed
 
 - **Email** — Every email the server sends is a short letter with one button, instead of plain text with the link in it (D-252)
+- **Performance** — The first page load fetches about a sixth less JavaScript, because the channel and message screens load beside the session answer rather than inside the first file (D-250)
 
 ### Security
 

@@ -111,7 +111,8 @@ describe('the inbox panel', () => {
     await settle();
     expect(view.world.history.stack.at(-1)).toBe('/w/acme/inbox?category=mentions');
     expect(view.queryByRole('dialog', { name: 'Inbox' })).toBeNull();
-    const onPage = within(view.getByRole('group', { name: 'Category' }));
+    // The inbox is chat's chunk: the page arrives when it has loaded, not within a turn.
+    const onPage = within(await view.findByRole('group', { name: 'Category' }));
     expect(onPage.getByRole('button', { name: 'Mentions' }).getAttribute('aria-pressed')).toBe(
       'true',
     );

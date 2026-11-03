@@ -15,13 +15,19 @@
  * which is how the browser tests photograph it from a production-shaped build.
  * It is a prop so a test can mount it without a build flag.
  */
-import { lazy, Suspense, type ComponentType } from 'react';
-import { ChannelScreen } from '../features/channel/channel-screen';
-import { InboxScreen } from '../features/inbox/inbox-screen';
+import { lazy, Suspense, useEffect, type ComponentType } from 'react';
+import {
+  LazyChannelScreen,
+  LazyDraftsScreen,
+  LazyInboxScreen,
+  LazyQuestionsScreen,
+  LazySavedScreen,
+  LazySearchScreen,
+  LazyUnreadsScreen,
+  preloadChat,
+} from '../features/chat/load';
 import { InviteScreen } from '../features/invitations/invite-screen';
 import { MailStopScreen } from '../features/missed-mail/stop-screen';
-import { QuestionsScreen } from '../features/questions/questions-screen';
-import { SearchScreen } from '../features/search/search-screen';
 import { SessionGate } from '../features/session/session';
 import { Home } from '../features/shell/home';
 import { NotFound } from '../features/shell/not-found';
@@ -33,10 +39,8 @@ import { EmailSignInScreen } from '../features/sign-in/email-sign-in-screen';
 import { SignUpScreen } from '../features/sign-in/sign-up-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
+import { moduleOf } from '../router/routes';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
-import { SavedScreen } from '../features/saved/saved-screen';
-import { DraftsScreen } from '../features/drafts/drafts-screen';
-import { UnreadsScreen } from '../features/unreads/unreads-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
@@ -84,6 +88,11 @@ interface OutletProps {
 
 export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Element => {
   const { match } = useRoute();
+  const isChatRoute = match.name !== 'notFound' && moduleOf(match.name) === 'chat';
+  // Asked for in the first commit, beside the request for the session, so the chunk is not a second wait.
+  useEffect(() => {
+    if (isChatRoute) preloadChat();
+  }, [isChatRoute]);
   switch (match.name) {
     case 'signIn':
       return <SignInScreen />;
@@ -121,7 +130,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="channel">
-            <ChannelScreen channelId={match.params.channelId} />
+            <LazyChannelScreen channelId={match.params.channelId} />
           </ModuleGate>
         </Shell>
       );
@@ -129,7 +138,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="questions">
-            <QuestionsScreen />
+            <LazyQuestionsScreen />
           </ModuleGate>
         </Shell>
       );
@@ -137,7 +146,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="inbox">
-            <InboxScreen />
+            <LazyInboxScreen />
           </ModuleGate>
         </Shell>
       );
@@ -145,7 +154,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="search">
-            <SearchScreen />
+            <LazySearchScreen />
           </ModuleGate>
         </Shell>
       );
@@ -153,7 +162,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="saved">
-            <SavedScreen />
+            <LazySavedScreen />
           </ModuleGate>
         </Shell>
       );
@@ -161,7 +170,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="drafts">
-            <DraftsScreen />
+            <LazyDraftsScreen />
           </ModuleGate>
         </Shell>
       );
@@ -169,7 +178,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <ModuleGate route="unreads">
-            <UnreadsScreen />
+            <LazyUnreadsScreen />
           </ModuleGate>
         </Shell>
       );
