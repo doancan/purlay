@@ -196,6 +196,8 @@ const tables = [
       width: 'export',
       height: 'export',
       created_at: 'export',
+      // The core's note that a module has taken the file (0078): bookkeeping, not content.
+      claimed_at: 'omit',
       // Where the object is kept on this server: the export names it by its id instead.
       storage_key: 'omit',
       thumbnail_key: 'omit',
@@ -321,6 +323,7 @@ export const chatExport: ExportContribution = {
 
 /** The tables of chat that are not in an export, and why. */
 export type ChatExcluded =
+  | 'message_attachments'
   | 'github_integrations'
   | 'github_deliveries'
   | 'incoming_webhooks'
@@ -337,6 +340,8 @@ export type ChatExcluded =
   | 'link_previews';
 
 export const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
+  message_attachments:
+    'which message a file was sent with: written beside the file’s own `message_id` and `channel_id`, which the export carries, until those move here and this table is what carries them',
   github_integrations: 'the sealed GitHub token: a credential never leaves',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   incoming_webhooks:

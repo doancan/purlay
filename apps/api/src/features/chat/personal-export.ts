@@ -134,6 +134,8 @@ const tables = [
       width: 'export',
       height: 'export',
       created_at: 'export',
+      // The core's note that a module has taken the file (0079): bookkeeping, not content.
+      claimed_at: 'omit',
       // Where the object is kept on this server: the export names it by its id instead.
       storage_key: 'omit',
       thumbnail_key: 'omit',
@@ -208,6 +210,7 @@ export const chatPersonalExport: PersonalContribution = {
 
 /** The tables of chat that are not in a person's export, and why. */
 export type ChatPersonalExcluded =
+  | 'message_attachments'
   | 'notifications'
   | 'mentions'
   | 'message_versions'
@@ -229,6 +232,8 @@ export type ChatPersonalExcluded =
   | 'missed_mail_letters';
 
 export const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
+  message_attachments:
+    'which message a file was sent with: the file’s own `message_id` and `channel_id` carry it, until they move here',
   notifications:
     'pointers to other people’s messages that mentioned or answered them: the words are the others’',
   mentions: 'who another person’s message named: the message is the other person’s',
