@@ -219,6 +219,11 @@ export interface HubOptions {
   readonly listen: (identity: SocketIdentity) => void;
   readonly timers?: Timers;
   /**
+   * Whether a server event belongs to a module this process does not run (`composition.ts`): a frame of one is
+   * dropped here, however it got here — a node that runs the module may have published it. Absent, none is closed.
+   */
+  readonly closedEvent?: (event: string) => boolean;
+  /**
    * Told when a person's first socket on this node opens and when their last closes — from the count
    * the hub keeps anyway for the per-person cap, so presence never counts sockets twice (D-136).
    */
@@ -269,7 +274,7 @@ const channelOf = (frame: ServerFrame): string | null => {
 export const createSocketHub = (
   auth: Auth,
   clock: Clock,
-  { log, leave, listen, timers = systemTimers, presence }: HubOptions,
+  { log, leave, listen, timers = systemTimers, presence, closedEvent }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
@@ -311,6 +316,7 @@ export const createSocketHub = (
     // best-effort by design: what a client missed it asks for on reconnect, by
     // keyset (`ARCHITECTURE.md` §5.4).
     if (socket === undefined) return;
+    if (closedEvent?.(frame.event) === true) return;
     if (frame.event === 'ACCESS_REVOKED') {
       // Takes effect now, even behind a replay: what was kept for these channels is
       // forgotten, and nothing published to them reaches this connection again. The

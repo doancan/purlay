@@ -5,6 +5,7 @@
  * checks. Nothing in the core names any of it: the composition root (`composition.ts`) reads this object when chat
  * is among the modules a process runs, and leaves it out when it is not.
  */
+import type { ServerEvent } from '@purlay/types';
 import { chatExport } from './export';
 import { chatPersonalExport } from './personal-export';
 import { startWithTheDefaultChannel } from './channels/workspace-hooks';
@@ -31,6 +32,28 @@ export const chatModule = {
     jobs: ['mail:missed'],
     // What a person does in a channel over the socket: watch it, write in it, say they are typing.
     frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],
+    // What chat's services send to a socket. The core's own — a workspace changing, an access revoked, a session
+    // ended, the acknowledgements, the pong — are not listed, nor is deep work's: they reach every process.
+    events: [
+      'MESSAGE_CREATED',
+      'MESSAGE_HIDDEN',
+      'MESSAGE_REVISED',
+      'MESSAGE_VERSIONS_UPDATED',
+      'THREAD_UPDATED',
+      'REACTIONS_UPDATED',
+      'CHANNEL_STATE',
+      'CHANNEL_ADDED',
+      'CHANNEL_UPDATED',
+      'CHANNELS_UPDATED',
+      'PINS_UPDATED',
+      'BOOKMARKS_UPDATED',
+      'INCIDENT_UPDATED',
+      'REMINDERS_UPDATED',
+      'SAVED_UPDATED',
+      'NOTIFICATIONS_UPDATED',
+      'TYPING',
+      'PRESENCE',
+    ] satisfies readonly ServerEvent[],
     routes: [
       '/api/channels/**',
       '/api/messages/**',

@@ -5,8 +5,8 @@
  * nodes of two sets for as long as it takes. So a mismatch is **said, never acted on**: the node keeps
  * serving, readiness does not change, and a log line names this node's set and the others', once when it
  * starts and once when it ends. What would be wrong across the two is small: the bus carries frames by
- * topic and a node drops a topic no socket of its own holds, so a module's frames are not heard by a node
- * that does not run it, and a node that does not run a module closes its routes (the plain `404`). A bus
+ * topic, and a socket of a node that does not run a module drops the events the module's manifest lists
+ * (`hub.ts`) — a person's own topic is held by every socket, so the topic alone would not keep them out — and a node that does not run a module closes its routes (the plain `404`). A bus
  * channel per set would be worse — a sign-out on one node would no longer close the sockets of another.
  *
  * Each node keeps one field in a shared hash, `node -> lapse time|set`, renewed every `RENEW_MS` and

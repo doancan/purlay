@@ -97,6 +97,14 @@ describe('the application as its modules make it', () => {
         expect(all.closedFrame(op)).toBe(false);
       }
       for (const op of ['PING', 'ACTIVE']) expect(alone.closedFrame(op)).toBe(false);
+      // So are the events it sends; the core's own reach every process.
+      for (const event of ['MESSAGE_CREATED', 'CHANNEL_ADDED', 'TYPING', 'PRESENCE']) {
+        expect(alone.closedEvent(event)).toBe(true);
+        expect(all.closedEvent(event)).toBe(false);
+      }
+      for (const event of ['WORKSPACE_UPDATED', 'ACCESS_REVOKED', 'SESSION_ENDED', 'PONG', 'ACK']) {
+        expect(alone.closedEvent(event)).toBe(false);
+      }
     });
 
     test('a module the build does not carry stops the start, naming it', () => {
