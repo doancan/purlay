@@ -15,4 +15,14 @@ describe('integration: measuring the latency budget', () => {
       expect(value).toBeLessThan(5_000);
     }
   }, 120_000);
+
+  test('with issues busy, answers every message and says what the readers of issues were answered', async () => {
+    const latency = await measureLatency(5, true);
+    expect(latency.messages).toBe(5);
+    expect(latency.issues?.answered).toBeGreaterThan(0);
+    for (const value of [latency.ackP95Ms, latency.fanOutP95Ms]) {
+      expect(value).toBeGreaterThan(0);
+      expect(value).toBeLessThan(5_000);
+    }
+  }, 120_000);
 });

@@ -17,6 +17,12 @@
  * their p95s is compared, with every trial reported and recorded: one isolated stall cannot decide
  * the gate, and a slowdown in two or three trials still fails. Never retry until a pass (D-49).
  *
+ * **With issues busy** (`MODULES.md` §7): after those, the same trials run again while people read issues' list as
+ * fast as the API answers, in the same process and on the same pool. Chat is not budgeted and issues is, so chat's
+ * p95 must stay within the budget's own rule — past `REGRESSION_FACTOR` times the quiet trials of the same run and
+ * past the noise floor is a regression — with the same second look. The comparison is with this run's quiet
+ * numbers, the baseline mechanism above, because what is asked is what issues adds, not what this machine does today.
+ *
  * **A regression must happen twice** (D-227): a run that regressed is measured again, three more trials,
  * once, and fails only if that regresses too. `--record` keeps the run judged last; both are printed.
  *
@@ -27,7 +33,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
-import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { systemClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
@@ -47,6 +53,19 @@ export const jumped = (
   factor: number = REGRESSION_FACTOR,
 ): boolean => before !== undefined && value > Math.max(before * factor, NOISE_FLOOR_MS);
 
+/**
+ * People reading issues' list, each with this many requests in flight: more than a pool holds, so that were issues
+ * not held to its share the pool would be theirs.
+ */
+const ISSUE_READERS = 4;
+const ISSUE_REQUESTS_IN_FLIGHT = 4;
+/**
+ * Issues' statements are made slow the way a long migration or a slow query would, without a clock in the
+ * database: a lock on the table they read, taken for this long, let go for this long, again and again.
+ */
+const ISSUES_LOCKED_MS = 700;
+const ISSUES_UNLOCKED_MS = 300;
+
 /** Under the per-connection and per-user budgets of ten a second (`rate-limiter.ts`). */
 const PACE_MS = 125;
 const READY_WITHIN_MS = 60_000;
@@ -55,6 +74,8 @@ export interface Latency {
   readonly ackP95Ms: number;
   readonly fanOutP95Ms: number;
   readonly messages: number;
+  /** What the people reading issues were answered while the messages were timed; only when they were there. */
+  readonly issues?: { readonly answered: number; readonly refused: number };
 }
 
 const LATENCY_TRIALS = 3;
@@ -186,8 +207,45 @@ const answered = (socket: Socket, id: string): Promise<void> =>
     });
   });
 
-/** Starts the API against a fresh clone, times `count` messages, and takes everything down. */
-export const measureLatency = async (count: number): Promise<Latency> => {
+/** Reads issues' list over and over until `stopped`, as one person with `ISSUE_REQUESTS_IN_FLIGHT` requests open. */
+const readIssues = (
+  origin: string,
+  who: Person,
+  workspaceId: string,
+  stopped: () => boolean,
+  tally: { answered: number; refused: number },
+): Promise<unknown> =>
+  Promise.all(
+    Array.from({ length: ISSUE_REQUESTS_IN_FLIGHT }, async () => {
+      while (!stopped()) {
+        const response = await fetch(`${origin}/api/workspaces/${workspaceId}/issues`, {
+          headers: { cookie: who.cookie, origin },
+        });
+        await response.arrayBuffer();
+        if (response.status === 200) tally.answered += 1;
+        // The share's own answer to a request it has no room for: expected, and counted.
+        else if (response.status === 503) tally.refused += 1;
+        else throw new Error(`issues answered ${String(response.status)}`);
+      }
+    }),
+  );
+
+/** Takes the issues table in turns, until `stopped`, so that the statements of the module wait for it. */
+const lockIssuesInTurns = async (clone: ClonedDatabase, stopped: () => boolean): Promise<void> => {
+  while (!stopped()) {
+    await clone.db.transaction().execute(async (transaction) => {
+      await sql`lock table issues in access exclusive mode`.execute(transaction);
+      await Bun.sleep(ISSUES_LOCKED_MS);
+    });
+    await Bun.sleep(ISSUES_UNLOCKED_MS);
+  }
+};
+
+/**
+ * Starts the API against a fresh clone, times `count` messages, and takes everything down. With `issuesBusy`,
+ * people read issues' list throughout, from the same process and the same pool, while its table is locked in turns.
+ */
+export const measureLatency = async (count: number, issuesBusy = false): Promise<Latency> => {
   const clone = await cloneIntegrationDatabase();
   const port = await freePort();
   const origin = `http://localhost:${String(port)}`;
@@ -209,6 +267,9 @@ export const measureLatency = async (count: number): Promise<Latency> => {
     stderr: 'inherit',
   });
   const sockets: Socket[] = [];
+  const tally = { answered: 0, refused: 0 };
+  let hammering = true;
+  let hammers: Promise<unknown> = Promise.resolve();
   try {
     const deadline = performance.now() + READY_WITHIN_MS;
     for (;;) {
@@ -256,6 +317,25 @@ export const measureLatency = async (count: number): Promise<Latency> => {
       await done;
     }
 
+    if (issuesBusy) {
+      const readers = await Promise.all(
+        Array.from({ length: ISSUE_READERS }, async (_, n) => {
+          const reader = await aPerson(clone, deriveAuthSecret(key), `budget-reader-${String(n)}`);
+          await clone.db
+            .insertInto('workspace_members')
+            .values({ workspace_id: workspace.id, user_id: reader.id, role: 'member' })
+            .execute();
+          return reader;
+        }),
+      );
+      hammers = Promise.all([
+        lockIssuesInTurns(clone, () => !hammering),
+        ...readers.map((reader) =>
+          readIssues(origin, reader, workspace.id, () => !hammering, tally),
+        ),
+      ]);
+    }
+
     const sentAt = new Map<string, number>();
     const acks: number[] = [];
     const fanOuts: number[] = [];
@@ -289,8 +369,17 @@ export const measureLatency = async (count: number): Promise<Latency> => {
         `answers missing: ${String(acks.length)} ACKs and ${String(fanOuts.length)} deliveries of ${String(count)}`,
       );
     }
-    return { ackP95Ms: p95(acks), fanOutP95Ms: p95(fanOuts), messages: count };
+    hammering = false;
+    await hammers;
+    return {
+      ackP95Ms: p95(acks),
+      fanOutP95Ms: p95(fanOuts),
+      messages: count,
+      ...(issuesBusy ? { issues: tally } : {}),
+    };
   } finally {
+    hammering = false;
+    await hammers.catch(() => undefined);
     for (const socket of sockets) socket.close();
     api.kill('SIGTERM');
     await api.exited;
@@ -327,7 +416,12 @@ const readLatency = async (file: string): Promise<Latency> => {
 export const main = async (
   args: readonly string[],
   measure: (count: number) => Promise<Latency> = measureLatency,
-): Promise<{ readonly lines: readonly string[]; readonly code: number }> => {
+): Promise<{
+  readonly lines: readonly string[];
+  readonly code: number;
+  /** What the quiet trials came to, for the trials with issues busy to be judged against. */
+  readonly quiet: Latency;
+}> => {
   const keepFile = optionOf(args, '--keep');
   const firstKept = keepFile !== undefined && !(await Bun.file(keepFile).exists());
   const baselineFile = firstKept ? undefined : (keepFile ?? optionOf(args, '--baseline'));
@@ -370,11 +464,59 @@ export const main = async (
   // A regression is not adopted: the next run is judged against the last one that passed.
   if (keepFile !== undefined && !regressed) await write(keepFile);
   const said = firstKept ? ['no baseline yet: this run is recorded, nothing compared'] : [];
-  return { lines: [...said, ...lines], code: regressed ? 1 : 0 };
+  return { lines: [...said, ...lines], code: regressed ? 1 : 0, quiet: now };
+};
+
+/**
+ * Chat's latency with issues busy, against the quiet trials of the same run: the trials again, each with people
+ * reading issues' list throughout, judged by `judge` — past the factor and the noise floor is a regression — and
+ * measured once more if it regressed, as D-227 has it. Trials in which nobody was answered are an error: a
+ * measurement with nothing busy proves nothing.
+ */
+export const withIssuesBusy = async (
+  quiet: Latency,
+  measure: (count: number, issuesBusy: boolean) => Promise<Latency> = measureLatency,
+): Promise<{ readonly regressed: boolean; readonly lines: readonly string[] }> => {
+  const once = async (): Promise<{
+    readonly regressed: boolean;
+    readonly lines: readonly string[];
+  }> => {
+    const trials: Latency[] = [];
+    for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
+      const latency = await measure(MESSAGES_PER_TRIAL, true);
+      if ((latency.issues?.answered ?? 0) === 0) {
+        throw new Error(
+          'nobody was answered while issues were meant to be busy: nothing was measured',
+        );
+      }
+      trials.push(latency);
+    }
+    const verdict = judge(summarizeTrials(trials), quiet);
+    const detail = trials.map(
+      (trial, index) =>
+        `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms; issues answered ${String(trial.issues?.answered)}, refused ${String(trial.issues?.refused)}`,
+    );
+    return { regressed: verdict.regressed, lines: [...verdict.lines, ...detail] };
+  };
+  const first = await once();
+  const heading = 'with issues busy, against the quiet trials of this run:';
+  if (!first.regressed) return { regressed: false, lines: [heading, ...first.lines] };
+  const again = await once();
+  return {
+    regressed: again.regressed,
+    lines: [
+      heading,
+      ...first.lines,
+      'first measurement with issues busy regressed; measured again:',
+      ...again.lines,
+    ],
+  };
 };
 
 if (import.meta.main) {
-  const { lines, code } = await main(process.argv.slice(2));
+  const { lines, code, quiet } = await main(process.argv.slice(2));
   for (const line of lines) console.log(line);
-  process.exit(code);
+  const busy = await withIssuesBusy(quiet);
+  for (const line of busy.lines) console.log(line);
+  process.exit(code === 0 && !busy.regressed ? 0 : 1);
 }

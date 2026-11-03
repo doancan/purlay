@@ -12,6 +12,7 @@ import {
   main,
   p95,
   summarizeTrials,
+  withIssuesBusy,
   type Latency,
 } from './budget-latency';
 
@@ -256,5 +257,80 @@ describe('a regression, measured again (D-227)', () => {
     const { measure, calls } = measuring([steady, steady, steady, slow, slow, slow]);
     expect((await main(['--keep', file], measure)).code).toBe(0);
     expect(calls()).toBe(3);
+  });
+});
+
+describe('chat’s latency with issues busy', () => {
+  const quiet = run(25, 25);
+  /** A trial with people reading issues all the while: answered some, refused some. */
+  const busy = (ack: number, fanOut: number): Latency => ({
+    ...run(ack, fanOut),
+    issues: { answered: 900, refused: 12 },
+  });
+  const measuring = (
+    answers: readonly Latency[],
+  ): {
+    readonly measure: (count: number, issuesBusy: boolean) => Promise<Latency>;
+    readonly asked: { count: number; issuesBusy: boolean }[];
+  } => {
+    const asked: { count: number; issuesBusy: boolean }[] = [];
+    return {
+      asked,
+      measure: (count, issuesBusy): Promise<Latency> => {
+        asked.push({ count, issuesBusy });
+        return Promise.resolve(answers[asked.length - 1] ?? busy(999, 999));
+      },
+    };
+  };
+
+  test('asks for three trials of sixty messages with issues busy, and passes when chat holds', async () => {
+    const { measure, asked } = measuring([busy(27, 26), busy(30, 28), busy(29, 27)]);
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(asked).toEqual(Array.from({ length: 3 }, () => ({ count: 60, issuesBusy: true })));
+    expect(verdict.regressed).toBe(false);
+    expect(verdict.lines[0]).toBe('with issues busy, against the quiet trials of this run:');
+    expect(verdict.lines[1]).toBe(
+      'ACK round-trip p95: 29.0 ms of 120 ms (60 messages, was 25.0 ms)',
+    );
+    expect(verdict.lines.join('\n')).toContain('issues answered 900, refused 12');
+  });
+
+  test('a jump past the factor of the quiet trials is a regression, measured again once, and fails if it repeats', async () => {
+    const slow = busy(90, 90);
+    const { measure, asked } = measuring(Array.from({ length: 6 }, () => slow));
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(asked).toHaveLength(6);
+    expect(verdict.regressed).toBe(true);
+    expect(verdict.lines).toContain(
+      'first measurement with issues busy regressed; measured again:',
+    );
+    expect(verdict.lines.filter((line) => line.endsWith('— REGRESSED'))).toHaveLength(4);
+  });
+
+  test('passes when the second look holds', async () => {
+    const slow = busy(90, 90);
+    const fine = busy(28, 28);
+    const { measure, asked } = measuring([slow, slow, slow, fine, fine, fine]);
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(asked).toHaveLength(6);
+    expect(verdict.regressed).toBe(false);
+  });
+
+  test('is an error, not a pass, when nobody was answered while issues were meant to be busy', async () => {
+    for (const issues of [undefined, { answered: 0, refused: 0 }]) {
+      const { measure } = measuring([
+        { ...run(27, 27), ...(issues === undefined ? {} : { issues }) },
+      ]);
+      const refusal = await withIssuesBusy(quiet, measure).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      expect(refusal).toContain('nobody was answered');
+    }
+  });
+
+  test('the command hands back what the quiet trials came to, to be judged against', async () => {
+    const result = await main([], () => Promise.resolve(run(30, 31)));
+    expect(result.quiet).toEqual(summarizeTrials([run(30, 31), run(30, 31), run(30, 31)]));
   });
 });
