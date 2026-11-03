@@ -297,6 +297,14 @@ request with behaviour unchanged:
 8. the lint then forbids a chat table's name in `modules/` and `platform/`, from an allow-list that has shrunk to
    nothing.
 
+**Step 12, in the order it is built.** (a) *The composition* (**built**): `composition.ts` takes the modules a process runs
+and makes from them what the core leaves open — the workspace's first hook, the account's erasure hook, who answers
+for the channels, the purge's steps and tables, the two catalogues, the columns readiness checks; a module is its manifest
+and what it contributes (`features/chat/module.ts`), and a process with no module has the core alone, shown on a real
+database. (b) Reading `MODULES` at boot and handing the composition only the modules it names; (c) the routes of a module
+mounted only when it runs, a disabled module's plain `404`, and its jobs and commands exiting `0`; (d) the server naming
+the enabled modules and the web building its routes from them; (e) the matrix in CI and the cluster check.
+
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The
 places the core and chat share data — attachments, read state, notifications, which reference messages by key
