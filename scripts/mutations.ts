@@ -12535,6 +12535,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/export/export.integration.test.ts'],
   },
   {
+    id: 'module-set-mismatch-unsaid',
+    why: 'a rolling deploy of a new module set runs half the cluster on another set and nobody is told (D-250)',
+    file: 'apps/api/src/realtime/module-set.ts',
+    find: 'if (others.length > 0 && !mismatched) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/realtime/module-set.test.ts'],
+  },
+  {
     id: 'module-budget-no-cap',
     why: "a module takes every connection of the pool and chat's sends queue behind it (D-250)",
     file: 'apps/api/src/platform/module-budget.ts',
