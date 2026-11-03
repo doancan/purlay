@@ -171,7 +171,7 @@ until then it is a stated intent and not a guarantee.
 | Disabled ⇒ no tables | the CI matrix, per cell | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off | 10 |
 | A core migration keeps module schemas valid | CI migrating each set from the last release | 10 |
-| One module set in a cluster; a rolling deploy still passes | the boot check, a two-node test with different sets, a bus channel per set | 12 |
+| One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
 | Shell chunk holds no module code | `budget:web` shape check | 11 |
@@ -312,7 +312,9 @@ the wait for another node's) are the core's and the named modules' sets, and the
 is not run is the plain `404` of any unknown path, before the rate limit and the session are asked, a job of one that acts for its
 users (chat's missed-mail letter) exits `0` with a line saying so and is left out of the status report — its sweeps and the retention purge still run, the rows being there — and `GET /api/client` lists the modules the server runs.
 A scan holds every route the application registers to the core's list or a module's. (d) The web building its routes
-from the listed modules (step 11); (e) the matrix in CI and the cluster check.
+from the listed modules (step 11); (e) *the cluster check* (**built**): where nodes share Redis each keeps its set in one
+shared record, renewed and lapsing by itself, and a node that finds another set logs it once and again when the nodes agree;
+it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI.
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The

@@ -207,6 +207,8 @@ export interface HeldAfterDrain {
   readonly database: { readonly destroy: () => Promise<void> };
   /** The shared Redis connections (D-201); absent where `REDIS_URL` is unset, and closed last. */
   readonly redis?: { readonly close: () => void } | undefined;
+  /** This node's entry in the shared record of the modules each node runs (D-250), taken out before Redis closes. */
+  readonly moduleSet?: { readonly stop: () => Promise<void> } | undefined;
 }
 
 /**
@@ -215,7 +217,7 @@ export interface HeldAfterDrain {
  * bound, then the reports of the shutdown itself, then the pool.
  */
 export const closeAfterDrain =
-  ({ push, services, errorTracker, database, redis }: HeldAfterDrain) =>
+  ({ push, services, errorTracker, database, redis, moduleSet }: HeldAfterDrain) =>
   async (): Promise<void> => {
     try {
       await push?.flush();
@@ -224,6 +226,7 @@ export const closeAfterDrain =
       await database.destroy();
     } finally {
       // Whatever above failed, the connections and their timers do not outlive the shutdown.
+      await moduleSet?.stop();
       redis?.close();
     }
   };

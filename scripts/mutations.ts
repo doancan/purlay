@@ -10772,8 +10772,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'redis-skipped-when-the-drain-fails',
     why: 'a pool that will not close leaves the Redis connections and timers running',
     file: 'apps/api/src/lifecycle.ts',
-    find: '    } finally {\n      // Whatever above failed, the connections and their timers do not outlive the shutdown.\n      redis?.close();\n    }',
-    replace: '    }\n    redis?.close();',
+    find: '    } finally {\n      // Whatever above failed, the connections and their timers do not outlive the shutdown.\n      await moduleSet?.stop();\n      redis?.close();\n    }',
+    replace: '    }\n    await moduleSet?.stop();\n    redis?.close();',
     tests: ['apps/api/src/lifecycle.test.ts'],
   },
   {
@@ -12533,6 +12533,14 @@ export const MUTATIONS: readonly Mutation[] = [
     find: " where name not like '%/%'",
     replace: '',
     tests: ['apps/api/src/modules/export/export.integration.test.ts'],
+  },
+  {
+    id: 'module-set-mismatch-unsaid',
+    why: 'a rolling deploy of a new module set runs half the cluster on another set and nobody is told (D-250)',
+    file: 'apps/api/src/realtime/module-set.ts',
+    find: 'if (others.length > 0 && !mismatched) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/realtime/module-set.test.ts'],
   },
   {
     id: 'module-budget-no-cap',
