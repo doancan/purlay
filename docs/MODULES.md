@@ -73,7 +73,7 @@ not take the core down (§7). **A disabled module's routes are registered all th
 application is one typed Elysia chain, and a route table added to or left out per process would break the type the
 web client reads; so every route of the build is registered, and `closed()` (`composition.ts`, built from the
 `routes` of the manifests of the modules not run) is asked before the rate limit and the session. The route-ownership
-test (`routes.test.ts` of the door) holds the manifests' lists and the routes the application registers together, so a
+test (`ingress/http/route-ownership.test.ts`) holds the manifests' lists and the routes the application registers together, so a
 route nobody owns, or one claimed by two, fails it. The effect is that a request for a closed path gets the plain
 `404` of any unknown route, with the generic body and no code that says *disabled* — which would tell a caller who has
 not signed in which modules an instance runs. A closed job exits `0` (`closedJob`), a closed frame is answered as an
@@ -240,11 +240,127 @@ not the whole suite once per cell.
 
 ## 9. Adding a module — the checklist
 
-A section in this file with its requires, optional partners and capabilities · its migration set, with the
-`SCHEMA.md` and `DATA.md` entries · its `data` hooks (erasure, export, retention) · its audit actions and
-permissions · its events and notifications · its web manifest and chunk bound · its smoke test and matrix cell
-· its latency measure · what a user sees for each partner that is absent · the threshold at which it is removed if
-nobody uses it (D-250 rule 6).
+Written from what building issues (D-254) needed, in the order a change is made. Each item names the file or test
+that fails if it is skipped; an item with no such thing is said to have none. `issues` is the worked example: read its
+commit beside this list.
+
+**1. Decide it.**
+
+- Take the next D-number in `DECISIONS.md` (`### D-N.`; the document check refuses a gap, a repeat and a decision
+  nothing else cites) and write the decision: what the module is, what it is **not** (D-254 §1 lists what issues left
+  out, each a decision of its own), the table, who may do what, what happens to its data when it is off, and the cost
+  of reversing it. A module is admitted only with this, a section under §11 and a removal rule (D-250 rule 6).
+- Add its row and its section to §11 below. `module-listing.test.ts` fails for a bundled module without a row, or a row
+  for one that is not bundled.
+
+**2. The manifest** (`features/<id>/module.ts`, the object in `bundledModules` in `composition.ts`).
+
+- `id`: lowercase letters, digits, hyphens, at most 32, and not a path the core owns (`RESERVED_MODULE_IDS`; the
+  registry refuses it, and a test holds the list to `API.md`).
+- `requires` (will not start without), `optional` (used when present; mutual optional partners are a cycle, one must be
+  the one that knows the other), `provides` (capability names like `chat.post-system-message`). Say what a user sees for
+  each absent partner. Promoting an `optional` to `requires` is a breaking change.
+- `routes`: every path template the module owns, as the paths the contract gives (`:name` is a segment, a trailing `**`
+  the rest). `route-ownership.test.ts` fails for a registered route no manifest claims or two claim.
+- `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
+  for its users. Leave out a job that only keeps rows tidy: rows outlive the module's being off. Chat's `events` are a
+  `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the module sends and does not list
+  would reach a process that does not run it.
+
+**3. The data.**
+
+- A **migration set** in `packages/db/migrations/<id>/0001_<name>.sql`, recorded as `<id>/0001_<name>`; registered in
+  `PRODUCT_MIGRATION_SETS` (`packages/db/src/migrator.ts`). Keys go module to core, never between modules; index every
+  key. `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
+  and `DATA.md`.
+- **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it.
+  `table-ownership.integration.test.ts` holds the list to the database, and a key across owners fails it. A core
+  migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
+- **Data hooks and the data-lifecycle rule.** Erasure, export and retention reach every module whose tables exist,
+  enabled or not (D-250 rule 5, D-255 §3). So a module whose data an erased account, a deleted workspace or an export
+  must reach sets `dataInCore: true` and gives `userErased`, `workspacePurge` (its table in `tables`, because a purged
+  workspace keeps its row as a tombstone and the cascade never fires), `export` and `personalExport`. Each hook that names
+  a table its own set makes asks `tableExists` first; the exports skip it through the contribution's `ownSet`. Add the
+  table to the compile-time decision in `export-catalogue.ts`: while a table is undecided it does not compile and names
+  the table. A module whose data is not personal or workspace data still decides it, as `excluded`.
+- **Audit and permissions**: an audit action is a value of `AuditAction` and its target a `targetType` in
+  `modules/audit/audit.ts`, written in the same transaction by id and never by words (D-222), with the sentence the
+  settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`). A role rule is in the service and tested
+  through the route.
+
+**4. The routes, in `ingress/`.**
+
+- Route handlers in `apps/api/src/ingress/http/<id>.ts` and their registration in `ingress/http/app.ts`; the
+  module's services do not import HTTP types. The wire types go in `packages/types/src/<id>.ts`, exported from `index.ts`,
+  with new error codes in `errors.ts` and the endpoint in `api.ts` and `API.md`.
+- **Cross-tenant classification.** The endpoints are read from `API.md`, and each must appear in `apps/api/src/testing/cross-tenant.ts`
+  with a case (what it answers for a workspace the caller is not in, `WORKSPACE_NOT_FOUND`, and how channel visibility
+  applies: `none`, with the reason, for a route that names no channel) or among the unscoped with the reason it has no
+  tenant to cross; `cross-tenant.test.ts` fails for one that is in neither, and `cross-tenant.integration.test.ts` runs
+  the crossings. A new path parameter name needs its id there too.
+- `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
+
+**5. The web.**
+
+- `apps/web/src/features/<id>/load.tsx`: one `import()` through `chunkOf` (`app/chunk.ts`) into the module's own chunk,
+  with a quiet skeleton while it comes. Nothing else imports the screen: not the shell, not another chunk.
+- The route: add it to `ROUTES` and to **`ROUTE_MODULES`** in `router/routes.ts` (the table is typed over every route, so
+  a route cannot be added without saying whose it is; `route-modules.test.ts` holds it), draw it in `app/outlet.tsx`
+  inside `ModuleGate`, so where the session does not list the module the address is `NotFound` as the server's is.
+- **Gating by `useRuns`** (or `WhenRun`) every place the module shows up: the rail link (`shell/rail.tsx`), the palette
+  entry (`palette/use-palette-items.ts`), any sidebar section, shortcut (`shell/global-keys.tsx`) and settings page, and
+  any request that would otherwise be answered with `404`. The icon (`components/icon.tsx`), the client (`data/api.ts`,
+  `data/keys.ts`), the failure words for its error codes (`data/failure.ts`, and the exhaustive switch in
+  `composer/uploads.tsx`) and the English and Turkish catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
+- **`budget:web` shape check**: a marker only the screen carries goes in `MODULE_SCREENS` in `scripts/budget-web.ts`, and
+  the screen's file holds it; the check fails if an initial chunk carries it. A bound for the chunk is added where the
+  budget lists chat's.
+
+**6. The tests that make it a module and not a folder.**
+
+- The **modules-off cell**: the module's routes are `404` in a process without it (`ingress/http/modules-off.integration.test.ts`)
+  and its frames and events are closed (`realtime/modules-off*.integration.test.ts`, if it has any).
+- The **migration cell**: `packages/db/src/migration-cells.integration.test.ts` finds the table beside its set and nowhere
+  else; `migration-sets.test.ts` lists the set.
+- The **lifecycle matrix cell**: `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment
+  reader with the module's set as a database state and the module alone as a process.
+- A **real process** per `MODULES` value in `platform/migrate-on-start.integration.test.ts`.
+- The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
+  out of the frame when the server runs none.
+- A **module-listing** row (§11, above) and `composition.test.ts` for what the module contributes.
+- **Mutations**: for each rule above the tests are the only guard of, a mutation in `scripts/mutations.ts` that breaks the
+  rule and names the test that must fail (issues added eleven; read `issues-*` there). Insert new entries after
+  `core-sweep-names-a-chat-table`, never at the end of the file.
+
+**7. The release.**
+
+- `bun run release` rewrites `apps/api/src/released-manifests.json` (`manifests:snapshot`), and from then on
+  `module-compat.test.ts` holds the module to it: no new requirement, no capability, route, job or frame gone, no id changed.
+  A break is a dated entry under `exceptions` in that file, where a reviewer sees it; the release clears them. Until a
+  release carries the module the snapshot does not name it.
+- `docs/changelog/changes.md` gets an entry under **Added**; the decision count in `README.md` follows.
+
+**8. The documents.** `MODULES.md` (§11 row and section, §8 if a rule is now held), `DECISIONS.md`, `SCHEMA.md` (the
+migration and the table), `DATA.md` (what personal data it holds and how it is erased and exported), `API.md`
+(routes, error codes), `CONFIG.md` (the `MODULES` row names it), `ARCHITECTURE.md` (the features tree) and
+`DEPLOY.md` (nothing to change unless the module needs configuration). `check:docs` and `module-listing.test.ts` fail for
+the ones they hold.
+
+**What a new module edits outside its own folder, counted on the issues commit (#962).** Source files, not tests and
+not documents; the list is here so that it can shrink, and each line says whether it has to.
+
+| Where | Files | Why, and whether it can go |
+|---|---|---|
+| `apps/api/src` | `composition.ts`, `ingress/http/app.ts`, `ingress/http/<id>.ts`, `export-catalogue.ts`, `modules/audit/audit.ts` | the module's row, its routes, the compile-time decision of its tables, the target type; the first two are the cost of one typed chain and one list |
+| `apps/api/src/modules/export` | `catalogue.ts`, `export.ts`, `personal-catalogue.ts`, `personal.ts` | paid once, by the first own-set module (`ownSet`, `absent`); the next one touches none |
+| `packages/db` | `migrations/<id>/0001`, `src/migrator.ts`, `src/table-owners.ts`, `src/schema.ts` | the set, its registration, its owner, the generated schema; the last is generated |
+| `packages/types/src` | `<id>.ts`, `api.ts`, `errors.ts`, `index.ts` | the wire; the module's own file is the module's |
+| `apps/web/src` | `router/routes.ts`, `app/outlet.tsx`, `shell/rail.tsx`, `palette/use-palette-items.ts`, `components/icon.tsx`, `data/api.ts`, `data/keys.ts`, `data/failure.ts`, `features/composer/uploads.tsx`, `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | twelve: the shell's list of screens, rail, palette, icon, client, keys, error words twice, audit words and the two catalogues. A web manifest that the router, rail and palette read would take about five of them; the two failure files are one switch written twice |
+| `scripts` | `budget-web.ts`, `mutations.ts` | the screen's marker and the mutations; the first can be derived from the module's folder |
+
+That is 27 source files that recur, plus the four of the export that were paid once, and eight documents. The
+architecture review's "about 12 source files and 3 documents" counted the places a module must be *wired*; counting every
+file an issues-sized module touches gives the larger number, and the web's twelve are most of it.
 
 ## 10. Order of work
 
