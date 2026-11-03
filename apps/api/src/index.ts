@@ -9,7 +9,7 @@
  * convention (`ARCHITECTURE.md` §4).
  */
 import { exportQueue } from './modules/export/queue';
-import { exportCatalogue } from './export-catalogue';
+import { exportCatalogue, personalExportCatalogue } from './export-catalogue';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -131,6 +131,7 @@ const exports = exportQueue({
   log,
   storage,
   catalogue: exportCatalogue,
+  personalCatalogue: personalExportCatalogue,
 });
 
 // The transport this node's sockets hear on. Made here, rather than by the application, so that

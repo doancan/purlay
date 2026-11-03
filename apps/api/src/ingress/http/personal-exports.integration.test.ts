@@ -39,7 +39,7 @@ import { exportQueue } from '../../modules/export/queue';
 import { sweepExports } from '../../modules/export/requests';
 import { endPersonalExports } from '../../modules/export/personal-requests';
 import { createApp } from './app';
-import { exportCatalogue } from '../../export-catalogue';
+import { exportCatalogue, personalExportCatalogue } from '../../export-catalogue';
 
 let cloned: ClonedDatabase;
 
@@ -79,6 +79,7 @@ const aWorld = async (options: { readonly held?: boolean } = {}): Promise<World>
   const room = await aRoom(cloned.db, ['ada', 'bob']);
   const queue = exportQueue({
     catalogue: exportCatalogue,
+    personalCatalogue: personalExportCatalogue,
     database: cloned.db,
     clock,
     log: silent,
@@ -415,6 +416,7 @@ describe('integration: a person’s export of their own data', () => {
       if (refuses) world.store.failing('delete', new Error('the bucket refuses'));
       const queue = exportQueue({
         catalogue: exportCatalogue,
+        personalCatalogue: personalExportCatalogue,
         database: cloned.db,
         clock: world.clock,
         log,
@@ -437,6 +439,7 @@ describe('integration: a person’s export of their own data', () => {
     const { log, lines } = aRecordingLogger();
     const queue = exportQueue({
       catalogue: exportCatalogue,
+      personalCatalogue: personalExportCatalogue,
       database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
       clock: aMovableClock(),
       log,

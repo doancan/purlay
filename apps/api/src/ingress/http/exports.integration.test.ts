@@ -38,7 +38,7 @@ import { sendMessage } from '../../features/chat/messages/messages';
 import { exportQueue } from '../../modules/export/queue';
 import { sayAlive, sweepExports } from '../../modules/export/requests';
 import { createApp } from './app';
-import { exportCatalogue } from '../../export-catalogue';
+import { exportCatalogue, personalExportCatalogue } from '../../export-catalogue';
 
 let cloned: ClonedDatabase;
 
@@ -83,6 +83,7 @@ const aWorld = async (
     .execute();
   const queue = exportQueue({
     catalogue: exportCatalogue,
+    personalCatalogue: personalExportCatalogue,
     database: cloned.db,
     clock,
     log: silent,
@@ -372,6 +373,7 @@ describe('integration: an owner’s export', () => {
       const { log, lines } = aRecordingLogger();
       const queue = exportQueue({
         catalogue: exportCatalogue,
+        personalCatalogue: personalExportCatalogue,
         database: cloned.db,
         clock: {
           now: (): Date => {
@@ -550,6 +552,7 @@ describe('integration: an owner’s export', () => {
     const { log, lines } = aRecordingLogger();
     const queue = exportQueue({
       catalogue: exportCatalogue,
+      personalCatalogue: personalExportCatalogue,
       database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
       clock,
       log,
@@ -570,6 +573,7 @@ describe('integration: an owner’s export', () => {
     await sayAlive(
       {
         catalogue: exportCatalogue,
+        personalCatalogue: personalExportCatalogue,
         database: cloned.db,
         clock: later,
         log: silent,
@@ -589,6 +593,7 @@ describe('integration: an owner’s export', () => {
     await sayAlive(
       {
         catalogue: exportCatalogue,
+        personalCatalogue: personalExportCatalogue,
         database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
         clock,
         log,
