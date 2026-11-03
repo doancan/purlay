@@ -258,7 +258,7 @@ request with behaviour unchanged:
    answers `[]` and 0 when chat is absent, which is its second implementation; the proof is that the existing
    tests pass unmodified with chat's, that the same channel ids still reach the fan-out after the commit, and
    that nothing breaks with the null one;
-2. **`userErased`**, a hook list run in the account's erasure transaction, where chat registers the five deletes
+2. **`userErased`** (**built**), a hook list run in the account's erasure transaction, where chat registers the five deletes
    it does today (`saved_searches`, `saved_messages`, `thread_follows`, `notifications`, `missed_mail_letters`)
    in the same order; proved by the existing erasure tests, the rows of every table compared before and after on a
    seeded fixture, the SQL sequence captured before and after, and an erasure raced against sends;
