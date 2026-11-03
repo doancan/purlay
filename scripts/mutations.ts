@@ -9128,7 +9128,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'performance-skip-runs-the-measurements',
     why: 'PURLAY_E2E_PERFORMANCE=skip still runs the measuring tests, inside the parallel suite (D-227)',
     file: 'apps/web/playwright.config.ts',
-    find: "  ...(performanceMode === 'skip' ? { testIgnore: MEASURING } : {}),\n",
+    find: "    ...(performanceMode === 'skip' ? MEASURING : []),\n",
     replace: '',
     tests: ['scripts/browser-measurement.test.ts'],
   },
