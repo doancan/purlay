@@ -13,9 +13,8 @@ import { offlinePresence, onlinePresence } from './online';
 
 const timersRecorded = (): Timers & {
   readonly armed: { readonly ms: number; readonly fire: () => void; cleared: boolean }[];
-  readonly fireAll: () => void;
-  /** Fires the grace timers only: the idle timers are left for `advance`. */
-  readonly fireGrace: () => void;
+  /** Fires the timers armed for `ms` or less (a retry, a grace); the idle timers are left for `advance`. */
+  readonly fireUpTo: (ms: number) => void;
   /** Moves quiet time forward, running each timer that falls due, in order, including ones they arm. */
   readonly advance: (ms: number) => void;
 } => {
@@ -27,9 +26,9 @@ const timersRecorded = (): Timers & {
       armed.push({ ms, at: quiet + ms, fire, cleared: false });
       return armed.length - 1;
     },
-    fireGrace: (): void => {
+    fireUpTo: (ms): void => {
       for (const timer of armed) {
-        if (timer.ms === PRESENCE_GRACE_MS && !timer.cleared) {
+        if (timer.ms <= ms && !timer.cleared) {
           timer.cleared = true;
           timer.fire();
         }
@@ -49,9 +48,6 @@ const timersRecorded = (): Timers & {
     clear: (handle): void => {
       const timer = armed[handle as number];
       if (timer !== undefined) timer.cleared = true;
-    },
-    fireAll: (): void => {
-      for (const timer of armed.splice(0)) if (!timer.cleared) timer.fire();
     },
   };
 };
@@ -112,7 +108,7 @@ describe('who is online on this node', () => {
     expect(w.told).toHaveLength(1);
     expect(w.timers.armed.filter((t) => !t.cleared).map((t) => t.ms)).toContain(PRESENCE_GRACE_MS);
     expect(w.online.held()).toEqual({ online: 1, leaving: 1 });
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
     expect(w.told.map((c) => [c.userId, c.online])).toEqual([
       ['alice', true],
@@ -127,7 +123,7 @@ describe('who is online on this node', () => {
     w.online.arrived('alice');
     w.online.left('alice');
     w.online.arrived('alice');
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
     expect(w.told.map((c) => c.online)).toEqual([true]);
     expect(w.online.held()).toEqual({ online: 1, leaving: 0 });
@@ -138,7 +134,7 @@ describe('who is online on this node', () => {
     w.online.arrived('alice');
     w.setNow(500);
     w.online.left('alice');
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     w.online.arrived('bob');
     await w.online.settled();
     const versions = w.told.map((c) => c.version);
@@ -165,7 +161,7 @@ describe('who is online on this node', () => {
     w.online.stop();
     w.online.left('alice');
     w.online.arrived('bob');
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
     expect(w.told.map((c) => c.userId)).toEqual(['alice']);
     expect(w.online.held().leaving).toBe(0);
@@ -177,7 +173,7 @@ describe('who is online on this node', () => {
     w.online.left('alice');
     w.online.stop();
     expect(w.timers.armed.every((t) => t.cleared)).toBe(true);
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
     expect(w.told.map((c) => c.online)).toEqual([true]);
   });
@@ -197,9 +193,9 @@ describe('who is online on this node', () => {
     await w.online.settled();
     expect(told).toEqual([]);
     expect(w.online.held().leaving).toBe(1);
-    w.timers.fireAll();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
-    expect(told.map((c) => [c.userId, c.online])).toEqual([['alice', true]]);
+    expect(told.map((c) => [c.userId, c.online, c.away])).toEqual([['alice', true, false]]);
     expect(w.online.held()).toEqual({ online: 1, leaving: 0 });
   });
 
@@ -223,7 +219,7 @@ describe('who is online on this node', () => {
     grace.cleared = true;
     grace.fire();
     await w.online.settled();
-    w.timers.fireAll();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
     expect(told.map((c) => c.online)).toEqual([false]);
   });
@@ -350,7 +346,7 @@ describe('who is away on this node: idleness only (D-257)', () => {
     w.timers.advance(AWAY_AFTER_MS);
     w.online.left('alice');
     w.online.arrived('alice');
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     await w.online.settled();
     expect(w.told.map((c) => c.away)).toEqual([false, true]);
     expect(await w.online.onlineAmong(['alice'])).toMatchObject([{ away: true }]);
@@ -361,7 +357,7 @@ describe('who is away on this node: idleness only (D-257)', () => {
     w.online.arrived('alice');
     w.timers.advance(AWAY_AFTER_MS);
     w.online.left('alice');
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     w.online.arrived('alice');
     await w.online.settled();
     expect(w.told.map((c) => [c.online, c.away])).toEqual([
@@ -380,7 +376,7 @@ describe('who is away on this node: idleness only (D-257)', () => {
     const w = world();
     w.online.arrived('alice');
     w.online.left('alice');
-    w.timers.fireGrace();
+    w.timers.fireUpTo(PRESENCE_GRACE_MS);
     w.timers.advance(AWAY_AFTER_MS * 2);
     await w.online.settled();
     expect(w.told.map((c) => [c.online, c.away])).toEqual([
@@ -413,6 +409,8 @@ describe('who is away on this node: idleness only (D-257)', () => {
     w.online.arrived('alice');
     w.online.stop();
     expect(w.timers.armed.every((t) => t.cleared)).toBe(true);
+    // `held` counts people and graces, not idle timers: the cleared timers above are the check for those.
+    expect(w.online.held()).toEqual({ online: 1, leaving: 0 });
     w.timers.advance(AWAY_AFTER_MS);
     w.online.active('alice');
     await w.online.retell('alice');
