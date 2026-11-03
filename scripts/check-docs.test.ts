@@ -118,4 +118,25 @@ describe('the document check', () => {
     expect(status).toBe(1);
     expect(output).toContain('0007_message_content_limit.sql');
   });
+
+  test('fails when a module’s migration is missing from SCHEMA.md, or SCHEMA.md names one that is not a file (D-250)', () => {
+    const missing = aCopy();
+    edit(missing, 'docs/SCHEMA.md', (text) =>
+      text.replace(/^chat\/0001_message_attachments\.sql.*$/m, ''),
+    );
+    const left = run(missing);
+    expect(left.status).toBe(1);
+    expect(left.output).toContain('chat/0001_message_attachments.sql');
+
+    const invented = aCopy();
+    edit(invented, 'docs/SCHEMA.md', (text) =>
+      text.replace(
+        /^(chat\/0001_message_attachments\.sql.*)$/m,
+        '$1\nchat/0002_a_file_nobody_wrote.sql  nothing',
+      ),
+    );
+    const named = run(invented);
+    expect(named.status).toBe(1);
+    expect(named.output).toContain('chat/0002_a_file_nobody_wrote.sql');
+  });
 });
