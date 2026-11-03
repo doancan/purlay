@@ -152,6 +152,7 @@ until then it is a stated intent and not a guarantee.
 | No read of another module's tables | typed query handle; a lint ban on raw `sql` in `features/` | 5 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
+| Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
 | A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built**, a module is handed it when it is made | 5 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
