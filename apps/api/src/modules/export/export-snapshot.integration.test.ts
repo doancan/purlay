@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import { aMemoryStore } from '../../testing/storage';
 import { aRecordingLogger } from '../../testing/doubles';
+import { exportCatalogue } from '../../export-catalogue';
 
 let cloned: ClonedDatabase;
 
@@ -52,7 +53,7 @@ describe('integration: an export’s snapshot', () => {
     await snapshotOn(cloned.db)(async (transaction) => {
       await readTables(
         transaction,
-        { kind: 'all', workspaceId: room.workspaceId, channelIds: [room.channelId] },
+        { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
         async (table, lines) => {
           if (table === 'messages' && !committed) {
             // Another connection, committed at once, while the export holds its snapshot.
@@ -64,6 +65,7 @@ describe('integration: an export’s snapshot', () => {
           }
           if (table === 'reactions') reactions.push(...lines);
         },
+        exportCatalogue,
       );
     });
     expect(committed).toBe(true);
@@ -117,13 +119,14 @@ describe('integration: an export’s snapshot', () => {
     const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'out');
     const { manifest } = await exportWorkspace(
       {
+        catalogue: exportCatalogue,
         database: cloned.db,
         clock: fixedClock(NOW),
         log: aRecordingLogger().log,
         storage: removing,
       },
       { id: room.workspaceId, slug: 'acme', name: 'Acme' },
-      { kind: 'all', workspaceId: room.workspaceId, channelIds: [room.channelId] },
+      { kind: 'all', workspaceId: room.workspaceId, prepared: { chat: [room.channelId] } },
       target,
     );
     expect(manifest.blobs).toEqual({ count: 0, bytes: 0, removed: [fileId], missing: [] });

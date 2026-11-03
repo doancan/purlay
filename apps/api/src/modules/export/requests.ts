@@ -33,7 +33,7 @@ import {
 import { Value } from '@sinclair/typebox/value';
 import type { Clock } from '../../platform/clock';
 import { HOUR_MS } from '../../platform/clock';
-import { visibleChannelIds } from '../../platform/channels';
+import type { Catalogue } from './catalogue';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
@@ -202,6 +202,8 @@ export interface RunDependencies {
   readonly clock: Clock;
   readonly log: Logger;
   readonly storage: ObjectStore;
+  /** What a workspace's export holds, assembled from the core's contribution and the modules' (D-250). */
+  readonly catalogue: Catalogue;
 }
 
 /** Marks an export failed, with a code; only while it is still being made. */
@@ -331,7 +333,6 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
     return;
   }
   const owner = context.userId;
-  const channelIds = await visibleChannelIds(database, context);
 
   const stopBeating = beatWhileMade(dependencies, 'workspace_exports', exportId);
   const scratch = await mkdtemp(join(tmpdir(), 'purlay-export-'));
@@ -342,7 +343,11 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
     const { manifest } = await exportWorkspace(
       dependencies,
       { id: row.workspace_id, slug: row.slug, name: row.name },
-      { kind: 'visible-to-owner', workspaceId: row.workspace_id, channelIds },
+      await dependencies.catalogue.scopeOf(database, {
+        kind: 'visible-to-owner',
+        workspaceId: row.workspace_id,
+        viewer: context,
+      }),
       folder,
       'caller',
     );
@@ -382,7 +387,7 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
         targetId: row.workspace_id,
         metadata: {
           scope: 'visible-to-owner',
-          messages: String(manifest.tables['messages'] ?? 0),
+          ...dependencies.catalogue.audit(manifest.tables),
         },
       });
       return true;

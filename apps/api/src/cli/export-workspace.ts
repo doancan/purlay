@@ -8,7 +8,8 @@
  * Prints where it wrote and how many rows; never anybody's words.
  */
 import { createDatabase } from '@purlay/db';
-import { everyChannel, exportWorkspace } from '../modules/export/export';
+import { exportWorkspace } from '../modules/export/export';
+import { exportCatalogue } from '../export-catalogue';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
@@ -38,13 +39,15 @@ try {
       process.exitCode = 2;
     } else {
       const { path, manifest } = await exportWorkspace(
-        { database, clock: systemClock, log, storage: storeFor(config) },
-        workspace,
         {
-          kind: 'all',
-          workspaceId: workspace.id,
-          channelIds: await everyChannel(database, workspace.id),
+          database,
+          clock: systemClock,
+          log,
+          storage: storeFor(config),
+          catalogue: exportCatalogue,
         },
+        workspace,
+        await exportCatalogue.scopeOf(database, { kind: 'all', workspaceId: workspace.id }),
         directory,
       );
       process.stdout.write(

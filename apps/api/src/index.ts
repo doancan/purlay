@@ -9,6 +9,7 @@
  * convention (`ARCHITECTURE.md` §4).
  */
 import { exportQueue } from './modules/export/queue';
+import { exportCatalogue } from './export-catalogue';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -124,7 +125,13 @@ log.info(push === undefined ? 'web push is off: no VAPID keys' : 'web push is on
 
 // An owner's exports, one at a time, made by this process after answering (D-140).
 const storage = storeFor(config);
-const exports = exportQueue({ database, clock: systemClock, log, storage });
+const exports = exportQueue({
+  database,
+  clock: systemClock,
+  log,
+  storage,
+  catalogue: exportCatalogue,
+});
 
 // The transport this node's sockets hear on. Made here, rather than by the application, so that
 // the sign-in library publishes on it too: a session it ends closes the sockets it held (D-85).
