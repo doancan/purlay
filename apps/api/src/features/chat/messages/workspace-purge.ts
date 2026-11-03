@@ -11,7 +11,7 @@ import {
   type Batch,
   type WorkspacePurge,
 } from '../../../modules/workspaces/deletion-purge';
-import { dropFiles } from '../../../modules/attachments/deletions';
+import { dropMessageFiles } from './message-files';
 
 /** Channels one transaction takes: each takes its memberships, feeds, incidents and bookmarks with it. */
 const CHANNEL_BATCH = 100;
@@ -31,7 +31,7 @@ const messageBatch =
         .execute()
     ).map((row) => row.id);
     if (ids.length === 0) return { rows: 0, files: 0, keys: [] };
-    const files = await dropFiles(transaction, workspaceId, ids);
+    const files = await dropMessageFiles(transaction, workspaceId, ids);
     await transaction.deleteFrom('messages').where('id', 'in', ids).execute();
     return { rows: ids.length, files: files.count, keys: files.keys };
   };

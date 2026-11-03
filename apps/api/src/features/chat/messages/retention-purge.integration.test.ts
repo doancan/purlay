@@ -20,6 +20,7 @@ import { aMemoryStore } from '../../../testing/storage';
 import { sendMessage } from './messages';
 import { removeMessage } from './delete';
 import { PURGE_BATCH, purgeRetention, purgeWorkspace } from './retention-purge';
+import { linkFile } from '../../../testing/sent-files';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -212,6 +213,12 @@ describe('integration: the retention purge', () => {
             size_bytes: String(size),
           })
           .execute();
+        await linkFile(db, {
+          id: id,
+          workspaceId: room.workspaceId,
+          messageId: message,
+          channelId: room.channelId,
+        });
       }
       await db
         .updateTable('workspaces')
@@ -407,6 +414,12 @@ describe('integration: the retention purge', () => {
           size_bytes: '1',
         })
         .execute();
+      await linkFile(db, {
+        id: id,
+        workspaceId: room.workspaceId,
+        messageId: old,
+        channelId: room.channelId,
+      });
       await keep(db, room, WINDOW_DAYS);
       storage.failing('delete', new Error('the store is down'));
       const failure = await purgeRetention(deps(db, storage)).then(
@@ -615,6 +628,12 @@ describe('integration: a channel that keeps its history longer (D-225)', () => {
           size_bytes: '700',
         })
         .execute();
+      await linkFile(db, {
+        id: id,
+        workspaceId: room.workspaceId,
+        messageId: old,
+        channelId: room.channelId,
+      });
       await db
         .updateTable('workspaces')
         .set({ storage_used_bytes: '700', retention_days: WINDOW_DAYS })

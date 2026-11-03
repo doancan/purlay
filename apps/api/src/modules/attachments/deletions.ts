@@ -141,18 +141,20 @@ export const sweepObjectDeletions = async (
 };
 
 /**
- * The files of these messages: rows deleted, their bytes off the workspace, their keys queued for the
- * store in the same transaction (D-141) and returned, for the caller to delete once it has committed.
+ * These files: rows deleted, their bytes off the workspace, their keys queued for the store in the
+ * same transaction (D-141) and returned, for the caller to delete once it has committed. Which files
+ * go is the caller's to say — the module that claimed them knows what holds them (D-250).
  */
-export const dropFiles = async (
+export const dropFilesById = async (
   transaction: Transaction,
   workspaceId: string,
-  messageIds: readonly string[],
+  attachmentIds: readonly string[],
 ): Promise<{ readonly count: number; readonly keys: readonly string[] }> => {
-  if (messageIds.length === 0) return { count: 0, keys: [] };
+  if (attachmentIds.length === 0) return { count: 0, keys: [] };
   const gone = await transaction
     .deleteFrom('attachments')
-    .where('message_id', 'in', messageIds)
+    .where('workspace_id', '=', workspaceId)
+    .where('id', 'in', attachmentIds)
     .returning(['size_bytes', 'storage_key', 'thumbnail_key'])
     .execute();
   if (gone.length > 0) {
