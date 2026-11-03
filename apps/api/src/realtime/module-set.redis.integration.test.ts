@@ -107,7 +107,7 @@ afterAll(async () => {
   await admin.destroy();
 });
 
-describe('a cluster whose nodes run different module sets', () => {
+describe('integration: a cluster whose nodes run different module sets', () => {
   test('each node says so and serves on, and says when the nodes agree again', async () => {
     const key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64');
     const first = aNode('chat', key);

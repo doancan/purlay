@@ -10772,8 +10772,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'redis-skipped-when-the-drain-fails',
     why: 'a pool that will not close leaves the Redis connections and timers running',
     file: 'apps/api/src/lifecycle.ts',
-    find: '    } finally {\n      // Whatever above failed, the connections and their timers do not outlive the shutdown.\n      redis?.close();\n    }',
-    replace: '    }\n    redis?.close();',
+    find: '    } finally {\n      // Whatever above failed, the connections and their timers do not outlive the shutdown.\n      await moduleSet?.stop();\n      redis?.close();\n    }',
+    replace: '    }\n    await moduleSet?.stop();\n    redis?.close();',
     tests: ['apps/api/src/lifecycle.test.ts'],
   },
   {
