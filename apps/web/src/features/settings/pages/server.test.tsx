@@ -1059,6 +1059,52 @@ describe('Settings → Server — Google (D-251)', () => {
     },
   );
 
+  test('a call that failed outright is told as a failure, and keeps the form', async () => {
+    const view = await render(
+      aClient({ google: () => Promise.reject(new SetupFailure(500, 'INTERNAL', 'no')) }),
+    );
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(google.getByRole('alert')).toBeDefined();
+    expect(google.getByLabelText<HTMLInputElement>('Client secret').value).toBe('shh-google');
+    view.unmount();
+  });
+
+  test('cancelling closes the form and forgets the try', async () => {
+    const failed: ProbeResult = { ok: false, reason: 'secret-rejected', raw: 'no' };
+    const view = await render(aClient({ google: () => Promise.resolve(failed) }));
+    const google = card(view, 'Sign in with Google');
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    await fill(google);
+    await person().click(google.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    await person().click(google.getByRole('button', { name: 'Cancel' }));
+    expect(google.queryByLabelText('Client secret')).toBeNull();
+    await person().click(google.getByRole('button', { name: 'Connect Google' }));
+    expect(google.queryByText(en[reasonWords('secret-rejected', 'google').what])).toBeNull();
+    view.unmount();
+  });
+
+  test('a secret the key could not open says so, with the form already open and a way to let it go', async () => {
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve({ ...WITH_GOOGLE, needsReentry: ['google'] as const }),
+      }),
+    );
+    const google = card(view, 'Sign in with Google');
+    expect(google.getByText(en['settings.server.reentry'])).toBeDefined();
+    expect(google.getByLabelText('Client secret')).toBeDefined();
+    expect(google.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    await person().click(google.getByRole('button', { name: 'Disconnect' }));
+    expect(
+      within(view.getByRole('dialog')).getByText(en['settings.server.google.disconnectTitle']),
+    ).toBeDefined();
+    view.unmount();
+  });
+
   test('a refused client is said in both languages as the ID and the secret together: Google answers a wrong ID as it does a wrong secret', () => {
     const words = reasonWords('secret-rejected', 'google');
     expect(en[words.what]).toBe(
