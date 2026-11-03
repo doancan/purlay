@@ -34,6 +34,7 @@ import { Value } from '@sinclair/typebox/value';
 import type { Clock } from '../../platform/clock';
 import { HOUR_MS } from '../../platform/clock';
 import type { Catalogue } from './catalogue';
+import type { PersonalCatalogue } from './personal-catalogue';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
@@ -204,6 +205,8 @@ export interface RunDependencies {
   readonly storage: ObjectStore;
   /** What a workspace's export holds, assembled from the core's contribution and the modules' (D-250). */
   readonly catalogue: Catalogue;
+  /** What a person's export holds, assembled the same way (D-241, D-250). */
+  readonly personalCatalogue: PersonalCatalogue;
 }
 
 /** Marks an export failed, with a code; only while it is still being made. */

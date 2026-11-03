@@ -11,7 +11,13 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtemp, readdir, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeIntegrationDatabase, sql, withRollback, type Transaction } from '@purlay/db';
+import {
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  type Database,
+  type Transaction,
+} from '@purlay/db';
 import { PersonalExportManifest, messageId } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { fixedClock } from '../../platform/clock';
@@ -23,8 +29,13 @@ import { aSession } from '../../testing/signed-in';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { sendMessage } from '../../features/chat/messages/messages';
-import { exportPerson, PERSONAL_TABLE_ORDER } from './personal';
-import { MIGRATOR_TABLES, PERSONAL_COLUMNS, PERSONAL_EXCLUDED, type PersonalTable } from './tables';
+import { exportPerson } from './personal';
+import { MIGRATOR_TABLES } from './tables';
+import {
+  EVERY_TABLE_DECIDED_FOR_PEOPLE,
+  EXCLUDED_FROM_PERSONAL_EXPORT,
+  personalExportCatalogue,
+} from '../../export-catalogue';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -286,7 +297,13 @@ describe('integration: exporting a person’s own data', () => {
 
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-personal-')), 'out');
       const { path, manifest } = await exportPerson(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+          personalCatalogue: personalExportCatalogue,
+        },
         { id: pat.userId, username: pat.username },
         target,
       );
@@ -295,18 +312,18 @@ describe('integration: exporting a person’s own data', () => {
       expect(JSON.parse(await readFile(join(target, 'manifest.json'), 'utf8'))).toEqual(manifest);
       expect((await readdir(target)).sort()).toEqual(
         [
-          ...PERSONAL_TABLE_ORDER.map((table) => `${table}.ndjson`),
+          ...personalExportCatalogue.order.map((table) => `${table}.ndjson`),
           'blobs',
           'manifest.json',
         ].sort(),
       );
 
       // Every table written, its count its file's, none empty, each row pat's and only the columns decided.
-      for (const table of PERSONAL_TABLE_ORDER) {
+      for (const table of personalExportCatalogue.order) {
         const rows = await lines(target, table);
         expect({ table, rows: rows.length }).toEqual({ table, rows: manifest.tables[table] ?? -1 });
         expect({ table, empty: rows.length === 0 }).toEqual({ table, empty: false });
-        const decided = Object.entries(PERSONAL_COLUMNS[table])
+        const decided = Object.entries(personalExportCatalogue.table(table).columns)
           .filter(([, kind]) => kind === 'export')
           .map(([column]) => column)
           .sort();
@@ -336,7 +353,7 @@ describe('integration: exporting a person’s own data', () => {
       // Every place a row names is there, and no other.
       const channels = new Set((await lines(target, 'channels')).map((row) => row['id']));
       const workspaces = new Set((await lines(target, 'workspaces')).map((row) => row['id']));
-      for (const table of PERSONAL_TABLE_ORDER) {
+      for (const table of personalExportCatalogue.order) {
         for (const row of await lines(target, table)) {
           if (typeof row['channel_id'] === 'string')
             expect(channels.has(row['channel_id'])).toBe(true);
@@ -402,7 +419,13 @@ describe('integration: exporting a person’s own data', () => {
       const person = member(room, 'new');
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-personal-')), 'out');
       const { manifest } = await exportPerson(
-        { database: db, clock, log: aRecordingLogger().log, storage: aMemoryStore() },
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: aMemoryStore(),
+          personalCatalogue: personalExportCatalogue,
+        },
         { id: person.userId, username: person.username },
         target,
       );
@@ -413,13 +436,18 @@ describe('integration: exporting a person’s own data', () => {
   });
 
   test('every table and every column of the catalogue is decided on', async () => {
+    // The compile-time half: the composition root does not compile while a table of the schema is undecided.
+    expect(EVERY_TABLE_DECIDED_FOR_PEOPLE).toBe(true);
     await withRollback(async (db) => {
       const { rows } = await sql<{ table: string; columns: string[] }>`
         select table_name as table, array_agg(column_name::text order by column_name) as columns
         from information_schema.columns where table_schema = 'public'
         group by table_name
       `.execute(db);
-      const decided = [...Object.keys(PERSONAL_COLUMNS), ...Object.keys(PERSONAL_EXCLUDED)];
+      const decided = [
+        ...personalExportCatalogue.order,
+        ...Object.keys(EXCLUDED_FROM_PERSONAL_EXPORT),
+      ];
       expect(
         rows
           .map((row) => row.table)
@@ -427,16 +455,14 @@ describe('integration: exporting a person’s own data', () => {
           .sort(),
       ).toEqual([...decided].sort());
       for (const row of rows) {
-        if (!(row.table in PERSONAL_COLUMNS)) continue;
+        if (!personalExportCatalogue.order.some((name) => name === row.table)) continue;
         expect({ table: row.table, columns: row.columns }).toEqual({
           table: row.table,
-          columns: Object.keys(PERSONAL_COLUMNS[row.table as PersonalTable]).sort(),
+          columns: Object.keys(
+            personalExportCatalogue.table(row.table as keyof Database).columns,
+          ).sort(),
         });
       }
-      // Each table it writes is written in the order the reader is given, once.
-      expect(PERSONAL_TABLE_ORDER.map(String).sort()).toEqual(
-        [...Object.keys(PERSONAL_COLUMNS)].sort(),
-      );
     });
   });
 });
@@ -465,7 +491,13 @@ describe('integration: the shape of a person’s export', () => {
       const { store, pat } = await aPersonWithAFootprint(db);
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-personal-shape-')), 'out');
       const { manifest } = await exportPerson(
-        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+          personalCatalogue: personalExportCatalogue,
+        },
         { id: pat.userId, username: pat.username },
         target,
       );
