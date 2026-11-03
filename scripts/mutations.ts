@@ -12787,6 +12787,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "  job_runs: 'the scheduler’s own record',\n",
     replace: '',
     tests: [PERSONAL_EXPORT_TESTS],
+  },
+  {
     id: 'attachment-link-not-backfilled',
     why: "a database upgraded with files already sent has none of them in chat's link table, so a channel's files are found empty once the readers move (D-250)",
     file: 'packages/db/migrations/chat/0001_message_attachments.sql',
