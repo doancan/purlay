@@ -12499,4 +12499,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "{ name: 'random' }",
     tests: ['apps/api/src/modules/workspaces/workspace-created.integration.test.ts'],
   },
+  {
+    id: 'workspace-purge-skips-module-content',
+    why: "a module's messages and files are left behind by the purge of a deleted workspace (D-242, D-250)",
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: '    ...purge.before,\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
+  {
+    id: 'workspace-purge-skips-module-structure',
+    why: "a module's channels are left behind by the purge of a deleted workspace (D-242, D-250)",
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: '    ...purge.after,\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
+  {
+    id: 'workspace-purge-skips-module-tables',
+    why: 'what a module owns that still names the workspace is left when the rest is gone (D-242, D-250)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: '[...purge.tables, ...CORE_REMAINING_TABLES]',
+    replace: '[...CORE_REMAINING_TABLES]',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
 ];
