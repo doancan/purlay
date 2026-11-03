@@ -14,7 +14,8 @@
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { ObjectStore } from '../../../platform/storage';
 import { atomicallyOn } from '../../../platform/transactions';
-import { drainObjectDeletions, dropFiles } from '../../../modules/attachments/deletions';
+import { drainObjectDeletions } from '../../../modules/attachments/deletions';
+import { dropMessageFiles } from './message-files';
 import { recordAudit } from '../../../modules/audit/audit';
 import type { JobDependencies } from '../../../modules/jobs/jobs';
 import {
@@ -52,9 +53,9 @@ const eraseBatch = async (
         eb('deleted_at', 'is', null),
         eb.exists(
           eb
-            .selectFrom('attachments')
-            .select('attachments.id')
-            .whereRef('attachments.message_id', '=', 'messages.id'),
+            .selectFrom('message_attachments')
+            .select('message_attachments.attachment_id')
+            .whereRef('message_attachments.message_id', '=', 'messages.id'),
         ),
       ]),
     )
@@ -82,7 +83,7 @@ const eraseBatch = async (
     now,
     rows.filter((row) => row.deleted_at === null).map((row) => row.id),
   );
-  const files = await dropFiles(
+  const files = await dropMessageFiles(
     transaction,
     workspaceId,
     rows.map((row) => row.id),

@@ -14,6 +14,7 @@ import { aRoom, counters, type Room } from '../../../testing/rooms';
 import { aMemoryStore } from '../../../testing/storage';
 import { sendMessage } from './messages';
 import { eraseContent, planContentErasure } from './content-erasure';
+import { linkFile } from '../../../testing/sent-files';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -108,6 +109,12 @@ describe('integration: erasing what a person wrote', () => {
           size_bytes: '300',
         })
         .execute();
+      await linkFile(db, {
+        id: fileId,
+        workspaceId: room.workspaceId,
+        messageId: hers,
+        channelId: room.channelId,
+      });
       await db
         .updateTable('workspaces')
         .set({ storage_used_bytes: '300' })
@@ -203,6 +210,12 @@ describe('integration: erasing what a person wrote', () => {
           size_bytes: '1',
         })
         .execute();
+      await linkFile(db, {
+        id: fileId,
+        workspaceId: room.workspaceId,
+        messageId: hers,
+        channelId: room.channelId,
+      });
       expect(
         await eraseContent(
           { database: db, clock, log: aRecordingLogger().log, storage: aMemoryStore() },

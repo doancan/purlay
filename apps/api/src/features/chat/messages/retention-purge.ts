@@ -41,7 +41,8 @@ import {
 import { DAY_MS } from '../../../platform/clock';
 import type { ObjectStore } from '../../../platform/storage';
 import { atomicallyOn } from '../../../platform/transactions';
-import { drainObjectDeletions, dropFiles } from '../../../modules/attachments/deletions';
+import { drainObjectDeletions } from '../../../modules/attachments/deletions';
+import { dropMessageFiles } from './message-files';
 import { recordAudit } from '../../../modules/audit/audit';
 import type { JobDependencies } from '../../../modules/jobs/jobs';
 import {
@@ -157,7 +158,7 @@ const purgeReplies = async (
   if (rows.length === 0) return NOTHING;
   const ids = rows.map((row) => row.id);
   await takeBackLive(transaction, now, rows);
-  const files = await dropFiles(transaction, workspaceId, ids);
+  const files = await dropMessageFiles(transaction, workspaceId, ids);
   await transaction.deleteFrom('messages').where('id', 'in', ids).execute();
   const touched = [
     ...new Set(rows.flatMap((row) => (row.parent_id === null ? [] : [row.parent_id]))),
@@ -222,9 +223,9 @@ const purgeRoots = async (
         ),
         eb.exists(
           eb
-            .selectFrom('attachments')
-            .select('attachments.id')
-            .whereRef('attachments.message_id', '=', 'message.id'),
+            .selectFrom('message_attachments')
+            .select('message_attachments.attachment_id')
+            .whereRef('message_attachments.message_id', '=', 'message.id'),
         ),
       ]),
     )
@@ -258,7 +259,7 @@ const purgeRoots = async (
     ).flatMap((row) => (row.parent_id === null ? [] : [row.parent_id])),
   );
   await takeBackLive(transaction, now, rows);
-  const files = await dropFiles(transaction, workspaceId, ids);
+  const files = await dropMessageFiles(transaction, workspaceId, ids);
   const alone = ids.filter((id) => !holding.has(id));
   if (alone.length > 0) await transaction.deleteFrom('messages').where('id', 'in', alone).execute();
   const kept = await tombstoneRows(
