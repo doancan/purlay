@@ -1154,7 +1154,9 @@ core reads in place of `message_id IS NULL` — null until a module has taken th
 links it — and makes `(id, workspace_id)` unique so that a table of chat's can key to both. Chat's own migration set
 adds `message_attachments`, below, with the keys `attachments` has to `messages` and a key to `attachments`; it is backfilled
 from `message_id` and `channel_id`, and the two are written together. **`message_id`, `channel_id` and their keys stay for one
-release** — the release before reads them — and go in the next, once nothing does.
+release** — the release before reads them — and go in the next, once nothing does. The readers have moved: the core asks `claimed_at`,
+chat asks `message_attachments`, and a test fails if production code reads either column again; only the send still writes
+them, and the exports still write them as data. The columns go next release.
 
 ```sql
 -- chat/0001_message_attachments.sql
@@ -1989,7 +1991,7 @@ CREATE INDEX idx_personal_exports_user ON personal_exports (user_id, id DESC);
 ### 9.4. `object_deletions`
 
 Objects in the store whose rows are gone, until the store has let them go (D-141). A key is written in
-the transaction that deletes the rows naming it — `dropFiles` for retention and erasure, the orphan
+the transaction that deletes the rows naming it — `dropFilesById` for retention and erasure, the orphan
 sweep, a discarded upload — so a refusal, or a process stopping between the commit and the delete, never
 loses it. The row goes once the store has deleted the object; `sweep:deletions` tries what is left
 every hour, in key order from where it got to. Instance-wide, like `job_runs`: an operator's table, read

@@ -222,7 +222,8 @@ unchanged and proved so:
 1. leaf moves — the GitHub client and the `ILIKE` escape to `platform/` (**built**);
 2. a `workspaceCreated` hook list; chat registers the creation of the default channel, and a hook that throws
    rolls the whole workspace back (**built**);
-3. `dropFiles` to `attachments`, taking the ids of the messages it drops (**built**);
+3. `dropFiles` to `attachments`, taking the ids of the messages it drops (**built**); split in step 8 below into the
+   core's `dropFilesById` and chat's `dropMessageFiles`, which finds the files through the link;
 4. erasure and retention: both turned out to be whole commands about messages that nothing in the core calls, so
    they moved to `messages/` and no hook was needed (**built**);
 5. notifications: they are written only by messages and point at channels and messages, and their module is read
@@ -241,7 +242,15 @@ unchanged and proved so:
    `attachments`, and the core's table holds a stored object, its uploader and its workspace and nothing of a
    message. An upload nobody links is what the orphan sweep already removes after a day. It is a migration that
    moves data and every reader of those two columns changes with it, so it is done with step 10, on a copy with
-   the dumps compared, and the ratchet keeps the crossing in view until then.
+   the dumps compared, and the ratchet keeps the crossing in view until then. **In three releases, two built:**
+   *expand* (**built**: `claimed_at`, `message_attachments` backfilled, and a send writing the old columns and the
+   link together); *the readers move* (**built**: the core says unsent and sent with `claimed_at`, chat finds a file's
+   message and channel through `message_attachments`, the workspace export's and the person's export's bounds read
+   through the link, and `dropFiles` is the core's `dropFilesById` and chat's `dropMessageFiles`; a test,
+   `attachment-readers.test.ts`, fails if production code reads `attachments.message_id` or `channel_id` again,
+   with an allow-list of the one place that still writes them); *contract* (**left**: the columns, their keys and
+   indexes go, the dual write and the allow-list with them, and the exports stop writing the two columns — which
+   changes the frozen shape of an export, so it is its own change).
 
 The three behaviours that could change without a test failing: the default channel at workspace creation (an
 integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
