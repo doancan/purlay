@@ -124,6 +124,7 @@ test('walks a fresh server from the code to its first workspace', async ({ brows
     github: true,
     email: true,
     oidc: null,
+    google: false,
     signUp: 'invite-only',
     password: true,
   });
