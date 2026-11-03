@@ -86,6 +86,7 @@ describe('the single-value reads', () => {
           nameFromGitHub: false,
           mustEnrolTwoFactor: false,
           scheduledDeletions: [],
+          modules: ['chat'],
         });
       },
       channels: (workspaceId) => {

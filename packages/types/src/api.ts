@@ -129,6 +129,12 @@ export const MeResponse = Type.Object({
    * Empty for anybody who owns none.
    */
   scheduledDeletions: Type.Array(WorkspaceDeletion),
+  /**
+   * The modules this server runs, by the words an operator writes in `MODULES` (D-250): the screens, routes and
+   * shortcuts of a module that is not here are not drawn. Asked here, not of the public `GET /api/client`, because
+   * the page already waits for this answer and a signed-out screen needs none of it.
+   */
+  modules: Type.Array(Type.String()),
 });
 export type MeResponse = Static<typeof MeResponse>;
 

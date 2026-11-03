@@ -114,6 +114,7 @@ describe('the endpoints', () => {
       nameFromGitHub: false,
       mustEnrolTwoFactor: false,
       scheduledDeletions: [],
+      modules: ['chat'],
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });

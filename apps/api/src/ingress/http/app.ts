@@ -508,6 +508,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
   );
   // The reason a node is not ready is written once per check, not once per probe that hears it.
   let saidNotReady: Readiness | null = null;
+  /** The words an operator writes in `MODULES` for the modules this process runs. */
+  const moduleIds = modules.modules.map((module) => module.manifest.id);
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
@@ -562,6 +564,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const creating = {
     ...dependencies,
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
+    modules: moduleIds,
   };
   const delivering = { count: 0 };
   // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
@@ -802,13 +805,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get('/auth/oidc', async ({ set }) => respond(set, await startSignIn(dependencies, 'oidc')))
     .get('/auth/google', async ({ set }) => respond(set, await startSignIn(dependencies, 'google')))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
-    .get('/api/client', () =>
-      clientInfo(
-        dependencies.config,
-        dependencies.auth,
-        modules.modules.map((module) => module.manifest.id),
-      ),
-    )
+    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth, moduleIds))
     // The native application's way in (D-191): the browser's page says yes, the application spends the code.
     .post(
       '/api/native/authorize',

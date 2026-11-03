@@ -13006,4 +13006,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "if (words.length === 1 && words[0] === 'none') return PRODUCT_MIGRATION_SETS;",
     tests: ['packages/db/src/migration-sets.test.ts'],
   },
+  {
+    id: 'me-names-every-module-whatever-runs',
+    why: 'the page is told chat runs on a server that runs no module, and draws screens that answer 404 (D-250)',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: 'modules: [...dependencies.modules],',
+    replace: "modules: ['chat'],",
+    tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
+  },
 ];
