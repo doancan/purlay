@@ -254,7 +254,8 @@ What the shape is for, which the types do not say:
   channel's box, never a thread's reply box (D-171); it hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. `ACTIVE` is the client's
   word that its page is in front of the person in a workspace: answered with nothing, heard only by the
-  push sender, which holds that workspace's pushes for its window (D-143). Each frame joined the union
+  push sender, which holds that workspace's pushes for its window (D-143), and — as the person's own
+  word that they are using Purlay — by presence, which counts it against `AWAY_AFTER_MS` (D-257). Each frame joined the union
   with its feature, so an exhaustive switch breaks where a case is unhandled rather than carrying
   stubs for features that do not exist.
 
@@ -487,6 +488,13 @@ grace after their last closes, every change at a version that only grows; its re
 two nodes is announced once by each, a frame too many and never a wrong answer; **for online, one node
 alone is wrong on two** (a person online on one is offline to the other), so the shared adapter comes
 before a second node does (D-25, D-136 §5).
+
+Online has a second half, **away** (D-257): online and either idle for `AWAY_AFTER_MS` (five minutes
+without an `ACTIVE` word from any of the person's pages) or away by their own choice (`users.away_chosen`).
+It is told on the same `PRESENCE` change as `away`, at the same versions. One node keeps the last word per
+person in memory; several keep it in the person's Redis record (D-201) with an idle index swept on every
+renewal, so an idle lapse may be told up to one renewal late. A socket back inside the grace changes
+nothing; an arrival after being offline starts active; offline always wins.
 
 ### 6.2. `RateLimiter`
 
