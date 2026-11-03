@@ -176,7 +176,7 @@ until then it is a stated intent and not a guarantee.
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
-| Shell chunk holds no module code | `budget:web` shape check | 11 |
+| Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat | 11 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
@@ -206,7 +206,7 @@ Each step ships alone and can be reverted.
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
 | 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
-| 11 | Chat's web screens a lazy chunk; budgets split | no |
+| 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |
 | 13 | Issues complete, the second module in full | new feature |
 
@@ -317,6 +317,23 @@ A scan holds every route the application registers to the core's list or a modul
 from the listed modules (step 11); (e) *the cluster check* (**built**): where nodes share Redis each keeps its set in one
 shared record, renewed and lapsing by itself, and a node that finds another set logs it once and again when the nodes agree;
 it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI.
+
+**Step 11 in detail — chat's screens as a chunk (built; measured 2026-11-03).** The seven screens (channel, inbox,
+questions, search, saved, drafts, unreads) and what only they reach — the composer, the feed, messages and threads —
+are re-exported by `features/chat/chat.ts`, which only `features/chat/load.tsx` imports, with `import()`: one chunk,
+`assets/chat-*.js`, not seven, because they share the composer and the feed and would otherwise pull them into a
+third chunk. Each screen is drawn inside `ModuleGate` and, while the chunk comes, the skeleton the channel draws for
+its own data (`ui/skeleton`), so the first paint keeps its shape. **No waterfall:** `Outlet` asks for the chunk in the
+first commit of a chat address, beside the request for the session, not when the screen is first drawn; without that
+the chunk starts after `/api/me` and the channel's messages wait for it. What stays in the shell is what the frame,
+the sidebar and the realtime reader use of chat (links, read caches, the panels the frame hosts); `budget:web` lists
+the screens and heavy modules that may not be there. Measured on the same build: initial JavaScript 293.24 → 242.04 KB
+gzipped (entry 292.63 → 241.43), chat's chunk 45.65 KB; the bounds are 250 KB for the shell (3% over) and 50 KB for
+chat (10% over), and the 400 KB backstop stays. Time to the first message row, cold cache at 10 Mbit/s and 40 ms,
+median of nine, in-page timer: 1444–1474 ms before, 1471–1476 ms after (run twice; the runs differ by as much as
+the two builds do) and 1509 ms with the chunk not asked for early; with a warm cache 124 ms before, 124–130 ms after.
+The repo's own cold-load test stops at the frame, which chat's chunk does not gate, so the first-row timer was a
+temporary spec, not kept.
 
 **The three risks.** The migration rename and reorder: a wrong one stops a database from opening, so it is
 rehearsed on a copy with the dumps compared, and it needs the owner's approval, being hard to reverse. The
