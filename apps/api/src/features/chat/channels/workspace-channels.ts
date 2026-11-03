@@ -8,19 +8,25 @@ import { visibleChannelIds } from '../../../platform/channels';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import type { WorkspaceChannels } from '../../../modules/workspaces/channels-port';
 
+const leaveAll = async (
+  executor: Executor,
+  workspaceId: string,
+  userId: string,
+): Promise<readonly string[]> => {
+  const theirs = await requireWorkspaceMembership(executor, userId, workspaceId);
+  const channelIds = await visibleChannelIds(executor, theirs);
+  await executor
+    .deleteFrom('channel_members')
+    .where('user_id', '=', userId)
+    .where('channel_id', 'in', (eb) =>
+      eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
+    )
+    .execute();
+  return channelIds;
+};
+
 export const chatWorkspaceChannels: WorkspaceChannels = {
-  leaveAll: async (executor: Executor, workspaceId: string, userId: string) => {
-    const theirs = await requireWorkspaceMembership(executor, userId, workspaceId);
-    const channelIds = await visibleChannelIds(executor, theirs);
-    await executor
-      .deleteFrom('channel_members')
-      .where('user_id', '=', userId)
-      .where('channel_id', 'in', (eb) =>
-        eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
-      )
-      .execute();
-    return channelIds;
-  },
+  leaveAll,
 
   keptLonger: async (
     executor: Executor,

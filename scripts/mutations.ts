@@ -4417,8 +4417,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'removed-member-keeps-channels',
     why: 'somebody removed from the workspace is still a member of its private channels, and rejoins them with it',
     file: 'apps/api/src/features/chat/channels/workspace-channels.ts',
-    find: "      .deleteFrom('channel_members')\n",
-    replace: "      .selectFrom('channel_members')\n",
+    find: "    .deleteFrom('channel_members')\n",
+    replace: "    .selectFrom('channel_members')\n",
     tests: ['apps/api/src/modules/workspaces/members.integration.test.ts'],
   },
   {
@@ -12527,8 +12527,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'workspace-channels-leave-tells-nobody',
     why: "a removed member's sockets keep receiving every channel they could see, because nobody is told which (D-85, D-250)",
     file: 'apps/api/src/features/chat/channels/workspace-channels.ts',
-    find: '    return channelIds;\n  },\n\n  keptLonger',
-    replace: '    return [];\n  },\n\n  keptLonger',
+    find: '  return channelIds;\n};\n\nexport const chatWorkspaceChannels',
+    replace: '  return [];\n};\n\nexport const chatWorkspaceChannels',
     tests: ['apps/api/src/modules/workspaces/workspace-channels.integration.test.ts'],
   },
   {
