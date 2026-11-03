@@ -183,14 +183,34 @@ moves into that module.
 
 ## 6. Web
 
-A module's screens are `apps/web/src/features/<id>/`, loaded as **one chunk** by `load.tsx` (`chunkOf(() => import(…))`,
-`app/chunk.ts`), drawn behind `ModuleGate` in `app/outlet.tsx`. There is no web manifest file: the route's owner is the
-`ROUTE_MODULES` table in `router/routes.ts` (every route is named, so one cannot be added without saying whose it is),
-and everything else asks `useRuns(id)` or draws inside `WhenRun`. The session says which modules run: `GET /api/me`'s
-`modules`, not the public `GET /api/client`. So a module that is not run has no rail link, no palette entry, no shortcut,
-no section and no request, and its address is `NotFound`, as the server's is. The shell chunk holds no module code;
-`budget:web` holds a bound for the shell and one for chat's chunk, and a shape check that fails if a module's screen
-(chat's, or the marker of issues') is in an initial chunk (§8).
+<!-- web-module-registry: this section and the three lines marked the same way below are the web registry's. -->
+
+**Built (D-250, the web registry).** `apps/web/src/features/<id>/manifest.ts` is data and one loader, no component:
+the module's `id`; `load`, an `import()` of its chunk, which exports one screen for each route; its routes (path
+patterns, all inside `/w/:slug`); the places it puts on the rail and in the palette; its shortcut rows; its settings
+pages; whether its chunk is asked for in the first commit (`preload`); and what stands in for a screen while the
+chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone). The list of manifests is
+`apps/web/src/modules/registry.ts`, and nothing else names a module to the shell:
+
+- **Router.** The route table is the core's routes and every manifest's, merged, so `RouteName`, `href()` and the
+  params of each route are still a compile-time union derived from the manifests; `moduleOf` is read from them too.
+- **Outlet.** A route a manifest declares is one component, `ModuleRoute`: `Shell`, `ModuleGate`, and the module's
+  screen behind `Suspense` (the stand-in the manifest names). The core's routes are the `switch`'s cases, and one
+  without a case does not compile.
+- **Rail, palette, shortcuts, settings.** Each draws, for the modules the session lists, what the manifests say. An entry
+  that is more than a link (the inbox's dot and panel, the open-questions count) draws itself, by route, in `rail.tsx`.
+  What chat's palette lists from its data (channels, people, mark all read) stays in `use-palette-items.ts`, gated on chat.
+- **The shell holds no module code.** A manifest imports types only, so the registry the shell carries holds no screen,
+  and a manifest that imported a component which imports the router would fail at start-up. The chunk is asked for in
+  the first commit of a `preload` module's route (chat's), beside the request for the session; `budget:web` reads the
+  module ids from the manifests and looks for each one's screen marker (`screen-of-the-<id>-module`) in the initial
+  chunks.
+
+`registry.test.tsx` holds every manifest to the router and to each other: a route the router does not know, a rail
+entry for another module's route, a palette place that is not the module's own, a settings page or shortcut row placed
+after something that is not there, and a manifest the registry does not list.
+
+The session says which modules run: `GET /api/me`'s `modules`, not the public `GET /api/client`; so a module that is not run has no rail link, no palette entry, no shortcut, no section and no request, and its address is `NotFound`, as the server's is.
 
 ## 7. Isolation
 
@@ -309,21 +329,23 @@ commit beside this list.
   the crossings. A new path parameter name needs its id there too.
 - `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
 
-**5. The web.**
+**5. The web** (the web registry, §6).
 
-- `apps/web/src/features/<id>/load.tsx`: one `import()` through `chunkOf` (`app/chunk.ts`) into the module's own chunk,
-  with a quiet skeleton while it comes. Nothing else imports the screen: not the shell, not another chunk.
-- The route: add it to `ROUTES` and to **`ROUTE_MODULES`** in `router/routes.ts` (the table is typed over every route, so
-  a route cannot be added without saying whose it is; `route-modules.test.ts` holds it), draw it in `app/outlet.tsx`
-  inside `ModuleGate`, so where the session does not list the module the address is `NotFound` as the server's is.
-- **Gating by `useRuns`** (or `WhenRun`) every place the module shows up: the rail link (`shell/rail.tsx`), the palette
-  entry (`palette/use-palette-items.ts`), any sidebar section, shortcut (`shell/global-keys.tsx`) and settings page, and
-  any request that would otherwise be answered with `404`. The icon (`components/icon.tsx`), the client (`data/api.ts`,
-  `data/keys.ts`), the failure words for its error codes (`data/failure.ts`, and the exhaustive switch in
-  `composer/uploads.tsx`) and the English and Turkish catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
-- **`budget:web` shape check**: a marker only the screen carries goes in `MODULE_SCREENS` in `scripts/budget-web.ts`, and
-  the screen's file holds it; the check fails if an initial chunk carries it. A bound for the chunk is added where the
-  budget lists chat's.
+- `apps/web/src/features/<id>/manifest.ts`: data and one loader, no component: the `id`; `load`, one `import()` of the
+  module's chunk through `chunkOf` (`app/chunk.ts`), which exports a screen for each route; the routes (inside
+  `/w/:slug`), the rail and palette places, shortcut rows and settings pages, `preload`, and `waiting` (the stand-in
+  while the chunk comes). One line in `apps/web/src/modules/registry.ts` lists it. The router, the outlet, the rail, the
+  palette, the shortcuts and the settings read the manifest; nothing else names the module to the shell, and
+  `registry.test.tsx` fails for a route the router does not know, a rail entry for another module's route, a palette
+  place that is not the module's own, or a manifest the registry does not list.
+- **Gating by `useRuns`** (or `WhenRun`) stays for what a manifest does not describe: a sidebar section, a request that
+  would otherwise be answered with `404`.
+- Still per module: the icon (`components/icon.tsx`), the client (`data/api.ts`, `data/keys.ts`), the failure words for
+  its error codes (`data/failure.ts`, and the exhaustive switch in `composer/uploads.tsx`), and the English and Turkish
+  catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
+- **`budget:web` shape check**: it reads the module ids from `features/*/manifest.ts` and looks for each one's marker,
+  `screen-of-the-<id>-module`, in the initial chunks; the screen's file holds the marker. A bound for the chunk is added
+  where the budget lists chat's.
 
 **6. The tests that make it a module and not a folder.**
 
@@ -364,12 +386,15 @@ not documents; the list is here so that it can shrink, and each line says whethe
 | `apps/api/src/modules/export` | `catalogue.ts`, `export.ts`, `personal-catalogue.ts`, `personal.ts` | paid once, by the first own-set module (`ownSet`, `absent`); the next one touches none |
 | `packages/db` | `migrations/<id>/0001`, `src/migrator.ts`, `src/table-owners.ts`, `src/schema.ts` | the set, its registration, its owner, the generated schema; the last is generated |
 | `packages/types/src` | `<id>.ts`, `api.ts`, `errors.ts`, `index.ts` | the wire; the module's own file is the module's |
-| `apps/web/src` | `router/routes.ts`, `app/outlet.tsx`, `shell/rail.tsx`, `palette/use-palette-items.ts`, `components/icon.tsx`, `data/api.ts`, `data/keys.ts`, `data/failure.ts`, `features/composer/uploads.tsx`, `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | twelve: the shell's list of screens, rail, palette, icon, client, keys, error words twice, audit words and the two catalogues. A web manifest that the router, rail and palette read would take about five of them; the two failure files are one switch written twice |
-| `scripts` | `budget-web.ts`, `mutations.ts` | the screen's marker and the mutations; the first can be derived from the module's folder |
+| `apps/web/src` | `modules/registry.ts` (one line), `components/icon.tsx`, `data/api.ts`, `data/keys.ts`, `data/failure.ts`, `features/composer/uploads.tsx`, `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts`, `testing/fake-api.ts` | the registry line lists the manifest; the router, outlet, rail, palette, shortcuts, settings and `budget:web` read it, so they are no longer edited; the rest are shared registries a module adds its entries to |
+| `scripts` | `mutations.ts` | the mutations; the screen's marker is derived from the module's manifest |
 
 That is 27 source files that recur, plus the four of the export that were paid once, and eight documents. The
 architecture review's "about 12 source files and 3 documents" counted the places a module must be *wired*; counting every
 file an issues-sized module touches gives the larger number, and the web's twelve are most of it.
+
+Since the web registry the web's share is the manifest, one registry line, and the icon, client, failure words and
+catalogues: a third module's web edits went from about ten places across twelve files to five things.
 
 ## 10. Order of work
 
@@ -519,7 +544,7 @@ it never refuses traffic, so a new set rolls out node by node; (f) the matrix in
 
 **Step 11 in detail — chat's screens as a chunk (built; measured 2026-11-03).** The seven screens (channel, inbox,
 questions, search, saved, drafts, unreads) and what only they reach — the composer, the feed, messages and threads —
-are re-exported by `features/chat/chat.ts`, which only `features/chat/load.tsx` imports, with `import()`: one chunk,
+are exported by `features/chat/chat.ts`, which only chat's manifest imports, with `import()` (<!-- web-module-registry -->): one chunk,
 `assets/chat-*.js`, not seven, because they share the composer and the feed and would otherwise pull them into a
 third chunk. Each screen is drawn inside `ModuleGate` and, while the chunk comes, the skeleton the channel draws for
 its own data (`ui/skeleton`), so the first paint keeps its shape. **No waterfall:** `Outlet` asks for the chunk in the
@@ -584,7 +609,7 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 - **Audit and permissions.** None: nothing it does is on the workspace's trail, and the role rule — any member makes and
   changes, only the creator or an owner or an admin deletes — is in the service, tested through the route.
 - **Events and notifications.** None. An issue has no frame and tells nobody; a client reads again.
-- **Web.** The screen at `/w/:slug/issues`, one `import()` from `features/issues/load.tsx` into a chunk of its own; the rail
+- **Web.** The screen at `/w/:slug/issues`, one `import()` from `features/issues/manifest.ts` (<!-- web-module-registry -->) into a chunk of its own; the rail
   link and the palette entry only where the session lists the module. `budget:web` holds the shell chunk to carrying none of
   the screen.
 - **Smoke test and matrix cell.** `module-lifecycle.integration.test.ts` for every lifecycle step in each state of the database (core alone, chat's set, issues' set, every set) against each process,
