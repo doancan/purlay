@@ -13,6 +13,7 @@ import {
   GITHUB_URL_DEFAULT,
   type Config,
 } from '../platform/config';
+import { composition } from '../composition';
 import type { Dependencies } from '../ingress/http/app';
 import type { RateBudget } from '../realtime/rate-limiter';
 import type { Timers } from '../realtime/hub';
@@ -256,6 +257,7 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
   workspaceCreators: () => Promise.resolve({ kind: 'anyone' }),
   // Chat is part of what a test runs against, as it is in the application.
   workspaceChannels: chatWorkspaceChannels,
+  composition,
 });
 
 /**

@@ -279,7 +279,7 @@ import {
 } from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
-import { composition, type Composition } from '../../composition';
+import type { Composition } from '../../composition';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -376,8 +376,12 @@ export interface Dependencies {
   readonly workspaceChannels?: WorkspaceChannels;
   /** What the modules forget of a person whose account is erased, inside the erasure (D-250); absent, chat's. */
   readonly userErased?: UserErased;
-  /** The modules this process runs; absent, every one the build carries. A path of a module left out is a `404`. */
-  readonly composition?: Composition;
+  /**
+   * The modules this process runs. Required: a caller that forgot it would silently run every module the build carries,
+   * and a path of a module left out is a `404`. The process's own (`index.ts`) is `compositionFor(MODULES)`; a test gets the
+   * whole build's from `testDependencies`.
+   */
+  readonly composition: Composition;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
   readonly collatedColumns?: readonly CollatedColumn[];
   /**
@@ -467,8 +471,8 @@ const answerSetup = <T>(
 const SETUP_PATH = /^\/setup(?:\/|$)/;
 
 export const createApp = (given: Dependencies): HttpApplication => {
-  // The modules this process runs (`composition.ts`): every one the build carries, unless a caller says otherwise.
-  const modules = given.composition ?? composition;
+  // The modules this process runs (`composition.ts`).
+  const modules = given.composition;
   const dependencies = {
     ...given,
     readAttachment: modules.readAttachment,
