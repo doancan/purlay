@@ -177,7 +177,7 @@ until then it is a stated intent and not a guarantee.
 | Optional never becomes required silently | a test of manifests against the last release | 12 |
 | Chat is not slowed by a module | `budget:latency` per module | 12 |
 | Shell chunk holds no module code | `budget:web` shape check | 11 |
-| This file lists the manifests | a test | 9 |
+| This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — runs when
 `modules/**`, `features/**`, `platform/**` or `packages/db/**` changes. It is the set of cells run, and the
@@ -324,3 +324,13 @@ places the core and chat share data — attachments, read state, notifications, 
 (I-3, I-4, I-7) — where "works without chat" is unproven until the real schema says so; moving the rows that
 cannot stay in the core into chat is the cost, and the core's claim is only as large as what is left. And the
 wire names, which installed clients read.
+
+## 11. The modules this build carries
+
+One row for each manifest in `bundledModules` (`composition.ts`): a module added there without its row, or a row for
+one that is not there, fails `module-listing.test.ts`. `—` is none. The rest of a module's section (§9) goes under
+its row's id as it is written.
+
+| Module | Requires | Optional | Provides |
+|---|---|---|---|
+| `chat` | — | — | — |

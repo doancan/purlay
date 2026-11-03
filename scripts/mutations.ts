@@ -13062,4 +13062,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "message_attachments: 'core',",
     tests: ['packages/db/src/migration-cells.integration.test.ts'],
   },
+  {
+    id: 'manifest-says-more-than-the-listing',
+    why: 'a module offers a capability that MODULES.md does not list, so the document an operator reads is not the build (D-250)',
+    file: 'apps/api/src/features/chat/module.ts',
+    find: '    provides: [],',
+    replace: "    provides: ['chat.messages'],",
+    tests: ['apps/api/src/module-listing.test.ts'],
+  },
 ];
