@@ -271,11 +271,15 @@ request with behaviour unchanged:
    shape of the files, rows and columns — the safety net, written first — passed unchanged through the move.
    `attachments` is still described by chat, which bounds it by messages, until the link is chat's (step 8)
 4. **The personal export** the same way;
-5. **`COLLATED_COLUMNS`** in the readiness check: the core keeps its own three, the manifest adds the rest, and the test
-   that scans the migrations for the collation compares with the core plus all manifests;
-6. **`platform/channels.ts`** — the channel guard, 26 mentions of chat's tables — moves whole to
-   `features/chat/channels/guard.ts`, last of these, once nothing in the core imports it; `attachmentNotFound` stays
-   in the core. The three imports from `modules/` are what steps 1 and 3 remove;
+5. **`COLLATED_COLUMNS`** in the readiness check (**built**): the core keeps `CORE_COLLATED_COLUMNS` (`users.email`,
+   `users.username`, `workspaces.slug`); chat's list (`features/chat/collated-columns.ts`: `channels.name` and the
+   `github_*` digests) is handed in where the application is put together, `createApp`'s `collatedColumns`, defaulting
+   to chat's. The check and its message are unchanged; the test that scans the migrations for the collation compares
+   with the core plus chat's, and one more integration test breaks `channels.name` and expects it named;
+6. **`platform/channels.ts`** (**built**) — the channel guard, 26 mentions of chat's tables — moved whole, with its
+   two tests, to `features/chat/channels/guard.ts`, the `ChannelContext` brand still in that one file;
+   `attachmentNotFound`, a plain error, moved to `platform/errors.ts`, where the attachment code reaches it. Nothing
+   in the core imports the guard now (one workspace test still does, which the lint allows);
 7. the message link of an attachment becomes chat's (step 8 above), with step 10;
 8. the lint then forbids a chat table's name in `modules/` and `platform/`, from an allow-list that has shrunk to
    nothing.
