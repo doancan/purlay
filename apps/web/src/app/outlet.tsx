@@ -2,7 +2,8 @@
  * Which screen an address means.
  *
  * One switch over the route table, so adding a route is a compile error until it
- * has a screen: `Match['name']` is exhaustive here, and `default` is not written.
+ * has a screen: a module's routes are drawn from its manifest (`ModuleRoute`) before it, so the
+ * core's routes are the cases, and one without a case does not compile.
  * Every signed-in route renders inside `Shell`, which is what makes a person, a
  * workspace and a connection true below it; the sign-in screen and the front door
  * need only the person.
@@ -16,22 +17,11 @@
  * It is a prop so a test can mount it without a build flag.
  */
 import { lazy, Suspense, useEffect, type ComponentType } from 'react';
-import {
-  LazyChannelScreen,
-  LazyDraftsScreen,
-  LazyInboxScreen,
-  LazyQuestionsScreen,
-  LazySavedScreen,
-  LazySearchScreen,
-  LazyUnreadsScreen,
-  preloadChat,
-} from '../features/chat/load';
 import { InviteScreen } from '../features/invitations/invite-screen';
 import { MailStopScreen } from '../features/missed-mail/stop-screen';
 import { SessionGate } from '../features/session/session';
 import { Home } from '../features/shell/home';
 import { NotFound } from '../features/shell/not-found';
-import { ModuleGate } from '../features/shell/module-gate';
 import { Shell } from '../features/shell/shell';
 import { WorkspaceHome } from '../features/shell/workspace-home';
 import { SignInScreen } from '../features/sign-in/sign-in-screen';
@@ -39,10 +29,10 @@ import { EmailSignInScreen } from '../features/sign-in/email-sign-in-screen';
 import { SignUpScreen } from '../features/sign-in/sign-up-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
-import { moduleOf } from '../router/routes';
+import { isModuleMatch, moduleOf } from '../router/routes';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
+import { ModuleRoute, warmModule } from './module-route';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
-import { LazyIssuesScreen } from '../features/issues/load';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazySettingsScreen } from '../features/settings/load';
 import { LazySetupScreen, LazyVerifyScreen } from '../features/setup/load';
@@ -89,11 +79,13 @@ interface OutletProps {
 
 export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Element => {
   const { match } = useRoute();
-  const isChatRoute = match.name !== 'notFound' && moduleOf(match.name) === 'chat';
+  const owner = match.name === 'notFound' ? null : moduleOf(match.name);
   // Asked for in the first commit, beside the request for the session, so the chunk is not a second wait.
   useEffect(() => {
-    if (isChatRoute) preloadChat();
-  }, [isChatRoute]);
+    warmModule(owner);
+  }, [owner]);
+  // The modules' routes are drawn from their manifests; what is left is the core's, each a case below.
+  if (isModuleMatch(match)) return <ModuleRoute name={match.name} params={match.params} />;
   switch (match.name) {
     case 'signIn':
       return <SignInScreen />;
@@ -125,70 +117,6 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <WorkspaceHome />
-        </Shell>
-      );
-    case 'channel':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="channel">
-            <LazyChannelScreen channelId={match.params.channelId} />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'questions':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="questions">
-            <LazyQuestionsScreen />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'inbox':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="inbox">
-            <LazyInboxScreen />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'search':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="search">
-            <LazySearchScreen />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'saved':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="saved">
-            <LazySavedScreen />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'drafts':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="drafts">
-            <LazyDraftsScreen />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'unreads':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="unreads">
-            <LazyUnreadsScreen />
-          </ModuleGate>
-        </Shell>
-      );
-    case 'issues':
-      return (
-        <Shell slug={match.params.slug}>
-          <ModuleGate route="issues">
-            <LazyIssuesScreen />
-          </ModuleGate>
         </Shell>
       );
     case 'welcome':

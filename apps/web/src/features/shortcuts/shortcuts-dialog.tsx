@@ -8,6 +8,9 @@
  * `↓`), the modifiers spelled for the platform in front of them.
  */
 import { useI18n } from '../../i18n/i18n-provider';
+import type { PlainKey } from '../../i18n/types';
+import type { ModuleShortcut } from '../../modules/manifest';
+import { running } from '../../modules/registry';
 import { Dialog } from '../../ui/dialog';
 import { Kbd } from '../../ui/kbd';
 import { keyLabels, type KeyLabels } from './platform';
@@ -21,51 +24,19 @@ export interface ShortcutsDialogProps {
   readonly modules: readonly string[];
 }
 
-type RowKey =
-  | 'shortcuts.palette'
-  | 'shortcuts.reference'
-  | 'shortcuts.settings'
-  | 'shortcuts.close'
-  | 'shortcuts.channels'
-  | 'shortcuts.rowMenu'
-  | 'shortcuts.deepWork'
-  | 'shortcuts.readAll'
-  | 'shortcuts.move'
-  | 'shortcuts.thread'
-  | 'shortcuts.reply'
-  | 'shortcuts.edit'
-  | 'shortcuts.resolve'
-  | 'shortcuts.send'
-  | 'shortcuts.newline'
-  | 'shortcuts.codeSend'
-  | 'shortcuts.bold'
-  | 'shortcuts.italic'
-  | 'shortcuts.link'
-  | 'shortcuts.preview'
-  | 'shortcuts.strike'
-  | 'shortcuts.inlineCode'
-  | 'shortcuts.codeBlock'
-  | 'shortcuts.bullets'
-  | 'shortcuts.numbers'
-  | 'shortcuts.quote'
-  | 'shortcuts.editLast';
-
-type GroupKey =
-  'shortcuts.group.navigation' | 'shortcuts.group.messages' | 'shortcuts.group.composer';
-
 interface Row {
-  readonly label: RowKey;
-  /** The module whose key it is; absent is the core's. */
-  readonly module?: 'chat';
+  readonly label: PlainKey;
   /** Alternatives; each is the keys pressed together, in order. */
   readonly keys: (k: KeyLabels) => readonly (readonly string[])[];
 }
 
-const GROUPS: readonly {
-  readonly title: GroupKey;
-  readonly module?: 'chat';
+interface Group {
+  readonly title: PlainKey;
   readonly rows: readonly Row[];
-}[] = [
+}
+
+/** The core's keys. A module's rows are in its manifest (D-250), placed where it says. */
+const CORE_GROUPS: readonly Group[] = [
   {
     title: 'shortcuts.group.navigation',
     rows: [
@@ -73,51 +44,29 @@ const GROUPS: readonly {
       { label: 'shortcuts.reference', keys: (k) => [[k.mod, '/']] },
       { label: 'shortcuts.settings', keys: (k) => [[k.mod, ',']] },
       { label: 'shortcuts.close', keys: (k) => [[k.escape]] },
-      {
-        label: 'shortcuts.channels',
-        module: 'chat',
-        keys: (k) => [
-          [k.alt, '↑'],
-          [k.alt, '↓'],
-        ],
-      },
-      { label: 'shortcuts.rowMenu', module: 'chat', keys: (k) => [[k.shift, 'F10']] },
       { label: 'shortcuts.deepWork', keys: (k) => [[k.mod, k.shift, 'D']] },
-      { label: 'shortcuts.readAll', module: 'chat', keys: (k) => [[k.shift, k.escape]] },
-    ],
-  },
-  {
-    title: 'shortcuts.group.messages',
-    module: 'chat',
-    rows: [
-      { label: 'shortcuts.move', keys: () => [['↑'], ['↓']] },
-      { label: 'shortcuts.thread', keys: () => [['T']] },
-      { label: 'shortcuts.reply', keys: () => [['R']] },
-      { label: 'shortcuts.edit', keys: () => [['E']] },
-      { label: 'shortcuts.resolve', keys: (k) => [[k.mod, k.shift, 'R']] },
-    ],
-  },
-  {
-    title: 'shortcuts.group.composer',
-    module: 'chat',
-    rows: [
-      { label: 'shortcuts.send', keys: (k) => [[k.enter]] },
-      { label: 'shortcuts.newline', keys: (k) => [[k.shift, k.enter]] },
-      { label: 'shortcuts.codeSend', keys: (k) => [[k.mod, k.enter]] },
-      { label: 'shortcuts.bold', keys: (k) => [[k.mod, 'B']] },
-      { label: 'shortcuts.italic', keys: (k) => [[k.mod, 'I']] },
-      { label: 'shortcuts.strike', keys: (k) => [[k.mod, k.shift, 'X']] },
-      { label: 'shortcuts.inlineCode', keys: (k) => [[k.mod, 'E']] },
-      { label: 'shortcuts.codeBlock', keys: (k) => [[k.mod, k.alt, k.shift, 'C']] },
-      { label: 'shortcuts.link', keys: (k) => [[k.mod, k.shift, 'U']] },
-      { label: 'shortcuts.bullets', keys: (k) => [[k.mod, k.shift, '8']] },
-      { label: 'shortcuts.numbers', keys: (k) => [[k.mod, k.shift, '7']] },
-      { label: 'shortcuts.quote', keys: (k) => [[k.mod, k.shift, '9']] },
-      { label: 'shortcuts.editLast', keys: () => [['↑']] },
-      { label: 'shortcuts.preview', keys: (k) => [[k.mod, k.shift, 'P']] },
     ],
   },
 ];
+
+/**
+ * The groups of the modules a server runs: the core's, with each module's rows after the row its manifest names
+ * (or last in its group), and a group of its own where no core group has the name.
+ */
+const groupsFor = (modules: readonly string[]): readonly Group[] =>
+  running(modules)
+    .flatMap((module): readonly ModuleShortcut[] => module.shortcuts)
+    .reduce<readonly Group[]>((groups, row) => {
+      if (!groups.some((group) => group.title === row.group)) {
+        return [...groups, { title: row.group, rows: [row] }];
+      }
+      return groups.map((group) => {
+        if (group.title !== row.group) return group;
+        const after = group.rows.findIndex((own) => own.label === row.after);
+        const at = after === -1 ? group.rows.length : after + 1;
+        return { ...group, rows: [...group.rows.slice(0, at), row, ...group.rows.slice(at)] };
+      });
+    }, CORE_GROUPS);
 
 /** The reference itself: the groups and their rows, as the dialog and the settings page both show it. */
 export const ShortcutList = ({
@@ -135,36 +84,32 @@ export const ShortcutList = ({
   const Heading = level === 2 ? 'h2' : 'h3';
   return (
     <>
-      {GROUPS.filter((group) => group.module === undefined || modules.includes(group.module)).map(
-        (group) => (
-          <section key={group.title} aria-labelledby={group.title} className="flex flex-col gap-2">
-            <Heading id={group.title} className="text-label text-ink-muted">
-              {t(group.title)}
-            </Heading>
-            <ul className="flex flex-col gap-2">
-              {group.rows
-                .filter((row) => row.module === undefined || modules.includes(row.module))
-                .map((row) => (
-                  <li key={row.label} className="flex items-center justify-between gap-4">
-                    <span className="text-body text-ink">{t(row.label)}</span>
-                    <span className="flex items-center gap-2">
-                      {row.keys(labels).map((sequence, at) => (
-                        <span key={sequence.join('+')} className="flex items-center gap-1">
-                          {at > 0 && (
-                            <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
-                          )}
-                          {sequence.map((key) => (
-                            <Kbd key={key}>{key}</Kbd>
-                          ))}
-                        </span>
+      {groupsFor(modules).map((group) => (
+        <section key={group.title} aria-labelledby={group.title} className="flex flex-col gap-2">
+          <Heading id={group.title} className="text-label text-ink-muted">
+            {t(group.title)}
+          </Heading>
+          <ul className="flex flex-col gap-2">
+            {group.rows.map((row) => (
+              <li key={row.label} className="flex items-center justify-between gap-4">
+                <span className="text-body text-ink">{t(row.label)}</span>
+                <span className="flex items-center gap-2">
+                  {row.keys(labels).map((sequence, at) => (
+                    <span key={sequence.join('+')} className="flex items-center gap-1">
+                      {at > 0 && (
+                        <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
+                      )}
+                      {sequence.map((key) => (
+                        <Kbd key={key}>{key}</Kbd>
                       ))}
                     </span>
-                  </li>
-                ))}
-            </ul>
-          </section>
-        ),
-      )}
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </>
   );
 };

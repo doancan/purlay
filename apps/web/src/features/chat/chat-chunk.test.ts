@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { chatScreens } from './load';
+import { moduleChunk } from '../../app/module-route';
 
 const SRC = join(import.meta.dirname, '..', '..');
 const CHAT_ENTRY = join(SRC, 'features', 'chat', 'chat.ts');
@@ -52,16 +52,17 @@ describe("chat's chunk", () => {
   });
 
   test('is asked for once, and holds the seven screens', async () => {
-    expect(chatScreens()).toBe(chatScreens());
-    const screens = await chatScreens();
+    const chat = moduleChunk('chat');
+    expect(chat.get()).toBe(chat.get());
+    const { screens } = await chat.get();
     expect(Object.keys(screens).sort()).toEqual([
-      'ChannelScreen',
-      'DraftsScreen',
-      'InboxScreen',
-      'QuestionsScreen',
-      'SavedScreen',
-      'SearchScreen',
-      'UnreadsScreen',
+      'channel',
+      'drafts',
+      'inbox',
+      'questions',
+      'saved',
+      'search',
+      'unreads',
     ]);
   });
 });

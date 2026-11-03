@@ -10,7 +10,8 @@ import { useMemo } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { useChannels, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { href } from '../../router/routes';
+import { running } from '../../modules/registry';
+import { href, spell } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
@@ -30,7 +31,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const { user, modules } = useSession();
   // Channels, conversations and what is read are chat's: a server without it offers only the core's.
   const chat = modules.includes('chat');
-  const issues = modules.includes('issues');
   const { match, navigate } = useRoute();
   const { setChoice } = useTheme();
   const { openDirectMessage } = useActions();
@@ -49,41 +49,23 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     const ordered = inSidebarOrder(channels ?? []);
     const current = ordered.find((c) => c.id === currentChannelId);
 
-    if (chat) {
-      items.push({
-        id: 'view:questions',
-        group: 'views',
-        label: t('questions.title'),
-        glyph: 'open-question',
-        recency: '',
-        run: () => {
-          navigate(href('questions', { slug }));
-        },
-      });
-      // The rail's places, by name (`PRD.md` §4.6): the palette is the product's search over where to go.
-      for (const view of [
-        { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
-        { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
-        { id: 'drafts', label: t('drafts.title'), glyph: 'edit', to: href('drafts', { slug }) },
-        {
-          id: 'unreads',
-          label: t('unreads.title'),
-          glyph: 'channels',
-          to: href('unreads', { slug }),
-        },
-        { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
-      ] as const) {
+    // The places each module the server runs offers, by name (`PRD.md` §4.6): the palette is the product's search over where to go.
+    for (const module of running(modules)) {
+      for (const place of module.palette) {
         items.push({
-          id: `view:${view.id}`,
+          id: `view:${place.route}`,
           group: 'views',
-          label: view.label,
-          glyph: view.glyph,
+          label: t(place.label),
+          glyph: place.glyph,
           recency: '',
           run: () => {
-            navigate(view.to);
+            navigate(spell(place.route, { slug }));
           },
         });
       }
+    }
+
+    if (chat) {
       if (current !== undefined) {
         items.push({
           id: 'view:feed',
@@ -166,19 +148,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
           },
         });
       }
-    }
-
-    if (issues) {
-      items.push({
-        id: 'view:issues',
-        group: 'views',
-        label: t('issues.title'),
-        glyph: 'issues',
-        recency: '',
-        run: () => {
-          navigate(href('issues', { slug }));
-        },
-      });
     }
 
     // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
@@ -273,7 +242,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     role,
     serverAdmin,
     chat,
-    issues,
     modules,
   ]);
 };
