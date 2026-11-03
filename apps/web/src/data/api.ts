@@ -103,6 +103,7 @@ import {
   type CreateWorkspaceRequest,
   type NotificationLevel,
   type SetDeepWorkRequest,
+  SetAwayResponse,
   type ReadNotificationsRequest,
   type ReadThreadRequest,
   type SetThreadFollowRequest,
@@ -242,6 +243,8 @@ export interface Api {
     workspaceId: string,
     input: SetDeepWorkRequest,
   ) => Promise<DeepWorkResponse>;
+  /** Chooses to appear away, or to appear active again (D-257). */
+  readonly setAway: (away: boolean) => Promise<SetAwayResponse>;
   /** What the caller is told about in this channel (D-107). */
   readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
   /** Stars a channel the caller is in, or lets the star go (D-132). */
@@ -702,6 +705,8 @@ export const createApi = (http: Http): Api => {
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
     removeChannelMember: (channelId, userId) =>
       http.send('DELETE', `/api/channels/${at(channelId)}/members/${at(userId)}`, options()),
+    setAway: (away) =>
+      http.request('PUT', '/api/me/away', SetAwayResponse, options({ body: { away } })),
     setDeepWork: (workspaceId, input) =>
       http.request(
         'PUT',
