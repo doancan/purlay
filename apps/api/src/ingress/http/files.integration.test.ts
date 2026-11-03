@@ -361,7 +361,7 @@ describe('integration: a linked file’s channel is its message’s (chat/0001)'
           db
             .updateTable('message_attachments')
             // Not typed for a null: the schema says it cannot be, which is what is asked of the database.
-            .set({ channel_id: channelId as string })
+            .set({ channel_id: channelId! })
             .where('attachment_id', '=', file)
             .execute(),
         );

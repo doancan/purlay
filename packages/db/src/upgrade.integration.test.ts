@@ -366,9 +366,8 @@ describe('integration: the contract release on a database that has run the expan
     const { db, world } = await expandedDatabase();
     try {
       // Before: the columns, the two keys to messages, the check and the indexes are there.
-      expect(await columnsOfAttachments(db)).toEqual(
-        expect.arrayContaining(['message_id', 'channel_id']),
-      );
+      expect(await columnsOfAttachments(db)).toContain('message_id');
+      expect(await columnsOfAttachments(db)).toContain('channel_id');
       expect(await namesOfAttachmentsKeys(db)).toEqual([
         'attachments_channel_iff_message',
         'attachments_message_channel_fkey',
@@ -445,9 +444,8 @@ describe('integration: the contract release on a database that has run the expan
 
       const refused = await migrateToLatest(db, undefined, { modules: PRODUCT_MIGRATION_SETS });
       expect(String(refused.error)).toContain('chat/0005 refused: 1 attachment(s)');
-      expect(await columnsOfAttachments(db)).toEqual(
-        expect.arrayContaining(['message_id', 'channel_id']),
-      );
+      expect(await columnsOfAttachments(db)).toContain('message_id');
+      expect(await columnsOfAttachments(db)).toContain('channel_id');
       expect(await namesOfAttachmentsKeys(db)).toHaveLength(6);
       const recorded = await sql<{ name: string }>`
         select name from kysely_migration where name = ${CONTRACT_MIGRATION}`.execute(db);
@@ -529,9 +527,8 @@ describe('integration: the matrix of sets around the contract', () => {
       // never writes, and chat's link table is not made.
       const coreOnly = await migrateToLatest(db, undefined, { modules: setsNamedBy('none') });
       expect(coreOnly.error).toBeUndefined();
-      expect(await columnsOfAttachments(db)).toEqual(
-        expect.arrayContaining(['message_id', 'channel_id']),
-      );
+      expect(await columnsOfAttachments(db)).toContain('message_id');
+      expect(await columnsOfAttachments(db)).toContain('channel_id');
       const table = await sql`select to_regclass('message_attachments') as name`.execute(db);
       expect(table.rows).toEqual([{ name: null }]);
 
