@@ -26,23 +26,19 @@
 import { migrationHistoryProblem, pendingMigrations, sql, type Executor } from '@purlay/db';
 import type { Clock } from './clock';
 
+/** A column a migration declares `COLLATE "C"`. */
+export type CollatedColumn = readonly [table: string, column: string];
+
 /**
- * The columns the migrations declare `COLLATE "C"`. Repeated here because a
- * running process cannot read its migrations' text; bound to them by a test, so
- * a new collated column cannot be added without being checked.
+ * The columns the migrations declare `COLLATE "C"`, repeated here because a running process cannot
+ * read its migrations' text — the core's own; each module adds its columns where the application is
+ * put together (D-250). Bound to the migrations by a test that compares them with the core's plus
+ * every module's, so a new collated column cannot be added without being checked.
  */
-export const COLLATED_COLUMNS: readonly (readonly [table: string, column: string])[] = [
+export const CORE_COLLATED_COLUMNS: readonly CollatedColumn[] = [
   ['users', 'email'],
   ['users', 'username'],
   ['workspaces', 'slug'],
-  ['channels', 'name'],
-  ['github_repo_feeds', 'repository_full_name'],
-  ['github_deliveries', 'delivery_id'],
-  ['github_app_handshakes', 'state_digest'],
-  ['github_app_deliveries', 'delivery_id'],
-  ['github_app_deliveries', 'body_digest'],
-  ['github_operations', 'content_digest'],
-  ['github_operations', 'marker'],
 ];
 
 export type Readiness =
@@ -59,6 +55,7 @@ export type SharedProblem = () => string | undefined;
 
 export const readiness = async (
   database: Executor,
+  collatedColumns: readonly CollatedColumn[],
   signIn?: ReadinessCheck,
   shared?: SharedProblem,
 ): Promise<Readiness> => {
@@ -83,9 +80,9 @@ export const readiness = async (
     const collation = new Map(
       rows.map((row) => [`${row.table_name}.${row.column_name}`, row.collation_name]),
     );
-    const wrong = COLLATED_COLUMNS.map(([table, column]) => `${table}.${column}`).filter(
-      (column) => collation.get(column) !== 'C',
-    );
+    const wrong = collatedColumns
+      .map(([table, column]) => `${table}.${column}`)
+      .filter((column) => collation.get(column) !== 'C');
     if (wrong.length > 0) {
       return {
         ready: false,
