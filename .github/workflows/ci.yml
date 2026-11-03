@@ -192,6 +192,14 @@ jobs:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
           PURLAY_E2E_PERFORMANCE: skip
 
+      # The frame on a server that runs no module (D-250): the same build and the same seeded world, served with
+      # MODULES=none, in a real browser — no chat route asked for, no chat screen drawn, no console error.
+      - name: the browser with no module
+        if: matrix.part == 'suite'
+        run: bun run test:modules-none
+        env:
+          PURLAY_E2E_PROJECT: ${{ matrix.project }}
+
       # The measuring tests by themselves, on one worker: inside the parallel run another test competed
       # for the runner while they measured, and the same code's cold load read anywhere from 86 to 178 ms.
       - name: the browser measurements, alone
