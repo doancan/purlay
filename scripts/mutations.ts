@@ -817,27 +817,27 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'content-erasure-crosses-workspaces',
     why: 'one customer’s request empties the person’s words in another customer’s workspace (D-28)',
-    file: 'apps/api/src/modules/users/content-erasure.ts',
+    file: 'apps/api/src/modules/messages/content-erasure.ts',
     find: "    .where('workspace_id', '=', workspaceId)\n    .where('sender_id', '=', userId)\n",
     replace: "    .where('sender_id', '=', userId)\n",
-    tests: ['apps/api/src/modules/users/content-erasure.integration.test.ts'],
+    tests: ['apps/api/src/modules/messages/content-erasure.integration.test.ts'],
   },
   {
     id: 'content-erasure-keeps-the-files',
     why: 'the person’s files outlive the erasure of what they wrote',
-    file: 'apps/api/src/modules/users/content-erasure.ts',
+    file: 'apps/api/src/modules/messages/content-erasure.ts',
     find: '  const files = await dropFiles(\n',
     replace:
       '  const files = await (async (..._: unknown[]) => ({ count: 0, keys: [] as string[] }))(\n',
-    tests: ['apps/api/src/modules/users/content-erasure.integration.test.ts'],
+    tests: ['apps/api/src/modules/messages/content-erasure.integration.test.ts'],
   },
   {
     id: 'content-erasure-keeps-the-counts',
     why: 'an emptied message stays counted unread, and its mention waits for ever',
-    file: 'apps/api/src/modules/users/content-erasure.ts',
+    file: 'apps/api/src/modules/messages/content-erasure.ts',
     find: '  await takeBackLive(transaction, now, rows);\n',
     replace: '',
-    tests: ['apps/api/src/modules/users/content-erasure.integration.test.ts'],
+    tests: ['apps/api/src/modules/messages/content-erasure.integration.test.ts'],
   },
   {
     id: 'erasure-locks-the-person-before-the-sessions',
