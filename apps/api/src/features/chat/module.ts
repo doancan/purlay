@@ -27,6 +27,8 @@ export const chatModule = {
     // Only what acts for chat's users. The sweeps and the retention purge keep the rows tidy and keep running whether
     // chat does or not: the rows are there.
     jobs: ['mail:missed'],
+    // What a person does in a channel over the socket: watch it, write in it, say they are typing.
+    frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],
     routes: [
       '/api/channels/**',
       '/api/messages/**',

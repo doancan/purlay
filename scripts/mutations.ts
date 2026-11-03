@@ -13114,4 +13114,31 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    if (found.length > 1000) {',
     tests: ['scripts/budget-web.test.ts'],
   },
+  {
+    id: 'socket-frame-of-a-closed-module-taken',
+    why: 'a socket of a process that does not run chat still writes, watches and types in channels: the module is off and its door is open (D-250)',
+    file: 'apps/api/src/realtime/router.ts',
+    find: 'if (dependencies.closedFrame?.(parsed.op) === true) {',
+    replace: 'if (false as boolean) {',
+    tests: [
+      'apps/api/src/realtime/router.test.ts',
+      'apps/api/src/realtime/modules-off-socket.integration.test.ts',
+    ],
+  },
+  {
+    id: 'socket-not-told-which-frames-are-closed',
+    why: 'the application knows chat is off and its sockets are never told, so every frame is taken (D-250)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '    closedFrame: modules.closedFrame,\n',
+    replace: '',
+    tests: ['apps/api/src/realtime/modules-off-socket.integration.test.ts'],
+  },
+  {
+    id: 'composition-frames-of-a-module-never-closed',
+    why: 'the composition says no operation is closed, whatever the manifest lists (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: '(module.manifest.frames ?? []).includes(op)',
+    replace: 'false',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
 ];

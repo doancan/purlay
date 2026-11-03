@@ -91,6 +91,12 @@ describe('the application as its modules make it', () => {
       // Keeping rows within their retention does not wait for a module to run.
       expect(alone.closedJob('purge:retention')).toBe(false);
       expect(alone.closedJob('sweep:sessions')).toBe(false);
+      // The socket's operations of chat are closed with it; the core's are not.
+      for (const op of ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING']) {
+        expect(alone.closedFrame(op)).toBe(true);
+        expect(all.closedFrame(op)).toBe(false);
+      }
+      for (const op of ['PING', 'ACTIVE']) expect(alone.closedFrame(op)).toBe(false);
     });
 
     test('a module the build does not carry stops the start, naming it', () => {

@@ -24,6 +24,11 @@ export interface ModuleManifest {
    */
   readonly routes?: readonly string[];
   /**
+   * The operations of a client frame on the socket that the module owns. A process that does not run the module
+   * answers one as it answers an operation nobody has: the socket is a way in like any route (`MODULES.md` §3).
+   */
+  readonly frames?: readonly string[];
+  /**
    * The scheduled jobs (`bun run job <name>`) that act for the module's users, mail for one. A scheduler that still
    * runs one of a module that is not run is answered with success and a line saying so: there is nothing for it to
    * do. A sweep or a purge of the module's rows is not listed: rows outlive the module's being off, and keeping

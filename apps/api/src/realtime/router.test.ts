@@ -27,6 +27,7 @@ const subscribeWith = async (
   database: Executor,
   log: Logger,
   id: string,
+  closedFrame?: (op: string) => boolean,
 ): Promise<readonly ServerFrame[]> =>
   await withinRequest(
     { requestId: 'frame-1', startedAt: 0 },
@@ -35,6 +36,7 @@ const subscribeWith = async (
         {
           database,
           clock,
+          ...(closedFrame === undefined ? {} : { closedFrame }),
           bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
@@ -135,6 +137,46 @@ describe('a frame that fails in a way nobody anticipated', () => {
     // And it is the body HTTP answers with, word for word.
     expect(replies[0]).toMatchObject({
       data: refusalFor('UNKNOWN', new DatabaseUnavailableError(cause), []).body.error,
+    });
+  });
+});
+
+describe('a frame of a module this process does not run', () => {
+  test('is answered as an operation nobody has — the same fields, the same message — and touches nothing', async () => {
+    const { log } = aRecordingLogger();
+    const id = '00000000-0000-7000-8000-000000000001';
+    const [closed] = await subscribeWith(
+      aDatabaseThatMustNotBeTouched(),
+      log,
+      id,
+      (op) => op === 'SUBSCRIBE',
+    );
+    const unknown = await withinRequest(
+      { requestId: 'frame-2', startedAt: 0 },
+      async () =>
+        await routeFrame(
+          {
+            database: aDatabaseThatMustNotBeTouched(),
+            clock,
+            bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
+            limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+            userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+            presence: inMemoryPresenceRegistry(clock),
+            attention: nobodyActive,
+            sessionLifetime: () => NO_SESSION_LIFETIME,
+            log,
+            socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
+            atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),
+          },
+          { socketId: 's1', userId: 'u1', sessionId: 'not-read', expiresAt: clock.now() },
+          { id, op: 'NOT_AN_OPERATION', payload: {} },
+        ),
+    );
+    expect(closed).toMatchObject({ event: 'ERROR', refId: id });
+    expect({ ...closed, ts: undefined, id: undefined }).toEqual({
+      ...unknown[0],
+      ts: undefined,
+      id: undefined,
     });
   });
 });

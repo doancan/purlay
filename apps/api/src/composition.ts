@@ -70,6 +70,8 @@ export interface Composition {
   readonly closed: (path: string) => boolean;
   /** Whether a job belongs to a module this build carries and this process does not run. */
   readonly closedJob: (name: string) => boolean;
+  /** Whether a client frame's operation belongs to a module this build carries and this process does not run. */
+  readonly closedFrame: (op: string) => boolean;
 }
 
 /**
@@ -129,6 +131,10 @@ export const compose = (
     closedJob: (name) =>
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.jobs ?? []).includes(name),
+      ),
+    closedFrame: (op) =>
+      bundled.some(
+        (module) => !modules.includes(module) && (module.manifest.frames ?? []).includes(op),
       ),
   };
 };
