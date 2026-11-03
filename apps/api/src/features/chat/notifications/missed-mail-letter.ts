@@ -6,11 +6,13 @@
  * - **Other people's words, quoted safely.** Names and excerpts go through `quotable`: no line breaks, no
  *   control or direction characters, no `://` for a mail client to make a link of, and cut short. The subject
  *   is fixed text, so nothing typed reaches a header.
- * - **Only the server's addresses are links**, each on a line of its own; the HTML is the text escaped.
+ * - **Only the server's addresses are links.** The letter is `composeLetter`'s: one button to open
+ *   Purlay, each message a line with a small link to it, and the link that stops the letters at the foot.
  */
 import { excerptOf } from '@purlay/markdown';
 import type { PushLocale } from '@purlay/types';
-import { escapeHtml, type MailMessage } from '../../../platform/mail';
+import { composeLetter, type LetterBlock, type LetterItem } from '../../../platform/letter';
+import type { MailMessage } from '../../../platform/mail';
 import { quotable } from '../../../modules/workspaces/invitation-mail';
 
 /** The newest messages a conversation shows; the rest are counted. */
@@ -68,7 +70,7 @@ const WORDS: Readonly<Record<PushLocale, Words>> = {
     more: (count) => `and ${String(count)} more`,
     someone: 'Someone',
     workspace: 'A workspace',
-    open: 'Open Purlay:',
+    open: 'Open Purlay',
     why: 'You get this because you asked for email about direct messages and mentions you have not read (Settings → Notifications). At most one an hour.',
     stop: 'To stop these emails, open this link:',
   },
@@ -79,21 +81,11 @@ const WORDS: Readonly<Record<PushLocale, Words>> = {
     more: (count) => `ve ${String(count)} tane daha`,
     someone: 'Biri',
     workspace: 'Bir çalışma alanı',
-    open: 'Purlay’ı aç:',
+    open: 'Purlay’ı aç',
     why: 'Bunu, okumadığın doğrudan mesajlar ve bahsetmeler için e-posta istediğin için alıyorsun (Ayarlar → Bildirimler). Saatte en fazla bir tane.',
     stop: 'Bu e-postaları durdurmak için bu bağlantıyı aç:',
   },
 };
-
-/** A line of the letter: words, one of the server's addresses, or the space between two paragraphs. */
-type Line =
-  | { readonly kind: 'text'; readonly text: string }
-  | { readonly kind: 'link'; readonly url: string }
-  | { readonly kind: 'gap' };
-
-const text = (words: string): Line => ({ kind: 'text', text: words });
-const link = (url: string): Line => ({ kind: 'link', url });
-const GAP: Line = { kind: 'gap' };
 
 /** A conversation as the letter names it: a channel by its name, a direct message by who wrote. */
 const nameOf = (conversation: MissedConversation, words: Words): string => {
@@ -106,73 +98,47 @@ const nameOf = (conversation: MissedConversation, words: Words): string => {
   return authors.join(', ');
 };
 
-const conversationLines = (
+const conversationBlock = (
   conversation: MissedConversation,
   workspace: MissedWorkspace,
   head: MissedLetterHead,
   words: Words,
-): Line[] => {
+): LetterBlock => {
   const { messages } = conversation;
   const shown = messages.slice(-EXCERPTS_PER_CONVERSATION);
-  const lines: Line[] = [text(`${nameOf(conversation, words)} — ${words.count(messages.length)}`)];
-  for (const message of shown) {
+  const items = shown.map((message): LetterItem => {
     const excerpt = quotable(excerptOf(message.content), '', EXCERPT_MAX);
     const author = quotable(message.author ?? '', words.someone);
-    lines.push(text(excerpt === '' ? `  ${author}` : `  ${author}: “${excerpt}”`));
-    lines.push(
-      link(
-        `${head.appUrl}/w/${encodeURIComponent(workspace.slug)}/c/${conversation.channelId}?message=${message.id}`,
-      ),
-    );
-  }
-  if (messages.length > shown.length) {
-    lines.push(text(`  ${words.more(messages.length - shown.length)}`));
-  }
-  return lines;
+    return {
+      text: excerpt === '' ? author : `${author}: “${excerpt}”`,
+      url: `${head.appUrl}/w/${encodeURIComponent(workspace.slug)}/c/${conversation.channelId}?message=${message.id}`,
+    };
+  });
+  return {
+    kind: 'group',
+    title: `${nameOf(conversation, words)} — ${words.count(messages.length)}`,
+    items,
+    ...(messages.length > shown.length ? { more: words.more(messages.length - shown.length) } : {}),
+  };
 };
 
-const linesOf = (head: MissedLetterHead, words: Words): Line[] => [
-  text(words.intro),
-  ...head.workspaces.flatMap((workspace) => [
-    GAP,
-    text(quotable(workspace.name, words.workspace)),
-    ...workspace.conversations.flatMap((conversation) =>
-      conversationLines(conversation, workspace, head, words),
+const blocksOf = (head: MissedLetterHead, words: Words): LetterBlock[] => [
+  { kind: 'paragraph', text: words.intro },
+  ...head.workspaces.flatMap((workspace): LetterBlock[] => [
+    { kind: 'heading', text: quotable(workspace.name, words.workspace) },
+    ...workspace.conversations.map((conversation) =>
+      conversationBlock(conversation, workspace, head, words),
     ),
   ]),
-  GAP,
-  text(words.open),
-  link(head.appUrl),
-  GAP,
-  text(words.why),
-  text(words.stop),
-  link(`${head.appUrl}/mail/stop#${head.stopToken}`),
+  { kind: 'button', label: words.open, url: head.appUrl },
+  { kind: 'note', text: words.why },
+  { kind: 'note', text: words.stop, url: `${head.appUrl}/mail/stop#${head.stopToken}` },
 ];
 
-const plain = (lines: readonly Line[]): string =>
-  lines
-    .map((line) => (line.kind === 'gap' ? '' : line.kind === 'link' ? line.url : line.text))
-    .join('\n');
-
-/** The same lines as HTML: every character escaped, a paragraph per run of lines, the addresses made links. */
-const html = (lines: readonly Line[]): string => {
-  const paragraphs: string[][] = [[]];
-  for (const line of lines) {
-    if (line.kind === 'gap') {
-      paragraphs.push([]);
-      continue;
-    }
-    const escaped =
-      line.kind === 'link'
-        ? `<a href="${escapeHtml(line.url)}">${escapeHtml(line.url)}</a>`
-        : escapeHtml(line.text);
-    paragraphs.at(-1)?.push(escaped);
-  }
-  return paragraphs.map((paragraph) => `<p>${paragraph.join('<br>')}</p>`).join('');
-};
-
-export const missedLetter = (head: MissedLetterHead): MailMessage => {
-  const words = WORDS[head.locale];
-  const lines = linesOf(head, words);
-  return { to: head.to, subject: words.subject, text: plain(lines), html: html(lines) };
-};
+export const missedLetter = (head: MissedLetterHead): MailMessage =>
+  composeLetter({
+    to: head.to,
+    subject: WORDS[head.locale].subject,
+    locale: head.locale,
+    blocks: blocksOf(head, WORDS[head.locale]),
+  });

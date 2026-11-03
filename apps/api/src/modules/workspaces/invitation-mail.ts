@@ -29,7 +29,8 @@ import {
   type InvitationMailResult,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { textLetter, type MailMessage } from '../../platform/mail';
+import { composeLetter } from '../../platform/letter';
+import type { MailMessage } from '../../platform/mail';
 import { takeDaily, type Allowance } from '../../platform/quota';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { createInvitation } from './invitations';
@@ -66,19 +67,24 @@ const WORDS = {
     subject: 'You have been invited to Purlay',
     someone: 'Someone',
     workspace: 'a workspace',
-    body: (inviter: string, workspace: string, until: string, url: string): string =>
-      `${inviter} invited you to join “${workspace}” on Purlay.\n\n` +
-      `Open this link to join. It works until ${until} for anybody who has it, so keep it to yourself:\n\n${url}\n\n` +
+    invited: (inviter: string, workspace: string): string =>
+      `${inviter} invited you to join “${workspace}” on Purlay.`,
+    button: 'Accept the invitation',
+    until: (until: string): string =>
+      `The link works until ${until} for anybody who has it, so keep it to yourself.`,
+    ignore:
       'If you did not expect this, you can ignore it; nothing happens until somebody opens the link.',
   },
   tr: {
     subject: 'Purlay’a davet edildin',
     someone: 'Biri',
     workspace: 'bir çalışma alanı',
-    body: (inviter: string, workspace: string, until: string, url: string): string =>
-      `${inviter} seni Purlay’da “${workspace}” alanına katılmaya davet etti.\n\n` +
-      `Katılmak için bu bağlantıyı aç. ${until} tarihine kadar, elinde olan herkes için çalışır; kimseyle paylaşma:\n\n${url}\n\n` +
-      'Beklemiyorsan görmezden gelebilirsin; biri bağlantıyı açmadıkça hiçbir şey olmaz.',
+    invited: (inviter: string, workspace: string): string =>
+      `${inviter} seni Purlay’da “${workspace}” alanına katılmaya davet etti.`,
+    button: 'Daveti kabul et',
+    until: (until: string): string =>
+      `Bağlantı ${until} tarihine kadar, elinde olan herkes için çalışır; kimseyle paylaşma.`,
+    ignore: 'Beklemiyorsan görmezden gelebilirsin; biri bağlantıyı açmadıkça hiçbir şey olmaz.',
   },
 } as const;
 
@@ -101,17 +107,23 @@ export interface Letterhead {
 /** The letter to one address: who invited, to what, the link, until when, and that it may be ignored. */
 export const invitationLetter = (to: string, head: Letterhead): MailMessage => {
   const words = WORDS[head.locale];
-  return textLetter(
+  return composeLetter({
     to,
-    words.subject,
-    words.body(
-      quotable(head.inviter, words.someone),
-      quotable(head.workspace, words.workspace),
-      untilWords(head.expiresAt, head.locale),
-      head.url,
-    ),
-    head.url,
-  );
+    subject: words.subject,
+    locale: head.locale,
+    blocks: [
+      {
+        kind: 'paragraph',
+        text: words.invited(
+          quotable(head.inviter, words.someone),
+          quotable(head.workspace, words.workspace),
+        ),
+      },
+      { kind: 'button', label: words.button, url: head.url },
+      { kind: 'note', text: words.until(untilWords(head.expiresAt, head.locale)) },
+      { kind: 'note', text: words.ignore },
+    ],
+  });
 };
 
 /** The counter of an inviter's letters, which an erasure deletes with the rest of the person. */

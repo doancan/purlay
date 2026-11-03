@@ -1,6 +1,6 @@
 /**
  * The missed-mail letter (D-240) as words: what each part says, in each language, and the HTML that is the
- * same text escaped, with only the server's own addresses made links.
+ * same words escaped, with only the server's own addresses made links.
  */
 import { describe, expect, test } from 'bun:test';
 import { missedLetter, type MissedLetterHead } from './missed-mail-letter';
@@ -34,16 +34,18 @@ describe('the missed-mail letter', () => {
   test('a conversation without a name is named by who wrote; an author nobody knows is "Someone"; a message without words is its author alone', () => {
     const { text, to } = missedLetter(head());
     expect(to).toBe('ada@example.test');
-    expect(text).toContain('Kokil Metal\nAyşe, Bora, Someone — 3 messages');
-    expect(text).toContain('  Ayşe: “selam”\nhttps://purlay.test/w/kokil/c/c1?message=m1');
-    expect(text).toContain('  Bora\nhttps://purlay.test/w/kokil/c/c1?message=m2');
+    expect(text).toContain('Kokil Metal\n\nAyşe, Bora, Someone — 3 messages');
+    expect(text).toContain('  Ayşe: “selam”\n  https://purlay.test/w/kokil/c/c1?message=m1');
+    expect(text).toContain('  Bora\n  https://purlay.test/w/kokil/c/c1?message=m2');
     expect(text).toContain('  Someone: “code and bold”');
     expect(text).toContain('Open Purlay:\nhttps://purlay.test\n');
     expect(text).not.toContain('more');
-    expect(text.endsWith(`https://purlay.test/mail/stop#${'a'.repeat(64)}`)).toBe(true);
+    expect(text).toContain(
+      `To stop these emails, open this link:\nhttps://purlay.test/mail/stop#${'a'.repeat(64)}`,
+    );
   });
 
-  test('the HTML is the text, paragraph by paragraph, every character escaped and only the addresses linked', () => {
+  test('the HTML says the same, every character escaped, and links only the server’s addresses', () => {
     const { html } = missedLetter(
       head({
         workspaces: [
@@ -61,13 +63,15 @@ describe('the missed-mail letter', () => {
         ],
       }),
     );
-    expect(html).toContain('<p>A &amp; &lt;B&gt;<br>#genel — 1 message<br>');
-    expect(html).toContain('&quot;Q&quot;: “x”');
+    expect(html).toContain('>A &amp; &lt;B&gt;</p>');
+    expect(html).toContain('>#genel — 1 message</p>');
     expect(html).toContain(
-      '<a href="https://purlay.test/w/a-b/c/c1?message=m1">https://purlay.test/w/a-b/c/c1?message=m1</a>',
+      '&quot;Q&quot;: “x” · <a href="https://purlay.test/w/a-b/c/c1?message=m1"',
     );
-    expect(html.match(/<a /g)).toHaveLength(3);
-    expect(html.startsWith('<p>Messages that need you')).toBe(true);
+    // The message, the button, the stop link, and the button's address again at the foot.
+    expect(html.match(/<a /g)).toHaveLength(4);
+    expect(html).toContain('>Open Purlay</a>');
+    expect(html).toContain(`href="https://purlay.test/mail/stop#${'a'.repeat(64)}"`);
   });
 
   test('in Turkish, a workspace with no name left is said in words', () => {
@@ -86,7 +90,7 @@ describe('the missed-mail letter', () => {
       }),
     );
     expect(subject).toBe('Purlay’da seni bekleyen mesajlar var');
-    expect(text).toContain('Bir çalışma alanı\n#x — 1 mesaj');
+    expect(text).toContain('Bir çalışma alanı\n\n#x — 1 mesaj');
     expect(text).toContain('Purlay’ı aç:');
   });
 

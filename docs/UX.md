@@ -255,10 +255,10 @@ chat the team already uses.
   *this workspace has reached today's limit of 200 invitation emails*; *this server cannot send email*.
   The addresses refused stay in the field, so nothing leaves unsaid; the ones queued are cleared. A
   request that fails says *Could not send the invitations* above the link, keeps the addresses and
-  claims nothing. The letter is plain text in the interface's language: who invited (their display
-  name), the workspace, the link with its token after `#`, until when it works, and that it can be
-  ignored if unexpected; its subject is fixed text, and the names in it are cut, stripped of line breaks
-  and of anything that reads as a web address.
+  claims nothing. The letter (D-252) is in the interface's language: who invited (their display
+  name), the workspace, an **Accept the invitation** button whose link carries the token after `#`, until
+  when it works, and that it can be ignored if unexpected; its subject is fixed text, and the names in it
+  are cut, stripped of line breaks and of anything that reads as a web address.
 
 **Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
 with a role each: a labelled select where the person may change it, the role in words where they may

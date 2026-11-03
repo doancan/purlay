@@ -27,7 +27,8 @@ describe('the administrator’s verification letter', () => {
     // Never in the path or the query, where a log or a referrer would carry it (D-138 §4).
     expect(letter.text).not.toContain(`/setup/verify/${TOKEN}`);
     expect(letter.text).not.toContain(`?token=`);
-    expect(letter.html).toContain(`<a href="https://chat.example.com/setup/verify#${TOKEN}">`);
+    expect(letter.html).toContain(`<a href="https://chat.example.com/setup/verify#${TOKEN}"`);
+    expect(letter.html).toContain('>Confirm my address</a>');
   });
 
   test('is in Turkish for a Turkish wizard', () => {

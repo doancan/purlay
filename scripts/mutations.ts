@@ -6066,8 +6066,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'invite-mail-subject-quotes-the-inviter',
     why: 'an inviter’s display name, which they chose, is in the subject line of mail from this server',
     file: 'apps/api/src/modules/workspaces/invitation-mail.ts',
-    find: '    words.subject,\n    words.body(',
-    replace: '    `${head.inviter}: ${words.subject}`,\n    words.body(',
+    find: '    subject: words.subject,\n    locale: head.locale,',
+    replace: '    subject: `${head.inviter}: ${words.subject}`,\n    locale: head.locale,',
     tests: ['apps/api/src/modules/workspaces/invitation-mail.test.ts'],
   },
   {
