@@ -14,7 +14,7 @@ export interface ReleasedManifest {
 }
 
 /** A deliberate break, said where a reviewer reads it. `change` is the sentence `incompatibilities` gives. */
-export interface CompatibilityException {
+interface CompatibilityException {
   readonly change: string;
   /** YYYY-MM-DD */
   readonly on: string;
