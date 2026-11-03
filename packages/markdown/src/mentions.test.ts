@@ -1,6 +1,6 @@
 /**
  * The shape of a mention, shared by the server's resolution and the client's highlight. The
- * server's own tests (`apps/api/src/modules/messages/mentions.test.ts`) still pin what it does with
+ * server's own tests (`apps/api/src/features/chat/messages/mentions.test.ts`) still pin what it does with
  * the shape — code, refusal, the cap — unchanged by the move.
  */
 import { describe, expect, test } from 'bun:test';
