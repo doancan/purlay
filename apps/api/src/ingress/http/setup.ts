@@ -68,6 +68,7 @@ import {
   type Serving,
   type WizardDependencies,
 } from '../../modules/setup/wizard';
+import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import { clearedSetupCookie, readCookie, SETUP_COOKIE, setupCookie } from '../../platform/cookies';
@@ -77,6 +78,8 @@ import { validated } from './validate';
 
 export interface SetupDependencies {
   readonly config: Config;
+  /** What the modules start the first workspace with, in its transaction (D-250). */
+  readonly workspaceCreated: WorkspaceCreated;
   /** The pool: a change of the settings commits in a transaction of its own. */
   readonly database: Executor;
   readonly clock: Clock;
@@ -498,7 +501,14 @@ export const makeTheFirstWorkspace = async (
   const input = validated(CreateWorkspaceRequest, body);
   const { workspace, created } = await said(
     dependencies,
-    async () => await makeFirstWorkspace(dependencies.database, session, input, dependencies.clock),
+    async () =>
+      await makeFirstWorkspace(
+        dependencies.database,
+        session,
+        input,
+        dependencies.clock,
+        dependencies.workspaceCreated,
+      ),
   );
   return answer(holder, workspace, created ? 201 : 200);
 };
