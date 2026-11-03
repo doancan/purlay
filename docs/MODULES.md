@@ -584,3 +584,55 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 - **Removal threshold.** Decided by the owner at each release, against the measured use. A measurable rule is needed
   before a package is sold (§10, *Before a package is sold*); there is none yet. Its table stays until an operator drops
   it (D-250 rule 5).
+
+## 12. Glossary
+
+The terms of this file and of the code that carries it, as they are **now**. A line says where the word lives. Not a
+table, so that §11's listing test reads only the modules.
+
+- **Core** — what knows no module by name: identity, workspaces and tenancy, permissions, audit, the domain bus,
+  attachments, the registry, the erasure and export catalogues. `modules/` and `platform/`.
+- **Module** — a unit of product with a manifest, a migration set of its own, data hooks and a web chunk (§1).
+- **Manifest** — what a module says of itself to the registry: `id`, `requires`, `optional`, `provides`, `routes`,
+  `frames`, `events`, `jobs` (`platform/module-kit/manifest.ts`, §2). It is not a trust boundary.
+- **`BundledModule`** — a manifest plus what the module contributes to the places the core leaves open: the slots in
+  `composition.ts` (`userErased`, `workspacePurge`, `export`, `personalExport`, `workspaceCreated`, `workspaceChannels`,
+  `readAttachment`, `pushNotices`, `collatedColumns`, `dataInCore`).
+- **Bundled** — carried by this build: in `bundledModules`. A bundled module has a row in §11, a set in
+  `PRODUCT_MIGRATION_SETS` and routes the application registers, whether or not a process runs it.
+- **Run** — named by this process's `MODULES`. What a process *acts* with is the modules it runs; what it keeps whole is
+  more (see *holding*).
+- **Composition** — what the core's open places become for the modules a process runs (`compose` in `composition.ts`):
+  the hook lists, the purge, the catalogues, the migration sets and the four `closed` questions. `compositionFor(setting)`
+  is the one `MODULES` makes; with no module it is the core alone.
+- **Closed** — a path nobody has. For a module bundled and not run: a **closed route** is a path of its manifest's
+  `routes`, answered as an unknown path (`closed()`); a **closed job** is one of its `jobs`, which exits `0` with a line
+  (`closedJob`); a **closed frame** is a client operation of its `frames`, answered as one nobody has (`closedFrame`); a
+  **closed event** is a server event of its `events`, which a socket of this process is not sent, from its own services
+  or another node's (`closedEvent`). A path no module claims is not closed, it is the core's.
+- **Cell** — one combination the tests build: a database state (core alone, chat's set, issues' set, every set) against a
+  process (no module, each alone, both). §8.
+- **Migration set** — a module's ordered migrations in `packages/db/migrations/<id>/`, recorded as `<id>/<file>`; the
+  core's own are the legacy rows (D-250 decided a). Validated per set by the migrator (D-86).
+- **Table owner** — the core or one module, for every table, in `TABLE_OWNERS`; a foreign key across owners fails a test.
+- **`dataInCore`** — a flag of `BundledModule` meaning that what the module contributes to the lifecycle of its data is
+  held by every process's composition, whether or not it runs. Named for chat, whose tables the core's migrations made;
+  issues has the same flag with a table of its own set. **The compose-simplification work may remove this flag**
+  (holding every module whose rows may exist); until it merges, this is what the code does.
+- **Holding** — the modules whose contributions a composition keeps: those it runs plus every bundled module with
+  `dataInCore` (the local `holding` of `compose`). Erasure, purge, exports, retention and the columns readiness checks
+  read from it; the workspace's first hook and the routes do not, since they *act*.
+- **`ownSet`** — on an export contribution: the tables its module's own set makes. An export asks `tableExists` for each
+  and skips a contribution whose table is absent, so a database that never applied the set is no failure and its export
+  says nothing of it.
+- **`tableExists`** — `@purlay/db`: whether the database has a table, asked at the moment it is needed and never
+  remembered, because another node may apply the set while this one runs. The one primitive a hook uses to be held where
+  the set is applied and silent where it is not (D-255 §3).
+- **Tombstone** — a purged workspace's row, kept so that the cascade of its keys never fires; why a module's purge names
+  its tables itself.
+- **Hint and fact** — an event is a hint (a UI nudge, fine to lose) or a fact (written as a row in the same transaction
+  and drained by a sweeper), §4.
+- **Capability** — a name a module provides and another asks for (`capabilities.has`), fixed after `register`.
+- **Said, never acted on** — how a node reports a cluster whose members run different sets: one log line, nothing else
+  (D-255 §1).
+
