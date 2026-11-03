@@ -5,32 +5,19 @@
  * error here, as a column nobody decided is where that table is described.
  */
 import type { Database } from '@purlay/db';
+import { composition } from './composition';
+import { CHAT_EXCLUDED, type ChatExcluded, type ChatWritten } from './features/chat/export';
 import {
-  chatExport,
-  CHAT_EXCLUDED,
-  type ChatExcluded,
-  type ChatWritten,
-} from './features/chat/export';
-import {
-  chatPersonalExport,
   CHAT_PERSONAL_EXCLUDED,
   type ChatPersonalExcluded,
   type ChatPersonalWritten,
 } from './features/chat/personal-export';
-import { assembleCatalogue } from './modules/export/catalogue';
+import { CORE_EXCLUDED, type CoreExcluded, type CoreWritten } from './modules/export/core-export';
 import {
-  coreExport,
-  CORE_EXCLUDED,
-  type CoreExcluded,
-  type CoreWritten,
-} from './modules/export/core-export';
-import {
-  corePersonalExport,
   CORE_PERSONAL_EXCLUDED,
   type CorePersonalExcluded,
   type CorePersonalWritten,
 } from './modules/export/core-personal-export';
-import { assemblePersonalCatalogue } from './modules/export/personal-catalogue';
 
 type Undecided = Exclude<keyof Database, CoreWritten | CoreExcluded | ChatWritten | ChatExcluded>;
 /** True while every table is decided; while one is not, the next line does not compile, and names it. */
@@ -44,7 +31,8 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
   ...CHAT_EXCLUDED,
 };
 
-export const exportCatalogue = assembleCatalogue(coreExport, [chatExport]);
+/** The workspace export's catalogue for the modules a process runs (`composition.ts`). */
+export const exportCatalogue = composition.exportCatalogue;
 
 type PersonalUndecided = Exclude<
   keyof Database,
@@ -63,6 +51,5 @@ export const EXCLUDED_FROM_PERSONAL_EXPORT: Readonly<Record<string, string>> = {
   ...CHAT_PERSONAL_EXCLUDED,
 };
 
-export const personalExportCatalogue = assemblePersonalCatalogue(corePersonalExport, [
-  chatPersonalExport,
-]);
+/** A person's export's catalogue for the modules a process runs (`composition.ts`). */
+export const personalExportCatalogue = composition.personalExportCatalogue;

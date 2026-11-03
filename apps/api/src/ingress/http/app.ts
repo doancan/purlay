@@ -174,11 +174,7 @@ import {
   platformAppFetch,
   type GitHubAppFetch,
 } from '../../platform/github-app-api';
-import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
-import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
-import { chatUserErased } from '../../features/chat/channels/user-hooks';
-import { CHAT_COLLATED_COLUMNS } from '../../features/chat/collated-columns';
 import type { UserErased } from '../../modules/users/erasure';
 import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
@@ -279,6 +275,7 @@ import {
 } from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
+import { composition } from '../../composition';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -466,10 +463,10 @@ const SETUP_PATH = /^\/setup(?:\/|$)/;
 export const createApp = (given: Dependencies): HttpApplication => {
   const dependencies = {
     ...given,
-    workspaceCreated: given.workspaceCreated ?? chatWorkspaceHooks(),
-    workspaceChannels: given.workspaceChannels ?? chatWorkspaceChannels,
-    userErased: given.userErased ?? chatUserErased(),
-    collatedColumns: given.collatedColumns ?? CHAT_COLLATED_COLUMNS,
+    workspaceCreated: given.workspaceCreated ?? composition.workspaceCreated,
+    workspaceChannels: given.workspaceChannels ?? composition.workspaceChannels,
+    userErased: given.userErased ?? composition.userErased,
+    collatedColumns: given.collatedColumns ?? composition.collatedColumns,
   };
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
