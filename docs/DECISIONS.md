@@ -6234,8 +6234,7 @@ started. Typing (D-114) answers "is anyone in this channel now"; this answers "i
 **Decision.**
 1. **Online is having Purlay open**: at least one socket on this node, any tab. Not "active" — no
    idle guess, no "away" (D-131 §5 left "away" to this; it is not built: a guess at attention reads as
-   a fact about a person). *Amended 2026-11-03 by D-257:* "away" is built — idle for five minutes, or
-   chosen — as a state, never a duration. Deep Work does not hide it. **Told to the people who share a workspace with
+   a fact about a person). Deep Work does not hide it. **Told to the people who share a workspace with
    the person**, and only them: a stranger never hears it, nor somebody removed a moment ago (membership
    is read as it is told). Accepted, and the owner's to change: a person in two workspaces who has one
    open is online to the other's members too — a socket is no workspace's, and telling which
@@ -6273,6 +6272,9 @@ switch, a frame per person per switch for a distinction a team of thirty rarely 
 the whole team. *No snapshot, frames only* — somebody who opened Purlay before you would never be seen.
 
 **Cost of reversing:** the frame, one route, the registry's online half; no migration.
+
+*Amended 2026-11-03 by D-257:* §1's "no idle guess, no away" is withdrawn: away is built, idle for five minutes or
+chosen, as a state and never a duration.
 
 ### D-137. Incident channels: an incident is a state of a channel — #487
 
@@ -6613,8 +6615,6 @@ while its person is away must not swallow the mention their phone should have to
    (`platform/attention.ts`) for two of those intervals, so one word lost on a slow socket does not end
    it. It is a guess, and it stays the server's: nothing shows it to anybody (D-136 rejected "away" as a
    fact about a person; this is only whether to buzz a pocket).
-   *Amended 2026-11-03 by D-257:* the input list also counts a moving pointer and the wheel, and presence
-   reads the same word; the push rule is unchanged.
 2. **Held for every device of the person, for that workspace only.** The page in front of them already
    says it — the inbox, the badges, the title. Active in one workspace holds nothing of another's.
 3. **Held means dropped, never sent later** (D-12): a person who comes back to their phone after an
@@ -6633,6 +6633,9 @@ two-minute window.
 
 **Cost of reversing:** the frame, `platform/attention.ts` and one filter in the push sender; no
 migration.
+
+*Amended 2026-11-03 by D-257:* §1's input list also counts a moving pointer and the wheel, and presence reads the
+same word; the push rule is unchanged.
 
 ### D-144. The production stack prepares its own object store on `up` — #76
 
