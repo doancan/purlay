@@ -244,7 +244,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('with no module set the core alone is applied, and a module opened later brings its own', async () => {
     const { name, db } = await freshDatabase('core-alone');
@@ -279,7 +279,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('a migration that fails stops the start, naming it and keeping the cause', async () => {
     const { name, db } = await freshDatabase('bad');
@@ -293,7 +293,7 @@ describe('integration: migrate on start', () => {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   /**
    * The application's pool cancels a statement after 30 s (D-87), and the migrator is not
@@ -322,7 +322,7 @@ describe('integration: migrate on start', () => {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('the connection it opens is closed when it is done, whether or not it succeeded', async () => {
     const { name, db } = await freshDatabase('closed');
@@ -339,7 +339,7 @@ describe('integration: migrate on start', () => {
     // A closed connection's server process leaves `pg_stat_activity` a moment after the client
     // hangs up, so the count is waited on to reach zero; a connection left open never does.
     const settled = async (): Promise<number> => {
-      const deadline = Date.now() + 5_000;
+      const deadline = Date.now() + 20_000;
       let open = await sessions();
       while (open > 0 && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 25));
@@ -357,7 +357,7 @@ describe('integration: migrate on start', () => {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('two API processes started at the same instant migrate once, and both become ready', async () => {
     const { name, db } = await freshDatabase('race');
@@ -763,7 +763,10 @@ describe('integration: migrate on start', () => {
       done = true;
     });
     try {
-      await Bun.sleep(200);
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
       expect(done).toBe(false);
       await migrateOnStart({ connectionString: urlFor(name) });
       await waiting;
@@ -776,7 +779,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('waiting for the migrations survives a database that does not answer, says so once, and ends when it does', async () => {
     const { name, db } = await freshDatabase('unreachable');
@@ -795,7 +798,10 @@ describe('integration: migrate on start', () => {
       done = true;
     });
     try {
-      await Bun.sleep(200);
+      await waitUntil(
+        () => lines.some((line) => line['msg'] === WAITING),
+        'the wait to say why it waits',
+      );
       expect(done).toBe(false);
       answering = true;
       await waiting;
@@ -808,7 +814,7 @@ describe('integration: migrate on start', () => {
     } finally {
       await db.destroy();
     }
-  });
+  }, 60_000);
 
   test('waiting for the migrations is for the sets it is given: a database that has exactly those is waited on no longer', async () => {
     const { name, db } = await freshDatabase('until-partial');

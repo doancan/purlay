@@ -13,7 +13,7 @@ import {
   type MigrationSet,
 } from './migrator';
 import { TABLE_OWNERS } from './table-owners';
-import { closeIntegrationDatabase } from './testing';
+import { closeIntegrationDatabase, dropDatabases, DROP_HOOK_MS } from './testing';
 
 const databases: string[] = [];
 
@@ -27,14 +27,14 @@ const open = (name: string): Kysely<unknown> => {
   });
 };
 
+// Dropped together, as the other files drop theirs: one at a time they outlived the five seconds a hook is given.
 afterAll(async () => {
-  const admin = open('postgres');
-  for (const name of databases) {
-    await sql`drop database if exists ${sql.id(name)} with (force)`.execute(admin);
-  }
-  await admin.destroy();
+  await dropDatabases(databases);
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
+
+/** Each test makes and migrates several databases, on a server that other files are also using. */
+const MIGRATING_MS = 60_000;
 
 /** The tables of a database that has had the core's migrations and these sets, and nothing else. */
 const tablesAfter = async (sets: readonly MigrationSet[]): Promise<string[]> => {
@@ -62,24 +62,32 @@ const tablesAfter = async (sets: readonly MigrationSet[]): Promise<string[]> => 
 };
 
 describe('integration: the cells of the matrix, migrated', () => {
-  test('a set that is off creates nothing, and what a set creates is its own', async () => {
-    const core = await tablesAfter(setsNamedBy('none'));
-    expect(core.length).toBeGreaterThan(0);
-    for (const set of PRODUCT_MIGRATION_SETS) {
-      const alone = await tablesAfter(setsNamedBy(set.id));
-      const added = alone.filter((table) => !core.includes(table));
-      expect(added.length).toBeGreaterThan(0);
-      expect(added.filter((table) => TABLE_OWNERS[table] !== set.id)).toEqual([]);
-      expect(core.filter((table) => !alone.includes(table))).toEqual([]);
-    }
-  });
+  test(
+    'a set that is off creates nothing, and what a set creates is its own',
+    async () => {
+      const core = await tablesAfter(setsNamedBy('none'));
+      expect(core.length).toBeGreaterThan(0);
+      for (const set of PRODUCT_MIGRATION_SETS) {
+        const alone = await tablesAfter(setsNamedBy(set.id));
+        const added = alone.filter((table) => !core.includes(table));
+        expect(added.length).toBeGreaterThan(0);
+        expect(added.filter((table) => TABLE_OWNERS[table] !== set.id)).toEqual([]);
+        expect(core.filter((table) => !alone.includes(table))).toEqual([]);
+      }
+    },
+    MIGRATING_MS,
+  );
 
-  test('every set together is the core and what each set adds, no more', async () => {
-    const core = await tablesAfter(setsNamedBy('none'));
-    const every = await tablesAfter(setsNamedBy(undefined));
-    const own = Object.entries(TABLE_OWNERS)
-      .filter(([table, owner]) => owner !== 'core' && !core.includes(table))
-      .map(([table]) => table);
-    expect(every).toEqual([...core, ...own].sort());
-  });
+  test(
+    'every set together is the core and what each set adds, no more',
+    async () => {
+      const core = await tablesAfter(setsNamedBy('none'));
+      const every = await tablesAfter(setsNamedBy(undefined));
+      const own = Object.entries(TABLE_OWNERS)
+        .filter(([table, owner]) => owner !== 'core' && !core.includes(table))
+        .map(([table]) => table);
+      expect(every).toEqual([...core, ...own].sort());
+    },
+    MIGRATING_MS,
+  );
 });
