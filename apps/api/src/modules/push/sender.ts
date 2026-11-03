@@ -20,7 +20,7 @@
  *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, a push is dropped and
  *   said. `flush` waits for them at shutdown, within its bound.
  */
-import { sql, type Executor } from '@purlay/db';
+import type { Executor } from '@purlay/db';
 import { NEEDS_YOU, type PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
@@ -28,6 +28,7 @@ import type { Logger } from '../../platform/logging';
 import type { Counter, PushFailure } from '../../platform/metrics';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
+import type { PushNotices } from './notices';
 import { encryptPush, freshParts } from './encrypt';
 import { vapidAuthorization, vapidSigningKey, type VapidKeys } from './vapid';
 import { pushBody, saidOf } from './words';
@@ -72,6 +73,8 @@ export interface PushSenderDependencies {
    * what they are looking at already says it.
    */
   readonly attention: Attention;
+  /** What the write told, from whoever owns the writes: chat's notifications, where the server is composed (D-250). */
+  readonly notices: PushNotices;
   /** Where a push that did not reach its service is counted, by why (D-221); absent, it is not. */
   readonly failures?: Counter<'reason'>;
 }
@@ -90,21 +93,17 @@ interface Device {
 const OUR_REQUEST_REFUSED = new Set([400, 401, 403, 413]);
 
 const devicesFor = async (
-  { database, clock, keys, attention, log }: PushSenderDependencies,
+  { database, clock, keys, attention, log, notices }: PushSenderDependencies,
   messageId: string,
   userIds: readonly string[],
 ): Promise<Device[]> => {
-  const rows = await database
-    .selectFrom('notifications as n')
-    .innerJoin('messages as m', 'm.id', 'n.message_id')
-    .innerJoin('users as author', 'author.id', 'm.sender_id')
-    .innerJoin('users as person', 'person.id', 'n.user_id')
-    .innerJoin('channels as c', 'c.id', 'n.channel_id')
-    .innerJoin('workspaces as w', 'w.id', 'n.workspace_id')
-    .innerJoin('push_subscriptions as s', 's.user_id', 'n.user_id')
+  const told = await notices.of(database, messageId, userIds);
+  if (told.length === 0) return [];
+  const tellable = [...new Set(told.map((notice) => notice.userId))];
+  const subscriptions = await database
+    .selectFrom('push_subscriptions as s')
+    .innerJoin('users as person', 'person.id', 's.user_id')
     .innerJoin('sessions as live', 'live.id', 's.session_id')
-    // A reply's root: whose thread it is decides what the reply is said as (D-162).
-    .leftJoin('messages as root', 'root.id', 'm.parent_id')
     .select([
       's.id',
       's.user_id as userId',
@@ -112,28 +111,9 @@ const devicesFor = async (
       's.endpoint',
       's.p256dh',
       's.auth',
-      'n.type',
-      'n.channel_id',
-      'n.workspace_id',
       'person.locale',
-      'author.display_name',
-      'c.name',
-      'w.slug',
-      'root.sender_id as root_sender_id',
-      // A group's people besides the one told, by name: what its notice is titled (D-127).
-      sql<string | null>`(
-        select string_agg(other.display_name, ', ' order by key_part.place)
-        from unnest(string_to_array(c.dm_key, ':')) with ordinality as key_part(id, place)
-        join users as other on other.id = key_part.id::uuid
-        where cardinality(string_to_array(c.dm_key, ':')) > 2 and other.id <> n.user_id
-      )`.as('group_names'),
     ])
-    .where('n.message_id', '=', messageId)
-    .where('n.user_id', 'in', userIds)
-    .where('n.type', 'in', [...NEEDS_YOU, 'reminder'])
-    .where('n.read_at', 'is', null)
-    .where('n.suppressed_by_deep_work', '=', false)
-    .where('m.deleted_at', 'is', null)
+    .where('s.user_id', 'in', tellable)
     .where('person.deleted_at', 'is', null)
     .where('live.expires_at', '>', clock.now())
     .where('s.server_key', '=', keys.publicKey)
@@ -141,13 +121,27 @@ const devicesFor = async (
     .orderBy('s.created_at')
     .orderBy('s.id')
     .execute();
+  const workspaces = await database
+    .selectFrom('workspaces')
+    .select(['id', 'slug'])
+    .where('id', 'in', [...new Set(told.map((notice) => notice.workspaceId))])
+    .execute();
+  const slugs = new Map(workspaces.map((workspace) => [workspace.id, workspace.slug]));
+  const rows = subscriptions.flatMap((subscription) =>
+    told
+      .filter((notice) => notice.userId === subscription.userId)
+      .flatMap((notice) => {
+        const slug = slugs.get(notice.workspaceId);
+        return slug === undefined ? [] : [{ ...subscription, ...notice, slug }];
+      }),
+  );
   const held = new Set<string>();
   const devices = rows.flatMap((row) => {
     const reason =
       row.type === 'reminder' ? 'reminder' : NEEDS_YOU.find((known) => known === row.type);
     if (reason === undefined) return [];
     // In front of this workspace's page: held, never sent later (D-143, D-12).
-    if (attention.active(row.userId, row.workspace_id)) {
+    if (attention.active(row.userId, row.workspaceId)) {
       held.add(row.userId);
       return [];
     }
@@ -156,14 +150,15 @@ const devicesFor = async (
         ...row,
         payload: {
           // A channel by its name; a group by its people; a direct message by who wrote it.
-          title: row.name !== null ? `#${row.name}` : (row.group_names ?? row.display_name),
+          title:
+            row.channelName !== null ? `#${row.channelName}` : (row.groupNames ?? row.authorName),
           body: pushBody(
             row.locale === 'tr' ? 'tr' : 'en',
-            saidOf(reason, row.group_names !== null, row.root_sender_id, row.userId),
-            row.display_name,
+            saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
+            row.authorName,
           ),
-          url: `/w/${row.slug}/c/${row.channel_id}`,
-          tag: `channel:${row.channel_id}`,
+          url: `/w/${row.slug}/c/${row.channelId}`,
+          tag: `channel:${row.channelId}`,
         },
       },
     ];

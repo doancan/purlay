@@ -20,6 +20,7 @@ export {
 } from './client';
 export { purgeDeadSessions } from './sessions';
 export { tableExists } from './table-exists';
+export { TABLE_OWNERS, type TableOwner } from './table-owners';
 /**
  * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).
