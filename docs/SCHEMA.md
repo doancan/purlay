@@ -1530,6 +1530,33 @@ CREATE INDEX idx_hidden_messages_channel   ON hidden_messages (channel_id, works
 CREATE INDEX idx_hidden_messages_changes   ON hidden_messages (user_id, channel_id, hidden_at, message_id);
 ```
 
+### 7.12. `issues`
+
+A workspace's issue (the issues module's set, `issues/0001`): a title, a markdown body, open or done, who it is
+assigned to and who made it. Both people outlive their rows as `NULL`, as a channel's creator does. That the
+assignee is a member of the workspace is the service's check and not a key, so a member who leaves does not
+rewrite their issues. The keys run to the core only (D-250): the table exists where the module's set was applied, and
+a database that never ran it has none.
+
+```sql
+CREATE TYPE issue_status AS ENUM ('open', 'done');
+
+CREATE TABLE issues (
+    id           UUID PRIMARY KEY,                       -- UUIDv7 made by the application: the page's cursor
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    title        TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 200),
+    body         TEXT NOT NULL DEFAULT '' CHECK (char_length(body) <= 10000),
+    status       issue_status NOT NULL DEFAULT 'open',
+    assignee_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_issues_workspace  ON issues (workspace_id, id DESC);
+CREATE INDEX idx_issues_assignee   ON issues (assignee_id) WHERE assignee_id IS NOT NULL;
+CREATE INDEX idx_issues_created_by ON issues (created_by) WHERE created_by IS NOT NULL;
+```
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -2649,6 +2676,7 @@ chat/0001_message_attachments.sql  chat's set: message_attachments, the link of 
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
 chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
+issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

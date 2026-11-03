@@ -71,6 +71,7 @@ is rotated out (§4).
 | `scheduled_message_attachments` | Which unsent scheduled message holds a file: ids only | The files a scheduled message will send (D-250) | Until it is sent, edited away or cancelled; with the message or its file |
 | `message_reminders` | When a person asked to be reminded of a message | Reminders, told in the inbox when due | Until delivered or removed; on erasure; with the message |
 | `hidden_messages` | Which messages a person deleted for themselves alone, and when | Deleting a message for oneself, without changing it for anybody else | On erasure; with the message |
+| `issues` | A workspace's issue: its title and markdown body, whether it is done, who it is assigned to and who made it | Issues, a module that is run only where the operator chose it (D-250) | Until deleted by its creator or an admin; with the workspace's purge; both people are cleared on their erasure |
 | `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |
 | `notifications` | What a person was told of, whether they read it, and when a letter mailed it (D-240) | The inbox (D-12), and email about what was missed | With its message; on erasure |
 | `incidents` | Who declared and resolved an incident; its runbook and postmortem | Incident channels (D-137) | For the life of the channel; not touched by content erasure (D-139 §7) |
