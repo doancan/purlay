@@ -12,7 +12,7 @@ import {
   readMissedMail,
   setMissedMail,
   stopMissedMail,
-} from '../../modules/notifications/missed-mail';
+} from '../../features/chat/notifications/missed-mail';
 import type { Clock } from '../../platform/clock';
 import { requireSession } from './session';
 import { validated } from './validate';

@@ -16,7 +16,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aUserRow } from '../../testing/users';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import {
   GITHUB_DELIVERIES_KEPT_DAYS,
   ORPHAN_AGE_MS,

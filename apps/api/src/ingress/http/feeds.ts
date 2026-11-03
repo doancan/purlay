@@ -15,7 +15,7 @@ import {
   createFeed,
   regenerateSecret,
   removeFeed,
-} from '../../modules/integrations/feeds';
+} from '../../features/chat/integrations/feeds';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
 import { validated } from './validate';

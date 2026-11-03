@@ -14,7 +14,7 @@ import { messageId, type ServerFrame } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
 import { aTestAuth, aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { testDependencies } from '../testing/doubles';
-import { missedIn } from '../modules/messages/messages';
+import { missedIn } from '../features/chat/messages/messages';
 import { fixedClock } from '../platform/clock';
 import { channelTopic, publishAccessRevoked, userTopic } from '../platform/events';
 import { createLogger } from '../platform/logging';

@@ -28,7 +28,7 @@ import { aMemoryStore } from '../../testing/storage';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { aSession } from '../../testing/signed-in';
 import { createApp } from './app';
-import { purgeRetention, purgeWorkspace } from '../../modules/messages/retention-purge';
+import { purgeRetention, purgeWorkspace } from '../../features/chat/messages/retention-purge';
 
 let cloned: ClonedDatabase;
 

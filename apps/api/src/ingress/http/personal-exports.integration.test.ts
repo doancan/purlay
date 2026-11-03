@@ -34,7 +34,7 @@ import {
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { aSession } from '../../testing/signed-in';
-import { sendMessage } from '../../modules/messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import { exportQueue } from '../../modules/export/queue';
 import { sweepExports } from '../../modules/export/requests';
 import { endPersonalExports } from '../../modules/export/personal-requests';

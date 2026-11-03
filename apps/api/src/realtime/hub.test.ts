@@ -18,7 +18,7 @@ import {
   type Connection,
   type Timers,
 } from './hub';
-import { REPLAY_BYTES_MAX } from '../modules/messages/replay';
+import { REPLAY_BYTES_MAX } from '../features/chat/messages/replay';
 
 /** Timers that record what was asked of them and fire only when told. */
 const recordedTimers = (): Timers & {

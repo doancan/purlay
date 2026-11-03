@@ -51,7 +51,7 @@ export interface Connection {
  *
  * It must exceed the largest burst a healthy connection receives at once, or a
  * fast reader would be closed by its own replay and loop: that is the replay's
- * byte budget, and a test binds the two (`REPLAY_BYTES_MAX` in `modules/messages/replay.ts`).
+ * byte budget, and a test binds the two (`REPLAY_BYTES_MAX` in `features/chat/messages/replay.ts`).
  */
 export const OUTBOUND_HIGH_WATER_MARK = 4 * 1024 * 1024;
 

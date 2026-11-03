@@ -9,7 +9,7 @@ import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aRoom, type Room } from '../../testing/rooms';
-import { createChannel } from '../channels/channels';
+import { createChannel } from '../../features/chat/channels/channels';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { changeRole, removeMember } from '../workspaces/members';
 import { auditTrail, recordAudit } from './audit';

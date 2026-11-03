@@ -8,7 +8,7 @@ import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
 import { GitHubIssueOutcome, messageId, type Message } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { keepAuthorization } from '../modules/integrations/github-app';
+import { keepAuthorization } from '../features/chat/integrations/github-app';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../platform/config';
 import { credentialCipher } from '../platform/crypto';
 import { SESSION_COOKIE } from '../platform/cookies';

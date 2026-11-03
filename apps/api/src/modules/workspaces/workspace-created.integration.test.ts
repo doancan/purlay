@@ -18,7 +18,7 @@ import { fixedClock } from '../../platform/clock';
 import { hookList } from '../../platform/hooks';
 import { atomicallyOn } from '../../platform/transactions';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
-import { chatWorkspaceHooks } from '../channels/workspace-hooks';
+import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
 import { createWorkspace, type WorkspaceCreated } from './workspaces';
 
 let cloned: ClonedDatabase;

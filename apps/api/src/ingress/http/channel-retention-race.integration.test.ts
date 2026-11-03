@@ -27,7 +27,7 @@ import { aRecordingLogger, NOW, testDependencies } from '../../testing/doubles';
 import { aRoom, counters, type Room } from '../../testing/rooms';
 import { aSession } from '../../testing/signed-in';
 import { aMemoryStore } from '../../testing/storage';
-import { purgeRetention, purgeWorkspace } from '../../modules/messages/retention-purge';
+import { purgeRetention, purgeWorkspace } from '../../features/chat/messages/retention-purge';
 import { createApp } from './app';
 
 let cloned: ClonedDatabase;

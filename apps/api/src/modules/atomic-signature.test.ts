@@ -9,9 +9,9 @@ import { describe, expect, test } from 'bun:test';
 import type { Executor, Transaction } from '@purlay/db';
 import { fixedClock } from '../platform/clock';
 import type { WorkspaceContext } from '../platform/tenancy';
-import { createChannel } from './channels/channels';
+import { createChannel } from '../features/chat/channels/channels';
 import { createWorkspace } from './workspaces/workspaces';
-import { chatWorkspaceHooks } from './channels/workspace-hooks';
+import { chatWorkspaceHooks } from '../features/chat/channels/workspace-hooks';
 import { acceptInvitation, createInvitation, revokeInvitation } from './workspaces/invitations';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));

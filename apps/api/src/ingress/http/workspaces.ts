@@ -60,8 +60,8 @@ import {
   mayConfigure,
   removeGitHubToken,
   setGitHubToken,
-} from '../../modules/integrations/github';
-import { verifiedToken, type GitHubApi } from '../../modules/integrations/unfurl';
+} from '../../features/chat/integrations/github';
+import { verifiedToken, type GitHubApi } from '../../features/chat/integrations/unfurl';
 import type { CredentialCipher } from '../../platform/crypto';
 import {
   NO_LOG,

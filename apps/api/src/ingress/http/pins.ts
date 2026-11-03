@@ -6,7 +6,12 @@ import type { PinList } from '@purlay/types';
 import { requireChannelById } from '../../platform/channels';
 import { NO_LOG, publication, publishAfterCommit, publishPinsUpdated } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
-import { channelPins, pinMessage, unpinMessage, type PinChange } from '../../modules/pins/pins';
+import {
+  channelPins,
+  pinMessage,
+  unpinMessage,
+  type PinChange,
+} from '../../features/chat/pins/pins';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 

@@ -2,7 +2,7 @@
  * How long a workspace keeps its history (D-27 §1, D-139 §4): an owner's to read and to set, whole days
  * from 30, or forever. Forever is the default and the tenet (D-2); shortening it is what this product
  * exists to prevent happening silently, so every change is on the trail with what it was and what it
- * became. The nightly purge (`modules/messages/retention-purge.ts`) does the rest.
+ * became. The nightly purge (`features/chat/messages/retention-purge.ts`) does the rest.
  */
 import type { Executor, Transaction } from '@purlay/db';
 import type { RetentionSetting } from '@purlay/types';

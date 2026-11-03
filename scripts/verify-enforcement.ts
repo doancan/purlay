@@ -108,13 +108,14 @@ const VIOLATIONS: readonly Violation[] = [
     ruleId: 'no-restricted-imports',
     path: 'apps/api/src/modules/users/__enforcement__.ts',
     source:
-      "import { thing } from '../messages/thing';\n\nexport const use = (): unknown => thing;\n",
+      "import { thing } from '../../features/chat/messages/thing';\n\nexport const use = (): unknown => thing;\n",
   },
   {
     rule: "a module of chat imports the core's freely (control)",
     ruleId: 'no-restricted-imports',
-    path: 'apps/api/src/modules/messages/__enforcement__.ts',
-    source: "import { thing } from '../users/thing';\n\nexport const use = (): unknown => thing;\n",
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { thing } from '../../../modules/users/thing';\n\nexport const use = (): unknown => thing;\n",
     allowed: true,
   },
   {
@@ -386,7 +387,7 @@ const VIOLATIONS: readonly Violation[] = [
   {
     rule: "a link's address may not be asserted into existence (D-101)",
     ruleId: 'no-restricted-syntax',
-    path: 'apps/api/src/modules/messages/__enforcement__.test.ts',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.test.ts',
     source:
       "import type { SafeHref } from '@purlay/markdown';\nexport const forged = { href: 'javascript:x' } as unknown as SafeHref;\n",
   },

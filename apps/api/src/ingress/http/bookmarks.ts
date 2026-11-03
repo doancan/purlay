@@ -17,7 +17,7 @@ import {
   channelBookmarks,
   removeBookmark,
   type BookmarkChange,
-} from '../../modules/bookmarks/bookmarks';
+} from '../../features/chat/bookmarks/bookmarks';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { validated } from './validate';

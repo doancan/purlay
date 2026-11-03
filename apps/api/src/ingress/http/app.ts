@@ -172,9 +172,9 @@ import {
   platformAppFetch,
   type GitHubAppFetch,
 } from '../../platform/github-app-api';
-import { chatWorkspaceHooks } from '../../modules/channels/workspace-hooks';
+import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
 import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
-import { latestReleaseCheck } from '../../modules/integrations/latest-release';
+import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
   createWorkspaceChannel,
@@ -227,7 +227,11 @@ import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
-import { githubApi, inProcessPauses, type GitHubApi } from '../../modules/integrations/unfurl';
+import {
+  githubApi,
+  inProcessPauses,
+  type GitHubApi,
+} from '../../features/chat/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';

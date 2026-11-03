@@ -18,7 +18,7 @@
 import type { GithubFetch } from '../modules/auth/better-auth';
 import type { GitHubAppFetch } from '../platform/github-app-api';
 import { answeredWithin, type GitHubAppStub } from './github-app-stub';
-import type { GitHubApi } from '../modules/integrations/unfurl';
+import type { GitHubApi } from '../features/chat/integrations/unfurl';
 
 /** A GitHub account as GitHub's API describes it. */
 export interface GitHubPerson {

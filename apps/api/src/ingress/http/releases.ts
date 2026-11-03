@@ -1,7 +1,7 @@
 /** The version this server runs and the newest release, for whoever is signed in (D-248). */
 import type { LatestReleaseAnswer } from '@purlay/types';
 import type { Auth } from '../../modules/auth/better-auth';
-import type { ReleaseCheck } from '../../modules/integrations/latest-release';
+import type { ReleaseCheck } from '../../features/chat/integrations/latest-release';
 import { SERVER_VERSION } from '../../platform/server-version';
 import { requireSession } from './session';
 

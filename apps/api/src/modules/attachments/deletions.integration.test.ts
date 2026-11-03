@@ -25,7 +25,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { NOW } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
-import { sendMessage } from '../messages/messages';
+import { sendMessage } from '../../features/chat/messages/messages';
 import {
   dropFiles,
   drainObjectDeletions,

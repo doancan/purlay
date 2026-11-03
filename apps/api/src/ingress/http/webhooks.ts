@@ -11,7 +11,7 @@ import {
   requireFeed,
   type Outcome,
   type WebhookDependencies,
-} from '../../modules/integrations/webhook';
+} from '../../features/chat/integrations/webhook';
 
 /** Deliveries read at once on this node: each is up to a mebibyte held while it is checked. */
 export const DELIVERIES_AT_ONCE = 8;

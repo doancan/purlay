@@ -30,7 +30,7 @@ import {
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aGitHubStub } from '../../testing/github-stub';
-import { keepAuthorization } from '../../modules/integrations/github-app';
+import { keepAuthorization } from '../../features/chat/integrations/github-app';
 import { credentialCipher } from '../../platform/crypto';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';

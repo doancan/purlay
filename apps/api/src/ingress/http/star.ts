@@ -10,7 +10,7 @@ import {
   publishAfterCommit,
   publishChannelsUpdated,
 } from '../../platform/events';
-import { setStarred } from '../../modules/channels/star';
+import { setStarred } from '../../features/chat/channels/star';
 import type { ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 

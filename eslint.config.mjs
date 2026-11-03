@@ -23,44 +23,6 @@ const NO_TRANSPORT_TYPES = {
 const FEATURES_DIR = 'apps/api/src/features';
 const FEATURE_IDS = featureIds(FEATURES_DIR);
 
-// Until chat moves under `features/` (`MODULES.md` §10, step 9) its modules sit in `modules/` beside the
-// core's, and this is where each is said to be one or the other. The core imports none of chat's — it must work
-// with chat absent (D-250) — and a new folder that is in neither list stops the linter rather than escape
-// the rule. The list shrinks to nothing when the move is done.
-const CORE_MODULES = [
-  'attachments',
-  'audit',
-  'auth',
-  'export',
-  'images',
-  'jobs',
-  'push',
-  'setup',
-  'users',
-  'workspaces',
-];
-const CHAT_MODULES = [
-  'bookmarks',
-  'channels',
-  'incidents',
-  'integrations',
-  'messages',
-  'notifications',
-  'pins',
-  'presence',
-  'reactions',
-  'saved',
-  'search',
-];
-const UNCLASSIFIED_MODULES = featureIds('apps/api/src/modules').filter(
-  (id) => !CORE_MODULES.includes(id) && !CHAT_MODULES.includes(id),
-);
-if (UNCLASSIFIED_MODULES.length > 0) {
-  throw new Error(
-    `apps/api/src/modules/ has ${UNCLASSIFIED_MODULES.join(', ')}: say in eslint.config.mjs whether each is the core's or chat's (D-250)`,
-  );
-}
-
 const NO_FEATURES = {
   group: ['**/features/**'],
   message:
@@ -649,25 +611,29 @@ export default defineConfig([
     },
   },
 
-  // The core's modules import none of chat's, so that the core runs with chat absent (D-250). Restates the
-  // module rules above, which ESLint replaces rather than merges; tests may, they build a room to act in.
+  // The core's tests may import a feature: they build a room to act in, and chat is where rooms are. The
+  // core's own code may not (above): it must run with chat absent (D-250).
   {
-    files: CORE_MODULES.map((id) => `apps/api/src/modules/${id}/**/*.ts`),
-    ignores: ['**/*.test.ts'],
+    files: ['apps/api/src/modules/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [NO_TRANSPORT_TYPES], paths: [NO_CREATE_DATABASE] },
+      ],
+    },
+  },
+  {
+    files: ['apps/api/src/platform/**/*.test.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
-            NO_TRANSPORT_TYPES,
-            NO_FEATURES,
             {
-              regex: String.raw`^\.\./(${CHAT_MODULES.join('|')})(/|$)`,
-              message:
-                "A module of the core imports none of chat's: the core runs with chat absent. Reach it through a hook, a port or an event the core defines. (D-250, MODULES.md §4)",
+              group: ['**/modules/**', '**/ingress/**', '**/realtime/**'],
+              message: 'platform is the bottom layer; it imports from nothing above it.',
             },
           ],
-          paths: [NO_CREATE_DATABASE],
         },
       ],
     },
@@ -676,10 +642,11 @@ export default defineConfig([
   // A feature: below the doors like a module, never importing another feature — its code or its tables'
   // owner — and, like a module, taking its executor as an argument. One block for each, because the
   // rule has to name the others. (D-250, MODULES.md §4)
-  ...featureFences(FEATURES_DIR, FEATURE_IDS, NO_TRANSPORT_TYPES, [
-    NO_CREATE_DATABASE,
-    ...NO_RAW_SQL,
-  ]),
+  // Chat predates the ban on raw SQL and writes it throughout; it is held to the rest and leaves this
+  // exemption when its queries are behind the typed handle (`MODULES.md` §10, step 9).
+  ...featureFences(FEATURES_DIR, FEATURE_IDS, NO_TRANSPORT_TYPES, (id) =>
+    id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL],
+  ),
 
   // The door that composes the other: realtime imports nothing from ingress. Its
   // tests may — they stand up a whole application to drive a real socket — and so

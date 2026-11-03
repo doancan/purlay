@@ -10,7 +10,7 @@ import type { Clock } from '../../platform/clock';
 import type { CredentialCipher } from '../../platform/crypto';
 import type { Logger } from '../../platform/logging';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { unfurl, type GitHubApi, type GitHubPauses } from '../../modules/integrations/unfurl';
+import { unfurl, type GitHubApi, type GitHubPauses } from '../../features/chat/integrations/unfurl';
 import type { RateLimiter } from '../../realtime/rate-limiter';
 import { requireSession } from './session';
 import { validated } from './validate';

@@ -14,7 +14,7 @@ import { closeIntegrationDatabase, withRollback, type Transaction } from '@purla
 import { fixedClock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
-import { chatWorkspaceHooks } from '../channels/workspace-hooks';
+import { chatWorkspaceHooks } from '../../features/chat/channels/workspace-hooks';
 import { createWorkspace, membersIn, membershipsOf, meOf, workspaceIn } from './workspaces';
 import { workspaceCreatorsOf } from './creators';
 

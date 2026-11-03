@@ -25,7 +25,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aSession } from '../../testing/signed-in';
 import { aMemoryStore } from '../../testing/storage';
 import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
-import { chatWorkspacePurge } from '../../modules/messages/workspace-purge';
+import { chatWorkspacePurge } from '../../features/chat/messages/workspace-purge';
 import { purgeWorkspaces } from '../../modules/workspaces/deletion-purge';
 import { createApp } from './app';
 
