@@ -12451,4 +12451,28 @@ export const MUTATIONS: readonly Mutation[] = [
       'apps/api/src/platform/module-budget.integration.test.ts',
     ],
   },
+  {
+    id: 'domain-bus-handler-failure-escapes',
+    why: "one module's failing handler would fail the publisher and keep the other modules from hearing (D-250)",
+    file: 'apps/api/src/platform/domain-bus.ts',
+    find: "if (outcome.status === 'rejected') {",
+    replace: "if (outcome.status === 'rejected' && false) {",
+    tests: ['apps/api/src/platform/domain-bus.test.ts'],
+  },
+  {
+    id: 'domain-bus-stop-keeps-listening',
+    why: 'a module that stopped still gets events, and its handler runs against torn-down state (D-250)',
+    file: 'apps/api/src/platform/domain-bus.ts',
+    find: '(subscriptions.get(event.type) ?? []).filter((other) => other !== entry),',
+    replace: '(subscriptions.get(event.type) ?? []),',
+    tests: ['apps/api/src/platform/domain-bus.test.ts'],
+  },
+  {
+    id: 'domain-bus-ignores-event-type',
+    why: 'every handler would hear every event, whatever it was subscribed to (D-250)',
+    file: 'apps/api/src/platform/domain-bus.ts',
+    find: 'const listening = subscriptions.get(event.type) ?? [];',
+    replace: 'const listening = [...subscriptions.values()].flat();',
+    tests: ['apps/api/src/platform/domain-bus.test.ts'],
+  },
 ];
