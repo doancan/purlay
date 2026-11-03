@@ -100,8 +100,8 @@ open but is not at it", and somebody stepping out can say so with one click.
    counts the person away when no page of theirs has spoken for `AWAY_AFTER_MS`. On several nodes the
    last word lives where the online claims live (`redis-presence.ts`), and a sweep tells the lapse, so
    a frozen page or a dead node cannot leave anybody stuck active.
-2. **A socket that opens starts active**: opening or reloading Purlay is the person's own act. A
-   reconnect the page makes by itself (a network blip) carries the time of the page's last input, so a
+2. **A socket that opens after the person was offline starts active**: opening or reloading Purlay is the
+   person's own act. A socket back inside the grace (a network blip, a reload) changes nothing, so a
    person idle for an hour is not turned green by their Wi-Fi.
 3. **Away by choice is ordered with the rest.** The route writes the column first, then tells the
    change through the same announcement path as online and offline, at a new version from the same
