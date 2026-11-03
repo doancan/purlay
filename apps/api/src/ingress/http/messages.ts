@@ -52,7 +52,7 @@ import {
 } from '../../modules/messages/threads';
 import { followState, setFollowing } from '../../modules/messages/follow';
 import { searchIn } from '../../modules/search/search';
-import { channelFiles } from '../../modules/attachments/files';
+import { channelFiles } from '../../modules/channels/files';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
 
