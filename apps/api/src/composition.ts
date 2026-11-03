@@ -30,6 +30,13 @@ import type { CollatedColumn } from './platform/readiness';
 /** What a module may contribute: each slot is the core's, and a module fills the ones it has. */
 export interface BundledModule {
   readonly manifest: ModuleManifest;
+  /**
+   * Its tables were made by the core's own migrations, so they exist whether or not the module runs. What the module
+   * contributes to the lifecycle of that data — an erased account's, a deleted workspace's, an export, who answers
+   * for the channels a member leaves — then applies even to a process that does not run it: a person's right to be
+   * erased does not wait for a setting. A module with a migration set of its own is held only while it runs.
+   */
+  readonly dataInCore?: boolean;
   /** Run inside the transaction of a new workspace, once its owner is a member. */
   readonly workspaceCreated?: (...args: Parameters<WorkspaceCreated['run']>) => Promise<void>;
   /** Run inside the transaction of an erased account. */
@@ -75,11 +82,18 @@ export const compose = (
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
+  // What a process acts with is the modules it runs; what it keeps whole is every module whose rows exist.
+  const holding = [
+    ...modules,
+    ...bundled.filter((module) => !modules.includes(module) && module.dataInCore),
+  ];
   for (const module of modules) {
     if (module.workspaceCreated !== undefined) workspaceCreated.register(module.workspaceCreated);
+  }
+  for (const module of holding) {
     if (module.userErased !== undefined) userErased.register(module.userErased);
   }
-  const answering = modules.filter((module) => module.workspaceChannels !== undefined);
+  const answering = holding.filter((module) => module.workspaceChannels !== undefined);
   if (answering.length > 1) {
     throw new Error(
       `more than one module answers for a workspace's channels: ${answering.map((module) => module.manifest.id).join(', ')}`,
@@ -91,19 +105,19 @@ export const compose = (
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,
     workspacePurge: {
-      before: modules.flatMap((module) => module.workspacePurge?.before ?? []),
-      after: modules.flatMap((module) => module.workspacePurge?.after ?? []),
-      tables: modules.flatMap((module) => module.workspacePurge?.tables ?? []),
+      before: holding.flatMap((module) => module.workspacePurge?.before ?? []),
+      after: holding.flatMap((module) => module.workspacePurge?.after ?? []),
+      tables: holding.flatMap((module) => module.workspacePurge?.tables ?? []),
     },
     exportCatalogue: assembleCatalogue(
       coreExport,
-      modules.flatMap((module) => module.export ?? []),
+      holding.flatMap((module) => module.export ?? []),
     ),
     personalExportCatalogue: assemblePersonalCatalogue(
       corePersonalExport,
-      modules.flatMap((module) => module.personalExport ?? []),
+      holding.flatMap((module) => module.personalExport ?? []),
     ),
-    collatedColumns: modules.flatMap((module) => module.collatedColumns ?? []),
+    collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),
     ),

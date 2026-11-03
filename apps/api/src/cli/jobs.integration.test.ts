@@ -25,7 +25,7 @@ const job = async (
 
 describe('integration: the scheduled jobs of the modules a process runs', () => {
   test('a job of a module that is not run exits 0 and says there was nothing to do', async () => {
-    for (const name of ['purge:retention', 'mail:missed']) {
+    for (const name of ['mail:missed']) {
       const { code, said } = await job(name, 'none');
       expect(code).toBe(0);
       expect(said).toContain('the job belongs to a module that is not run');
@@ -35,7 +35,8 @@ describe('integration: the scheduled jobs of the modules a process runs', () => 
   test('the status report leaves the closed jobs out, so none of them is overdue', async () => {
     const { said } = await job('jobs:status', 'none');
     expect(said).toContain('sweep:sessions');
-    expect(said).not.toContain('purge:retention');
+    // What acts for chat's users is not overdue with chat off; keeping its rows within retention still is.
+    expect(said).toContain('purge:retention');
     expect(said).not.toContain('mail:missed');
   }, 30_000);
 

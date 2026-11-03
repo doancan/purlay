@@ -12954,7 +12954,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'composition-purge-steps-dropped',
     why: "the purge of a deleted workspace leaves a running module's messages and channels behind (D-242, D-250)",
     file: 'apps/api/src/composition.ts',
-    find: 'before: modules.flatMap((module) => module.workspacePurge?.before ?? []),',
+    find: 'before: holding.flatMap((module) => module.workspacePurge?.before ?? []),',
     replace: 'before: [],',
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
@@ -13021,5 +13021,13 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'owner === null || modules.includes(owner)',
     replace: 'true',
     tests: ['apps/web/src/app/app.test.tsx'],
+  },
+  {
+    id: 'composition-data-of-a-module-not-run-forgotten',
+    why: 'an erased account, a deleted workspace and an export leave chat’s rows alone because MODULES left chat out: the data stays after the right to erase it (D-250 rule 5)',
+    file: 'apps/api/src/composition.ts',
+    find: '!modules.includes(module) && module.dataInCore',
+    replace: 'false',
+    tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
 ];

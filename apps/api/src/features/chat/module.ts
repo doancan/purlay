@@ -14,6 +14,8 @@ import { CHAT_COLLATED_COLUMNS } from './collated-columns';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
 export const chatModule = {
+  // Its tables are in the core's first migrations (`MODULES.md` §5): they exist with chat off.
+  dataInCore: true,
   manifest: {
     id: 'chat',
     requires: [],
@@ -22,7 +24,9 @@ export const chatModule = {
     // Every route that is about channels, messages and what hangs off them. The ones that are the workspace's own
     // (its members, invitations, exports, retention window, deletion, uploads) and the account's are the core's, and
     // `routes.test.ts` of the door holds the two lists to the routes the application registers.
-    jobs: ['purge:retention', 'mail:missed', 'sweep:link-previews', 'sweep:github-deliveries'],
+    // Only what acts for chat's users. The sweeps and the retention purge keep the rows tidy and keep running whether
+    // chat does or not: the rows are there.
+    jobs: ['mail:missed'],
     routes: [
       '/api/channels/**',
       '/api/messages/**',

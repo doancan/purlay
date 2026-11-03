@@ -52,7 +52,7 @@ describe('integration: what the modules a process runs make of the core’s open
     });
   });
 
-  test('an erased account forgets chat’s saved searches when chat runs, and leaves them when no module does', async () => {
+  test('an erased account forgets chat’s saved searches whether or not chat runs, and leaves them only in a build without it', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['pat']);
       const pat = room.members['pat'];
@@ -79,8 +79,10 @@ describe('integration: what the modules a process runs make of the core’s open
         ).length;
 
       await save('one');
-      await compose([]).userErased.run(db, pat.userId);
+      await compose([], []).userErased.run(db, pat.userId);
       expect(await kept()).toBe(1);
+      await compose([]).userErased.run(db, pat.userId);
+      expect(await kept()).toBe(0);
       await composition.userErased.run(db, pat.userId);
       expect(await kept()).toBe(0);
     });
