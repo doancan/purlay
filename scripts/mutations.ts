@@ -12475,4 +12475,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'const listening = [...subscriptions.values()].flat();',
     tests: ['apps/api/src/platform/domain-bus.test.ts'],
   },
+  {
+    id: 'hooks-not-awaited',
+    why: 'a hook that throws would no longer fail the transaction that runs it, so a workspace could exist without its first channel (D-250)',
+    file: 'apps/api/src/platform/hooks.ts',
+    find: 'for (const hook of hooks) await hook(...args);',
+    replace: 'for (const hook of hooks) void hook(...args);',
+    tests: ['apps/api/src/platform/hooks.test.ts'],
+  },
+  {
+    id: 'workspace-hooks-not-run',
+    why: 'a new workspace would have no first channel (D-174, D-250)',
+    file: 'apps/api/src/modules/workspaces/workspaces.ts',
+    find: 'await hooks.run(executor, clock, context);',
+    replace: 'void context;',
+    tests: ['apps/api/src/modules/workspaces/workspace-created.integration.test.ts'],
+  },
+  {
+    id: 'workspace-hook-wrong-name',
+    why: 'the first channel would not be the default one (D-174)',
+    file: 'apps/api/src/modules/channels/workspace-hooks.ts',
+    find: '{ name: DEFAULT_CHANNEL_NAME }',
+    replace: "{ name: 'random' }",
+    tests: ['apps/api/src/modules/workspaces/workspace-created.integration.test.ts'],
+  },
 ];
