@@ -108,6 +108,81 @@ automatic recovery restores the backup it took immediately before its failed swi
 loses database writes made after that backup. A failure of the restore itself exits with code 2,
 reports the backup directory and leaves `.switching` for an operator to investigate.
 
+## Modules (operator runbook)
+
+Purlay is a core and modules, and `MODULES` says which a process runs. What a module is and how one is built is in
+[MODULES.md](MODULES.md); this is what an operator does. The variable is in [CONFIG.md](CONFIG.md); the decisions are
+D-250, D-254 and D-255.
+
+**The values.** Unset or blank is every module the build carries (`chat`, `issues`). `none` is the core alone: sign-in,
+workspaces, members, invitations, exports and the trail. Otherwise a comma-separated list of ids, `MODULES=chat` or
+`MODULES=chat,issues`, with no empty item and no repeat. Put it in `production.env`; every node of a cluster runs the same
+value.
+
+**Check what a node runs.** There is no boot line or metric for it yet (planned, not built). Today:
+
+- signed in, `GET /api/me` answers `modules`, the ids this server runs (the page draws the screens of those only);
+- a path of a module that is off answers the plain `404` of any unknown path, for example
+  `GET /api/workspaces/<id>/issues` with a session on a node that does not run `issues`; the public `GET /api/client`
+  names no module;
+- the value the container was started with: `docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" exec api printenv MODULES` (nothing printed is every module);
+- with `REDIS_URL`, each live node's set is in the hash `purlay:modules` (`HGETALL`), one field per node.
+
+**Turn a module off or on.** Change `MODULES` and restart the API (`up -d --wait`). Off: its routes, socket operations
+and events, and the jobs that act for its users, are closed and its screens are gone from the page. **Its rows stay**,
+untouched and kept whole: an account's erasure, a deleted workspace's purge, the exports and the retention purge still
+reach them, so nothing in them outlives a person's right to be erased because a setting changed. Nothing is dropped; if
+you want the tables gone, drop them by hand, knowing that a later turn-on will not recreate them (the set is recorded as
+applied). On: the module's migration set applies on start with `MIGRATE_ON_START=true`, or with `bun run db:migrate`
+first; a node that runs a module whose set is not applied is not ready (below). Turning chat on later does **not** make a
+first channel for a workspace that was made while chat was off: a member sees "Choose one from the list, or create the
+first", and the new-channel button makes it.
+
+**Adding issues later.** Set `MODULES` to include `issues` (or unset it, if it already named everything) and restart; the
+set `issues/0001_issues` applies and the screen appears for every workspace on the instance. There is no per-workspace
+switch yet.
+
+**A fresh install under `MODULES=none`, then adding chat.** The install works with the core alone. The core's own
+migrations also create chat's original tables, which stay empty and inert; chat's own set (`chat/0001` to `chat/0004`) is
+applied when `chat` joins `MODULES`. Exports and an erasure under `none` find no chat rows and say nothing about them.
+
+**Rolling deploys with different sets.** Changing `MODULES` rolls node by node, and for as long as the roll takes two sets
+are live. Nothing stops: a node keeps serving, `/health/ready` stays green and no node refuses its peer. What an operator
+sees: a request that reaches a node without the module gets a `404` for the module's paths (so a client behind a load
+balancer sees them come and go until the roll ends), a socket on that node does not hear the module's events, and one
+`warn` line in the log of a node that sees a peer with another set (`the nodes of this cluster do not run the same
+modules; serving on, as in a rolling deploy`, with `thisNode` and `otherNodes`), and an `info` line when they agree again.
+That line needs `REDIS_URL`; without Redis there is one node. **Finish the roll**: a set that stays mixed is a service that
+answers differently by node. A migration that a new module brings applies when the first node of the new set starts.
+
+**Backup, restore and D-86.** A backup (`scripts/backup.sh`) holds every table of every set, whether the module runs or
+not, and the migration table with each applied file as `<module>/<file>`. There is no down migration (D-86): going back is
+restoring the backup taken before the upgrade, as in [ARCHITECTURE.md](ARCHITECTURE.md#11-deployment) under "Upgrading and
+rolling back", never starting an older image on a newer database; that is refused with `corrupted migrations: previously
+applied migration <name> is missing`. A restore into a database for a process with another `MODULES` is fine: the rows are
+there, and a module that is off leaves them inert.
+
+**Boot failures, and what each says.**
+
+- `MODULES cannot be run; exiting`, exit `1`, with `problems`, each one sentence: `MODULES names "<id>", which this build
+  does not have (it has: <ids>)`; `MODULES names "<id>" twice`; `MODULES has an empty item: a doubled or trailing comma`;
+  `"<id>" requires "<other>", which MODULES does not enable`. Every problem is listed at once. Fix the value and restart.
+- `migrating on start failed at <file>` (exit `1`; the cause is attached): a migration of the core or of a module's set
+  failed. The node does not serve half a schema; compose restarts it and it fails the same way until the cause is fixed.
+- `/health/ready` is `503` and the log says why: `migrations not applied: <files>` (for example
+  `issues/0001_issues`: this node runs a module whose set is not applied, run `bun run db:migrate` or start with
+  `MIGRATE_ON_START=true`), or a history that does not match the files, or columns that must compare byte-wise do not
+  (D-40), or the sign-in library cannot find its tables. A node that does not migrate logs `waiting for the migrations
+  before reading the settings` once per kind of reason and waits for another node or `db:migrate` to finish.
+
+**`MODULES=none` does not save memory.** The process loads the same code, and the resident memory measured with `none`
+and with every module was about the same. Turning a module off is for what is served and kept, not for the size of the
+process.
+
+**Not supported.** Different packages for different workspaces on one instance (a module is on for the whole process;
+per-workspace enablement is a precondition of selling a package, D-250 rule 9), and third-party modules: a module is
+first-party code in this repository, and loading one from elsewhere is not supported.
+
 ## References
 
 - [GitHub: publishing Docker images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
