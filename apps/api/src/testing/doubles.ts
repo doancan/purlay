@@ -267,14 +267,18 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
 export const aManualTimers = (): Timers & {
   /** Fires every timer armed and not cleared, as if their time had come. */
   readonly runAll: () => void;
+  /** Fires only the timers armed for `ms` or less: a grace runs, five quiet minutes do not. */
+  readonly runUpTo: (ms: number) => void;
   readonly pending: () => number;
 } => {
   const armed = new Map<number, () => void>();
+  const lengths = new Map<number, number>();
   let next = 0;
   return {
-    set: (callback: () => void): number => {
+    set: (callback: () => void, ms: number): number => {
       next += 1;
       armed.set(next, callback);
+      lengths.set(next, ms);
       return next;
     },
     clear: (handle: unknown): void => {
@@ -283,6 +287,11 @@ export const aManualTimers = (): Timers & {
     runAll: (): void => {
       const due = [...armed];
       armed.clear();
+      for (const [, fire] of due) fire();
+    },
+    runUpTo: (ms: number): void => {
+      const due = [...armed].filter(([handle]) => (lengths.get(handle) ?? 0) <= ms);
+      for (const [handle] of due) armed.delete(handle);
       for (const [, fire] of due) fire();
     },
     pending: (): number => armed.size,
