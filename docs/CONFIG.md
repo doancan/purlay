@@ -358,7 +358,7 @@ read, and they are gone: D-23, amended.)
 
 | What | Value | Where |
 |---|---|---|
-| A card is kept | 5 minutes, for the workspace whose token fetched it | `CARD_TTL_MS` in `modules/integrations/unfurl.ts` |
+| A card is kept | 5 minutes, for the workspace whose token fetched it | `CARD_TTL_MS` in `features/chat/integrations/unfurl.ts` |
 | A link GitHub says is not there is kept | 1 hour | `NEGATIVE_TTL_MS`, same file |
 | GitHub failing (`5xx`, a network error, an answer that is not a card, a plain `403`) is held off | 1 minute, for that link | `UNAVAILABLE_TTL_MS`, same file |
 | Calls to GitHub per workspace | 100 at once, then 1 a second, whoever asks; spent, a link is a plain link and nothing is cached | `GITHUB_CALL_BUDGET` in `ingress/http/rate-limit.ts` |

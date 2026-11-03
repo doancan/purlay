@@ -149,7 +149,7 @@ until then it is a stated intent and not a guarantee.
 |---|---|---|
 | No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |
 | The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
-| The core's modules import none of chat's, before chat has moved | the lint, from a list of which `modules/` folder is whose; a folder in neither stops the linter — **built** | 6–8 |
+| The core's modules import none of chat's | the lint that keeps `modules/` and `platform/` from importing a feature, now that chat is `features/chat`; the core's tests may — **built** | 9 |
 | No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built** | 5 |
 | No read of another module's tables | the typed query handle, handed to a module with its own tables and the core's | 9 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
@@ -198,7 +198,7 @@ Each step ships alone and can be reverted.
 | 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
 | 5b | Issues' thin slice for the dogfood team — open an issue from a message, link back — to prove the ports with a real user before the moves | new feature |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
-| 9 | Chat moved under `features/chat`; channel visibility, message erasure and the export entries move with it | no |
+| 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
 | 10 | Migrations split by module; `data` hooks; codegen and `db:check` per module; the ownership ratchet reaches zero | no |
 | 11 | Chat's web screens a lazy chunk; budgets split | no |
 | 12 | `MODULES` turns modules off; the full matrix, the cluster check and the per-module budgets in CI | **yes** |

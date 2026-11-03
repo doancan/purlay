@@ -1665,7 +1665,7 @@ location, and a test runs it from another directory.
 **Amended 2026-10-09 (#245): the replay budget is a module's, and two casts went.** The byte and
 per-channel caps and the cursor floor were in `realtime/router.ts`; they decide how a reconnecting
 client catches up, not how a socket behaves, and nothing in them touches a connection. They are
-`modules/messages/replay.ts` (`replaySince`), and the router sends what it returns. The two
+`features/chat/messages/replay.ts` (`replaySince`), and the router sends what it returns. The two
 "casts that defeat the exhaustive union" were checked first: the `ServerFrame` one was real
 (`frame()` asserted `{event, data}` into the union), and is now built from a body that is itself
 one member of the union, so an event paired with another event's data does not compile; the
@@ -5616,7 +5616,7 @@ as §7.4 had it: one person could take a channel's history away from everyone in
 refusing a name typed with spaces or capitals**, as New channel did: it answered a person for typing
 the way they speak, and the fix it asked for was always the same one the field can make.
 
-**Cost of reversing:** a role check and a count in `modules/channels/settings.ts`, two rows of the
+**Cost of reversing:** a role check and a count in `features/chat/channels/settings.ts`, two rows of the
 permission table, and this paragraph; no data changes shape.
 
 ### D-124. What is the person's and what is the workspace's — #495, #496, #497
@@ -7302,7 +7302,7 @@ broadcast D-12 exists to prevent.
 not tell (D-99 §2's bound); the state is the person's relation to the thread, the bound is what one
 reply writes.
 
-**Cost of reversing:** `thread_follows` (migration `0044`), `modules/messages/follow.ts`, the choices
+**Cost of reversing:** `thread_follows` (migration `0044`), `features/chat/messages/follow.ts`, the choices
 read in `delivery.ts`, the two routes and their contract, the panel's `follow-toggle.tsx`, and their
 tests.
 
@@ -7531,7 +7531,7 @@ proceed, and is open to their reversal.
   there are in every case measured; an index is paid on every send (D-10).
 
 **Cost of reversing:** `senderId` in `SearchQuery`, the route's parameter list and one `where` in
-`modules/search/search.ts`; `?from=`, `features/search/author-picker.tsx` and the strings on the web.
+`features/chat/search/search.ts`; `?from=`, `features/search/author-picker.tsx` and the strings on the web.
 
 ### D-167. Browse says what a channel is before it is joined; a group has a face
 
@@ -7818,7 +7818,7 @@ who notice the mistake. *Refusing to remove oneself* — a second answer for a r
 exactly leaving. *Telling the rest of the channel* — nobody's screen depends on it; the members list is
 read when it is opened.
 
-**Cost of reversing:** `removeChannelMember` in `modules/channels/settings.ts`, its route, a reason in
+**Cost of reversing:** `removeChannelMember` in `features/chat/channels/settings.ts`, its route, a reason in
 the contract, a row on the audit page and the details' Remove; no table changes shape.
 
 ### D-173. A workspace's storage is shown to its owners; its quota stays the operator's
@@ -11871,7 +11871,7 @@ notes (`docs/changelog/v{x.y.z}.md`, D-185); neither reached a screen.
    shared address — an office, a proxy — spent the budget people sign in with, and the browser tests saw `429`. This route
    needs a session and is charged per person, to the costly reads. `GET /api/client` stays for the native applications,
    which ask it once before anybody has signed in, and no code of the browser's names it (a test holds that). The server makes one anonymous `GET {GITHUB_API_URL}/repos/doancan/purlay/releases/latest`
-   (`modules/integrations/latest-release.ts`), bounded as every call to GitHub is — a deadline, no redirect followed, the body
+   (`features/chat/integrations/latest-release.ts`), bounded as every call to GitHub is — a deadline, no redirect followed, the body
    checked against a schema, never throwing to the caller — and accepts only a tag of three numbers behind a `v` and a page on
    `https://github.com/`; a draft, a pre-release, a rate limit, a `5xx`, a redirect or anything else is `null` and one log line
    without the body. The page must be exactly this repository's page of that tag
