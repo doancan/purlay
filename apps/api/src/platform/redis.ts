@@ -20,6 +20,7 @@
  * The address holds a password, so it is never logged: a line says that Redis was lost, and why, never where.
  */
 import type { Logger } from './logging';
+import { redisNames, type RedisNames } from './redis-names';
 
 /** What this file asks of a client: the part of Bun's `RedisClient` it uses, so a test can stand one in. */
 export interface RedisClientLike {
@@ -54,6 +55,8 @@ export const KEEPALIVE_MS = 5_000;
 export const STABLE_MS = 10_000;
 
 export interface RedisLink {
+  /** The names this link's namespace gives its keys and its channel: the only ones an adapter may use. */
+  readonly names: RedisNames;
   /** Runs one command. Rejects when not connected, on an error reply, and after `COMMAND_TIMEOUT_MS`. */
   readonly send: (command: string, args: readonly string[]) => Promise<unknown>;
   /** Runs a Lua script atomically: `keys` first, then `args`. */
@@ -79,6 +82,8 @@ export interface RedisLink {
 export interface RedisOptions {
   readonly create: () => RedisClientLike;
   readonly log: Logger;
+  /** `REDIS_KEY_PREFIX`: the namespace of every key and of the bus channel. Unset is `purlay`. */
+  readonly namespace?: string | undefined;
   readonly timers?: RedisTimers;
   /** 0..1, for the wait before a retry; a test passes a constant. */
   readonly jitter?: () => number;
@@ -105,10 +110,12 @@ const describe = (error: unknown): string =>
 export const connectRedis = ({
   create,
   log,
+  namespace,
   timers = systemTimers,
   jitter = Math.random,
   keepaliveMs = KEEPALIVE_MS,
 }: RedisOptions): RedisLink => {
+  const names = redisNames(namespace);
   let closed = false;
   const channels: [channel: string, listener: (message: string) => void][] = [];
   const resubscribed = new Set<() => void>();
@@ -249,6 +256,7 @@ export const connectRedis = ({
   };
 
   return {
+    names,
     send,
     script: async (source, keys, args) =>
       await send('EVAL', [source, String(keys.length), ...keys, ...args]),

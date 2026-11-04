@@ -10522,6 +10522,25 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/redis-bus.test.ts'],
   },
   {
+    id: 'redis-key-outside-the-namespace',
+    why: 'a limiter bucket is named with the literal prefix instead of the link’s namespace: two deployments on one Redis spend one bucket',
+    file: 'apps/api/src/realtime/redis-limiter.ts',
+    find: '`${link.names.bucketPrefix}${name}:${key}`',
+    replace: '`purlay:rl:${name}:${key}`',
+    tests: [
+      'apps/api/src/realtime/redis-namespace.test.ts',
+      'apps/api/src/platform/redis-names.test.ts',
+    ],
+  },
+  {
+    id: 'redis-namespace-ignored',
+    why: 'the namespace is validated and then dropped: every name is the default’s, whatever REDIS_KEY_PREFIX says',
+    file: 'apps/api/src/platform/redis-names.ts',
+    find: '  const prefix = `${namespace}:`;\n',
+    replace: "  const prefix = 'purlay:';\n",
+    tests: ['apps/api/src/platform/redis-names.test.ts'],
+  },
+  {
     id: 'redis-bus-gap-unreported',
     why: 'frames missed while the subscription was away are never replayed: sockets stay open and silently behind',
     file: 'apps/api/src/realtime/redis-bus.ts',
@@ -10557,8 +10576,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'redis-limiter-names-shared',
     why: 'two limiters that key by the same user share one bucket in Redis: a user’s reads spend their writes',
     file: 'apps/api/src/realtime/redis-limiter.ts',
-    find: '`${BUCKET_PREFIX}${name}:${key}`',
-    replace: '`${BUCKET_PREFIX}${key}`',
+    find: '`${link.names.bucketPrefix}${name}:${key}`',
+    replace: '`${link.names.bucketPrefix}${key}`',
     tests: ['apps/api/src/realtime/redis-limiter.test.ts'],
   },
   {

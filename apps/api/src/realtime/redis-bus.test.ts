@@ -5,9 +5,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { ServerFrame } from '@purlay/types';
+import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink, type FakeLink } from '../testing/redis';
-import { BUS_CHANNEL, redisBackplane } from './redis-bus';
+import { redisBackplane } from './redis-bus';
+
+const names = redisNames();
 
 const frame = (n: number): ServerFrame => ({
   event: 'PINS_UPDATED',
@@ -26,7 +29,7 @@ const cluster = (
       if (command !== 'PUBLISH') return null;
       const message = args[1] ?? '';
       published.push(message);
-      for (const other of links) if (other.state.subscribed) other.deliver(BUS_CHANNEL, message);
+      for (const other of links) if (other.state.subscribed) other.deliver(names.bus, message);
       return links.length;
     };
   }
@@ -161,7 +164,7 @@ describe('the shared bus', () => {
       JSON.stringify({ topic: 'channel:1', frame: 'x' }),
       JSON.stringify({ topic: 'channel:1', frame: { nothing: 1 }, secret: 'SECRET-WORDS' }),
     ]) {
-      link.deliver(BUS_CHANNEL, bad);
+      link.deliver(names.bus, bad);
     }
     expect(a.heard).toEqual([]);
     expect(
@@ -228,7 +231,7 @@ describe('the shared bus', () => {
     });
     const hear = (origin: string, seq: number): void => {
       link.deliver(
-        BUS_CHANNEL,
+        names.bus,
         JSON.stringify({ topic: 'channel:t', frame: frame(seq), origin, seq }),
       );
     };

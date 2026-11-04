@@ -18,7 +18,6 @@ import type { Logger } from '../platform/logging';
 import type { RedisLink } from '../platform/redis';
 import { systemTimers, type Timers } from './hub';
 
-export const MODULE_SET_KEY = 'purlay:modules';
 export const NODE_TTL_MS = 30_000;
 const RENEW_MS = NODE_TTL_MS / 3;
 
@@ -79,7 +78,7 @@ export const watchModuleSet = ({
     try {
       const answer = await link.script(
         ANNOUNCE_SCRIPT,
-        [MODULE_SET_KEY],
+        [link.names.moduleSet],
         [nodeId, set, String(NODE_TTL_MS)],
       );
       if (!Array.isArray(answer)) throw new Error('the module-set script answered something else');
@@ -111,7 +110,7 @@ export const watchModuleSet = ({
       stopped = true;
       if (next !== undefined) timers.clear(next);
       try {
-        await link.send('HDEL', [MODULE_SET_KEY, nodeId]);
+        await link.send('HDEL', [link.names.moduleSet, nodeId]);
       } catch (error) {
         log.debug('this node’s modules could not be taken out of the shared record', {
           err: error,

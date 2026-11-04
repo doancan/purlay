@@ -42,8 +42,6 @@ redis.call('PEXPIRE', KEYS[1], math.ceil(burst / rate * 1000) + 1000)
 return allowed
 `;
 
-export const BUCKET_PREFIX = 'purlay:rl:';
-
 export interface RedisLimiterOptions {
   readonly link: RedisLink;
   readonly name: string;
@@ -60,7 +58,7 @@ export const redisRateLimiter = ({
   local,
   log,
 }: RedisLimiterOptions): RateLimiter => {
-  const keyOf = (key: string): string => `${BUCKET_PREFIX}${name}:${key}`;
+  const keyOf = (key: string): string => `${link.names.bucketPrefix}${name}:${key}`;
   return {
     consume: async (key, cost = 1): Promise<boolean> => {
       try {

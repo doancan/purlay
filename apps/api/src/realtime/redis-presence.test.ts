@@ -4,18 +4,14 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { fixedClock } from '../platform/clock';
+import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { inMemoryPresenceRegistry } from './presence';
 import { aFakeLink, refusedWith } from '../testing/redis';
 import { PRESENCE_NODE_TTL_MS } from './online';
-import {
-  IDLE_INDEX,
-  LAPSE_INDEX,
-  ONLINE_PREFIX,
-  TYPING_PREFIX,
-  redisPresenceDirectory,
-  redisPresenceRegistry,
-} from './redis-presence';
+import { redisPresenceDirectory, redisPresenceRegistry } from './redis-presence';
+
+const names = redisNames();
 
 const anOwnWindow = (): ReturnType<typeof inMemoryPresenceRegistry> =>
   inMemoryPresenceRegistry(fixedClock(new Date('2026-09-09T12:00:00Z')));
@@ -28,7 +24,7 @@ describe('typing, shared', () => {
     const registry = redisPresenceRegistry(link, aRecordingLogger().log, anOwnWindow());
     expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(true);
     expect(await registry.startTyping('c1', 'u1', 5_000)).toBe(false);
-    expect(link.scripts[0]?.keys).toEqual([`${TYPING_PREFIX}c1:u1`]);
+    expect(link.scripts[0]?.keys).toEqual([`${names.typingPrefix}c1:u1`]);
     expect(link.scripts[0]?.args).toEqual(['5000']);
   });
 
@@ -59,7 +55,7 @@ describe('typing, shared', () => {
     const registry = redisPresenceRegistry(link, aRecordingLogger().log, anOwnWindow());
     registry.stopTyping('c1', 'u1');
     await Promise.resolve();
-    expect(link.sent).toEqual([{ command: 'DEL', args: [`${TYPING_PREFIX}c1:u1`] }]);
+    expect(link.sent).toEqual([{ command: 'DEL', args: [`${names.typingPrefix}c1:u1`] }]);
   });
 });
 
@@ -72,9 +68,17 @@ describe('who is online, shared', () => {
     expect(await directory.join('u1', 300_000)).toBe(1_700_000_000_001);
     expect(await directory.join('u1', 300_000)).toBeNull();
     expect(await directory.leave('u1')).toBe(1_700_000_000_002);
-    expect(link.scripts[0]?.keys).toEqual([`${ONLINE_PREFIX}u1`, LAPSE_INDEX, IDLE_INDEX]);
+    expect(link.scripts[0]?.keys).toEqual([
+      `${names.onlinePrefix}u1`,
+      names.lapseIndex,
+      names.idleIndex,
+    ]);
     expect(link.scripts[0]?.args).toEqual(['node-a', String(PRESENCE_NODE_TTL_MS), 'u1', '300000']);
-    expect(link.scripts[2]?.keys).toEqual([`${ONLINE_PREFIX}u1`, LAPSE_INDEX, IDLE_INDEX]);
+    expect(link.scripts[2]?.keys).toEqual([
+      `${names.onlinePrefix}u1`,
+      names.lapseIndex,
+      names.idleIndex,
+    ]);
     expect(link.scripts[2]?.args).toEqual(['node-a', 'u1']);
   });
 
@@ -85,7 +89,7 @@ describe('who is online, shared', () => {
     const directory = redisPresenceDirectory(link, 'node-a');
     expect(await directory.active('u1', 300_000)).toBeNull();
     expect(await directory.active('u1', 300_000)).toBe(1_700_000_000_003);
-    expect(link.scripts[0]?.keys).toEqual([`${ONLINE_PREFIX}u1`, IDLE_INDEX]);
+    expect(link.scripts[0]?.keys).toEqual([`${names.onlinePrefix}u1`, names.idleIndex]);
     expect(link.scripts[0]?.args).toEqual(['u1', '300000']);
   });
 
@@ -111,7 +115,7 @@ describe('who is online, shared', () => {
       version: 1_700_000_000_005,
     });
     expect(await directory.retell('u1')).toBeNull();
-    expect(link.scripts[0]?.keys).toEqual([`${ONLINE_PREFIX}u1`]);
+    expect(link.scripts[0]?.keys).toEqual([`${names.onlinePrefix}u1`]);
     link.behaviour.script = (): unknown => [1];
     expect(await refusedWith(directory.retell('u1'))).toContain('something else');
     link.behaviour.script = (): unknown => 'x';
@@ -159,8 +163,8 @@ describe('who is online, shared', () => {
     link.behaviour.script = (): unknown => 1;
     await directory.release(['u1', 'u2']);
     expect(link.scripts.map((script) => script.keys)).toEqual([
-      [`${ONLINE_PREFIX}u1`, LAPSE_INDEX, IDLE_INDEX],
-      [`${ONLINE_PREFIX}u2`, LAPSE_INDEX, IDLE_INDEX],
+      [`${names.onlinePrefix}u1`, names.lapseIndex, names.idleIndex],
+      [`${names.onlinePrefix}u2`, names.lapseIndex, names.idleIndex],
     ]);
     expect(link.scripts[0]?.args).toEqual(['node-a', 'u1']);
     link.behaviour.script = (): unknown => ['u1', 77, 0, 'u2', 78, 0, 'u3', 79, 1];
@@ -169,8 +173,8 @@ describe('who is online, shared', () => {
       { userId: 'u2', online: false, away: false, version: 78 },
       { userId: 'u3', online: true, away: true, version: 79 },
     ]);
-    expect(link.scripts.at(-1)?.keys).toEqual([LAPSE_INDEX, IDLE_INDEX]);
-    expect(link.scripts.at(-1)?.args[0]).toBe(ONLINE_PREFIX);
+    expect(link.scripts.at(-1)?.keys).toEqual([names.lapseIndex, names.idleIndex]);
+    expect(link.scripts.at(-1)?.args[0]).toBe(names.onlinePrefix);
     link.behaviour.script = (): unknown => ['u1', 77];
     expect(await refusedWith(directory.sweep())).toContain('something else');
     link.behaviour.script = (): unknown => [1, 2, 0];

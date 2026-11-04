@@ -185,7 +185,7 @@ value.
   true only when chat runs, and a caller with no session gets `401` from a route of a module that runs and `404`
   from one that does not (`MODULES.md` §3);
 - the value the container was started with: `docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" exec api printenv MODULES` (nothing printed is every module);
-- with `REDIS_URL`, each live node's set is in the hash `purlay:modules` (`HGETALL`), one field per node.
+- with `REDIS_URL`, each live node's set is in the hash `<REDIS_KEY_PREFIX>:modules` (`HGETALL`; `purlay:modules` when it is unset), one field per node.
 
 **Turn a module off or on.** Change `MODULES` and restart the API (`up -d --wait`). Off: its routes, socket operations
 and events, and the jobs that act for its users, are closed and its screens are gone from the page. **Its rows stay**,

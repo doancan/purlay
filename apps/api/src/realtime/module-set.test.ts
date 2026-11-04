@@ -4,10 +4,13 @@
  * that keeps the shared record is held against a real Redis (`module-set.redis.integration.test.ts`).
  */
 import { describe, expect, test } from 'bun:test';
+import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink, type FakeLink } from '../testing/redis';
 import type { Timers } from './hub';
-import { moduleSetOf, MODULE_SET_KEY, watchModuleSet, type ModuleSetWatch } from './module-set';
+import { moduleSetOf, watchModuleSet, type ModuleSetWatch } from './module-set';
+
+const names = redisNames();
 
 /** Timers that run when the test says: the renewal is a turn of the loop, not a wait. */
 const manualTimers = (): { timers: Timers; tick: () => Promise<void>; pending: () => number } => {
@@ -74,7 +77,7 @@ describe('nodes that run different sets', () => {
     const warnings = view.said('warn');
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatchObject({ thisNode: 'chat', otherNodes: ['none'] });
-    expect(view.link.scripts[0]?.keys).toEqual([MODULE_SET_KEY]);
+    expect(view.link.scripts[0]?.keys).toEqual([names.moduleSet]);
     expect(view.link.scripts[0]?.args.slice(0, 2)).toEqual(['node-a', 'chat']);
 
     await view.clock.tick();
@@ -124,7 +127,7 @@ describe('nodes that run different sets', () => {
     await view.watch.stop();
 
     expect(view.clock.pending()).toBe(0);
-    expect(view.link.sent).toEqual([{ command: 'HDEL', args: [MODULE_SET_KEY, 'node-a'] }]);
+    expect(view.link.sent).toEqual([{ command: 'HDEL', args: [names.moduleSet, 'node-a'] }]);
   });
 
   test('a node that cannot take its entry out says so at debug and still stops', async () => {

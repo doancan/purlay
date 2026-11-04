@@ -161,7 +161,11 @@ const redisUrl = config.REDIS_URL;
 const redis =
   redisUrl === undefined
     ? undefined
-    : connectRedis({ create: () => bunRedisClient(redisUrl), log });
+    : connectRedis({
+        create: () => bunRedisClient(redisUrl),
+        log,
+        namespace: config.REDIS_KEY_PREFIX,
+      });
 const sharing = redis === undefined ? undefined : sharedRealtime(redis, systemClock, log);
 log.info(
   redis === undefined
