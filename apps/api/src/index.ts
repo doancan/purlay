@@ -12,7 +12,7 @@ import { deliverReminders } from './features/chat/reminders/delivery';
 import { deliverScheduled } from './features/chat/scheduled/delivery';
 import { timedDeliveryLoop } from './features/chat/scheduled/loop';
 import { exportQueue } from './modules/export/queue';
-import { compositionFor, type Composition } from './composition';
+import { compositionFor, moduleReport, type Composition } from './composition';
 import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
@@ -77,6 +77,7 @@ const modules = ((): Composition => {
     process.exit(1);
   }
 })();
+log.info('the modules this process runs', moduleReport(modules));
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.

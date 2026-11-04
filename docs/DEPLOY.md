@@ -119,8 +119,11 @@ workspaces, members, invitations, exports and the trail. Otherwise a comma-separ
 `MODULES=chat,issues`, with no empty item and no repeat. Put it in `production.env`; every node of a cluster runs the same
 value.
 
-**Check what a node runs.** There is no boot line or metric for it yet (planned, not built). Today:
+**Check what a node runs.**
 
+- the boot logs one `info` line, `the modules this process runs`, with `running` and `notRun` (the modules the build
+  carries and this process leaves out);
+- `/metrics` (behind `METRICS_TOKEN`) carries `purlay_modules_info{module="<id>"} 1` for each running module;
 - signed in, `GET /api/me` answers `modules`, the ids this server runs (the page draws the screens of those only);
 - a path of a module that is off answers the plain `404` of any unknown path, for example
   `GET /api/workspaces/<id>/issues` with a session on a node that does not run `issues`; the public `GET /api/client`
@@ -182,6 +185,24 @@ process.
 **Not supported.** Different packages for different workspaces on one instance (a module is on for the whole process;
 per-workspace enablement is a precondition of selling a package, D-250 rule 9), and third-party modules: a module is
 first-party code in this repository, and loading one from elsewhere is not supported.
+
+## Sizing an upgrade that backfills
+
+A migration file runs in one transaction, and the locks it takes are held until it commits. `chat/0001`
+(the first start with a build that has it, on every existing install, and the first start of a node that
+adds chat to a database that never had it) creates `message_attachments` with keys to `messages` and
+`attachments`, then copies every attached file's link into it. That holds `SHARE ROW EXCLUSIVE` on both
+tables for the whole copy: **reads go on, writes to messages and attachments wait.**
+
+Measured on a private database of 1,000,000 messages and 200,000 attachments linked to a message (one
+machine, PostgreSQL on the same host): the file took 8.3 s, and a writer probing every 100 ms waited 10.9 s
+at worst. The cost is the copy, about 40 µs per attached file, so 1,000,000 attachments is roughly 40 s of
+refused writes. Nothing is lost and nothing fails: the migrating connection has no statement timeout
+(D-87), and a waiting writer is served when the file commits. But the other nodes' pools hold a connection
+for each blocked writer, and a pool of ten that is all blocked answers everything else `503` after three
+seconds. So, for an install with more than a few hundred thousand attachments, upgrade in a quiet hour, or
+stop the other nodes first. A `lock_timeout` is not the remedy: it bounds the wait to *get* a lock, not how long the
+lock is held once taken.
 
 ## References
 

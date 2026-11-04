@@ -221,3 +221,17 @@ export const compositionFor = (setting: string | undefined): Composition =>
 
 /** What a process runs when nothing says otherwise: every module this build carries. */
 export const composition: Composition = compositionFor(undefined);
+
+/**
+ * What the boot says about modules: the ones this process runs and the ones the build carries but it does not,
+ * by id, so a log line answers "does this node run chat?" without reading its environment.
+ */
+export const moduleReport = (
+  running: Composition,
+  bundled: readonly BundledModule[] = bundledModules,
+): { readonly running: readonly string[]; readonly notRun: readonly string[] } => ({
+  running: running.modules.map((module) => module.manifest.id),
+  notRun: bundled
+    .filter((module) => !running.modules.includes(module))
+    .map((module) => module.manifest.id),
+});

@@ -53,10 +53,20 @@ registers — the audit actions are in `modules/audit`, and the role rules are i
 
 ## 3. Boot
 
+**What `MODULES` does not do: it does not shrink the process.** The build loads the code of every module it carries, whatever is run, so `MODULES=none` measured the same resident memory as every module (63.7 MiB unset, 65.5 MiB `none`, one development start each; 111.5 and 112.6 MiB in an independent review). The benefit is reachability and data scope: a module that is off has no route, job, frame or table in this process, and its data is held whole all the same (§5). It is not a way to run a smaller server.
+
 1. Parse `MODULES` (`module-kit`'s `resolve`). Unset or blank means every bundled module (a blank variable is read as unset everywhere in the configuration); `none` means the core alone. An
-   unknown or repeated id, an empty item, or a missing requirement stops the process before it listens; a
-   cycle, a reserved id or a repeated capability are caught earlier, when the build's registry is made.
+   unknown or repeated id, an id outside the grammar (lowercase letters, digits and hyphens: `CHAT`, `None` and
+   `chat;issues` are refused, never corrected), an empty item, `none` listed with another id (it must stand alone),
+   or a missing requirement stops the process before it listens; a cycle, a reserved id or a repeated capability
+   are caught earlier, when the build's registry is made. **One reading serves both commands:**
+   `parseModulesSetting` (`packages/db`) is the tokenizer and validator of the setting's shape, and `resolve`
+   and `bun run db:migrate` both call it, so a setting one refuses the other refuses, with the same sentences;
+   `db:migrate` exits 1 naming `MODULES` and each problem before it applies anything. Only what a module
+   `requires` of another is the API's to check, since only the manifests say so. `module-setting-pair.test.ts`
+   holds the two as a pair over a table of inputs.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
+   The boot then logs one `info` line, `the modules this process runs`, with `running` and `notRun` (the modules the build carries and this process leaves out), and `/metrics` carries `purlay_modules_info{module="…"} 1` for each running module.
 3. Where nodes share Redis, record this node's module set in the shared record (`realtime/module-set.ts`) and
    compare it with the live peers'. A difference is **said, never acted on** (D-250 rule 8 as amended by D-255): the
    node logs it once, keeps serving, and readiness does not change, so a rolling deploy of a new set passes. Nodes of
@@ -216,15 +226,37 @@ The session says which modules run: `GET /api/me`'s `modules`, not the public `G
 
 Modules share a process, an event loop and a connection pool, so they are kept apart by **budget**:
 
-- a share of the pool — a cap on a module's concurrent connections with a queue timeout — a
-  `statement_timeout` set inside its transactions, a deadline per request and an error boundary around each
-  handler and job: an unhandled rejection in one module is that module's, not the process's. **These land in step
-  5, before a second module exists**, because a gate in step 12 would measure a mechanism nobody built;
+- a share of the pool: a cap on the transactions a module has open at once, with a queue timeout and a
+  `statement_timeout` set inside them (`budgeted`, `platform/module-budget.ts`). **Wired for issues, and only
+  for issues** (`features/issues/budget.ts`, handed to its four routes by `createApp`): a third of
+  `DATABASE_POOL_MAX`, never more than the pool less one and never fewer than one (a pool of one has nothing to
+  leave), a queue timeout of one second and a statement limit of five. A request over the share waits its
+  turn and, past the timeout, is answered `503 DATABASE_UNAVAILABLE` (`The issues module's share of the database
+  is in use. Try again.`), which a client retries. **Chat is not budgeted**: it is what the others are kept from
+  slowing, and its behaviour and latency are as they were. The share caps the connections a module holds; it
+  does not cap what a module costs the event loop, which all modules share. Not built: a deadline per request, an
+  error boundary around each handler beyond the domain bus's, and the share for a module that has none yet;
+  a module added later is budgeted by wiring its routes the way issues' are;
 - a deadline and an abort signal per `SearchSource`; one that overruns is cancelled, skipped, and the response
   says which (`skipped: [module]`, a wire shape fixed in step 4);
-- the CI latency gate runs for the hot path of **every** module with another one busy, not for chat's send
-  path alone;
-- every log line and metric carries `module`.
+- the CI latency gate refuses **starvation**, and only that (`budget:latency`): after the quiet trials it runs
+  two more with twelve people reading issues' list, one request at a time with a pause between, while the issues
+  table is locked in turns, so that the readers hold their share of connections and there are more of them than
+  the pool has. The lower of the two is compared with the quiet p95 of the same run, and chat is starved when it
+  is **more than eight times** that (`STARVATION_FACTOR`, with the noise floor of the gate's other rule under it);
+  a starved run is measured again once, and nobody answered is an error. Eight is chosen between what was
+  measured: with the budget a busy issues module cost chat **two to four times** its p95 on a two-core shared CI
+  runner and about the same locally under six busy loops (1.1 to 1.5 times), and with the budget removed the
+  same scenario cost 18 to 23 times on a laptop (727–774 ms against 33–39 ms). That a CI runner without the
+  budget is at least as bad is expected, not measured. **So a busy issues module still costs chat up to about
+  three times its p95 on a two-core shared host — database backends and CPU contention, which the share of the
+  pool does not remove — and that is not starvation and is not refused.** **Built for chat with issues busy**; the
+  hot path of a module other than chat is not measured, as no other module is budgeted. CPU and event-loop time
+  are shared by every module in a process, so a module that serves a great many requests, or heavy ones, can
+  still slow chat's sends on a shared process, budget or no budget (an unpaced reader of issues' list, three
+  hundred requests a second, tripled chat's p95 on a laptop);
+- every log line and metric carries `module`. **Not built**: the boot line and `purlay_modules_info` name the
+  modules a process runs, and nothing else carries the label yet.
 
 ## 8. What holds each rule
 
@@ -243,7 +275,7 @@ until then it is a stated intent and not a guarantee.
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
-| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — the mechanism is **built** and tested alone, but nothing outside its tests imports it, so no process takes it yet: **pending** the operability work that wires it | 5 |
+| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built and wired for issues** (a third of the pool; chat is not budgeted); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, and the mutation `issues-routes-outside-their-budget` holds the wiring | 5 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
@@ -256,7 +288,7 @@ until then it is a stated intent and not a guarantee.
 | A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state; CI migrating each set from the *last release's* database is **not** built | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release` (`manifests:snapshot`): no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
-| Chat is not slowed by a module | `budget:latency` measures the hot paths and has no notion of a module; per-module cells and "with another module busy" are **pending** (operability work) | 12 |
+| Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** for issues, the one budgeted module; it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 

@@ -226,7 +226,7 @@ import {
   type CollatedColumn,
   type Readiness,
 } from '../../platform/readiness';
-import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import { modulesInfoFamily, serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
 import { PLAN } from '../../modules/jobs/schedule';
@@ -259,6 +259,8 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
+import { issuesBudget } from '../../features/issues/budget';
+import { budgeted } from '../../platform/module-budget';
 import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
@@ -534,6 +536,17 @@ export const createApp = (given: Dependencies): HttpApplication => {
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
+  // Issues' work on the database is held to a share of the pool, so a module that is slow or busy cannot make
+  // chat's sends wait for a connection. Chat is not budgeted: it is what the others are kept from slowing.
+  // Made once, because the share is one count of the transactions open at once across every request.
+  const issueDependencies = {
+    ...dependencies,
+    atomically: budgeted(
+      'issues',
+      issuesBudget(dependencies.config.DATABASE_POOL_MAX),
+      dependencies.database,
+    ),
+  };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -809,7 +822,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
     // the 404 of a path nothing serves.
     .get('/metrics', async ({ request, set }) => {
       const page = await answerMetrics(
-        { token: dependencies.config.METRICS_TOKEN, metrics, read: readJobs, log },
+        {
+          token: dependencies.config.METRICS_TOKEN,
+          metrics,
+          read: async () => [modulesInfoFamily(moduleIds), ...(await readJobs())],
+          log,
+        },
         request,
       );
       set.headers['content-type'] = EXPOSITION_CONTENT_TYPE;
@@ -1346,20 +1364,21 @@ export const createApp = (given: Dependencies): HttpApplication => {
     )
     .get(
       '/api/workspaces/:workspaceId/issues',
-      async ({ request, params }) => await listIssues(dependencies, request, params.workspaceId),
+      async ({ request, params }) =>
+        await listIssues(issueDependencies, request, params.workspaceId),
     )
     .post('/api/workspaces/:workspaceId/issues', async ({ request, params, body, set }) => {
-      const issue = await postIssue(dependencies, request, params.workspaceId, body);
+      const issue = await postIssue(issueDependencies, request, params.workspaceId, body);
       set.status = 201;
       return issue;
     })
     .patch(
       '/api/workspaces/:workspaceId/issues/:issueId',
       async ({ request, params, body }) =>
-        await patchIssue(dependencies, request, params.workspaceId, params.issueId, body),
+        await patchIssue(issueDependencies, request, params.workspaceId, params.issueId, body),
     )
     .delete('/api/workspaces/:workspaceId/issues/:issueId', async ({ request, params, set }) => {
-      await removeIssue(dependencies, request, params.workspaceId, params.issueId);
+      await removeIssue(issueDependencies, request, params.workspaceId, params.issueId);
       set.status = 204;
       return null;
     })

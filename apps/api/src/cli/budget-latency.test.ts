@@ -7,11 +7,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   BUDGETS,
+  STARVATION_FACTOR,
+  requireAnswers,
+  gate,
+  countAnswer,
+  lowestOf,
   REGRESSION_FACTOR,
   judge,
   main,
   p95,
   summarizeTrials,
+  withIssuesBusy,
   type Latency,
 } from './budget-latency';
 
@@ -256,5 +262,160 @@ describe('a regression, measured again (D-227)', () => {
     const { measure, calls } = measuring([steady, steady, steady, slow, slow, slow]);
     expect((await main(['--keep', file], measure)).code).toBe(0);
     expect(calls()).toBe(3);
+  });
+});
+
+describe('chat’s latency with issues busy', () => {
+  const quiet = run(25, 25);
+  /** A trial with people reading issues all the while: answered some, refused some. */
+  const busy = (ack: number, fanOut: number): Latency => ({
+    ...run(ack, fanOut),
+    issues: { answered: 900, refused: 12 },
+  });
+  const measuring = (
+    answers: readonly Latency[],
+  ): {
+    readonly measure: (count: number, issuesBusy: boolean) => Promise<Latency>;
+    readonly asked: { count: number; issuesBusy: boolean }[];
+  } => {
+    const asked: { count: number; issuesBusy: boolean }[] = [];
+    return {
+      asked,
+      measure: (count, issuesBusy): Promise<Latency> => {
+        asked.push({ count, issuesBusy });
+        return Promise.resolve(answers[asked.length - 1] ?? busy(999, 999));
+      },
+    };
+  };
+
+  test('asks for two trials of sixty messages with issues busy, judges the lower, and passes when chat holds', async () => {
+    const { measure, asked } = measuring([busy(31, 26), busy(29, 28)]);
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(asked).toEqual(Array.from({ length: 2 }, () => ({ count: 60, issuesBusy: true })));
+    expect(verdict.regressed).toBe(false);
+    expect(verdict.lines[0]).toBe('with issues busy, against the quiet trials of this run:');
+    expect(verdict.lines[1]).toBe(
+      'ACK round-trip p95: 29.0 ms of 120 ms (60 messages, was 25.0 ms)',
+    );
+    expect(verdict.lines.join('\n')).toContain('issues answered 900, refused 12');
+  });
+
+  test('starvation, past the factor of the quiet trials, is measured again once, and fails if it repeats', async () => {
+    const slow = busy(250, 250);
+    const { measure, asked } = measuring(Array.from({ length: 4 }, () => slow));
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(asked).toHaveLength(4);
+    expect(verdict.regressed).toBe(true);
+    expect(verdict.lines).toContain(
+      'first measurement with issues busy regressed; measured again:',
+    );
+    expect(verdict.lines.filter((line) => line.endsWith('— REGRESSED'))).toHaveLength(4);
+  });
+
+  test('passes when the second look holds, even at a few times the quiet p95', async () => {
+    const slow = busy(250, 250);
+    const fine = busy(70, 70);
+    const { measure, asked } = measuring([slow, slow, fine, fine]);
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(asked).toHaveLength(4);
+    expect(verdict.regressed).toBe(false);
+  });
+
+  test('is an error, not a pass, when nobody was answered while issues were meant to be busy', async () => {
+    for (const issues of [undefined, { answered: 0, refused: 0 }]) {
+      const { measure } = measuring([
+        { ...run(27, 27), ...(issues === undefined ? {} : { issues }) },
+      ]);
+      const refusal = await withIssuesBusy(quiet, measure).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      expect(refusal).toContain('nobody was answered');
+    }
+  });
+
+  test('one starved trial among two is not starvation, since the lower is what is judged', async () => {
+    const { measure, asked } = measuring([busy(250, 250), busy(70, 70)]);
+    expect((await withIssuesBusy(quiet, measure)).regressed).toBe(false);
+    expect(asked).toHaveLength(2);
+  });
+
+  test('the factor is judged on the ratio to the quiet p95, with the noise floor under it', async () => {
+    const verdictFor = async (quietMs: number, busyMs: number): Promise<boolean> => {
+      const { measure } = measuring(Array.from({ length: 4 }, () => busy(busyMs, busyMs)));
+      return (await withIssuesBusy(run(quietMs, quietMs), measure)).regressed;
+    };
+    // Just under and just over eight times a quiet 25 ms.
+    expect(await verdictFor(25, 25 * STARVATION_FACTOR - 0.1)).toBe(false);
+    expect(await verdictFor(25, 25 * STARVATION_FACTOR + 0.1)).toBe(true);
+    // A quiet 1 ms makes eight times 8 ms, which is noise: only the floor of 20 ms counts.
+    expect(await verdictFor(1, 19.9)).toBe(false);
+    expect(await verdictFor(1, 20.1)).toBe(true);
+  });
+
+  test('says the ratio to the quiet p95 and the factor that is starvation', async () => {
+    const { measure } = measuring([busy(50, 75), busy(60, 80)]);
+    const verdict = await withIssuesBusy(quiet, measure);
+    expect(verdict.lines).toContain(
+      'ratio to the quiet p95: ACK 2.0x, fan-out 3.0x; starved past 8x',
+    );
+  });
+
+  test('counts an answer and a refusal of the share, and refuses to count anything else', () => {
+    const tally = { answered: 0, refused: 0 };
+    countAnswer(tally, 200);
+    countAnswer(tally, 200);
+    countAnswer(tally, 503);
+    expect(tally).toEqual({ answered: 2, refused: 1 });
+    expect(() => {
+      countAnswer(tally, 500);
+    }).toThrow('issues answered 500');
+    expect(tally).toEqual({ answered: 2, refused: 1 });
+  });
+
+  test('the lower p95 of each metric is taken separately', () => {
+    expect(lowestOf([run(40, 20), run(30, 50)])).toEqual(run(30, 20));
+  });
+
+  test('the command hands back what the quiet trials came to, to be judged against', async () => {
+    const result = await main([], () => Promise.resolve(run(30, 31)));
+    expect(result.quiet).toEqual(summarizeTrials([run(30, 31), run(30, 31), run(30, 31)]));
+  });
+});
+
+describe('a trial that was not answered', () => {
+  test('is an error unless every message was answered and delivered', () => {
+    requireAnswers(60, 60, 60);
+    expect(() => {
+      requireAnswers(59, 60, 60);
+    }).toThrow('answers missing: 59 ACKs and 60 deliveries of 60');
+    expect(() => {
+      requireAnswers(60, 0, 60);
+    }).toThrow('answers missing');
+  });
+});
+
+describe('the whole gate', () => {
+  const quietOrBusy =
+    (quiet: Latency, busy: Latency) =>
+    (_count: number, issuesBusy: boolean): Promise<Latency> =>
+      Promise.resolve(issuesBusy ? { ...busy, issues: { answered: 100, refused: 0 } } : quiet);
+
+  test('passes when the quiet trials and the trials with issues busy both hold', async () => {
+    const result = await gate([], quietOrBusy(run(25, 25), run(27, 27)));
+    expect(result.code).toBe(0);
+    expect(result.lines).toContain('with issues busy, against the quiet trials of this run:');
+  });
+
+  test('fails when chat regresses with issues busy, though the quiet trials held', async () => {
+    const result = await gate([], quietOrBusy(run(25, 25), run(250, 250)));
+    expect(result.code).toBe(1);
+  });
+
+  test('fails when the quiet trials regress against the baseline, whatever issues does', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    await Bun.write(file, JSON.stringify(run(30, 30)));
+    const result = await gate(['--baseline', file], quietOrBusy(run(100, 30), run(100, 30)));
+    expect(result.code).toBe(1);
   });
 });

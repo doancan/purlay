@@ -26,6 +26,7 @@ have it.
 ### Added
 
 - **Issues** — A second module, off or on with `MODULES`: a workspace keeps a list of issues, each with a title, markdown details, open or done and somebody it is given to; any member makes and changes them, and only whoever made one, an owner or an admin deletes it (D-254)
+- **Operations** — The log says at boot which modules a process runs and which it leaves out, and `/metrics` has `purlay_modules_info{module="…"}` for each one it runs, so an operator can tell the nodes of a cluster apart (D-250)
 - **Operations** — Nodes of a cluster that run different `MODULES` say so in their logs and keep serving, so a new set can roll out node by node (D-250)
 - **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
 - **Messages** — Schedule a message, with its files, to be sent later; the server sends it at its time even with every app closed (D-30)
@@ -40,6 +41,8 @@ have it.
 
 ### Fixed
 
+- **Operations** — A slow or busy issues list can no longer hold every database connection and make chat's sends wait: issues' requests are held to a third of the pool, and one over it is told the database is busy and retried (D-250)
+- **Operations** — `bun run db:migrate` reads `MODULES` exactly as the server does: a setting the server refuses (`CHAT`, `chat,calendar`, `none,chat`, `,`) now stops the command with exit 1 and the reason, instead of migrating the wrong set (D-250)
 - **Operations** — A fresh install started with `MODULES=none` can erase an account, purge a deleted workspace, export and run its nightly jobs; they failed on tables only chat's own migrations make (D-250)
 
 ### Security
