@@ -204,8 +204,17 @@ refused writes. Nothing is lost and nothing fails: the migrating connection has 
 (D-87), and a waiting writer is served when the file commits. But the other nodes' pools hold a connection
 for each blocked writer, and a pool of ten that is all blocked answers everything else `503` after three
 seconds. So, for an install with more than a few hundred thousand attachments, upgrade in a quiet hour, or
-stop the other nodes first. A `lock_timeout` is not the remedy: it bounds the wait to *get* a lock, not how long the
-lock is held once taken.
+stop the other nodes first. A `lock_timeout` is not the remedy for that: it bounds the wait to *get* a lock, not how long
+the lock is held once taken.
+
+**A migration that cannot get its lock fails instead of queueing.** An `ALTER TABLE` waits for every transaction
+already using the table, and while it waits every later query on that table waits behind it (measured: a plain
+`SELECT` was held 8 s by one long transaction and one queued `ALTER`). A migration that runs in a transaction therefore
+waits at most ten seconds for any one lock (`lock_timeout`, D-86) and then stops with `migration <file> could not get
+a lock it needs in time`. Nothing it did is recorded; a node that migrates as it starts exits and tries again at the
+next start. Before upgrading, look for what is holding the table: `select pid, state, xact_start, query from
+pg_stat_activity where xact_start < now() - interval '10 seconds' order by xact_start;` (a long `idle in
+transaction` session is the usual cause), let it finish or end it with `pg_terminate_backend(pid)`, and start again.
 
 ## References
 

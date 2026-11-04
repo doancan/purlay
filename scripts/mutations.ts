@@ -12528,6 +12528,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/db/src/migrator.integration.test.ts'],
   },
   {
+    id: 'migration-no-lock-timeout',
+    why: 'a migration queued behind a long transaction waits for it, and every other query on the table waits behind the migration (D-86)',
+    file: 'packages/db/src/migrator.ts',
+    find: "await sql`select set_config('lock_timeout', ${String(lockTimeoutMilliseconds)}, true)`.execute(",
+    replace: 'await sql`select ${String(lockTimeoutMilliseconds)}`.execute(',
+    tests: ['packages/db/src/migrator.integration.test.ts'],
+  },
+  {
+    id: 'migration-lock-timeout-unexplained',
+    why: 'a migration that gave up on a lock fails with a bare "canceling statement due to lock timeout", and the operator is not told what to do (D-86)',
+    file: 'packages/db/src/migrator.ts',
+    find: 'if (!isLockTimeout(error)) return error;',
+    replace: 'if (error !== undefined) return error;',
+    tests: ['packages/db/src/migrator.integration.test.ts'],
+  },
+  {
     id: 'migration-set-prefix-lost',
     why: 'two sets with the same file name would record one row and the second would never run (D-250)',
     file: 'packages/db/src/migrator.ts',
