@@ -14497,4 +14497,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['packages/db/src/migration-safety.test.ts'],
   },
+  {
+    id: 'resident-memory-help-forgets-the-os-figure',
+    why: 'the resident-memory gauge is described as plain resident memory, so an operator who sees it at a third of ps on macOS takes the metric for wrong, or ps for the truth (#1028)',
+    file: 'apps/api/src/platform/metrics.ts',
+    find: "    'Memory this process holds, in bytes, as Bun reports it: the resident set on Linux, the physical footprint on macOS, which leaves out pages freed but not yet handed back and so reads below ps.',\n",
+    replace: "    'Resident memory of this process, in bytes.',\n",
+    tests: ['apps/api/src/platform/metrics.test.ts'],
+  },
 ];

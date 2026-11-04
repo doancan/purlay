@@ -598,7 +598,9 @@ signal, not a restart — the jobs are tried again on their own schedule. A job 
 at `error`, and so reported to `ERROR_TRACKING_DSN` like the API's errors.
 
 **Metrics for Prometheus** (D-221). Off until `METRICS_TOKEN` is set in `production.env`; the stack passes it
-to the API alone. The page is the API process's own — the time it has run and its memory, the sockets open on
+to the API alone. The page is the API process's own — the time it has run and its memory (as Bun reports it: the resident set on
+Linux, which is what `ps` and `docker stats` show, and on macOS the physical footprint, which reads well below `ps` there
+because it leaves out pages freed but not yet taken back — a development machine's figure, not the server's), the sockets open on
 it, each HTTP request by method, the route as registered (`/api/channels/:channelId`, never the path as sent),
 status class and duration, what was refused for the rate at each door, pushes and letters that did not
 reach their service — and the scheduled jobs' record as `jobs:status` reads it: when each last succeeded

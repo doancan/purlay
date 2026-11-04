@@ -228,7 +228,7 @@ export const serverMetrics = (readings: ProcessReadings = thisProcess): ServerMe
   );
   registry.gauge(
     'purlay_process_resident_memory_bytes',
-    'Resident memory of this process, in bytes.',
+    'Memory this process holds, in bytes, as Bun reports it: the resident set on Linux, the physical footprint on macOS, which leaves out pages freed but not yet handed back and so reads below ps.',
     readings.residentBytes,
   );
   const httpDuration = registry.histogram(

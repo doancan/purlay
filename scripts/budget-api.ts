@@ -8,6 +8,8 @@
  * process, started the way the image starts it — migrations on, against a real database — then left
  * alone for a moment before its resident memory is read. It needs `DATABASE_URL`; without one it says
  * so, and in CI, where the database is provided, it refuses rather than report a budget it never took.
+ * The figure is `ps`'s, the operating system's. On macOS that is higher than `purlay_process_resident_memory_bytes`,
+ * which is the physical footprint there (#1028); the budget is taken, and CI runs, on Linux.
  * The API is started on a clone of the test template made from that server, dropped afterwards —
  * never on the database `DATABASE_URL` names, which it would migrate and write settings into.
  */

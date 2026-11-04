@@ -127,6 +127,16 @@ describe("the server's instruments", () => {
     expect(page.types.get('purlay_http_request_duration_seconds')).toBe('histogram');
   });
 
+  test('say which memory figure the resident gauge is, since ps reads higher on macOS (#1028)', () => {
+    const text = renderMetrics(serverMetrics(fixedProcess));
+    const help = text
+      .split('\n')
+      .find((line) => line.startsWith('# HELP purlay_process_resident_memory_bytes'));
+    expect(help).toContain('resident set on Linux');
+    expect(help).toContain('physical footprint on macOS');
+    expect(help).toContain('below ps');
+  });
+
   test('the real process is read when no readings are handed in', () => {
     const page = readExposition(renderMetrics(serverMetrics()));
     expect(sampleOf(page, 'purlay_process_uptime_seconds')).toBeGreaterThan(0);
