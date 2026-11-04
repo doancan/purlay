@@ -28,7 +28,11 @@ import {
   startGitHubSignIn,
 } from '../../testing/github-sign-in';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS, type GitHubStub } from '../../testing/github-stub';
-import { aFloodingServer, aRedirectingServer } from '../../testing/hostile-servers';
+import {
+  aFloodingServer,
+  aRedirectingServer,
+  STOPPED_WELL_BEFORE_THE_FLOOD_ENDS,
+} from '../../testing/hostile-servers';
 import type { GithubFetch } from '../../modules/auth/better-auth';
 import { aTestAuth } from '../../testing/signed-in';
 
@@ -265,7 +269,7 @@ describe('integration: a GitHub that redirects, or floods (D-179 §4.4)', () => 
       const back = await signInThrough((stub) => through(flooding.url, ['/user'], stub));
       expect(signedIn(back)).toBe(false);
       await Bun.sleep(100);
-      expect(flooding.written()).toBeLessThan(4 * 1024 * 1024);
+      expect(flooding.written()).toBeLessThan(STOPPED_WELL_BEFORE_THE_FLOOD_ENDS);
     } finally {
       flooding.stop();
     }
