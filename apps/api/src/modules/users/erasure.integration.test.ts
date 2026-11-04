@@ -25,10 +25,11 @@ import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { eraseAccount } from './erasure';
 import { issuePassport } from '../workspaces/invitation-passport';
 import { tokenDigest } from '../../platform/tokens';
-import { acceptInvitation, createInvitation } from '../workspaces/invitations';
+import { acceptInvitation, createInvitation, listInvitations } from '../workspaces/invitations';
 import { inviterMailKey } from '../workspaces/invitation-mail';
 import { aUserRow } from '../../testing/users';
 import { chatUserErased } from '../../features/chat/channels/user-hooks';
+import { channelPins, pinMessage } from '../../features/chat/pins/pins';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -755,6 +756,47 @@ describe('integration: erasing an account', () => {
             await erase(db, await signedIn(db, beside, 'cy'), member(beside, 'cy').username),
         ),
       ).toBe('taken');
+    });
+  });
+
+  test('what they pinned and the links they made keep naming the anonymised account, never nobody (D-256)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      await owner(db, room, 'ada');
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      const said = await sendMessage(db, clock, bob.context, {
+        id: messageId(NOW),
+        content: 'worth keeping',
+      });
+      await pinMessage(db, clock, ada.userId, said.message.id);
+      const workspace = await requireWorkspaceMembership(db, ada.userId, room.workspaceId);
+      await createInvitation(db, clock, workspace);
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+
+      // The keys are `ON DELETE SET NULL`, and an erasure soft-deletes the row: none of them fires.
+      expect(
+        await db
+          .selectFrom('pinned_messages')
+          .select('pinned_by')
+          .where('channel_id', '=', room.channelId)
+          .execute(),
+      ).toEqual([{ pinned_by: ada.userId }]);
+      expect(
+        await db
+          .selectFrom('workspace_invitations')
+          .select('created_by')
+          .where('workspace_id', '=', room.workspaceId)
+          .execute(),
+      ).toEqual([{ created_by: ada.userId }]);
+      // And what the contract shows is the anonymised account.
+      const [pin] = await channelPins(db, bob.context);
+      expect(pin?.pinnedBy?.id).toBe(ada.userId);
+      expect(isErased({ username: pin?.pinnedBy?.username ?? '' })).toBe(true);
+      const bobsContext = await requireWorkspaceMembership(db, bob.userId, room.workspaceId);
+      const [link] = (await listInvitations(db, clock, bobsContext, {})).data;
+      expect(link?.createdBy?.id).toBe(ada.userId);
+      expect(isErased({ username: link?.createdBy?.username ?? '' })).toBe(true);
     });
   });
 

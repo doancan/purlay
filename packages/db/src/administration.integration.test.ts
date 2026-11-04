@@ -72,7 +72,7 @@ describe('integration: the audit trail', () => {
     });
   });
 
-  test('keeps what was done when the actor is erased (D-27)', async () => {
+  test('keeps what was done when the actor’s row is deleted outright; an erasure soft-deletes it and keeps the actor named (D-256)', async () => {
     await withRollback(async (db) => {
       const at = await aWorkspaceAndActor(db);
       const id = Bun.randomUUIDv7('hex', NOW);

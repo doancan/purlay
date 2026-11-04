@@ -547,7 +547,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
             expect(verdict).toEqual({ ready: true });
           });
 
-          test('(a) erasing an account forgets the person in every table there is, and keeps the team’s', async () => {
+          test('(a) erasing an account forgets what chat and issues hold of the person, and keeps the team’s', async () => {
             const world = await seed(database, state);
             const erased = await database
               .transaction()
