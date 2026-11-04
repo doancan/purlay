@@ -8,17 +8,21 @@
  * refusal, because a skipped required check counts as passed and a gate that reads "nothing failed"
  * passes on nothing having run (`CONTRIBUTING.md` §6.4).
  *
- * The browser jobs are judged too (D-226): a change they cannot see skips them, and only then is their
- * skip a pass — when `changes` succeeded and said so. Anything else, a skip included, is a refusal.
+ * The browser jobs are judged too (D-226), and so is `modules`, the job that starts the API once per `MODULES`
+ * value: a change they cannot see skips them, and only then is their skip a pass — when `changes` succeeded
+ * and said so. Anything else, a skip included, is a refusal.
  *
  *   bun run ci:gate        in CI: reads `NEEDS`, the job's `toJSON(needs)`
  */
 
 /** The jobs `verify` stands for. `ci.yml`'s `needs:` for the job is bound to this list by a test. */
-export const GATED = ['static', 'schema', 'changes', 'browser'] as const;
+export const GATED = ['static', 'schema', 'changes', 'browser', 'modules'] as const;
 
-/** Whether `changes` succeeded and said the browser jobs see nothing in this change: their skip is right. */
-const browserNotNeeded = (jobs: Record<string, unknown>): boolean => {
+/** The jobs a change can rightly skip: each has an output of `changes` of its own name that says so. */
+const SKIPPABLE: readonly string[] = ['browser', 'modules'];
+
+/** Whether `changes` succeeded and said `output` is `false`: this change cannot move what that job sees. */
+const notNeeded = (jobs: Record<string, unknown>, output: string): boolean => {
   const changes = jobs['changes'];
   if (typeof changes !== 'object' || changes === null) return false;
   const { result, outputs } = changes as { result?: unknown; outputs?: unknown };
@@ -26,7 +30,7 @@ const browserNotNeeded = (jobs: Record<string, unknown>): boolean => {
     result === 'success' &&
     typeof outputs === 'object' &&
     outputs !== null &&
-    (outputs as { browser?: unknown }).browser === 'false'
+    (outputs as Record<string, unknown>)[output] === 'false'
   );
 };
 
@@ -53,7 +57,7 @@ export const judge = (needs: string): string[] => {
       typeof job === 'object' && job !== null && 'result' in job && typeof job.result === 'string'
         ? job.result
         : '';
-    const skipIsRight = name === 'browser' && result === 'skipped' && browserNotNeeded(jobs);
+    const skipIsRight = SKIPPABLE.includes(name) && result === 'skipped' && notNeeded(jobs, name);
     if (result !== 'success' && !skipIsRight) {
       reasons.push(`${name} ended ${result === '' ? 'with no result' : result}`);
     }

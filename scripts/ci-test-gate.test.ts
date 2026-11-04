@@ -35,3 +35,21 @@ describe('the complete CI coverage suite', () => {
     expect(tests[0]?.['continue-on-error']).not.toBe(true);
   });
 });
+
+describe('the module matrix job', () => {
+  const job = workflow.jobs['modules'];
+
+  test('runs the smoke on a database of its own and only when the change can move an answer', () => {
+    expect(job?.needs).toBe('changes');
+    expect(job?.if).toBe("needs.changes.outputs.modules == 'true'");
+    expect(job?.env?.['DATABASE_URL']).toBeTruthy();
+    expect(job?.steps.filter((step) => step.run === 'bun run modules:smoke')).toHaveLength(1);
+  });
+
+  test('names a script the repository has, under the name the workflow runs', () => {
+    const { scripts } = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(scripts['modules:smoke']).toContain('apps/api/src/testing/module-smoke.ts');
+  });
+});
