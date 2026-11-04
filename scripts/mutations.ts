@@ -14390,4 +14390,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  const before = new Date(dependencies.clock.now().getTime() + DAY_MS);\n',
     tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
   },
+  {
+    id: 'a-query-asks-by-a-column-no-index-starts-with',
+    why: 'a statement filters a table by a column no index starts with, and the table is read whole on every call: a statement whose only column is `issues.status` is refused, where one that also names `workspace_id` is not (#901)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: "  await transaction.deleteFrom('issues').where('id', '=', issueId).execute();",
+    replace: "  await transaction.deleteFrom('issues').where('status', '=', issueId).execute();",
+    tests: ['packages/db/src/query-columns.integration.test.ts'],
+  },
 ];
