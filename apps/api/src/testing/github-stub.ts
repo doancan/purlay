@@ -222,7 +222,11 @@ export const aGitHubStub = (
     return Response.json({ message: 'Not Found' }, { status: 404 });
   };
 
-  const fetch: GithubFetch = async (url, init) => {
+  /** What the sign-in library sends, and what the App's own calls add: the App revokes with a `DELETE`. */
+  type StubInit = Omit<Parameters<GithubFetch>[1], 'method'> & {
+    readonly method?: 'GET' | 'POST' | 'DELETE';
+  };
+  const fetch = async (url: string, init: StubInit): Promise<Response> => {
     calls.urls.push(url);
     calls.signals.push(init.signal instanceof AbortSignal);
     const request = new Request(url, {
@@ -300,7 +304,7 @@ export const aGitHubStub = (
 
   const appFetch: GitHubAppFetch = async (url, init) =>
     await fetch(url, {
-      ...(init.method === 'POST' ? { method: 'POST' } : {}),
+      method: init.method,
       headers: init.headers,
       ...(init.body === undefined ? {} : { body: init.body }),
       redirect: 'manual',

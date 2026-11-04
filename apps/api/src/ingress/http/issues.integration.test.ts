@@ -639,7 +639,7 @@ describe('integration: what issues does for the core’s open places', () => {
         .body as Issue;
       const given = (await call('POST', w.path, ada, { title: 'Ada made', assigneeId: bob.userId }))
         .body as Issue;
-      await composition.userErased.run(db, bob.userId);
+      await composition.userErased.run(db, bob.userId, () => undefined);
       const rows = await db
         .selectFrom('issues')
         .select(['id', 'assignee_id', 'created_by'])

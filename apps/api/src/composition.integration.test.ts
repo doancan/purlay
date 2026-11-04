@@ -79,11 +79,11 @@ describe('integration: what the modules a process runs make of the core’s open
         ).length;
 
       await save('one');
-      await compose([], []).userErased.run(db, pat.userId);
+      await compose([], []).userErased.run(db, pat.userId, () => undefined);
       expect(await kept()).toBe(1);
-      await compose([]).userErased.run(db, pat.userId);
+      await compose([]).userErased.run(db, pat.userId, () => undefined);
       expect(await kept()).toBe(0);
-      await composition.userErased.run(db, pat.userId);
+      await composition.userErased.run(db, pat.userId, () => undefined);
       expect(await kept()).toBe(0);
     });
   });

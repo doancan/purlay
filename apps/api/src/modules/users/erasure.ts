@@ -15,12 +15,17 @@
  *   another live member is refused until they hand it over.
  *
  * After the commit the caller ends their sockets and tells each workspace (the ingress), as signing out
- * everywhere does (D-11).
+ * everywhere does (D-11), and runs what the hooks asked to be done once the rows are gone: a call to a provider
+ * that must not hold the transaction open, and whose failure must not undo the erasure (`AfterErasure`).
  */
 import { sql, type Transaction } from '@purlay/db';
 import { ERASED_USERNAME_PREFIX, ERASURE_SIGN_IN_MINUTES } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
+import type { CredentialCipher } from '../../platform/crypto';
 import { AppError } from '../../platform/errors';
+import type { GitHubAppApi } from '../../platform/github-app-api';
+import type { Logger } from '../../platform/logging';
+import type { GitHubAppSettings } from '../setup/settings';
 import { recordAudit } from '../audit/audit';
 import { availableUsername } from '../auth/identity';
 import { endPersonalExports } from '../export/personal-requests';
@@ -36,7 +41,23 @@ export interface Erased {
   /** Whose sockets end: every one the person has, whatever session it holds. */
   readonly userId: string;
   readonly workspaces: readonly { readonly id: string; readonly memberIds: readonly string[] }[];
+  /** What the hooks asked to be done after the commit, in the order they asked. */
+  readonly afterCommit: readonly AfterErasure[];
 }
+
+/** What the process holds for a task that reaches beyond the database once the erasure is committed. */
+export interface ErasureServices {
+  readonly log: Logger;
+  readonly cipher: CredentialCipher;
+  /** The GitHub App as the settings hold it now (`undefined`: none), and GitHub as the App speaks to it. */
+  readonly githubApp: { readonly app: GitHubAppSettings | undefined; readonly api: GitHubAppApi };
+}
+
+/**
+ * Done after the erasure commits, best effort: it must catch its own failures and say them (it is not retried, and a
+ * throw is only logged by the caller). The erasure is never undone by it, nor held open while it runs.
+ */
+type AfterErasure = (services: ErasureServices) => Promise<void>;
 
 const invalid = (field: string, says: string): AppError =>
   new AppError({
@@ -46,7 +67,7 @@ const invalid = (field: string, says: string): AppError =>
   });
 
 /** What runs inside the transaction of an erased account, for each module that keeps something of a person. */
-export type UserErased = Hooks<[Transaction, string]>;
+export type UserErased = Hooks<[Transaction, string, (task: AfterErasure) => void]>;
 
 export const eraseAccount = async (
   executor: Transaction,
@@ -64,7 +85,7 @@ export const eraseAccount = async (
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
   // A session resolves only for a live account, so this is a second request racing the first: done.
-  if (person === undefined) return { userId: caller.userId, workspaces: [] };
+  if (person === undefined) return { userId: caller.userId, workspaces: [], afterCommit: [] };
   if (confirm !== person.username) throw invalid('confirm', 'is not your username');
   // The session as it is now — live, and signed in recently enough (D-139 §5) — held until the end, as
   // every write of the person's holds it (D-85).
@@ -145,7 +166,7 @@ export const eraseAccount = async (
     .where('deleted_at', 'is', null)
     .forUpdate()
     .executeTakeFirst();
-  if (locked === undefined) return { userId: person.id, workspaces: [] };
+  if (locked === undefined) return { userId: person.id, workspaces: [], afterCommit: [] };
 
   const blocking: string[] = [];
   const unowned: string[] = [];
@@ -219,7 +240,10 @@ export const eraseAccount = async (
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
   // What the modules keep for a person — chat's saved searches and messages, followed threads, inbox and
   // missed-mail letters — forgotten by the hooks, here, in this transaction (D-250).
-  await userErased.run(executor, person.id);
+  const afterCommit: AfterErasure[] = [];
+  await userErased.run(executor, person.id, (task) => {
+    afterCommit.push(task);
+  });
   // A copy of their own data they asked for (D-241): no longer downloadable, its archive swept.
   await endPersonalExports(executor, clock, person.id);
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
@@ -251,5 +275,5 @@ export const eraseAccount = async (
   // Every session of the person ends, the one that asked included, and takes its address, browser and
   // devices with its row (D-139 §5, 0024).
   await revokeAllSessions(executor, person.id);
-  return { userId: person.id, workspaces };
+  return { userId: person.id, workspaces, afterCommit };
 };

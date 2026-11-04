@@ -46,6 +46,7 @@ import {
   type UserTokens,
 } from '../../../platform/github-app-api';
 import { appJwt } from '../../../platform/github-app-key';
+import type { ErasureServices } from '../../../modules/users/erasure';
 
 /** How long a trip to GitHub and back may take: GitHub's own codes last ten minutes. */
 const HANDSHAKE_TTL_MS = 10 * 60 * 1000;
@@ -244,6 +245,41 @@ export const forgetAuthorization = async (
   userId: string,
 ): Promise<void> => {
   await database.deleteFrom('github_user_authorizations').where('user_id', '=', userId).execute();
+};
+
+/**
+ * An erased person's authorization revoked at GitHub, after their erasure committed (D-246, #993): the grant and
+ * every token the App holds for them, asked of GitHub as the App. Best effort by design — the sealed copy is
+ * already deleted, so a failure leaves only a token that was not revoked, said in the log with GitHub's reason
+ * and never the token. Nothing here throws.
+ */
+export const revokeErasedAuthorization = async (
+  { log, cipher, githubApp }: ErasureServices,
+  sealed: { readonly id: string; readonly access_token_encrypted: string },
+): Promise<void> => {
+  if (githubApp.app === undefined) {
+    log.warn('github app authorization not revoked at GitHub: this server holds no App', {
+      authorizationId: sealed.id,
+    });
+    return;
+  }
+  try {
+    const accessToken = await cipher.open(
+      Buffer.from(sealed.access_token_encrypted, 'base64'),
+      sealedIn('access', sealed.id),
+    );
+    await githubApp.api.revokeAuthorization(githubApp.app, accessToken);
+  } catch (error) {
+    log.warn('github app authorization not revoked at GitHub', {
+      authorizationId: sealed.id,
+      reason:
+        error instanceof GitHubUnavailable ||
+        error instanceof GitHubRateLimited ||
+        error instanceof GitHubUnauthorized
+          ? error.message
+          : 'the sealed token did not open',
+    });
+  }
 };
 
 /** `DELETE /api/workspaces/:workspaceId/github-app/installation` — an owner lets it go; nothing if none. */
