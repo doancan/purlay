@@ -211,7 +211,7 @@ describe('the application as its modules make it', () => {
         calls.length = 0;
         const composed = composeFor(carried, setting);
         expect(composed.workspacePurge.tables).toEqual(['mentions', 'channels', 'issues']);
-        await composed.userErased.run(aTransactionThatMustNotBeTouched(), 'u');
+        await composed.userErased.run(aTransactionThatMustNotBeTouched(), 'u', () => undefined);
         expect(calls).toEqual(['provider', 'zloner', 'consumer']);
       }
     });

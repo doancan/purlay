@@ -1020,7 +1020,22 @@ export const createApp = (given: Dependencies): HttpApplication => {
     })
 
     .post('/api/me/erase', async ({ request, body, set }) =>
-      respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
+      respond(
+        set,
+        await eraseMyAccount(
+          {
+            ...dependencies,
+            bus: sockets.bus,
+            erasureServices: () => ({
+              log,
+              cipher,
+              githubApp: { app: githubApp().app, api: appApi },
+            }),
+          },
+          request,
+          body,
+        ),
+      ),
     )
     .post('/api/me/exports', async ({ request, set }) => {
       const asked = await askForMyExport(dependencies, request);

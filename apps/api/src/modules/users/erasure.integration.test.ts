@@ -420,6 +420,35 @@ describe('integration: erasing an account', () => {
     });
   });
 
+  test('what is revoked at GitHub is asked for after the commit, once for each sealed authorization, and for none where there is none (#993)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      await db
+        .insertInto('github_user_authorizations')
+        .values({
+          id: messageId(clock.now()),
+          user_id: ada.userId,
+          github_user_id: 1001,
+          github_login: 'login-1001',
+          access_token_encrypted: 'sealed-access',
+          access_expires_at: null,
+          refresh_token_encrypted: null,
+          refresh_expires_at: null,
+          created_at: clock.now(),
+          updated_at: clock.now(),
+        })
+        .execute();
+      // Not run by the erasure: it is handed back, for the caller to run when the transaction has ended.
+      const erased = await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      expect(erased.afterCommit).toHaveLength(1);
+      expect((await erase(db, await signedIn(db, room, 'bob'), bob.username)).afterCommit).toEqual(
+        [],
+      );
+    });
+  });
+
   test('the passports made for the erased address go with it, and no other address’s or cookie’s does', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['bob', 'ada']);

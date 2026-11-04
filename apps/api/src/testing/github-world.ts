@@ -13,6 +13,7 @@ import { DEVELOPMENT_ENCRYPTION_KEY } from '../platform/config';
 import { credentialCipher } from '../platform/crypto';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { fixedClock } from '../platform/clock';
+import type { Logger } from '../platform/logging';
 import { testDependencies } from './doubles';
 import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from './github-app-stub';
 import { aGitHubStub } from './github-stub';
@@ -53,6 +54,10 @@ export const aWorld = async (
     /** How long a call to GitHub may take before it is taken as lost. */
     readonly deadlineMs?: number;
     readonly authorized?: boolean;
+    /** Where the application writes what it logs, for a test that reads it. */
+    readonly log?: Logger;
+    /** `false`: a server whose settings hold no GitHub App. */
+    readonly appSettings?: boolean;
   } = {},
 ): Promise<World> => {
   const room = await aRoom(db, ['owner', 'member'], {
@@ -74,8 +79,9 @@ export const aWorld = async (
     testDependencies({
       database: db,
       clock: { now: () => time.now },
-      githubApp: () => GITHUB_APP_STUB,
+      githubApp: () => (options.appSettings === false ? undefined : GITHUB_APP_STUB),
       githubAppFetch: appFetch,
+      ...(options.log === undefined ? {} : { log: options.log }),
     }),
   );
   const personOf = async (name: string): Promise<Person> => {

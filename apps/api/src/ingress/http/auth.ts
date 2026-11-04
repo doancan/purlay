@@ -20,7 +20,7 @@
 import { CLIENT_ADDRESS_HEADER, type Auth, type AuthAnswer } from '../../modules/auth/better-auth';
 import { EraseAccountRequest, type MySignIn } from '@purlay/types';
 import { mySignIn } from '../../modules/auth/my-sign-in';
-import { eraseAccount, type UserErased } from '../../modules/users/erasure';
+import { eraseAccount, type ErasureServices, type UserErased } from '../../modules/users/erasure';
 import {
   publication,
   publishAfterCommit,
@@ -77,6 +77,8 @@ export interface SignOutDependencies extends AuthDependencies {
 /** Erasing an account also reaches what the modules keep of the person, through their hooks (D-250). */
 export interface EraseDependencies extends SignOutDependencies {
   readonly userErased: UserErased;
+  /** What a task asked for after the commit is given: read when the erasure has committed, not before. */
+  readonly erasureServices: () => ErasureServices;
 }
 
 /** What a handler decided. `location` set means a redirect; otherwise `204`. */
@@ -568,6 +570,12 @@ export const eraseMyAccount = async (
       publication('WORKSPACE_UPDATED', () =>
         publishWorkspaceUpdated(bus, clock, workspace.memberIds, workspace.id),
       ),
+    ),
+    // Last, and bounded by GitHub's deadline: a call to a provider after everything the person sees is done.
+    erased.afterCommit.map((task) =>
+      publication('AFTER_ERASURE', async () => {
+        await task(dependencies.erasureServices());
+      }),
     ),
   ]);
   return { setCookie: [clearedSessionCookie()] };
