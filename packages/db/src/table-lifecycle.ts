@@ -14,7 +14,12 @@ import type { DB } from './schema';
 type Erasure =
   /** The person's rows are deleted, in the erasure's transaction or by a key that cascades from a row it deletes. */
   | 'deleted'
-  /** The rows stay and name only the anonymised account (or a column is cleared): the team's record, not the person's. */
+  /**
+   * The rows stay and name only the anonymised account (or a column is cleared): the team's record, not the person's.
+   * Erasure soft-deletes the `users` row, so no `ON DELETE SET NULL` or `CASCADE` key to it ever fires: a column that
+   * says who made, added, pinned or declared something keeps naming the anonymised account (D-256), and a row that
+   * hangs on the person stays unless a step of the erasure or a `userErased` hook deletes it.
+   */
   | 'anonymised'
   /** The table holds nothing that names a person; the reason is said. */
   | { readonly nobody: string }
@@ -72,7 +77,10 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   ),
   sessions: decided('deleted', 'swept'),
   setup_state: decided(
-    { nobody: 'digests of the setup’s one-time code, one row' },
+    {
+      nobody:
+        'digests of the setup’s one-time code and the id of the administrator it made, one row',
+    },
     { kept: 'one row for the life of the instance' },
   ),
   two_factors: decided('deleted', 'until-removed'),
@@ -96,7 +104,14 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   channels: decided('anonymised', { kept: 'for the life of the workspace' }),
   github_app_deliveries: decided({ nobody: 'a delivery’s id and its body’s digest' }, 'swept'),
   github_app_handshakes: decided('anonymised', 'swept'),
-  github_app_installations: decided('anonymised', 'until-removed'),
+  // `connected_by` stays, naming the anonymised account (D-256). `account_login` is the GitHub login of the account
+  // the App was installed on, and for a personal one (`account_type = 'User'`) it is the person's: nothing clears it.
+  github_app_installations: decided(
+    {
+      gap: 'account_login is the person’s GitHub login when the App is installed on their personal account, and the erasure does not clear it, nor the audit metadata that names it (#997)',
+    },
+    'until-removed',
+  ),
   github_deliveries: decided({ nobody: 'a delivery’s id and its body’s digest' }, 'swept'),
   github_integrations: decided('anonymised', 'until-removed'),
   github_links: decided('anonymised', 'with-parent'),

@@ -24,7 +24,8 @@ export type IssueStatus = Static<typeof IssueStatus>;
 
 /**
  * An issue. `assigneeId` and `createdBy` are the people's ids — the workspace's members come from `/members` —
- * and are `null` for nobody, or for somebody whose account was erased.
+ * and are `null` for nobody. An erased account is taken off what was assigned to it, so `assigneeId` is `null` then;
+ * `createdBy` stays, naming the anonymised account (D-256).
  */
 export const Issue = Type.Object({
   id: Uuid,

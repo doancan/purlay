@@ -5,11 +5,14 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { BOOKMARKS_MAX, messageId } from '@purlay/types';
+import { BOOKMARKS_MAX, isErased, messageId } from '@purlay/types';
 import { requireChannelById, type ChannelContext } from '../channels/guard';
 import { fixedClock } from '../../../platform/clock';
 import { attempt } from '../../../testing/attempt';
 import { aRoom, type Room } from '../../../testing/rooms';
+import { aSession } from '../../../testing/signed-in';
+import { eraseAccount } from '../../../modules/users/erasure';
+import { chatUserErased } from '../channels/user-hooks';
 import { addBookmark, channelBookmarks, removeBookmark } from './bookmarks';
 
 afterAll(async () => {
@@ -149,17 +152,25 @@ describe('integration: channel bookmarks', () => {
     });
   });
 
-  test("a person's erasure leaves their bookmark, by no one", async () => {
+  test("a person's erasure leaves their bookmark, added by their anonymised account (D-256)", async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
+      const bob = room.members['bob'];
+      if (bob === undefined) throw new Error('no bob');
       await addBookmark(db, at(0), contextOf(room, 'bob'), DOCS);
-      await db
-        .deleteFrom('users')
-        .where('id', '=', room.members['bob']?.userId ?? '')
-        .execute();
+      // The real erasure, which soft-deletes the row: `ON DELETE SET NULL` never fires on it.
+      const { sessionId } = await aSession(db, at(0), bob.userId);
+      await eraseAccount(
+        db,
+        at(1),
+        { userId: bob.userId, sessionId },
+        bob.username,
+        chatUserErased(),
+      );
       const [kept] = await channelBookmarks(db, contextOf(room, 'alice'));
-      expect(kept?.addedBy).toBeNull();
       expect(kept?.url).toBe(DOCS.url);
+      expect(kept?.addedBy?.id).toBe(bob.userId);
+      expect(isErased({ username: kept?.addedBy?.username ?? '' })).toBe(true);
     });
   });
 });

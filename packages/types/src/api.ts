@@ -863,7 +863,7 @@ export const AuditActionName = Type.Union(AUDIT_ACTIONS.map((action) => Type.Lit
 
 /**
  * One administrative action: who, what, to whom, and for a change from what to what. Never anything
- * a person wrote. The actor is null once they were erased (D-27).
+ * a person wrote. The actor is the anonymised account once they were erased (D-256), and null only when nobody did it.
  */
 export const AuditEntry = Type.Object({
   id: Uuid,
@@ -917,7 +917,7 @@ export type AuditExportQuery = Static<typeof AuditExportQuery>;
  * One entry of a downloaded trail, newest first: a line of the NDJSON file, and — in this order, as its
  * header names them — a row of the CSV, whose `metadata` cell is this object as JSON. Who acted is said
  * by id and by name, since the file is read away from the people list that names them on the page; the
- * actor's fields are null once nobody did it or they were erased (D-27).
+ * actor's fields are those of the anonymised account once they were erased (D-256), and null only when nobody did it.
  */
 export const AuditExportLine = Type.Object({
   id: Uuid,
@@ -957,7 +957,7 @@ export const InvitationToken = Type.String({ pattern: '^[0-9a-f]{64}$' });
 /** One of a workspace's links as its admins see it — never the token, which is shown once. */
 export const Invitation = Type.Object({
   id: Uuid,
-  /** Null once the person who made it was erased (D-27). */
+  /** The anonymised account once the person who made it was erased (D-256); null only where nobody did. */
   createdBy: Type.Union([User, Type.Null()]),
   createdAt: Timestamp,
   expiresAt: Timestamp,
@@ -1298,8 +1298,8 @@ export type FileQuery = Static<typeof FileQuery>;
 export const PINS_MAX = 50;
 
 /**
- * A pinned message, as the caller can read it now, with who pinned it — null once that person's
- * account is gone — and when.
+ * A pinned message, as the caller can read it now, with who pinned it — the anonymised account once
+ * that person is erased (D-256) — and when.
  */
 export const PinnedMessage = Type.Object({
   message: Message,
@@ -1322,7 +1322,7 @@ export const BOOKMARK_TITLE_MAX = 80;
 /** A web address a bookmark may hold: `http:` or `https:`, bounded; the server parses it as a URL too. */
 export const BookmarkUrl = Type.String({ pattern: '^https?://[^\\s]+$', maxLength: 2048 });
 
-/** A link kept at hand for a channel's members, with who added it — null once they are gone. */
+/** A link kept at hand for a channel's members, with who added it — the anonymised account once they are erased (D-256). */
 export const ChannelBookmark = Type.Object({
   id: Uuid,
   channelId: Uuid,
@@ -1467,7 +1467,7 @@ export const IncomingWebhook = Type.Object({
   id: Uuid,
   channelId: Uuid,
   name: IncomingWebhookName,
-  /** Who made it; null once that account is gone. */
+  /** Who made it; the anonymised account once they are erased (D-256). */
   createdBy: Type.Union([User, Type.Null()]),
   createdAt: Timestamp,
   /** When it last posted; null until it has. */
@@ -1562,7 +1562,7 @@ const incidentFields = {
   id: Uuid,
   channelId: Uuid,
   severity: IncidentSeverity,
-  /** Null once the person who declared it is gone. */
+  /** The anonymised account once the person who declared it is erased (D-256). */
   declaredBy: Type.Union([User, Type.Null()]),
   declaredAt: Timestamp,
   /** Who is responding, first brought in first; each a member of the channel (D-137 §3). */
@@ -1624,7 +1624,7 @@ export const IncidentChange = Type.Union([
   // From an open status only: nothing moves a resolved incident (D-137 §3).
   Type.Object({ kind: Type.Literal('status'), from: OpenIncidentStatus, to: IncidentStatus }),
   Type.Object({ kind: Type.Literal('severity'), from: IncidentSeverity, to: IncidentSeverity }),
-  /** Somebody brought in to respond, or taken off; null once they are gone. */
+  /** Somebody brought in to respond, or taken off; the anonymised account once they are erased (D-256). */
   Type.Object({ kind: Type.Literal('responder_added'), user: Type.Union([User, Type.Null()]) }),
   Type.Object({ kind: Type.Literal('responder_removed'), user: Type.Union([User, Type.Null()]) }),
   /** The runbook's link set, or cleared (null). */
@@ -1634,7 +1634,7 @@ export const IncidentChange = Type.Union([
 ]);
 export type IncidentChange = Static<typeof IncidentChange>;
 
-/** One entry of an incident's timeline: what changed, by whom (null once they are gone), when. */
+/** One entry of an incident's timeline: what changed, by whom (the anonymised account once they are erased, D-256), when. */
 export const IncidentUpdate = Type.Object({
   id: Uuid,
   at: Timestamp,
