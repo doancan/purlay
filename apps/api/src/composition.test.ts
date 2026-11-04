@@ -7,6 +7,7 @@ import {
   composeFor,
   moduleReport,
   registry,
+  startWhereRunning,
   type BundledModule,
 } from './composition';
 import { chatModule } from './features/chat/module';
@@ -322,5 +323,20 @@ describe('what the boot says about modules', () => {
       running: [],
       notRun: ['chat', 'issues'],
     });
+  });
+});
+
+describe('what the boot starts for a module', () => {
+  test('is started where the module runs, once, and not where it is carried and off or not carried at all', () => {
+    const started: string[] = [];
+    const start = (): void => {
+      started.push('started');
+    };
+    startWhereRunning(compose([chatModule], [chatModule, issuesModule]), 'chat', start);
+    expect(started).toEqual(['started']);
+    startWhereRunning(compose([issuesModule], [chatModule, issuesModule]), 'chat', start);
+    startWhereRunning(compose([], [chatModule, issuesModule]), 'chat', start);
+    startWhereRunning(compose([], []), 'chat', start);
+    expect(started).toEqual(['started']);
   });
 });

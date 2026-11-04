@@ -12,7 +12,7 @@ import { deliverReminders } from './features/chat/reminders/delivery';
 import { deliverScheduled } from './features/chat/scheduled/delivery';
 import { timedDeliveryLoop } from './features/chat/scheduled/loop';
 import { exportQueue } from './modules/export/queue';
-import { compositionFor, moduleReport, type Composition } from './composition';
+import { compositionFor, moduleReport, startWhereRunning, type Composition } from './composition';
 import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
@@ -372,7 +372,7 @@ if (config.MIGRATE_ON_START === true) {
 }
 services.settle(runtime);
 // Scheduled messages and reminders are chat's (D-250): delivered by a process that runs chat, and by no other.
-if (modules.modules.some((module) => module.manifest.id === 'chat')) timedDelivery.start();
+startWhereRunning(modules, 'chat', timedDelivery.start);
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
 log.info(
   runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',

@@ -13741,6 +13741,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/module-set.redis.integration.test.ts'],
   },
   {
+    id: 'boot-starts-chat-timers-whatever-runs',
+    why: "a process that does not run chat starts the timers of scheduled messages and reminders, which read tables of chat's set that its database may not have (D-250)",
+    file: 'apps/api/src/composition.ts',
+    find: 'if (running.modules.some((module) => module.manifest.id === id)) start();',
+    replace: 'start();',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'unreads-route-is-no-module-screen',
     why: "the unreads screen is no longer chat's, so a server that does not run chat still shows it instead of 'nothing here' (D-250)",
     file: 'apps/web/src/router/routes.ts',
