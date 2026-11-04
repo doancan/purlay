@@ -614,6 +614,45 @@ describe('the shared Redis (D-201)', () => {
       expect(message).not.toContain('secret-pw-r');
     }
   });
+
+  describe('its namespace, REDIS_KEY_PREFIX', () => {
+    const REDIS_URL = 'redis://localhost:6379';
+
+    test('is unset or empty unless somebody names one: the names stay what they were', () => {
+      expect(loadConfig({ ...valid, REDIS_URL }).REDIS_KEY_PREFIX).toBeUndefined();
+      expect(loadConfig({ ...valid, REDIS_URL, REDIS_KEY_PREFIX: '' }).REDIS_KEY_PREFIX).toBe(
+        undefined,
+      );
+    });
+
+    test('takes a short word of letters, digits, dot, underscore and hyphen', () => {
+      for (const REDIS_KEY_PREFIX of ['staging', 'Tenant_7', 'eu-west.1', 'x'.repeat(32)]) {
+        expect(loadConfig({ ...valid, REDIS_URL, REDIS_KEY_PREFIX }).REDIS_KEY_PREFIX).toBe(
+          REDIS_KEY_PREFIX,
+        );
+      }
+    });
+
+    test('refuses anything else at start, naming the variable', () => {
+      for (const REDIS_KEY_PREFIX of [
+        'with space',
+        'a:b',
+        'staging:',
+        '{tag}',
+        '-x',
+        'çay',
+        'x'.repeat(33),
+      ]) {
+        expect(refusal({ ...valid, REDIS_URL, REDIS_KEY_PREFIX })).toContain('REDIS_KEY_PREFIX');
+      }
+    });
+
+    test('needs the Redis it names keys in: alone it is a mistake, said at start', () => {
+      expect(refusal({ ...valid, REDIS_KEY_PREFIX: 'staging' })).toContain(
+        'REDIS_KEY_PREFIX: needs REDIS_URL',
+      );
+    });
+  });
 });
 
 describe('the metrics token (D-221)', () => {

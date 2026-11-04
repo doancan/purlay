@@ -8,8 +8,11 @@ import { join } from 'node:path';
 import { CLONE_HOOK_MS, createDatabase, DROP_HOOK_MS, sql } from '@purlay/db';
 import { bunRedisClient, connectRedis } from '../platform/redis';
 import { createLogger } from '../platform/logging';
+import { redisNames } from '../platform/redis-names';
 import { redisUrlForTests } from '../testing/redis';
-import { MODULE_SET_KEY, NODE_TTL_MS } from './module-set';
+import { NODE_TTL_MS } from './module-set';
+
+const names = redisNames();
 
 const source = process.env['DATABASE_URL'];
 if (source === undefined || source === '') {
@@ -95,13 +98,13 @@ const nodes: Node[] = [];
 
 beforeAll(async () => {
   await sql`create database ${sql.id(NAME)}`.execute(admin);
-  await redis.send('DEL', [MODULE_SET_KEY]);
+  await redis.send('DEL', [names.moduleSet]);
 }, CLONE_HOOK_MS);
 
 afterAll(async () => {
   for (const node of nodes) node.process.kill();
   await Promise.all(nodes.map(async (node) => await node.process.exited));
-  await redis.send('DEL', [MODULE_SET_KEY]).catch(() => undefined);
+  await redis.send('DEL', [names.moduleSet]).catch(() => undefined);
   redis.close();
   await sql`drop database if exists ${sql.id(NAME)} with (force)`.execute(admin);
   await admin.destroy();

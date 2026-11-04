@@ -3,6 +3,7 @@
  */
 import { connectRedis, bunRedisClient, type RedisLink } from '../platform/redis';
 import { createLogger } from '../platform/logging';
+import { redisNames } from '../platform/redis-names';
 
 /** A link that answers from what a test gives it. Scripts are answered by `onScript`, commands by `onSend`. */
 export interface FakeLink extends RedisLink {
@@ -21,11 +22,12 @@ export interface FakeLink extends RedisLink {
   readonly resubscribe: () => void;
 }
 
-export const aFakeLink = (): FakeLink => {
+export const aFakeLink = (namespace?: string): FakeLink => {
   const listeners = new Map<string, ((message: string) => void)[]>();
   const resubscribed: (() => void)[] = [];
   const state = { connected: true, subscribed: true };
   const link: FakeLink = {
+    names: redisNames(namespace),
     scripts: [],
     sent: [],
     state,
@@ -86,10 +88,12 @@ export const redisUrlForTests = (): string => {
 export const aRealLink = async (
   url: string = redisUrlForTests(),
   keepaliveMs?: number,
+  namespace?: string,
 ): Promise<RedisLink> => {
   const link = connectRedis({
     create: () => bunRedisClient(url),
     log: createLogger({ level: 'silent' }),
+    namespace,
     ...(keepaliveMs === undefined ? {} : { keepaliveMs }),
   });
   const started = performance.now();

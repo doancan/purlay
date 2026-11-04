@@ -199,11 +199,6 @@ end
 return answers
 `;
 
-export const TYPING_PREFIX = 'purlay:typing:';
-export const ONLINE_PREFIX = 'purlay:online:';
-export const LAPSE_INDEX = 'purlay:online-lapse';
-/** When each person's quiet time comes, scored by Redis's clock (D-257). */
-export const IDLE_INDEX = 'purlay:online-idle';
 /** How many lapsed people, and how many idle, one sweep tells of. */
 const SWEEP_BATCH = 100;
 
@@ -217,7 +212,7 @@ export const redisPresenceRegistry = (
     try {
       const answer = await link.script(
         TYPING_SCRIPT,
-        [`${TYPING_PREFIX}${channelId}:${userId}`],
+        [`${link.names.typingPrefix}${channelId}:${userId}`],
         [String(ttlMs)],
       );
       if (answer === 0) return false;
@@ -234,9 +229,11 @@ export const redisPresenceRegistry = (
   stopTyping: (channelId, userId): void => {
     local.stopTyping(channelId, userId);
     // Not waited for: the send has been answered, and the window ends by itself within its length.
-    link.send('DEL', [`${TYPING_PREFIX}${channelId}:${userId}`]).catch((error: unknown) => {
-      log.debug('a typing window could not be ended early', { err: error });
-    });
+    link
+      .send('DEL', [`${link.names.typingPrefix}${channelId}:${userId}`])
+      .catch((error: unknown) => {
+        log.debug('a typing window could not be ended early', { err: error });
+      });
   },
 });
 
@@ -259,7 +256,7 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
     asVersion(
       await link.script(
         JOIN_SCRIPT,
-        [`${ONLINE_PREFIX}${userId}`, LAPSE_INDEX, IDLE_INDEX],
+        [`${link.names.onlinePrefix}${userId}`, link.names.lapseIndex, link.names.idleIndex],
         [nodeId, String(PRESENCE_NODE_TTL_MS), userId, String(awayAfterMs)],
       ),
     ),
@@ -267,7 +264,7 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
     asVersion(
       await link.script(
         LEAVE_SCRIPT,
-        [`${ONLINE_PREFIX}${userId}`, LAPSE_INDEX, IDLE_INDEX],
+        [`${link.names.onlinePrefix}${userId}`, link.names.lapseIndex, link.names.idleIndex],
         [nodeId, userId],
       ),
     ),
@@ -275,12 +272,12 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
     asVersion(
       await link.script(
         ACTIVE_SCRIPT,
-        [`${ONLINE_PREFIX}${userId}`, IDLE_INDEX],
+        [`${link.names.onlinePrefix}${userId}`, link.names.idleIndex],
         [userId, String(awayAfterMs)],
       ),
     ),
   retell: async (userId): Promise<PresenceChange | null> => {
-    const answer = await link.script(RETELL_SCRIPT, [`${ONLINE_PREFIX}${userId}`], []);
+    const answer = await link.script(RETELL_SCRIPT, [`${link.names.onlinePrefix}${userId}`], []);
     if (!Array.isArray(answer) || answer.length !== 2) {
       throw new Error('the presence script answered something else');
     }
@@ -293,7 +290,7 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
         async (userId) =>
           await link.script(
             RELEASE_SCRIPT,
-            [`${ONLINE_PREFIX}${userId}`, LAPSE_INDEX, IDLE_INDEX],
+            [`${link.names.onlinePrefix}${userId}`, link.names.lapseIndex, link.names.idleIndex],
             [nodeId, userId],
           ),
       ),
@@ -302,8 +299,8 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
   sweep: async (): Promise<readonly PresenceChange[]> => {
     const answer = await link.script(
       SWEEP_SCRIPT,
-      [LAPSE_INDEX, IDLE_INDEX],
-      [ONLINE_PREFIX, String(SWEEP_BATCH)],
+      [link.names.lapseIndex, link.names.idleIndex],
+      [link.names.onlinePrefix, String(SWEEP_BATCH)],
     );
     if (!Array.isArray(answer) || answer.length % 3 !== 0) {
       throw new Error('the presence script answered something else');
@@ -323,7 +320,7 @@ export const redisPresenceDirectory = (link: RedisLink, nodeId: string): Presenc
     if (userIds.length === 0) return [];
     const answers = await link.script(
       AMONG_SCRIPT,
-      userIds.map((userId) => `${ONLINE_PREFIX}${userId}`),
+      userIds.map((userId) => `${link.names.onlinePrefix}${userId}`),
       [],
     );
     if (!Array.isArray(answers) || answers.length !== 2 * userIds.length) {

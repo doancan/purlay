@@ -9,19 +9,16 @@ import { AWAY_AFTER_MS, type ServerFrame } from '@purlay/types';
 import { channelTopic, type Topic } from '../platform/events';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
+import { redisNames } from '../platform/redis-names';
 import { bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
 import { aDroppableProxy, aRealLink, redisUrlForTests, refusedWith } from '../testing/redis';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter } from './rate-limiter';
 import { redisBackplane } from './redis-bus';
 import { redisRateLimiter } from './redis-limiter';
-import {
-  IDLE_INDEX,
-  LAPSE_INDEX,
-  ONLINE_PREFIX,
-  redisPresenceDirectory,
-  redisPresenceRegistry,
-} from './redis-presence';
+import { redisPresenceDirectory, redisPresenceRegistry } from './redis-presence';
+
+const names = redisNames();
 
 const silent = createLogger({ level: 'silent' });
 const links: RedisLink[] = [];
@@ -142,7 +139,7 @@ describe('integration: who is online across nodes', () => {
     const user = unique('user');
     // What a node that died left behind: a claim whose time has passed.
     await link.send('HSET', [
-      `${ONLINE_PREFIX}${user}`,
+      `${names.onlinePrefix}${user}`,
       'n:node-dead',
       String(Date.now() - 1_000),
       'v',
@@ -151,14 +148,18 @@ describe('integration: who is online across nodes', () => {
     expect(await live.among([user])).toEqual([]);
     // Nobody live held them, so the node that comes now is the one that makes them online.
     expect(await live.join(user, AWAY_AFTER_MS)).not.toBeNull();
-    expect(await link.send('HEXISTS', [`${ONLINE_PREFIX}${user}`, 'n:node-dead'])).toBe(0);
+    expect(await link.send('HEXISTS', [`${names.onlinePrefix}${user}`, 'n:node-dead'])).toBe(0);
   });
 
   test('a person a dead node held and a live node holds is not told offline when the live node leaves late', async () => {
     const link = await node();
     const live = redisPresenceDirectory(link, 'node-live');
     const user = unique('user');
-    await link.send('HSET', [`${ONLINE_PREFIX}${user}`, 'n:node-dead', String(Date.now() - 1_000)]);
+    await link.send('HSET', [
+      `${names.onlinePrefix}${user}`,
+      'n:node-dead',
+      String(Date.now() - 1_000),
+    ]);
     await live.join(user, AWAY_AFTER_MS);
     expect(await live.leave(user)).not.toBeNull();
   });
@@ -185,7 +186,7 @@ describe('integration: who is online across nodes', () => {
     const user = unique('user');
     await a.join(user, AWAY_AFTER_MS);
     expect(await a.join(user, AWAY_AFTER_MS)).toBeNull();
-    const ttl = await link.send('PTTL', [`${ONLINE_PREFIX}${user}`]);
+    const ttl = await link.send('PTTL', [`${names.onlinePrefix}${user}`]);
     expect(typeof ttl === 'number' && ttl > 25_000).toBe(true);
   });
 });
@@ -211,8 +212,12 @@ describe('integration: people nobody told of (D-201)', () => {
     const joined = (await dead.join(user, AWAY_AFTER_MS)) ?? 0;
     // Not due yet: the claim is alive.
     expect(await sweptOf(live, [user])).toEqual([]);
-    await link.send('HSET', [`${ONLINE_PREFIX}${user}`, 'n:node-dead', String(Date.now() - 1_000)]);
-    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), user]);
+    await link.send('HSET', [
+      `${names.onlinePrefix}${user}`,
+      'n:node-dead',
+      String(Date.now() - 1_000),
+    ]);
+    await link.send('ZADD', [names.lapseIndex, String(Date.now() - 1_000), user]);
     const gone = await sweptOf(live, [user]);
     expect(gone).toHaveLength(1);
     expect(gone[0]?.online).toBe(false);
@@ -230,7 +235,7 @@ describe('integration: people nobody told of (D-201)', () => {
     await a.join(user, AWAY_AFTER_MS);
     await a.join(left, AWAY_AFTER_MS);
     expect(await a.leave(left)).not.toBeNull();
-    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), user]);
+    await link.send('ZADD', [names.lapseIndex, String(Date.now() - 1_000), user]);
     // The index says lapsed, but the claim is live: the sweep only moves the entry on.
     expect(await sweptOf(sweeper, [user, left])).toEqual([]);
     expect(await sweeper.among([user])).toHaveLength(1);
@@ -266,9 +271,9 @@ describe('integration: who is idle across nodes (D-257)', () => {
     return found;
   };
   const fields = async (link: RedisLink, user: string): Promise<unknown> =>
-    await link.send('HMGET', [`${ONLINE_PREFIX}${user}`, 'a', 'i']);
+    await link.send('HMGET', [`${names.onlinePrefix}${user}`, 'a', 'i']);
   const idleScore = async (link: RedisLink, user: string): Promise<unknown> =>
-    await link.send('ZSCORE', [IDLE_INDEX, user]);
+    await link.send('ZSCORE', [names.idleIndex, user]);
 
   test('a join of somebody nobody held starts them active; a join while held changes neither the word nor the idleness', async () => {
     const link = await node();
@@ -301,7 +306,7 @@ describe('integration: who is idle across nodes (D-257)', () => {
 
     const nobody = unique('user');
     expect(await a.active(nobody, 7_000)).toBeNull();
-    expect(await link.send('EXISTS', [`${ONLINE_PREFIX}${nobody}`])).toBe(0);
+    expect(await link.send('EXISTS', [`${names.onlinePrefix}${nobody}`])).toBe(0);
     expect(await idleScore(link, nobody)).toBeNull();
   });
 
@@ -367,8 +372,12 @@ describe('integration: who is idle across nodes (D-257)', () => {
     expect(await b.leave(left)).not.toBeNull();
     expect(await idleScore(link, left)).toBeNull();
 
-    await link.send('HSET', [`${ONLINE_PREFIX}${lapsed}`, 'n:node-a', String(Date.now() - 1_000)]);
-    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), lapsed]);
+    await link.send('HSET', [
+      `${names.onlinePrefix}${lapsed}`,
+      'n:node-a',
+      String(Date.now() - 1_000),
+    ]);
+    await link.send('ZADD', [names.lapseIndex, String(Date.now() - 1_000), lapsed]);
     expect(await sweptOf(b, [lapsed])).toMatchObject([{ online: false, away: false }]);
     expect(await idleScore(link, lapsed)).toBeNull();
 
@@ -382,7 +391,11 @@ describe('integration: who is idle across nodes (D-257)', () => {
     const user = unique('user');
     await a.join(user, 20);
     // What a node that died left behind, the lapse not yet swept.
-    await link.send('HSET', [`${ONLINE_PREFIX}${user}`, 'n:node-a', String(Date.now() - 1_000)]);
+    await link.send('HSET', [
+      `${names.onlinePrefix}${user}`,
+      'n:node-a',
+      String(Date.now() - 1_000),
+    ]);
     await Bun.sleep(30);
     const told = await sweptOf(a, [user]);
     expect(told.filter((change) => change.away)).toEqual([]);

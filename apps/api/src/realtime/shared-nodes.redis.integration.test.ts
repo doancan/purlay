@@ -23,6 +23,7 @@ import { Value } from '@sinclair/typebox/value';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
+import { redisNames } from '../platform/redis-names';
 import type { RedisLink } from '../platform/redis';
 import { connectRedis, bunRedisClient } from '../platform/redis';
 import { testConfig, testDependencies } from '../testing/doubles';
@@ -36,8 +37,10 @@ import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 import type { Timers } from './hub';
 import { onlinePresence, type OnlinePresence } from './online';
-import { ONLINE_PREFIX, redisPresenceDirectory } from './redis-presence';
+import { redisPresenceDirectory } from './redis-presence';
 import { sharedRealtime } from './shared';
+
+const names = redisNames();
 
 const origin = 'https://purlay.test';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
@@ -428,7 +431,7 @@ describe('integration: who is away across nodes', () => {
     await speak(living, userId, AWAY_MS);
     dying.die();
     // What its claim becomes once it has not been renewed for its lifetime.
-    await a.link.send('HSET', [`${ONLINE_PREFIX}${userId}`, `n:${dying.id}`, '1']);
+    await a.link.send('HSET', [`${names.onlinePrefix}${userId}`, `n:${dying.id}`, '1']);
     await speak(living, userId, 3 * AWAY_MS);
     expect(states(userId)).toEqual([[true, false]]);
     expect(await living.online.onlineAmong([userId])).toMatchObject([

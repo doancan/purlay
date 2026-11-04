@@ -1,8 +1,8 @@
 /**
  * The event bus several nodes share (D-201, D-7): the `Backplane` a second process can join, over Redis.
  *
- * **One channel for the whole cluster, filtered here.** A node subscribes once, to `purlay:bus`, and every
- * frame published anywhere arrives on it and is fanned out to the sockets this node holds for its topic. The
+ * **One channel for the whole cluster, filtered here.** A node subscribes once, to its namespace's `bus`
+ * channel (`purlay:bus` unless `REDIS_KEY_PREFIX` says another), and every frame published anywhere arrives on it and is fanned out to the sockets this node holds for its topic. The
  * alternative, a Redis channel per topic, needs a `SUBSCRIBE` to be acknowledged before the hub may replay
  * from the database (D-82's order: listen, then read), and the interface's `subscribe` is synchronous and
  * answers at once — a frame published between the two would be lost for good. With one standing subscription
@@ -29,8 +29,6 @@ import type { Deliver, Topic } from '../platform/events';
 import type { Logger } from '../platform/logging';
 import type { RedisLink } from '../platform/redis';
 import { subscriptionsOf, type Backplane, type InspectableEventBus } from './bus';
-
-export const BUS_CHANNEL = 'purlay:bus';
 
 interface Envelope {
   readonly topic: Topic;
@@ -79,7 +77,7 @@ export const redisBackplane = (link: RedisLink, log: Logger): Backplane => {
     for (const node of nodes) node.fanOut(topic, frame);
   };
 
-  link.subscribe(BUS_CHANNEL, (message) => {
+  link.subscribe(link.names.bus, (message) => {
     const envelope = envelopeOf(message);
     if (envelope === undefined) {
       // Never the message: it is somebody's.
@@ -117,7 +115,7 @@ export const redisBackplane = (link: RedisLink, log: Logger): Backplane => {
           published += 1;
           try {
             await link.send('PUBLISH', [
-              BUS_CHANNEL,
+              link.names.bus,
               JSON.stringify({ topic, frame, origin, seq: published }),
             ]);
           } catch (error) {
