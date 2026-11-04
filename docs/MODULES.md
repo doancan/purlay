@@ -463,11 +463,11 @@ integration tests (a seeded row, a file list or a snapshot for the new table), p
 What grows by itself: the `modules:smoke` cells, the lifecycle matrix and the migration cells.
 
 **What still goes unnoticed (silent gaps).** `db:migrate` validating `requires` (#985), the cross-owner key list (#986),
-the typed lifecycle decision per table (#990), the core-enum guard (#994) and the member-of-two-workspaces list check
-(#988) are merged. Still silent today: a wrong-but-compiling `deleted` or `window` lifecycle decision with no row-level
-proof; a forgotten `workspacePurge` table; a same-member list check that passes vacuously when the tenant seeds nothing
-for the module; the `notification_type` allowance being keyed by type, not by set; and a query column that is not a
-foreign key and has no index (only foreign keys are held). Sibling changes are closing the first four.
+the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
+(#988), its non-vacuous form (#1010), the purge coverage (#1009), the set-keyed enum allowance (#1007) and the row-level
+lifecycle proof for `deleted` and `window` decisions (#1011) are merged. Still silent today: an `anonymised` lifecycle
+decision (only 8 of 28 are probed) and the sweeps, which have no control row; and a query column that is not a foreign
+key and has no index (only foreign keys are held).
 
 **What a new module's check needs.** `scripts/check-docs.test.ts` works from a copy of the tracked files, so `git add`
 the module's files first, or it fails with `SCHEMA.md names a migration that is not a file`. The database named in
