@@ -1,0 +1,860 @@
+/**
+ * `TABLE_LIFECYCLE` says what becomes of each table's rows, and nothing else checks that the code does it
+ * (D-27, D-139, D-250): a table can be decided `deleted` with no deletion written, or `window` with no purge
+ * reaching it, and compile and pass. This runs the decisions. For each table decided `deleted` it seeds the
+ * cheapest row that names a person, runs the real `eraseAccount` with chat's hooks, and asks that the row is gone;
+ * for each decided `window` or `swept` it seeds a row past its time, runs the real purge or sweep with a clock
+ * after it, and asks the same. A decision that cannot be seeded cheaply is in `UNSEEDED_*`, with why.
+ *
+ * What is held is what is decided: a table decided `deleted`, `window` or `swept` that is in neither the probes nor the
+ * allow-list fails, and so does a name in the allow-list that has since been probed or decided otherwise.
+ * `anonymised` is held where a row can be seeded cheaply (`KEPT_PROBES`): the erasure leaves it, naming the
+ * tombstone. Those are not complete, and nothing demands they are: a deletion that goes too far is what they catch.
+ */
+import { afterAll, describe, expect, test } from 'bun:test';
+import {
+  closeIntegrationDatabase,
+  purgeDeadSessions,
+  sql,
+  TABLE_LIFECYCLE,
+  type TableLifecycle,
+  withRollback,
+  type Transaction,
+} from '@purlay/db';
+import { messageId } from '@purlay/types';
+import { chatUserErased } from './features/chat/channels/user-hooks';
+import { mailMissedMessages } from './features/chat/notifications/missed-mail';
+import { sendMessage } from './features/chat/messages/messages';
+import { purgeRetention } from './features/chat/messages/retention-purge';
+import { deliverScheduled } from './features/chat/scheduled/delivery';
+import { sweepGitHubDeliveries, sweepLinkPreviews } from './features/chat/sweeps';
+import { sweepObjectDeletions } from './modules/attachments/deletions';
+import { storeUpload } from './modules/attachments/uploads';
+import { recordAudit } from './modules/audit/audit';
+import { addressCounterKey } from './modules/auth/magic-link';
+import { sweepEmailSignIns } from './modules/jobs/jobs';
+import { eraseAccount } from './modules/users/erasure';
+import { issuePassport } from './modules/workspaces/invitation-passport';
+import { createInvitation } from './modules/workspaces/invitations';
+import { DAY_MS, fixedClock } from './platform/clock';
+import { NO_LOG, type EventBus } from './platform/events';
+import { requireWorkspaceMembership } from './platform/tenancy';
+import { tokenDigest } from './platform/tokens';
+import { atomicallyOn } from './platform/transactions';
+import { aRoom, type Room } from './testing/rooms';
+import { linkFile } from './testing/sent-files';
+import { aSession } from './testing/signed-in';
+import { aMemoryStore } from './testing/storage';
+
+afterAll(async () => {
+  await closeIntegrationDatabase();
+});
+
+const NOW = new Date('2026-11-04T03:00:00.000Z');
+const clock = fixedClock(NOW);
+/** Past every window and every expiry a sweep keeps: the longest is the GitHub deliveries' thirty days. */
+const LONG_AGO = new Date(NOW.getTime() - 90 * DAY_MS);
+const WINDOW_DAYS = 30;
+
+type Table = string;
+
+/** Rows that have the value in the column. */
+const countWhere = async (
+  db: Transaction,
+  table: Table,
+  column: string,
+  value: string,
+): Promise<number> =>
+  Number(
+    (
+      await sql<{ count: string }>`
+        select count(*)::text as count from ${sql.table(table)} where ${sql.id(column)} = ${value}`.execute(
+        db,
+      )
+    ).rows[0]?.count,
+  );
+
+const countLike = async (
+  db: Transaction,
+  table: Table,
+  column: string,
+  prefix: string,
+): Promise<number> =>
+  Number(
+    (
+      await sql<{ count: string }>`
+        select count(*)::text as count from ${sql.table(table)} where ${sql.id(column)} like ${`${prefix}%`}`.execute(
+        db,
+      )
+    ).rows[0]?.count,
+  );
+
+let tick = 0;
+const anId = (at: Date = NOW): string => messageId(new Date(at.getTime() + (tick += 1)));
+
+const member = (room: Room, name: string): NonNullable<Room['members'][string]> => {
+  const found = room.members[name];
+  if (found === undefined) throw new Error(`no member ${name}`);
+  return found;
+};
+
+const upload = async (
+  db: Transaction,
+  world: World,
+  userId: string,
+  id: string = anId(),
+): Promise<string> => {
+  await storeUpload(
+    { atomically: atomicallyOn(db), storage: aMemoryStore(), log: NO_LOG },
+    await requireWorkspaceMembership(db, userId, world.workspaceId),
+    { id, name: 'plan.pdf', bytes: new Uint8Array(10).fill(7) },
+  );
+  return id;
+};
+
+/** A workspace of two people, bob who owns it and ada who is erased, and what the probes name. */
+interface World {
+  readonly workspaceId: string;
+  readonly channelId: string;
+  readonly adaId: string;
+  readonly bobId: string;
+  readonly adaUsername: string;
+  readonly sessionId: string;
+  /** Bob's message, which ada's saved messages, follows and notifications name. */
+  readonly bobsMessage: string;
+  /** What the rows kept under the address are named by: read before the erasure replaces the address. */
+  readonly counterKey: string;
+  readonly adaEmail: string;
+  readonly adaContext: Room['members'][string]['context'];
+}
+
+const aWorld = async (db: Transaction): Promise<World> => {
+  const room = await aRoom(db, ['bob', 'ada']);
+  const ada = member(room, 'ada');
+  const bob = member(room, 'bob');
+  const { sessionId } = await aSession(db, clock, ada.userId);
+  const { email } = await db
+    .selectFrom('users')
+    .select('email')
+    .where('id', '=', ada.userId)
+    .executeTakeFirstOrThrow();
+  const sent = await sendMessage(db, clock, bob.context, { id: anId(), content: 'hi' });
+  return {
+    workspaceId: room.workspaceId,
+    channelId: room.channelId,
+    adaId: ada.userId,
+    bobId: bob.userId,
+    adaUsername: ada.username,
+    sessionId,
+    bobsMessage: sent.message.id,
+    counterKey: await addressCounterKey(email),
+    adaEmail: email,
+    adaContext: ada.context,
+  };
+};
+
+/** The cheapest rows of one table that a test can name, and how to count them afterwards. */
+interface Probe {
+  readonly seed: (db: Transaction, world: World) => Promise<void>;
+  readonly rows: (db: Transaction, world: World) => Promise<number>;
+}
+
+const by = (
+  table: Table,
+  column: string,
+  value: (world: World) => string,
+  seed: Probe['seed'],
+): Probe => ({
+  seed,
+  rows: async (db, world) => await countWhere(db, table, column, value(world)),
+});
+
+const adas = (world: World): string => world.adaId;
+
+/** The names of a person's row in a table that keeps nobody else's: the column `user_id` of the world's person. */
+const ofAda = (table: Table, seed: Probe['seed']): Probe => by(table, 'user_id', adas, seed);
+
+const inWorkspace = (world: World): { workspace_id: string; channel_id: string } => ({
+  workspace_id: world.workspaceId,
+  channel_id: world.channelId,
+});
+
+/** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
+const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
+  accounts: ofAda('accounts', async (db, world) => {
+    await db
+      .insertInto('accounts')
+      .values({ account_id: 'ada-github', provider_id: 'github', user_id: world.adaId })
+      .execute();
+  }),
+  admin_email_verification: ofAda('admin_email_verification', async (db, world) => {
+    await db
+      .insertInto('admin_email_verification')
+      .values({
+        email: world.adaEmail,
+        issued_at: NOW,
+        token_digest: 'a'.repeat(64),
+        user_id: world.adaId,
+      })
+      .execute();
+  }),
+  invitation_passports: {
+    seed: async (db, world) => {
+      const owner = await db
+        .selectFrom('workspace_members')
+        .select('user_id')
+        .where('workspace_id', '=', world.workspaceId)
+        .where('role', '=', 'owner')
+        .executeTakeFirstOrThrow();
+      const { token } = await createInvitation(
+        db,
+        clock,
+        await requireWorkspaceMembership(db, owner.user_id, world.workspaceId),
+      );
+      await issuePassport(db, clock, { token, email: world.adaEmail });
+    },
+    rows: async (db, world) =>
+      await countWhere(
+        db,
+        'invitation_passports',
+        'address_digest',
+        await tokenDigest(world.adaEmail),
+      ),
+  },
+  native_authorizations: ofAda('native_authorizations', async (db, world) => {
+    await db
+      .insertInto('native_authorizations')
+      .values({
+        id: anId(),
+        user_id: world.adaId,
+        code_digest: 'b'.repeat(64),
+        challenge: 'c'.repeat(43),
+        created_at: NOW,
+        expires_at: new Date(NOW.getTime() + 120_000),
+      })
+      .execute();
+  }),
+  push_subscriptions: ofAda('push_subscriptions', async (db, world) => {
+    await db
+      .insertInto('push_subscriptions')
+      .values({
+        user_id: world.adaId,
+        session_id: world.sessionId,
+        endpoint: `https://push.example.test/${crypto.randomUUID()}`,
+        p256dh: 'p',
+        auth: 'a',
+        server_key: 'k',
+      })
+      .execute();
+  }),
+  rate_limits: {
+    seed: async (db, world) => {
+      await db
+        .insertInto('rate_limits')
+        .values({ key: world.counterKey, count: 1, last_request: String(NOW.getTime()) })
+        .execute();
+    },
+    rows: async (db, world) => await countLike(db, 'rate_limits', 'key', world.counterKey),
+  },
+  sessions: ofAda('sessions', async () => {
+    // The world's own session is the row: the erasure ends it with the rest.
+  }),
+  two_factors: ofAda('two_factors', async (db, world) => {
+    await db
+      .insertInto('two_factors')
+      .values({ user_id: world.adaId, secret: 's', backup_codes: '[]' })
+      .execute();
+  }),
+  // A password reset's row holds the person's id in `value`.
+  verifications: by('verifications', 'value', adas, async (db, world) => {
+    await db
+      .insertInto('verifications')
+      .values({
+        identifier: `reset-password:${crypto.randomUUID()}`,
+        value: world.adaId,
+        expires_at: new Date(NOW.getTime() + DAY_MS),
+      })
+      .execute();
+  }),
+  github_user_authorizations: ofAda('github_user_authorizations', async (db, world) => {
+    await db
+      .insertInto('github_user_authorizations')
+      .values({
+        id: anId(),
+        user_id: world.adaId,
+        github_user_id: '501',
+        github_login: 'ada-dev',
+        access_token_encrypted: 'sealed',
+        created_at: NOW,
+        updated_at: NOW,
+      })
+      .execute();
+  }),
+  notifications: ofAda('notifications', async (db, world) => {
+    await db
+      .insertInto('notifications')
+      .values({
+        user_id: world.adaId,
+        ...inWorkspace(world),
+        message_id: world.bobsMessage,
+        type: 'mention',
+      })
+      .execute();
+  }),
+  hidden_messages: ofAda('hidden_messages', async (db, world) => {
+    await db
+      .insertInto('hidden_messages')
+      .values({ user_id: world.adaId, ...inWorkspace(world), message_id: world.bobsMessage })
+      .execute();
+  }),
+  message_reminders: ofAda('message_reminders', async (db, world) => {
+    await db
+      .insertInto('message_reminders')
+      .values({
+        user_id: world.adaId,
+        ...inWorkspace(world),
+        message_id: world.bobsMessage,
+        remind_at: new Date(NOW.getTime() + DAY_MS),
+      })
+      .execute();
+  }),
+  scheduled_messages: ofAda('scheduled_messages', async (db, world) => {
+    await db
+      .insertInto('scheduled_messages')
+      .values({
+        id: anId(),
+        user_id: world.adaId,
+        ...inWorkspace(world),
+        content: 'later',
+        send_at: new Date(NOW.getTime() + DAY_MS),
+      })
+      .execute();
+  }),
+  // A file reserved by a scheduled message goes with the message, by the key that cascades from it.
+  scheduled_message_attachments: {
+    seed: async (db, world) => {
+      const scheduledId = anId();
+      await db
+        .insertInto('scheduled_messages')
+        .values({
+          id: scheduledId,
+          user_id: world.adaId,
+          ...inWorkspace(world),
+          content: 'with a file',
+          send_at: new Date(NOW.getTime() + DAY_MS),
+        })
+        .execute();
+      await db
+        .insertInto('scheduled_message_attachments')
+        .values({
+          scheduled_message_id: scheduledId,
+          attachment_id: await upload(db, world, world.adaId),
+          workspace_id: world.workspaceId,
+        })
+        .execute();
+    },
+    rows: async (db, world) =>
+      await countWhere(db, 'scheduled_message_attachments', 'workspace_id', world.workspaceId),
+  },
+  missed_mail_letters: ofAda('missed_mail_letters', async (db, world) => {
+    await db
+      .insertInto('missed_mail_letters')
+      .values({ user_id: world.adaId, sent_at: NOW, stop_digest: crypto.randomUUID() })
+      .execute();
+  }),
+  saved_messages: ofAda('saved_messages', async (db, world) => {
+    await db
+      .insertInto('saved_messages')
+      .values({
+        id: anId(),
+        user_id: world.adaId,
+        ...inWorkspace(world),
+        message_id: world.bobsMessage,
+      })
+      .execute();
+  }),
+  saved_searches: ofAda('saved_searches', async (db, world) => {
+    await db
+      .insertInto('saved_searches')
+      .values({
+        id: anId(),
+        name: 'mine',
+        query: JSON.stringify({ q: 'x' }),
+        user_id: world.adaId,
+        workspace_id: world.workspaceId,
+      })
+      .execute();
+  }),
+  thread_follows: ofAda('thread_follows', async (db, world) => {
+    await db
+      .insertInto('thread_follows')
+      .values({
+        user_id: world.adaId,
+        ...inWorkspace(world),
+        message_id: world.bobsMessage,
+        following: true,
+      })
+      .execute();
+  }),
+};
+
+/**
+ * Tables decided `deleted` that this does not seed, and why. **This list may only shrink**: a table is added to it
+ * only by a person who says why it cannot be seeded cheaply, and leaves it the day it is probed.
+ */
+const UNSEEDED_ERASURE: Readonly<Record<Table, string>> = {};
+
+/**
+ * Tables decided `anonymised` whose row the erasure must leave. A deletion that reaches further than
+ * the decision is what these catch; the table is complete only for what is cheap to seed.
+ */
+const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
+  users: by('users', 'id', adas, async () => {
+    // Ada is the row.
+  }),
+  workspace_members: ofAda('workspace_members', async () => {
+    // The room made it.
+  }),
+  channel_members: ofAda('channel_members', async () => {
+    // The room made it.
+  }),
+  messages: by('messages', 'sender_id', adas, async (db, world) => {
+    await sendMessage(db, clock, world.adaContext, { id: anId(), content: 'mine' });
+  }),
+  attachments: by('attachments', 'uploader_id', adas, async (db, world) => {
+    await upload(db, world, world.adaId);
+  }),
+  audit_log: by('audit_log', 'actor_user_id', adas, async (db, world) => {
+    await recordAudit(db, clock, {
+      workspaceId: world.workspaceId,
+      actorUserId: world.adaId,
+      action: 'workspace.renamed',
+      targetType: 'workspace',
+      targetId: world.workspaceId,
+    });
+  }),
+  channel_bookmarks: by('channel_bookmarks', 'added_by', adas, async (db, world) => {
+    await db
+      .insertInto('channel_bookmarks')
+      .values({
+        id: anId(),
+        ...inWorkspace(world),
+        added_by: world.adaId,
+        title: 'docs',
+        url: 'https://example.test/docs',
+      })
+      .execute();
+  }),
+  issues: by('issues', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('issues')
+      .values({
+        id: anId(),
+        workspace_id: world.workspaceId,
+        title: 'an issue',
+        created_by: world.adaId,
+      })
+      .execute();
+  }),
+};
+
+/** The jobs that delete by time, as `bun run job <name>` calls them, over the test's transaction and the clock. */
+const SWEEPS = {
+  'purge:retention': async (db: Transaction) => {
+    await purgeRetention({ database: db, clock, log: NO_LOG, storage: aMemoryStore() });
+  },
+  'sweep:email-sign-ins': async (db: Transaction) => {
+    await sweepEmailSignIns({ database: db, clock });
+  },
+  'sweep:sessions': async (db: Transaction) => {
+    await purgeDeadSessions(db, NOW, 1_000);
+  },
+  'sweep:link-previews': async (db: Transaction) => {
+    await sweepLinkPreviews({ database: db, clock });
+  },
+  'sweep:github-deliveries': async (db: Transaction) => {
+    await sweepGitHubDeliveries({ database: db, clock });
+  },
+  'sweep:deletions': async (db: Transaction) => {
+    await sweepObjectDeletions({
+      database: db,
+      atomically: atomicallyOn(db),
+      log: NO_LOG,
+      storage: aMemoryStore(),
+    });
+  },
+  'mail:missed': async (db: Transaction) => {
+    await mailMissedMessages({
+      database: db,
+      clock,
+      log: NO_LOG,
+      send: undefined,
+      appUrl: 'https://purlay.example.test',
+    });
+  },
+  // The scheduler's delivery loop ends by deleting the scheduled messages that are done and a month old.
+  'deliver:scheduled': async (db: Transaction) => {
+    const bus: EventBus = {
+      publish: () => Promise.resolve(),
+      subscribe: () => false,
+      unsubscribe: () => undefined,
+      forget: () => undefined,
+    };
+    await deliverScheduled({ database: db, clock, bus, log: NO_LOG });
+  },
+} as const;
+
+interface RetentionProbe extends Probe {
+  readonly job: keyof typeof SWEEPS;
+}
+
+/** What marks the rows a retention probe seeds, so each is counted by what it holds and not by an id it never learns. */
+const MARK = crypto.randomUUID().replaceAll('-', '').repeat(2);
+const OLD_FILE = messageId(LONG_AGO);
+const DONE_SCHEDULED = messageId(new Date(LONG_AGO.getTime() + 1));
+
+/** A row past its time, found by the column that holds `MARK`. */
+const pastDue = (
+  job: RetentionProbe['job'],
+  table: Table,
+  column: string,
+  seed: RetentionProbe['seed'],
+  held: string = MARK,
+): RetentionProbe => ({ job, seed, rows: async (db) => await countWhere(db, table, column, held) });
+
+/** Tables decided `window` or `swept`: a row past its time, and none left once the job that deletes it has run. */
+const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
+  messages: pastDue('purge:retention', 'messages', 'content', async (db, world) => {
+    await db
+      .updateTable('workspaces')
+      .set({ retention_days: WINDOW_DAYS })
+      .where('id', '=', world.workspaceId)
+      .execute();
+    await sendMessage(db, fixedClock(LONG_AGO), world.adaContext, {
+      id: anId(LONG_AGO),
+      content: MARK,
+    });
+  }),
+  // A file goes with the message it was sent with, past the same window.
+  attachments: {
+    job: 'purge:retention',
+    seed: async (db, world) => {
+      const sent = await sendMessage(db, fixedClock(LONG_AGO), world.adaContext, {
+        id: anId(LONG_AGO),
+        content: 'with a file',
+      });
+      await upload(db, world, world.adaId, OLD_FILE);
+      await linkFile(db, {
+        id: OLD_FILE,
+        workspaceId: world.workspaceId,
+        messageId: sent.message.id,
+        channelId: world.channelId,
+      });
+    },
+    rows: async (db) => await countWhere(db, 'attachments', 'id', OLD_FILE),
+  },
+  admin_email_verification: pastDue(
+    'sweep:email-sign-ins',
+    'admin_email_verification',
+    'token_digest',
+    async (db, world) => {
+      await db
+        .insertInto('admin_email_verification')
+        .values({
+          email: world.adaEmail,
+          issued_at: LONG_AGO,
+          token_digest: MARK,
+          user_id: world.adaId,
+        })
+        .execute();
+    },
+  ),
+  invitation_passports: pastDue(
+    'sweep:email-sign-ins',
+    'invitation_passports',
+    'address_digest',
+    async (db, world) => {
+      const { invitation } = await createInvitation(
+        db,
+        clock,
+        await requireWorkspaceMembership(db, world.bobId, world.workspaceId),
+      );
+      await db
+        .insertInto('invitation_passports')
+        .values({
+          id: anId(),
+          invitation_id: invitation.id,
+          kind: 'email',
+          address_digest: MARK,
+          expires_at: LONG_AGO,
+        })
+        .execute();
+    },
+  ),
+  native_authorizations: pastDue(
+    'sweep:email-sign-ins',
+    'native_authorizations',
+    'code_digest',
+    async (db, world) => {
+      await db
+        .insertInto('native_authorizations')
+        .values({
+          id: anId(),
+          user_id: world.adaId,
+          code_digest: MARK,
+          challenge: 'c'.repeat(43),
+          created_at: LONG_AGO,
+          expires_at: LONG_AGO,
+        })
+        .execute();
+    },
+  ),
+  rate_limits: pastDue('sweep:email-sign-ins', 'rate_limits', 'key', async (db) => {
+    await db
+      .insertInto('rate_limits')
+      .values({ key: MARK, count: 1, last_request: String(LONG_AGO.getTime()) })
+      .execute();
+  }),
+  verifications: pastDue(
+    'sweep:email-sign-ins',
+    'verifications',
+    'identifier',
+    async (db, world) => {
+      await db
+        .insertInto('verifications')
+        .values({ identifier: MARK, value: world.adaId, expires_at: LONG_AGO })
+        .execute();
+    },
+  ),
+  sessions: pastDue('sweep:sessions', 'sessions', 'token_hash', async (db, world) => {
+    await db
+      .insertInto('sessions')
+      .values({ user_id: world.adaId, token_hash: MARK, expires_at: LONG_AGO })
+      .execute();
+  }),
+  link_previews: pastDue('sweep:link-previews', 'link_previews', 'url_hash', async (db) => {
+    await db
+      .insertInto('link_previews')
+      .values({
+        url: `https://example.test/${MARK}`,
+        url_hash: MARK,
+        payload: JSON.stringify({}),
+        expires_at: LONG_AGO,
+      })
+      .execute();
+  }),
+  github_app_deliveries: pastDue(
+    'sweep:github-deliveries',
+    'github_app_deliveries',
+    'delivery_id',
+    async (db) => {
+      await db
+        .insertInto('github_app_deliveries')
+        .values({ delivery_id: MARK, body_digest: 'ab'.repeat(32), received_at: LONG_AGO })
+        .execute();
+    },
+  ),
+  github_app_handshakes: pastDue(
+    'sweep:github-deliveries',
+    'github_app_handshakes',
+    'state_digest',
+    async (db, world) => {
+      await db
+        .insertInto('github_app_handshakes')
+        .values({
+          state_digest: MARK,
+          user_id: world.adaId,
+          workspace_id: world.workspaceId,
+          purpose: 'install',
+          expires_at: LONG_AGO,
+        })
+        .execute();
+    },
+  ),
+  github_deliveries: pastDue(
+    'sweep:github-deliveries',
+    'github_deliveries',
+    'delivery_id',
+    async (db, world) => {
+      const feedId = anId();
+      await db
+        .insertInto('github_repo_feeds')
+        .values({
+          id: feedId,
+          ...inWorkspace(world),
+          repository_full_name: 'acme/api',
+          secret_encrypted: 'sealed',
+          events: ['push'],
+        })
+        .execute();
+      await db
+        .insertInto('github_deliveries')
+        .values({ feed_id: feedId, delivery_id: MARK, received_at: LONG_AGO })
+        .execute();
+    },
+  ),
+  github_operations: pastDue(
+    'sweep:github-deliveries',
+    'github_operations',
+    'marker',
+    async (db, world) => {
+      await db
+        .insertInto('github_operations')
+        .values({
+          id: anId(),
+          workspace_id: world.workspaceId,
+          actor_id: world.adaId,
+          client_request_id: crypto.randomUUID(),
+          content_digest: 'ab'.repeat(32),
+          root_id: world.bobsMessage,
+          repository_id: '77',
+          repository_full_name: 'acme/api',
+          marker: MARK,
+          status: 'pending',
+          created_at: LONG_AGO,
+          updated_at: LONG_AGO,
+        })
+        .execute();
+    },
+  ),
+  object_deletions: pastDue(
+    'sweep:deletions',
+    'object_deletions',
+    'storage_key',
+    async (db) => {
+      await db
+        .insertInto('object_deletions')
+        .values({ storage_key: `w/${MARK}` })
+        .execute();
+    },
+    `w/${MARK}`,
+  ),
+  missed_mail_letters: pastDue(
+    'mail:missed',
+    'missed_mail_letters',
+    'stop_digest',
+    async (db, world) => {
+      await db
+        .insertInto('missed_mail_letters')
+        .values({ user_id: world.adaId, sent_at: LONG_AGO, stop_digest: MARK })
+        .execute();
+    },
+  ),
+  scheduled_messages: {
+    job: 'deliver:scheduled',
+    seed: async (db, world) => {
+      await db
+        .insertInto('scheduled_messages')
+        .values({
+          id: DONE_SCHEDULED,
+          user_id: world.adaId,
+          ...inWorkspace(world),
+          content: 'done',
+          send_at: LONG_AGO,
+          state: 'sent',
+          created_at: LONG_AGO,
+          updated_at: LONG_AGO,
+        })
+        .execute();
+    },
+    rows: async (db) => await countWhere(db, 'scheduled_messages', 'id', DONE_SCHEDULED),
+  },
+};
+
+/** Tables decided `window` or `swept` that this does not seed, and why. **This list may only shrink**, as the other. */
+const UNSEEDED_RETENTION: Readonly<Record<Table, string>> = {};
+
+describe('integration: what TABLE_LIFECYCLE decides is what the code does', () => {
+  const decided: [Table, TableLifecycle][] = Object.entries(TABLE_LIFECYCLE);
+  const tablesWhere = (matches: (lifecycle: TableLifecycle) => boolean): string[] =>
+    decided.filter(([, lifecycle]) => matches(lifecycle)).map(([table]) => table);
+  const erasedByDeletion = tablesWhere(({ erasure }) => erasure === 'deleted');
+  const keptByErasure = tablesWhere(({ erasure }) => erasure === 'anonymised');
+
+  test('every table decided `deleted` is probed or allow-listed, and the allow-list holds nothing else', () => {
+    const unheld = erasedByDeletion.filter(
+      (table) => !(table in ERASURE_PROBES) && !(table in UNSEEDED_ERASURE),
+    );
+    expect(unheld).toEqual([]);
+    const stale = [...Object.keys(ERASURE_PROBES), ...Object.keys(UNSEEDED_ERASURE)].filter(
+      (table) => !erasedByDeletion.includes(table),
+    );
+    expect(stale).toEqual([]);
+    expect(Object.keys(UNSEEDED_ERASURE).filter((table) => table in ERASURE_PROBES)).toEqual([]);
+    expect(Object.keys(KEPT_PROBES).filter((table) => !keptByErasure.includes(table))).toEqual([]);
+  });
+
+  test('the account’s erasure deletes the rows of each table decided `deleted`, and leaves each `anonymised` one it can seed', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const seeded: Record<Table, Probe> = { ...ERASURE_PROBES, ...KEPT_PROBES };
+      for (const probe of Object.values(seeded)) await probe.seed(db, world);
+      // Seeded for real: a probe that found nothing before the erasure holds nothing after it.
+      const before: Record<Table, number> = {};
+      for (const [table, probe] of Object.entries(seeded)) {
+        before[table] = await probe.rows(db, world);
+      }
+      expect(Object.entries(before).filter(([, rows]) => rows === 0)).toEqual([]);
+
+      await eraseAccount(
+        db,
+        clock,
+        { userId: world.adaId, sessionId: world.sessionId },
+        world.adaUsername,
+        chatUserErased(),
+      );
+
+      const left: Record<Table, number> = {};
+      for (const [table, probe] of Object.entries(seeded))
+        left[table] = await probe.rows(db, world);
+      const survivors = Object.keys(ERASURE_PROBES).filter((table) => left[table] !== 0);
+      expect(survivors).toEqual([]);
+      // Left, not left alone: the erasure writes its own line to the trail.
+      const removed = Object.keys(KEPT_PROBES).filter(
+        (table) => (left[table] ?? 0) < (before[table] ?? 0),
+      );
+      expect(removed).toEqual([]);
+    });
+  });
+
+  const sweptOrWindowed = tablesWhere(
+    ({ retention }) => retention === 'window' || retention === 'swept',
+  );
+
+  test('every table decided `window` or `swept` is probed or allow-listed, and the allow-list holds nothing else', () => {
+    const unheld = sweptOrWindowed.filter(
+      (table) => !(table in RETENTION_PROBES) && !(table in UNSEEDED_RETENTION),
+    );
+    expect(unheld).toEqual([]);
+    const stale = [...Object.keys(RETENTION_PROBES), ...Object.keys(UNSEEDED_RETENTION)].filter(
+      (table) => !sweptOrWindowed.includes(table),
+    );
+    expect(stale).toEqual([]);
+    expect(Object.keys(UNSEEDED_RETENTION).filter((table) => table in RETENTION_PROBES)).toEqual(
+      [],
+    );
+  });
+
+  test('the job each table names deletes its rows past their time', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      for (const probe of Object.values(RETENTION_PROBES)) await probe.seed(db, world);
+      const before = await Promise.all(
+        Object.entries(RETENTION_PROBES).map(
+          async ([table, probe]) => [table, await probe.rows(db, world)] as const,
+        ),
+      );
+      expect(before.filter(([, rows]) => rows === 0)).toEqual([]);
+
+      for (const job of new Set(Object.values(RETENTION_PROBES).map((probe) => probe.job))) {
+        await SWEEPS[job](db);
+      }
+
+      const survivors: string[] = [];
+      for (const [table, probe] of Object.entries(RETENTION_PROBES)) {
+        if ((await probe.rows(db, world)) !== 0) survivors.push(`${table} (${probe.job})`);
+      }
+      expect(survivors).toEqual([]);
+    });
+  });
+});
