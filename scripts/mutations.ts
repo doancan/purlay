@@ -14223,4 +14223,29 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/modules/audit/recorded-actions.test.ts'],
   },
+  {
+    id: 'cross-owner-keys-grow-unrecorded',
+    why: 'a foreign key across owners is added to the list and to the schema as if it were nothing, and the list that may only shrink grows with no decision recorded (D-250)',
+    file: 'packages/db/src/table-owners.ts',
+    find: "CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> messages'];",
+    replace:
+      "CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> messages', 'issues -> chat'];",
+    tests: ['packages/db/src/table-ownership.integration.test.ts'],
+  },
+  {
+    id: 'module-key-to-module-not-required',
+    why: 'a module’s table points at another module’s, and its manifest does not say it requires that module, so it starts without tables its own keys need (D-250)',
+    file: 'packages/db/src/table-owners.ts',
+    find: "  message_attachments: 'chat',\n",
+    replace: "  message_attachments: 'issues',\n",
+    tests: ['apps/api/src/module-foreign-keys.integration.test.ts'],
+  },
+  {
+    id: 'table-lifecycle-decision-forgotten',
+    why: 'a module adds an owned table and decides neither its erasure nor its retention, so the account erasure and the retention window silently pass it by (D-250)',
+    file: 'packages/db/src/table-lifecycle.ts',
+    find: "  issues: decided('anonymised', 'until-removed'),\n",
+    replace: '',
+    tests: ['packages/db/src/table-lifecycle.test.ts'],
+  },
 ];
