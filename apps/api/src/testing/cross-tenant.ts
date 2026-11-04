@@ -332,7 +332,12 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: CHANNEL,
   },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
-  'GET /api/channels/:channelId/changes': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'GET /api/channels/:channelId/changes': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    // Without `since` it answers the watermark and no rows, which no filter could leak.
+    query: 'since=2000-01-01T00%3A00%3A00.000Z',
+    visibility: CHANNEL,
+  },
   'GET /api/channels/:channelId/files': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/pins': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/incident': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
@@ -823,6 +828,32 @@ export const listEndpoints = (): readonly (readonly [string, CrossTenantCase])[]
     const path = key.startsWith('GET ') ? key.slice('GET '.length) : '';
     return path.includes('/:') && !path.split('/').at(-1)?.startsWith(':');
   });
+
+/**
+ * What a list answered holds: the rows of every array in its body, or `undefined` when the body holds
+ * none (a single resource, not a collection that could be empty). A list answers either the array
+ * itself or an object whose collections are its arrays (`{ data: [...], nextCursor }`).
+ */
+export const rowsIn = (body: unknown): number | undefined => {
+  if (Array.isArray(body)) return body.length;
+  if (typeof body !== 'object' || body === null) return undefined;
+  const collections = Object.values(body).filter((value): value is unknown[] =>
+    Array.isArray(value),
+  );
+  return collections.length === 0
+    ? undefined
+    : collections.reduce((rows, collection) => rows + collection.length, 0);
+};
+
+/**
+ * The lists the seed (`aTenant`) leaves legitimately empty, each with why. The one-member-two-workspaces
+ * case proves a list shows nothing of the other workspace only when it shows something of its own, so a
+ * list of a new module must have a row seeded for it; this may only shrink.
+ */
+export const EMPTY_FOR_THE_SEED: Readonly<Record<string, string>> = {
+  'GET /api/workspaces/:workspaceId/presence':
+    'who is online follows live connections, which the HTTP seed never opens (D-136)',
+};
 
 /**
  * The two reads D-34 was written about: they span channels, so they are where a

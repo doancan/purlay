@@ -14309,6 +14309,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/cross-tenant.integration.test.ts'],
   },
   {
+    id: 'a-seeded-list-is-empty',
+    why: 'a list of a new module has no row seeded for it, so it answers an empty list, nothing can leak, and the one-member-two-workspaces case passes proving nothing (#901)',
+    file: 'apps/api/src/ingress/http/cross-tenant.integration.test.ts',
+    find: "    ['PUT', `/api/messages/${root}/pin`, undefined],\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/cross-tenant.integration.test.ts'],
+  },
+  {
     id: 'erasure-keeps-github-authorizations',
     why: 'an erased person’s sealed GitHub App tokens and GitHub login outlive them, since erasure keeps the users row and the key’s cascade never fires (D-246)',
     file: 'apps/api/src/features/chat/channels/user-hooks.ts',
