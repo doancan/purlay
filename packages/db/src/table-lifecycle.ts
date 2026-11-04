@@ -100,14 +100,9 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   github_links: decided('anonymised', 'with-parent'),
   github_operations: decided('anonymised', 'swept'),
   github_repo_feeds: decided('anonymised', 'until-removed'),
-  // The sealed GitHub App tokens and the GitHub login of the person, left by the erasure: the row's key cascades from
-  // `users`, which an erasure never deletes (it anonymises the row).
-  github_user_authorizations: decided(
-    {
-      gap: 'the erasure does not delete the sealed tokens and the GitHub login; the person’s own revoke does',
-    },
-    'until-removed',
-  ),
+  // Deleted by the chat module's `userErased` hook. The token itself stays valid at GitHub until the person revokes the
+  // App there: nothing calls GitHub to revoke it.
+  github_user_authorizations: decided('deleted', 'until-removed'),
   incident_responders: decided('anonymised', 'with-parent'),
   incident_updates: decided('anonymised', 'with-parent'),
   incidents: decided('anonymised', { kept: 'for the life of the channel' }),

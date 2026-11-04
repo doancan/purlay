@@ -1,7 +1,7 @@
 /**
  * What chat forgets when an account is erased (D-139 §5, D-250): the messages they deleted for themselves, their
  * reminders and scheduled messages (whose reserved files go back to the orphan sweep), the searches and messages
- * they saved, the threads they followed, their inbox, and when they were last mailed about what they missed (D-240). Registered
+ * they saved, the threads they followed, their inbox, and when they were last mailed about what they missed (D-240), and the sealed tokens they gave the GitHub App (D-246). Registered
  * where the application is put together; the account code names none of these tables, and runs the hooks inside
  * the erasure's own transaction, at the place these deletes always ran.
  */
@@ -25,6 +25,12 @@ export const forgetWhatChatKeeps = async (
   await transaction.deleteFrom('notifications').where('user_id', '=', userId).execute();
   // And when they were last mailed about what they missed, with each letter's stop link (D-240).
   await transaction.deleteFrom('missed_mail_letters').where('user_id', '=', userId).execute();
+  // And the sealed tokens that let the App write to GitHub as them, with their GitHub login (D-246): the row's key
+  // cascades from `users`, which an erasure keeps as the tombstone, so it never fires.
+  await transaction
+    .deleteFrom('github_user_authorizations')
+    .where('user_id', '=', userId)
+    .execute();
 };
 
 export const chatUserErased = (): HookList<Parameters<UserErased['run']>> => {
