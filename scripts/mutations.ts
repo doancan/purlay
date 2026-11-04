@@ -14215,4 +14215,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'needs: [static, schema, changes, browser]',
     tests: ['scripts/ci-gate.test.ts'],
   },
+  {
+    id: 'channel-create-stops-recording-its-audit',
+    why: 'a channel is created and the trail says nothing of it: an administrative action nobody can find later (D-26)',
+    file: 'apps/api/src/features/chat/channels/channels.ts',
+    find: "  await recordAudit(executor, clock, {\n    workspaceId: context.workspaceId,\n    actorUserId: context.userId,\n    action: 'channel.created',\n    targetType: 'channel',\n    targetId: row.id,\n    metadata: { type: input.type ?? 'public' },\n  });\n",
+    replace: '',
+    tests: ['apps/api/src/modules/audit/recorded-actions.test.ts'],
+  },
 ];
