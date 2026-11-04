@@ -56,6 +56,8 @@ x-environment: &environment
   MODULES: ${MODULES:-}
   DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  # Sockets this node holds open before it answers 503; size by measured fan-out (docs/DEPLOY.md).
+  SOCKET_MAX_CONNECTIONS: ${SOCKET_MAX_CONNECTIONS:-2000}
   # Inside the stack's network; managed PostgreSQL is a different deployment.
   # Production refuses an unencrypted database link unless told the network is
   # private (D-79), and here it is: a compose network no other host can join.

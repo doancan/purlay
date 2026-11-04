@@ -58,8 +58,8 @@ interface Client {
   readonly close: () => Promise<void>;
 }
 
-const connect = async (cookie: string): Promise<Client> => {
-  const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
+const connect = async (cookie: string, at: string = server): Promise<Client> => {
+  const socket = new WebSocket(`${at.replace('http', 'ws')}/ws`, {
     headers: { cookie, origin },
   } as unknown as string[]);
   const ended = new Promise<number>((resolve) => {
@@ -108,8 +108,8 @@ const ready = async (client: Client, n: number): Promise<void> => {
   await until('a PONG', () => client.frames.some((f) => f.refId === id));
 };
 
-const upgrade = async (cookie: string): Promise<Response> =>
-  await fetch(`${server}/ws`, {
+const upgrade = async (cookie: string, at: string = server): Promise<Response> =>
+  await fetch(`${at}/ws`, {
     headers: {
       upgrade: 'websocket',
       connection: 'Upgrade',
@@ -273,5 +273,54 @@ describe('integration: how many sockets may be open', () => {
         await s.close();
       }),
     );
+  });
+});
+
+describe('integration: the node’s total is the configured SOCKET_MAX_CONNECTIONS', () => {
+  test('with no limits handed in, the configured number is what the node holds, and the next is a 503', async () => {
+    const CONFIGURED = 3;
+    // Nothing in `connectionLimits`: the cap comes from the configuration, as in production.
+    const configured = createApp(
+      testDependencies({
+        database: cloned.db,
+        clock,
+        config: testConfig({ APP_URL: origin, SOCKET_MAX_CONNECTIONS: CONFIGURED }),
+        rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
+      }),
+    );
+    const at = `http://localhost:${String(configured.listen(0))}`;
+    try {
+      const users = await Promise.all(
+        Array.from(
+          { length: CONFIGURED },
+          async (_, i) => await aSignedInUser(cloned.db, clock, `cfg${String(i)}`),
+        ),
+      );
+      const held = await Promise.all(users.map(async (u) => await connect(u.cookie, at)));
+      await Promise.all(
+        held.map(async (socket, n) => {
+          await ready(socket, n);
+        }),
+      );
+
+      const late = await aSignedInUser(cloned.db, clock, 'cfg-late');
+      const refused = await upgrade(late.cookie, at);
+      expect(refused.status).toBe(503);
+      expect(await refused.json()).toMatchObject({ error: { code: 'DATABASE_UNAVAILABLE' } });
+
+      // One closes, and the node has room again: the cap is a count of what is open, not of what came.
+      await held[0]?.close();
+      await until('the closed socket to be forgotten', () => configured.held().connections === 2);
+      const again = await connect(late.cookie, at);
+      await ready(again, 98);
+      await again.close();
+      await Promise.all(
+        held.slice(1).map(async (s) => {
+          await s.close();
+        }),
+      );
+    } finally {
+      await configured.stop(true);
+    }
   });
 });
