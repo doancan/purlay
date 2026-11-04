@@ -386,6 +386,40 @@ describe('integration: erasing an account', () => {
     });
   });
 
+  test('the sealed tokens and the login the erased person gave the GitHub App go with them, and nobody else’s do (D-246)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      const authorize = async (userId: string, providerUserId: number): Promise<void> => {
+        await db
+          .insertInto('github_user_authorizations')
+          .values({
+            id: messageId(clock.now()),
+            user_id: userId,
+            github_user_id: providerUserId,
+            github_login: `login-${String(providerUserId)}`,
+            access_token_encrypted: 'sealed-access',
+            access_expires_at: null,
+            refresh_token_encrypted: 'sealed-refresh',
+            refresh_expires_at: null,
+            created_at: clock.now(),
+            updated_at: clock.now(),
+          })
+          .execute();
+      };
+      await authorize(ada.userId, 1001);
+      await authorize(bob.userId, 1002);
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const left = await db
+        .selectFrom('github_user_authorizations')
+        .select(['user_id', 'github_login'])
+        .where('user_id', 'in', [ada.userId, bob.userId])
+        .execute();
+      expect(left).toEqual([{ user_id: bob.userId, github_login: 'login-1002' }]);
+    });
+  });
+
   test('the passports made for the erased address go with it, and no other address’s or cookie’s does', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['bob', 'ada']);

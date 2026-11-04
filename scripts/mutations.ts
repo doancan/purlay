@@ -14267,4 +14267,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "    .select(ISSUE_COLUMNS)\n    .orderBy('id', 'desc')",
     tests: ['apps/api/src/ingress/http/cross-tenant.integration.test.ts'],
   },
+  {
+    id: 'erasure-keeps-github-authorizations',
+    why: 'an erased person’s sealed GitHub App tokens and GitHub login outlive them, since erasure keeps the users row and the key’s cascade never fires (D-246)',
+    file: 'apps/api/src/features/chat/channels/user-hooks.ts',
+    find: "  await transaction\n    .deleteFrom('github_user_authorizations')\n    .where('user_id', '=', userId)\n    .execute();\n",
+    replace: '',
+    tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
+  },
 ];
