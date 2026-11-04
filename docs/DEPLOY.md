@@ -270,6 +270,33 @@ next start. Before upgrading, look for what is holding the table: `select pid, s
 pg_stat_activity where xact_start < now() - interval '10 seconds' order by xact_start;` (a long `idle in
 transaction` session is the usual cause), let it finish or end it with `pg_terminate_backend(pid)`, and start again.
 
+## Sizing a node's sockets
+
+`SOCKET_MAX_CONNECTIONS` (default 2000) is how many WebSockets one API process holds; the next handshake is
+answered `503` and the client retries. It is per node, so three nodes behind one balancer hold three times
+the number. It is a CPU and fan-out decision, not a promise: every message is written to every socket
+subscribed to its channel, so what a node carries depends on how many sockets, how many messages a second
+and how many listeners each one reaches.
+
+What one run measured (a single node, no Redis, loopback, one laptop core; your hardware and traffic
+will differ):
+
+- 1,990 sockets held at 10 messages a second: p99 delivery 312 ms.
+- 4,990 sockets at 5 messages a second: every delivery arrived (559,503 of 559,503), p99 502 ms. At 10
+  messages a second the node fell behind for about 12 s before it caught up.
+
+So the default is a safe starting point, not the ceiling, and a larger number is not free: **size by the
+fan-out you measure** (`purlay_websocket_connections` on `/metrics` against your own message rate and CPU),
+raise it in steps, and watch delivery latency before the next step. A node past its CPU does not fail
+loudly; its sockets get later. A buffer that a stalled reader fills is closed at 4 MB (`RESYNC`), so many
+slow readers also cost memory.
+
+**Refused handshakes are not free.** The node checks the session before it checks the cap, so a client
+refused with `503` has still cost the session queries; during a reconnection storm against a full node,
+live users' requests slow down (about 6 times, in the run above). The order is deliberate for now: a `503` before the
+session check would tell a caller who is not signed in that the node is full. Whether to accept that, or to
+spend the cap check first, is the owner's decision (#1027).
+
 ## References
 
 - [GitHub: publishing Docker images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)

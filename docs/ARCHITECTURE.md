@@ -405,8 +405,11 @@ about none, so one added later cannot slip past (#412).
   N times the quota (D-25). **The number is decided (D-198, closing O-4)** — 10 frames/second with a
   burst of 60, measured against what a page sends (`bun run measure:frames`).
   **The budget is also the user's:** `MESSAGE_SEND` is charged to a per-user bucket shared with HTTP's
-  writes, and a user (20) and a node (2,000) may hold only so many sockets, refused at the upgrade with
-  `429` / `503` (D-84, amended; provisional, O-4).
+  writes, and a user (20) and a node (`SOCKET_MAX_CONNECTIONS`, 2,000 unless set) may hold only so many sockets, refused at the
+  upgrade with `429` / `503` (D-84, amended; provisional, O-4). The node's number is per node, a CPU and fan-out
+  decision (`DEPLOY.md`, *Sizing a node's sockets*). **The session is checked before the cap**, so a handshake the
+  node refuses with `503` has still cost the session queries; the order is kept because answering `503` first would
+  tell a caller with no session that the node is full, and it is the owner's to change (#1027).
 - HTTP has limits of its own behind the same seam: `/auth/*` per client address, mutations per signed-in
   user at the socket's budget, so `POST /messages` is no cheaper than a frame. A refusal is `429`
   with `Retry-After`. Provisional, as above (D-81).
