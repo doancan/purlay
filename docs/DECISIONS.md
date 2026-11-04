@@ -12342,7 +12342,7 @@ changes carries a note that points here.
    webhook, so it answers whatever its headers say as `/api/no-such-thing` does. A route-ownership test holds the
    manifests and the registered routes together.
 3. **Data is held whether or not a module runs, and `tableExists` is how.** A module's erasure, purge, export and
-   retention contributions are in every process's composition (`dataInCore`) and each asks `tableExists`
+   retention contributions are in every process's composition (every bundled module's) and each asks `tableExists`
    (`@purlay/db`) at the moment it needs a table the module's own set makes, never remembered, since another node may
    apply the set while this one runs. Chat's own-set tables and issues' table are held this way (D-254 §4). A process
    that runs a module on a database without its set is not a cell: readiness refuses it. The alternative, a
@@ -12368,11 +12368,14 @@ changes carries a note that points here.
 8. **Issues stays minimal.** D-254 stands: no link, no frame, no comments, no notification. Its removal threshold is
    **decided by the owner at each release, against the measured use**; a measurable rule is required before a package
    is sold (D-250 rule 9) and does not exist yet.
-9. **Pool isolation is built as a mechanism and not yet taken by a process.** *D-250 rule 7 said it would be built
-   before a second module ships.* `budgeted` (`platform/module-budget.ts`: a cap on open transactions, a queue timeout,
-   a `statement_timeout`) exists and is tested alone; no module is handed it, and the second module shipped without it.
-   That is recorded as a debt, not as a decision to skip: wiring it, and a latency gate that knows modules, are the
-   operability work. Until then isolation by budget is intent.
+9. **Pool isolation is wired for issues, and a gate holds chat against starvation.** *D-250 rule 7 said it would be built
+   before a second module ships; the second module shipped without it, and that was recorded as a debt.* The debt is
+   paid: `budgeted` (`platform/module-budget.ts`: a cap on open transactions, a queue timeout, a `statement_timeout`) is
+   handed to the issues routes (a third of the pool, never more than the pool minus one), chat is not budgeted, and
+   `budget:latency` runs the send path with issues holding its share and fails if chat's p95 passes eight times the
+   quiet p95 of the same run (measured on a 2-core runner: 2.4 to 3.7 times with the budget, about twenty times
+   without). What it does not hold: a busy module's CPU and event-loop cost on a shared process, which can still cost
+   chat about three times its p95 on a small host.
 
 **Rejected.** *Refusing to serve beside a peer with another set* (D-250's text): a rolling deploy of a new set would
 be impossible without an outage, and a typo would be an outage anyway. *A bus channel per set*: a sign-out must reach

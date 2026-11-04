@@ -168,6 +168,11 @@ describe('the document check', () => {
       ['`MODULES.md` §9 steps 6–9 do it', 'docs/ARCHITECTURE.md'],
       ['a disabled module is never mounted', 'docs/OVERVIEW.md'],
       ['the first 77 files create chat’s tables', 'docs/MODULES.md'],
+      ['a module sets `dataInCore: true` and gives its hooks', 'docs/MODULES.md'],
+      ['every bundled module with `dataInCore` is held', 'docs/CONFIG.md'],
+      ['the compose work may remove this flag', 'docs/OVERVIEW.md'],
+      ['until then isolation by budget is intent', 'docs/MODULES.md'],
+      ['nothing outside its tests imports it, so no process takes it', 'docs/MODULES.md'],
     ])('fails on %s', (sentence, file) => {
       const { status, output } = plant(file, sentence);
       expect(status).toBe(1);

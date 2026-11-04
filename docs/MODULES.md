@@ -44,7 +44,7 @@ declares:
   scheduled jobs that act for its users. A process that does not run the module closes all four (§3).
 
 That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. What a module
-contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `dataInCore`,
+contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads:
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
 of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
 and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
@@ -339,7 +339,7 @@ commit beside this list.
   migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
 - **Data hooks and the data-lifecycle rule.** Erasure, export and retention reach every module whose tables exist,
   enabled or not (D-250 rule 5, D-255 §3). So a module whose data an erased account, a deleted workspace or an export
-  must reach sets `dataInCore: true` and gives `userErased`, `workspacePurge` (its table in `tables`, because a purged
+  must reach gives `userErased`, `workspacePurge` (its table in `tables`, because a purged
   workspace keeps its row as a tombstone and the cascade never fires), `export` and `personalExport`. Each hook that names
   a table its own set makes asks `tableExists` first; the exports skip it through the contribution's `ownSet`. Add the
   table to the compile-time decision in `export-catalogue.ts`: while a table is undecided it does not compile and names
@@ -442,9 +442,9 @@ Each step ships alone and can be reverted.
 | 5b | *Superseded by 13.* It planned a thin slice that opened an issue from a message and linked back; D-254 §1 decided that issues has no link and no frame, so that slice was not built | — |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
-| 10 | Migrations split by module; `data` hooks — **built** (`dataInCore`, `tableExists`, §5); the ownership ratchet is not at zero (it holds the crossings that are left, until the attachment link's contract step, `chat/0005`, draft PR #961, merges); codegen and `db:check` per module are **not built** | no |
+| 10 | Migrations split by module; `data` hooks — **built** (`tableExists`, §5); the ownership ratchet is not at zero (it holds the crossings that are left, until the attachment link's contract step, `chat/0005`, draft PR #961, merges); codegen and `db:check` per module are **not built** | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
-| 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; **not built:** the whole-suite matrix and per-module budgets in CI (`budget:latency` has no module notion: pending) | **yes** |
+| 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; **not built:** the whole-suite matrix in CI; a share of the pool and a starvation gate are built for issues, the one budgeted module (§7) | **yes** |
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
@@ -665,7 +665,7 @@ table, so that §11's listing test reads only the modules.
   `frames`, `events`, `jobs` (`platform/module-kit/manifest.ts`, §2). It is not a trust boundary.
 - **`BundledModule`** — a manifest plus what the module contributes to the places the core leaves open: the slots in
   `composition.ts` (`userErased`, `workspacePurge`, `export`, `personalExport`, `workspaceCreated`, `workspaceChannels`,
-  `readAttachment`, `pushNotices`, `collatedColumns`, `dataInCore`).
+  `readAttachment`, `pushNotices`, `collatedColumns`).
 - **Bundled** — carried by this build: in `bundledModules`. A bundled module has a row in §11, a set in
   `PRODUCT_MIGRATION_SETS` and routes the application registers, whether or not a process runs it.
 - **Run** — named by this process's `MODULES`. What a process *acts* with is the modules it runs; what it keeps whole is
@@ -683,13 +683,11 @@ table, so that §11's listing test reads only the modules.
 - **Migration set** — a module's ordered migrations in `packages/db/migrations/<id>/`, recorded as `<id>/<file>`; the
   core's own are the legacy rows (D-250 decided a). Validated per set by the migrator (D-86).
 - **Table owner** — the core or one module, for every table, in `TABLE_OWNERS`; a foreign key across owners fails a test.
-- **`dataInCore`** — a flag of `BundledModule` meaning that what the module contributes to the lifecycle of its data is
-  held by every process's composition, whether or not it runs. Named for chat, whose tables the core's migrations made;
-  issues has the same flag with a table of its own set. **The compose-simplification work may remove this flag**
-  (holding every module whose rows may exist); until it merges, this is what the code does.
-- **Holding** — the modules whose contributions a composition keeps: those it runs plus every bundled module with
-  `dataInCore` (the local `holding` of `compose`). Erasure, purge, exports, retention and the columns readiness checks
-  read from it; the workspace's first hook and the routes do not, since they *act*.
+- **Holding** — the modules whose contributions a composition keeps: every bundled module, in the registry's resolved
+  order (`composeFor`), whichever it runs. Erasure, purge, exports, retention and the columns readiness checks read from
+  it; the workspace's first hook, the routes, the jobs and the attachment reader of a module that is not run do not,
+  since they *act*. (A `dataInCore` flag once said which modules were held; every bundled module set it and a `false`
+  would have made a person's erasure wait for a setting, so it was removed.)
 - **`ownSet`** — on an export contribution: the tables its module's own set makes. An export asks `tableExists` for each
   and skips a contribution whose table is absent, so a database that never applied the set is no failure and its export
   says nothing of it.

@@ -271,6 +271,12 @@ RETIRED_CLAIMS = [
      'a module that is not run has its routes registered and closed by path (D-255 §2)'),
     (r'\bfirst 77 files\b', {'docs/DECISIONS.md'},
      'it is the 77 files that existed when this was decided'),
+    (r'`dataInCore: true`|with\s+`dataInCore`|sets `dataInCore`', set(),
+     'the `dataInCore` flag was removed: every bundled module'"'"'s data hooks are held (D-255 §3)'),
+    (r'may remove this flag', set(),
+     'the compose simplification merged: there is no `dataInCore` flag'),
+    (r'isolation by budget is intent|no process takes it|nothing outside its tests imports it', set(),
+     'the module budget is wired for issues, and `budget:latency` holds chat against starvation (D-255 §9)'),
 ]
 for _f, _body in docs.items():
     if is_changelog(_f):
