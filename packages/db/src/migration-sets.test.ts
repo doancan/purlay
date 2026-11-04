@@ -1,6 +1,13 @@
+import { readdirSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
-import { PRODUCT_MIGRATION_SETS, PRODUCT_MODULE_IDS, setsNamedBy } from './migrator';
+import {
+  MIGRATIONS_DIRECTORY,
+  PRODUCT_MIGRATION_SETS,
+  PRODUCT_MODULE_IDS,
+  setsNamedBy,
+} from './migrator';
 import { ModulesSettingError, parseModulesSetting } from './modules-setting';
+import { TABLE_OWNERS } from './table-owners';
 
 const idsOfSets = (setting: string | undefined): string[] =>
   setsNamedBy(setting).map((set) => set.id);
@@ -51,6 +58,24 @@ describe('the migration sets a MODULES setting names', () => {
 
   test('every set belongs to a module the build carries', () => {
     for (const set of PRODUCT_MIGRATION_SETS) expect(PRODUCT_MODULE_IDS).toContain(set.id);
+  });
+
+  test('the sets registered are the directories under migrations/, so a set cannot be made and left unregistered', () => {
+    const directories = readdirSync(MIGRATIONS_DIRECTORY, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(PRODUCT_MIGRATION_SETS.map((set): string => set.id).sort()).toEqual(directories);
+    for (const set of PRODUCT_MIGRATION_SETS) {
+      expect(set.directory).toBe(`${MIGRATIONS_DIRECTORY}/${set.id}`);
+    }
+  });
+
+  test('every set owns at least one table in TABLE_OWNERS, and every owner but the core is a set', () => {
+    const owners = new Set<string>(Object.values(TABLE_OWNERS));
+    for (const set of PRODUCT_MIGRATION_SETS) expect(owners).toContain(set.id);
+    const setIds = new Set<string>(PRODUCT_MIGRATION_SETS.map((set) => set.id));
+    for (const owner of owners) if (owner !== 'core') expect(setIds).toContain(owner);
   });
 });
 
