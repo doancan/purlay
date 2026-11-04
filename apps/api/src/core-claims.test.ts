@@ -8,7 +8,14 @@ import { describe, expect, test } from 'bun:test';
 import { ClientFrame, ServerFrame } from '@purlay/types';
 import { bundledModules, type BundledModule } from './composition';
 import { PLAN } from './modules/jobs/schedule';
-import { CORE_EVENTS, CORE_FRAMES, CORE_JOBS } from './platform/module-kit/core-claims';
+import {
+  CORE_CLAIMS,
+  CORE_EVENTS,
+  CORE_FRAMES,
+  CORE_JOBS,
+  CORE_ROUTES,
+} from './platform/module-kit/core-claims';
+import { ModuleConfigError, moduleRegistry } from './platform/module-kit/registry';
 
 const sorted = (names: Iterable<string>): string[] => [...names].sort();
 const carried: readonly BundledModule[] = bundledModules;
@@ -34,4 +41,24 @@ describe('what the core claims', () => {
     );
     expect(sorted([...CORE_JOBS, ...owned('jobs')])).toEqual(sorted(runnable));
   });
+
+  test('the socket upgrade is the core’s', () => {
+    expect(CORE_ROUTES).toContain('/ws');
+  });
+
+  test.each(['/auth/x', '/auth/x/y', '/ws'])(
+    'a module that claims %s, which the core answers, is refused',
+    (route) => {
+      const manifest = { id: 'notes', requires: [], optional: [], provides: [], routes: [route] };
+      let refused: readonly string[] = [];
+      try {
+        moduleRegistry([manifest], CORE_CLAIMS);
+      } catch (error) {
+        if (!(error instanceof ModuleConfigError)) throw error;
+        refused = error.problems;
+      }
+      expect(refused).toHaveLength(1);
+      expect(refused[0]).toContain(`"notes" owns the route "${route}"`);
+    },
+  );
 });

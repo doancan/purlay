@@ -7,11 +7,13 @@ import {
   composeFor,
   moduleReport,
   registry,
+  startWhereRunning,
   type BundledModule,
 } from './composition';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
 import type { AttachmentReader } from './modules/attachments/readable';
+import { noPushNotices, type PushNotices } from './modules/push/notices';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
 import { attachmentNotFound, AppError } from './platform/errors';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
@@ -143,6 +145,34 @@ describe('the application as its modules make it', () => {
       expect(await outcomeOf(withBroken.readAttachment(database, 'u', 'in-second'))).toBe(
         'the database is gone',
       );
+    });
+  });
+
+  describe('what a running module’s reader may say', () => {
+    const database = aDatabaseThatMustNotBeTouched();
+
+    test('says no only as `ATTACHMENT_NOT_FOUND`: any other refusal of a reader reaches the caller and no later reader is asked', async () => {
+      const busy = moduleReading('busy', () =>
+        Promise.reject(new AppError({ code: 'DATABASE_UNAVAILABLE', message: 'busy' })),
+      );
+      const later = moduleReading('later', readerOf('in-later'));
+      const both = compose([busy, later], [busy, later]);
+      expect(await outcomeOf(both.readAttachment(database, 'u', 'in-later'))).toBe(
+        'DATABASE_UNAVAILABLE',
+      );
+    });
+  });
+
+  describe('the push notices', () => {
+    const notices: PushNotices = { of: () => Promise.resolve([]) };
+    const noticing: BundledModule = {
+      manifest: { id: 'noticing', requires: [], optional: [], provides: [] },
+      pushNotices: notices,
+    };
+
+    test('are those of a module that runs, and the core’s none for one the build carries but does not run', () => {
+      expect(compose([noticing], [noticing]).pushNotices).toBe(notices);
+      expect(compose([], [noticing]).pushNotices).toBe(noPushNotices);
     });
   });
 
@@ -293,5 +323,20 @@ describe('what the boot says about modules', () => {
       running: [],
       notRun: ['chat', 'issues'],
     });
+  });
+});
+
+describe('what the boot starts for a module', () => {
+  test('is started where the module runs, once, and not where it is carried and off or not carried at all', () => {
+    const started: string[] = [];
+    const start = (): void => {
+      started.push('started');
+    };
+    startWhereRunning(compose([chatModule], [chatModule, issuesModule]), 'chat', start);
+    expect(started).toEqual(['started']);
+    startWhereRunning(compose([issuesModule], [chatModule, issuesModule]), 'chat', start);
+    startWhereRunning(compose([], [chatModule, issuesModule]), 'chat', start);
+    startWhereRunning(compose([], []), 'chat', start);
+    expect(started).toEqual(['started']);
   });
 });

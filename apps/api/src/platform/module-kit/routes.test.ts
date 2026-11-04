@@ -46,6 +46,14 @@ describe('which templates claim a path in common', () => {
     expect(templatesOverlap('/api/a/:x/c', '/api/a/b/:y')).toBe(true);
   });
 
+  test('reads a trailing star, as the core spells its catch-all, as the rest of the path', () => {
+    expect(templatesOverlap('/auth/foo', '/auth/*')).toBe(true);
+    expect(templatesOverlap('/auth/*', '/auth/foo/bar')).toBe(true);
+    expect(templatesOverlap('/auth/*', '/auth/**')).toBe(true);
+    expect(templatesOverlap('/auth/*', '/auth')).toBe(false);
+    expect(templatesOverlap('/auth/*', '/other/foo')).toBe(false);
+  });
+
   test('is not two templates that no path matches both of', () => {
     expect(templatesOverlap('/api/a/b', '/api/a/c')).toBe(false);
     expect(templatesOverlap('/api/a/b', '/api/a/b/c')).toBe(false);

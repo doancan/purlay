@@ -223,6 +223,14 @@ export const compositionFor = (setting: string | undefined): Composition =>
 export const composition: Composition = compositionFor(undefined);
 
 /**
+ * Starts what belongs to a module, in a process that runs it and in no other: the boot's own work for a module (the
+ * timers of chat's scheduled messages and reminders) must not run where the module is off, whose tables may not be there.
+ */
+export const startWhereRunning = (running: Composition, id: string, start: () => void): void => {
+  if (running.modules.some((module) => module.manifest.id === id)) start();
+};
+
+/**
  * What the boot says about modules: the ones this process runs and the ones the build carries but it does not,
  * by id, so a log line answers "does this node run chat?" without reading its environment.
  */

@@ -42,11 +42,13 @@ have it.
 ### Fixed
 
 - **Operations** — A slow or busy issues list can no longer hold every database connection and make chat's sends wait: issues' requests are held to a third of the pool, and one over it is told the database is busy and retried (D-250)
+- **Operations** — An issues request whose query runs past its time limit is answered `503 DATABASE_UNAVAILABLE`, which a client retries, instead of `500` (D-250)
 - **Operations** — `bun run db:migrate` reads `MODULES` exactly as the server does: a setting the server refuses (`CHAT`, `chat,calendar`, `none,chat`, `,`) now stops the command with exit 1 and the reason, instead of migrating the wrong set (D-250)
 - **Operations** — A fresh install started with `MODULES=none` can erase an account, purge a deleted workspace, export and run its nightly jobs; they failed on tables only chat's own migrations make (D-250)
 
 ### Security
 
+- **Issues** — Somebody signed in who is not in a workspace can no longer use up the issues' share of the database and make its members' requests fail as busy: who may ask is settled before a slot is taken (D-250)
 - **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)
 
 ---

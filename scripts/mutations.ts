@@ -12607,6 +12607,23 @@ export const MUTATIONS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'module-budget-timeout-is-internal',
+    why: "a statement over the module's time limit answers 500 INTERNAL, which a client does not retry, where the share in use answers a retryable 503 (D-250)",
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: 'if (isStatementTimeout(error)) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/platform/module-budget.integration.test.ts'],
+  },
+  {
+    id: 'issues-slot-before-membership',
+    why: 'a signed-in person who is not in the workspace takes a slot of the issues share and members are refused as busy (D-250)',
+    file: 'apps/api/src/ingress/http/issues.ts',
+    find: '  const context = await requireWorkspaceMembership(database, userId, workspaceId);\n  return await atomically(async (transaction) => await issuePage(transaction, context, query));',
+    replace:
+      '  return await atomically(async (transaction) => {\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await issuePage(transaction, context, query);\n  });',
+    tests: ['apps/api/src/ingress/http/issues-budget.integration.test.ts'],
+  },
+  {
     id: 'domain-bus-handler-failure-escapes',
     why: "one module's failing handler would fail the publisher and keep the other modules from hearing (D-250)",
     file: 'apps/api/src/platform/domain-bus.ts',
@@ -13018,6 +13035,25 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/core-claims.test.ts'],
   },
   {
+    id: 'overlap-star-is-a-literal-segment',
+    why: 'the core spells its catch-all /auth/* with one star, and a module claiming a path below it is not seen to overlap it (D-250)',
+    file: 'apps/api/src/platform/module-kit/routes.ts',
+    find: "  if (parts.at(-1) === '*') parts[parts.length - 1] = '**';",
+    replace: '',
+    tests: ['apps/api/src/platform/module-kit/routes.test.ts', 'apps/api/src/core-claims.test.ts'],
+  },
+  {
+    id: 'core-claims-socket-route-forgotten',
+    why: 'the core’s list of routes misses the socket upgrade, so a module could take /ws unnoticed (D-250)',
+    file: 'apps/api/src/platform/module-kit/core-claims.ts',
+    find: "  '/ws',\n",
+    replace: '',
+    tests: [
+      'apps/api/src/core-claims.test.ts',
+      'apps/api/src/ingress/http/route-ownership.test.ts',
+    ],
+  },
+  {
     id: 'module-set-not-registered',
     why: 'a bundled module has a directory of migrations that no registered set names, so no database ever migrates it (D-250)',
     file: 'packages/db/src/migrator.ts',
@@ -13100,6 +13136,22 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/composition.ts',
     find: '        if (!refusal) throw error;',
     replace: '        if (refusal && !refusal) throw error;',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-attachment-any-apperror-is-a-no',
+    why: 'a reader that throws an AppError other than ATTACHMENT_NOT_FOUND (the database being busy) is taken for a no, and the next reader is asked as if nothing happened (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: "const refusal = error instanceof AppError && error.body.code === 'ATTACHMENT_NOT_FOUND';",
+    replace: 'const refusal = error instanceof AppError;',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-push-notices-of-a-module-not-run',
+    why: 'the push sender asks a module the process does not run for its notices, and reads its tables (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: 'modules.find((module) => module.pushNotices !== undefined)',
+    replace: 'holding.find((module) => module.pushNotices !== undefined)',
     tests: ['apps/api/src/composition.test.ts'],
   },
   {
@@ -13335,12 +13387,28 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/modules/registry.test.tsx', 'apps/web/src/router/route-modules.test.ts'],
   },
   {
+    id: 'web-route-names-may-collide',
+    why: 'a module that names a route the core has, or another module has, silently replaces it in the router’s table (D-250)',
+    file: 'apps/web/src/router/routes.ts',
+    find: '  if (repeated.size > 0) {',
+    replace: '  if (false) {',
+    tests: ['apps/web/src/router/routes.test.ts'],
+  },
+  {
     id: 'web-module-route-outside-its-gate',
     why: 'a module’s screen is drawn on a server that does not run the module, a screen whose every request answers 404 (D-250)',
     file: 'apps/web/src/app/module-route.tsx',
     find: '<ModuleGate route={name}>',
     replace: '<ModuleGate route="welcome">',
     tests: ['apps/web/src/app/app.test.tsx'],
+  },
+  {
+    id: 'web-module-screen-missing-is-opaque',
+    why: 'a chunk that lacks the screen of a route its manifest declares fails as an undefined component inside React, not as a named error (D-250)',
+    file: 'apps/web/src/app/module-route.tsx',
+    find: '  if (screen === undefined) {',
+    replace: '  if (false as boolean) {',
+    tests: ['apps/web/src/app/module-route.test.tsx'],
   },
   {
     id: 'web-module-chunk-never-warmed',
@@ -13608,7 +13676,10 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/ingress/ws/socket.ts',
     find: "dependencies.closedEvent?.('PRESENCE') === true",
     replace: 'false as boolean',
-    tests: ['apps/api/src/realtime/modules-off-presence.integration.test.ts'],
+    tests: [
+      'apps/api/src/ingress/ws/socket.test.ts',
+      'apps/api/src/realtime/modules-off-presence.integration.test.ts',
+    ],
   },
   {
     id: 'hub-delivers-closed-module-events',
@@ -13616,7 +13687,10 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/realtime/hub.ts',
     find: 'if (closedEvent?.(frame.event) === true) return;',
     replace: '',
-    tests: ['apps/api/src/realtime/modules-off-presence.integration.test.ts'],
+    tests: [
+      'apps/api/src/realtime/hub.test.ts',
+      'apps/api/src/realtime/modules-off-presence.integration.test.ts',
+    ],
   },
   {
     id: 'composition-events-of-a-module-never-closed',
@@ -13673,6 +13747,14 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'set: moduleSetOf(modules.modules.map((module) => module.manifest.id)),',
     replace: 'set: moduleSetOf([]),',
     tests: ['apps/api/src/realtime/module-set.redis.integration.test.ts'],
+  },
+  {
+    id: 'boot-starts-chat-timers-whatever-runs',
+    why: "a process that does not run chat starts the timers of scheduled messages and reminders, which read tables of chat's set that its database may not have (D-250)",
+    file: 'apps/api/src/composition.ts',
+    find: 'if (running.modules.some((module) => module.manifest.id === id)) start();',
+    replace: 'start();',
+    tests: ['apps/api/src/composition.test.ts'],
   },
   {
     id: 'unreads-route-is-no-module-screen',
@@ -13818,11 +13900,27 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/issues/issues-screen.test.tsx'],
   },
   {
+    id: 'issues-rail-link-never-current',
+    why: 'the place a module adds to the rail never says it is the page the person is on, so a screen reader is not told where they are (D-250, D-254)',
+    file: 'apps/web/src/features/shell/rail.tsx',
+    find: "        {...(current ? { 'aria-current': 'page' as const } : {})}",
+    replace: '',
+    tests: ['apps/web/src/features/shell/rail.test.tsx'],
+  },
+  {
     id: 'issues-palette-offers-it-whatever-runs',
     why: 'the palette offers an Issues screen on a server that does not run the module, a dead end that answers 404 (D-254)',
     file: 'apps/web/src/features/palette/use-palette-items.ts',
     find: 'for (const module of running(modules)) {',
     replace: "for (const module of running([...modules, 'issues'])) {",
+    tests: ['apps/web/src/features/palette/command-palette.test.tsx'],
+  },
+  {
+    id: 'palette-modules-in-reverse-order',
+    why: 'the palette lists the places of the modules in another order than the registry’s, so a module added later leads and the core’s own views are pushed down (D-250)',
+    file: 'apps/web/src/features/palette/use-palette-items.ts',
+    find: 'for (const module of running(modules)) {',
+    replace: 'for (const module of [...running(modules)].reverse()) {',
     tests: ['apps/web/src/features/palette/command-palette.test.tsx'],
   },
   {
@@ -13937,27 +14035,24 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'issues-post-ignores-a-ended-session',
     why: 'a session that ended after it was read still makes an issue (D-85, D-254)',
     file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await createIssue(',
-    replace:
-      '    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await createIssue(',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await createIssue(',
+    replace: '    return await createIssue(',
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-patch-ignores-a-ended-session',
     why: 'a session that ended after it was read still changes an issue (D-85, D-254)',
     file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await updateIssue(',
-    replace:
-      '    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await updateIssue(',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await updateIssue(',
+    replace: '    return await updateIssue(',
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-delete-ignores-a-ended-session',
     why: 'a session that ended after it was read still deletes an issue (D-85, D-254)',
     file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    await deleteIssue(',
-    replace:
-      '    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    await deleteIssue(',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    await deleteIssue(',
+    replace: '    await deleteIssue(',
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {

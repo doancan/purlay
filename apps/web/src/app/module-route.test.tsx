@@ -8,7 +8,8 @@ import { installDom } from '../testing/dom';
 import { IDS, aSignedInApi } from '../testing/fixtures';
 import { renderApp } from '../testing/render';
 import { Outlet } from './outlet';
-import { moduleChunk, warmModule, Waiting } from './module-route';
+import type { ModuleChunk } from '../modules/manifest';
+import { moduleChunk, screenOf, warmModule, Waiting } from './module-route';
 
 installDom();
 
@@ -68,6 +69,21 @@ describe('asking for a module’s chunk before anything waits on it', () => {
   test('a chunk is one request: every ask for it is the same promise', () => {
     expect(moduleChunk('chat').get()).toBe(moduleChunk('chat').get());
     expect(moduleChunk('issues').get()).toBe(moduleChunk('issues').get());
+  });
+});
+
+describe('a route’s screen out of its module’s chunk', () => {
+  const Home = (): null => null;
+  const chunk: ModuleChunk = { screens: { home: Home } };
+
+  test('is the screen the chunk exports under the route’s name', () => {
+    expect(screenOf(chunk, 'notes', 'home')).toBe(Home);
+  });
+
+  test('is a named error when the chunk has none, saying the module and the route', () => {
+    expect(() => screenOf(chunk, 'notes', 'archive')).toThrow(
+      "the notes module's chunk has no screen for the route archive",
+    );
   });
 });
 

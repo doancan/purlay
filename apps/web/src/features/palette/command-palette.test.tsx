@@ -270,6 +270,36 @@ describe('issues, a module of its own', () => {
     }
   });
 
+  test('is listed after the places of chat, in the order of the client’s modules, whichever order the server names them in', async () => {
+    for (const modules of [
+      ['chat', 'issues'],
+      ['issues', 'chat'],
+    ]) {
+      const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules }) });
+      const { options } = await mount(where, '/w/acme');
+      const views = options().filter((text) =>
+        [
+          'Open questions',
+          'Inbox',
+          'Saved',
+          'Drafts and sent',
+          'All unreads',
+          'Search',
+          'Issues',
+        ].includes(text),
+      );
+      expect(views).toEqual([
+        'Open questions',
+        'Inbox',
+        'Saved',
+        'Drafts and sent',
+        'All unreads',
+        'Search',
+        'Issues',
+      ]);
+    }
+  });
+
   test('choosing it goes to the issues screen of the workspace', async () => {
     const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules: ['issues'] }) });
     const { input, here } = await mount(where, '/w/acme');

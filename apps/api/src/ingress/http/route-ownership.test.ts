@@ -17,7 +17,9 @@ const registered = (): string[] => {
   const text = readFileSync(join(import.meta.dir, 'app.ts'), 'utf8');
   return [
     ...new Set(
-      [...text.matchAll(/\.(?:get|post|put|patch|delete)\(\s*'(\/[^']*)'/g)].map((m) => m[1] ?? ''),
+      [...text.matchAll(/\.(?:get|post|put|patch|delete|ws)\(\s*'(\/[^']*)'/g)].map(
+        (m) => m[1] ?? '',
+      ),
     ),
   ].sort();
 };
