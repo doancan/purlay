@@ -64,7 +64,10 @@ not add it. Closed by D-57 at the contract, not per route.
 
 - **`beforeHandle` runs twice per connection.** Once for the route, once for the upgrade. It is
   idempotent here, so the cost is a second session lookup per connect, not a defect — recorded
-  because a check with a side effect placed there would run twice.
+  because a check with a side effect placed there would run twice. *Measured again (#1033):* the
+  second run's answer is ignored, and at a few hundred handshakes a second the extra read is what
+  fills the pool, so admission is registered as a `guard` around the route, which runs it once.
+  The hook given to `.ws()` itself is run twice; one given to a guard is run once.
 - **`ws.data.request` is available in `open`.** The connection can therefore re-derive who it
   belongs to without carrying a value out of the handshake, which is framework plumbing that would
   be verified once and then quietly change.
