@@ -14317,4 +14317,29 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
   },
+  {
+    id: 'erasure-hook-clears-an-organisations-login',
+    why: 'an erased person who connected the App on an organisation takes the organisation’s login out of the workspace’s installation with them (#997)',
+    file: 'apps/api/src/features/chat/channels/user-hooks.ts',
+    find: "    .where('account_type', '=', 'User')\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
+  },
+  {
+    id: 'erasure-hook-leaves-the-personal-login',
+    why: 'the GitHub login of a personal account the erased person installed the App on stays in the installation (#997)',
+    file: 'apps/api/src/features/chat/channels/user-hooks.ts',
+    find: "    .where('connected_by', '=', userId)\n    .where('account_type', '=', 'User')\n",
+    replace:
+      "    .where('connected_by', '=', userId)\n    .where('account_type', '=', 'User')\n    .where('id', 'is', null)\n",
+    tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
+  },
+  {
+    id: 'erasure-hook-clears-anothers-login',
+    why: 'erasing one person replaces the login of every personal-account installation, not only theirs (#997)',
+    file: 'apps/api/src/features/chat/channels/user-hooks.ts',
+    find: "    .where('connected_by', '=', userId)\n    .where('account_type', '=', 'User')\n",
+    replace: "    .where('account_type', '=', 'User')\n",
+    tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
+  },
 ];

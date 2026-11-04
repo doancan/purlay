@@ -54,5 +54,6 @@ have it.
 - **Issues** — Somebody signed in who is not in a workspace can no longer use up the issues' share of the database and make its members' requests fail as busy: who may ask is settled before a slot is taken (D-250)
 - **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)
 - **Accounts** — Erasing an account now deletes the sealed GitHub App tokens and the GitHub login Purlay kept to write to GitHub as that person; GitHub is then asked to revoke the person's authorization of the App, best effort: if it cannot, the erasure still completes, and a token that has expired can still be revoked by the person in their GitHub settings (D-246)
+- **Accounts** — Erasing an account now replaces the GitHub login of an installation of the App on their personal account, which is their own login, with their anonymised name; an organisation's login stays, and so do the audit lines that named the login when the App was connected or disconnected (D-256)
 
 ---

@@ -1,15 +1,19 @@
 /**
  * Erasing an account revokes the person's GitHub App authorization at GitHub (D-246, #993): after the commit, as the
  * App, once for each person's token, best effort — a GitHub that fails, hangs or cannot be reached changes nothing
- * about the erasure, which has deleted the sealed tokens either way, and what is logged never holds a token.
+ * about the erasure, which has deleted the sealed tokens either way, and what is logged never holds a token. And it
+ * takes the person's own GitHub login out of the installation of the App on their personal account (#997).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { ERASED_USERNAME_PREFIX } from '@purlay/types';
 import { keepAuthorization } from '../../features/chat/integrations/github-app';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { credentialCipher } from '../../platform/crypto';
+import { recordAudit } from '../../modules/audit/audit';
 import { aRecordingLogger } from '../../testing/doubles';
 import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
+import { aRoom } from '../../testing/rooms';
 import { aWorld, PERSON, type Person, type World } from '../../testing/github-world';
 
 afterAll(async () => {
@@ -149,6 +153,104 @@ describe('integration: erasing an account revokes its GitHub App authorization (
       expect(await rowsOf(db, world.member.userId)).toBe(0);
       expect(world.github.calls).toEqual([]);
       expect(revocationWarnings(recording.lines)).toHaveLength(1);
+    });
+  });
+});
+
+type AccountKind = 'User' | 'Organization';
+
+const connect = async (
+  db: Executor,
+  workspaceId: string,
+  connectedBy: string,
+  login: string,
+  kind: AccountKind,
+): Promise<void> => {
+  await db
+    .insertInto('github_app_installations')
+    .values({
+      id: crypto.randomUUID(),
+      workspace_id: workspaceId,
+      installation_id: String(1000 + login.length),
+      account_login: login,
+      account_type: kind,
+      connected_by: connectedBy,
+      connected_at: new Date('2026-01-01T00:00:00Z'),
+    })
+    .execute();
+};
+
+const loginOf = async (db: Executor, workspaceId: string): Promise<string> =>
+  (
+    await db
+      .selectFrom('github_app_installations')
+      .select('account_login')
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirstOrThrow()
+  ).account_login;
+
+describe('integration: erasing an account clears its GitHub login from the installation (#997)', () => {
+  test('the login of a personal-account installation the person connected is replaced; nobody else’s, and no organisation’s, is', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db, { installed: false });
+      const second = await aRoom(db, ['someone']);
+      const third = await aRoom(db, ['someone']);
+      const someone = second.members['someone']?.userId ?? '';
+      // Theirs: the App on their own account. Another person's own account, and an organisation the erased
+      // person connected (its login names the organisation, not them), stay as they are.
+      await connect(db, world.workspaceId, world.member.userId, 'ayse-dev', 'User');
+      await connect(db, second.workspaceId, someone, 'other-dev', 'User');
+      await connect(db, third.workspaceId, world.member.userId, 'acme-corp', 'Organization');
+      expect((await erase(world)).status).toBe(204);
+
+      const erasedName = (
+        await db
+          .selectFrom('users')
+          .select('username')
+          .where('id', '=', world.member.userId)
+          .executeTakeFirstOrThrow()
+      ).username;
+      expect(erasedName.startsWith(ERASED_USERNAME_PREFIX)).toBe(true);
+      expect(await loginOf(db, world.workspaceId)).toBe(erasedName);
+      expect(await loginOf(db, second.workspaceId)).toBe('other-dev');
+      expect(await loginOf(db, third.workspaceId)).toBe('acme-corp');
+      // The installation itself is the workspace's: its id, its kind and who connected it are as they were.
+      const kept = await db
+        .selectFrom('github_app_installations')
+        .select(['installation_id', 'account_type', 'connected_by'])
+        .where('workspace_id', '=', world.workspaceId)
+        .executeTakeFirstOrThrow();
+      expect(kept).toEqual({
+        installation_id: String(1000 + 'ayse-dev'.length),
+        account_type: 'User',
+        connected_by: world.member.userId,
+      });
+    });
+  });
+
+  test('the trail keeps its line, append-only (I-9): it names the login as it was written', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db, { installed: false });
+      await connect(db, world.workspaceId, world.member.userId, 'ayse-dev', 'User');
+      await recordAudit(
+        db,
+        { now: () => world.time.now },
+        {
+          workspaceId: world.workspaceId,
+          actorUserId: world.member.userId,
+          action: 'integration.app_connected',
+          targetType: 'integration',
+          targetId: world.workspaceId,
+          metadata: { account: 'ayse-dev' },
+        },
+      );
+      expect((await erase(world)).status).toBe(204);
+      const line = await db
+        .selectFrom('audit_log')
+        .select('metadata')
+        .where('action', '=', 'integration.app_connected')
+        .executeTakeFirstOrThrow();
+      expect(line.metadata).toEqual({ account: 'ayse-dev' });
     });
   });
 });

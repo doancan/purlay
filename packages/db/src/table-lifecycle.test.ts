@@ -14,7 +14,7 @@ const lifecycle: Readonly<Record<string, TableLifecycle | undefined>> = TABLE_LI
  * The tables whose erasure does not reach the person's rows today. **This list may only shrink**: a new gap is a
  * table somebody did not finish, and is not added here to make the test pass.
  */
-const KNOWN_ERASURE_GAPS: readonly string[] = ['github_app_installations'];
+const KNOWN_ERASURE_GAPS: readonly string[] = [];
 
 describe('the lifecycle of each table', () => {
   test('is decided for every owned table, and for no other', () => {

@@ -105,13 +105,9 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   github_app_deliveries: decided({ nobody: 'a delivery’s id and its body’s digest' }, 'swept'),
   github_app_handshakes: decided('anonymised', 'swept'),
   // `connected_by` stays, naming the anonymised account (D-256). `account_login` is the GitHub login of the account
-  // the App was installed on, and for a personal one (`account_type = 'User'`) it is the person's: nothing clears it.
-  github_app_installations: decided(
-    {
-      gap: 'account_login is the person’s GitHub login when the App is installed on their personal account, and the erasure does not clear it, nor the audit metadata that names it (#997)',
-    },
-    'until-removed',
-  ),
+  // the App was installed on, and for a personal one (`account_type = 'User'`) it is the person's: chat's hook
+  // replaces it with their anonymised name. An organisation's login stays. The audit line that names the login stays too.
+  github_app_installations: decided('anonymised', 'until-removed'),
   github_deliveries: decided({ nobody: 'a delivery’s id and its body’s digest' }, 'swept'),
   github_integrations: decided('anonymised', 'until-removed'),
   github_links: decided('anonymised', 'with-parent'),
