@@ -1,8 +1,15 @@
 /**
  * The lifecycle of a person's and a workspace's data in every cell of the module matrix (D-250 rule 5 and 6,
- * `MODULES.md` §5): a database as the core alone leaves it, as the core and chat's set leave it, and as every
- * set leaves it — each a real database of its own, migrated and dropped — against a process that runs chat and
- * one that does not (`compose([])`).
+ * `MODULES.md` §5): a database as each valid `MODULES` value leaves it — the core alone, each module's set on the
+ * core, every set — each a real database of its own, migrated and dropped, against a process that runs each such
+ * value too. The cells are not listed here: `moduleCells` makes them from the modules the build carries, so a module
+ * added to the bundle adds its databases and its processes to this file, and the tables its set makes are the ones
+ * `TABLE_OWNERS` gives it that the core alone lacks. What a module wrote of its own — chat's messages, issues'
+ * issues — is seeded and checked by a probe for that module (`seed`); a module without one is still held to the rest.
+ *
+ * At three modules or fewer every subset is a cell, databases crossed with processes (2^n × 2^n: 16 at two modules,
+ * 64 at three). Past that `subsetsOf` samples: 12 subsets at five modules, so 12 databases and 144 cells, not the
+ * 32 databases and 1024 cells of all of them.
  *
  * Chat's own set (`chat/0001`–`0004`) makes five tables, and every bundled module is held whether or not it runs: its
  * erasure, purge and export answers apply to a process that does not run it, because a person's right to be erased does not wait for a
@@ -25,14 +32,15 @@ import {
   dropDatabases,
   migrateToLatest,
   pendingMigrations,
-  setsNamedBy,
+  PRODUCT_MIGRATION_SETS,
   sql,
+  TABLE_OWNERS,
   type Executor,
   type MigrationSet,
   type Transaction,
 } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS, isErased, messageId } from '@purlay/types';
-import { compose, composition, compositionFor, type Composition } from './composition';
+import { bundledModules, compose, type Composition } from './composition';
 import {
   EVERY_TABLE_DECIDED,
   EVERY_TABLE_DECIDED_FOR_PEOPLE,
@@ -63,19 +71,8 @@ import { aRoom, type Room } from './testing/rooms';
 import { aSession } from './testing/signed-in';
 import { linkFile } from './testing/sent-files';
 import { aMemoryStore, type MemoryStore } from './testing/storage';
+import { moduleCells } from './testing/module-cells';
 import { aUniqueSlug, aUserRow } from './testing/users';
-
-/** The tables chat's own set makes: what a database migrated without chat does not have. */
-const CHAT_SET_TABLES = [
-  'hidden_messages',
-  'message_attachments',
-  'message_reminders',
-  'scheduled_message_attachments',
-  'scheduled_messages',
-] as const;
-
-/** The one table issues' own set makes. */
-const ISSUES_SET_TABLES = ['issues'] as const;
 
 /** Every table chat keeps of a person, by the column that names them. */
 const CHAT_PERSONAL_TABLES = [
@@ -92,38 +89,35 @@ const CHAT_PERSONAL_TABLES = [
 interface DatabaseState {
   readonly name: string;
   readonly sets: readonly MigrationSet[];
-  /** Whether chat's own set has been applied: whether its five tables are there. */
-  readonly chatSet: boolean;
-  /** Whether issues' set has been applied: whether its table is there. */
-  readonly issuesSet: boolean;
 }
 
-const DATABASE_STATES: readonly DatabaseState[] = [
-  { name: 'fresh, the core alone', sets: setsNamedBy('none'), chatSet: false, issuesSet: false },
-  { name: 'fresh, with chat’s set', sets: setsNamedBy('chat'), chatSet: true, issuesSet: false },
-  { name: 'fresh, with issues’ set', sets: setsNamedBy('issues'), chatSet: false, issuesSet: true },
-  {
-    name: 'legacy-shaped, every set applied',
-    sets: setsNamedBy(undefined),
-    chatSet: true,
-    issuesSet: true,
-  },
-];
+/** Whether a module's own set has been applied to the database: whether its tables are there. */
+const hasSet = (state: DatabaseState, id: string): boolean =>
+  state.sets.some((set) => set.id === id);
+
+const CELLS = moduleCells(bundledModules);
+
+/** A database as each cell's `MODULES` value migrates it. */
+const DATABASE_STATES: readonly DatabaseState[] = CELLS.map((cell) => ({
+  name: cell.setting === undefined ? 'legacy-shaped, every set applied' : `fresh, ${cell.label}`,
+  sets: cell.composition.migrationSets,
+}));
+
+const CORE_ALONE = DATABASE_STATES[0]!;
 
 interface Run {
   readonly name: string;
   readonly composition: Composition;
-  /** The modules it runs, whose sets its database must have: readiness refuses it otherwise. */
-  readonly runs: readonly ('chat' | 'issues')[];
+  /** The modules it runs, whose sets its database must have where they keep one: readiness refuses it otherwise. */
+  readonly runs: readonly string[];
 }
 
-/** Every process the matrix promises: the core alone, each module alone, and everything. */
-const RUNS: readonly Run[] = [
-  { name: 'no module run', composition: compose([]), runs: [] },
-  { name: 'chat run', composition: compositionFor('chat'), runs: ['chat'] },
-  { name: 'issues run', composition: compositionFor('issues'), runs: ['issues'] },
-  { name: 'chat and issues run', composition, runs: ['chat', 'issues'] },
-];
+/** Every process the matrix promises: one for each cell, the core alone and the modules in each combination. */
+const RUNS: readonly Run[] = CELLS.map((cell) => ({
+  name: `${cell.label} run`,
+  composition: cell.composition,
+  runs: cell.ids,
+}));
 
 const urlOf = (name: string): string => {
   const url = new URL(process.env['DATABASE_URL'] ?? '');
@@ -229,7 +223,7 @@ const seed = async (database: Executor, state: DatabaseState): Promise<World> =>
     let ada: Person;
     let bob: Person;
     let room: Room | undefined;
-    if (state.chatSet) {
+    if (hasSet(state, 'chat')) {
       room = await aRoom(tx, ['bob', 'ada']);
       workspaceId = room.workspaceId;
       ada = person(room, 'ada');
@@ -278,7 +272,7 @@ const seed = async (database: Executor, state: DatabaseState): Promise<World> =>
     const unsentFile = await upload(tx, store, workspaceId, ada.userId);
     // What issues keeps, where its table is there: an issue each made and gave to the other.
     let issues: World['issues'];
-    if (state.issuesSet) {
+    if (hasSet(state, 'issues')) {
       const make = async (by: Person, to: Person, title: string): Promise<string> =>
         (
           await tx
@@ -413,6 +407,37 @@ const presentTables = async (database: Executor): Promise<string[]> =>
     )
   ).rows.map((row) => row.name);
 
+/** One database per state, made once however many tests ask: the core alone is asked by every state. */
+interface BuiltDatabase {
+  readonly name: string;
+  readonly present: string[];
+}
+
+const built = new Map<DatabaseState, Promise<BuiltDatabase>>();
+
+const databaseOf = async (state: DatabaseState): Promise<BuiltDatabase> => {
+  let pending = built.get(state);
+  if (pending === undefined) {
+    pending = (async (): Promise<BuiltDatabase> => {
+      const name = await freshDatabase(state.sets);
+      const reading = createDatabase({ connectionString: urlOf(name), poolSize: 1 });
+      try {
+        return { name, present: await presentTables(reading) };
+      } finally {
+        await reading.destroy();
+      }
+    })();
+    built.set(state, pending);
+  }
+  return await pending;
+};
+
+/** The tables a module's own set makes: the ones `TABLE_OWNERS` gives it that the core alone does not have. */
+const ownTables = (id: string, coreTables: readonly string[]): string[] =>
+  Object.entries(TABLE_OWNERS)
+    .filter(([table, owner]) => owner === id && !coreTables.includes(table))
+    .map(([table]) => table);
+
 const countWhere = async (
   database: Executor,
   table: string,
@@ -454,30 +479,37 @@ const exportTarget = async (): Promise<string> =>
 describe('integration: the data lifecycle in every cell of the module matrix', () => {
   for (const state of DATABASE_STATES) {
     describe(`database ${state.name}`, () => {
-      let name: string;
       let database: Executor;
       let present: readonly string[];
+      let coreTables: readonly string[];
 
       beforeAll(async () => {
-        name = await freshDatabase(state.sets);
-        database = createDatabase({ connectionString: urlOf(name), poolSize: 4 });
-        present = await presentTables(database);
+        const built = await databaseOf(state);
+        database = createDatabase({ connectionString: urlOf(built.name), poolSize: 4 });
+        present = built.present;
+        coreTables = (await databaseOf(CORE_ALONE)).present;
       }, CLONE_HOOK_MS);
       afterAll(async () => {
         await database.destroy();
       });
 
       test('each set’s tables are there exactly where its set was applied', () => {
-        for (const table of CHAT_SET_TABLES) {
-          expect(present.includes(table)).toBe(state.chatSet);
+        for (const set of PRODUCT_MIGRATION_SETS) {
+          expect(ownTables(set.id, coreTables).length).toBeGreaterThan(0);
         }
-        for (const table of ISSUES_SET_TABLES) {
-          expect(present.includes(table)).toBe(state.issuesSet);
+        for (const { manifest } of bundledModules) {
+          for (const table of ownTables(manifest.id, coreTables)) {
+            expect(`${table}: ${String(present.includes(table))}`).toBe(
+              `${table}: ${String(hasSet(state, manifest.id))}`,
+            );
+          }
         }
       });
 
       for (const run of RUNS) {
-        const lacking = run.runs.filter((id) => !(id === 'chat' ? state.chatSet : state.issuesSet));
+        const lacking = run.composition.migrationSets
+          .map((set) => set.id)
+          .filter((id) => !hasSet(state, id));
         if (lacking.length > 0) {
           test(`${run.name}: readiness refuses a process that runs ${lacking.join(' and ')} without its set`, async () => {
             const pending = await pendingMigrations(
@@ -613,13 +645,11 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
             const personal = processes.personalExportCatalogue;
             // What the database holds is what the catalogues decided, less the tables its set did not make.
             const held = present.filter((table) => !MIGRATOR_TABLES.includes(table)).sort();
+            const missing = bundledModules
+              .filter(({ manifest }) => !hasSet(state, manifest.id))
+              .flatMap(({ manifest }) => ownTables(manifest.id, coreTables));
             const expected = (decided: readonly string[]): string[] =>
-              decided
-                .filter((table) => state.chatSet || !CHAT_SET_TABLES.some((own) => own === table))
-                .filter(
-                  (table) => state.issuesSet || !ISSUES_SET_TABLES.some((own) => own === table),
-                )
-                .sort();
+              decided.filter((table) => !missing.includes(table)).sort();
             expect(held).toEqual(
               expected([...catalogue.order, ...Object.keys(EXCLUDED_FROM_EXPORT)]),
             );
@@ -815,64 +845,77 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
   }
 
   describe('a node that migrates as it starts', () => {
-    test('(f) the core alone first, chat’s set when chat is turned on, and either way ready', async () => {
-      const name = await freshDatabase(setsNamedBy('none'));
-      const database = createDatabase({ connectionString: urlOf(name), poolSize: 2 });
-      try {
-        const none = compose([]);
-        const chatOnly = compositionFor('chat');
-        const first = await migrateOnStart({ connectionString: urlOf(name) }, undefined, {
-          sets: none.migrationSets,
-        });
-        expect(first).toEqual([]);
-        expect(
-          (
-            await readiness(
-              database,
-              none.collatedColumns,
-              undefined,
-              undefined,
-              none.migrationSets,
-            )
-          ).ready,
-        ).toBe(true);
-        // Chat turned on later opens on the set it never had, and applies it, and not before.
-        expect(
-          (
-            await readiness(
-              database,
-              chatOnly.collatedColumns,
-              undefined,
-              undefined,
-              chatOnly.migrationSets,
-            )
-          ).ready,
-        ).toBe(false);
-        const second = await migrateOnStart({ connectionString: urlOf(name) }, undefined, {
-          sets: chatOnly.migrationSets,
-        });
-        expect(second.length).toBeGreaterThan(0);
-        expect(second.every((migration) => migration.startsWith('chat/'))).toBe(true);
-        expect(second.some((migration) => migration.startsWith('issues/'))).toBe(false);
-        // Issues' set was never applied here, so only the processes that do not run issues are ready.
-        for (const run of RUNS.filter((each) => !each.runs.includes('issues'))) {
-          expect(
-            (
-              await readiness(
-                database,
-                run.composition.collatedColumns,
-                undefined,
-                undefined,
-                run.composition.migrationSets,
-              )
-            ).ready,
-          ).toBe(true);
-        }
-        const tables = await presentTables(database);
-        for (const table of CHAT_SET_TABLES) expect(tables).toContain(table);
-      } finally {
-        await database.destroy();
-      }
-    });
+    // Each module that keeps a set, run alone: the cells that name one module and make one set.
+    const alone = CELLS.filter(
+      (cell) => cell.ids.length === 1 && cell.composition.migrationSets.length === 1,
+    );
+    for (const cell of alone) {
+      const [id] = cell.ids as [string];
+      test(
+        `(f) the core alone first, ${id}’s set when ${id} is turned on, and either way ready`,
+        async () => {
+          const name = await freshDatabase([]);
+          const database = createDatabase({ connectionString: urlOf(name), poolSize: 2 });
+          try {
+            const none = compose([]);
+            const first = await migrateOnStart({ connectionString: urlOf(name) }, undefined, {
+              sets: none.migrationSets,
+            });
+            expect(first).toEqual([]);
+            expect(
+              (
+                await readiness(
+                  database,
+                  none.collatedColumns,
+                  undefined,
+                  undefined,
+                  none.migrationSets,
+                )
+              ).ready,
+            ).toBe(true);
+            // The module turned on later opens on the set it never had, and applies it, and not before.
+            const only = cell.composition;
+            expect(
+              (
+                await readiness(
+                  database,
+                  only.collatedColumns,
+                  undefined,
+                  undefined,
+                  only.migrationSets,
+                )
+              ).ready,
+            ).toBe(false);
+            const second = await migrateOnStart({ connectionString: urlOf(name) }, undefined, {
+              sets: only.migrationSets,
+            });
+            expect(second.length).toBeGreaterThan(0);
+            expect(second.every((migration) => migration.startsWith(`${id}/`))).toBe(true);
+            // Every other set was never applied here, so only the processes that run none of them are ready.
+            for (const run of RUNS.filter((each) =>
+              each.composition.migrationSets.every((set) => set.id === id),
+            )) {
+              expect(
+                (
+                  await readiness(
+                    database,
+                    run.composition.collatedColumns,
+                    undefined,
+                    undefined,
+                    run.composition.migrationSets,
+                  )
+                ).ready,
+              ).toBe(true);
+            }
+            const tables = await presentTables(database);
+            const coreTables = (await databaseOf(CORE_ALONE)).present;
+            for (const table of ownTables(id, coreTables)) expect(tables).toContain(table);
+          } finally {
+            await database.destroy();
+          }
+        },
+        CLONE_HOOK_MS,
+      );
+    }
   });
 });
