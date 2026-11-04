@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Operations** — Run Purlay on a server managed with Dockhand, behind Nginx Proxy Manager, from one compose file (`docker-compose.dockhand.yml`, D-258)
 - **People** — Somebody who has not used Purlay for five minutes shows as away, and anybody can set themselves away from the account menu (D-257)
 - **Operations** — `bun run db:migrate` refuses a `MODULES` selection that leaves out a module another one requires, in the words the API boot uses, instead of migrating a database the API then will not start on (D-250)
 - **Issues** — A second module, off or on with `MODULES`: a workspace keeps a list of issues, each with a title, markdown details, open or done and somebody it is given to; any member makes and changes them, and only whoever made one, an owner or an admin deletes it (D-254)
