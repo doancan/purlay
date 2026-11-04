@@ -350,9 +350,14 @@ commit beside this list.
   registered, and for a set that owns no table. Keys go module to core, never between modules; index every
   key. `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
   and `DATA.md`.
-- **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it.
+- **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it. The set's
+  `requires` go in `PRODUCT_MODULE_REQUIRES` next to `PRODUCT_MODULE_IDS` in `migrator.ts`; a test holds that mirror to
+  the manifests.
   `table-ownership.integration.test.ts` holds the list to the database, and a key across owners fails it. A core
   migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
+- **The table's lifecycle**: every owned table needs its erasure and retention decision in `TABLE_LIFECYCLE`
+  (`packages/db/src/table-lifecycle.ts`); a table with none does not compile, and `table-lifecycle.test.ts` holds the
+  list to `TABLE_OWNERS`. The compiler does not check that a `deleted` or `window` decision is true (see the silent gaps).
 - **Data hooks and the data-lifecycle rule.** Erasure, export and retention reach every module whose tables exist,
   enabled or not (D-250 rule 5, D-255 §3). So a module whose data an erased account, a deleted workspace or an export
   must reach gives `userErased`, `workspacePurge` (its table in `tables`, because a purged
@@ -368,13 +373,17 @@ commit beside this list.
 **4. The routes, in `ingress/`.**
 
 - Route handlers in `apps/api/src/ingress/http/<id>.ts` and their registration in `ingress/http/app.ts`; the
-  module's services do not import HTTP types. The wire types go in `packages/types/src/<id>.ts`, exported from `index.ts`,
+  module's services do not import HTTP types. A service that writes atomically takes `atomicallyOn(database)`
+  (`platform/transactions.ts`): a raw `database.transaction()` compiles and runs, and answers 500 in the cross-tenant
+  harness, which holds a transaction already. The wire types go in `packages/types/src/<id>.ts`, exported from `index.ts`,
   with new error codes in `errors.ts` and the endpoint in `api.ts` and `API.md`.
 - **Cross-tenant classification.** The endpoints are read from `API.md`, and each must appear in `apps/api/src/testing/cross-tenant.ts`
   with a case (what it answers for a workspace the caller is not in, `WORKSPACE_NOT_FOUND`, and how channel visibility
   applies: `none`, with the reason, for a route that names no channel) or among the unscoped with the reason it has no
   tenant to cross; `cross-tenant.test.ts` fails for one that is in neither, and `cross-tenant.integration.test.ts` runs
-  the crossings. A new path parameter name needs its id there too.
+  the crossings. A new path parameter name needs its id there too, and the module's own row needs a seeded id: add its field to `Ids`
+  and seed it in `aTenant` (`ingress/http/cross-tenant.integration.test.ts`). Without the seed, the same-member
+  two-workspace list check passes vacuously for the module's lists.
 - `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
 
 **5. The web** (the web registry, §6).
@@ -434,27 +443,36 @@ audit action edits.
 | Where | Files | Why |
 |---|---|---|
 | `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (two routes), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
-| `packages/db` | `src/migrator.ts` (set registration), `src/table-owners.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, the generated schema |
+| `packages/db` | `src/migrator.ts` (set registration and `PRODUCT_MODULE_REQUIRES`), `src/table-owners.ts`, `src/table-lifecycle.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, its erasure and retention decision, the generated schema |
 | `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
 | an audit action | `modules/audit/audit.ts` (target type), `packages/types/src/api.ts` (action), web `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | the exhaustive switch and the catalogues refuse an action with no sentence, so an audit action forces three web files even for a module with no web part |
 
-That is 11 shared files besides the module's own two (the `ingress/http` handler and the types file), and 6 of them
+That is 12 shared files besides the module's own two (the `ingress/http` handler and the types file), and 7 of them
 without an audit action. A module with UI adds its manifest, one
 `registry.ts` line and the per-module web files listed in item 5. The old figure of 27 files was the issues commit
 counted before the web registry and the derived catalogue, and is stale.
 
 **The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
-fixture, and are edited: `composition.test.ts`, `platform/metrics.test.ts` and `ingress/http/metrics.test.ts`,
+fixture, and are edited (ten files): `composition.test.ts`, `platform/metrics.test.ts`, `ingress/http/metrics.test.ts`,
 `testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
-unknown-module name, so a real module of that name breaks it), the upgrade, modules-off, export and personal
-integration tests (a seeded row, a file list or a snapshot for the new table), and `testing/cross-tenant.ts` (item 4).
+unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
+integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`
+(the `Ids` field, item 4), the seed in `cross-tenant.integration.test.ts`, and the `channel-visibility.integration` and
+`upgrade.integration` fixtures that need a seeded row or field.
 What grows by itself: the `modules:smoke` cells, the lifecycle matrix and the migration cells.
 
-**What still goes unnoticed (silent gaps).** Open: a decision for each table of what erasure and retention do to it
-(in progress, by another change). Not yet merged, so open: `db:migrate` validating `requires` (#985), the cross-owner
-foreign-key list bound to the code and to `requires` (#986), and the same member's two-workspace list isolation
-(#988).
+**What still goes unnoticed (silent gaps).** `db:migrate` validating `requires` (#985), the cross-owner key list (#986),
+the typed lifecycle decision per table (#990), the core-enum guard (#994) and the member-of-two-workspaces list check
+(#988) are merged. Still silent today: a wrong-but-compiling `deleted` or `window` lifecycle decision with no row-level
+proof; a forgotten `workspacePurge` table; a same-member list check that passes vacuously when the tenant seeds nothing
+for the module; the `notification_type` allowance being keyed by type, not by set; and a query column that is not a
+foreign key and has no index (only foreign keys are held). Sibling changes are closing the first four.
+
+**What a new module's check needs.** `scripts/check-docs.test.ts` works from a copy of the tracked files, so `git add`
+the module's files first, or it fails with `SCHEMA.md names a migration that is not a file`. The database named in
+`.env.test` must already exist. The check "a real process per `MODULES` value" in `migrate-on-start.integration.test.ts`
+is not enforced for a new module: add its case by hand.
 
 **Recovery when the test database is corrupted.** Editing a migration that has been applied, or adding a `0002` file
 and removing it, makes the persistent test template and database fail with `... was edited after it was applied`: the
