@@ -757,9 +757,16 @@ describe('integration: a socket across a change of the settings', () => {
       await opened(second);
       await until(() => events.filter((event) => event === 'lookup C').length >= 2);
 
-      // The first socket: admitted wholly by A, opened wholly by B; the second, only ever by C.
-      expect(events.slice(0, 4)).toEqual(['lookup A', 'context A', 'lookup B', 'context B']);
-      expect(new Set(events.slice(4))).toEqual(new Set(['lookup C']));
+      // The first socket: admitted wholly by A, opened wholly by B (its two reads, the first of which
+      // touches the stale session); the second, only ever by C.
+      expect(events.slice(0, 5)).toEqual([
+        'lookup A',
+        'context A',
+        'lookup B',
+        'context B',
+        'lookup B',
+      ]);
+      expect(new Set(events.slice(5))).toEqual(new Set(['lookup C']));
     } finally {
       for (const socket of sockets) socket.close();
       await server.app.stop(true);
