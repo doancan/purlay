@@ -22,6 +22,7 @@ import type { PresenceChange, PresenceSnapshot } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import {
   publication,
+  type Publish,
   publishAfterCommit,
   userTopic,
   type EventBus,
@@ -69,20 +70,22 @@ export const announcePresence = async (
   },
   change: PresenceChange,
 ): Promise<void> => {
-  // The person last: their own pages follow their own state, as everybody else's do (D-257).
-  const told = [...(await coMembers(database, change.userId)), change.userId];
+  const members = await coMembers(database, change.userId);
   const chosen = change.online && (await awayChosen(database, change.userId));
   const state: PresenceChange = { ...change, away: change.online && (change.away || chosen) };
+  // The person last: their own pages follow their own state, as everybody else's do, and while they
+  // are online they also hear whether the away is their choice, so every device's menu knows it (D-257).
+  const own: PresenceChange = change.online ? { ...state, chosen } : state;
+  const tell = (memberId: string, told: PresenceChange): Publish =>
+    publication('PRESENCE', () =>
+      bus.publish(userTopic(memberId), {
+        event: 'PRESENCE',
+        data: { changes: [told] },
+        ts: clock.now().getTime(),
+      }),
+    );
   await publishAfterCommit(log, [
-    told.map((memberId) =>
-      publication('PRESENCE', () =>
-        bus.publish(userTopic(memberId), {
-          event: 'PRESENCE',
-          data: { changes: [state] },
-          ts: clock.now().getTime(),
-        }),
-      ),
-    ),
+    [...members.map((memberId) => tell(memberId, state)), tell(change.userId, own)],
   ]);
 };
 

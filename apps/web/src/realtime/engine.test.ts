@@ -1170,6 +1170,46 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(w.engine.store.getState().presence[alice]?.away).toBe(false);
   });
 
+  test('the away choice heard of yourself keeps every device’s menu right, newest wins (D-257)', () => {
+    const w = world();
+    w.client.setQueryData(keys.me, aSession());
+    w.engine.start();
+    w.open();
+    const me = aSession().user.id;
+    const say = (version: number, chosen?: boolean): void => {
+      w.deliver(
+        frame({
+          event: 'PRESENCE',
+          data: {
+            changes: [
+              {
+                userId: me,
+                online: true,
+                away: chosen ?? false,
+                version,
+                ...(chosen === undefined ? {} : { chosen }),
+              },
+            ],
+          },
+          ts: T0,
+        }),
+      );
+    };
+    const chosen = (): boolean | undefined =>
+      w.client.getQueryData<MeResponse>(keys.me)?.awayChosen;
+    // Chosen on another device: this one's menu now offers to appear active.
+    say(10, true);
+    expect(chosen()).toBe(true);
+    // Said before that, heard after: kept out, as the presence itself is.
+    say(5, false);
+    expect(chosen()).toBe(true);
+    // A change that does not say (an offline one) leaves the choice as it was.
+    say(20);
+    expect(chosen()).toBe(true);
+    say(30, false);
+    expect(chosen()).toBe(false);
+  });
+
   describe('who is online is read again a grace after a reconnect (D-136 §4)', () => {
     const epoch = (w: World): number => w.engine.store.getState().presenceEpoch;
     const reconnect = (w: World): void => {

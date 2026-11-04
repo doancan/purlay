@@ -39,6 +39,7 @@ import {
   type Channel,
   type ClientFrame,
   type ErrorCode,
+  type MeResponse,
   type RevokedReason,
   PRESENCE_GRACE_MS,
   type PresenceChange,
@@ -761,6 +762,13 @@ export const createEngine = (options: EngineOptions): Engine => {
         away: change.away,
         version: change.version,
       };
+      // Only what the person hears of themselves says this: their choice, made on any device (D-257).
+      const { chosen } = change;
+      if (chosen !== undefined) {
+        client.setQueryData<MeResponse>(keys.me, (me) =>
+          me === undefined || me.awayChosen === chosen ? me : { ...me, awayChosen: chosen },
+        );
+      }
     }
     store.setState({ presence: next });
   };
