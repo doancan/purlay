@@ -13668,7 +13668,10 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/ingress/ws/socket.ts',
     find: "dependencies.closedEvent?.('PRESENCE') === true",
     replace: 'false as boolean',
-    tests: ['apps/api/src/realtime/modules-off-presence.integration.test.ts'],
+    tests: [
+      'apps/api/src/ingress/ws/socket.test.ts',
+      'apps/api/src/realtime/modules-off-presence.integration.test.ts',
+    ],
   },
   {
     id: 'hub-delivers-closed-module-events',
@@ -13676,7 +13679,10 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/realtime/hub.ts',
     find: 'if (closedEvent?.(frame.event) === true) return;',
     replace: '',
-    tests: ['apps/api/src/realtime/modules-off-presence.integration.test.ts'],
+    tests: [
+      'apps/api/src/realtime/hub.test.ts',
+      'apps/api/src/realtime/modules-off-presence.integration.test.ts',
+    ],
   },
   {
     id: 'composition-events-of-a-module-never-closed',
