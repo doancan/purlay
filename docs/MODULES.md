@@ -354,9 +354,9 @@ commit beside this list.
   enabled or not (D-250 rule 5, D-255 §3). So a module whose data an erased account, a deleted workspace or an export
   must reach gives `userErased`, `workspacePurge` (its table in `tables`, because a purged
   workspace keeps its row as a tombstone and the cascade never fires), `export` and `personalExport`. Each hook that names
-  a table its own set makes asks `tableExists` first; the exports skip it through the contribution's `ownSet`. Add the
-  table to the compile-time decision in `export-catalogue.ts`: while a table is undecided it does not compile and names
-  the table. A module whose data is not personal or workspace data still decides it, as `excluded`.
+  a table its own set makes asks `tableExists` first; the exports skip it through the contribution's `ownSet`. The
+  compile-time decision in `export-catalogue.ts` is derived from the manifests (nothing to edit there): while a table is
+  undecided it does not compile and names the table. A module whose data is not personal or workspace data still decides it, as `excluded`.
 - **Audit and permissions**: an audit action is a value of `AuditAction` and its target a `targetType` in
   `modules/audit/audit.ts`, written in the same transaction by id and never by words (D-222), with the sentence the
   settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`). A role rule is in the service and tested
@@ -424,24 +424,42 @@ migration and the table), `DATA.md` (what personal data it holds and how it is e
 `DEPLOY.md` (nothing to change unless the module needs configuration). `check:docs` and `module-listing.test.ts` fail for
 the ones they hold.
 
-**What a new module edits outside its own folder, counted on the issues commit (#962).** Source files, not tests and
-not documents; the list is here so that it can shrink, and each line says whether it has to.
+**What a new module edits outside its own folder, measured by a throwaway third module (`notes`) built from this
+list.** Source files, not tests and not documents; the first four rows are what a module without UI and without an
+audit action edits.
 
-| Where | Files | Why, and whether it can go |
+| Where | Files | Why |
 |---|---|---|
-| `apps/api/src` | `composition.ts`, `ingress/http/app.ts`, `ingress/http/<id>.ts`, `export-catalogue.ts`, `modules/audit/audit.ts` | the module's row, its routes, the compile-time decision of its tables, the target type; the first two are the cost of one typed chain and one list |
-| `apps/api/src/modules/export` | `catalogue.ts`, `export.ts`, `personal-catalogue.ts`, `personal.ts` | paid once, by the first own-set module (`ownSet`, `absent`); the next one touches none |
-| `packages/db` | `migrations/<id>/0001`, `src/migrator.ts`, `src/table-owners.ts`, `src/schema.ts` | the set, its one registration (the module ids derive from it), its owner, the generated schema; the last is generated. The module ids cannot be derived from the API's manifests (the DB package may not import them), so `module-setting-pair.test.ts` holds the two to each other by id |
-| `packages/types/src` | `<id>.ts`, `api.ts`, `errors.ts`, `index.ts` | the wire; the module's own file is the module's |
-| `apps/web/src` | `modules/registry.ts` (one line), `components/icon.tsx`, `data/api.ts`, `data/keys.ts`, `data/failure.ts`, `features/composer/uploads.tsx`, `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts`, `testing/fake-api.ts` | the registry line lists the manifest; the router, outlet, rail, palette, shortcuts, settings and `budget:web` read it, so they are no longer edited; the rest are shared registries a module adds its entries to |
-| `scripts` | `mutations.ts` | the mutations; the screen's marker is derived from the module's manifest |
+| `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (two routes), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
+| `packages/db` | `src/migrator.ts` (set registration), `src/table-owners.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, the generated schema |
+| `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
+| `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
+| an audit action | `modules/audit/audit.ts` (target type), `packages/types/src/api.ts` (action), web `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | the exhaustive switch and the catalogues refuse an action with no sentence, so an audit action forces three web files even for a module with no web part |
 
-That is 27 source files that recur, plus the four of the export that were paid once, and eight documents. The
-architecture review's "about 12 source files and 3 documents" counted the places a module must be *wired*; counting every
-file an issues-sized module touches gives the larger number, and the web's twelve are most of it.
+That is 11 shared files besides the module's own two (the `ingress/http` handler and the types file), and 7 of them
+without an audit action (`api.ts` is edited for the endpoint either way). A module with UI adds its manifest, one
+`registry.ts` line and the per-module web files listed in item 5. The old figure of 27 files was the issues commit
+counted before the web registry and the derived catalogue, and is stale.
 
-Since the web registry the web's share is the manifest, one registry line, and the icon, client, failure words and
-catalogues: a third module's web edits went from about ten places across twelve files to five things.
+**The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
+fixture, and are edited: `composition.test.ts`, `platform/metrics.test.ts` and `ingress/http/metrics.test.ts`,
+`testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
+unknown-module name, so a real module of that name breaks it), the upgrade, modules-off, export and personal
+integration tests (a seeded row, a file list or a snapshot for the new table), and `testing/cross-tenant.ts` (item 4).
+What grows by itself: the `modules:smoke` cells, the lifecycle matrix and the migration cells.
+
+**What still goes unnoticed (silent gaps).** Open: a decision for each table of what erasure and retention do to it
+(in progress, by another change). Not yet merged, so open: `db:migrate` validating `requires` (#985), the cross-owner
+foreign-key list bound to the code and to `requires` (#986), and the same member's two-workspace list isolation
+(#988).
+
+**Recovery when the test database is corrupted.** Editing a migration that has been applied, or adding a `0002` file
+and removing it, makes the persistent test template and database fail with `... was edited after it was applied`: the
+template is migrated on every run and the clones come from it. Drop your own two databases and run again: the database
+named in `.env.test` and its template, `<name>_template` (`buildIntegrationTemplate`), for example
+`psql "$URL_OF_YOUR_DATABASE_ON_postgres" -c 'drop database "<name>_template" with (force)'` and the same for
+`<name>`. Never drop `purlay` or `purlay_template` when another worktree or session uses them: `bun run db:prune` lists
+what is scratch and leaves a database in use alone, but names both.
 
 ## 10. Order of work
 
