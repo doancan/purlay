@@ -10665,7 +10665,10 @@ pulled by a scraper the operator runs; nobody is sent anything.
 - **No dependency.** The format is a page of rules: HELP and TYPE, three escapes, `+Inf`/`-Inf`/`NaN`, cumulative
   buckets. It is written in `platform/exposition.ts` and held by a strict reader in the tests that refuses what the
   format does not allow.
-- **What is counted is what the code can see honestly, per process.** Uptime and resident memory; sockets open on
+- **What is counted is what the code can see honestly, per process.** Uptime and resident memory (*measured for #1028:
+  Bun's `process.memoryUsage().rss` is the physical footprint on macOS; under load on a Mac the gauge read 125.6 MiB
+  where `footprint` said 125.6 MiB and `ps` 420 MiB, the difference being 266 MiB the process had freed that the
+  system had not yet reclaimed. The gauge is what the process holds; `ps` on macOS is not; the help line says so*); sockets open on
   this process (several nodes are several targets, which Prometheus adds up — D-201 does not change that); each HTTP
   request as one histogram by method, route **as registered** and status class, whose `_count` is the request
   counter, so a second counter would be the same number twice; refusals for the rate at each door; pushes that did
