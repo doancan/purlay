@@ -293,8 +293,9 @@ until then it is a stated intent and not a guarantee.
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
-tests build: `module-lifecycle.integration.test.ts` (the database as the core alone, chat's set, issues' set or every
-set, against a process that runs none, each alone or both), `migration-cells.integration.test.ts`,
+tests build: `module-lifecycle.integration.test.ts` (the database as each valid `MODULES` value leaves it, against a process
+that runs each such value; the cells are made from the bundle by `testing/module-cells.ts`, every subset up to three
+modules and a sample past that, so a third module adds its cells with no test edited), `migration-cells.integration.test.ts`,
 `modules-off*.integration.test.ts`, a real process per `MODULES` in `migrate-on-start.integration.test.ts`, and
 `test:modules-none` in a browser. It is the set of cells run, and the only combinations promised (D-250 rule 6). It is
 not the whole suite once per cell.
