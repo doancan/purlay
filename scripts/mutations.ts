@@ -14301,6 +14301,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
   },
   {
+    id: 'table-lifecycle-kept-decision-is-flipped',
+    why: 'a table whose rows the erasure leaves is decided `deleted`, so the decision says the opposite of what its probe seeds and holds: the probes of the `anonymised` tables are not decoration (#901)',
+    file: 'packages/db/src/table-lifecycle.ts',
+    find: "  incident_updates: decided('anonymised', 'with-parent'),\n",
+    replace: "  incident_updates: decided('deleted', 'with-parent'),\n",
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
+  {
     id: 'a-list-forgets-its-workspace-filter',
     why: 'a list shows a person who belongs to two workspaces the rows of the other one; the strangers the crossing probes are refused before it runs (D-21)',
     file: 'apps/api/src/features/issues/issues.ts',

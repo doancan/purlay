@@ -8,8 +8,8 @@
  *
  * What is held is what is decided: a table decided `deleted`, `window` or `swept` that is in neither the probes nor the
  * allow-list fails, and so does a name in the allow-list that has since been probed or decided otherwise.
- * `anonymised` is held where a row can be seeded cheaply (`KEPT_PROBES`): the erasure leaves it, naming the
- * tombstone. Those are not complete, and nothing demands they are: a deletion that goes too far is what they catch.
+ * `anonymised` is held the same way (`KEPT_PROBES`, `UNSEEDED_KEPT`, and the cap on the latter): the erasure leaves
+ * the row, which still names the tombstone. A deletion that goes further than the decision is what these catch.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import {
@@ -44,6 +44,7 @@ import { atomicallyOn } from './platform/transactions';
 import { aRoom, type Room } from './testing/rooms';
 import { linkFile } from './testing/sent-files';
 import { aSession } from './testing/signed-in';
+import { aUniqueSlug } from './testing/users';
 import { aMemoryStore } from './testing/storage';
 
 afterAll(async () => {
@@ -109,6 +110,25 @@ const upload = async (
     await requireWorkspaceMembership(db, userId, world.workspaceId),
     { id, name: 'plan.pdf', bytes: new Uint8Array(10).fill(7) },
   );
+  return id;
+};
+
+/** A resolved incident in the world's channel, so any number stand beside each other (one open one per channel). */
+const anIncident = async (db: Transaction, world: World, declaredBy: string): Promise<string> => {
+  const id = anId();
+  await db
+    .insertInto('incidents')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      channel_id: world.channelId,
+      severity: 3,
+      status: 'resolved',
+      declared_by: declaredBy,
+      declared_at: NOW,
+      resolved_at: NOW,
+    })
+    .execute();
   return id;
 };
 
@@ -405,8 +425,8 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
 const UNSEEDED_ERASURE: Readonly<Record<Table, string>> = {};
 
 /**
- * Tables decided `anonymised` whose row the erasure must leave. A deletion that reaches further than
- * the decision is what these catch; the table is complete only for what is cheap to seed.
+ * Tables decided `anonymised` whose row the erasure must leave: a row that names the person, counted by the column
+ * that names them, which the soft deletion keeps pointing at the same (anonymised) account.
  */
 const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
   users: by('users', 'id', adas, async () => {
@@ -456,7 +476,247 @@ const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  personal_exports: ofAda('personal_exports', async (db, world) => {
+    await db
+      .insertInto('personal_exports')
+      .values({ id: anId(), user_id: world.adaId, status: 'pending', created_at: NOW })
+      .execute();
+  }),
+  server_audit_log: by('server_audit_log', 'actor_user_id', adas, async (db, world) => {
+    await db
+      .insertInto('server_audit_log')
+      .values({ id: anId(), actor_user_id: world.adaId, action: 'server.settings.changed' })
+      .execute();
+  }),
+  workspace_exports: by('workspace_exports', 'requested_by', adas, async (db, world) => {
+    await db
+      .insertInto('workspace_exports')
+      .values({
+        id: anId(),
+        workspace_id: world.workspaceId,
+        requested_by: world.adaId,
+        status: 'pending',
+        created_at: NOW,
+      })
+      .execute();
+  }),
+  workspace_invitations: by('workspace_invitations', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('workspace_invitations')
+      .values({
+        id: anId(),
+        workspace_id: world.workspaceId,
+        token_hash: 'd'.repeat(64),
+        created_by: world.adaId,
+        created_at: NOW,
+        expires_at: new Date(NOW.getTime() + DAY_MS),
+      })
+      .execute();
+  }),
+  workspaces: by('workspaces', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('workspaces')
+      .values({ name: 'Ada’s', slug: aUniqueSlug('ada'), created_by: world.adaId })
+      .execute();
+  }),
+  channels: by('channels', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('channels')
+      .values({ workspace_id: world.workspaceId, name: 'ada-made', created_by: world.adaId })
+      .execute();
+  }),
+  github_app_handshakes: ofAda('github_app_handshakes', async (db, world) => {
+    await db
+      .insertInto('github_app_handshakes')
+      .values({
+        state_digest: crypto.randomUUID(),
+        user_id: world.adaId,
+        workspace_id: world.workspaceId,
+        purpose: 'install',
+        expires_at: new Date(NOW.getTime() + DAY_MS),
+      })
+      .execute();
+  }),
+  // An organisation's login stays with the installation: the hook replaces only a personal account's.
+  github_app_installations: by(
+    'github_app_installations',
+    'connected_by',
+    adas,
+    async (db, world) => {
+      await db
+        .insertInto('github_app_installations')
+        .values({
+          id: anId(),
+          workspace_id: world.workspaceId,
+          installation_id: '4242',
+          account_login: 'acme',
+          account_type: 'Organization',
+          connected_by: world.adaId,
+          connected_at: NOW,
+        })
+        .execute();
+    },
+  ),
+  github_integrations: by('github_integrations', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('github_integrations')
+      .values({ id: anId(), workspace_id: world.workspaceId, created_by: world.adaId })
+      .execute();
+  }),
+  github_links: by('github_links', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('github_links')
+      .values({
+        id: anId(),
+        ...inWorkspace(world),
+        root_id: world.bobsMessage,
+        repository_id: '77',
+        repository_full_name: 'acme/api',
+        kind: 'issue',
+        number: 1,
+        title: 'an item',
+        state: 'open',
+        state_at: NOW,
+        origin: 'linked',
+        created_by: world.adaId,
+        created_at: NOW,
+      })
+      .execute();
+  }),
+  github_operations: by('github_operations', 'actor_id', adas, async (db, world) => {
+    await db
+      .insertInto('github_operations')
+      .values({
+        id: anId(),
+        workspace_id: world.workspaceId,
+        actor_id: world.adaId,
+        client_request_id: crypto.randomUUID(),
+        content_digest: 'ab'.repeat(32),
+        root_id: world.bobsMessage,
+        repository_id: '77',
+        repository_full_name: 'acme/api',
+        marker: crypto.randomUUID(),
+        status: 'pending',
+        created_at: NOW,
+        updated_at: NOW,
+      })
+      .execute();
+  }),
+  github_repo_feeds: by('github_repo_feeds', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('github_repo_feeds')
+      .values({
+        id: anId(),
+        ...inWorkspace(world),
+        repository_full_name: 'acme/api',
+        secret_encrypted: 'sealed',
+        events: ['push'],
+        created_by: world.adaId,
+      })
+      .execute();
+  }),
+  // An incident's three tables are kept by what each says of ada: who declared it, who was added, who acted.
+  incidents: by('incidents', 'declared_by', adas, async (db, world) => {
+    await anIncident(db, world, world.adaId);
+  }),
+  incident_responders: ofAda('incident_responders', async (db, world) => {
+    const incidentId = await anIncident(db, world, world.bobId);
+    await db
+      .insertInto('incident_responders')
+      .values({
+        incident_id: incidentId,
+        channel_id: world.channelId,
+        user_id: world.adaId,
+        added_by: world.bobId,
+        added_at: NOW,
+      })
+      .execute();
+  }),
+  incident_updates: by('incident_updates', 'actor_id', adas, async (db, world) => {
+    const incidentId = await anIncident(db, world, world.bobId);
+    await db
+      .insertInto('incident_updates')
+      .values({
+        id: anId(),
+        incident_id: incidentId,
+        kind: 'declared',
+        to_value: 'investigating',
+        actor_id: world.adaId,
+        at: NOW,
+      })
+      .execute();
+  }),
+  incoming_webhooks: by('incoming_webhooks', 'created_by', adas, async (db, world) => {
+    await db
+      .insertInto('incoming_webhooks')
+      .values({
+        id: anId(),
+        ...inWorkspace(world),
+        name: 'deploys',
+        secret_digest: crypto.randomUUID(),
+        created_by: world.adaId,
+        created_at: NOW,
+      })
+      .execute();
+  }),
+  mentions: by('mentions', 'mentioned_user_id', adas, async (db, world) => {
+    await db
+      .insertInto('mentions')
+      .values({
+        ...inWorkspace(world),
+        message_id: world.bobsMessage,
+        mentioned_user_id: world.adaId,
+      })
+      .execute();
+  }),
+  // A version hangs on its message and names nobody: it is ada's by the sender of the message it replaced.
+  message_versions: {
+    seed: async (db, world) => {
+      const sent = await sendMessage(db, clock, world.adaContext, { id: anId(), content: 'v2' });
+      await db
+        .insertInto('message_versions')
+        .values({
+          id: anId(),
+          ...inWorkspace(world),
+          message_id: sent.message.id,
+          content: 'v1',
+          replaced_at: NOW,
+        })
+        .execute();
+    },
+    rows: async (db, world) =>
+      Number(
+        (
+          await db
+            .selectFrom('message_versions')
+            .innerJoin('messages', 'messages.id', 'message_versions.message_id')
+            .select((eb) => eb.fn.countAll<string>().as('count'))
+            .where('messages.sender_id', '=', world.adaId)
+            .executeTakeFirstOrThrow()
+        ).count,
+      ),
+  },
+  pinned_messages: by('pinned_messages', 'pinned_by', adas, async (db, world) => {
+    await db
+      .insertInto('pinned_messages')
+      .values({ ...inWorkspace(world), message_id: world.bobsMessage, pinned_by: world.adaId })
+      .execute();
+  }),
+  reactions: ofAda('reactions', async (db, world) => {
+    await db
+      .insertInto('reactions')
+      .values({ message_id: world.bobsMessage, user_id: world.adaId, emoji: '👍' })
+      .execute();
+  }),
 };
+
+/**
+ * Tables decided `anonymised` that `KEPT_PROBES` does not seed, and why. **This list may only shrink**, and a test
+ * holds its size to `MAX_UNSEEDED_KEPT`: a table joins it only with the cap raised in the same change, by a person
+ * who says in one line why a row naming the person cannot be seeded cheaply.
+ */
+const UNSEEDED_KEPT: Readonly<Record<Table, string>> = {};
+const MAX_UNSEEDED_KEPT = 0;
 
 /** The jobs that delete by time, as `bun run job <name>` calls them, over the test's transaction and the clock. */
 const SWEEPS = {
@@ -781,7 +1041,19 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
     );
     expect(stale).toEqual([]);
     expect(Object.keys(UNSEEDED_ERASURE).filter((table) => table in ERASURE_PROBES)).toEqual([]);
-    expect(Object.keys(KEPT_PROBES).filter((table) => !keptByErasure.includes(table))).toEqual([]);
+  });
+
+  test('every table decided `anonymised` is probed or allow-listed, and the allow-list holds nothing else and stays under its cap', () => {
+    const unheld = keptByErasure.filter(
+      (table) => !(table in KEPT_PROBES) && !(table in UNSEEDED_KEPT),
+    );
+    expect(unheld).toEqual([]);
+    const stale = [...Object.keys(KEPT_PROBES), ...Object.keys(UNSEEDED_KEPT)].filter(
+      (table) => !keptByErasure.includes(table),
+    );
+    expect(stale).toEqual([]);
+    expect(Object.keys(UNSEEDED_KEPT).filter((table) => table in KEPT_PROBES)).toEqual([]);
+    expect(Object.keys(UNSEEDED_KEPT).length).toBeLessThanOrEqual(MAX_UNSEEDED_KEPT);
   });
 
   test('the account’s erasure deletes the rows of each table decided `deleted`, and leaves each `anonymised` one it can seed', async () => {
