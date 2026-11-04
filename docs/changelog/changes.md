@@ -39,6 +39,8 @@ have it.
 
 ### Changed
 
+- **Messages** — A device polling a channel for changes when nothing happened is answered from the indexes instead of a scan of the whole channel, so the answer no longer slows as the channel grows (D-194)
+
 - **Email** — Every email the server sends is a short letter with one button, instead of plain text with the link in it (D-252)
 - **Performance** — The first page load fetches about a sixth less JavaScript, because the channel and message screens load beside the session answer rather than inside the first file (D-250)
 
