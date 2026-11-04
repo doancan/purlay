@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Operations** — `REDIS_KEY_PREFIX` names the namespace of every key and of the bus channel in the shared Redis, so two deployments on one Redis no longer hear each other's frames or share presence and rate limits; unset keeps the names as they were (D-201)
 - **Operations** — Run Purlay on a server managed with Dockhand, behind Nginx Proxy Manager, from one compose file (`docker-compose.dockhand.yml`, D-258)
 - **People** — Somebody who has not used Purlay for five minutes shows as away, and anybody can set themselves away from the account menu (D-257)
 - **Operations** — `bun run db:migrate` refuses a `MODULES` selection that leaves out a module another one requires, in the words the API boot uses, instead of migrating a database the API then will not start on (D-250)

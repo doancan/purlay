@@ -456,7 +456,11 @@ the type refuses the pool (D-77).
   `CLOSE_CODES.RESTARTING` so they replay from their cursors, which is the logic that already exists
   (D-190). Typing, who is online and the limiters that are keyed beyond one connection are shared the
   same way and fall back to this node's own answer (`realtime/redis-presence.ts`, `redis-limiter.ts`).
-  Without `REDIS_URL` none of it is built.
+  Without `REDIS_URL` none of it is built. **Every key and the channel are named in one place**
+  (`platform/redis-names.ts`), under a namespace: `purlay` unless `REDIS_KEY_PREFIX` says another, so
+  two deployments that share one Redis (staging and production) each have a `<namespace>:bus` and their own
+  `<namespace>:rl:`, `:typing:`, `:online:` and `:modules` names, and hear nothing of each other. A test fails
+  on a `purlay:` name written out in any other file.
 
 **Delivery is isolated per subscriber.** The message is committed before the bus fans it out, so a
 send that throws for one socket is logged with that socket's id (never the frame) and the rest still
@@ -1074,7 +1078,8 @@ and reminder delivery loops run inside it, and are safe on several nodes because
 the node that accepted it, which is why the per-connection frame limiter stays in that node's process
 (D-201), and why a node that loses its Redis sends its sockets back to replay rather than leaving them
 silent. A node reports ready only after it has reached Redis once; a node that has, and loses it, serves
-on, degraded, and says so in its log.
+on, degraded, and says so in its log. Every node of one cluster sets the same `REDIS_KEY_PREFIX`; clusters
+that share a Redis set different ones (§6), because nothing else keeps their bus and their records apart.
 
 
 **Thread knowledge (D-204).** ThreadSummary optionally includes knowledge; old rows omit it. A message page hydrates root metadata and bounded live-answer previews in one batched join. Metadata writes advance both knowledge_version (editor concurrency) and state_version (event ordering), so the existing changed_at trigger includes them in reconnect replay. THREAD_UPDATED carries the additive summary. Answer revisions update previews in held client lists; deleted roots drop decision metadata. Saved searches are database-backed personal filters; no new event, scheduler or external service is introduced.
