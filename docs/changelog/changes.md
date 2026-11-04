@@ -46,6 +46,7 @@ have it.
 
 ### Fixed
 
+- **Search** — A search no longer reads the whole workspace when the words are rare or nowhere: the words, the decision note and the accepted answer are each looked up on their own index and merged, with the same results in the same order (D-105)
 - **Operations** — An upgrade whose migration cannot get a table's lock within ten seconds (a long transaction is using it) now stops with a message saying what to do and tries again at the next start, instead of queueing behind that transaction and holding up every other query on the table (D-86)
 - **Operations** — A slow or busy issues list can no longer hold every database connection and make chat's sends wait: issues' requests are held to a third of the pool, and one over it is told the database is busy and retried (D-250)
 - **Operations** — An issues request whose query runs past its time limit is answered `503 DATABASE_UNAVAILABLE`, which a client retries, instead of `500` (D-250)

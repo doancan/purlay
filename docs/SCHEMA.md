@@ -834,6 +834,16 @@ CREATE INDEX idx_messages_search_folded
     ON messages USING gin (workspace_id, purlay_fold(content) gin_trgm_ops)
     WHERE deleted_at IS NULL;
 
+-- Search asks a message's decision note and its accepted answer apart from its words, one query each
+-- merged under one bound (0081, #1019); an OR over the three could use none of the indexes. Both hold
+-- only the few roots that have a note or an answer, newest first inside a workspace.
+CREATE INDEX idx_messages_search_noted
+    ON messages (workspace_id, id DESC)
+    WHERE decision_note <> '' AND deleted_at IS NULL;
+CREATE INDEX idx_messages_search_answered
+    ON messages (workspace_id, id DESC)
+    WHERE accepted_answer_id IS NOT NULL AND deleted_at IS NULL;
+
 -- "Messages by this user", and the guard against orphaned RESTRICT references.
 CREATE INDEX idx_messages_sender ON messages (sender_id);
 
@@ -2681,6 +2691,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-251)
 0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
 0080_away_chosen.sql          users.away_chosen: a person's choice to appear away  (D-257)
+0081_message_search_branches.sql idx_messages_search_noted + idx_messages_search_answered: search asks the note and the answer apart from the words  (D-105, #1019)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
