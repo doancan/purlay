@@ -14350,4 +14350,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "    .where('account_type', '=', 'User')\n",
     tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
   },
+  {
+    id: 'purge-forgets-a-modules-table',
+    why: 'a module owns a table with a workspace_id and forgets to list it in its workspacePurge.tables: the workspace keeps its tombstone row, no key cascades, and the module’s rows stay for ever (#901)',
+    file: 'apps/api/src/features/issues/module.ts',
+    find: "{ before: [], after: [], tables: ['issues'] }",
+    replace: '{ before: [], after: [], tables: [] }',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
 ];
