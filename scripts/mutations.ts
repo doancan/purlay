@@ -14259,4 +14259,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['packages/db/src/table-lifecycle.test.ts'],
   },
+  {
+    id: 'a-list-forgets-its-workspace-filter',
+    why: 'a list shows a person who belongs to two workspaces the rows of the other one; the strangers the crossing probes are refused before it runs (D-21)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: "    .select(ISSUE_COLUMNS)\n    .where('workspace_id', '=', context.workspaceId)\n    .orderBy('id', 'desc')",
+    replace: "    .select(ISSUE_COLUMNS)\n    .orderBy('id', 'desc')",
+    tests: ['apps/api/src/ingress/http/cross-tenant.integration.test.ts'],
+  },
 ];

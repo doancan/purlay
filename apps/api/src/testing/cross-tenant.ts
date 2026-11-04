@@ -809,6 +809,22 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
 };
 
 /**
+ * The `GET` endpoints that list what a workspace, channel or message holds: scoped by a path parameter
+ * and not ending in one, so a single resource (`GET /api/channels/:channelId`) is not a list. Read from
+ * `CROSS_TENANT`, so an endpoint added there is probed with no edit here.
+ *
+ * What these must hold is the other tenant boundary: a person who belongs to two workspaces sees
+ * each one's list with nothing of the other's in it. The crossing above only ever probes strangers,
+ * and a list that forgot its `workspace_id` filter shows a stranger nothing they were not already
+ * refused — it leaks between the workspaces of the same member.
+ */
+export const listEndpoints = (): readonly (readonly [string, CrossTenantCase])[] =>
+  Object.entries(CROSS_TENANT).filter(([key]) => {
+    const path = key.startsWith('GET ') ? key.slice('GET '.length) : '';
+    return path.includes('/:') && !path.split('/').at(-1)?.startsWith(':');
+  });
+
+/**
  * The two reads D-34 was written about: they span channels, so they are where a
  * private conversation leaks. When either is served it must be `workspace-wide`.
  */

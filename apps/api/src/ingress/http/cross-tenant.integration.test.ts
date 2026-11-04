@@ -14,6 +14,8 @@
  * 4. the owner's identical request succeeds. Without this, a path that routes
  *    nowhere would pass every assertion above — its `404` is just as real.
  *
+ * A second describe below crosses the other boundary, between two workspaces of one member.
+ *
  * Which endpoints must appear here is not decided in this file
  * (`cross-tenant.test.ts`, D-63).
  */
@@ -23,6 +25,7 @@ import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import {
   CROSS_TENANT,
+  listEndpoints,
   pathFor,
   queriesFor,
   type Ids,
@@ -377,5 +380,43 @@ describe('integration: cross-tenant isolation', () => {
         });
       });
     }
+  }
+});
+
+/**
+ * One person in two workspaces, with data in both: what the list of one holds of the other.
+ *
+ * The strangers above are refused before any query runs, so a list that forgot its `workspace_id`
+ * filter would pass them all and show a member the rows of their other workspace.
+ */
+describe('integration: one member, two workspaces', () => {
+  for (const [key, crossing] of listEndpoints()) {
+    const [method = '', path = ''] = key.split(' ');
+    const [, query = ''] = queriesFor(crossing)[0] ?? [];
+
+    test(`${key} lists nothing of the member's other workspace`, async () => {
+      await withRollback(async (db) => {
+        const member = await signedIn(db, 'xt-both');
+        const first = await aTenant(db, member, 'xt-first');
+        const second = await aTenant(db, member, 'xt-second');
+
+        const directions: readonly (readonly [Ids, Ids])[] = [
+          [first, second],
+          [second, first],
+        ];
+        for (const [here, other] of directions) {
+          const own = await call(db, method, pathFor(`${path}${query}`, here), member);
+          expect(own.ok).toBe(true);
+          const text = await own.text();
+          for (const [name, id] of Object.entries<string>({ ...other })) {
+            expect({ endpoint: key, field: name, leaked: text.includes(id) }).toEqual({
+              endpoint: key,
+              field: name,
+              leaked: false,
+            });
+          }
+        }
+      });
+    });
   }
 });
