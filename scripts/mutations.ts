@@ -14016,4 +14016,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/ingress/http/issues-cap.concurrency.integration.test.ts'],
   },
+  {
+    id: 'module-cells-without-the-full-set',
+    why: 'the matrix of the lifecycle tests leaves out the cell that runs every module, the one an operator runs by default (D-250)',
+    file: 'apps/api/src/testing/module-cells.ts',
+    find: 'Array.from({ length: 2 ** ids.length }',
+    replace: 'Array.from({ length: 2 ** ids.length - 1 }',
+    tests: ['apps/api/src/testing/module-cells.test.ts'],
+  },
 ];
