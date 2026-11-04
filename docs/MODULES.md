@@ -348,7 +348,9 @@ commit beside this list.
   derived from it, so there is no second list; a module with no tables of its own is the exception and goes in
   `MODULES_WITHOUT_A_SET` beside it). `migration-sets.test.ts` fails by id for a directory under `migrations/` that is not
   registered, and for a set that owns no table. Keys go module to core, never between modules; index every
-  key. `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
+  key (`schema.integration.test.ts`), and every table a statement of the module reads needs an index that starts with
+  a column it names (`query-columns.integration.test.ts`: the module's own migration set, or a reasoned line in
+  its capped `UNINDEXED` list for a table that stays small). `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
   and `DATA.md`.
 - **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it. The set's
   `requires` go in `PRODUCT_MODULE_REQUIRES` next to `PRODUCT_MODULE_IDS` in `migrator.ts`; a test holds that mirror to
@@ -466,9 +468,14 @@ What grows by itself: the `modules:smoke` cells, the lifecycle matrix and the mi
 the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
 (#988), its non-vacuous form (#1010), the purge coverage (#1009), the set-keyed enum allowance (#1007) and the row-level
 lifecycle proof for `deleted` and `window` decisions (#1011) are merged, and every `anonymised` lifecycle decision is
-probed (all 28; the allow-list of unprobed tables is empty and capped at 0). Still silent today: the sweeps, which have no
-control row; and a query column that is not a foreign
-key and has no index (only foreign keys are held).
+probed (all 28; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
+no index starts with is held too (`query-columns.integration.test.ts`, seven reasoned exceptions, capped at 7), but
+only as far as a source scan sees: a `where` or `orderBy` with a literal column on a chain it can follow to its table.
+It does not see a column named inside a `where((eb) => ...)` callback (55 places), in a `sql` template (199 templates,
+not all of them queries) or in a variable (29), a chain that starts from a parameter or a helper's return value (27),
+a CTE or select alias (21 references), or whether a partial index's predicate serves the statement. And the rule is per statement and table, not per column:
+`where workspace_id = $1 and status = $2` passes because `workspace_id` leads an index, so a column that is filtered
+only after that one is not asked for an index of its own.
 
 **What a new module's check needs.** `scripts/check-docs.test.ts` works from a copy of the tracked files, so `git add`
 the module's files first, or it fails with `SCHEMA.md names a migration that is not a file`. The database named in
