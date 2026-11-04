@@ -851,7 +851,9 @@ CREATE INDEX idx_messages_unresolved
 -- 1,000,000 messages took 4.9 s and deleting a channel did not finish in 60 s. (D-89)
 -- What a client catching up reads: one channel in the order things happened to it (D-194). Added by 0058,
 -- which dropped `idx_messages_channel (channel_id)`: this one leads with the same column, so it serves the
--- foreign key too.
+-- foreign key too. A poll with few changes reads their ids from this index and from `idx_hidden_messages_changes`
+-- and fetches those rows by key; `greatest(changed_at, hidden_at)` is no column, so the channel is scanned only
+-- when more than `IDS_READ_MAX` changes are ahead of the walk (#1018).
 CREATE INDEX idx_messages_changes     ON messages (channel_id, changed_at, id);
 CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
