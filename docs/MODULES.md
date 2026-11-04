@@ -285,8 +285,8 @@ until then it is a stated intent and not a guarantee.
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
 | A bundle has no cycle, repeat or double capability, and no two modules (nor a module and the core, `core-claims.ts`) own the same route template (a subtree or a named segment overlapping another's counts), job, socket operation or server event | the registry, and mutations in `scripts/mutations.ts` | 1 |
 | `MODULES` is valid | `resolve`, at boot: a process that cannot parse it logs `MODULES cannot be run; exiting` with every problem and exits `1` (`registry.test.ts`, `migrate-on-start.integration.test.ts`) — **built** | 12 |
-| The matrix exists as soon as two cells differ | CI cells for core-alone and everything, widened per step | 9 |
-| Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, and `test:modules-none`, a browser spec run in the browser job — **built**; not a whole-suite matrix | 12 |
+| The matrix exists as soon as two cells differ | the cells the tests build (below) and, on a started process, CI's `modules` job (`bun run modules:smoke`): one migrated database and one API per cell, the cells made from the bundle — **built** | 9 |
+| Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, `modules:smoke` (every path every manifest claims, every method, signed out, on a real process per cell: a module left out answers byte for byte what an unknown path does, a module that runs answers something else), and `test:modules-none`, a browser spec run in the browser job — **built**; not a whole-suite matrix | 12 |
 | Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; the whole suite is **not** run per cell: no CI job does | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off; every lifecycle step in each cell of database state × process, on real migrated databases (`module-lifecycle.integration.test.ts`) — **built** | 10 |
 | A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state; CI migrating each set from the *last release's* database is **not** built | 10 |
@@ -301,8 +301,12 @@ tests build: `module-lifecycle.integration.test.ts` (the database as each valid 
 that runs each such value; the cells are made from the bundle by `testing/module-cells.ts`, every subset up to three
 modules and a sample past that, so a third module adds its cells with no test edited), `migration-cells.integration.test.ts`,
 `modules-off*.integration.test.ts`, a real process per `MODULES` in `migrate-on-start.integration.test.ts`, and
-`test:modules-none` in a browser. It is the set of cells run, and the only combinations promised (D-250 rule 6). It is
-not the whole suite once per cell.
+`test:modules-none` in a browser, and `modules:smoke` (`testing/module-smoke.ts`), which CI runs as the `modules` job whenever the
+API, a package, the dependencies or the workflow changed: for each cell, `db:migrate` under its `MODULES`, the API started with the same
+value and no migration of its own, and the paths of the manifests asked for. It is the set of cells run, and the only combinations
+promised (D-250 rule 6). It is **not the whole suite once per cell**, and cannot be: the suite's tests build their own composition and
+read no `MODULES`, so the variable would change nothing in them and a job that set it would prove nothing; the cells are the
+process-level checks above.
 
 ## 9. Adding a module — the checklist
 
@@ -396,6 +400,8 @@ commit beside this list.
 - The **lifecycle matrix cell**: `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment
   reader with the module's set as a database state and the module alone as a process.
 - A **real process** per `MODULES` value in `platform/migrate-on-start.integration.test.ts`.
+- The **smoke cell**: nothing to edit — `modules:smoke` makes its cells from the bundle and its paths from the manifest's `routes`, so a
+  module with routes is asked for in every cell. A module whose manifest claims no path fails it (nothing would show it runs).
 - The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
   out of the frame when the server runs none.
 - A **module-listing** row (§11, above) and `composition.test.ts` for what the module contributes.

@@ -9,12 +9,20 @@ type Job = (typeof GATED)[number];
  * What `toJSON(needs)` hands the gate: every job succeeded and the change touched what the browser
  * jobs see, unless said otherwise.
  */
-const results = (over: Partial<Record<Job, string>> = {}, touched = 'true'): string =>
+const results = (
+  over: Partial<Record<Job, string>> = {},
+  touched = 'true',
+  touchedModules = 'true',
+): string =>
   JSON.stringify({
     static: { result: over.static ?? 'success', outputs: {} },
     schema: { result: over.schema ?? 'success', outputs: {} },
-    changes: { result: over.changes ?? 'success', outputs: { browser: touched } },
+    changes: {
+      result: over.changes ?? 'success',
+      outputs: { browser: touched, modules: touchedModules },
+    },
     browser: { result: over.browser ?? 'success', outputs: {} },
+    modules: { result: over.modules ?? 'success', outputs: {} },
   });
 
 describe('the gate', () => {
@@ -40,6 +48,25 @@ describe('the gate', () => {
     expect(judge(results({ changes: 'failure', browser: 'skipped' }, 'false'))).toEqual([
       'changes ended failure',
       'browser ended skipped',
+    ]);
+  });
+
+  test('passes a change the modules job cannot see, which was skipped for it', () => {
+    expect(judge(results({ modules: 'skipped' }, 'true', 'false'))).toEqual([]);
+  });
+
+  test('refuses a skipped modules job for a change it can see, and one whose reason is only the browser’s', () => {
+    expect(judge(results({ modules: 'skipped' }, 'true', 'true'))).toEqual([
+      'modules ended skipped',
+    ]);
+    expect(judge(results({ modules: 'skipped' }, 'false', 'true'))).toEqual([
+      'modules ended skipped',
+    ]);
+  });
+
+  test('refuses a failed modules job, whatever the change touched', () => {
+    expect(judge(results({ modules: 'failure' }, 'false', 'false'))).toEqual([
+      'modules ended failure',
     ]);
   });
 

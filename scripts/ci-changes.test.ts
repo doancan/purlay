@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { main, needsBrowser, run } from './ci-changes';
+import { main, needsBrowser, needsModules, run } from './ci-changes';
 
 describe('the browser jobs', () => {
   test('always run on main', () => {
@@ -33,6 +33,34 @@ describe('the browser jobs', () => {
   });
 });
 
+describe('the modules job', () => {
+  test('always runs on main', () => {
+    expect(needsModules('push', [])).toBe(true);
+  });
+
+  test.each([
+    'apps/api/src/composition.ts',
+    'apps/api/src/testing/module-smoke.ts',
+    'packages/db/src/cli/migrate.ts',
+    'package.json',
+    'bun.lock',
+    '.github/workflows/ci.yml',
+  ])('runs for a pull request that changes %s', (file) => {
+    expect(needsModules('pull_request', ['docs/UX.md', file])).toBe(true);
+  });
+
+  test('does not run for the client, documents or another workflow, which cannot move an answer', () => {
+    expect(
+      needsModules('pull_request', [
+        'apps/web/src/features/shell/rail.tsx',
+        'docs/MODULES.md',
+        'scripts/check-docs.py',
+        '.github/workflows/codeql.yml',
+      ]),
+    ).toBe(false);
+  });
+});
+
 describe('the command', () => {
   const listing =
     (files: string[], exitCode = 0) =>
@@ -49,8 +77,8 @@ describe('the command', () => {
       NUMBER: '7',
       GITHUB_OUTPUT: output,
     };
-    expect(main(environment, listing(['docs/UX.md']))).toBe('browser=false');
-    expect(readFileSync(output, 'utf8')).toBe('browser=false\n');
+    expect(main(environment, listing(['docs/UX.md']))).toBe('browser=false\nmodules=false');
+    expect(readFileSync(output, 'utf8')).toBe('browser=false\nmodules=false\n');
   });
 
   test('asks nothing of GitHub on main', () => {
@@ -58,7 +86,16 @@ describe('the command', () => {
       main({ EVENT: 'push' }, () => {
         throw new Error('not asked');
       }),
-    ).toBe('browser=true');
+    ).toBe('browser=true\nmodules=true');
+  });
+
+  test('says each job on its own: a client change is a browser run and no modules run', () => {
+    expect(
+      main(
+        { EVENT: 'pull_request', REPOSITORY: 'o/r', NUMBER: '7' },
+        listing(['apps/web/src/main.tsx']),
+      ),
+    ).toBe('browser=true\nmodules=false');
   });
 
   test('refuses rather than guessing when the files cannot be read', () => {

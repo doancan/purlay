@@ -66,6 +66,7 @@
     "release": "bun run scripts/release.ts",
     "schedule": "bun run apps/api/src/cli/schedule.ts",
     "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --path-ignore-patterns '**/*.integration.test.ts'",
+    "modules:smoke": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/module-smoke.ts",
     "test:all": "bun --no-env-file --env-file=.env.test run scripts/test-all.ts",
     "test:e2e": "bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
     "test:modules-none": "PURLAY_E2E_MODULES=none bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
