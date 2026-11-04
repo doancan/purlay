@@ -96,9 +96,10 @@ export const CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> mess
 export const CORE_COLUMNS_A_SET_CHANGES: readonly string[] = [];
 
 /**
- * The enum types of the core that a module's set may alter, as the type's name: `ALTER TYPE ... ADD VALUE` changes
+ * The enum types of the core that a module's set may alter, as `set:type`: `ALTER TYPE ... ADD VALUE` changes
  * what the core's columns accept without changing a column, so `CORE_COLUMNS_A_SET_CHANGES` does not see it. The
- * cells test fails for a change that is not here. **This list may only shrink**: `notification_type` is the one
- * that exists today (`migrations/chat/0003_message_reminders.sql` adds `'reminder'` to the core's `notifications.type`).
+ * cells test fails for a change that is not here, and the entry names the set, so another set altering the same
+ * type fails too. **This list may only shrink**: `chat:notification_type` is the one that exists today
+ * (`migrations/chat/0003_message_reminders.sql` adds `'reminder'` to the core's `notifications.type`).
  */
-export const CORE_ENUMS_A_SET_CHANGES: readonly string[] = ['notification_type'];
+export const CORE_ENUMS_A_SET_CHANGES: readonly string[] = ['chat:notification_type'];
