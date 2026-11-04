@@ -465,8 +465,9 @@ What grows by itself: the `modules:smoke` cells, the lifecycle matrix and the mi
 **What still goes unnoticed (silent gaps).** `db:migrate` validating `requires` (#985), the cross-owner key list (#986),
 the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
 (#988), its non-vacuous form (#1010), the purge coverage (#1009), the set-keyed enum allowance (#1007) and the row-level
-lifecycle proof for `deleted` and `window` decisions (#1011) are merged. Still silent today: an `anonymised` lifecycle
-decision (only 8 of 28 are probed) and the sweeps, which have no control row; and a query column that is not a foreign
+lifecycle proof for `deleted` and `window` decisions (#1011) are merged, and every `anonymised` lifecycle decision is
+probed (all 28; the allow-list of unprobed tables is empty and capped at 0). Still silent today: the sweeps, which have no
+control row; and a query column that is not a foreign
 key and has no index (only foreign keys are held).
 
 **What a new module's check needs.** `scripts/check-docs.test.ts` works from a copy of the tracked files, so `git add`
