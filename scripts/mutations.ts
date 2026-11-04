@@ -13531,6 +13531,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/db/src/migration-cells.integration.test.ts'],
   },
   {
+    id: 'set-adds-a-column-to-a-core-table',
+    why: 'a module’s set adds a column to a table of the core, which then differs between a database where the module is on and one where it is off (D-250)',
+    file: 'packages/db/migrations/issues/0001_issues.sql',
+    find: 'CREATE TYPE issue_status AS ENUM',
+    replace: 'ALTER TABLE workspaces ADD COLUMN stray boolean;\n\nCREATE TYPE issue_status AS ENUM',
+    tests: ['packages/db/src/migration-cells.integration.test.ts'],
+  },
+  {
     id: 'manifest-says-more-than-the-listing',
     why: 'a module offers a capability that MODULES.md does not list, so the document an operator reads is not the build (D-250)',
     file: 'apps/api/src/features/chat/module.ts',
