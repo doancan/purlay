@@ -26,7 +26,11 @@ import { githubAppApi, githubAppCaller } from '../../platform/github-app-api';
 import type { GitHubAppSettings } from './settings';
 import { aClosedPort, aScriptedRelay, type RelayScript } from '../../testing/smtp-relay';
 import { aGitHubPerson } from '../../testing/github-sign-in';
-import { aFloodingServer, aRedirectingServer } from '../../testing/hostile-servers';
+import {
+  aFloodingServer,
+  aRedirectingServer,
+  STOPPED_WELL_BEFORE_THE_FLOOD_ENDS,
+} from '../../testing/hostile-servers';
 import {
   anOidcStub,
   OIDC_STUB_CREDENTIALS,
@@ -131,15 +135,6 @@ const failure = (result: ProbeResult): { reason: ProbeReason; raw: string } => {
   if (result.ok) throw new Error('expected the try to fail');
   return { reason: result.reason, raw: result.raw };
 };
-
-/**
- * How far a hostile server got before the probe stopped reading: the floods are 300 MiB, and a probe that read
- * on to the end would leave `written()` at all of it. What is measured is how much the server handed to the
- * socket by the time the close reached it, and on a loaded machine the kernel's buffers and the loopback let a
- * few MiB through first, so the bound sits a decade below the flood rather than a hair above what a quiet
- * machine writes. It still fails for a probe that keeps reading.
- */
-const STOPPED_WELL_BEFORE_THE_FLOOD_ENDS = 32 * 1024 * 1024;
 
 describe('integration: trying a relay (D-179 §4.4)', () => {
   test('a relay that takes the login, the sender and the recipient is sent the one letter, as given', async () => {
