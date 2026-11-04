@@ -13139,6 +13139,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts'],
   },
   {
+    id: 'composition-attachment-any-apperror-is-a-no',
+    why: 'a reader that throws an AppError other than ATTACHMENT_NOT_FOUND (the database being busy) is taken for a no, and the next reader is asked as if nothing happened (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: "const refusal = error instanceof AppError && error.body.code === 'ATTACHMENT_NOT_FOUND';",
+    replace: 'const refusal = error instanceof AppError;',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-push-notices-of-a-module-not-run',
+    why: 'the push sender asks a module the process does not run for its notices, and reads its tables (D-250)',
+    file: 'apps/api/src/composition.ts',
+    find: 'modules.find((module) => module.pushNotices !== undefined)',
+    replace: 'holding.find((module) => module.pushNotices !== undefined)',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'composition-two-answers-allowed',
     why: 'two modules answer for the channels and the first silently wins (D-250)',
     file: 'apps/api/src/composition.ts',
