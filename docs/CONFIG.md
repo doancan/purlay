@@ -561,6 +561,21 @@ proxy_set_header Connection        "upgrade";
 Check it, do not trust it: sign in, then `SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1`
 must be your address, not Cloudflare's.
 
+**With Dockhand and Nginx Proxy Manager** (D-258), use `docker-compose.dockhand.yml` instead: the same stack in
+one file — Garage's and Caddy's configuration written inline, so nothing is mounted from a checkout — with no
+port published and WAL archiving left out. Its one extra variable:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `PROXY_NETWORK` | ✅ (Dockhand file only) | The name of Nginx Proxy Manager's Docker network (`docker network ls`; often `<its stack>_default`). The stack's Caddy joins it as `purlay`, so Nginx Proxy Manager forwards to `http://purlay:80`; nothing else of the stack is on it |
+
+`HTTP_PORT`, `HTTPS_PORT`, `WAL_ARCHIVE`, `WAL_ARCHIVE_TIMEOUT` and `WAL_ARCHIVE_PATH` are not read by it. Caddy there
+listens on plain HTTP and takes the client's address from the `X-Real-IP` that Nginx Proxy Manager sets to the
+peer it saw — believed only from a private address — and gives the API that one address, so `TRUST_PROXY`'s one
+proxy still holds. Nginx Proxy Manager's own `X-Forwarded-For` is not used: it appends to whatever the client
+sent. With Cloudflare in front of Nginx Proxy Manager, `X-Real-IP` is a Cloudflare address unless Nginx Proxy
+Manager restores the client from `CF-Connecting-IP` (its *Advanced* tab, as above); check it the same way.
+
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
 (D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
 nightly, in UTC; and every quarter hour `mail:missed`, the letters to people who asked to be emailed about what
