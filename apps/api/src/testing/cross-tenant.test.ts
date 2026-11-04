@@ -14,6 +14,7 @@ import {
   WORKSPACE_WIDE_READS,
   documentedEndpoints,
   endpointKey,
+  listEndpoints,
   queriesFor,
   type DocumentedEndpoint,
 } from './cross-tenant';
@@ -109,6 +110,16 @@ describe('every served endpoint has a cross-tenant case', () => {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'message' });
       }
     }
+  });
+
+  test('the lists of a workspace are found, and a single resource is not one', () => {
+    const keys = listEndpoints().map(([key]) => key);
+    expect(keys).toContain('GET /api/workspaces/:workspaceId/channels');
+    expect(keys).toContain('GET /api/channels/:channelId/messages');
+    expect(keys).not.toContain('GET /api/channels/:channelId');
+    expect(keys).not.toContain('GET /api/messages/:messageId');
+    expect(keys).not.toContain('GET /api/notifications');
+    expect(keys.every((key) => key.startsWith('GET '))).toBe(true);
   });
 
   test('a further query is crossed after the case’s own, joined to it', () => {
