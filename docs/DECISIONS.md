@@ -12423,4 +12423,15 @@ which carries no identity (`deleted-user-…`, no address, no profile), and the 
 `anonymised` in `TABLE_LIFECYCLE`. `DATA.md`, `SCHEMA.md` and D-218 say so; a bookmark of an erased person is shown as added by
 that account, not by no one.
 
+**Scope, checked 2026-11-04.** Every key to `users(id)` was set against `TABLE_LIFECYCLE` and what the erasure does. Besides the two
+above, `pinned_messages.pinned_by`, `incident_updates.actor_id`, `incident_responders.added_by`, `incidents.declared_by`,
+`incoming_webhooks.created_by`, `github_integrations`, `github_repo_feeds`, `github_links` and `github_app_installations.connected_by`,
+`workspace_invitations.created_by`, `workspace_exports.requested_by`, `channels.created_by`, `workspaces.created_by`, the message
+columns that name a person, and `setup_state.admin_user_id` keep naming the anonymised account, and the contract shows that account
+(`deleted-user-…`), not `null`. What the erasure does delete or clear is what it says in `eraseAccount` and in chat's and issues'
+`userErased` hooks (an issue's assignee is cleared). The one table that holds the person's own data and is not reached is
+`github_app_installations.account_login`, a `gap` in `TABLE_LIFECYCLE` and #997.
+The comments of migrations 0021, 0040 and 0065 still say an erasure nulls these columns; a migration is checksummed (`migrator.ts`),
+so they stand and this is the correction.
+
 **Cost of reversing.** Clearing them would be a step of the erasure's transaction and a loss of who changed a setting.
