@@ -43,6 +43,10 @@ D-139 §4) and `purge:retention` applies nightly (D-27 §1, D-139 §1–3); fore
 (D-139 §7). A backup holds whatever was in the database and the bucket when it was taken, until it
 is rotated out (§4).
 
+What becomes of a table's rows on a person's erasure, and how long they live, is also decided in code, table by
+table, in `packages/db/src/table-lifecycle.ts`: a table without that decision does not compile, and its test holds
+the list to every owned table. This map is the operator's reading of it, not what holds it.
+
 | Table | Personal data | Why | How long |
 |---|---|---|---|
 | `users` | GitHub id, username, display name, avatar address, email, whether it is verified, whether they run the server, whether and since when it is suspended (D-233), whether a password sign-in asks for a second step (D-236), since when they asked to be emailed about what they missed (D-240), language, title, time zone, status, when last seen | Who the person is, and how they sign in | Until erasure, which clears or replaces every one of these but the interface language (D-139 §5) |
@@ -82,7 +86,7 @@ is rotated out (§4).
 | `github_repo_feeds` | Who connected a feed; its repository | Repository feeds (D-134) | Until removed |
 | `incoming_webhooks` | Who made a channel's incoming webhook, its name, and when it last posted; the SHA-256 of its secret, never the secret | Posting to a channel from CI and monitoring (D-245) | Until revoked; with the channel; who made it is named as the anonymised person after their erasure (D-139 §5). Never exported. What it posted is a message, kept as messages are |
 | `github_app_installations` | Who connected a workspace's installation of the GitHub App, by id; the GitHub account's login and kind; when it was connected and whether GitHub suspended it | The workspace's reach into its repositories through the App (D-246) | Until disconnected, by an owner or by GitHub's word that it was removed |
-| `github_user_authorizations` | The person, by id; their GitHub login and id; their sealed App access and refresh tokens, never in the clear | Letting Purlay write to GitHub as that person, only when they chose to (D-246) | Until the person stops it, GitHub says they revoked the App, or the account is erased; never exported |
+| `github_user_authorizations` | The person, by id; their GitHub login and id; their sealed App access and refresh tokens, never in the clear | Letting Purlay write to GitHub as that person, only when they chose to (D-246) | Until the person stops it or GitHub says they revoked the App; never exported. **Account erasure does not delete it yet**: it anonymises the `users` row and never deletes it, so this table's cascading key does not fire, and the sealed tokens and the GitHub login stay until the person's own revoke |
 | `github_app_handshakes` | The person, by id; the SHA-256 of the state of a trip to GitHub, never the state; for an authorization, its PKCE verifier sealed; where to come back to | Bringing a trip to GitHub back to the person who made it (D-246) | Ten minutes, and spent on return; swept |
 | `github_app_deliveries` | None: a delivery's id and its body's digest (D-246) | Telling a repeated delivery to the GitHub App from a new one | `GITHUB_DELIVERIES_KEPT_DAYS` |
 | `github_links` | Who made or linked it, by id; the repository, number, title and state of an issue or pull request a thread points at — a title is the person's own, edited before it was sent | Showing a thread's GitHub work (D-246) | With its root; in a workspace export, never a person's own |
