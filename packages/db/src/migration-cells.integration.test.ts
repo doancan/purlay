@@ -125,14 +125,14 @@ const enumName = (line: string): string => line.slice(0, line.indexOf(':'));
 /**
  * The enum types of the core that a set altered or dropped: a value added, removed or renamed changes what the
  * core's columns accept without changing a column. A module creates enum types of its own; one of the core's is
- * the declared link and nothing else (`CORE_ENUMS_A_SET_CHANGES`).
+ * the declared link and nothing else (`CORE_ENUMS_A_SET_CHANGES`, which names the set as well as the type).
  */
-const coreEnumsChanged = (core: Shape, withSet: Shape): string[] => {
+const coreEnumsChanged = (core: Shape, withSet: Shape, setId: string): string[] => {
   const after = new Set(withSet.enums);
   return core.enums
     .filter((line) => !after.has(line))
     .map(enumName)
-    .filter((type) => !CORE_ENUMS_A_SET_CHANGES.includes(type));
+    .filter((type) => !CORE_ENUMS_A_SET_CHANGES.includes(`${setId}:${type}`));
 };
 
 describe('integration: the cells of the matrix, migrated', () => {
@@ -199,10 +199,10 @@ describe('integration: a set leaves the columns of the core as they were', () =>
       const problems: string[] = [];
       for (const set of PRODUCT_MIGRATION_SETS) {
         const alone = await shapeAfter(setsNamedBy(set.id));
-        for (const type of coreEnumsChanged(core, alone)) {
+        for (const type of coreEnumsChanged(core, alone, set.id)) {
           problems.push(
             `set '${set.id}' alters the core's enum type '${type}': a module creates enum types of its own; ` +
-              `record a deliberate change to the core's in CORE_ENUMS_A_SET_CHANGES (packages/db/src/table-owners.ts)`,
+              `record a deliberate change to the core's as '${set.id}:${type}' in CORE_ENUMS_A_SET_CHANGES (packages/db/src/table-owners.ts)`,
           );
         }
       }
@@ -222,8 +222,28 @@ describe('integration: a set leaves the columns of the core as they were', () =>
         );
         const core = await shapeAfter([]);
         const withScratch = await shapeAfter([{ id: 'scratch', directory }]);
-        expect(coreEnumsChanged(core, withScratch)).toEqual(['user_role']);
+        expect(coreEnumsChanged(core, withScratch, 'scratch')).toEqual(['user_role']);
         expect(coreColumnsChanged(core, withScratch)).toEqual([]);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+    MIGRATING_MS,
+  );
+
+  test(
+    'a scratch set that alters the enum type chat is allowed to alter is named all the same',
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), 'scratch-set-'));
+      try {
+        writeFileSync(
+          join(directory, '0001_stray.sql'),
+          "CREATE TABLE scratch_own (id uuid PRIMARY KEY);\nALTER TYPE notification_type ADD VALUE 'scratch_kind';\n",
+        );
+        const core = await shapeAfter([]);
+        const withScratch = await shapeAfter([{ id: 'scratch', directory }]);
+        expect(coreEnumsChanged(core, withScratch, 'scratch')).toEqual(['notification_type']);
+        expect(coreEnumsChanged(core, withScratch, 'chat')).toEqual([]);
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
