@@ -13363,6 +13363,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/modules/registry.test.tsx', 'apps/web/src/router/route-modules.test.ts'],
   },
   {
+    id: 'web-route-names-may-collide',
+    why: 'a module that names a route the core has, or another module has, silently replaces it in the router’s table (D-250)',
+    file: 'apps/web/src/router/routes.ts',
+    find: '  if (repeated.size > 0) {',
+    replace: '  if (false) {',
+    tests: ['apps/web/src/router/routes.test.ts'],
+  },
+  {
     id: 'web-module-route-outside-its-gate',
     why: 'a module’s screen is drawn on a server that does not run the module, a screen whose every request answers 404 (D-250)',
     file: 'apps/web/src/app/module-route.tsx',

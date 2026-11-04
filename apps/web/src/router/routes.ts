@@ -19,7 +19,7 @@ import type { ParamNames } from '../modules/manifest';
 import { MODULES, type ModuleRoutes } from '../modules/registry';
 
 /** The core's routes. A module's are in its manifest (D-250), and the table below is both. */
-const CORE_ROUTES = {
+export const CORE_ROUTES = {
   // The API sends a failed sign-in back here, so the contract spells it (D-121).
   signIn: SIGN_IN_PATH,
   // A sign-in link's page; its token is in the fragment, never the path (D-138 §4).
@@ -42,6 +42,24 @@ const CORE_ROUTES = {
   settings: '/w/:slug/settings/:section',
   gallery: '/__gallery',
 } as const;
+
+/**
+ * Refuses a route name that two of the tables give. The tables are merged by spreading, where the later one would
+ * silently replace the earlier: a module that named a route `home` would take the core's address and no test would say.
+ */
+export const assertDistinctRoutes = (tables: readonly Readonly<Record<string, string>>[]): void => {
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const name of tables.flatMap((table) => Object.keys(table))) {
+    if (seen.has(name)) repeated.add(name);
+    seen.add(name);
+  }
+  if (repeated.size > 0) {
+    throw new Error(`a route name is declared twice: ${[...repeated].sort().join(', ')}`);
+  }
+};
+
+assertDistinctRoutes([CORE_ROUTES, ...MODULES.map((module) => module.routes)]);
 
 // The manifests' route records are spread into one; the cast is the type the manifests already have, merged.
 const MODULE_ROUTES = Object.assign({}, ...MODULES.map((module) => module.routes)) as ModuleRoutes;
