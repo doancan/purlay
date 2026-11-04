@@ -32,7 +32,7 @@ describe('integration: a module held to its share of the database', () => {
     expect(await timeoutSeen(db)).not.toBe('200ms');
   });
 
-  test('ends a statement that runs past it, and frees the slot for the next', async () => {
+  test('ends a statement that runs past it as the database being busy, which a client retries, and frees the slot for the next', async () => {
     const db = integrationDatabase();
     const atomically = budgeted('notes', BUDGET, db);
     const error = await thrown(() =>
@@ -40,7 +40,8 @@ describe('integration: a module held to its share of the database', () => {
         await sql`select pg_sleep(2)`.execute(transaction);
       }),
     );
-    expect(String(error)).toMatch(/statement timeout/);
+    expect(error).toBeInstanceOf(AppError);
+    expect((error as AppError).body.code).toBe('DATABASE_UNAVAILABLE');
     expect(await atomically(() => Promise.resolve('next'))).toBe('next');
   });
 

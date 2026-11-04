@@ -12607,6 +12607,14 @@ export const MUTATIONS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'module-budget-timeout-is-internal',
+    why: "a statement over the module's time limit answers 500 INTERNAL, which a client does not retry, where the share in use answers a retryable 503 (D-250)",
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: 'if (isStatementTimeout(error)) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/platform/module-budget.integration.test.ts'],
+  },
+  {
     id: 'issues-slot-before-membership',
     why: 'a signed-in person who is not in the workspace takes a slot of the issues share and members are refused as busy (D-250)',
     file: 'apps/api/src/ingress/http/issues.ts',
