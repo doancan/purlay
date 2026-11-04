@@ -42,14 +42,28 @@ export const warmModule = (id: string | null): void => {
   }
 };
 
+/**
+ * A route's screen out of its module's chunk. The chunk's `screens` are typed to the manifest's routes
+ * (`ModuleScreens`); here they are looked up by name, so a chunk that lacks one is said by name rather than left to
+ * fail as `undefined is not a constructor` somewhere inside React.
+ */
+export const screenOf = (
+  chunk: ModuleChunk,
+  module: string,
+  route: string,
+): ComponentType<{ readonly params: Params }> => {
+  const screen = chunk.screens[route];
+  if (screen === undefined) {
+    throw new Error(`the ${module} module's chunk has no screen for the route ${route}`);
+  }
+  return screen as ComponentType<{ readonly params: Params }>;
+};
+
 const SCREENS = new Map<string, { readonly screen: Screen; readonly waiting: 'bar' | 'plain' }>(
   MANIFESTS.flatMap((module) =>
     Object.keys(module.routes).map((route) => {
       const screen = lazy(async () => ({
-        // The chunk's `screens` are typed to the manifest's routes (`ModuleScreens`); here they are looked up by name.
-        default: (await moduleChunk(module.id).get()).screens[route] as ComponentType<{
-          readonly params: Params;
-        }>,
+        default: screenOf(await moduleChunk(module.id).get(), module.id, route),
       }));
       return [route, { screen, waiting: module.waiting }] as const;
     }),

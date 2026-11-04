@@ -13379,6 +13379,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/app/app.test.tsx'],
   },
   {
+    id: 'web-module-screen-missing-is-opaque',
+    why: 'a chunk that lacks the screen of a route its manifest declares fails as an undefined component inside React, not as a named error (D-250)',
+    file: 'apps/web/src/app/module-route.tsx',
+    find: '  if (screen === undefined) {',
+    replace: '  if (false as boolean) {',
+    tests: ['apps/web/src/app/module-route.test.tsx'],
+  },
+  {
     id: 'web-module-chunk-never-warmed',
     why: 'the chunk of the module a person lands in is no longer asked for in the first commit, so a cold load waits for the session before it asks (D-250)',
     file: 'apps/web/src/app/module-route.tsx',
