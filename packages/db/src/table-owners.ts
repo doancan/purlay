@@ -86,3 +86,11 @@ export const TABLE_OWNERS: Readonly<Record<keyof DB, TableOwner>> = {
  * what a fix looks like. Steps 6–10 of the plan empty it.
  */
 export const CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> messages'];
+
+/**
+ * The columns of a core table that a module's set may add, drop or change, as `table.column`: the expand and the
+ * contract of a link that moves into a module (`MODULES.md` §10, step 8), and nothing else, because a module adds
+ * its own tables and leaves the core's as they are. **This list may only shrink** once the link is done: the cells
+ * test (`migration-cells.integration.test.ts`) fails for a change that is not here.
+ */
+export const CORE_COLUMNS_A_SET_CHANGES: readonly string[] = [];
