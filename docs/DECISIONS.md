@@ -12476,7 +12476,10 @@ green dot is, and said "away" to a screen reader. Others do not see whether it w
 5. **Your own state is told to you**: every presence change also goes to the person's own `user:` topic, so the avatar
    on every page of theirs — account menu, People — shows what everybody else is told, chosen on another device or
    idle, which only the server knows. It is their own state, so nobody new hears anything. Disconnected, a page draws
-   nothing for them rather than the last state it heard.
+   nothing for them rather than the last state it heard. While they are online, what they hear of themselves also
+   carries `chosen`, whether the away is their choice, so the menu on every device of theirs offers the right one of
+   *Set yourself as away* and *Set yourself as active* without a reload; newest version wins, as for the state. Nobody
+   else is ever told `chosen`.
 6. **Accepted edge**: with Redis unreachable for more than five minutes, a person who is speaking can be shown away for
    up to a minute after it comes back, until their next word.
 7. Unchanged: D-136 §2 to §4 and §7, Deep Work (it does not change away, nor away it), and the push rule (D-143).

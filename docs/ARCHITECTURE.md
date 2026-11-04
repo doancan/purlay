@@ -495,7 +495,8 @@ It is told on the same `PRESENCE` change as `away`, at the same versions. One no
 person in memory; several keep it in the person's Redis record (D-201) with an idle index swept on every
 renewal, so an idle lapse may be told up to one renewal late. A socket back inside the grace changes
 nothing; an arrival after being offline starts active; offline always wins. Every change is also told on
-the person's own `user:` topic, so their own avatar follows what everybody else hears.
+the person's own `user:` topic, so their own avatar follows what everybody else hears, and, while they are online, says
+`chosen` there alone, so the account menu on each of their devices knows the choice.
 
 ### 6.2. `RateLimiter`
 

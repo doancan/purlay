@@ -516,6 +516,12 @@ export const PresenceChange = Type.Object(
     away: Type.Boolean(),
     /** Later is larger; a client keeps the largest it has heard for a person (D-136 §3). */
     version: Type.Integer({ minimum: 0 }),
+    /**
+     * Whether the away is the person's own choice (`users.away_chosen`, D-257): only in what the person
+     * hears of themselves while online, so every device of theirs knows the choice; never told to
+     * anybody else, to whom idle and chosen look the same.
+     */
+    chosen: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );

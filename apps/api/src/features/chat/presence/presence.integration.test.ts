@@ -66,8 +66,9 @@ describe('integration: who hears that somebody came online', () => {
       expect(node.heard(idOf(here, 'bob'))).toEqual([change]);
       // In the workspace, not in the channel: presence is the workspace's, not a channel's.
       expect(node.heard(idOf(here, 'erin'))).toEqual([change]);
-      // Her own state, on her own topic: every page of hers draws her own avatar from it.
-      expect(node.heard(alice)).toEqual([change]);
+      // Her own state, on her own topic: every page of hers draws her own avatar from it, and her
+      // menu reads whether the away is her choice from it.
+      expect(node.heard(alice)).toEqual([{ ...change, chosen: false }]);
     });
   });
 
@@ -81,7 +82,7 @@ describe('integration: who hears that somebody came online', () => {
       await node.announce(alice);
       expect(node.heard(carol)).toEqual([]);
       // Telling Alice herself reaches nobody new.
-      expect(node.heard(idOf(here, 'alice'))).toEqual([alice]);
+      expect(node.heard(idOf(here, 'alice'))).toEqual([{ ...alice, chosen: false }]);
       // The control: the same socket does hear somebody she shares a workspace with.
       const dave = { userId: idOf(there, 'dave'), online: true, away: false, version: 2 };
       await node.announce(dave);
@@ -124,8 +125,14 @@ describe('integration: who hears that somebody came online', () => {
         { userId: alice, online: true, away: true, version: 2 },
         { userId: alice, online: false, away: false, version: 3 },
       ]);
-      // She hears her own, choice and all: the same changes Bob does.
-      expect(node.heard(alice)).toEqual(node.heard(bob));
+      // She hears her own: the same changes Bob does, and, while online, whether the away is her
+      // choice — which Bob never hears, so idle and chosen look the same to everybody else.
+      expect(node.heard(alice)).toEqual([
+        { userId: alice, online: true, away: false, version: 1, chosen: false },
+        { userId: alice, online: true, away: true, version: 2, chosen: true },
+        { userId: alice, online: false, away: false, version: 3 },
+      ]);
+      expect(node.heard(bob).some((change) => 'chosen' in change)).toBe(false);
     });
   });
 
