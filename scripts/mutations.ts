@@ -13884,11 +13884,27 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/issues/issues-screen.test.tsx'],
   },
   {
+    id: 'issues-rail-link-never-current',
+    why: 'the place a module adds to the rail never says it is the page the person is on, so a screen reader is not told where they are (D-250, D-254)',
+    file: 'apps/web/src/features/shell/rail.tsx',
+    find: "        {...(current ? { 'aria-current': 'page' as const } : {})}",
+    replace: '',
+    tests: ['apps/web/src/features/shell/rail.test.tsx'],
+  },
+  {
     id: 'issues-palette-offers-it-whatever-runs',
     why: 'the palette offers an Issues screen on a server that does not run the module, a dead end that answers 404 (D-254)',
     file: 'apps/web/src/features/palette/use-palette-items.ts',
     find: 'for (const module of running(modules)) {',
     replace: "for (const module of running([...modules, 'issues'])) {",
+    tests: ['apps/web/src/features/palette/command-palette.test.tsx'],
+  },
+  {
+    id: 'palette-modules-in-reverse-order',
+    why: 'the palette lists the places of the modules in another order than the registry’s, so a module added later leads and the core’s own views are pushed down (D-250)',
+    file: 'apps/web/src/features/palette/use-palette-items.ts',
+    find: 'for (const module of running(modules)) {',
+    replace: 'for (const module of [...running(modules)].reverse()) {',
     tests: ['apps/web/src/features/palette/command-palette.test.tsx'],
   },
   {

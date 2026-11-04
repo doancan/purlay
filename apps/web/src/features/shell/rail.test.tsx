@@ -120,6 +120,43 @@ describe('the rail', () => {
     expect(marked).toEqual([current]);
   });
 
+  describe('Issues, a place a module adds', () => {
+    const withIssues = (): Api =>
+      aSignedInApi({
+        me: () => Promise.resolve({ ...aSession(), modules: ['chat', 'issues'] }),
+        issues: () => Promise.resolve({ data: [], nextCursor: null }),
+      });
+    const railOf = async (view: View): Promise<HTMLElement> =>
+      await view.findByRole('navigation', { name: 'Places' });
+
+    test('is the current page on its own screen, and the only one', async () => {
+      const view = await renderApp(<Outlet />, { path: '/w/acme/issues', api: withIssues() });
+      const rail = await railOf(view);
+      expect(within(rail).getByRole('link', { name: 'Issues' }).getAttribute('aria-current')).toBe(
+        'page',
+      );
+      expect(
+        [...rail.querySelectorAll('[aria-current]')].map((link) => link.textContent.trim()),
+      ).toEqual(['Issues']);
+    });
+
+    test('is still the current page at an address the router reads the same, with a trailing slash, which the link’s own comparison does not', async () => {
+      const view = await renderApp(<Outlet />, { path: '/w/acme/issues/', api: withIssues() });
+      const rail = await railOf(view);
+      expect(within(rail).getByRole('link', { name: 'Issues' }).getAttribute('aria-current')).toBe(
+        'page',
+      );
+    });
+
+    test('is not marked on another page', async () => {
+      const view = await renderApp(<Outlet />, { path: '/w/acme/search', api: withIssues() });
+      const rail = await railOf(view);
+      expect(within(rail).getByRole('link', { name: 'Issues' }).hasAttribute('aria-current')).toBe(
+        false,
+      );
+    });
+  });
+
   test('Channels marks a section, not a page: the open channel’s row is the page', async () => {
     const view = await open();
     expect(
