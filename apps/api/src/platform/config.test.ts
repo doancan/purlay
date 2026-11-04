@@ -239,6 +239,25 @@ describe('loading configuration', () => {
   });
 
   /**
+   * The node's socket cap. Unset keeps what every deployment has had; a number outside what a node can
+   * mean (zero would refuse every client, a fraction has no count) is refused where it is read.
+   */
+  test('SOCKET_MAX_CONNECTIONS is a whole number from one to 100000, 2000 unless set', () => {
+    expect(loadConfig(valid).SOCKET_MAX_CONNECTIONS).toBe(2_000);
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '' }).SOCKET_MAX_CONNECTIONS).toBe(2_000);
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '1' }).SOCKET_MAX_CONNECTIONS).toBe(1);
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '5000' }).SOCKET_MAX_CONNECTIONS).toBe(
+      5_000,
+    );
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '100000' }).SOCKET_MAX_CONNECTIONS).toBe(
+      100_000,
+    );
+    for (const SOCKET_MAX_CONNECTIONS of ['0', '-1', '100001', '1.5', '2k', 'many']) {
+      expect(refusal({ ...valid, SOCKET_MAX_CONNECTIONS })).toContain('SOCKET_MAX_CONNECTIONS');
+    }
+  });
+
+  /**
    * A session is a credential that lives this long. Both ends are limits a person
    * chose: a year is the longest a stolen cookie may be worth, and zero would mint
    * sessions that are expired when issued.

@@ -63,6 +63,11 @@ export const Environment = Type.Object({
    *  the socket upgrade that stops cross-site hijacking (D-39). There is no CORS. */
   APP_URL: Type.String({ format: 'uri' }),
 
+  /** How many WebSockets this node holds open before it answers a new upgrade `503` (D-84). A per-node
+   *  number: the hosted product's several nodes each hold this many. The default, 2000, is what every
+   *  deployment has always had. Sized by the fan-out the node's CPU carries, not by memory (`DEPLOY.md`). */
+  SOCKET_MAX_CONNECTIONS: Type.Integer({ minimum: 1, maximum: 100_000, default: 2_000 }),
+
   /** Behind exactly one reverse proxy that sets `X-Forwarded-For`. Without it the
    *  socket's peer is the client and the header is ignored — anyone can write it. */
   TRUST_PROXY: Type.Boolean({ default: false }),

@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Operations** — `SOCKET_MAX_CONNECTIONS` sets how many WebSockets one node holds open before it answers `503`; unset stays 2000, and the deployment guide says to size it by measured fan-out (D-84)
 - **Operations** — `REDIS_KEY_PREFIX` names the namespace of every key and of the bus channel in the shared Redis, so two deployments on one Redis no longer hear each other's frames or share presence and rate limits; unset keeps the names as they were (D-201)
 - **Operations** — Run Purlay on a server managed with Dockhand, behind Nginx Proxy Manager, from one compose file (`docker-compose.dockhand.yml`, D-258)
 - **People** — Somebody who has not used Purlay for five minutes shows as away, and anybody can set themselves away from the account menu (D-257)

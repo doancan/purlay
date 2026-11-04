@@ -106,6 +106,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   APP_URL: 'https://purlay.test',
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
+  SOCKET_MAX_CONNECTIONS: 2_000,
   TRUST_PROXY: false,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,

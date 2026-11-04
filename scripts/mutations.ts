@@ -14505,4 +14505,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "    'Resident memory of this process, in bytes.',\n",
     tests: ['apps/api/src/platform/metrics.test.ts'],
   },
+  {
+    id: 'socket-cap-ignores-the-configuration',
+    why: 'the node’s socket total is the old fixed 2000 again, whatever SOCKET_MAX_CONNECTIONS says: an operator who lowers it to protect a node, or raises it after measuring, changes nothing (#1027)',
+    file: 'apps/api/src/ingress/ws/socket.ts',
+    find: '    total: dependencies.config.SOCKET_MAX_CONNECTIONS,\n',
+    replace: '    total: 2_000,\n',
+    tests: ['apps/api/src/realtime/socket-limits.integration.test.ts'],
+  },
 ];

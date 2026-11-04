@@ -44,7 +44,7 @@ import type { PushSender } from '../../modules/push/sender';
 import type { ServerMetrics } from '../../platform/metrics';
 
 export interface SocketDependencies {
-  readonly config: Pick<Config, 'APP_URL'>;
+  readonly config: Pick<Config, 'APP_URL' | 'SOCKET_MAX_CONNECTIONS'>;
   /** The seam a socket's session is resolved through, as an HTTP request's is (`sessions.ts`). */
   readonly auth: Auth;
   readonly database: Executor;
@@ -61,7 +61,7 @@ export interface SocketDependencies {
   readonly closedFrame?: (op: string) => boolean;
   /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedEvent?: (event: string) => boolean;
-  /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
+  /** Defaults to `SOCKET_CONNECTION_LIMITS.perUser` and the configuration's `SOCKET_MAX_CONNECTIONS`; a test passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
   /** Who is in front of a workspace's page now (D-143), heard from `ACTIVE`. */
@@ -143,7 +143,10 @@ const outboundBufferOf = (raw: object): (() => number) => {
 
 export const createSocketLifecycle = (dependencies: SocketDependencies): SocketLifecycle => {
   const { log, database, clock } = dependencies;
-  const limits = dependencies.connectionLimits ?? SOCKET_CONNECTION_LIMITS;
+  const limits = dependencies.connectionLimits ?? {
+    perUser: SOCKET_CONNECTION_LIMITS.perUser,
+    total: dependencies.config.SOCKET_MAX_CONNECTIONS,
+  };
   // Who is online on this node (D-136): told by the hub's own count of each person's sockets. It is chat's news
   // (`PRESENCE` is in its manifest): a process that does not run chat counts nobody, shares nothing and tells nobody.
   const online =
