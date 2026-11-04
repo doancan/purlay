@@ -194,8 +194,8 @@ moves into that module.
   to `migrations/<id>/`, so a directory with no registered set, or a set with no module, fails a test.
 - `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
   with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
-  tables, and leaves every column of a core table as it was except those `CORE_COLUMNS_A_SET_CHANGES` declares
-  (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
+  tables, and leaves every column of a core table, and every value of a core enum type, as it was except what
+  `CORE_COLUMNS_A_SET_CHANGES` and `CORE_ENUMS_A_SET_CHANGES` declare (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
   module whose tables a combined schema would hide.
 
 ## 6. Web

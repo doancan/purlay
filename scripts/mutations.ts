@@ -13550,6 +13550,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/db/src/migration-cells.integration.test.ts'],
   },
   {
+    id: 'set-adds-a-value-to-a-core-enum',
+    why: 'a module’s set adds a value to an enum type of the core, so the core’s columns accept a value in a database where the module is on and refuse it where it is off (D-250)',
+    file: 'packages/db/migrations/issues/0001_issues.sql',
+    find: 'CREATE TYPE issue_status AS ENUM',
+    replace: "ALTER TYPE user_role ADD VALUE 'stray';\n\nCREATE TYPE issue_status AS ENUM",
+    tests: ['packages/db/src/migration-cells.integration.test.ts'],
+  },
+  {
     id: 'manifest-says-more-than-the-listing',
     why: 'a module offers a capability that MODULES.md does not list, so the document an operator reads is not the build (D-250)',
     file: 'apps/api/src/features/chat/module.ts',
