@@ -79,11 +79,22 @@ export const PRODUCT_MIGRATION_SETS = [
 ] as const satisfies readonly MigrationSet[];
 
 /**
- * The ids of the modules this build carries — those with a set of migrations and those without. A module that
- * keeps no tables of its own is still a module a `MODULES` setting may name, so this list is the build's, not
- * `PRODUCT_MIGRATION_SETS`'s; `module-compat.test.ts` holds it to the manifests.
+ * Modules of the build that keep no tables of their own, so have no set. Empty today: a module that has a set is
+ * a module id by being in `PRODUCT_MIGRATION_SETS`, and needs nothing here.
  */
-export const PRODUCT_MODULE_IDS: readonly string[] = ['chat', 'issues'];
+const MODULES_WITHOUT_A_SET: readonly string[] = [];
+
+/**
+ * The ids of the modules this build carries: every set's id, and the modules that have none. A module that keeps
+ * no tables of its own is still a module a `MODULES` setting may name, so this list is the build's, not
+ * `PRODUCT_MIGRATION_SETS`'s. The DB package cannot import the API's manifests (dependency direction), so the
+ * agreement with them is held by a test, not derived: `module-setting-pair.test.ts` fails by id when the manifests
+ * and this list differ.
+ */
+export const PRODUCT_MODULE_IDS: readonly string[] = [
+  ...PRODUCT_MIGRATION_SETS.map((set) => set.id),
+  ...MODULES_WITHOUT_A_SET,
+];
 
 /**
  * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every

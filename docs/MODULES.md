@@ -336,7 +336,10 @@ commit beside this list.
 **3. The data.**
 
 - A **migration set** in `packages/db/migrations/<id>/0001_<name>.sql`, recorded as `<id>/0001_<name>`; registered in
-  `PRODUCT_MIGRATION_SETS` (`packages/db/src/migrator.ts`). Keys go module to core, never between modules; index every
+  `PRODUCT_MIGRATION_SETS` (`packages/db/src/migrator.ts`, one line: the module ids a `MODULES` setting may name, `PRODUCT_MODULE_IDS`, are
+  derived from it, so there is no second list; a module with no tables of its own is the exception and goes in
+  `MODULES_WITHOUT_A_SET` beside it). `migration-sets.test.ts` fails by id for a directory under `migrations/` that is not
+  registered, and for a set that owns no table. Keys go module to core, never between modules; index every
   key. `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
   and `DATA.md`.
 - **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it.
@@ -421,7 +424,7 @@ not documents; the list is here so that it can shrink, and each line says whethe
 |---|---|---|
 | `apps/api/src` | `composition.ts`, `ingress/http/app.ts`, `ingress/http/<id>.ts`, `export-catalogue.ts`, `modules/audit/audit.ts` | the module's row, its routes, the compile-time decision of its tables, the target type; the first two are the cost of one typed chain and one list |
 | `apps/api/src/modules/export` | `catalogue.ts`, `export.ts`, `personal-catalogue.ts`, `personal.ts` | paid once, by the first own-set module (`ownSet`, `absent`); the next one touches none |
-| `packages/db` | `migrations/<id>/0001`, `src/migrator.ts`, `src/table-owners.ts`, `src/schema.ts` | the set, its registration, its owner, the generated schema; the last is generated |
+| `packages/db` | `migrations/<id>/0001`, `src/migrator.ts`, `src/table-owners.ts`, `src/schema.ts` | the set, its one registration (the module ids derive from it), its owner, the generated schema; the last is generated. The module ids cannot be derived from the API's manifests (the DB package may not import them), so `module-setting-pair.test.ts` holds the two to each other by id |
 | `packages/types/src` | `<id>.ts`, `api.ts`, `errors.ts`, `index.ts` | the wire; the module's own file is the module's |
 | `apps/web/src` | `modules/registry.ts` (one line), `components/icon.tsx`, `data/api.ts`, `data/keys.ts`, `data/failure.ts`, `features/composer/uploads.tsx`, `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts`, `testing/fake-api.ts` | the registry line lists the manifest; the router, outlet, rail, palette, shortcuts, settings and `budget:web` read it, so they are no longer edited; the rest are shared registries a module adds its entries to |
 | `scripts` | `mutations.ts` | the mutations; the screen's marker is derived from the module's manifest |
