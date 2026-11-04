@@ -25,11 +25,13 @@ import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import {
   CROSS_TENANT,
+  EMPTY_FOR_THE_SEED,
   listEndpoints,
   pathFor,
   queriesFor,
   type Ids,
   requestInit,
+  rowsIn,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
@@ -147,6 +149,30 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       parentId: root,
     }),
   );
+  // The owner's own, one of each, so every list of them has a row to show (the list case needs one).
+  const dueAt = new Date(NOW.getTime() + 3_600_000).toISOString();
+  for (const [method, path, body] of [
+    ['PUT', `/api/messages/${root}/pin`, undefined],
+    ['PUT', `/api/messages/${root}/saved`, {}],
+    ['PUT', `/api/messages/${root}/reminder`, { remindAt: dueAt }],
+    [
+      'PUT',
+      `/api/channels/${channelId}/scheduled/${crypto.randomUUID()}`,
+      { content: 'later', sendAt: dueAt },
+    ],
+    [
+      'PUT',
+      `/api/workspaces/${workspaceId}/saved-searches/${crypto.randomUUID()}`,
+      { name: 'Mine', query: { q: 'question' } },
+    ],
+  ] as const) {
+    expect((await call(db, method, path, cookie, body)).ok).toBe(true);
+  }
+  // An archived channel, for the list of them.
+  const gone = await created(
+    await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'old' }),
+  );
+  expect((await call(db, 'DELETE', `/api/channels/${gone}`, cookie)).status).toBe(204);
   // Somebody the owner can make an admin, or remove.
   const member = await aSignedInUser(db, clock, `${slug}-member`);
   await db
@@ -408,6 +434,13 @@ describe('integration: one member, two workspaces', () => {
           const own = await call(db, method, pathFor(`${path}${query}`, here), member);
           expect(own.ok).toBe(true);
           const text = await own.text();
+          // A list that holds nothing cannot leak: it would pass this case and prove nothing.
+          const isJson = own.headers.get('content-type')?.includes('json') === true;
+          if (isJson && EMPTY_FOR_THE_SEED[key] === undefined && rowsIn(JSON.parse(text)) === 0) {
+            throw new Error(
+              `${key} answered no rows for a workspace that owns data, so this case proves nothing about it: seed a row for it in aTenant`,
+            );
+          }
           for (const [name, id] of Object.entries<string>({ ...other })) {
             expect({ endpoint: key, field: name, leaked: text.includes(id) }).toEqual({
               endpoint: key,
