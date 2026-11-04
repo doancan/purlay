@@ -171,6 +171,8 @@ describe('the document check', () => {
       ['a module sets `dataInCore: true` and gives its hooks', 'docs/MODULES.md'],
       ['every bundled module with `dataInCore` is held', 'docs/CONFIG.md'],
       ['the compose work may remove this flag', 'docs/OVERVIEW.md'],
+      ['so "no oracle" is exact for paths, bodies and codes', 'docs/MODULES.md'],
+      ['so the public handshake adds nothing to what a closed route’s 404 hides', 'docs/API.md'],
       ['until then isolation by budget is intent', 'docs/MODULES.md'],
       ['nothing outside its tests imports it, so no process takes it', 'docs/MODULES.md'],
     ])('fails on %s', (sentence, file) => {

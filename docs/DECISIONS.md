@@ -12352,11 +12352,14 @@ changes carries a note that points here.
    `GET /api/attachments/:id` and `/thumbnail` answer `ATTACHMENT_NOT_FOUND` for it as for an id that never existed,
    while an upload nobody attached stays its uploader's. The core names no module; the manifest widens the reader.
 5. **The session carries the modules; the public handshake does not.** *Amends D-254 §6.* `GET /api/me` lists
-   `modules`; `GET /api/client` names none (PR #963), so the public answer adds nothing to what a closed route's `404`
-   hides. The exception that already existed stays: `capabilities` (`scheduledMessages`, `messageReminders`,
-   `personalMessageDeletion`, D-58), derived from chat, because a native client needs them before it signs in. That is
-   the one thing an anonymous caller can infer about the set, and it is documented as such. The macOS client reading
-   `modules` is issue #958.
+   `modules`; `GET /api/client` names none (PR #963). A closed route's body and code are those of an unknown path. Its
+   status is not: for a caller with no session a route of a running module answers `401` and one of a module not run
+   answers `404`, an unknown path always `404`, so the set is observable anonymously from that status (shown by
+   sweeping every route against `MODULES` of none, chat, issues and both), and from `capabilities`
+   (`scheduledMessages`, `messageReminders`, `personalMessageDeletion`, D-58), true only when chat runs and kept
+   because a native client needs them before it signs in. This is accepted and documented (`MODULES.md` §3); the way
+   to remove the status signal is to answer `401` before `404` for every `/api/*` path without a session. The macOS
+   client reading `modules` is issue #958.
 6. **The contract migration of the attachment link is chat's.** The three-release move of `attachments.message_id` and
    `channel_id` (`MODULES.md` §10, step 8) ends with a step in **chat's own set**, `chat/0005` (draft PR #961, not
    merged), not in the core's migrations: a core migration never names a module's table (D-250 rule 5), and the

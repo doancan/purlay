@@ -31,7 +31,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | — | `postgres://user:pass@host:5432/purlay` |
-| `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling |
+| `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling. The issues module takes at most a third of it (rounded down, never more than the pool less one, at least one: `features/issues/budget.ts`); chat is not budgeted |
 | `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. Verifies the server's certificate. `bun run db:migrate` reads it too. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
 | `DATABASE_ALLOW_PLAINTEXT` | — | `false` | Production only: acknowledges that the database link is not encrypted because the network is private (a compose network, a unix socket). Without it production will not start on `DATABASE_SSL=false`. It does not turn TLS off by itself |
 | `DATABASE_SSL_CA_FILE` | — | — | Path to a PEM file of the certificate authority to trust instead of the system's, for a private or managed root. Needs `DATABASE_SSL=true`; a file that cannot be read stops the boot (D-87) |
