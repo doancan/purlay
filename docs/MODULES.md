@@ -352,6 +352,12 @@ commit beside this list.
   a column it names (`query-columns.integration.test.ts`: the module's own migration set, or a reasoned line in
   its capped `UNINDEXED` list for a table that stays small). `SCHEMA.md` §12 lists the file (`check:docs` fails if it does not) and the table's entry goes in `SCHEMA.md`
   and `DATA.md`.
+- **The migration is written for a table that has rows** (`DATA.md` §5, `migration-safety.test.ts`). A migration after
+  the baseline fails the test for an `UPDATE` or `DELETE` with no `LIMIT`, a `CHECK` or `FOREIGN KEY` added without
+  `NOT VALID`, an index built without `CONCURRENTLY` (or `CONCURRENTLY` inside the transaction), or a column type
+  change, on a table `TABLE_LIFECYCLE` does not call `swept` or one row for life. The module's own tables are exempt in
+  the migration that creates them; a later change to them is not. A table that is small on every instance says so in
+  the file, `-- purlay: large-table-ok: <why>`, and the test reads the reason.
 - **The table's owner**: `TABLE_OWNERS` in `packages/db/src/table-owners.ts`, and the owner type beside it. The set's
   `requires` go in `PRODUCT_MODULE_REQUIRES` next to `PRODUCT_MODULE_IDS` in `migrator.ts`; a test holds that mirror to
   the manifests.
@@ -476,6 +482,10 @@ not all of them queries) or in a variable (29), a chain that starts from a param
 a CTE or select alias (21 references), or whether a partial index's predicate serves the statement. And the rule is per statement and table, not per column:
 `where workspace_id = $1 and status = $2` passes because `workspace_id` leads an index, so a column that is filtered
 only after that one is not asked for an index of its own.
+A migration that rewrites or locks a growing table in one step is held too, for the files after the baseline
+(`migration-safety.test.ts`, `DATA.md` §5; thirteen shipped files grandfathered with a reason, capped at 13): it reads
+the statements of the file, not the table's size, and does not see a table named through a variable in a `DO` block,
+`SET NOT NULL` or `ADD UNIQUE`.
 
 **What a new module's check needs.** `scripts/check-docs.test.ts` works from a copy of the tracked files, so `git add`
 the module's files first, or it fails with `SCHEMA.md names a migration that is not a file`. The database named in
