@@ -173,3 +173,80 @@ code as a known gap any longer. What an append-only trail keeps of a person's ow
    accounts. A workspace's content erased on a request outside the product is the same: an owner asks,
    or, with none able to, the operator sets `workspaces.deleted_at` a week back and runs
    `bun run job purge:workspaces`. Backups keep it until rotated out (step 4).
+
+---
+
+## 5. Writing a migration for a table that has rows
+
+A migration runs on every instance, on the data that instance holds, and the one on a busy server finds a
+table millions of rows long. Two shipped files learned it from the scale benchmark: `0058` updated every
+`messages` row in one statement (85 s on 1.3M rows) and `0060` added seven columns and seven `CHECK`s whose
+validation scanned the table under `ACCESS EXCLUSIVE` (about a second per 1.3M rows, with every reader and
+writer queued behind it). A shipped migration is not edited (D-86), so the rule is for the next one.
+
+**The rule** (`migration-safety.test.ts`). A migration after the last one that existed when the rule was made
+(`LAST_GRANDFATHERED` there) fails the test when it holds, for a table that grows, any of:
+
+| Statement | Why it hurts | Instead |
+|---|---|---|
+| `UPDATE` or `DELETE` with no `LIMIT` | one transaction writes every row, holds their locks and the WAL until the end | batches of a few thousand rows, each its own transaction, until none is left (below) |
+| `ADD CONSTRAINT … CHECK` or `FOREIGN KEY`, or `ADD COLUMN … CHECK` / `REFERENCES`, without `NOT VALID` | the table is read in full while the lock that stops writers is held | `ADD CONSTRAINT … NOT VALID`, then `VALIDATE CONSTRAINT` as its own statement |
+| `CREATE INDEX` without `CONCURRENTLY`, or `CONCURRENTLY` inside the migrator's transaction | the plain build blocks writes for as long as it takes; `CONCURRENTLY` is refused in a transaction | `-- purlay: no-transaction` at the head of the file and `CREATE INDEX CONCURRENTLY` |
+| `ALTER COLUMN … TYPE` | rewrites the table and every index under `ACCESS EXCLUSIVE` | add a new column, backfill it in batches, switch the readers and writers, drop the old column in a later migration |
+
+**Which tables grow** is not a list kept here: it is `TABLE_LIFECYCLE`. A table whose rows a schedule sweeps
+(`swept`), and a table that is one row for the life of the instance, are exempt; every other table is covered,
+and a table a module adds is covered as soon as it has its lifecycle decision. A file that creates the table
+itself is exempt, since nothing is in it yet.
+
+**The recipe**, from `0058` and `0010`, for a table that has rows:
+
+1. Put `-- purlay: no-transaction` on the first line, so the migrator runs the file one statement at a time
+   (`migrator.ts`), and `SET lock_timeout = '10s';` first, so a statement that cannot get its lock fails instead
+   of queueing every writer behind it. The file must be safe to run again: write each step with `IF [NOT] EXISTS`
+   or as a statement that finds nothing left to do.
+2. **A column**: `ADD COLUMN x … ` with no `NOT NULL` and a constant default is brief (a constant default does
+   not rewrite the table). A `NOT NULL` that the backfill must satisfy is added last, by way of a validated check (step 4).
+3. **A backfill or a delete, in batches.** Each batch takes a bounded set by key and the statement runs until it
+   changes no row. In a file that is outside the transaction, a `DO` block may commit between batches:
+
+   ```sql
+   DO $$
+   DECLARE changed INTEGER;
+   BEGIN
+     LOOP
+       UPDATE messages SET changed_at = created_at
+        WHERE id IN (SELECT id FROM messages WHERE changed_at IS NULL LIMIT 5000);
+       GET DIAGNOSTICS changed = ROW_COUNT;
+       EXIT WHEN changed = 0;
+       COMMIT;
+     END LOOP;
+   END $$;
+   ```
+
+   Index the column the batch selects by first (`CREATE INDEX CONCURRENTLY … WHERE changed_at IS NULL`), or each
+   batch scans the table again.
+4. **A constraint**: `ALTER TABLE t ADD CONSTRAINT c CHECK (…) NOT VALID;` takes the lock for an instant and
+   checks only new writes; `ALTER TABLE t VALIDATE CONSTRAINT c;` then reads the table holding a lock that lets
+   writers through. For `NOT NULL`: `ADD CONSTRAINT … CHECK (x IS NOT NULL) NOT VALID`, `VALIDATE`, `SET NOT NULL`
+   (it uses the validated check and does not scan), `DROP CONSTRAINT`. `0058` ends this way.
+5. **An index**: `CREATE INDEX CONCURRENTLY`, preceded by `DROP INDEX CONCURRENTLY IF EXISTS` of the same name:
+   a build that was cut off leaves an invalid index of that name behind, and `IF NOT EXISTS` would keep it.
+
+**What the test cannot see**, so the author checks it: a table named in a variable or `format()` inside a `DO`
+block; a `LIMIT` in a loop that does not run to the end (any `LIMIT` in the statement counts as a batch);
+`SET NOT NULL`, `ADD UNIQUE` and `ADD PRIMARY KEY`, which scan or build an index too; and how many rows the
+table holds on a real instance. The benchmark that found `0058` and `0060` (the scale run on 1.3M messages) is the
+measurement. Run a migration that touches a growing table against it, or against a copy at that size, before the
+pull request says it is safe.
+
+**When the table is small or empty on every instance** (a table a module creates in the same release, or
+one that holds a handful of rows by decision), the file says so, with a reason, instead of following the recipe:
+
+```sql
+-- purlay: large-table-ok: the table is created in this release, and nothing writes to it before it ships
+```
+
+The reason is at least twenty characters and is read by the test. The marker on a file with nothing to excuse
+fails the test, so it does not outlive the change that needed it. The shipped files that break the rule are in the
+test's `GRANDFATHERED`, each with why, capped, and it only shrinks; a file after the baseline cannot join it.

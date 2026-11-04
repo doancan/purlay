@@ -36,6 +36,7 @@ have it.
 - **Messages** — Ask to be reminded of a message; the reminder arrives in the inbox when it is due (D-128)
 - **Messages** — Delete a message for yourself alone; everybody else keeps it as it was (D-103)
 - **Messages** — A face typed as text, like `:D` or `<3`, becomes its emoji at the next space; Backspace straight after takes it back (D-253)
+- **Operations** — A new migration that updates or deletes every row of a growing table in one statement, adds a constraint without `NOT VALID`, builds an index without `CONCURRENTLY` or changes a column's type now fails the build, so an upgrade of a large instance no longer holds its tables for minutes (D-86)
 
 ### Changed
 

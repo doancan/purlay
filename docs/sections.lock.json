@@ -111,7 +111,12 @@
     "4.3": "Somebody who cannot sign in",
     "4.4": "Backups",
     "4.5": "A copy for the person",
-    "4.6": "A whole workspace"
+    "4.6": "A whole workspace",
+    "5": "Writing a migration for a table that has rows",
+    "5.2": "A column",
+    "5.3": "A backfill or a delete, in batches",
+    "5.4": "A constraint",
+    "5.5": "An index"
   },
   "docs/DECISIONS.md": {},
   "docs/DEPLOY.md": {},
