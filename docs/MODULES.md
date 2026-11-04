@@ -436,8 +436,8 @@ audit action edits.
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
 | an audit action | `modules/audit/audit.ts` (target type), `packages/types/src/api.ts` (action), web `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | the exhaustive switch and the catalogues refuse an action with no sentence, so an audit action forces three web files even for a module with no web part |
 
-That is 11 shared files besides the module's own two (the `ingress/http` handler and the types file), and 7 of them
-without an audit action (`api.ts` is edited for the endpoint either way). A module with UI adds its manifest, one
+That is 11 shared files besides the module's own two (the `ingress/http` handler and the types file), and 6 of them
+without an audit action. A module with UI adds its manifest, one
 `registry.ts` line and the per-module web files listed in item 5. The old figure of 27 files was the issues commit
 counted before the web registry and the derived catalogue, and is stale.
 
