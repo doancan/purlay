@@ -18,17 +18,43 @@ import {
 } from './modules/export/core-personal-export';
 
 type Bundled = (typeof bundledModules)[number];
+type Slot = 'export' | 'personalExport';
 /** What a module's contribution to the export under `Slot` writes and what it leaves out, as table names. */
-type WrittenBy<Slot extends 'export' | 'personalExport', Module> =
+export type WrittenBy<Under extends Slot, Module> =
   Module extends Readonly<
-    Record<Slot, { readonly tables: readonly { readonly name: infer Name }[] }>
+    Record<Under, { readonly tables: readonly { readonly name: PropertyKey }[] }>
   >
-    ? Name
+    ? Module[Under]['tables'][number]['name']
     : never;
-type ExcludedBy<Slot extends 'export' | 'personalExport', Module> =
-  Module extends Readonly<Record<Slot, { readonly excluded: infer Excluded }>>
+export type ExcludedBy<Under extends Slot, Module> =
+  Module extends Readonly<Record<Under, { readonly excluded: infer Excluded }>>
     ? keyof Excluded
     : never;
+
+/**
+ * The id of each module whose contribution under `Under` does not name its tables one by one. A contribution annotated
+ * `: ExportContribution` has `name: keyof Database` for every table and `excluded` keyed by `string`, so the sums below
+ * would take in every table (or none that is left out) and the check that each table is decided would hold for any
+ * schema. A module that says its tables, as `satisfies` and `as const` keep them, is not in this list.
+ */
+export type VagueContribution<Under extends Slot, Module> = Module extends {
+  readonly manifest: { readonly id: infer Id };
+}
+  ? [keyof Database] extends [WrittenBy<Under, Module>]
+    ? Id
+    : string extends ExcludedBy<Under, Module>
+      ? Id
+      : never
+  : never;
+type Sharp<Under extends Slot> = [VagueContribution<Under, Bundled>] extends [never]
+  ? true
+  : { readonly vague: VagueContribution<Under, Bundled> };
+const sharpExport: Sharp<'export'> = true;
+const sharpPersonalExport: Sharp<'personalExport'> = true;
+/** True while every bundled module's contribution to the export names its tables; while one does not, the line above does not compile. */
+export const EXPORT_SHARP: boolean = sharpExport;
+/** The same for a person's export. */
+export const PERSONAL_EXPORT_SHARP: boolean = sharpPersonalExport;
 
 type Undecided = Exclude<
   keyof Database,
