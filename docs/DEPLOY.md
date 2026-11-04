@@ -172,7 +172,7 @@ there, and a module that is off leaves them inert.
 
 - `MODULES cannot be run; exiting`, exit `1`, with `problems`, each one sentence: `MODULES names "<id>", which this build
   does not have (it has: <ids>)`; `MODULES names "<id>" twice`; `MODULES has an empty item: a doubled or trailing comma`;
-  `"<id>" requires "<other>", which MODULES does not enable`. Every problem is listed at once. Fix the value and restart.
+  `"<id>" requires "<other>", which MODULES does not enable`. Every problem is listed at once, and `bun run db:migrate` refuses the same value with the same sentences (exit `1`, before it applies anything). Fix the value and restart.
 - `migrating on start failed at <file>` (exit `1`; the cause is attached): a migration of the core or of a module's set
   failed. The node does not serve half a schema; compose restarts it and it fails the same way until the cause is fixed.
 - `/health/ready` is `503` and the log says why: `migrations not applied: <files>` (for example

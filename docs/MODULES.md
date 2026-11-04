@@ -62,9 +62,11 @@ registers — the audit actions are in `modules/audit`, and the role rules are i
    are caught earlier, when the build's registry is made. **One reading serves both commands:**
    `parseModulesSetting` (`packages/db`) is the tokenizer and validator of the setting's shape, and `resolve`
    and `bun run db:migrate` both call it, so a setting one refuses the other refuses, with the same sentences;
-   `db:migrate` exits 1 naming `MODULES` and each problem before it applies anything. Only what a module
-   `requires` of another is the API's to check, since only the manifests say so. `module-setting-pair.test.ts`
-   holds the two as a pair over a table of inputs.
+   `db:migrate` exits 1 naming `MODULES` and each problem before it applies anything. What a module `requires`
+   of another is judged the same way: `unmetRequirements` (`packages/db`) writes the sentence for both, the API
+   over its manifests and `db:migrate` over `PRODUCT_MODULE_REQUIRES`, the table `packages/db` keeps because it
+   cannot import the manifests. `module-setting-pair.test.ts` holds that table to the manifests, and the two
+   commands as a pair over a table of inputs.
 2. Order by `requires`, then by `optional` edges, so a module's partners have registered first.
    The boot then logs one `info` line, `the modules this process runs`, with `running` and `notRun` (the modules the build carries and this process leaves out), and `/metrics` carries `purlay_modules_info{module="…"} 1` for each running module.
 3. Where nodes share Redis, record this node's module set in the shared record (`realtime/module-set.ts`) and

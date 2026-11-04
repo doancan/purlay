@@ -25,6 +25,7 @@ have it.
 
 ### Added
 
+- **Operations** — `bun run db:migrate` refuses a `MODULES` selection that leaves out a module another one requires, in the words the API boot uses, instead of migrating a database the API then will not start on (D-250)
 - **Issues** — A second module, off or on with `MODULES`: a workspace keeps a list of issues, each with a title, markdown details, open or done and somebody it is given to; any member makes and changes them, and only whoever made one, an owner or an admin deletes it (D-254)
 - **Operations** — The log says at boot which modules a process runs and which it leaves out, and `/metrics` has `purlay_modules_info{module="…"}` for each one it runs, so an operator can tell the nodes of a cluster apart (D-250)
 - **Operations** — Nodes of a cluster that run different `MODULES` say so in their logs and keep serving, so a new set can roll out node by node (D-250)

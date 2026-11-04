@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql, type Kysely, type QueryExecutorProvider } from 'kysely';
 import pg from 'pg';
-import { parseModulesSetting } from './modules-setting';
+import { ModulesSettingError, parseModulesSetting, unmetRequirements } from './modules-setting';
 import { DEADLOCK_RETRY, retryOnDeadlock, type Retry, type RetryPolicy } from './retry';
 import { executableText, splitStatements } from './statements';
 
@@ -109,16 +109,32 @@ export const PRODUCT_MODULE_IDS: readonly string[] = [
 ];
 
 /**
+ * What each module of the build requires of another, by id, as its manifest says (`requires`). Like
+ * `PRODUCT_MODULE_IDS` it is kept here because the DB package cannot import the API's manifests, and
+ * `module-setting-pair.test.ts` fails when the two differ. It is what lets `db:migrate` refuse a selection the API
+ * would refuse for a missing requirement.
+ */
+export const PRODUCT_MODULE_REQUIRES: Readonly<Record<string, readonly string[]>> = {
+  chat: [],
+  issues: [],
+};
+
+/**
  * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every
  * set this build carries, `none` the core alone, otherwise the ones listed. The setting is read by
  * `parseModulesSetting`, the reading the API boots on too, so what this command refuses the API refuses and the
- * other way round — bar what a module requires of another, which only the API's manifests know. Throws
- * `ModulesSettingError` naming every problem.
+ * other way round, a module whose requirement is not named included (`unmetRequirements`, over `requires`).
+ * Throws `ModulesSettingError` naming every problem.
  */
-export const setsNamedBy = (setting: string | undefined): readonly MigrationSet[] => {
+export const setsNamedBy = (
+  setting: string | undefined,
+  requires: Readonly<Record<string, readonly string[]>> = PRODUCT_MODULE_REQUIRES,
+): readonly MigrationSet[] => {
   const parsed = parseModulesSetting(setting, PRODUCT_MODULE_IDS);
   if (parsed.kind === 'all') return PRODUCT_MIGRATION_SETS;
   if (parsed.kind === 'none') return [];
+  const unmet = unmetRequirements(parsed.ids, requires);
+  if (unmet.length > 0) throw new ModulesSettingError(unmet);
   return PRODUCT_MIGRATION_SETS.filter((set) => parsed.ids.includes(set.id));
 };
 

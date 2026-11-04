@@ -12,6 +12,7 @@ import {
   MODULE_ID,
   ModulesSettingError,
   parseModulesSetting,
+  unmetRequirements,
   type ModulesSetting,
 } from '@purlay/db';
 import type { CoreClaims } from './core-claims';
@@ -223,7 +224,7 @@ const enabledBy = (
   setting: string | undefined,
 ): readonly ModuleManifest[] => {
   // The shape of the setting is `parseModulesSetting`'s, the reading `db:migrate` takes too; what a module
-  // requires of another is this registry's to check.
+  // requires of another is `unmetRequirements`, over these manifests, the one `db:migrate` asks too.
   let parsed: ModulesSetting;
   try {
     parsed = parseModulesSetting(
@@ -239,16 +240,12 @@ const enabledBy = (
   if (parsed.kind === 'all') return bundled;
   if (parsed.kind === 'none') return [];
 
-  const problems: string[] = [];
   const named = new Set(parsed.ids);
   const enabled = bundled.filter((manifest) => named.has(manifest.id));
-  for (const manifest of enabled) {
-    for (const required of manifest.requires) {
-      if (!named.has(required)) {
-        problems.push(`"${manifest.id}" requires "${required}", which MODULES does not enable`);
-      }
-    }
-  }
+  const problems = unmetRequirements(
+    parsed.ids,
+    Object.fromEntries(bundled.map((manifest) => [manifest.id, manifest.requires])),
+  );
   if (problems.length > 0) throw new ModuleConfigError(MODULES_SUBJECT, problems);
   return enabled;
 };
