@@ -298,7 +298,7 @@ session check would tell a caller who is not signed in that the node is full. Wh
 spend the cap check first, is the owner's decision (#1027).
 
 **Memory after a mass reconnect.** Budget the container for the storm, not the steady state. One run
-(2,000 sockets reconnecting with replay, three times in one process, macOS, Bun 1.4.4) took the process
+(2,000 sockets reconnecting with replay, three times in one process, macOS) took the process
 from about 380 MB to 1.2 GB on the first storm and added only 20-50 MB on each of the next two. The
 JavaScript heap came back to 36 MB each time, objects returned to baseline, and nothing leaked; the
 allocator keeps the pages it had committed, so the figure from `ps` stays near its peak until the process
