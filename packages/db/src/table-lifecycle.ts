@@ -62,6 +62,7 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   }),
   push_subscriptions: decided('deleted', 'until-removed'),
   rate_limits: decided('deleted', 'swept'),
+  // The actor stays, naming the anonymised account: the key's SET NULL never fires on a soft deletion (D-256).
   server_audit_log: decided('anonymised', {
     kept: 'append-only trail of the server’s own settings',
   }),
@@ -89,6 +90,7 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   }),
 
   // Chat.
+  // `added_by` stays, naming the anonymised account: the key's SET NULL never fires on a soft deletion (D-256).
   channel_bookmarks: decided('anonymised', 'until-removed'),
   channel_members: decided('anonymised', 'until-removed'),
   channels: decided('anonymised', { kept: 'for the life of the workspace' }),

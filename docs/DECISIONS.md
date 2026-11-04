@@ -10563,7 +10563,8 @@ bookmarks, Teams' tabs).
   again, the first stays, by whom and as named, and nothing is published — a double click or a retry is not
   a second chip. At most `BOOKMARKS_MAX` (20), counted under the channel's row lock (`FOR NO KEY UPDATE`, the
   lock a send's own write takes), so two members adding the last one cannot both get in. `added_by` outlives
-  its person as null: the bookmark is the channel's. The workspace export carries them.
+  its person as null: the bookmark is the channel's. The workspace export carries them. *(Amended 2026-11-04, D-256: erasure
+  soft-deletes the account, so the key's `SET NULL` never fires and `added_by` keeps naming the anonymised account.)*
 - **Read by whoever can see the channel, changed by its members** — the rule pins have (D-130): a visible
   non-member is `403 NOT_A_CHANNEL_MEMBER`; one in another channel, never there, or not a UUID is the one
   `404 BOOKMARK_NOT_FOUND` (D-34). Both suites cover the routes.
@@ -12410,3 +12411,16 @@ handshake*: a caller who has not signed in would read the instance's packages.
 
 **Cost of reversing.** Documentation and tests only; §1 and §2 are held by `module-set.test.ts` and `modules-off*`, and a
 change of either is a change of those.
+
+### D-256. An erased account stays named where it was the actor or the adder — builds on D-139, D-218, D-26
+
+**Context.** `channel_bookmarks.added_by` and the actor of `server_audit_log` are keyed to `users` with `ON DELETE SET NULL`,
+and the documents said the erasure clears them. It does not: erasing an account soft-deletes and anonymises its row
+(`eraseAccount`, D-139 §5) and `forgetWhatChatKeeps` deletes only what chat holds for the person, so the key never fires.
+
+**Decision.** The owner accepts what the code does. `added_by` and `actor_user_id` keep pointing at the anonymised account,
+which carries no identity (`deleted-user-…`, no address, no profile), and the audit trail keeps its actor. Both tables are
+`anonymised` in `TABLE_LIFECYCLE`. `DATA.md`, `SCHEMA.md` and D-218 say so; a bookmark of an erased person is shown as added by
+that account, not by no one.
+
+**Cost of reversing.** Clearing them would be a step of the erasure's transaction and a loss of who changed a setting.
