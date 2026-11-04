@@ -28,6 +28,7 @@ export { TABLE_OWNERS, type TableOwner } from './table-owners';
  */
 export { sql } from 'kysely';
 export type {
+  AliasableExpression,
   Expression,
   ExpressionBuilder,
   RawBuilder,
