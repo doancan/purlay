@@ -4,7 +4,8 @@
  * reaching it, and compile and pass. This runs the decisions. For each table decided `deleted` it seeds the
  * cheapest row that names a person, runs the real `eraseAccount` with chat's hooks, and asks that the row is gone;
  * for each decided `window` or `swept` it seeds a row past its time, runs the real purge or sweep with a clock
- * after it, and asks the same. A decision that cannot be seeded cheaply is in `UNSEEDED_*`, with why.
+ * after it, and asks the same; and, in a second world, a row still inside its time, which the sweep must leave
+ * (a sweep that deletes too much is caught only by that control row). A decision that cannot be seeded cheaply is in `UNSEEDED_*`, with why.
  *
  * What is held is what is decided: a table decided `deleted`, `window` or `swept` that is in neither the probes nor the
  * allow-list fails, and so does a name in the allow-list that has since been probed or decided otherwise.
@@ -36,7 +37,7 @@ import { sweepEmailSignIns } from './modules/jobs/jobs';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
 import { createInvitation } from './modules/workspaces/invitations';
-import { DAY_MS, fixedClock } from './platform/clock';
+import { DAY_MS, fixedClock, HOUR_MS } from './platform/clock';
 import { NO_LOG, type EventBus } from './platform/events';
 import { requireWorkspaceMembership } from './platform/tenancy';
 import { tokenDigest } from './platform/tokens';
@@ -504,76 +505,105 @@ const SWEEPS = {
   },
 } as const;
 
-interface RetentionProbe extends Probe {
-  readonly job: keyof typeof SWEEPS;
+/**
+ * A row a retention probe seeds, told from the others by what it holds and not by an id it never learns. `at` is
+ * when the row was made, received, issued or lapsed, for the sweeps that count from it; `until` is when it
+ * expires, for those that delete at the expiry itself.
+ */
+interface Row {
+  readonly mark: string;
+  readonly id: string;
+  readonly at: Date;
+  readonly until: Date;
 }
 
-/** What marks the rows a retention probe seeds, so each is counted by what it holds and not by an id it never learns. */
-const MARK = crypto.randomUUID().replaceAll('-', '').repeat(2);
-const OLD_FILE = messageId(LONG_AGO);
-const DONE_SCHEDULED = messageId(new Date(LONG_AGO.getTime() + 1));
+interface RetentionProbe {
+  readonly job: keyof typeof SWEEPS;
+  readonly seed: (db: Transaction, world: World, row: Row) => Promise<void>;
+  readonly rows: (db: Transaction, row: Row) => Promise<number>;
+}
 
-/** A row past its time, found by the column that holds `MARK`. */
-const pastDue = (
+const aMark = (): string => crypto.randomUUID().replaceAll('-', '').repeat(2);
+
+/** Past the time of every sweep. */
+const EXPIRED: Row = { mark: aMark(), id: messageId(LONG_AGO), at: LONG_AGO, until: LONG_AGO };
+/**
+ * Inside the time of every sweep: made an hour ago, which no window and no margin has passed (the shortest is the
+ * day that a sign-in's rows are kept past their expiry), and expiring in an hour, which no expiry has.
+ */
+const KEPT: Row = {
+  mark: aMark(),
+  id: messageId(new Date(NOW.getTime() - HOUR_MS)),
+  at: new Date(NOW.getTime() - HOUR_MS),
+  until: new Date(NOW.getTime() + HOUR_MS),
+};
+
+/** A row found by the column that holds its mark. */
+const marked = (
   job: RetentionProbe['job'],
   table: Table,
   column: string,
   seed: RetentionProbe['seed'],
-  held: string = MARK,
-): RetentionProbe => ({ job, seed, rows: async (db) => await countWhere(db, table, column, held) });
+  held: (row: Row) => string = (row) => row.mark,
+): RetentionProbe => ({
+  job,
+  seed,
+  rows: async (db, row) => await countWhere(db, table, column, held(row)),
+});
 
-/** Tables decided `window` or `swept`: a row past its time, and none left once the job that deletes it has run. */
+/** Tables decided `window` or `swept`: a row seeded as `EXPIRED` and one as `KEPT`, by the same code. */
 const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
-  messages: pastDue('purge:retention', 'messages', 'content', async (db, world) => {
+  messages: marked('purge:retention', 'messages', 'content', async (db, world, row) => {
     await db
       .updateTable('workspaces')
       .set({ retention_days: WINDOW_DAYS })
       .where('id', '=', world.workspaceId)
       .execute();
-    await sendMessage(db, fixedClock(LONG_AGO), world.adaContext, {
-      id: anId(LONG_AGO),
-      content: MARK,
+    await sendMessage(db, fixedClock(row.at), world.adaContext, {
+      id: anId(row.at),
+      content: row.mark,
     });
   }),
   // A file goes with the message it was sent with, past the same window.
   attachments: {
     job: 'purge:retention',
-    seed: async (db, world) => {
-      const sent = await sendMessage(db, fixedClock(LONG_AGO), world.adaContext, {
-        id: anId(LONG_AGO),
+    seed: async (db, world, row) => {
+      const sent = await sendMessage(db, fixedClock(row.at), world.adaContext, {
+        id: anId(row.at),
         content: 'with a file',
       });
-      await upload(db, world, world.adaId, OLD_FILE);
+      await upload(db, world, world.adaId, row.id);
       await linkFile(db, {
-        id: OLD_FILE,
+        id: row.id,
         workspaceId: world.workspaceId,
         messageId: sent.message.id,
         channelId: world.channelId,
       });
     },
-    rows: async (db) => await countWhere(db, 'attachments', 'id', OLD_FILE),
+    rows: async (db, row) => await countWhere(db, 'attachments', 'id', row.id),
   },
-  admin_email_verification: pastDue(
+  // The setup's one address link: one row, which is why the kept row is seeded in a world of its own.
+  admin_email_verification: marked(
     'sweep:email-sign-ins',
     'admin_email_verification',
     'token_digest',
-    async (db, world) => {
+    async (db, world, row) => {
       await db
         .insertInto('admin_email_verification')
         .values({
           email: world.adaEmail,
-          issued_at: LONG_AGO,
-          token_digest: MARK,
+          issued_at: row.at,
+          token_digest: row.mark,
           user_id: world.adaId,
         })
         .execute();
     },
   ),
-  invitation_passports: pastDue(
+  invitation_passports: marked(
     'sweep:email-sign-ins',
     'invitation_passports',
     'address_digest',
-    async (db, world) => {
+    async (db, world, row) => {
       const { invitation } = await createInvitation(
         db,
         clock,
@@ -585,97 +615,102 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
           id: anId(),
           invitation_id: invitation.id,
           kind: 'email',
-          address_digest: MARK,
-          expires_at: LONG_AGO,
+          address_digest: row.mark,
+          expires_at: row.at,
         })
         .execute();
     },
   ),
-  native_authorizations: pastDue(
+  native_authorizations: marked(
     'sweep:email-sign-ins',
     'native_authorizations',
     'code_digest',
-    async (db, world) => {
+    async (db, world, row) => {
       await db
         .insertInto('native_authorizations')
         .values({
           id: anId(),
           user_id: world.adaId,
-          code_digest: MARK,
+          code_digest: row.mark,
           challenge: 'c'.repeat(43),
-          created_at: LONG_AGO,
-          expires_at: LONG_AGO,
+          created_at: row.at,
+          expires_at: row.at,
         })
         .execute();
     },
   ),
-  rate_limits: pastDue('sweep:email-sign-ins', 'rate_limits', 'key', async (db) => {
+  rate_limits: marked('sweep:email-sign-ins', 'rate_limits', 'key', async (db, _world, row) => {
     await db
       .insertInto('rate_limits')
-      .values({ key: MARK, count: 1, last_request: String(LONG_AGO.getTime()) })
+      .values({ key: row.mark, count: 1, last_request: String(row.at.getTime()) })
       .execute();
   }),
-  verifications: pastDue(
+  verifications: marked(
     'sweep:email-sign-ins',
     'verifications',
     'identifier',
-    async (db, world) => {
+    async (db, world, row) => {
       await db
         .insertInto('verifications')
-        .values({ identifier: MARK, value: world.adaId, expires_at: LONG_AGO })
+        .values({ identifier: row.mark, value: world.adaId, expires_at: row.at })
         .execute();
     },
   ),
-  sessions: pastDue('sweep:sessions', 'sessions', 'token_hash', async (db, world) => {
+  sessions: marked('sweep:sessions', 'sessions', 'token_hash', async (db, world, row) => {
     await db
       .insertInto('sessions')
-      .values({ user_id: world.adaId, token_hash: MARK, expires_at: LONG_AGO })
+      .values({ user_id: world.adaId, token_hash: row.mark, expires_at: row.until })
       .execute();
   }),
-  link_previews: pastDue('sweep:link-previews', 'link_previews', 'url_hash', async (db) => {
-    await db
-      .insertInto('link_previews')
-      .values({
-        url: `https://example.test/${MARK}`,
-        url_hash: MARK,
-        payload: JSON.stringify({}),
-        expires_at: LONG_AGO,
-      })
-      .execute();
-  }),
-  github_app_deliveries: pastDue(
-    'sweep:github-deliveries',
-    'github_app_deliveries',
-    'delivery_id',
-    async (db) => {
+  link_previews: marked(
+    'sweep:link-previews',
+    'link_previews',
+    'url_hash',
+    async (db, _world, row) => {
       await db
-        .insertInto('github_app_deliveries')
-        .values({ delivery_id: MARK, body_digest: 'ab'.repeat(32), received_at: LONG_AGO })
-        .execute();
-    },
-  ),
-  github_app_handshakes: pastDue(
-    'sweep:github-deliveries',
-    'github_app_handshakes',
-    'state_digest',
-    async (db, world) => {
-      await db
-        .insertInto('github_app_handshakes')
+        .insertInto('link_previews')
         .values({
-          state_digest: MARK,
-          user_id: world.adaId,
-          workspace_id: world.workspaceId,
-          purpose: 'install',
-          expires_at: LONG_AGO,
+          url: `https://example.test/${row.mark}`,
+          url_hash: row.mark,
+          payload: JSON.stringify({}),
+          expires_at: row.until,
         })
         .execute();
     },
   ),
-  github_deliveries: pastDue(
+  github_app_deliveries: marked(
+    'sweep:github-deliveries',
+    'github_app_deliveries',
+    'delivery_id',
+    async (db, _world, row) => {
+      await db
+        .insertInto('github_app_deliveries')
+        .values({ delivery_id: row.mark, body_digest: 'ab'.repeat(32), received_at: row.at })
+        .execute();
+    },
+  ),
+  github_app_handshakes: marked(
+    'sweep:github-deliveries',
+    'github_app_handshakes',
+    'state_digest',
+    async (db, world, row) => {
+      await db
+        .insertInto('github_app_handshakes')
+        .values({
+          state_digest: row.mark,
+          user_id: world.adaId,
+          workspace_id: world.workspaceId,
+          purpose: 'install',
+          expires_at: row.until,
+        })
+        .execute();
+    },
+  ),
+  github_deliveries: marked(
     'sweep:github-deliveries',
     'github_deliveries',
     'delivery_id',
-    async (db, world) => {
+    async (db, world, row) => {
       const feedId = anId();
       await db
         .insertInto('github_repo_feeds')
@@ -689,15 +724,15 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
         .execute();
       await db
         .insertInto('github_deliveries')
-        .values({ feed_id: feedId, delivery_id: MARK, received_at: LONG_AGO })
+        .values({ feed_id: feedId, delivery_id: row.mark, received_at: row.at })
         .execute();
     },
   ),
-  github_operations: pastDue(
+  github_operations: marked(
     'sweep:github-deliveries',
     'github_operations',
     'marker',
-    async (db, world) => {
+    async (db, world, row) => {
       await db
         .insertInto('github_operations')
         .values({
@@ -709,55 +744,60 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
           root_id: world.bobsMessage,
           repository_id: '77',
           repository_full_name: 'acme/api',
-          marker: MARK,
+          marker: row.mark,
           status: 'pending',
-          created_at: LONG_AGO,
-          updated_at: LONG_AGO,
+          created_at: row.at,
+          updated_at: row.at,
         })
         .execute();
     },
   ),
-  object_deletions: pastDue(
+  // Due at the database's `now()`, not the test's clock: a key is due when the row is written, or an hour on, as an
+  // upload's keys are written ahead of its object (`UPLOAD_GRACE`).
+  object_deletions: marked(
     'sweep:deletions',
     'object_deletions',
     'storage_key',
-    async (db) => {
+    async (db, _world, row) => {
       await db
         .insertInto('object_deletions')
-        .values({ storage_key: `w/${MARK}` })
+        .values({
+          storage_key: `w/${row.mark}`,
+          ...(row.until > NOW ? { due_at: sql<Date>`now() + interval '1 hour'` } : {}),
+        })
         .execute();
     },
-    `w/${MARK}`,
+    (row) => `w/${row.mark}`,
   ),
-  missed_mail_letters: pastDue(
+  missed_mail_letters: marked(
     'mail:missed',
     'missed_mail_letters',
     'stop_digest',
-    async (db, world) => {
+    async (db, world, row) => {
       await db
         .insertInto('missed_mail_letters')
-        .values({ user_id: world.adaId, sent_at: LONG_AGO, stop_digest: MARK })
+        .values({ user_id: world.adaId, sent_at: row.at, stop_digest: row.mark })
         .execute();
     },
   ),
   scheduled_messages: {
     job: 'deliver:scheduled',
-    seed: async (db, world) => {
+    seed: async (db, world, row) => {
       await db
         .insertInto('scheduled_messages')
         .values({
-          id: DONE_SCHEDULED,
+          id: row.id,
           user_id: world.adaId,
           ...inWorkspace(world),
           content: 'done',
-          send_at: LONG_AGO,
+          send_at: row.at,
           state: 'sent',
-          created_at: LONG_AGO,
-          updated_at: LONG_AGO,
+          created_at: row.at,
+          updated_at: row.at,
         })
         .execute();
     },
-    rows: async (db) => await countWhere(db, 'scheduled_messages', 'id', DONE_SCHEDULED),
+    rows: async (db, row) => await countWhere(db, 'scheduled_messages', 'id', row.id),
   },
 };
 
@@ -821,6 +861,12 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
     ({ retention }) => retention === 'window' || retention === 'swept',
   );
 
+  const runEachJob = async (db: Transaction): Promise<void> => {
+    for (const job of new Set(Object.values(RETENTION_PROBES).map((probe) => probe.job))) {
+      await SWEEPS[job](db);
+    }
+  };
+
   test('every table decided `window` or `swept` is probed or allow-listed, and the allow-list holds nothing else', () => {
     const unheld = sweptOrWindowed.filter(
       (table) => !(table in RETENTION_PROBES) && !(table in UNSEEDED_RETENTION),
@@ -838,23 +884,44 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
   test('the job each table names deletes its rows past their time', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
-      for (const probe of Object.values(RETENTION_PROBES)) await probe.seed(db, world);
+      for (const probe of Object.values(RETENTION_PROBES)) await probe.seed(db, world, EXPIRED);
       const before = await Promise.all(
         Object.entries(RETENTION_PROBES).map(
-          async ([table, probe]) => [table, await probe.rows(db, world)] as const,
+          async ([table, probe]) => [table, await probe.rows(db, EXPIRED)] as const,
         ),
       );
       expect(before.filter(([, rows]) => rows === 0)).toEqual([]);
 
-      for (const job of new Set(Object.values(RETENTION_PROBES).map((probe) => probe.job))) {
-        await SWEEPS[job](db);
-      }
+      await runEachJob(db);
 
       const survivors: string[] = [];
       for (const [table, probe] of Object.entries(RETENTION_PROBES)) {
-        if ((await probe.rows(db, world)) !== 0) survivors.push(`${table} (${probe.job})`);
+        if ((await probe.rows(db, EXPIRED)) !== 0) survivors.push(`${table} (${probe.job})`);
       }
       expect(survivors).toEqual([]);
+    });
+  });
+
+  // A sweep that deletes too much is not caught by a row past its time: only a row inside it is. Seeded in a world
+  // of its own, because one table (the setup's address link) holds a single row, so it cannot hold both.
+  test('the job each table names leaves its rows still inside their time', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      for (const probe of Object.values(RETENTION_PROBES)) await probe.seed(db, world, KEPT);
+      const before = await Promise.all(
+        Object.entries(RETENTION_PROBES).map(
+          async ([table, probe]) => [table, await probe.rows(db, KEPT)] as const,
+        ),
+      );
+      expect(before.filter(([, rows]) => rows !== 1)).toEqual([]);
+
+      await runEachJob(db);
+
+      const swept: string[] = [];
+      for (const [table, probe] of Object.entries(RETENTION_PROBES)) {
+        if ((await probe.rows(db, KEPT)) !== 1) swept.push(`${table} (${probe.job})`);
+      }
+      expect(swept).toEqual([]);
     });
   });
 });
