@@ -14382,4 +14382,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '{ before: [], after: [], tables: [] }',
     tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
   },
+  {
+    id: 'sweep-cutoff-widened-past-the-kept-row',
+    why: 'a sweep’s cutoff is moved past now, so it deletes the rows still inside their time along with the expired ones, and a probe that seeds only expired rows passes it (#901)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: '  const before = new Date(dependencies.clock.now().getTime() - DAY_MS);\n',
+    replace: '  const before = new Date(dependencies.clock.now().getTime() + DAY_MS);\n',
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
 ];
