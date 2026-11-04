@@ -17,16 +17,42 @@
  * is the same answer the second time, so it is not asked for again. A test passes
  * `retries: 0`.
  */
-import { QueryClient } from '@tanstack/react-query';
-import { isTransient } from '../data/errors';
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
+import { isApiError, isTransient } from '../data/errors';
+import { keys } from '../data/keys';
 
 /** How long a fetched page counts as fresh. */
 export const STALE_AFTER_MS = 30_000;
 
+/**
+ * A module's route the server has closed answers `404 ROUTE_NOT_FOUND`, where a missing thing answers its own code
+ * (`CHANNEL_NOT_FOUND`): in a rolling deploy with different `MODULES` that is a page drawn from a node that runs the
+ * module reaching one that does not (D-250, `DEPLOY.md`). The session is read again, once, so a server that no longer
+ * lists the module has it hidden by `ModuleGate` and the person is not left on "no longer available". One that still
+ * lists it is a mixed cluster, and nothing more is done: this reads `me` and never answers a failure of `me` itself, so
+ * it cannot loop, and a read already under way is the answer a burst of 404s waits for.
+ */
+const rereadSessionOnClosedRoute = (client: QueryClient, error: unknown): void => {
+  if (!isApiError(error) || error.code !== 'ROUTE_NOT_FOUND') return;
+  if (client.isFetching({ queryKey: keys.me, exact: true }) > 0) return;
+  void client.invalidateQueries({ queryKey: keys.me, exact: true });
+};
+
 export const createQueryClient = ({
   retries = 1,
-}: { readonly retries?: number } = {}): QueryClient =>
-  new QueryClient({
+}: { readonly retries?: number } = {}): QueryClient => {
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error, query): void => {
+        if (query.queryKey[0] === keys.me[0]) return;
+        rereadSessionOnClosedRoute(client, error);
+      },
+    }),
+    mutationCache: new MutationCache({
+      onError: (error): void => {
+        rereadSessionOnClosedRoute(client, error);
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: STALE_AFTER_MS,
@@ -35,3 +61,5 @@ export const createQueryClient = ({
       },
     },
   });
+  return client;
+};

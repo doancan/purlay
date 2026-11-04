@@ -157,6 +157,7 @@ sees: a request that reaches a node without the module gets a `404` for the modu
 balancer sees them come and go until the roll ends), a socket on that node does not hear the module's events, and one
 `warn` line in the log of a node that sees a peer with another set (`the nodes of this cluster do not run the same
 modules; serving on, as in a rolling deploy`, with `thisNode` and `otherNodes`), and an `info` line when they agree again.
+A page open during the roll that meets the `404 ROUTE_NOT_FOUND` of a node without the module reads `GET /api/me` again, once (a burst of them is one read); if the session no longer lists the module the page hides its screens, and if it still does (a mixed cluster) the page does nothing more.
 That line needs `REDIS_URL`; without Redis there is one node. **Finish the roll**: a set that stays mixed is a service that
 answers differently by node. A migration that a new module brings applies when the first node of the new set starts.
 
