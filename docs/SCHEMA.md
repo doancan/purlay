@@ -1406,7 +1406,8 @@ CREATE TABLE channel_bookmarks (
     -- An http or https address; the service parses it as a browser would (`javascript:` is never kept).
     url           TEXT NOT NULL CHECK (char_length(url) BETWEEN 1 AND 2048),
     title         TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 80),
-    -- The bookmark is the channel's: it outlives the account of the person who added it.
+    -- The bookmark is the channel's: it outlives the account of the person who added it. Erasure soft-deletes the
+    -- account, so SET NULL never fires: this keeps naming the anonymised account (D-256).
     added_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -1911,8 +1912,8 @@ CREATE TABLE audit_log (
     -- purge that would erase the audit trail fail loudly.
     workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
 
-    -- Kept when the actor is erased: their row stays, anonymised (D-139 §5). What was
-    -- done survives who did it.
+    -- Kept when the actor is erased: their row stays, anonymised (D-139 §5), and this keeps naming it, because
+    -- SET NULL never fires on a soft deletion (D-256). What was done survives who did it.
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
 
     -- Stable machine-readable verb: 'member.role_changed', 'integration.token_set',
@@ -1966,6 +1967,7 @@ cannot lack it. Append-only is held as `audit_log`'s is — by the sweep in
 ```sql
 CREATE TABLE server_audit_log (
     id            UUID PRIMARY KEY,
+    -- As audit_log's: an erased account is soft-deleted, so this keeps naming the anonymised account (D-256).
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action        VARCHAR(64) NOT NULL,
     session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
