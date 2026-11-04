@@ -85,16 +85,20 @@ web client reads; so every route of the build is registered, and `closed()` (`co
 `routes` of the manifests of the modules not run) is asked before the rate limit and the session. The route-ownership
 test (`ingress/http/route-ownership.test.ts`) holds the manifests' lists and the routes the application registers together, so a
 route nobody owns, or one claimed by two, fails it. The effect is that a request for a closed path gets the plain
-`404` of any unknown route, with the generic body and no code that says *disabled* — which would tell a caller who has
-not signed in which modules an instance runs. A closed job exits `0` (`closedJob`), a closed frame is answered as an
+`404` of any unknown route, with the generic body and no code that says *disabled*, so what a closed route says is the
+same as what an unknown path says (its status, for a caller with no session, is not: see below). A closed job exits `0` (`closedJob`), a closed frame is answered as an
 operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).
 
-**What an anonymous caller can still infer.** `GET /api/client` does not list modules (PR #963), but it carries
-`capabilities` flags derived from chat being run (`scheduledMessages`, `messageReminders`,
-`personalMessageDeletion`, D-58). They are the one thing a caller who has not signed in can read about the module set,
-and they stay because a native client needs them before it signs in. So "no oracle" is exact for paths, bodies and
-codes, and not for those three flags. A signed-in caller learns the list from `GET /api/me` (`modules`); the macOS
-client reading it is issue #958.
+**What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
+unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
+and the same route of a module that does not answers `404 ROUTE_NOT_FOUND`, while an unknown path is always `404`
+(`GET /api/channels/x/messages`, `GET /api/workspaces/x/issues` and `GET /api/notifications` each tell whether chat or
+issues runs). `GET /api/client` does not list modules (PR #963), but it carries `capabilities` flags that are true only
+when chat runs (`scheduledMessages`, `messageReminders`, `personalMessageDeletion`, D-58; `client-info.ts`), and they
+stay because a native client needs them before it signs in. So the module set is observable without a session, from
+that status and from those three flags. This is accepted. To remove the status signal, answer `401` before `404` for
+every `/api/*` path without a session; the flags would need their own decision. A signed-in caller learns the list
+from `GET /api/me` (`modules`); the macOS client reading it is issue #958.
 
 That holds before any other judgement of the request: the edge's refusals of a body (a missing or an oversized
 `Content-Length` on a webhook) are asked only of a path that is a route, so a closed webhook answers as `/api/no-such-thing`

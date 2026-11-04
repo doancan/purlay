@@ -127,7 +127,9 @@ value.
 - signed in, `GET /api/me` answers `modules`, the ids this server runs (the page draws the screens of those only);
 - a path of a module that is off answers the plain `404` of any unknown path, for example
   `GET /api/workspaces/<id>/issues` with a session on a node that does not run `issues`; the public `GET /api/client`
-  names no module;
+  lists no module, though `capabilities` (`scheduledMessages`, `messageReminders`, `personalMessageDeletion`) are
+  true only when chat runs, and a caller with no session gets `401` from a route of a module that runs and `404`
+  from one that does not (`MODULES.md` §3);
 - the value the container was started with: `docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" exec api printenv MODULES` (nothing printed is every module);
 - with `REDIS_URL`, each live node's set is in the hash `purlay:modules` (`HGETALL`), one field per node.
 

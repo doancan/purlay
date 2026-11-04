@@ -275,6 +275,8 @@ RETIRED_CLAIMS = [
      'the `dataInCore` flag was removed: every bundled module'"'"'s data hooks are held (D-255 §3)'),
     (r'may remove this flag', set(),
      'the compose simplification merged: there is no `dataInCore` flag'),
+    (r'no oracle\b[^.\n]*exact for paths|adds nothing to what a closed route', {'docs/DECISIONS.md'},
+     'a closed route hides body and code, not status: an anonymous caller sees 401 or 404 (MODULES.md §3, D-255 §5)'),
     (r'isolation by budget is intent|no process takes it|nothing outside its tests imports it', set(),
      'the module budget is wired for issues, and `budget:latency` holds chat against starvation (D-255 §9)'),
 ]
