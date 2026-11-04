@@ -1963,27 +1963,37 @@ export const createApp = (given: Dependencies): HttpApplication => {
      * (`docs/spikes/elysia.md`) — so a wrong origin and a missing session are
      * refused with a real HTTP status rather than a socket that opens and then
      * closes for a reason the client has to guess at (D-39, §7.2).
+     *
+     * Admission is a guard around the route, not an option of it: the framework runs a socket
+     * route's own `beforeHandle` in the route and then once more inside the upgrade handler it
+     * builds, and ignores the second answer — a second read of the session, and a second look at
+     * the cap, for every admitted socket, whose result nobody reads. A guard's hook runs once.
      */
-    .ws('/ws', {
-      // An upgrade's admission and a socket's open are flows of their own: each served by one instance.
-      beforeHandle: async ({ request, set }) => {
-        const refusal = await within(async () => await sockets.admit(request));
-        if (refusal === undefined) return undefined;
-        set.status = refusal.status;
-        return refusal.body;
+    .guard(
+      {
+        // An upgrade's admission and a socket's open are flows of their own: each served by one instance.
+        beforeHandle: async ({ request, set }) => {
+          const refusal = await within(async () => await sockets.admit(request));
+          if (refusal === undefined) return undefined;
+          set.status = refusal.status;
+          return refusal.body;
+        },
       },
-      open: async (socket) => {
-        await within(async () => {
-          await sockets.open(socket);
-        });
-      },
-      message: (socket, raw) => {
-        sockets.message(socket, raw);
-      },
-      close: (socket, code) => {
-        sockets.close(socket, code);
-      },
-    });
+      (guarded) =>
+        guarded.ws('/ws', {
+          open: async (socket) => {
+            await within(async () => {
+              await sockets.open(socket);
+            });
+          },
+          message: (socket, raw) => {
+            sockets.message(socket, raw);
+          },
+          close: (socket, code) => {
+            sockets.close(socket, code);
+          },
+        }),
+    );
 
   return {
     handle: async (request) => await app.handle(request),

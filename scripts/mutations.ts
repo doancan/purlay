@@ -6372,16 +6372,18 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'swap-socket-admission-not-pinned',
     why: 'a socket’s admission reads whichever instance is current at each use, so a change of the settings during it spreads one admission over two instances',
     file: APP,
-    find: '        const refusal = await within(async () => await sockets.admit(request));\n',
-    replace: '        const refusal = await sockets.admit(request);\n',
+    find: '          const refusal = await within(async () => await sockets.admit(request));\n',
+    replace: '          const refusal = await sockets.admit(request);\n',
     tests: [SWAP_TESTS],
+    equivalent:
+      'the admission now runs once, and the request is already pinned to the instance it started on by its first hook (`services.pin()` in `onRequest`), so the wrapper adds nothing for the one call; it used to matter only for the framework’s second, ignored call of the hook (#1033)',
   },
   {
     id: 'swap-socket-open-not-pinned',
     why: 'a socket’s open reads whichever instance is current at each use, so a change of the settings while it opens serves its second half by the new instance',
     file: APP,
-    find: '        await within(async () => {\n          await sockets.open(socket);\n        });\n',
-    replace: '        await sockets.open(socket);\n',
+    find: '            await within(async () => {\n              await sockets.open(socket);\n            });\n',
+    replace: '            await sockets.open(socket);\n',
     tests: [SWAP_TESTS],
   },
   {
@@ -14512,5 +14514,14 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '    total: dependencies.config.SOCKET_MAX_CONNECTIONS,\n',
     replace: '    total: 2_000,\n',
     tests: ['apps/api/src/realtime/socket-limits.integration.test.ts'],
+  },
+  {
+    id: 'socket-admission-runs-twice',
+    why: 'the socket route is given an admission of its own again, on top of the guard: the framework runs a route’s own beforeHandle twice, so every admitted socket costs a second read of the session and a second look at the cap, which at a few hundred handshakes a second is what fills the pool (#1033)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: "        guarded.ws('/ws', {\n",
+    replace:
+      "        guarded.ws('/ws', {\n          beforeHandle: async ({ request }) => {\n            await sockets.admit(request);\n          },\n",
+    tests: ['apps/api/src/realtime/handshake-reads.integration.test.ts'],
   },
 ];
