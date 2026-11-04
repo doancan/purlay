@@ -7,8 +7,9 @@
  * function now. It is pure and knows no module but the ids it is given.
  *
  * What it judges is the setting's own shape: a closed grammar of ids, no empty item, no repeat, `none` alone,
- * and no id the build lacks. What a module needs from another (`requires`) is the API's to check: it is the
- * manifests that say so.
+ * and no id the build lacks. What a module needs from another (`requires`) is judged by `unmetRequirements`, over
+ * a table of requirements each caller supplies: the API from its manifests, `db:migrate` from the build's
+ * `PRODUCT_MODULE_REQUIRES`, which a test holds to the manifests.
  */
 
 /** A module id: lowercase letters, digits and hyphens, starting with a letter. */
@@ -76,3 +77,19 @@ export const parseModulesSetting = (
   if (problems.length > 0) throw new ModulesSettingError(problems);
   return { kind: 'named', ids: [...named] };
 };
+
+/**
+ * One sentence for each module named whose requirement is not named too, in the order of `requires`, the table of
+ * every module's requirements by id. The sentence is the same wherever the setting is read.
+ */
+export const unmetRequirements = (
+  named: readonly string[],
+  requires: Readonly<Record<string, readonly string[]>>,
+): readonly string[] =>
+  Object.entries(requires)
+    .filter(([id]) => named.includes(id))
+    .flatMap(([id, required]) =>
+      required
+        .filter((other) => !named.includes(other))
+        .map((other) => `"${id}" requires "${other}", which MODULES does not enable`),
+    );

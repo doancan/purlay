@@ -38,6 +38,7 @@ export {
   MODULE_ID,
   ModulesSettingError,
   parseModulesSetting,
+  unmetRequirements,
   type ModulesSetting,
 } from './modules-setting';
 export {
@@ -46,6 +47,7 @@ export {
   MIGRATIONS_DIRECTORY,
   PRODUCT_MIGRATION_SETS,
   PRODUCT_MODULE_IDS,
+  PRODUCT_MODULE_REQUIRES,
   setsNamedBy,
   migrationHistoryProblem,
   pendingMigrations,

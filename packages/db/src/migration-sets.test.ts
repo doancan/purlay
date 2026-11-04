@@ -4,9 +4,10 @@ import {
   MIGRATIONS_DIRECTORY,
   PRODUCT_MIGRATION_SETS,
   PRODUCT_MODULE_IDS,
+  PRODUCT_MODULE_REQUIRES,
   setsNamedBy,
 } from './migrator';
-import { ModulesSettingError, parseModulesSetting } from './modules-setting';
+import { ModulesSettingError, parseModulesSetting, unmetRequirements } from './modules-setting';
 import { TABLE_OWNERS } from './table-owners';
 
 const idsOfSets = (setting: string | undefined): string[] =>
@@ -76,6 +77,34 @@ describe('the migration sets a MODULES setting names', () => {
     for (const set of PRODUCT_MIGRATION_SETS) expect(owners).toContain(set.id);
     const setIds = new Set<string>(PRODUCT_MIGRATION_SETS.map((set) => set.id));
     for (const owner of owners) if (owner !== 'core') expect(setIds).toContain(owner);
+  });
+});
+
+describe('what a module requires of another', () => {
+  const requires = { chat: [], issues: ['chat'] };
+
+  test('a selection that leaves a requirement out is refused in the words the API uses, and one that names it is not', () => {
+    expect(() => setsNamedBy('issues', requires)).toThrow(ModulesSettingError);
+    expect(() => setsNamedBy('issues', requires)).toThrow(
+      '"issues" requires "chat", which MODULES does not enable',
+    );
+    expect(idsOfSets('chat,issues')).toEqual(['chat', 'issues']);
+    expect(setsNamedBy('issues, chat', requires).map((set) => set.id)).toEqual(['chat', 'issues']);
+    expect(setsNamedBy('chat', requires).map((set) => set.id)).toEqual(['chat']);
+    expect(setsNamedBy(undefined, requires)).toEqual(PRODUCT_MIGRATION_SETS);
+    expect(setsNamedBy('none', requires)).toEqual([]);
+  });
+
+  test('every unmet requirement is named at once', () => {
+    expect(unmetRequirements(['b', 'c'], { a: ['x'], b: ['a', 'x'], c: ['a'] })).toEqual([
+      '"b" requires "a", which MODULES does not enable',
+      '"b" requires "x", which MODULES does not enable',
+      '"c" requires "a", which MODULES does not enable',
+    ]);
+  });
+
+  test('the table has an entry for every module of the build', () => {
+    expect(Object.keys(PRODUCT_MODULE_REQUIRES).sort()).toEqual([...PRODUCT_MODULE_IDS].sort());
   });
 });
 
