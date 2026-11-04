@@ -13346,6 +13346,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/app/app.test.tsx'],
   },
   {
+    id: 'web-closed-route-never-rereads-session',
+    why: 'a page drawn from a node that runs chat meets one that does not, and a chat call answering ROUTE_NOT_FOUND leaves the person on “no longer available” until a reload, since the session still lists chat (D-250)',
+    file: 'apps/web/src/app/query-client.ts',
+    find: 'void client.invalidateQueries({ queryKey: keys.me, exact: true });',
+    replace: 'void keys;',
+    tests: ['apps/web/src/app/closed-route.test.tsx'],
+  },
+  {
     id: 'web-registry-runs-every-module',
     why: 'the registry hands every module to the rail, the palette and the shortcuts whatever the server runs, so a server without chat is shown its places and keys (D-250)',
     file: 'apps/web/src/modules/registry.ts',
