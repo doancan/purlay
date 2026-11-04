@@ -14240,4 +14240,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "  message_attachments: 'issues',\n",
     tests: ['apps/api/src/module-foreign-keys.integration.test.ts'],
   },
+  {
+    id: 'table-lifecycle-decision-forgotten',
+    why: 'a module adds an owned table and decides neither its erasure nor its retention, so the account erasure and the retention window silently pass it by (D-250)',
+    file: 'packages/db/src/table-lifecycle.ts',
+    find: "  issues: decided('anonymised', 'until-removed'),\n",
+    replace: '',
+    tests: ['packages/db/src/table-lifecycle.test.ts'],
+  },
 ];
