@@ -418,6 +418,8 @@ describe('integration: the production compose file', () => {
       DATABASE_SSL_CA_FILE: 'the database is on the stack’s private network, without TLS (D-79)',
       REDIS_URL:
         'the cloud’s shared state; the self-hosted stack has no broker and never will (D-201)',
+      REDIS_KEY_PREFIX:
+        'it names keys in the cloud’s Redis, and the self-hosted stack has none (D-201)',
     };
     const withheldFrom: Record<string, Record<string, string>> = {
       api: stack,
