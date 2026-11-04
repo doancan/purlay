@@ -69,6 +69,16 @@ export interface Flooding {
   readonly stop: () => void;
 }
 
+/**
+ * How far a flooding server may get before a client that stops reading has let go: the floods are 300 MiB,
+ * and a client that read on to the end would leave `written()` at all of it. What is measured is what the
+ * server handed its socket by the time the close reached it, and that includes the kernel's socket buffers
+ * on both ends — Linux grows them under load to `tcp_wmem` (4 MiB) plus `tcp_rmem` (6 MiB) — so a bound
+ * of 4 MiB held only on an idle machine (CI measured 4259840 bytes, D-228). Set a decade below the flood
+ * rather than a hair above what a quiet machine writes; it still fails for a client that keeps reading.
+ */
+export const STOPPED_WELL_BEFORE_THE_FLOOD_ENDS = 32 * 1024 * 1024;
+
 const CHUNK = new Uint8Array(64 * 1024).fill(0x61);
 
 /**
