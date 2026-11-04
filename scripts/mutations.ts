@@ -12475,10 +12475,13 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'module-requirement-not-enabled',
     why: 'a module starts without what it requires, and fails at its first call instead of at boot (D-250)',
-    file: 'apps/api/src/platform/module-kit/registry.ts',
-    find: 'if (!named.has(required)) {',
-    replace: 'if (false) {',
-    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+    file: 'packages/db/src/modules-setting.ts',
+    find: '.filter((other) => !named.includes(other))',
+    replace: '.filter(() => false)',
+    tests: [
+      'apps/api/src/platform/module-kit/registry.test.ts',
+      'packages/db/src/migration-sets.test.ts',
+    ],
   },
   {
     id: 'module-unknown-id',
@@ -13241,6 +13244,14 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "if (parsed.kind === 'none') return [];",
     replace: "if (parsed.kind === 'none') return PRODUCT_MIGRATION_SETS;",
     tests: ['packages/db/src/migration-sets.test.ts'],
+  },
+  {
+    id: 'migrate-command-ignores-requirements',
+    why: '`bun run db:migrate` migrates a module whose required module is not in MODULES, while the API refuses to boot on it (D-250)',
+    file: 'packages/db/src/migrator.ts',
+    find: 'if (unmet.length > 0) throw new ModulesSettingError(unmet);',
+    replace: '',
+    tests: ['packages/db/src/migration-sets.test.ts', 'apps/api/src/module-setting-pair.test.ts'],
   },
   {
     id: 'latency-starvation-judged-as-a-regression',

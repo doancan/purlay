@@ -1,11 +1,16 @@
 /**
  * `bun run db:migrate` and the API read the one `MODULES` setting, and once read it twice: `CHAT` migrated the
  * core alone and said "nothing to apply" while the API refused it. This holds them as a pair over a table — for
- * every input, the command refuses exactly when the API does, bar what a module requires of another, which only
- * the API's manifests can say (`MODULES.md` §3).
+ * every input, the command refuses exactly when the API does, a missing requirement included: the command's table of
+ * requirements is held to the manifests here (`MODULES.md` §3).
  */
 import { describe, expect, test } from 'bun:test';
-import { PRODUCT_MIGRATION_SETS, PRODUCT_MODULE_IDS, setsNamedBy } from '@purlay/db';
+import {
+  PRODUCT_MIGRATION_SETS,
+  PRODUCT_MODULE_IDS,
+  PRODUCT_MODULE_REQUIRES,
+  setsNamedBy,
+} from '@purlay/db';
 import { bundledModules, registry } from './composition';
 import { moduleRegistry } from './platform/module-kit/registry';
 
@@ -112,13 +117,42 @@ describe('db:migrate and the API read MODULES alike', () => {
     );
   });
 
-  test('only the API checks what a module requires of another', () => {
+  test('the requirements the migrator knows are the manifests', () => {
+    expect(PRODUCT_MODULE_REQUIRES).toEqual(
+      Object.fromEntries(
+        bundledModules.map((module) => [module.manifest.id, [...module.manifest.requires]]),
+      ),
+    );
+  });
+
+  test('a module without its requirement is refused by both, in the same words', () => {
     const [first, second] = bundledModules.map((module) => module.manifest);
+    const requires = { [first!.id]: [], [second!.id]: [first!.id] };
     const needing = moduleRegistry([
       { ...first!, requires: [] },
       { ...second!, requires: [first!.id] },
     ]);
-    expect(() => needing.resolve(second!.id)).toThrow('requires');
-    expect(migrateRefuses(second!.id)).toBe(false);
+    const problemsOf = (run: () => unknown): readonly string[] => {
+      try {
+        run();
+      } catch (error) {
+        return (error as { problems: readonly string[] }).problems;
+      }
+      return [];
+    };
+    for (const setting of [
+      second!.id,
+      `${first!.id},${second!.id}`,
+      first!.id,
+      'none',
+      undefined,
+    ]) {
+      expect(problemsOf(() => setsNamedBy(setting, requires))).toEqual(
+        problemsOf(() => needing.resolve(setting)),
+      );
+    }
+    expect(problemsOf(() => setsNamedBy(second!.id, requires))).toEqual([
+      `"${second!.id}" requires "${first!.id}", which MODULES does not enable`,
+    ]);
   });
 });
