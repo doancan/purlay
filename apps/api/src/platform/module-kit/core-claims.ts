@@ -4,7 +4,10 @@
  * Each list is held to the code by a test (`route-ownership.test.ts`, `core-claims.test.ts`), so a new core claim that is
  * not added here fails there rather than waiting for a module to collide with it.
  */
-/** The paths of the core, as `app.ts` registers them, each once, whatever the methods. */
+/**
+ * The paths of the core, as `app.ts` registers them, each once, whatever the methods: `/ws` is the socket's upgrade, and a
+ * trailing `*` is a catch-all (`templatesOverlap` reads it as the rest of the path).
+ */
 export const CORE_ROUTES: readonly string[] = [
   '/api/attachments/:attachmentId',
   '/api/attachments/:attachmentId/thumbnail',
@@ -81,6 +84,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/setup/status',
   '/setup/verify',
   '/setup/workspace',
+  '/ws',
 ];
 
 /** The scheduled jobs (`bun run job <name>`) that keep the core's rows tidy and run whichever modules do. */

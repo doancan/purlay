@@ -13035,6 +13035,25 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/core-claims.test.ts'],
   },
   {
+    id: 'overlap-star-is-a-literal-segment',
+    why: 'the core spells its catch-all /auth/* with one star, and a module claiming a path below it is not seen to overlap it (D-250)',
+    file: 'apps/api/src/platform/module-kit/routes.ts',
+    find: "  if (parts.at(-1) === '*') parts[parts.length - 1] = '**';",
+    replace: '',
+    tests: ['apps/api/src/platform/module-kit/routes.test.ts', 'apps/api/src/core-claims.test.ts'],
+  },
+  {
+    id: 'core-claims-socket-route-forgotten',
+    why: 'the core’s list of routes misses the socket upgrade, so a module could take /ws unnoticed (D-250)',
+    file: 'apps/api/src/platform/module-kit/core-claims.ts',
+    find: "  '/ws',\n",
+    replace: '',
+    tests: [
+      'apps/api/src/core-claims.test.ts',
+      'apps/api/src/ingress/http/route-ownership.test.ts',
+    ],
+  },
+  {
     id: 'module-set-not-registered',
     why: 'a bundled module has a directory of migrations that no registered set names, so no database ever migrates it (D-250)',
     file: 'packages/db/src/migrator.ts',
