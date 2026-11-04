@@ -318,6 +318,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                     : { closedFrame: dependencies.closedFrame }),
                   presence,
                   attention: dependencies.attention,
+                  online,
                   sessionLifetime: () => dependencies.auth.sessionLifetime,
                   log,
                   push: dependencies.push,

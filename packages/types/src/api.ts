@@ -135,6 +135,11 @@ export const MeResponse = Type.Object({
    * the page already waits for this answer and a signed-out screen needs none of it.
    */
   modules: Type.Array(Type.String()),
+  /**
+   * Whether the caller chose to appear away (`users.away_chosen`, D-257): they stay away, whatever they
+   * do, until they choose to appear active again.
+   */
+  awayChosen: Type.Boolean(),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -1376,6 +1381,14 @@ export const UpdateProfileRequest = FromClient({
   ),
 });
 export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
+
+/** `PUT /api/me/away` — whether to appear away, by choice (D-257). */
+export const SetAwayRequest = FromClient({ away: Type.Boolean() });
+export type SetAwayRequest = Static<typeof SetAwayRequest>;
+
+/** The choice as it now stands. */
+export const SetAwayResponse = Type.Object({ away: Type.Boolean() });
+export type SetAwayResponse = Static<typeof SetAwayResponse>;
 
 // ── A repository's feed into a channel (#79, D-134) ────────────────────────
 

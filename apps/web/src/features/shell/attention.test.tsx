@@ -61,6 +61,16 @@ describe('saying the person is here', () => {
     view.unmount();
   });
 
+  test('a pointer move and a wheel say so too, rationed to one a minute (D-257)', async () => {
+    restore = facing(true, true);
+    const view = await opened();
+    fireEvent.pointerMove(window);
+    fireEvent.wheel(window);
+    fireEvent.pointerMove(window);
+    expect(view.world.sockets.sent('ACTIVE')).toHaveLength(1);
+    view.unmount();
+  });
+
   test('a hidden tab, or one without focus, says nothing however it is touched', async () => {
     for (const [visible, focused] of [
       [false, true],

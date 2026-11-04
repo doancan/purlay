@@ -150,8 +150,10 @@ const Specimen = (): React.JSX.Element => (
         <Avatar name="Alice Chen" username="alice" size="sm" />
         <Avatar name="Alice Chen" username="alice" size="md" />
         <Avatar name="Alice Chen" username="alice" size="lg" />
-        <Avatar name="Bob Okafor" username="bob" size="lg" />
-        <Avatar name="Carol Reyes" username="carol" size="lg" />
+        {/* Online, and away: the dot and the ring, in both themes' baselines (D-136, D-257). */}
+        <Avatar name="Bob Okafor" username="bob" size="lg" presence="active" />
+        <Avatar name="Carol Reyes" username="carol" size="lg" presence="away" />
+        <Avatar name="Carol Reyes" username="carol" size="md" presence="away" />
         <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
           <Icon name="open-question" size="sm" />
           Open

@@ -40,6 +40,8 @@ const ORIGIN = 'https://purlay.test';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
 const attention = inMemoryAttention(clock);
+/** Whose page spoke, as the router told who is online (D-257): every word, in order. */
+const spoke: string[] = [];
 
 const call = async (
   db: Executor,
@@ -157,6 +159,11 @@ describe('integration: the frame router', () => {
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         presence: inMemoryPresenceRegistry(clock),
         attention,
+        online: {
+          active: (userId): void => {
+            spoke.push(userId);
+          },
+        },
         sessionLifetime: () => lifetime,
         log: createLogger({ level: 'silent' }),
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
@@ -211,6 +218,8 @@ describe('integration: the frame router', () => {
       });
       expect(replies).toEqual([]);
       expect(attention.active(alice.userId, workspaceId)).toBe(true);
+      // And her page spoke: what keeps her from being told away (D-257).
+      expect(spoke.filter((userId) => userId === alice.userId)).toHaveLength(1);
     });
   });
 
@@ -261,6 +270,8 @@ describe('integration: the frame router', () => {
         ]);
         expect(attention.active(mallory.userId, target)).toBe(false);
       }
+      // A refused word is no word: it keeps nobody active.
+      expect(spoke.filter((userId) => userId === mallory.userId)).toEqual([]);
       // Not an id at all: refused by the contract, naming the field.
       const id = messageId(NOW);
       const malformed = await route(db, mallory, {

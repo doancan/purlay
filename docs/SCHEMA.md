@@ -111,6 +111,10 @@ CREATE TABLE users (
     -- account that existed before.
     google_made BOOLEAN NOT NULL DEFAULT FALSE,
 
+    -- Whether the person chose to appear away (D-257, 0080): they are told as away, whatever they do, until
+    -- they choose to appear active again. Idle time makes no one away by this column; it is only the choice.
+    away_chosen BOOLEAN NOT NULL DEFAULT FALSE,
+
     -- Whether the address is one a provider vouched for, or a link sent to it was followed. Better Auth
     -- reads it: an address that is not verified is never linked to by one that is, and an invitation is
     -- accepted only by an account whose address is. FALSE until something says so. (D-179, 0047)
@@ -2674,6 +2678,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
 0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-251)
 0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
+0080_away_chosen.sql          users.away_chosen: a person's choice to appear away  (D-257)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

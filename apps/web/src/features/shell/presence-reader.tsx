@@ -70,7 +70,12 @@ export const PresenceReader = (): null => {
     const online = new Set(snapshot.data.online.map((change) => change.userId));
     const offline: PresenceChange[] = members.data
       .filter((member) => !online.has(member.user.id))
-      .map((member) => ({ userId: member.user.id, online: false, version: snapshot.data.version }));
+      .map((member) => ({
+        userId: member.user.id,
+        online: false,
+        away: false,
+        version: snapshot.data.version,
+      }));
     engine.applyPresence([...snapshot.data.online, ...offline]);
   }, [snapshot.data, members.data, engine]);
 

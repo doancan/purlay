@@ -74,16 +74,20 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   starts the conversation of exactly them (D-127) —
   each drawn with the faces of its first two people, the second overlapping the first, and "+N"
   for the rest, in the height of any row (D-167) —
-  then the people, and your own row at the foot — your avatar with your online dot, the name over the
+  then the people, and your own row at the foot — your avatar with your own dot or ring, the name over the
   handle, and the up-and-down chevron — which opens the **account menu** (D-124, D-146, D-207): who
   you are, as a card; **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
-  tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Set yourself as away** ("Uzakta görün"),
+  which reads **Set yourself as active** ("Etkin görün") while it is on and keeps the person away on every device until they turn it
+  off — the card's own ring or dot follows it on every page of theirs (D-257); **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
   and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
   to a screen reader (D-137). A person has an avatar, and a
   dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
-  reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
+  reader. A person who has not used Purlay for five minutes, or who chose to appear away, has instead a
+  hollow ring of the same size in the muted ink — a transparent middle, a thin border — said as "away"
+  ("uzakta"); it never says since when, or whether it was chosen (D-257). Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
 - **Sidebar options and folding** (D-195) — the column is the person's to arrange, by **what is shown**, never by how
   tightly (D-118 §6). Each section's heading is a button that folds it; a folded section keeps listed what is unread,

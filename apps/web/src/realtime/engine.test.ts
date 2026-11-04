@@ -1118,7 +1118,7 @@ describe('Deep Work changed in another tab (#526)', () => {
       w.deliver(
         frame({
           event: 'PRESENCE',
-          data: { changes: [{ userId: alice, online, version }] },
+          data: { changes: [{ userId: alice, online, away: false, version }] },
           ts: T0,
         }),
       );
@@ -1126,12 +1126,48 @@ describe('Deep Work changed in another tab (#526)', () => {
     say(false, 20);
     // An online said before she left, heard after: kept out.
     say(true, 10);
-    expect(w.engine.store.getState().presence[alice]).toEqual({ online: false, version: 20 });
+    expect(w.engine.store.getState().presence[alice]).toEqual({
+      online: false,
+      away: false,
+      version: 20,
+    });
     say(true, 30);
-    expect(w.engine.store.getState().presence[alice]).toEqual({ online: true, version: 30 });
+    expect(w.engine.store.getState().presence[alice]).toEqual({
+      online: true,
+      away: false,
+      version: 30,
+    });
     // A snapshot read before the latest change is kept out too.
-    w.engine.applyPresence([{ userId: alice, online: false, version: 25 }]);
+    w.engine.applyPresence([{ userId: alice, online: false, away: false, version: 25 }]);
     expect(w.engine.store.getState().presence[alice]?.online).toBe(true);
+  });
+
+  test('a later away replaces an earlier active, an earlier one does not (D-257)', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const alice = '0199155c-6200-7b7f-8c11-0000000000a1';
+    const say = (away: boolean, version: number): void => {
+      w.deliver(
+        frame({
+          event: 'PRESENCE',
+          data: { changes: [{ userId: alice, online: true, away, version }] },
+          ts: T0,
+        }),
+      );
+    };
+    say(false, 10);
+    say(true, 20);
+    expect(w.engine.store.getState().presence[alice]).toEqual({
+      online: true,
+      away: true,
+      version: 20,
+    });
+    // An active said before she went away, heard after: kept out.
+    say(false, 15);
+    expect(w.engine.store.getState().presence[alice]?.away).toBe(true);
+    say(false, 30);
+    expect(w.engine.store.getState().presence[alice]?.away).toBe(false);
   });
 
   describe('who is online is read again a grace after a reconnect (D-136 §4)', () => {
@@ -1332,6 +1368,7 @@ describe('is the session still there', () => {
       mustEnrolTwoFactor: false,
       scheduledDeletions: [],
       modules: ['chat'],
+      awayChosen: false,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

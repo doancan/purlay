@@ -30,6 +30,7 @@ import {
   MAX_FRAME_BYTES,
   MESSAGE_CONTENT_MAX,
   MESSAGE_ID_SKEW,
+  PRESENCE_GRACE_MS,
   messageId,
   PresenceSnapshot,
   ServerFrame,
@@ -1191,7 +1192,7 @@ describe('integration: two real sockets', () => {
         const graced = Date.now() + 5_000;
         while (own.held().leaving !== 1 && Date.now() < graced) await Bun.sleep(10);
         expect(own.held()).toMatchObject({ online: 1, leaving: 1 });
-        timers.runAll();
+        timers.runUpTo(PRESENCE_GRACE_MS);
         await own.settled();
         // All four, not the first to reach its old value: the bus and the limiter are
         // released by the same handler, but nothing orders them for the reader.
@@ -1249,7 +1250,7 @@ describe('integration: two real sockets', () => {
         await until(() => own.held().leaving === 1, 'alice inside her grace');
         // Inside the grace nothing is said.
         expect(presenceOf(bob.frames, room.aliceId)).toEqual([true]);
-        timers.runAll();
+        timers.runUpTo(PRESENCE_GRACE_MS);
         await bob.until((f) => presenceOf(f, room.aliceId).includes(false), 'alice offline');
         expect(presenceOf(bob.frames, room.aliceId)).toEqual([true, false]);
         await bob.close();
@@ -1279,7 +1280,7 @@ describe('integration: two real sockets', () => {
         await until(() => own.held().leaving === 1, 'alice inside her grace');
         const back = await connect(room.alice, listening);
         await until(() => own.held().leaving === 0, 'alice back');
-        timers.runAll();
+        timers.runUpTo(PRESENCE_GRACE_MS);
         await own.settled();
         expect(presenceOf(bob.frames, room.aliceId)).toEqual([true]);
         await back.close();
@@ -1325,8 +1326,9 @@ describe('integration: two real sockets', () => {
         // Bob hearing it is the control: it was told, and told to whom it was for.
         await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
         await own.settled();
-        expect(outsider.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
-        expect(erin.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+        // Each hears their own state (D-257), and nothing of hers.
+        expect(presenceOf(outsider.frames, room.aliceId)).toEqual([]);
+        expect(presenceOf(erin.frames, room.aliceId)).toEqual([]);
         await Promise.all([alice.close(), bob.close(), outsider.close(), erin.close()]);
       } finally {
         await own.stop(true);

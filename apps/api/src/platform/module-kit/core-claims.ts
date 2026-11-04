@@ -18,6 +18,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/invitations/passport',
   '/api/invitations/preview',
   '/api/me',
+  '/api/me/away',
   '/api/me/erase',
   '/api/me/exports',
   '/api/me/exports/:exportId/download',

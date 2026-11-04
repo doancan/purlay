@@ -120,12 +120,12 @@ interface RealtimeState {
    */
   readonly typing: Readonly<Record<string, readonly string[]>>;
   /**
-   * Who is online, by person, at the version that said so (D-136): the largest heard wins, so a frame
-   * that arrives late cannot undo a newer one, nor a snapshot read before a change undo the change.
-   * A person not here is unknown — drawn as nothing, never as offline.
+   * Who is online, and whether away (D-257), by person, at the version that said so (D-136): the
+   * largest heard wins, so a frame that arrives late cannot undo a newer one, nor a snapshot read
+   * before a change undo the change. A person not here is unknown — drawn as nothing, never as offline.
    */
   readonly presence: Readonly<
-    Record<string, { readonly online: boolean; readonly version: number }>
+    Record<string, { readonly online: boolean; readonly away: boolean; readonly version: number }>
   >;
   /**
    * Rises when what a workspace's presence was read as may have gone stale: a grace after a
@@ -756,7 +756,11 @@ export const createEngine = (options: EngineOptions): Engine => {
     if (newer.length === 0) return;
     const next = { ...now };
     for (const change of newer) {
-      next[change.userId] = { online: change.online, version: change.version };
+      next[change.userId] = {
+        online: change.online,
+        away: change.away,
+        version: change.version,
+      };
     }
     store.setState({ presence: next });
   };

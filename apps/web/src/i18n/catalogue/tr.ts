@@ -1306,6 +1306,8 @@ export const tr = {
 
   'presence.online': 'çevrimiçi',
   'presence.onlineNow': 'Şu an çevrimiçi',
+  'presence.away': 'uzakta',
+  'presence.awayNow': 'Uzakta',
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',
   'diff.oldLine': 'Eski satır',
@@ -2060,6 +2062,9 @@ export const tr = {
 
   // ── Hesap ───────────────────────────────────────────────────────────────
   'user.menu': 'Hesap',
+  'user.setAway': 'Uzakta görün',
+  'user.setActive': 'Etkin görün',
+  'user.awayFailed': 'Durumun değiştirilemedi.',
   'user.signOut': 'Çıkış yap',
   'user.signOutEverywhere': 'Her yerden çıkış yap',
   'user.signOutEverywhere.entry': 'Her yerden çıkış yap…',
