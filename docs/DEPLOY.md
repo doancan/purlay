@@ -297,6 +297,17 @@ live users' requests slow down (about 6 times, in the run above). The order is d
 session check would tell a caller who is not signed in that the node is full. Whether to accept that, or to
 spend the cap check first, is the owner's decision (#1027).
 
+**Memory after a mass reconnect.** Budget the container for the storm, not the steady state. One run
+(2,000 sockets reconnecting with replay, three times in one process, macOS, Bun 1.4.4) took the process
+from about 380 MB to 1.2 GB on the first storm and added only 20-50 MB on each of the next two. The
+JavaScript heap came back to 36 MB each time, objects returned to baseline, and nothing leaked; the
+allocator keeps the pages it had committed, so the figure from `ps` stays near its peak until the process
+restarts. Replay is what costs: each reconnecting socket replays up to 1,000 frames or 1 MiB at once, about
+0.4 MB of memory per socket. So leave headroom of roughly that much per socket you expect to reconnect
+together, do not alarm on a high figure that stays flat after a storm, and let routine restarts or deploys
+reset it. Nothing yet limits how many sockets replay at the same moment; that is a design decision for the
+owner (#1029). This was not measured on Linux (glibc or musl), which may release memory differently.
+
 ## References
 
 - [GitHub: publishing Docker images](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
