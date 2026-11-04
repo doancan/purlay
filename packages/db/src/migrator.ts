@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql, type Kysely, type QueryExecutorProvider } from 'kysely';
+import pg from 'pg';
 import { parseModulesSetting } from './modules-setting';
 import { DEADLOCK_RETRY, retryOnDeadlock, type Retry, type RetryPolicy } from './retry';
 import { executableText, splitStatements } from './statements';
@@ -44,6 +45,17 @@ const LOCK_WAIT_MILLISECONDS = 120_000;
 /** Between two attempts at the lock: short at first, since most waits are a few milliseconds. */
 const LOCK_POLL_FIRST_MILLISECONDS = 25;
 const LOCK_POLL_MAX_MILLISECONDS = 500;
+
+/**
+ * How long a transactional migration waits for any one lock, unless its file says otherwise (D-86, amended). An
+ * `ALTER TABLE` waits for every transaction already using the table, and while it waits every later reader and
+ * writer of the table waits behind it, so an unbounded wait is an outage for as long as the one long
+ * transaction runs. It bounds the wait to get a lock, never how long a granted lock is held: a backfill is
+ * not cut short. The same ten seconds the files that leave their transaction set for themselves.
+ */
+const LOCK_TIMEOUT_MILLISECONDS = 10_000;
+/** SQLSTATE `lock_not_available`: what `lock_timeout` ends a statement with. */
+const LOCK_NOT_AVAILABLE = '55P03';
 
 const TABLE = 'kysely_migration';
 const OPT_OUT = /^--\s*purlay:\s*no-transaction\s*$/;
@@ -285,7 +297,14 @@ const verify = (
   return adopt;
 };
 
-const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => {
+const isLockTimeout = (error: unknown): boolean =>
+  error instanceof pg.DatabaseError && error.code === LOCK_NOT_AVAILABLE;
+
+const apply = async <T>(
+  conn: Kysely<T>,
+  file: MigrationFile,
+  lockTimeoutMilliseconds: number,
+): Promise<void> => {
   const record = async (db: QueryExecutorProvider): Promise<void> => {
     await sql`
       insert into ${sql.table(TABLE)} (name, timestamp, checksum)
@@ -294,6 +313,11 @@ const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => 
   };
   if (file.transactional) {
     await conn.transaction().execute(async (trx) => {
+      // Only this transaction's, so nothing outlives it on the connection. A file that needs a
+      // different wait says so itself with `SET LOCAL lock_timeout`, which comes after this.
+      await sql`select set_config('lock_timeout', ${String(lockTimeoutMilliseconds)}, true)`.execute(
+        trx,
+      );
       await sql.raw(file.text).execute(trx);
       await record(trx);
     });
@@ -301,6 +325,19 @@ const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => 
   }
   for (const statement of splitStatements(file.text)) await sql.raw(statement).execute(conn);
   await record(conn);
+};
+
+/** A migration that waited too long for a lock fails with what an operator does about it. */
+const explainLockTimeout = (file: MigrationFile, error: unknown): unknown => {
+  if (!isLockTimeout(error)) return error;
+  return new Error(
+    `migration ${file.name} could not get a lock it needs in time: another transaction is using a table it ` +
+      'changes, and waiting any longer would hold up everything else that uses that table. Nothing it ' +
+      'did is recorded and it runs again from its top at the next start. Find the long transaction ' +
+      '(pg_stat_activity, state and xact_start; pg_locks, granted = false), let it finish or end it, ' +
+      'and migrate again (D-86).',
+    { cause: error },
+  );
 };
 
 /**
@@ -338,6 +375,8 @@ const acquireMigrationLock = async (
 export interface MigrateOptions {
   /** How long to wait for another process's migration to finish. */
   readonly lockWaitMilliseconds?: number;
+  /** How long a transactional migration waits for one lock; the default is ten seconds. For tests. */
+  readonly lockTimeoutMilliseconds?: number;
   /** Called before a migration is run again after PostgreSQL ended it as a deadlock victim. */
   readonly onRetry?: (retry: Retry & { readonly migration: string }) => void;
   /** Attempts and waits for that; the default is `DEADLOCK_RETRY`. */
@@ -357,6 +396,7 @@ export const migrateToLatest = async <T>(
   options: MigrateOptions = {},
 ): Promise<MigrationResultSet> => {
   const lockWaitMilliseconds = options.lockWaitMilliseconds ?? LOCK_WAIT_MILLISECONDS;
+  const lockTimeoutMilliseconds = options.lockTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS;
   const results: MigrationResult[] = [];
   try {
     const sets = await loadSets(directory, options.modules ?? []);
@@ -391,14 +431,14 @@ export const migrateToLatest = async <T>(
             // running it again is the same thing a crash and a restart would do.
             await retryOnDeadlock(
               async () => {
-                await apply(conn, file);
+                await apply(conn, file, lockTimeoutMilliseconds);
               },
               options.deadlockRetry ?? DEADLOCK_RETRY,
               (retry) => options.onRetry?.({ ...retry, migration: file.name }),
             );
           } catch (error) {
             results.push({ migrationName: file.name, status: 'Error' });
-            throw error;
+            throw explainLockTimeout(file, error);
           }
           results.push({ migrationName: file.name, status: 'Success' });
         }

@@ -3409,6 +3409,29 @@ reads the core's rows only, so a module that is off does not change it. **Reject
 `chat/…`:** `0055` selects one by name and would silently update nothing on a fresh database, and the rename
 gains nothing a new file under a module's directory does not.
 
+*Amended 2026-11-04 — a transactional migration waits ten seconds for a lock, not for ever:* an `ALTER TABLE` is
+granted its lock after every transaction already using the table, and while it waits it is first in line, so a
+plain `SELECT` behind it waits too. Reproduced on a private database: one open transaction holding `ACCESS SHARE`
+on a table, one `ALTER TABLE`, one `SELECT` — the `SELECT` was answered after 8.01 s, when the transaction ended;
+with `lock_timeout = 5s` on the migrating session the `ALTER` failed at 5.05 s and the `SELECT` was answered at the
+same moment. With several nodes migrating as they start, that is an outage as long as the longest transaction.
+Every transactional migration now runs with `lock_timeout` set for its transaction alone (`set_config(…, true)`),
+ten seconds, the value the files that leave their transaction (0010, 0058, 0072) already set for themselves; a
+file that needs another says so with `SET LOCAL lock_timeout`, which comes after. A migration that ends on it fails
+with a message that names the file and what to do (find the long transaction, let it finish or end it, migrate
+again); it is not recorded and runs again from its top, so a restarting node tries again by itself. **The counter-
+risk was measured and is smaller than it looks:** `lock_timeout` counts the wait to *get* a lock and never how long
+a granted one is held, so a backfill is not cut short (an `ALTER` and then 3 s of work under a 1 s limit
+completed), and `chat/0001` on 200,000 messages and 40,000 attachments applied with the default. **Rejected — the
+same limit on files that leave their transaction:** `CREATE INDEX CONCURRENTLY` waits for old snapshots without
+blocking anyone, and `lock_timeout` ends that wait too, leaving an invalid index (measured: failed at 1.0 s with
+an open repeatable-read transaction, `indisvalid = false`); those files bound the statements that queue (`SET
+lock_timeout` before an `ALTER`) and leave the index build alone, as 0058 does. **Rejected — an environment
+variable:** nothing the operator can usefully choose differently; a migration that must wait longer is a
+migration, and says so. **Rejected — retrying the migration inside the process:** the wait is for a transaction
+only a person can judge (end it or wait for it), and a restart already is the retry. Reversibility: free, one
+constant.
+
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
 
 `createDatabase` set a pool size and nothing else (#243). With a pool of two, a third query waited 7,612 ms

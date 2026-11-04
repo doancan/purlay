@@ -44,6 +44,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 |---|---|---|
 | Wait for a free connection | 3 s | The query fails with `DATABASE_UNAVAILABLE` (`503`) instead of queuing |
 | `statement_timeout` | 30 s | The server cancels the statement. Not applied to `db:migrate`, whose index builds take as long as they take |
+| `lock_timeout` | none | Set by the migrator, not the pool: 10 s for each lock a transactional migration asks for, so one that queues behind a long transaction fails instead of holding up the table (D-86, `DEPLOY.md`) |
 | `idle_in_transaction_session_timeout` | 15 s | The server ends a session that opened a transaction and stopped |
 | Idle connection | 30 s | The pool closes a connection nobody has used |
 | `application_name` | `purlay-api` | Shown in `pg_stat_activity`, so a stuck session can be traced to this service |
