@@ -21,6 +21,9 @@ import { queryOf, validated } from './validate';
  * What these routes need beyond a channel's: the transaction boundary of the issues module's share of the
  * database (`features/issues/budget.ts`). Every statement they run, a read as much as a write, goes through it,
  * so a module of many slow requests holds a third of the pool at most and chat's sends are never queued behind it.
+ *
+ * Who may ask is settled first, by one plain read outside the share: a signed-in person who is not in the workspace
+ * must not be able to hold slots and make its members' requests wait for one.
  */
 export interface IssueDependencies extends ChannelDependencies {
   readonly atomically: Atomically;
@@ -28,37 +31,35 @@ export interface IssueDependencies extends ChannelDependencies {
 
 /** `GET /api/workspaces/:workspaceId/issues?status=&before=&limit=` — newest first. */
 export const listIssues = async (
-  { auth, atomically }: IssueDependencies,
+  { auth, database, atomically }: IssueDependencies,
   request: Request,
   workspaceId: string,
 ): Promise<IssuePage> => {
   const { userId } = await requireSession(auth, request);
   const query = validated(IssueQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
-  return await atomically(async (transaction) => {
-    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);
-    return await issuePage(transaction, context, query);
-  });
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  return await atomically(async (transaction) => await issuePage(transaction, context, query));
 };
 
 /** `POST /api/workspaces/:workspaceId/issues` — `201` with the issue, open. */
 export const postIssue = async (
-  { auth, atomically, clock }: IssueDependencies,
+  { auth, database, atomically, clock }: IssueDependencies,
   request: Request,
   workspaceId: string,
   body: unknown,
 ): Promise<Issue> => {
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(CreateIssueRequest, body);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await atomically(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);
     return await createIssue(transaction, clock, context, input);
   });
 };
 
 /** `PATCH /api/workspaces/:workspaceId/issues/:issueId` — the issue as it is now. */
 export const patchIssue = async (
-  { auth, atomically, clock }: IssueDependencies,
+  { auth, database, atomically, clock }: IssueDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -66,24 +67,24 @@ export const patchIssue = async (
 ): Promise<Issue> => {
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(UpdateIssueRequest, body);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await atomically(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);
     return await updateIssue(transaction, clock, context, issueId, input);
   });
 };
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */
 export const removeIssue = async (
-  { auth, atomically, clock }: IssueDependencies,
+  { auth, database, atomically, clock }: IssueDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
 ): Promise<void> => {
   const { userId, sessionId } = await requireSession(auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
   await atomically(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);
     await deleteIssue(transaction, clock, context, issueId);
   });
 };

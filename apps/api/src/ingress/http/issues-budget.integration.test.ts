@@ -34,6 +34,7 @@ let cloned: ClonedDatabase;
 let pool: ReturnType<typeof createDatabase>;
 let app: HttpApplication;
 let person: SignedInUser;
+let outsider: SignedInUser;
 let workspaceId = '';
 let channelId = '';
 
@@ -41,12 +42,13 @@ const call = async (
   method: string,
   path: string,
   body?: unknown,
+  as: SignedInUser = person,
 ): Promise<{ status: number; body: unknown }> => {
   const response = await app.handle(
     new Request(`${ORIGIN}${path}`, {
       method,
       headers: {
-        cookie: person.cookie,
+        cookie: as.cookie,
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -73,6 +75,7 @@ beforeAll(async () => {
     }),
   );
   person = await aSignedInUser(cloned.db, clock, 'budget-person');
+  outsider = await aSignedInUser(cloned.db, clock, 'budget-outsider');
   const slug = aUniqueSlug('budget');
   const made = await call('POST', '/api/workspaces', { name: slug, slug });
   workspaceId = (made.body as { id: string }).id;
@@ -93,6 +96,10 @@ const until = async (what: string, ready: () => boolean): Promise<void> => {
     await Bun.sleep(5);
   }
 };
+
+/** Every request the issues routes answer, as a signed-in person who is not in the workspace makes it. */
+const asOutsider = async (path: string, method = 'GET', body?: unknown): Promise<number> =>
+  (await call(method, `/api/workspaces/${workspaceId}${path}`, body, outsider)).status;
 
 describe('integration: the share of the pool issues may take', () => {
   test('is a third of it, at least one and never all of it but for a pool of one', () => {
@@ -153,6 +160,49 @@ describe('integration: issues over the share of the pool', () => {
       const answers = await Promise.all(lists);
       expect(answers.filter((answer) => answer.status === 200)).toHaveLength(share);
       expect((await call('GET', `/api/workspaces/${workspaceId}/issues`)).status).toBe(200);
+    },
+    TEST_MS,
+  );
+
+  test(
+    'a person who is not in the workspace holds no slot: with the share full they are told the workspace is not there, not that the database is busy',
+    async () => {
+      const share = issuesBudget(POOL).maxConcurrent;
+      let release: () => void = () => undefined;
+      const lockHeld = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let locked = false;
+      let holders: Promise<{ status: number; body: unknown }>[] = [];
+      const lock = cloned.db.transaction().execute(async (transaction) => {
+        await sql`lock table issues in access exclusive mode`.execute(transaction);
+        locked = true;
+        await lockHeld;
+      });
+      try {
+        await until('the lock', () => locked);
+        let started = 0;
+        holders = Array.from({ length: share }, () => {
+          started += 1;
+          return call('GET', `/api/workspaces/${workspaceId}/issues`);
+        });
+        await until('the share to be taken', () => started === share);
+        // The members' requests hold every slot, so a request that took one first would be refused as busy.
+        const statuses = [
+          await asOutsider('/issues'),
+          await asOutsider('/issues', 'POST', { title: 'not theirs to make' }),
+          await asOutsider(`/issues/${messageId(NOW)}`, 'PATCH', { title: 'x' }),
+          await asOutsider(`/issues/${messageId(NOW)}`, 'DELETE'),
+        ];
+        expect(statuses).toEqual([404, 404, 404, 404]);
+      } finally {
+        release();
+        await lock;
+      }
+      const answers = await Promise.all(holders);
+      expect(answers.map((answer) => answer.status)).toEqual(
+        Array.from({ length: share }, () => 200),
+      );
     },
     TEST_MS,
   );

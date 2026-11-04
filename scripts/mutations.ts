@@ -12607,6 +12607,15 @@ export const MUTATIONS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'issues-slot-before-membership',
+    why: 'a signed-in person who is not in the workspace takes a slot of the issues share and members are refused as busy (D-250)',
+    file: 'apps/api/src/ingress/http/issues.ts',
+    find: '  const context = await requireWorkspaceMembership(database, userId, workspaceId);\n  return await atomically(async (transaction) => await issuePage(transaction, context, query));',
+    replace:
+      '  return await atomically(async (transaction) => {\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await issuePage(transaction, context, query);\n  });',
+    tests: ['apps/api/src/ingress/http/issues-budget.integration.test.ts'],
+  },
+  {
     id: 'domain-bus-handler-failure-escapes',
     why: "one module's failing handler would fail the publisher and keep the other modules from hearing (D-250)",
     file: 'apps/api/src/platform/domain-bus.ts',
@@ -13929,27 +13938,24 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'issues-post-ignores-a-ended-session',
     why: 'a session that ended after it was read still makes an issue (D-85, D-254)',
     file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await createIssue(',
-    replace:
-      '    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await createIssue(',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await createIssue(',
+    replace: '    return await createIssue(',
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-patch-ignores-a-ended-session',
     why: 'a session that ended after it was read still changes an issue (D-85, D-254)',
     file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await updateIssue(',
-    replace:
-      '    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    return await updateIssue(',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await updateIssue(',
+    replace: '    return await updateIssue(',
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-delete-ignores-a-ended-session',
     why: 'a session that ended after it was read still deletes an issue (D-85, D-254)',
     file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    await deleteIssue(',
-    replace:
-      '    const context = await requireWorkspaceMembership(transaction, userId, workspaceId);\n    await deleteIssue(',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    await deleteIssue(',
+    replace: '    await deleteIssue(',
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
