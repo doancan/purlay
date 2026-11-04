@@ -14285,6 +14285,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/db/src/table-lifecycle.test.ts'],
   },
   {
+    id: 'table-lifecycle-deleted-decision-is-false',
+    why: 'a table is decided `deleted` on erasure and the erasure no longer deletes its rows, so the decision is false and still compiles: a person’s native sign-in codes outlive the account (D-250)',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: "  await executor.deleteFrom('native_authorizations').where('user_id', '=', person.id).execute();\n",
+    replace: '',
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
+  {
     id: 'a-list-forgets-its-workspace-filter',
     why: 'a list shows a person who belongs to two workspaces the rows of the other one; the strangers the crossing probes are refused before it runs (D-21)',
     file: 'apps/api/src/features/issues/issues.ts',
