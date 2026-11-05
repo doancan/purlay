@@ -18,6 +18,7 @@ export {
   tlsFromEnvironment,
   type ConnectionLease,
   type DatabaseOptions,
+  type DatabasePool,
   type Executor,
   type LeaseConnection,
   type Transaction,
@@ -25,7 +26,8 @@ export {
 export { purgeDeadSessions } from './sessions';
 export { absentTables, tableExists } from './table-exists';
 export { TABLE_LIFECYCLE, type TableLifecycle } from './table-lifecycle';
-export { TABLE_OWNERS, type TableOwner } from './table-owners';
+export { type ModuleDb, type ModuleSchema, type ModuleTransaction } from './module-db';
+export { TABLE_OWNERS, type TableOwner, type TablesOf } from './table-owners';
 /**
  * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).

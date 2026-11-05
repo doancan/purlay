@@ -13,7 +13,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
-  type Executor,
+  type DatabasePool,
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { SETUP_STEPS, type SetupState } from '@purlay/types';
@@ -96,7 +96,7 @@ const recording = (): { log: Logger; lines: string[] } => {
 
 interface Wizard {
   readonly app: HttpApplication;
-  readonly db: Executor;
+  readonly db: DatabasePool;
   readonly holder: RuntimeHolder;
   readonly clock: ReturnType<typeof movable>;
   /** Every line the application and the services wrote. */

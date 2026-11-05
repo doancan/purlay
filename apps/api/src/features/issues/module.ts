@@ -9,7 +9,7 @@
  * asks `tableExists` at the moment it needs it (the purge does so for every table it names, the exports through
  * `ownSet`, which asks `tableExists` for them). `module-lifecycle.integration.test.ts` runs every step in every database state and process.
  */
-import { tableExists, type Transaction } from '@purlay/db';
+import { tableExists } from '@purlay/db';
 import { ISSUES_AUDIT_ACTIONS } from '@purlay/types';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { issuesBudget } from './budget';
@@ -17,12 +17,13 @@ import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
 import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
 import { issuesPersonalExport } from './personal-export';
+import type { IssuesTx } from './schema';
 
 /**
  * An erased account's issues stay, under the anonymised person, as a message does (D-139 §5): the workspace's. What
  * goes is the assignment, which means nothing to a person who is no longer there to do it.
  */
-const unassignErasedPerson = async (transaction: Transaction, userId: string): Promise<void> => {
+const unassignErasedPerson = async (transaction: IssuesTx, userId: string): Promise<void> => {
   if (!(await tableExists(transaction, 'issues'))) return;
   await transaction
     .updateTable('issues')

@@ -13,7 +13,7 @@ import {
   readMigrationFiles,
   sql,
 } from '@purlay/db';
-import type { Executor, MigrationSet } from '@purlay/db';
+import type { DatabasePool, Executor, MigrationSet } from '@purlay/db';
 import { bundledModules, type BundledModule } from '../composition';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
@@ -42,7 +42,7 @@ const urlFor = (name: string): string => {
 const BASE = `${new URL(source).pathname.slice(1)}_mos_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const admin = createDatabase({ connectionString: urlFor('postgres'), poolSize: 1 });
 const created: string[] = [];
-const freshDatabase = async (suffix: string): Promise<{ name: string; db: Executor }> => {
+const freshDatabase = async (suffix: string): Promise<{ name: string; db: DatabasePool }> => {
   const name = `${BASE}_${suffix}`;
   await sql`create database ${sql.id(name)}`.execute(admin);
   created.push(name);

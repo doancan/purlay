@@ -286,7 +286,7 @@ export type MigrationConnection = Pick<
  * node that fails to migrate exits and starts again to be cancelled at the same point.
  * The idle-in-transaction limit stays: the runner is never idle inside its transaction.
  */
-export const createMigrationDatabase = (connection: MigrationConnection): Executor =>
+export const createMigrationDatabase = (connection: MigrationConnection): DatabasePool =>
   createDatabase({
     ...connection,
     poolSize: 1,
@@ -294,7 +294,7 @@ export const createMigrationDatabase = (connection: MigrationConnection): Execut
     connectionTimeoutMs: 10_000,
   });
 
-export const createDatabase = (options: DatabaseOptions): Executor => {
+export const createDatabase = (options: DatabaseOptions): DatabasePool => {
   const pool = new pg.Pool({
     connectionString: options.connectionString,
     max: options.poolSize ?? 10,
@@ -326,7 +326,13 @@ export const createDatabase = (options: DatabaseOptions): Executor => {
  * one-transaction-per-test possible, and it is why no module reaches for a
  * database handle of its own. (D-46)
  */
-export type Executor = Kysely<DB>;
+export type Executor = Kysely<DB> | KyselyTransaction<DB>;
+
+/**
+ * A database on a pool of its own — what `createDatabase` makes: the one that can open a transaction and be destroyed.
+ * A service takes `Executor`, which is this or a transaction; whoever *made* the database holds this.
+ */
+export type DatabasePool = Kysely<DB>;
 
 /**
  * An executor that is *known* to be inside a transaction. A service that writes

@@ -11,7 +11,7 @@
  * the duration of the callback (`AsyncLocalStorage`), where `heldTransaction` reads it.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { Executor, Transaction } from '@purlay/db';
+import { isTransaction, type Executor, type Transaction } from '@purlay/db';
 
 const held = new AsyncLocalStorage<Transaction>();
 
@@ -30,7 +30,8 @@ const boundTo = (target: object, property: string | symbol): unknown => {
 export const rememberingTransactions = (database: Executor): Executor =>
   new Proxy(database, {
     get: (target, property): unknown => {
-      if (property !== 'transaction') return boundTo(target, property);
+      // A transaction opens none of its own, so there is nothing to remember: kysely refuses the call as it always did.
+      if (property !== 'transaction' || isTransaction(target)) return boundTo(target, property);
       return (): unknown =>
         new Proxy(target.transaction(), {
           get: (builder, member): unknown => {

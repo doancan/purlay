@@ -13,7 +13,7 @@ import type { PRODUCT_MIGRATION_SETS } from './migrator';
 import type { DB } from './schema';
 export type TableOwner = 'core' | (typeof PRODUCT_MIGRATION_SETS)[number]['id'];
 
-export const TABLE_OWNERS: Readonly<Record<keyof DB, TableOwner>> = {
+export const TABLE_OWNERS = {
   // Identity, tenancy, and what the core keeps for every module.
   accounts: 'core',
   admin_email_verification: 'core',
@@ -81,7 +81,12 @@ export const TABLE_OWNERS: Readonly<Record<keyof DB, TableOwner>> = {
 
   // Issues: a workspace's issues (its own set, `migrations/issues/`).
   issues: 'issues',
-};
+} as const satisfies Readonly<Record<keyof DB, TableOwner>>;
+
+/** The tables one owner has, as a union of their names: what a module's handle is made of (`module-db.ts`). */
+export type TablesOf<Owner extends TableOwner> = {
+  [Table in keyof typeof TABLE_OWNERS]: (typeof TABLE_OWNERS)[Table] extends Owner ? Table : never;
+}[keyof typeof TABLE_OWNERS];
 
 /**
  * The columns of a core table that a module's set may add, drop or change, as `table.column`: the expand and the

@@ -5,7 +5,7 @@
  * exactly what the route under test is allowed to use — and, more usefully,
  * supplies things that *object* if a route reaches for what it should not.
  */
-import { leasableStandIn, type Executor, type Transaction } from '@purlay/db';
+import { leasableStandIn, type DatabasePool, type Executor, type Transaction } from '@purlay/db';
 import { fixedClock, type Clock } from '../platform/clock';
 import {
   DEVELOPMENT_ENCRYPTION_KEY,
@@ -48,7 +48,7 @@ export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown
  * name: not by asserting that it did not query, but by making a query impossible.
  * The assertion lives in the double, so it holds for every test that uses it.
  */
-export const aDatabaseThatMustNotBeTouched = (failure?: Error): Executor => {
+export const aDatabaseThatMustNotBeTouched = (failure?: Error): DatabasePool => {
   const untouched = new Proxy(
     {},
     {
@@ -62,7 +62,7 @@ export const aDatabaseThatMustNotBeTouched = (failure?: Error): Executor => {
         );
       },
     },
-  ) as Executor;
+  ) as DatabasePool;
   // Leasable, as the application leases the database it is given: a lease that took a connection fails as touching it does.
   return leasableStandIn(
     untouched,
