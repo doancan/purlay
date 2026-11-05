@@ -11,11 +11,15 @@ export {
   type MigrationConnection,
   DatabaseUnavailableError,
   isTransaction,
+  leasableStandIn,
+  leasingExecutor,
   POOL_DEFAULTS,
   readCaFile,
   tlsFromEnvironment,
+  type ConnectionLease,
   type DatabaseOptions,
   type Executor,
+  type LeaseConnection,
   type Transaction,
 } from './client';
 export { purgeDeadSessions } from './sessions';
