@@ -23,26 +23,9 @@ have it.
 
 ## Unreleased
 
-### Added
-
-- **Operations** — Nodes of a cluster that run different `MODULES` say so in their logs and keep serving, so a new set can roll out node by node (D-250)
-- **Sign-in** — Sign in with Google, beside GitHub, once an administrator connects it (D-251)
-- **Messages** — Schedule a message, with its files, to be sent later; the server sends it at its time even with every app closed (D-30)
-- **Messages** — Ask to be reminded of a message; the reminder arrives in the inbox when it is due (D-128)
-- **Messages** — Delete a message for yourself alone; everybody else keeps it as it was (D-103)
-- **Messages** — A face typed as text, like `:D` or `<3`, becomes its emoji at the next space; Backspace straight after takes it back (D-253)
-
 ### Changed
 
-- **Email** — Every email the server sends is a short letter with one button, instead of plain text with the link in it (D-252)
-- **Performance** — The first page load fetches about a sixth less JavaScript, because the channel and message screens load beside the session answer rather than inside the first file (D-250)
-
-### Fixed
-
-- **Operations** — A fresh install started with `MODULES=none` can erase an account, purge a deleted workspace, export and run its nightly jobs; they failed on tables only chat's own migrations make (D-250)
-
-### Security
-
-- **Messages** — One person can put at most three different reactions on a message; taking one back makes room for another (D-249)
+- **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)
+- **Operations** — the upgrade drops `attachments.message_id` and `attachments.channel_id`, and stops with a count, changing nothing, if a sent file's link is missing from chat's table; restore the backup and fix the data before deploying again (D-250)
 
 ---
