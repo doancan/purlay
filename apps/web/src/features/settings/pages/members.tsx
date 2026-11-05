@@ -75,6 +75,7 @@ export const MembersPage = (): React.JSX.Element => {
   // A role the person chose for their own row, asked about in the row before it is sent: they may not
   // be able to change it back themself (D-111).
   const [stepping, setStepping] = useState<UserRole | null>(null);
+  const [working, setWorking] = useState<ReadonlyMap<string, 'role' | 'remove'>>(new Map());
   const [problem, setProblem] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<UserRole | typeof ALL>(ALL);
@@ -94,36 +95,53 @@ export const MembersPage = (): React.JSX.Element => {
     member.user.id !== user.id && mayChangeRole(member);
   const offered = ROLES.filter((option) => actor === 'owner' || option !== 'owner');
 
+  const start = (userId: string, action: 'role' | 'remove'): boolean => {
+    if (working.has(userId)) return false;
+    setWorking((now) => new Map([...now, [userId, action]]));
+    return true;
+  };
+  const finish = (userId: string): void => {
+    setWorking((now) => new Map([...now].filter(([id]) => id !== userId)));
+  };
+
   const changeRole = async (member: WorkspaceMember, next: UserRole): Promise<void> => {
+    if (!start(member.user.id, 'role')) return;
     setProblem(null);
     try {
-      await api.updateMemberRole(workspace.id, member.user.id, next);
-    } catch (failure) {
-      setProblem(
-        isApiError(failure) && failure.code === 'LAST_OWNER'
-          ? t('members.lastOwner')
-          : `${t('members.roleFailed')} ${describe(failure)}`,
-      );
+      try {
+        await api.updateMemberRole(workspace.id, member.user.id, next);
+      } catch (failure) {
+        setProblem(
+          isApiError(failure) && failure.code === 'LAST_OWNER'
+            ? t('members.lastOwner')
+            : `${t('members.roleFailed')} ${describe(failure)}`,
+        );
+      }
+      await reread();
+      if (member.user.id === user.id) await client.invalidateQueries({ queryKey: keys.me });
+    } finally {
+      finish(member.user.id);
     }
-    // Either way, what is shown is what the server kept; and changing one's own role changes what this
-    // person may open, which the session says.
-    await reread();
-    if (member.user.id === user.id) await client.invalidateQueries({ queryKey: keys.me });
   };
 
   const remove = async (member: WorkspaceMember): Promise<void> => {
+    if (!start(member.user.id, 'remove')) return;
     setProblem(null);
     setAsking(null);
     try {
-      await api.removeMember(workspace.id, member.user.id);
-    } catch (failure) {
-      setProblem(
-        isApiError(failure) && failure.code === 'LAST_OWNER'
-          ? t('members.lastOwner')
-          : `${t('members.removeFailed', { name: member.user.displayName })} ${describe(failure)}`,
-      );
+      try {
+        await api.removeMember(workspace.id, member.user.id);
+      } catch (failure) {
+        setProblem(
+          isApiError(failure) && failure.code === 'LAST_OWNER'
+            ? t('members.lastOwner')
+            : `${t('members.removeFailed', { name: member.user.displayName })} ${describe(failure)}`,
+        );
+      }
+      await reread();
+    } finally {
+      finish(member.user.id);
     }
-    await reread();
   };
 
   const all = members.data ?? [];
@@ -202,7 +220,7 @@ export const MembersPage = (): React.JSX.Element => {
               onChange={(event) => {
                 setQuery(event.target.value);
               }}
-              className="h-control w-full rounded-md border-hairline border-border-strong bg-surface-100 pr-3 pl-8 text-body text-ink placeholder:text-ink-muted max-narrow:h-touch"
+              className="h-control w-full rounded-md border-hairline border-border-strong bg-surface-100 pr-3 pl-8 text-body text-ink placeholder:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
             />
           </label>
           <Select
@@ -276,6 +294,8 @@ export const MembersPage = (): React.JSX.Element => {
                       {manage ? (
                         <Select
                           aria-label={t('members.roleOf', { name })}
+                          disabled={working.has(member.user.id)}
+                          aria-busy={working.has(member.user.id) || undefined}
                           value={member.role}
                           className="w-full"
                           onChange={(event) => {
@@ -302,6 +322,8 @@ export const MembersPage = (): React.JSX.Element => {
                           <Button
                             variant="dangerQuiet"
                             aria-label={t('members.removeLabel', { name })}
+                            disabled={working.has(member.user.id)}
+                            busy={working.get(member.user.id) === 'remove'}
                             onClick={() => {
                               setAsking(member.user.id);
                             }}

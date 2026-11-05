@@ -356,6 +356,16 @@ export const en = {
   'invite.admin.title': 'Invite people to {workspace}',
   'invite.admin.description':
     'A link lets anyone signed in join as a member for seven days. Share it where your team already talks.',
+  'invite.admin.revoked': 'Link revoked.',
+  'invite.admin.makeAnother': 'Make another link',
+  'invite.admin.previousOpen': 'Previous links stay open until they expire or you revoke them.',
+  'invite.mail.checking': 'Checking email availability…',
+  'invite.mail.checkFailed': 'Could not check email availability.',
+  'invite.mail.off': 'Email invitations are unavailable on this server. Share a link instead.',
+  'settings.invitations.older': 'Load older links',
+  'settings.invitations.olderFailed': 'Older links did not load.',
+  'settings.invitations.refreshFailed':
+    'Could not refresh the open links. Showing the last loaded list.',
   'invite.admin.make': 'Make a link',
   'invite.admin.makeFailed': 'Could not make a link.',
   'invite.admin.link': 'Invitation link',
@@ -415,6 +425,7 @@ export const en = {
   'audit.description':
     'Who did which administrative thing, newest first. Never what anybody wrote.',
   'audit.empty': 'Nothing administrative has happened yet.',
+  'audit.refreshFailed': 'The audit log could not be refreshed.',
   'audit.olderFailed': 'Older entries did not load.',
   'audit.older': 'Load older',
   'audit.someone': 'Someone',
@@ -1877,6 +1888,10 @@ export const en = {
   'settings.notifications.what.direct': 'Somebody writes to you directly',
   'settings.notifications.what.reply': 'Somebody replies in a thread you started or replied in',
   'settings.notifications.what.channel': 'Somebody writes in a channel you set to Every message',
+  'quietHours.loadFailed': 'Quiet hours could not be loaded.',
+  'quietHours.timeRequired': 'Enter a start and end time.',
+  'settings.account.emailOidc': 'Your organisation’s sign-in is linked to this address.',
+  'settings.account.emailUnavailable': 'Email links do not sign in to this account.',
   'quietHours.title': 'Quiet hours',
   'quietHours.description':
     'Every week, the hours nothing interrupts you: what arrives is kept and counted, and nothing pops up or rings until they are over — Deep Work, by itself.',
@@ -2088,7 +2103,7 @@ export const en = {
   'settings.invitations.title': 'Invitations',
   'settings.invitations.description':
     'Links that let somebody join. A link opens for seven days to anyone signed in who has it, as a member.',
-  'settings.invitations.new': 'New link',
+  'settings.invitations.new': 'Invite people',
   'settings.invitations.newHint': 'Shown once: copy it now and paste it to the people you mean.',
   'settings.invitations.failed': 'The open links did not load.',
   'settings.invitations.manage': 'See and revoke open links',
@@ -2567,6 +2582,8 @@ export const en = {
     'How this server lets people in. Only you, its administrator, see this page.',
   'settings.server.loadError.title': 'Could not read the server settings',
   'settings.server.loadError.body': 'Nothing was changed. Try again.',
+  'settings.server.refreshError.body':
+    'Showing the last known settings. Retry to check the server’s current values.',
   'settings.server.reentry':
     'This secret could not be opened with the current key — enter it again.',
   'settings.server.setupUnfinished':
@@ -2702,6 +2719,8 @@ export const en = {
   'settings.server.policy.open.body': 'Anyone who can reach this server can create an account.',
   'settings.server.policy.saved': 'Saved. This applies from the next sign-up.',
   'settings.server.accounts.title': 'Accounts',
+  'settings.server.accounts.loadFailed':
+    'Could not read the accounts. Retry to get the current list.',
   'settings.server.accounts.description':
     'Suspend the account of somebody who has left: they are signed out everywhere and cannot sign in, and their messages and name stay. Lift it to let them back in as they were.',
   'settings.server.accounts.find': 'Find by name, username or address',

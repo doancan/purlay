@@ -75,6 +75,7 @@ export const GitHubAppCard = ({
     };
 
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     setOutcome(null);
@@ -92,7 +93,16 @@ export const GitHubAppCard = ({
         setForm({ ...form, clientSecret: '', privateKey: '', webhookSecret: '' });
         setOpen(false);
         setOutcome({ ok: true, words: t('settings.server.githubApp.saved') });
-        await refresh();
+        await refresh({
+          githubApp: {
+            appId,
+            slug: form.slug.trim(),
+            clientId: form.clientId.trim(),
+            clientSecret: { set: true },
+            privateKey: { set: true },
+            webhookSecret: { set: true },
+          },
+        });
       }
     } catch (caught) {
       setFailure(caught);
@@ -102,12 +112,15 @@ export const GitHubAppCard = ({
   };
 
   const disconnect = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     try {
       await client.disconnect('github-app', false);
-      await refresh();
+      await refresh({ githubApp: null });
       setAsking(false);
+      setOpen(false);
+      setForm(EMPTY);
       setOutcome({ ok: true, words: t('settings.server.githubApp.disconnected') });
     } catch (caught) {
       setFailure(caught);
@@ -179,6 +192,7 @@ export const GitHubAppCard = ({
               }}
             >
               <TextField
+                readOnly={busy}
                 label={t('settings.server.githubApp.appIdLabel')}
                 value={form.appId}
                 inputMode="numeric"
@@ -188,6 +202,7 @@ export const GitHubAppCard = ({
                 onChange={change('appId')}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.githubApp.slugLabel')}
                 hint={t('settings.server.githubApp.slugHint')}
                 value={form.slug}
@@ -198,6 +213,7 @@ export const GitHubAppCard = ({
                 onChange={change('slug')}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.oidc.clientIdLabel')}
                 value={form.clientId}
                 autoComplete="off"
@@ -208,6 +224,7 @@ export const GitHubAppCard = ({
                 onChange={change('clientId')}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.oidc.clientSecretLabel')}
                 type="password"
                 value={form.clientSecret}
@@ -223,6 +240,7 @@ export const GitHubAppCard = ({
                   {t('settings.server.githubApp.keyLabel')}
                 </label>
                 <textarea
+                  readOnly={busy}
                   id={keyId}
                   rows={5}
                   value={form.privateKey}
@@ -231,7 +249,7 @@ export const GitHubAppCard = ({
                   maxLength={GITHUB_APP_PRIVATE_KEY_MAX}
                   aria-invalid={field === 'privateKey' ? true : undefined}
                   aria-describedby={`${keyId}-hint`}
-                  className="w-full resize-y rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-2 font-mono text-caption text-ink aria-invalid:border-danger"
+                  className="w-full resize-y rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-2 font-mono text-caption text-ink aria-invalid:border-danger max-narrow:text-title max-narrow:font-normal"
                   onChange={change('privateKey')}
                 />
                 <p id={`${keyId}-hint`} className="text-caption text-ink-muted">
@@ -239,6 +257,7 @@ export const GitHubAppCard = ({
                 </p>
               </div>
               <TextField
+                readOnly={busy}
                 label={t('settings.server.githubApp.webhookSecretLabel')}
                 type="password"
                 value={form.webhookSecret}
@@ -251,7 +270,7 @@ export const GitHubAppCard = ({
               />
               {failed !== null && <ProbeFailure result={failed} />}
               {failure !== null && <ChangeFailure failure={failure} />}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" variant="primary" busy={busy} disabled={!filled || busy}>
                   {failed === null ? t('settings.server.github.save') : t('setup.tryAgain')}
                 </Button>
@@ -261,6 +280,12 @@ export const GitHubAppCard = ({
                     disabled={busy}
                     onClick={() => {
                       setOpen(false);
+                      setForm({
+                        ...EMPTY,
+                        appId: app === null ? '' : String(app.appId),
+                        slug: app?.slug ?? '',
+                        clientId: app?.clientId ?? '',
+                      });
                       setResult(null);
                       setFailure(null);
                     }}
@@ -287,7 +312,16 @@ export const GitHubAppCard = ({
         <Inset className="flex-row flex-wrap items-center gap-2">
           <Button
             variant={app === null ? 'primary' : 'secondary'}
+            disabled={busy}
             onClick={() => {
+              setForm({
+                ...EMPTY,
+                appId: app === null ? '' : String(app.appId),
+                slug: app?.slug ?? '',
+                clientId: app?.clientId ?? '',
+              });
+              setResult(null);
+              setFailure(null);
               setOpen(true);
               setOutcome(null);
             }}
@@ -300,6 +334,7 @@ export const GitHubAppCard = ({
             <Button
               variant="dangerQuiet"
               onClick={() => {
+                setFailure(null);
                 setAsking(true);
               }}
             >

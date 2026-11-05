@@ -39,12 +39,13 @@ export const PolicyCard = ({
   const [outcome, setOutcome] = useState<Outcome>(null);
 
   const change = async (signUp: 'invite-only' | 'open'): Promise<void> => {
+    if (chosen !== null) return;
     setChosen(signUp);
     setFailure(null);
     setOutcome(null);
     try {
       await client.policy({ signUp });
-      await refresh();
+      await refresh({ signUp });
       setOutcome({ ok: true, words: t('settings.server.policy.saved') });
     } catch (caught) {
       setFailure(caught);
@@ -62,6 +63,7 @@ export const PolicyCard = ({
       <SettingsRow label={t('settings.server.policy.label')} wide>
         <Choices
           label={t('settings.server.policy.label')}
+          disabled={chosen !== null}
           value={chosen ?? view.settings.signUp}
           choices={[
             {
@@ -116,6 +118,7 @@ export const SignInPolicyCard = ({
   const providers = view.channels.github || view.channels.oidc || view.channels.google;
 
   const change = async (rule: SignInRule, on: boolean): Promise<void> => {
+    if (pending !== null) return;
     setPending({ rule, on });
     setFailure(null);
     setOutcome(null);
@@ -123,7 +126,9 @@ export const SignInPolicyCard = ({
       await client.policy(
         rule === 'requireTwoFactor' ? { requireTwoFactor: on } : { passwordSignIn: on },
       );
-      await refresh();
+      await refresh(
+        rule === 'requireTwoFactor' ? { requireTwoFactor: on } : { passwordSignIn: on },
+      );
       // Whether the administrator is held back may have changed with it.
       await queries.invalidateQueries({ queryKey: keys.me });
       setOutcome({ ok: true, words: t('settings.server.signIn.saved') });
@@ -148,6 +153,7 @@ export const SignInPolicyCard = ({
       <SettingsRow label={t('settings.server.signIn.twoFactor')} wide>
         <Choices
           label={t('settings.server.signIn.twoFactor')}
+          disabled={pending !== null}
           value={valueOf('requireTwoFactor')}
           choices={[
             {
@@ -175,6 +181,7 @@ export const SignInPolicyCard = ({
       >
         <Choices
           label={t('settings.server.signIn.passwords')}
+          disabled={pending !== null}
           value={valueOf('passwordSignIn')}
           choices={[
             {
@@ -229,12 +236,13 @@ export const SessionLifetimeCard = ({
   const [outcome, setOutcome] = useState<Outcome>(null);
 
   const change = async (next: LifetimeChange): Promise<void> => {
+    if (pending !== null) return;
     setPending(next);
     setFailure(null);
     setOutcome(null);
     try {
       await client.policy(next);
-      await refresh();
+      await refresh(next);
       setOutcome({ ok: true, words: t('settings.server.signIn.saved') });
     } catch (caught) {
       setFailure(caught);
@@ -274,6 +282,7 @@ export const SessionLifetimeCard = ({
       >
         <Select
           id={idleId}
+          disabled={pending !== null}
           className="w-full"
           value={idle === null ? OFF : String(idle)}
           onChange={(event) => {
@@ -299,6 +308,7 @@ export const SessionLifetimeCard = ({
       >
         <Select
           id={maxAgeId}
+          disabled={pending !== null}
           className="w-full"
           value={maxAge === null ? OFF : String(maxAge)}
           onChange={(event) => {
@@ -342,8 +352,12 @@ export const CreatorsCard = ({
   const client = useServerClient();
   const refresh = useRefresh();
   const now = view.settings.workspaceCreators;
-  const [kind, setKind] = useState<'first' | 'anyone' | 'listed'>(now.kind);
-  const [typed, setTyped] = useState(now.kind === 'listed' ? now.logins.join(', ') : '');
+  const [draft, setDraft] = useState<{
+    readonly kind: 'first' | 'anyone' | 'listed';
+    readonly typed: string;
+  } | null>(null);
+  const kind = draft?.kind ?? now.kind;
+  const typed = draft?.typed ?? (now.kind === 'listed' ? now.logins.join(', ') : '');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
@@ -360,6 +374,7 @@ export const CreatorsCard = ({
           [...new Set(logins.map((login) => login.toLowerCase()))].sort().join(',')));
 
   const save = async (): Promise<void> => {
+    if (busy) return;
     if (listProblem) {
       setWrong(true);
       return;
@@ -370,7 +385,16 @@ export const CreatorsCard = ({
     setOutcome(null);
     try {
       await client.creators(choice);
-      await refresh();
+      await refresh({
+        workspaceCreators:
+          choice.kind === 'listed'
+            ? {
+                kind: 'listed',
+                logins: [...new Set(choice.logins.map((login) => login.toLowerCase()))].sort(),
+              }
+            : choice,
+      });
+      setDraft(null);
       setOutcome({ ok: true, words: t('settings.server.creators.saved') });
     } catch (caught) {
       if (isSetupFailure(caught) && 'workspaceCreators' in caught.fields) setWrong(true);
@@ -407,6 +431,7 @@ export const CreatorsCard = ({
       <SettingsRow label={t('settings.server.creators.label')} wide>
         <Choices
           label={t('settings.server.creators.label')}
+          disabled={busy}
           value={kind}
           choices={[
             {
@@ -426,7 +451,7 @@ export const CreatorsCard = ({
             },
           ]}
           onChange={(value) => {
-            setKind(value);
+            setDraft({ kind: value, typed });
             setWrong(false);
             setOutcome(null);
           }}
@@ -434,6 +459,7 @@ export const CreatorsCard = ({
       </SettingsRow>
       {kind === 'listed' && (
         <SettingsTextRow
+          readOnly={busy}
           label={t('settings.server.creators.logins')}
           hint={t('settings.server.creators.loginsHint')}
           value={typed}
@@ -442,8 +468,9 @@ export const CreatorsCard = ({
           className="font-mono"
           {...(wrong && listProblem ? { error: t('settings.server.creators.loginsError') } : {})}
           onChange={(event) => {
-            setTyped(event.target.value);
+            setDraft({ kind, typed: event.target.value });
             setWrong(false);
+            setOutcome(null);
           }}
         />
       )}

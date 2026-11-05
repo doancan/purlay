@@ -21,6 +21,7 @@ import { useApi } from '../../../data/api-provider';
 import { isApiError } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { families, keys } from '../../../data/keys';
+import { profileTimeZoneChanged } from '../../../data/cache';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
@@ -74,6 +75,7 @@ export const ProfilePage = (): React.JSX.Element => {
 
   const submit = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
+    if (busy || !changed) return;
     setState('busy');
     setProblems({});
     let saved: Profile;
@@ -102,6 +104,7 @@ export const ProfilePage = (): React.JSX.Element => {
     client.setQueryData<MeResponse>(keys.me, (me) =>
       me === undefined ? me : { ...me, profile: saved },
     );
+    if (saved.timeZone !== profile.timeZone) profileTimeZoneChanged(client, saved.timeZone);
     setEdited({});
     setState('saved');
     // Wherever you are a member, your profile is read again — as the frame tells the others to.
@@ -202,6 +205,7 @@ export const ProfilePage = (): React.JSX.Element => {
             after={
               <Button
                 variant="ghost"
+                disabled={busy}
                 className="-ml-3"
                 onClick={() => {
                   edit('timeZone', deviceZone());

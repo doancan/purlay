@@ -33,8 +33,9 @@ const asClock = (minutes: number): string =>
 const fromClock = (text: string): number | null => {
   const match = /^(\d{2}):(\d{2})$/.exec(text);
   if (match === null) return null;
-  const minutes = Number(match[1]) * 60 + Number(match[2]);
-  return minutes < MINUTES_PER_DAY ? minutes : null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours < MINUTES_PER_DAY / 60 && minutes < 60 ? hours * 60 + minutes : null;
 };
 
 export const QuietHoursCard = (): React.JSX.Element => {
@@ -45,6 +46,7 @@ export const QuietHoursCard = (): React.JSX.Element => {
   const { workspace } = useWorkspace();
   const fromId = useId();
   const toId = useId();
+  const timeProblemId = useId();
   const setting = useQuietHoursSetting();
   // What is being edited; until something is, the card shows what the server keeps.
   const [draft, setDraft] = useState<QuietHours | null | undefined>(undefined);
@@ -59,17 +61,38 @@ export const QuietHoursCard = (): React.JSX.Element => {
       new Date(Date.UTC(2023, 0, 1 + day)),
     );
 
+  const readFailure = setting.isError ? (
+    <div className="flex flex-wrap items-center gap-3 px-6 py-5 max-narrow:px-4">
+      <p role="alert" className="min-w-0 flex-1 text-label text-danger-text">
+        {t('quietHours.loadFailed')}
+      </p>
+      <Button
+        busy={setting.isFetching}
+        onClick={() => {
+          void setting.refetch();
+        }}
+      >
+        {t('common.retry')}
+      </Button>
+    </div>
+  ) : null;
+
   if (setting.data === undefined) {
     return (
       <SettingsCard title={t('quietHours.title')} description={t('quietHours.description')}>
-        <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
-          <Skeleton />
-        </LoadingStatus>
+        {readFailure ?? (
+          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
+            <Skeleton />
+          </LoadingStatus>
+        )}
       </SettingsCard>
     );
   }
   const { timeZone } = setting.data;
   const shown = draft === undefined ? setting.data.quietHours : draft;
+  const invalidFrom = shown !== null && typed.from !== undefined && fromClock(typed.from) === null;
+  const invalidTo = shown !== null && typed.to !== undefined && fromClock(typed.to) === null;
+  const invalidTime = invalidFrom || invalidTo;
 
   if (timeZone === null) {
     return (
@@ -89,6 +112,8 @@ export const QuietHoursCard = (): React.JSX.Element => {
   };
 
   const save = async (): Promise<void> => {
+    if (busy || draft === undefined || invalidTime || (shown !== null && shown.days.length === 0))
+      return;
     setBusy(true);
     setOutcome(null);
     try {
@@ -114,7 +139,9 @@ export const QuietHoursCard = (): React.JSX.Element => {
           <Button
             variant="primary"
             busy={busy}
-            disabled={draft === undefined || (shown !== null && shown.days.length === 0)}
+            disabled={
+              draft === undefined || invalidTime || (shown !== null && shown.days.length === 0)
+            }
             onClick={() => {
               void save();
             }}
@@ -124,11 +151,14 @@ export const QuietHoursCard = (): React.JSX.Element => {
         </>
       }
     >
+      {readFailure}
       <SettingsRow label={t('quietHours.on')} description={t('quietHours.zone', { timeZone })}>
         <Checkbox
           aria-label={t('quietHours.on')}
           checked={shown !== null}
+          disabled={busy}
           onChange={(event) => {
+            setTyped({});
             change(event.target.checked ? SUGGESTED : null);
           }}
         />
@@ -146,8 +176,11 @@ export const QuietHoursCard = (): React.JSX.Element => {
               <input
                 id={fromId}
                 type="time"
+                disabled={busy}
+                aria-invalid={invalidFrom || undefined}
+                aria-describedby={invalidFrom ? timeProblemId : undefined}
                 value={typed.from ?? asClock(shown.from)}
-                className="h-control rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-body text-ink"
+                className="h-control rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-body text-ink max-narrow:text-title max-narrow:font-normal"
                 onChange={(event) => {
                   setTyped({ ...typed, from: event.target.value });
                   const from = fromClock(event.target.value);
@@ -160,14 +193,26 @@ export const QuietHoursCard = (): React.JSX.Element => {
               <input
                 id={toId}
                 type="time"
+                disabled={busy}
+                aria-invalid={invalidTo || undefined}
+                aria-describedby={invalidTo ? timeProblemId : undefined}
                 value={typed.to ?? asClock(shown.to)}
-                className="h-control rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-body text-ink"
+                className="h-control rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-body text-ink max-narrow:text-title max-narrow:font-normal"
                 onChange={(event) => {
                   setTyped({ ...typed, to: event.target.value });
                   const to = fromClock(event.target.value);
                   if (to !== null) change({ ...shown, to });
                 }}
               />
+              {invalidTime && (
+                <span
+                  id={timeProblemId}
+                  role="alert"
+                  className="w-full text-caption text-danger-text"
+                >
+                  {t('quietHours.timeRequired')}
+                </span>
+              )}
             </span>
           </SettingsRow>
           <SettingsRow label={t('quietHours.days')} wide>
@@ -179,6 +224,7 @@ export const QuietHoursCard = (): React.JSX.Element => {
               {WEEK.map((day) => (
                 <label key={day} className="inline-flex items-center gap-2 text-body text-ink">
                   <Checkbox
+                    disabled={busy}
                     checked={shown.days.includes(day)}
                     onChange={(event) => {
                       const days = event.target.checked

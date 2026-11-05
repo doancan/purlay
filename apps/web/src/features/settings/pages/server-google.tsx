@@ -48,6 +48,7 @@ export const GoogleCard = ({
   const filled = clientId.trim() !== '' && clientSecret.trim() !== '';
 
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     setOutcome(null);
@@ -61,7 +62,7 @@ export const GoogleCard = ({
         setClientSecret('');
         setOpen(false);
         setOutcome({ ok: true, words: t('settings.server.google.saved') });
-        await refresh();
+        await refresh({ google: { clientId: clientId.trim(), clientSecret: { set: true } } });
       }
     } catch (caught) {
       setFailure(caught);
@@ -120,6 +121,7 @@ export const GoogleCard = ({
               }}
             >
               <TextField
+                readOnly={busy}
                 label={t('settings.server.google.clientIdLabel')}
                 value={clientId}
                 autoComplete="off"
@@ -133,6 +135,7 @@ export const GoogleCard = ({
                 }}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.google.clientSecretLabel')}
                 type="password"
                 value={clientSecret}
@@ -152,7 +155,7 @@ export const GoogleCard = ({
               </p>
               {failed !== null && <ProbeFailure result={failed} channel="google" />}
               {failure !== null && <ChangeFailure failure={failure} />}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" variant="primary" busy={busy} disabled={!filled || busy}>
                   {failed === null ? t('settings.server.google.save') : t('setup.tryAgain')}
                 </Button>
@@ -162,6 +165,8 @@ export const GoogleCard = ({
                     disabled={busy}
                     onClick={() => {
                       setOpen(false);
+                      setClientId(google?.clientId ?? '');
+                      setClientSecret('');
                       setResult(null);
                       setFailure(null);
                     }}
@@ -188,7 +193,12 @@ export const GoogleCard = ({
         <Inset className="flex-row flex-wrap items-center gap-2">
           <Button
             variant={google === null ? 'primary' : 'secondary'}
+            disabled={busy}
             onClick={() => {
+              setClientId(google?.clientId ?? '');
+              setClientSecret('');
+              setResult(null);
+              setFailure(null);
               setOpen(true);
               setOutcome(null);
             }}
@@ -217,6 +227,8 @@ export const GoogleCard = ({
         title={t('settings.server.google.disconnectTitle')}
         body={t('settings.server.google.disconnectBody')}
         done={() => {
+          setOpen(false);
+          setClientSecret('');
           setOutcome({ ok: true, words: t('settings.server.google.disconnected') });
         }}
       />

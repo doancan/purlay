@@ -3,7 +3,7 @@
  * form's reveal, and the dialog that asks before a way in is disconnected — and says outright, before
  * it is taken, when it is the last one.
  */
-import type { ServerSettingsAnswer } from '@purlay/types';
+import type { ServerSettingsAnswer, ServerSettingsView } from '@purlay/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -14,12 +14,37 @@ import { movementClass, useReducedMotion } from '../setup/motion';
 import { FailureNote, Note } from '../setup/parts';
 import { Dialog } from '../../ui/dialog';
 import { SERVER_SETTINGS_KEY, useServerClient } from './server-context';
+import { keys } from '../../data/keys';
 
 /** The page's query, read again after a change. */
-export const useRefresh = (): (() => Promise<void>) => {
+export const useRefresh = (): ((saved?: Partial<ServerSettingsView>) => Promise<void>) => {
   const queries = useQueryClient();
-  return async (): Promise<void> => {
-    await queries.invalidateQueries({ queryKey: SERVER_SETTINGS_KEY });
+  return async (saved): Promise<void> => {
+    // Only the public view of an accepted write belongs here, never its submitted credentials.
+    if (saved !== undefined) {
+      await queries.cancelQueries({ queryKey: SERVER_SETTINGS_KEY });
+      queries.setQueryData<ServerSettingsAnswer>(SERVER_SETTINGS_KEY, (current) =>
+        current === undefined
+          ? undefined
+          : {
+              ...current,
+              settings: { ...current.settings, ...saved },
+              needsReentry: current.needsReentry.filter((name) => !(name in saved)),
+              channels: {
+                github:
+                  saved.github === undefined ? current.channels.github : saved.github !== null,
+                google:
+                  saved.google === undefined ? current.channels.google : saved.google !== null,
+                oidc: saved.oidc === undefined ? current.channels.oidc : saved.oidc !== null,
+                email: saved.smtp === undefined ? current.channels.email : saved.smtp !== null,
+              },
+            },
+      );
+    }
+    await Promise.all([
+      queries.invalidateQueries({ queryKey: SERVER_SETTINGS_KEY }),
+      queries.invalidateQueries({ queryKey: keys.authMethods }),
+    ]);
   };
 };
 
@@ -75,15 +100,7 @@ export const Inset = ({
  * refuses for that reason although the page thought otherwise (somebody else changed it), the dialog
  * turns into that question and nothing has been taken.
  */
-export const DisconnectDialog = ({
-  channel,
-  view,
-  open,
-  onOpenChange,
-  title,
-  body,
-  done,
-}: {
+interface DisconnectDialogProps {
   readonly channel: 'github' | 'smtp' | 'oidc' | 'google';
   readonly view: ServerSettingsAnswer;
   readonly open: boolean;
@@ -92,7 +109,21 @@ export const DisconnectDialog = ({
   readonly body: string;
   /** What to say once it is done: the card's outcome line. */
   readonly done: () => void;
-}): React.JSX.Element => {
+}
+
+/** Each opening starts a new confirmation; a cancelled refusal grants no later consent. */
+export const DisconnectDialog = (props: DisconnectDialogProps): React.JSX.Element | null =>
+  props.open ? <OpenDisconnectDialog {...props} /> : null;
+
+const OpenDisconnectDialog = ({
+  channel,
+  view,
+  open,
+  onOpenChange,
+  title,
+  body,
+  done,
+}: DisconnectDialogProps): React.JSX.Element => {
   const { t } = useI18n();
   const client = useServerClient();
   const refresh = useRefresh();
@@ -114,11 +145,12 @@ export const DisconnectDialog = ({
     );
 
   const disconnect = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     try {
       await client.disconnect(channel, last);
-      await refresh();
+      await refresh({ [channel]: null });
       onOpenChange(false);
       done();
     } catch (caught) {

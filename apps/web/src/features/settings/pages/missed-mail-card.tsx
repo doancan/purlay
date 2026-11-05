@@ -52,6 +52,7 @@ export const MissedMailCard = (): React.JSX.Element | null => {
   if (before?.available !== true) return null;
 
   const change = (next: boolean): void => {
+    if (chosen !== null) return;
     setChosen(next);
     api.setMissedMail({ on: next }).then(
       (kept) => {
@@ -71,6 +72,8 @@ export const MissedMailCard = (): React.JSX.Element | null => {
         <Checkbox
           id={id}
           checked={chosen ?? before.on}
+          disabled={chosen !== null}
+          aria-busy={chosen !== null || undefined}
           onChange={(event) => {
             change(event.target.checked);
           }}

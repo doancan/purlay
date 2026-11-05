@@ -55,6 +55,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
 
   const save = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
+    if (busy !== null) return;
     const wanted = token.trim();
     if (!TOKEN.test(wanted)) {
       setProblem({ field: 'token', message: t('github.invalid') });
@@ -83,6 +84,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
   };
 
   const disconnect = async (): Promise<void> => {
+    if (busy !== null) return;
     setBusy('disconnect');
     setProblem(null);
     try {
@@ -123,7 +125,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
                 type="submit"
                 variant="primary"
                 busy={busy === 'save'}
-                disabled={token.trim() === ''}
+                disabled={token.trim() === '' || busy !== null}
               >
                 {connected ? t('settings.integrations.replace') : t('github.save')}
               </Button>
@@ -187,6 +189,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
                   <Button
                     variant="dangerQuiet"
                     busy={busy === 'disconnect'}
+                    disabled={busy !== null}
                     onClick={() => {
                       void disconnect();
                     }}
@@ -198,6 +201,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
             )}
           </SettingsRow>
           <SettingsTextRow
+            readOnly={busy !== null}
             label={t('github.token')}
             hint={t('github.tokenHint')}
             type="password"
