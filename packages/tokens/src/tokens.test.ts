@@ -143,6 +143,22 @@ describe('the validator refuses', () => {
     expect(problemsOf(file).join('\n')).toContain('longer than the 200ms');
   });
 
+  test('a celebration may run for seconds, the whole family under one cap of five seconds, and nothing else may (D-247, D-261)', () => {
+    // The two that exist are over the interface's 200ms and are fine.
+    expect(problemsOf(copy()).join('\n')).not.toContain('longer than');
+    // The family is its name and what is named under it, up to five seconds.
+    const long = copy();
+    damage(long, 'duration', 'duration-celebrate-grand', { value: '5200ms' });
+    expect(problemsOf(long).join('\n')).toContain('"duration-celebrate-grand": 5200ms');
+    // A motion that only looks like it (a different word) gets no allowance.
+    const other = copy();
+    damage(other, 'duration', 'duration-collapse', {
+      name: 'duration-celebratex',
+      value: '3000ms',
+    });
+    expect(problemsOf(other).join('\n')).toContain('longer than the 200ms');
+  });
+
   test('a colour that is missing from one theme', () => {
     const file = copy();
     damage(file, 'color', 'ink', { value: { dark: '#e6e8eb' } });

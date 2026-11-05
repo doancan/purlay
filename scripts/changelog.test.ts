@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CATEGORIES, NOTES_HEADING, NOTHING, problemsIn } from './changelog';
+import { CATEGORIES, FEATURED_MAX, NOTES_HEADING, NOTHING, problemsIn } from './changelog';
 
 const CHANGELOG = join(import.meta.dir, '../docs/changelog');
 
@@ -47,7 +47,29 @@ describe('what the judge refuses', () => {
   });
 
   test('knows its categories', () => {
-    expect(CATEGORIES).toEqual(['Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security']);
+    expect(CATEGORIES).toEqual([
+      'Featured',
+      'Added',
+      'Changed',
+      'Deprecated',
+      'Removed',
+      'Fixed',
+      'Security',
+    ]);
+  });
+
+  test('accepts Featured first, and refuses a fourth big thing, or Featured after the rest (D-261)', () => {
+    const featured = (count: number): string =>
+      `### Featured\n\n${Array.from({ length: count }, (_, at) => `- **Big ${String(at)}** — a thing`).join('\n')}\n\n### Added\n\n- **A** — b\n`;
+    expect(problemsIn(featured(1))).toEqual([]);
+    expect(problemsIn(featured(FEATURED_MAX))).toEqual([]);
+    expect(problemsIn(featured(FEATURED_MAX + 1))).toEqual([
+      expect.stringContaining(`holds ${String(FEATURED_MAX + 1)} bullets`),
+    ]);
+    expect(problemsIn('### Added\n\n- x\n\n### Featured\n\n- y\n')).toEqual([
+      expect.stringContaining('belongs before "### Added"'),
+    ]);
+    expect(problemsIn('### Featured\n')).toEqual([expect.stringContaining('has no bullet')]);
   });
 
   test('refuses a heading that is not a category', () => {

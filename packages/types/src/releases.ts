@@ -50,6 +50,7 @@ export type LatestReleaseAnswer = Static<typeof LatestReleaseAnswer>;
  * command judges the files with a list of its own — the scripts depend on no package — and a test holds the two.
  */
 export const RELEASE_CATEGORIES = [
+  'Featured',
   'Added',
   'Changed',
   'Deprecated',
@@ -61,10 +62,20 @@ export const RELEASE_CATEGORIES = [
 /** The notes' first line: `# Purlay v0.1.0 — 2026-10-26`. */
 export const RELEASE_NOTES_HEADING = /^# Purlay v(\d+\.\d+\.\d+) — (\d{4}-\d{2}-\d{2})$/;
 
+/** One bullet of a release's notes, as it was written and as it is drawn. */
+export interface ReleaseNotesItem {
+  /** What was written after the `- `, continuation lines joined: the whole bullet, as markdown. */
+  readonly markdown: string;
+  /** The product word in bold that starts a bullet — `**Messages** — …` — or `null` when it has none. */
+  readonly area: string | null;
+  /** What follows the area and its dash, as markdown; the whole bullet when there is no area. */
+  readonly body: string;
+}
+
 export interface ReleaseNotesGroup {
   readonly category: (typeof RELEASE_CATEGORIES)[number];
-  /** One bullet each, as the markdown that was written after its `- `, continuation lines joined. */
-  readonly items: readonly string[];
+  /** One entry per bullet, in the order they were written. */
+  readonly items: readonly ReleaseNotesItem[];
 }
 
 export interface ReleaseNotes {
@@ -73,6 +84,17 @@ export interface ReleaseNotes {
   readonly date: string;
   readonly groups: readonly ReleaseNotesGroup[];
 }
+
+/** `**Messages** — a sentence`: an area in bold, a dash, and what it did. */
+const AREA = /^\*\*([^*]+)\*\*\s+—\s+([\s\S]+)$/;
+
+/** A bullet's text, split into its area and its words. */
+export const readItem = (markdown: string): ReleaseNotesItem => {
+  const found = AREA.exec(markdown);
+  return found === null
+    ? { markdown, area: null, body: markdown }
+    : { markdown, area: found[1]?.trim() ?? null, body: found[2]?.trim() ?? markdown };
+};
 
 /**
  * What a release's notes file says: its version, its date and, per category, its bullets. A file that does not
@@ -102,5 +124,11 @@ export const readReleaseNotes = (text: string): ReleaseNotes | null => {
       if (last !== undefined) current.items[current.items.length - 1] = `${last} ${line.trim()}`;
     }
   }
-  return { version, date, groups: groups.filter((group) => group.items.length > 0) };
+  return {
+    version,
+    date,
+    groups: groups
+      .filter((group) => group.items.length > 0)
+      .map((group) => ({ category: group.category, items: group.items.map(readItem) })),
+  };
 };

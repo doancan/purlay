@@ -197,8 +197,10 @@ describe('the About page', () => {
     await person().click(await view.findByRole('button', { name: 'What’s new' }));
     const dialog = await view.findByRole('dialog', { name: 'What’s new in Purlay 0.1.0' });
     expect(within(dialog).getByText('Released Oct 26, 2026.')).toBeDefined();
-    expect(within(dialog).getByRole('heading', { level: 3, name: 'Added' })).toBeDefined();
-    expect(within(dialog).getByText('Messages').tagName).toBe('STRONG');
+    // Featured first, then each category by what it is (Added is told as New), the area a label of its own.
+    expect(within(dialog).getByRole('heading', { level: 3, name: 'Featured' })).toBeDefined();
+    expect(within(dialog).getByRole('heading', { level: 3, name: /^New/ })).toBeDefined();
+    expect(within(dialog).getByText('Messages').tagName).toBe('SPAN');
     expect(within(dialog).getByText('day dividers').tagName).toBe('CODE');
     await person().keyboard('{Escape}');
     await waitFor(() => {

@@ -319,6 +319,71 @@ describe('a release', () => {
     );
   });
 
+  test('publishes every category, Featured first: what GitHub is given is what the window will read (D-261)', () => {
+    const place = sandbox();
+    const changes = [
+      '## Unreleased',
+      '',
+      '### Featured',
+      '',
+      '- **Editor** — It reads what you paste',
+      '- **Notes** — Sorted by what they are',
+      '',
+      '### Added',
+      '',
+      '- **Search** — Find by author',
+      '',
+      '### Changed',
+      '',
+      '- **Sidebar** — Rows have room',
+      '',
+      '### Deprecated',
+      '',
+      '- **API** — The old route',
+      '',
+      '### Removed',
+      '',
+      '- **Badge** — A leftover',
+      '',
+      '### Fixed',
+      '',
+      '- **Feed** — The place is kept',
+      '',
+      '### Security',
+      '',
+      '- **Sign-in** — Hardened (D-179)',
+      '',
+      '---',
+      '',
+    ].join('\n');
+    const rolled = rollChanges(changes, '0.1.0', '2026-10-26').notes;
+    writeFileSync(join(place.checkout, 'docs/changelog/v0.1.0.md'), rolled);
+    git(place.checkout, 'commit', '--quiet', '-am', 'rolled');
+    const outcome = publish(place, {}, [git(place.checkout, 'rev-parse', 'HEAD')]);
+    expect(outcome.code).toBe(0);
+    const body = readFileSync(place.body, 'utf8');
+    // The headings GitHub shows, in the order the file has them, Featured above the rest.
+    const headings = [...body.matchAll(/^### (\w+)$/gm)].map((match) => match[1]);
+    expect(headings).toEqual([
+      'Featured',
+      'Added',
+      'Changed',
+      'Deprecated',
+      'Removed',
+      'Fixed',
+      'Security',
+    ]);
+    // The same bullets as the file: what the window reads (the client's parser is held to the file by
+    // `releases.test.ts`) is what GitHub shows.
+    const bulletsOf = (text: string): number[] =>
+      text
+        .split(/^### \w+$/m)
+        .slice(1)
+        .map((part) => part.split('\n').filter((line) => line.startsWith('- ')).length);
+    expect(bulletsOf(body)).toEqual([2, 1, 1, 1, 1, 1, 1]);
+    expect(bulletsOf(rolled)).toEqual(bulletsOf(body));
+  });
+
   test('a release GitHub refuses is a failure, not a success', () => {
     const outcome = publish(sandbox(), { CREATE_EXIT: '1' });
     expect(outcome.code).not.toBe(0);
