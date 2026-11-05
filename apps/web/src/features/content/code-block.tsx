@@ -14,6 +14,11 @@
  * not heard (`aria-hidden`) and not selected (`select-none`), so a hand selection copies the code
  * alone — and each beside its own line, so a wrapped line keeps its number at its first row.
  *
+ * **A block of Markdown has two views** (D-259): its source, as every block, and its preview, drawn by the
+ * same renderer a message is — so a person who sends Markdown in a fence is read as written or as it will
+ * look. Copy is the source in both. The preview arrives from the caller as a function, which only runs
+ * when it is asked for: this file does not import the renderer that imports it.
+ *
  * The clamp is `max-h-code` (a token) with `overflow-hidden`, under a fade into the block's own
  * background (`ARCHITECTURE.md` §8.2): a block over twelve lines is never taller than the feed can
  * use, it shows that there is more, and the person opens it when they want all of it.
@@ -88,9 +93,47 @@ interface CodeBlockProps {
   readonly code: string;
   /** What followed the fence; empty for none. */
   readonly language: string;
+  /** The block drawn as what it contains — given for Markdown, which has a second view (D-259). */
+  readonly preview?: () => React.ReactNode;
+  /** Open on the preview, as a Markdown *file* does: it is read, where a fence in a message is quoted. */
+  readonly previewFirst?: boolean;
 }
 
-export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element => {
+/** The two views of a block of Markdown, as buttons that say which is showing. */
+const ViewSwitch = ({
+  previewing,
+  onChange,
+}: {
+  readonly previewing: boolean;
+  readonly onChange: (previewing: boolean) => void;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const button = (preview: boolean, label: string): React.JSX.Element => (
+    <button
+      type="button"
+      aria-pressed={previewing === preview}
+      onClick={() => {
+        onChange(preview);
+      }}
+      className="inline-flex h-6 items-center rounded-md px-2 text-caption text-ink-muted transition-colors duration-hover ease-standard hover:text-ink aria-pressed:bg-surface-200 aria-pressed:text-ink"
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div role="group" aria-label={t('message.code.view')} className="flex items-center gap-1">
+      {button(false, t('message.code.source'))}
+      {button(true, t('message.code.preview'))}
+    </div>
+  );
+};
+
+export const CodeBlock = ({
+  code,
+  language,
+  preview,
+  previewFirst = false,
+}: CodeBlockProps): React.JSX.Element => {
   const { t } = useI18n();
   const { show } = useToast();
   const ports = useContentPorts();
@@ -98,8 +141,10 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
   const [open, setOpen] = useState(false);
   // A long line scrolls, under a scrollbar that is always drawn; wrapped, it is all in view at once.
   const [wrapped, setWrapped] = useState(false);
+  const [previewing, setPreviewing] = useState(previewFirst);
   const count = lineCount(code);
   const clamped = count > CLAMP_ABOVE_LINES && !open;
+  const showingPreview = preview !== undefined && previewing;
 
   useEffect(() => {
     let current = true;
@@ -141,23 +186,26 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
             {t('message.code.lines', { count })}
           </span>
         </div>
+        {preview !== undefined && <ViewSwitch previewing={previewing} onChange={setPreviewing} />}
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Tooltip content={t('message.code.wrap')}>
-            <button
-              type="button"
-              aria-label={t('message.code.wrap')}
-              aria-pressed={wrapped}
-              onClick={() => {
-                setWrapped(!wrapped);
-              }}
-              className={cn(
-                'inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink',
-                wrapped ? 'bg-surface-200 text-ink' : 'text-ink-muted',
-              )}
-            >
-              <Icon name="wrap" size="sm" />
-            </button>
-          </Tooltip>
+          {!showingPreview && (
+            <Tooltip content={t('message.code.wrap')}>
+              <button
+                type="button"
+                aria-label={t('message.code.wrap')}
+                aria-pressed={wrapped}
+                onClick={() => {
+                  setWrapped(!wrapped);
+                }}
+                className={cn(
+                  'inline-flex size-6 shrink-0 items-center justify-center rounded-md transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink',
+                  wrapped ? 'bg-surface-200 text-ink' : 'text-ink-muted',
+                )}
+              >
+                <Icon name="wrap" size="sm" />
+              </button>
+            </Tooltip>
+          )}
           <button
             type="button"
             onClick={copy}
@@ -168,44 +216,58 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
           </button>
         </div>
       </figcaption>
-      <div className="relative">
-        <pre
+      {showingPreview ? (
+        <div
           // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it.
-          // The clamp hides rather than scrolls, so it takes none.
-          tabIndex={clamped ? undefined : 0}
-          aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
-          className={cn(
-            'scrollbar-thin overflow-x-auto p-3 text-code text-ink',
-            wrapped && 'whitespace-pre-wrap break-words',
-            clamped && 'max-h-code overflow-y-hidden',
-          )}
+          tabIndex={0}
+          role="region"
+          aria-label={t('message.code.previewLabel', { language })}
+          // `relative`: the preview holds links, each with an announcement drawn out of the flow, and one
+          // whose containing block is outside this box is not clipped by it — it stretched the whole feed.
+          className="scrollbar-thin relative max-h-code overflow-auto bg-surface-100 px-4 py-3"
         >
-          <code>
-            {count >= NUMBERED_FROM_LINES ? (
-              <Numbered
-                lines={
-                  lines === null
-                    ? code.split('\n')
-                    : lines.map((line, row) => <TokenLine key={row} line={line} />)
-                }
-              />
-            ) : lines === null ? (
-              code
-            ) : (
-              <Tokens lines={lines} />
+          {preview()}
+        </div>
+      ) : (
+        <div className="relative">
+          <pre
+            // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it.
+            // The clamp hides rather than scrolls, so it takes none.
+            tabIndex={clamped ? undefined : 0}
+            aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
+            className={cn(
+              'scrollbar-thin overflow-x-auto p-3 text-code text-ink',
+              wrapped && 'whitespace-pre-wrap break-words',
+              clamped && 'max-h-code overflow-y-hidden',
             )}
-          </code>
-        </pre>
-        {clamped && (
-          // The fade into the block's own background says there is more below the clamp.
-          <span
-            aria-hidden="true"
-            data-code-fade
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-control bg-linear-to-b from-transparent to-code-bg"
-          />
-        )}
-      </div>
-      {count > CLAMP_ABOVE_LINES && (
+          >
+            <code>
+              {count >= NUMBERED_FROM_LINES ? (
+                <Numbered
+                  lines={
+                    lines === null
+                      ? code.split('\n')
+                      : lines.map((line, row) => <TokenLine key={row} line={line} />)
+                  }
+                />
+              ) : lines === null ? (
+                code
+              ) : (
+                <Tokens lines={lines} />
+              )}
+            </code>
+          </pre>
+          {clamped && (
+            // The fade into the block's own background says there is more below the clamp.
+            <span
+              aria-hidden="true"
+              data-code-fade
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-control bg-linear-to-b from-transparent to-code-bg"
+            />
+          )}
+        </div>
+      )}
+      {count > CLAMP_ABOVE_LINES && !showingPreview && (
         <button
           type="button"
           aria-expanded={open}

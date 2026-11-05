@@ -14,6 +14,7 @@ import {
   insertText,
   insideFence,
   undoPaste,
+  withoutBlock,
   isLongPaste,
   rowsFor,
   trimEnd,
@@ -285,6 +286,7 @@ describe('the formatting buttons: every construct the renderer draws, as markdow
   test.each([
     ['bullets', '- '],
     ['numbers', '1. '],
+    ['tasks', '- [ ] '],
     ['quote', '> '],
   ] as const)(
     '%s on a blank line with the caret in it starts the list there, caret after the marker',
@@ -693,5 +695,49 @@ describe('a table from the formatting row (D-210)', () => {
   test('words after it move to the line below, so the table ends where it should', () => {
     const { text } = insertMarkdown('before after', { start: 7, end: 7 }, 'table');
     expect(text).toBe('before \n| Column | Column |\n| --- | --- |\n|  |  |\nafter');
+  });
+});
+
+describe('a task list (D-259)', () => {
+  const at = (start: number, end = start): { start: number; end: number } => ({ start, end });
+
+  test('marks every line the selection touches with an empty box, and again takes them off', () => {
+    const marked = insertMarkdown('buy milk\nbook the van', at(0, 21), 'tasks');
+    expect(marked.text).toBe('- [ ] buy milk\n- [ ] book the van');
+    expect(insertMarkdown(marked.text, marked.selection, 'tasks').text).toBe(
+      'buy milk\nbook the van',
+    );
+  });
+
+  test('a bullet or a number becomes a task, and taking a task off takes its box too', () => {
+    expect(insertMarkdown('- one\n2. two', at(0, 12), 'tasks').text).toBe('- [ ] one\n- [ ] two');
+    // Bullets on tasks makes them bullets, box and all — it does not take the list away.
+    expect(insertMarkdown('- [x] done\n- [ ] open', at(0, 21), 'bullets').text).toBe(
+      '- done\n- open',
+    );
+    expect(insertMarkdown('- [ ] a\n- b', at(0, 12), 'bullets').text).toBe('- a\n- b');
+    // Tasks again, on lines that are all tasks, takes them off: the box goes with the marker.
+    expect(insertMarkdown('- [x] done\n- [ ] open', at(0, 21), 'tasks').text).toBe('done\nopen');
+  });
+
+  test('Shift+Enter in a task carries it on with an empty box; an empty task ends the list', () => {
+    expect(continueList('- [x] sent', 10)).toEqual({ text: '- [x] sent\n- [ ] ', caret: 17 });
+    expect(continueList('  * [ ] nested', 14)).toEqual({
+      text: '  * [ ] nested\n  * [ ] ',
+      caret: 23,
+    });
+    expect(continueList('- [ ] ', 6)).toEqual({ text: '', caret: 0 });
+  });
+});
+
+describe('taking a pasted block out again (D-259)', () => {
+  test('one line break stays where the block was, and nothing else in the text is touched', () => {
+    const typed = 'one\n\n\n\ntwo\n';
+    expect(withoutBlock(`${typed}BLOCK\nthree`, typed.length, 'BLOCK')).toEqual({
+      text: `${typed}three`,
+      caret: typed.length,
+    });
+    expect(withoutBlock('BLOCK', 0, 'BLOCK')).toEqual({ text: '', caret: 0 });
+    expect(withoutBlock('a\nBLOCK', 2, 'BLOCK')).toEqual({ text: 'a\n', caret: 2 });
   });
 });

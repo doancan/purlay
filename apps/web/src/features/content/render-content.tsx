@@ -46,6 +46,10 @@ import { readingCache } from './reading-cache';
  */
 const DiffBlock = lazy(async () => ({ default: (await import('./diff-block')).DiffBlock }));
 
+/** A fence named for Markdown: its block has a second view, the Markdown drawn as a message is (D-259). */
+const isMarkdownFence = (lang: string | null): boolean =>
+  ['md', 'markdown'].includes((lang ?? '').toLowerCase());
+
 /**
  * Bidirectional controls: the embeddings, overrides and isolates (U+202A–202E, U+2066–2069).
  * In a link's *label* they can reorder what is drawn so that the text reads as one address
@@ -350,7 +354,11 @@ const BlockNode = ({
           <DiffBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
         </Suspense>
       ) : (
-        <CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
+        <CodeBlock
+          code={node.value}
+          language={(node.lang ?? '').toLowerCase()}
+          {...(isMarkdownFence(node.lang) ? { preview: () => renderContent(node.value) } : {})}
+        />
       );
     case 'blockquote':
       return (

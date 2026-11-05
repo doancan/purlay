@@ -117,6 +117,7 @@ export type MarkdownKind =
   | 'link'
   | 'bullets'
   | 'numbers'
+  | 'tasks'
   | 'quote'
   | 'code'
   | 'table'
@@ -167,23 +168,34 @@ export const insertText = (text: string, selection: Selection, value: string): I
 });
 
 /** A line's own marker of each kind, and the one that is any of them. */
-const LINE_MARKER: Readonly<Record<'bullets' | 'numbers' | 'quote', RegExp>> = {
-  bullets: /^[-*+] /,
+const LINE_MARKER: Readonly<Record<ListKind, RegExp>> = {
+  // Not a task's `- [ ] `: a task is not "already a bullet", so Bullets turns it into one.
+  bullets: /^[-*+] (?!\[[ xX]\] )/,
   numbers: /^\d+\. /,
+  tasks: /^[-*+] \[[ xX]\] /,
   quote: /^> /,
 };
-const ANY_MARKER = /^(?:[-*+] |\d+\. |> )/;
+/** A task's box is part of its marker: taking a marker off a task takes the box too. */
+const ANY_MARKER = /^(?:[-*+] \[[ xX]\] |[-*+] |\d+\. |> )/;
+
+type ListKind = 'bullets' | 'numbers' | 'tasks' | 'quote';
+
+/** The marker a line of this kind starts with; a numbered list counts from one. */
+const markerOf = (kind: ListKind, number: number): string =>
+  kind === 'bullets'
+    ? '- '
+    : kind === 'tasks'
+      ? '- [ ] '
+      : kind === 'numbers'
+        ? `${String(number)}. `
+        : '> ';
 
 /**
  * A marker on every line the selection touches — whole lines, whatever part of them is selected — or
  * taken off all of them when each already has it. A line with another kind of marker is changed to this
  * one. Quotes keep the original markers and quote blank lines too, preserving lists and paragraphs.
  */
-const marked = (
-  text: string,
-  selection: Selection,
-  kind: 'bullets' | 'numbers' | 'quote',
-): Inserted => {
+const marked = (text: string, selection: Selection, kind: ListKind): Inserted => {
   const first = selection.start === 0 ? 0 : text.lastIndexOf('\n', selection.start - 1) + 1;
   const stop = text.indexOf('\n', Math.max(selection.start, selection.end - 1));
   const last = stop === -1 ? text.length : stop;
@@ -192,7 +204,7 @@ const marked = (
   if (selection.start === selection.end && named.length === 0) {
     // The caret on a blank line: the button starts the list there. Blank lines inside a selection
     // still take none, so a block of paragraphs is marked paragraph by paragraph.
-    const marker = kind === 'bullets' ? '- ' : kind === 'numbers' ? '1. ' : '> ';
+    const marker = markerOf(kind, 1);
     const caret = first + marker.length;
     return {
       text: text.slice(0, first) + marker + text.slice(last),
@@ -207,7 +219,7 @@ const marked = (
     const bare = line.replace(ANY_MARKER, '');
     if (off) return bare;
     number += 1;
-    return `${kind === 'bullets' ? '- ' : `${String(number)}. `}${bare}`;
+    return `${markerOf(kind, number)}${bare}`;
   });
   const block = changed.join('\n');
   const result = text.slice(0, first) + block + text.slice(last);
@@ -273,7 +285,7 @@ export const insertMarkdown = (
       selection: { start, end: start + (chosen === '' ? 4 : 8) },
     };
   }
-  if (kind === 'bullets' || kind === 'numbers' || kind === 'quote') {
+  if (kind === 'bullets' || kind === 'numbers' || kind === 'tasks' || kind === 'quote') {
     return marked(text, selection, kind);
   }
   if (kind === 'code') {
@@ -306,6 +318,24 @@ export const isCodeBlock = (pasted: string): boolean => {
   return tree?.children.length === 1 && tree.children[0]?.type === 'code';
 };
 
+/**
+ * The text with a block taken out where it was put (`placeBlock`), and the caret there. The block was set
+ * on lines of its own, so with it gone one line break stays between what was before and after, not two — and
+ * nothing else in the text is touched: blank lines somebody typed are theirs (D-259).
+ */
+export const withoutBlock = (
+  text: string,
+  at: number,
+  block: string,
+): { readonly text: string; readonly caret: number } => {
+  const before = text.slice(0, at);
+  const after = text.slice(at + block.length);
+  return {
+    text: before + (before.endsWith('\n') && after.startsWith('\n') ? after.slice(1) : after),
+    caret: at,
+  };
+};
+
 /** Undo only an unchanged, uniquely identifiable insertion; never restore an old draft over later edits. */
 export const undoPaste = (text: string, formatted: string, pasted: string): Inserted | null => {
   const start = text.indexOf(formatted);
@@ -314,7 +344,7 @@ export const undoPaste = (text: string, formatted: string, pasted: string): Inse
 };
 
 /** A list or a quote's own marker at the start of a line: its indent, its kind, and the text it takes. */
-const CONTINUING = /^(\s*)(?:([-*+])|(\d+)\.|(>)) /;
+const CONTINUING = /^(\s*)(?:([-*+])( \[[ xX]\])?|(\d+)\.|(>)) /;
 
 /**
  * What Shift+Enter does in a list or a quote: the line break, and the next marker already on the new line —
@@ -337,10 +367,11 @@ export const continueList = (
     return { text: text.slice(0, lineStart) + text.slice(caret), caret: lineStart };
   }
   const indent = found[1] ?? '';
+  // A task's next item is a task still, its box empty; a number counts on.
   const next =
-    found[3] !== undefined
-      ? `${indent}${String(Number(found[3]) + 1)}. `
-      : `${indent}${found[2] ?? found[4] ?? '-'} `;
+    found[4] !== undefined
+      ? `${indent}${String(Number(found[4]) + 1)}. `
+      : `${indent}${found[2] ?? found[5] ?? '-'}${found[3] === undefined ? '' : ' [ ]'} `;
   return {
     text: `${text.slice(0, caret)}\n${next}${text.slice(caret)}`,
     caret: caret + 1 + next.length,

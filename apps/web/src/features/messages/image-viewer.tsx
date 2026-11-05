@@ -96,7 +96,7 @@ const Picture = ({ image }: { readonly image: ViewedImage }): React.JSX.Element 
           src={`${at(image)}/thumbnail`}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 size-full rounded-md object-contain"
+          className="absolute inset-0 size-full rounded-lg object-contain"
         />
       )}
       <img
@@ -111,8 +111,8 @@ const Picture = ({ image }: { readonly image: ViewedImage }): React.JSX.Element 
         }}
         className={
           state === 'ready'
-            ? 'relative block max-h-full max-w-full rounded-md object-contain size-full'
-            : 'relative block max-h-full max-w-full rounded-md object-contain size-full opacity-0'
+            ? 'relative block max-h-full max-w-full rounded-lg object-contain size-full shadow-float'
+            : 'relative block max-h-full max-w-full rounded-lg object-contain size-full opacity-0'
         }
       />
       {state === 'loading' && (
@@ -188,7 +188,7 @@ export const ImageViewer = ({
           data-image-viewer=""
           // The lightbox is dark in either theme: a picture is judged on a dark ground.
           data-theme="dark"
-          className="fixed inset-0 z-palette flex flex-col bg-nav-rail text-nav-ink outline-none"
+          className="fixed inset-0 z-palette flex flex-col bg-nav-rail text-nav-ink outline-none data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out"
           onOpenAutoFocus={(event) => {
             // The viewer itself takes the first focus: a control taking it would show its tooltip, and
             // the tooltip would take the first Esc (#623). Tab still reaches every control.
@@ -263,9 +263,11 @@ export const ImageViewer = ({
             {stepper(next, 'next')}
           </div>
           <footer className="flex h-control shrink-0 items-center justify-center pb-4 font-mono text-caption text-nav-ink-muted">
-            {images.length > 1
-              ? t('viewer.position', { index: index + 1, count: images.length })
-              : null}
+            {images.length > 1 && (
+              <span className="rounded-pill bg-nav-surface px-3 py-1">
+                {t('viewer.position', { index: index + 1, count: images.length })}
+              </span>
+            )}
           </footer>
         </RadixDialog.Content>
       </RadixDialog.Portal>
