@@ -1,6 +1,8 @@
 /**
  * A module's screen, drawn from its manifest (D-250, `docs/MODULES.md` §6): the one component every route a module
- * declares is, inside `Shell` and `ModuleGate`, with what stands in for the screen while the module's chunk comes.
+ * declares is, inside `ModuleGate`, with what stands in for the screen while the module's chunk comes. `Outlet` puts
+ * it in the `Shell`, the same one the core's screens of the workspace are in, so a change from one to the other
+ * keeps the shell standing.
  *
  * **The chunk is one request, shared by every screen of the module** (`chunkOf`), and `warmModule` asks for it
  * before anything waits on it: `Outlet` calls it in the first commit of a route whose module says `preload`, in
@@ -14,7 +16,6 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
 import { ModuleGate } from '../features/shell/module-gate';
 import { ScreenBar } from '../features/shell/screen-bar';
-import { Shell } from '../features/shell/shell';
 import { useI18n } from '../i18n/i18n-provider';
 import type { ModuleChunk, ModuleManifest } from '../modules/manifest';
 import { MODULES } from '../modules/registry';
@@ -102,12 +103,10 @@ export const ModuleRoute = ({ name, params }: ModuleRouteProps): React.JSX.Eleme
   if (entry === undefined) throw new Error(`no module declares the route ${name}`);
   const { screen: Door, waiting } = entry;
   return (
-    <Shell slug={params.slug}>
-      <ModuleGate route={name}>
-        <Suspense fallback={<Waiting kind={waiting} />}>
-          <Door params={params} />
-        </Suspense>
-      </ModuleGate>
-    </Shell>
+    <ModuleGate route={name}>
+      <Suspense fallback={<Waiting kind={waiting} />}>
+        <Door params={params} />
+      </Suspense>
+    </ModuleGate>
   );
 };
