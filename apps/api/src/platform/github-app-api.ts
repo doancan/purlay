@@ -58,6 +58,17 @@ export class GitHubUnauthorized extends Error {
   }
 }
 
+/**
+ * `422` to a revocation: "Validation failed, or the endpoint has been spammed" (GitHub's documentation, "Delete an app
+ * authorization"). The only refusal it documents for a token it will not revoke, so it may mean an expired one.
+ */
+export class GitHubRevocationRefused extends Error {
+  constructor() {
+    super('GitHub answered a revocation with 422');
+    this.name = 'GitHubRevocationRefused';
+  }
+}
+
 export class GitHubUnavailable extends Error {
   constructor(reason: string) {
     super(reason);
@@ -109,8 +120,9 @@ export interface GitHubAppApi {
   ) => Promise<UserTokens | 'refused'>;
   /**
    * A person's authorization of the App revoked on GitHub (`DELETE /applications/{client_id}/grant`): the grant
-   * and every token the App holds for them, the refresh token too. Needs an access token GitHub still takes;
-   * anything but its `204` throws, so a caller that does not care how it ended catches it.
+   * and every token the App holds for them. Needs an access token GitHub still takes; anything but its `204`
+   * throws, `GitHubUnauthorized` or `GitHubRevocationRefused` for a token it does not take, so a caller that
+   * does not care how it ended catches it.
    */
   readonly revokeAuthorization: (
     client: { readonly clientId: string; readonly clientSecret: string },
@@ -429,6 +441,10 @@ export const githubAppApi = (caller: GitHubAppCaller, urls: GitHubAppUrls): GitH
       `${urls.api}/applications/${encodeURIComponent(client.clientId)}/grant`,
       { method: 'DELETE', basic: client, body: { access_token: accessToken } },
     );
+    if (response.status === 422) {
+      await response.body?.cancel();
+      throw new GitHubRevocationRefused();
+    }
     await ok(response, 'a revocation');
   },
   installationToken: async (jwt, installationId): Promise<string> => {

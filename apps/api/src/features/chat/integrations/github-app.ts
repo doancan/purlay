@@ -38,6 +38,7 @@ import { recordAudit } from '../../../modules/audit/audit';
 import type { GitHubAppSettings } from '../../../modules/setup/settings';
 import {
   GitHubRateLimited,
+  GitHubRevocationRefused,
   GitHubUnauthorized,
   GitHubUnavailable,
   type GitHubAccount,
@@ -247,15 +248,31 @@ export const forgetAuthorization = async (
   await database.deleteFrom('github_user_authorizations').where('user_id', '=', userId).execute();
 };
 
+/** What the log says when the renewal an expired access token needed could not be had. */
+const REFRESH_REFUSED = 'GitHub refused the refresh token';
+const NO_REFRESH_TOKEN = 'the access token was refused and no refresh token is kept';
+
+/** GitHub does not take this access token: what a revocation says of one that expired (or was revoked already). */
+const isRefusedToken = (error: unknown): boolean =>
+  error instanceof GitHubUnauthorized || error instanceof GitHubRevocationRefused;
+
 /**
- * An erased person's authorization revoked at GitHub, after their erasure committed (D-246, #993): the grant and
- * every token the App holds for them, asked of GitHub as the App. Best effort by design — the sealed copy is
- * already deleted, so a failure leaves only a token that was not revoked, said in the log with GitHub's reason
- * and never the token. Nothing here throws.
+ * An erased person's authorization revoked at GitHub, after their erasure committed (D-246, #993, #1000): the grant
+ * and every token the App holds for them, asked of GitHub as the App. The sealed access token goes first; an access
+ * token lives eight hours, so when GitHub refuses it the refresh token (six months) is spent for a new one and the
+ * grant revoked with that. An outage, a limit or a timeout is not retried through a refresh, which would only wait
+ * a second time. The documented call takes an access token and no refresh token, so the refresh grant goes with the
+ * App's grant, not by a call of its own. Best effort by design — the sealed copy is already deleted, so a failure
+ * leaves only a token that was not revoked, said in the log with GitHub's reason and never a token. Nothing here
+ * throws.
  */
 export const revokeErasedAuthorization = async (
   { log, cipher, githubApp }: ErasureServices,
-  sealed: { readonly id: string; readonly access_token_encrypted: string },
+  sealed: {
+    readonly id: string;
+    readonly access_token_encrypted: string;
+    readonly refresh_token_encrypted: string | null;
+  },
 ): Promise<void> => {
   if (githubApp.app === undefined) {
     log.warn('github app authorization not revoked at GitHub: this server holds no App', {
@@ -268,14 +285,33 @@ export const revokeErasedAuthorization = async (
       Buffer.from(sealed.access_token_encrypted, 'base64'),
       sealedIn('access', sealed.id),
     );
-    await githubApp.api.revokeAuthorization(githubApp.app, accessToken);
+    try {
+      await githubApp.api.revokeAuthorization(githubApp.app, accessToken);
+      return;
+    } catch (refused) {
+      if (!isRefusedToken(refused)) throw refused;
+      if (sealed.refresh_token_encrypted === null) throw new GitHubUnavailable(NO_REFRESH_TOKEN);
+    }
+    const renewed = await githubApp.api.refresh(
+      githubApp.app,
+      await cipher.open(
+        Buffer.from(sealed.refresh_token_encrypted, 'base64'),
+        sealedIn('refresh', sealed.id),
+      ),
+    );
+    if (renewed === 'refused') throw new GitHubUnavailable(REFRESH_REFUSED);
+    await githubApp.api.revokeAuthorization(githubApp.app, renewed.accessToken);
+    log.info('github app authorization revoked at GitHub with a renewed access token', {
+      authorizationId: sealed.id,
+    });
   } catch (error) {
     log.warn('github app authorization not revoked at GitHub', {
       authorizationId: sealed.id,
       reason:
         error instanceof GitHubUnavailable ||
         error instanceof GitHubRateLimited ||
-        error instanceof GitHubUnauthorized
+        error instanceof GitHubUnauthorized ||
+        error instanceof GitHubRevocationRefused
           ? error.message
           : 'the sealed token did not open',
     });

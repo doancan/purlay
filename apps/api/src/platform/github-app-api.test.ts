@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   GitHubRateLimited,
+  GitHubRevocationRefused,
   GitHubUnauthorized,
   GitHubUnavailable,
   githubAppApi,
@@ -155,7 +156,7 @@ describe('one call to GitHub', () => {
   });
 
   test('a grant GitHub does not revoke is GitHub unavailable, and says nothing of the token or the secret', async () => {
-    for (const status of [404, 422, 502, 302]) {
+    for (const status of [404, 502, 302]) {
       const error = await failure(
         api(answering(() => new Response('', { status }))).revokeAuthorization(
           { clientId: 'Iv23.x', clientSecret: 'shh' },
@@ -166,6 +167,18 @@ describe('one call to GitHub', () => {
       expect(String(error)).not.toContain('ghu_person');
       expect(String(error)).not.toContain('shh');
     }
+  });
+
+  test('a revocation GitHub answers 422 is its own refusal, so an expired token can be told from an outage', async () => {
+    const error = await failure(
+      api(answering(() => new Response('', { status: 422 }))).revokeAuthorization(
+        { clientId: 'Iv23.x', clientSecret: 'shh' },
+        'ghu_person',
+      ),
+    );
+    expect(error).toBeInstanceOf(GitHubRevocationRefused);
+    expect(error).not.toBeInstanceOf(GitHubUnavailable);
+    expect(String(error)).not.toContain('ghu_person');
   });
 
   test('an installation GitHub has none of is missing; the App is read as itself', async () => {
