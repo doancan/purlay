@@ -218,8 +218,9 @@ chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone).
 
 - **Router.** The route table is the core's routes and every manifest's, merged, so `RouteName`, `href()` and the
   params of each route are still a compile-time union derived from the manifests; `moduleOf` is read from them too.
-- **Outlet.** A route a manifest declares is one component, `ModuleRoute`: `Shell`, `ModuleGate`, and the module's
-  screen behind `Suspense` (the stand-in the manifest names). The core's routes are the `switch`'s cases, and one
+- **Outlet.** A route a manifest declares is one component, `ModuleRoute`: `ModuleGate` and the module's
+  screen behind `Suspense` (the stand-in the manifest names). `Outlet` draws the one `Shell` round it and round the
+  core's screens of a workspace, so a change from one to the other keeps the shell standing. The core's routes are the `switch`'s cases, and one
   without a case does not compile.
 - **Rail, palette, shortcuts, settings.** Each draws, for the modules the session lists, what the manifests say. An entry
   that is more than a link (the inbox's dot and panel, the open-questions count) draws itself, by route, in `rail.tsx`.
