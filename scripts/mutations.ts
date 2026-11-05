@@ -4499,8 +4499,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'audit-trail-read-by-a-member',
     why: 'any member reads who removed whom and who was made an admin',
     file: 'apps/api/src/modules/audit/audit.ts',
-    find: "  if (context.role === 'member') {\n",
-    replace: "  if (context.role === 'nobody') {\n",
+    find: '  if (!access.mayRead(context.role)) {\n',
+    replace: '  if (false as boolean) {\n',
     tests: ['apps/api/src/modules/audit/audit.integration.test.ts'],
   },
   {
@@ -14473,7 +14473,7 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/channels/channels.ts',
     find: "  await recordAudit(executor, clock, {\n    workspaceId: context.workspaceId,\n    actorUserId: context.userId,\n    action: 'channel.created',\n    targetType: 'channel',\n    targetId: row.id,\n    metadata: { type: input.type ?? 'public' },\n  });\n",
     replace: '',
-    tests: ['apps/api/src/modules/audit/recorded-actions.test.ts'],
+    tests: ['apps/api/src/audit-emissions.test.ts'],
   },
   {
     id: 'module-key-to-module-not-required',
@@ -15145,5 +15145,29 @@ export const MUTATIONS: readonly Mutation[] = [
     replace:
       "): boolean => permissions.holds(context.role, 'issues.delete-everything') || createdBy === context.userId;",
     tests: ['apps/api/src/permission-emissions.test.ts'],
+  },
+  {
+    id: 'trail-shows-what-the-role-cannot-read',
+    why: 'a row whose reading permission the role lacks is in its page all the same, so a module’s own read permission hides nothing (D-222)',
+    file: 'apps/api/src/modules/audit/audit.ts',
+    find: '  if (unreadable.length > 0) {',
+    replace: '  if (false as boolean) {',
+    tests: ['apps/api/src/modules/audit/audit.integration.test.ts'],
+  },
+  {
+    id: 'registry-accepts-an-audit-action-read-by-a-foreign-permission',
+    why: 'a module’s audit actions may be read by a permission another module declares, so turning that module off decides who reads these rows (D-265)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: '    if (!own.has(group.read) && !CORE_PERMISSION_NAMES.has(group.read)) {',
+    replace: '    if (false as boolean) {',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
+    id: 'chat-stops-declaring-its-audit-actions',
+    why: 'chat records actions its manifest no longer lists, so the trail’s filter, who reads them and what a build without chat offers are decided without them (D-265)',
+    file: 'apps/api/src/features/chat/module.ts',
+    find: "    auditActions: [{ read: 'audit.read', actions: CHAT_AUDIT_ACTIONS }],\n",
+    replace: '',
+    tests: ['apps/api/src/audit-emissions.test.ts'],
   },
 ];
