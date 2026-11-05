@@ -173,7 +173,10 @@ interface Pinned {
   readonly services: RuntimeServices | undefined;
 }
 
-export const runtimeServicesHolder = (log: Logger, mailFailures?: Counter): RuntimeHolder => {
+export const runtimeServicesHolder = (
+  log: Logger,
+  mailFailures?: Counter<'module'>,
+): RuntimeHolder => {
   let settled: RuntimeServices | undefined;
   const pinned = new AsyncLocalStorage<Pinned>();
   const serving = (): RuntimeServices | undefined => pinned.getStore()?.services ?? settled;

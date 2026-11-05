@@ -26,6 +26,7 @@ import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
 import type { Counter, PushFailure } from '../../platform/metrics';
+import { CORE_OWNER } from '../../platform/module-kit/ownership';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
 import type { PushNotices } from './notices';
@@ -76,7 +77,9 @@ export interface PushSenderDependencies {
   /** What the write told, from whoever owns the writes: chat's notifications, where the server is composed (D-250). */
   readonly notices: PushNotices;
   /** Where a push that did not reach its service is counted, by why (D-221); absent, it is not. */
-  readonly failures?: Counter<'reason'>;
+  readonly failures?: Counter<'reason' | 'module'>;
+  /** The module whose notices this sender delivers, for the failure counter's label; absent, the core's. */
+  readonly owner?: string;
 }
 
 interface Device {
@@ -172,7 +175,7 @@ export const createPushSender = async (
 ): Promise<PushSender> => {
   const { database, clock, log, keys, post } = dependencies;
   const failed = (reason: PushFailure, by = 1): void => {
-    dependencies.failures?.inc({ reason }, by);
+    dependencies.failures?.inc({ reason, module: dependencies.owner ?? CORE_OWNER }, by);
   };
   // Imported once, here, so a key that cannot sign stops the start rather than the first push.
   const signing = await vapidSigningKey(keys);
