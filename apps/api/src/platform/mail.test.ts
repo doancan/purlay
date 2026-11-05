@@ -120,7 +120,7 @@ describe('the outbox', () => {
   test('a letter the relay did not take is counted once, whichever relay it went through; one it took is not', async () => {
     const { log } = aRecordingLogger();
     const registry = createMetricsRegistry();
-    const mailFailures = registry.counter('purlay_mail_failures_total', 'F.', []);
+    const mailFailures = registry.counter('purlay_mail_failures_total', 'F.', ['module']);
     const sends = mailInFlight(log, mailFailures);
     const refused = (): Promise<void> => Promise.reject(new Error('421 try later'));
     const first = outbox(refused, log, sends);
@@ -130,7 +130,10 @@ describe('the outbox', () => {
     second.post(letter_, 'invitation');
     working.post(letter_, 'sign-in');
     await sends.flush(1_000);
-    expect(registry.families()[0]?.samples.map((sample) => sample.value)).toEqual([2]);
+    // Every letter this process posts is the core's.
+    expect(registry.families()[0]?.samples.map((sample) => [sample.labels, sample.value])).toEqual([
+      [{ module: 'core' }, 2],
+    ]);
   });
 
   test('flush waits no longer than its bound, and says how many it left', async () => {

@@ -157,7 +157,7 @@ export const dropDatabases = async (names: readonly string[]): Promise<void> => 
       names.map(async (name) => {
         // What is closing is let to close; what is not, is forced (`with (force)` is the fallback).
         await backendsGone(name, CLOSING_WITHIN_MS);
-        await sql`drop database ${sql.id(name)} with (force)`.execute(admin);
+        await sql`drop database if exists ${sql.id(name)} with (force)`.execute(admin);
       }),
     );
   } finally {
