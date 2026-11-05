@@ -118,7 +118,7 @@ export const CORE_EVENTS: readonly string[] = [
 
 /** What the core claims of each kind a manifest lists. */
 export type CoreClaims = Readonly<
-  Record<'routes' | 'jobs' | 'frames' | 'events', readonly string[]>
+  Record<'routes' | 'jobs' | 'frames' | 'events' | 'permissions', readonly string[]>
 >;
 
 export const CORE_CLAIMS: CoreClaims = {
@@ -126,4 +126,6 @@ export const CORE_CLAIMS: CoreClaims = {
   jobs: CORE_JOBS,
   frames: CORE_FRAMES,
   events: CORE_EVENTS,
+  // The core declares none yet (`CORE_PERMISSIONS`, which `core-claims.test.ts` holds to this).
+  permissions: [],
 };

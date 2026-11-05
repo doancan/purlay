@@ -143,6 +143,24 @@ const budgetProblems = (manifest: ModuleManifest): string[] => {
   return [];
 };
 
+const PERMISSION_WORD = /^[a-z][a-z0-9-]*$/;
+
+/** A permission is named `<id>.<what>` so that two modules and the core can never choose the same one, and is declared once. */
+const permissionProblems = (manifest: ModuleManifest): string[] => {
+  const { id } = manifest;
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const { name } of manifest.permissions ?? []) {
+    const word = name.startsWith(`${id}.`) ? name.slice(id.length + 1) : undefined;
+    if (word === undefined || !PERMISSION_WORD.test(word)) {
+      problems.push(`"${id}" declares the permission "${name}", which is not named "${id}.<what>"`);
+    }
+    if (seen.has(name)) problems.push(`"${id}" declares the permission "${name}" twice`);
+    seen.add(name);
+  }
+  return problems;
+};
+
 const bundleProblems = (
   manifests: readonly ModuleManifest[],
   core: Partial<CoreClaims>,
@@ -163,7 +181,7 @@ const bundleProblems = (
     if (ids.has(id)) problems.push(`two modules are called "${id}"`);
     ids.add(id);
 
-    problems.push(...budgetProblems(manifest));
+    problems.push(...budgetProblems(manifest), ...permissionProblems(manifest));
 
     for (const capability of manifest.provides) {
       if (!CAPABILITY.test(capability)) {
@@ -219,6 +237,7 @@ const CLAIM_KINDS = [
   ['jobs', 'job'],
   ['frames', 'socket operation'],
   ['events', 'server event'],
+  ['permissions', 'permission'],
 ] as const;
 
 /** Two claims of one kind clash: the same name, or for a route a template with a path in common. */
@@ -226,10 +245,18 @@ const clash = (kind: keyof CoreClaims, first: string, second: string): boolean =
   kind === 'routes' ? templatesOverlap(first, second) : first === second;
 
 /** A module's retention jobs are jobs it owns: the name of one is what `bun run job` is asked for, as of any other. */
-const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly string[] =>
-  kind === 'jobs'
-    ? [...(manifest.jobs ?? []), ...(manifest.retention ?? [])]
-    : (manifest[kind] ?? []);
+const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly string[] => {
+  switch (kind) {
+    case 'jobs':
+      return [...(manifest.jobs ?? []), ...(manifest.retention ?? [])];
+    case 'permissions':
+      return (manifest.permissions ?? []).map((declared) => declared.name);
+    case 'routes':
+    case 'frames':
+    case 'events':
+      return manifest[kind] ?? [];
+  }
+};
 
 /** What two modules both claim, and what a module claims that the core already has. */
 const overlapProblems = (

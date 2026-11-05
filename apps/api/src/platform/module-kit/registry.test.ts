@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import type { ModuleManifest } from './manifest';
+import { CORE_CLAIMS } from './core-claims';
 import { ModuleConfigError, RESERVED_MODULE_IDS, moduleRegistry } from './registry';
 
 const module = (id: string, rest: Partial<ModuleManifest> = {}): ModuleManifest => ({
@@ -349,5 +350,43 @@ describe('a module’s share of the database (D-250 rule 7)', () => {
         ),
       ]),
     ).not.toThrow();
+  });
+});
+
+describe('the permissions a module declares', () => {
+  const notes = (rest: Partial<ModuleManifest> = {}): ModuleManifest =>
+    module('notes', { permissions: [{ name: 'notes.publish', minimumRole: 'admin' }], ...rest });
+
+  test('a sound declaration registers', () => {
+    expect(() => moduleRegistry([notes()], CORE_CLAIMS)).not.toThrow();
+  });
+
+  test('a permission is named for its module, once', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          notes({
+            permissions: [
+              { name: 'audit.read', minimumRole: 'member' },
+              { name: 'notes.Publish', minimumRole: 'admin' },
+              { name: 'notes.publish', minimumRole: 'admin' },
+              { name: 'notes.publish', minimumRole: 'owner' },
+            ],
+          }),
+        ]),
+      ),
+    ).toEqual([
+      '"notes" declares the permission "audit.read", which is not named "notes.<what>"',
+      '"notes" declares the permission "notes.Publish", which is not named "notes.<what>"',
+      '"notes" declares the permission "notes.publish" twice',
+    ]);
+  });
+
+  test('a module cannot own a permission the core already has', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([notes()], { ...CORE_CLAIMS, permissions: ['notes.publish'] }),
+      ),
+    ).toEqual(['"notes" owns the permission "notes.publish", which is the core\'s']);
   });
 });
