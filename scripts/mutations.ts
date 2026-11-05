@@ -190,12 +190,15 @@ export const MUTATIONS: readonly Mutation[] = [
   },
 
   {
-    id: 'latency-trials-choose-the-best',
-    why: 'one lucky fast trial hides a slowdown sustained in the other two independent processes',
+    id: 'latency-trials-choose-the-worst',
+    why: 'the slowest trial is judged, so one stall on a shared runner fails a change that touched no message path (D-267)',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: 'values.sort((a, b) => a - b)[1]',
-    replace: 'values.sort((a, b) => a - b)[0]',
-    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+    find: '  ackP95Ms: Math.min(...trials.map((trial) => trial.ackP95Ms)),',
+    replace: '  ackP95Ms: Math.max(...trials.map((trial) => trial.ackP95Ms)),',
+    tests: [
+      'apps/api/src/cli/budget-latency.test.ts',
+      'apps/api/src/cli/budget-latency-noise.test.ts',
+    ],
   },
   {
     id: 'latency-trials-accept-incomplete-messages',
@@ -5077,7 +5080,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'latency-regression-never-seen',
     why: 'the ACK round-trip could triple and the budget would report it as fine',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: ': boolean => before !== undefined && value > Math.max(before * factor, NOISE_FLOOR_MS);',
+    find: ': boolean => before !== undefined && value > limitOf(before, factor);',
     replace: ': boolean => before !== undefined && value > Number.POSITIVE_INFINITY;',
     tests: ['apps/api/src/cli/budget-latency.test.ts', 'apps/api/src/cli/budget-browser.test.ts'],
   },
@@ -15327,5 +15330,43 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '      return (manifest.notifications ?? []).map((kind) => kind.type);',
     replace: '      return [];',
     tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
+    id: 'latency-floor-spread-forgotten',
+    why: 'a runner a few milliseconds quicker than the last one passes a change as a regression, and a gate people re-run has stopped being a gate (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'Math.max(before * factor, before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS)',
+    replace: 'Math.max(before * factor, NOISE_FLOOR_MS)',
+    tests: [
+      'apps/api/src/cli/budget-latency.test.ts',
+      'apps/api/src/cli/budget-latency-noise.test.ts',
+    ],
+  },
+  {
+    id: 'latency-floor-spread-too-wide',
+    why: 'the allowance for one runner differing from another is wide enough that a sustained slowdown of tens of milliseconds passes (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'export const FLOOR_SPREAD_MS = 10;',
+    replace: 'export const FLOOR_SPREAD_MS = 40;',
+    tests: [
+      'apps/api/src/cli/budget-latency.test.ts',
+      'apps/api/src/cli/budget-latency-noise.test.ts',
+    ],
+  },
+  {
+    id: 'latency-limit-ignores-the-factor',
+    why: 'a slowdown of a half as much again at a slow baseline passes because only the spread of the floor is allowed for (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'Math.max(before * factor, before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS)',
+    replace: 'Math.max(before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS)',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-noise-unsaid',
+    why: 'the output never says how far apart the trials were, so a run that failed on a noisy machine and one that failed on a slowdown read the same (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: '        spreadOf(trials),\n',
+    replace: '',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
   },
 ];
