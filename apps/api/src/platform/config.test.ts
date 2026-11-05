@@ -258,6 +258,28 @@ describe('loading configuration', () => {
   });
 
   /**
+   * How many sockets replay at once. Zero would let no replay run and every subscription would wait out its deadline;
+   * a fraction has no count. Both are refused where they are read.
+   */
+  test('SOCKET_REPLAY_CONCURRENCY is a whole number from one to 100000, 50 unless set', () => {
+    expect(loadConfig(valid).SOCKET_REPLAY_CONCURRENCY).toBe(50);
+    expect(loadConfig({ ...valid, SOCKET_REPLAY_CONCURRENCY: '' }).SOCKET_REPLAY_CONCURRENCY).toBe(
+      50,
+    );
+    expect(loadConfig({ ...valid, SOCKET_REPLAY_CONCURRENCY: '1' }).SOCKET_REPLAY_CONCURRENCY).toBe(
+      1,
+    );
+    expect(
+      loadConfig({ ...valid, SOCKET_REPLAY_CONCURRENCY: '100000' }).SOCKET_REPLAY_CONCURRENCY,
+    ).toBe(100_000);
+    for (const SOCKET_REPLAY_CONCURRENCY of ['0', '-1', '100001', '1.5', '50k', 'many']) {
+      expect(refusal({ ...valid, SOCKET_REPLAY_CONCURRENCY })).toContain(
+        'SOCKET_REPLAY_CONCURRENCY',
+      );
+    }
+  });
+
+  /**
    * A session is a credential that lives this long. Both ends are limits a person
    * chose: a year is the longest a stolen cookie may be worth, and zero would mint
    * sessions that are expired when issued.
