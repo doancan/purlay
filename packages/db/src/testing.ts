@@ -12,8 +12,9 @@
  * helper refuses; `bun run test` excludes these files, and `bun run
  * test:integration` is the command that runs them.
  */
-import { Kysely, PostgresDialect, sql, type Transaction } from 'kysely';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import pg from 'pg';
+import { executorOnPool } from './client';
 import { migrateToLatest, setsNamedBy, type MigrationSet } from './migrator';
 import type { DB } from './schema';
 
@@ -49,7 +50,7 @@ const integrationUrl = (): string => {
 };
 
 const connect = <T>(connectionString: string, max: number): Kysely<T> =>
-  new Kysely<T>({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, max }) }) });
+  executorOnPool<T>(new pg.Pool({ connectionString, max }));
 
 /** The same server, another database on it. */
 const onDatabase = (connectionString: string, name: string): string => {

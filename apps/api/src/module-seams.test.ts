@@ -171,3 +171,43 @@ describe('the doors name no module’s files outside its routes and the composit
     expect(featuresOf(join('cli', 'jobs.ts'))).toEqual([]);
   });
 });
+
+/**
+ * A module's handlers cannot take the pool without its module's share (`MODULES.md` §7, D-266). The share is a lease on
+ * every connection of the one database `createApp` hands the handlers, so what would get round it is another handle:
+ * the raw one the application was given, used a second time, or a pool a module opened for itself. Neither exists today,
+ * and this holds both to that. The rest, that a request of a module is noted as its own and held, is
+ * `issues-budget.integration.test.ts` and `chat-budget.integration.test.ts`, and the mutation
+ * `application-database-not-leased`.
+ */
+const APP_FILE = join('ingress', 'http', 'app.ts');
+const POOL_OPENERS = /\b(?:createDatabase|executorOnPool|leasableStandIn)\s*\(|from\s*['"]pg['"]/;
+
+describe('a module’s handlers reach the database only through the one the application leases', () => {
+  test('the application uses the database it was given once, to lease it', () => {
+    const uses = withoutComments(readFileSync(join(SOURCE_ROOT, APP_FILE), 'utf8')).match(
+      /\bgiven\.database\b/g,
+    );
+    expect(uses).toHaveLength(1);
+  });
+
+  test('no feature and no door but the composition root opens a pool of its own', () => {
+    const files = ['features', 'ingress']
+      .flatMap((directory) =>
+        readdirSync(join(SOURCE_ROOT, directory), { recursive: true, encoding: 'utf8' })
+          .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+          .map((file) => join(directory, file)),
+      )
+      .filter((file) =>
+        POOL_OPENERS.test(withoutComments(readFileSync(join(SOURCE_ROOT, file), 'utf8'))),
+      );
+    expect(files).toEqual([]);
+  });
+
+  test('it sees a second use of the raw handle, and nothing in a comment', () => {
+    const count = (source: string): number =>
+      withoutComments(source).match(/\bgiven\.database\b/g)?.length ?? 0;
+    expect(count('const again = given.database;')).toBe(1);
+    expect(count('// given.database\n/* given.database */')).toBe(0);
+  });
+});

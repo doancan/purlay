@@ -86,6 +86,12 @@ describe('what the database says about a request that was wrong', () => {
     expect([other.status, other.body.error.code]).toEqual([500, 'INTERNAL']);
   });
 
+  test('a statement over its time limit is the database being busy, which a client retries, and names no limit', () => {
+    const refusal = refusalFor('UNKNOWN', violation('57014'), []);
+    expect([refusal.status, refusal.body.error.code]).toEqual([503, 'DATABASE_UNAVAILABLE']);
+    expect(JSON.stringify(refusal.body)).not.toMatch(/timeout|statement/i);
+  });
+
   test('other database failures stay INTERNAL', () => {
     expect(refusalFor('UNKNOWN', violation('40001'), []).status).toBe(500);
     expect(refusalFor('UNKNOWN', new Error('boom'), []).status).toBe(500);
