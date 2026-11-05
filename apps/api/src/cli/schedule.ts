@@ -6,6 +6,7 @@
  * SIGTERM ends the wait at once; a job already running is let finish, within the stop grace.
  */
 import { join } from 'node:path';
+import { composition } from '../composition';
 import { PLAN, runSchedule } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
@@ -54,6 +55,7 @@ await runSchedule({
     return await child.exited;
   },
   stopped: () => stopping,
+  moduleOf: composition.owner.ofJob,
   log,
 });
 log.info('the scheduler stopped');

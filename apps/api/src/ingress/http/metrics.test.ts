@@ -226,6 +226,7 @@ describe('what the page counts', () => {
         method: 'GET',
         route: '/health',
         status: '2xx',
+        module: 'core',
       }),
     ).toBe(3);
     expect(
@@ -233,6 +234,7 @@ describe('what the page counts', () => {
         method: 'GET',
         route: '/api/channels/:channelId',
         status: '4xx',
+        module: 'chat',
         le: '+Inf',
       }),
     ).toBe(1);
@@ -272,6 +274,107 @@ describe('what the page counts', () => {
     }
   });
 
+  /**
+   * The module is the owner of the route as registered, from the manifests and the core's list: a tiny closed
+   * set, so hitting every kind of route leaves exactly these series and nothing a caller wrote.
+   */
+  test('the module a route belongs to is a label, and the set of series is exactly the routes hit', async () => {
+    const { app, metrics } = anApp();
+    const id = crypto.randomUUID();
+    await get(app, '/health');
+    await get(app, `/api/channels/${id}`);
+    await get(app, `/api/workspaces/${id}/issues`);
+    await get(app, `/api/no-such/${id}`);
+    await app.handle(
+      new Request(`${ORIGIN}/api/workspaces`, {
+        method: 'POST',
+        headers: { origin: 'https://elsewhere.test', 'content-type': 'application/json' },
+        body: '{}',
+      }),
+    );
+    await untilCounted(metrics, { route: '/health' }, 1);
+    await untilCounted(metrics, { route: '/api/channels/:channelId' }, 1);
+    await untilCounted(metrics, { route: '/api/workspaces/:workspaceId/issues' }, 1);
+    await untilCounted(metrics, { route: '/*' }, 1);
+    await untilCounted(metrics, { route: EDGE_ROUTE }, 1);
+    await pageOf(app);
+    await untilCounted(metrics, { route: '/metrics' }, 1);
+    const page = await pageOf(app);
+    const series = page.samples
+      .filter((sample) => sample.name === 'purlay_http_request_duration_seconds_count')
+      .map((sample) =>
+        [
+          sample.labels['method'],
+          sample.labels['route'],
+          sample.labels['status'],
+          sample.labels['module'],
+        ].join(' '),
+      )
+      .sort();
+    expect(series).toEqual(
+      [
+        'GET /* 4xx none',
+        'GET /api/channels/:channelId 4xx chat',
+        'GET /api/workspaces/:workspaceId/issues 4xx issues',
+        'GET /health 2xx core',
+        'GET /metrics 2xx core',
+        `POST ${EDGE_ROUTE} 4xx none`,
+      ].sort(),
+    );
+    for (const sample of page.samples.filter((one) => one.name.startsWith('purlay_http_'))) {
+      expect(Object.keys(sample.labels).sort()).toEqual(
+        [
+          'method',
+          'module',
+          'route',
+          'status',
+          ...(sample.labels['le'] === undefined ? [] : ['le']),
+        ].sort(),
+      );
+    }
+  });
+
+  test('a route of a module this process does not run keeps its owner as the label', async () => {
+    const { app, metrics } = anApp({ token: TOKEN, modules: compositionFor('issues') });
+    expect((await get(app, `/api/channels/${crypto.randomUUID()}`)).status).toBe(404);
+    await untilCounted(metrics, { route: '/api/channels/:channelId', module: 'chat' }, 1);
+  });
+
+  test('the request line names the module for a module’s route, and says nothing for the core’s', async () => {
+    const { app, lines } = anApp();
+    const id = crypto.randomUUID();
+    await get(app, `/api/channels/${id}`);
+    await get(app, '/api/me');
+    const until = async (path: string): Promise<Record<string, unknown>> => {
+      const deadline = performance.now() + 2_000;
+      for (;;) {
+        const line = lines.find((one) => one['msg'] === 'request' && one['path'] === path);
+        if (line !== undefined) return line;
+        if (performance.now() > deadline) throw new Error(`no line for ${path}`);
+        await Bun.sleep(1);
+      }
+    };
+    expect((await until(`/api/channels/${id}`))['module']).toBe('chat');
+    expect('module' in (await until('/api/me'))).toBe(false);
+  });
+
+  test('a failed request of a module’s route says the module, and the 500 is counted against it', async () => {
+    const { app, metrics, lines } = anApp();
+    // A session cookie sends the request to the database, which here throws.
+    const response = await get(app, `/api/channels/${crypto.randomUUID()}`, {
+      cookie: '__Host-purlay_session=anything',
+    });
+    expect(response.status).toBe(500);
+    expect(lines.find((line) => line['msg'] === 'request failed')).toMatchObject({
+      module: 'chat',
+    });
+    await untilCounted(
+      metrics,
+      { route: '/api/channels/:channelId', status: '5xx', module: 'chat' },
+      1,
+    );
+  });
+
   test('a request turned away at the edge is counted, under a route of its own', async () => {
     const { app, metrics } = anApp();
     const refused = await app.handle(
@@ -288,6 +391,7 @@ describe('what the page counts', () => {
         method: 'POST',
         route: EDGE_ROUTE,
         status: '4xx',
+        module: 'none',
       }),
     ).toBe(1);
   });

@@ -17,12 +17,14 @@ import { createApp, type HttpApplication } from './app';
 import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from './rate-limit';
 import { fixedClock } from '../../platform/clock';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import { composition } from '../../composition';
 import { PLAN } from '../../modules/jobs/schedule';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import { readExposition, sampleOf, type ReadPage } from '../../testing/exposition';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
+const owners = composition.owner;
 const NOW = new Date('2026-10-31T12:00:00.000Z');
 const clock = fixedClock(NOW);
 const ORIGIN = 'https://purlay.test';
@@ -121,16 +123,29 @@ describe('integration: the scheduled jobs on the page', () => {
       .execute();
     const page = await scrape();
     expect(sampleOf(page, 'purlay_jobs_status_readable')).toBe(1);
-    expect(sampleOf(page, 'purlay_job_last_success_timestamp_seconds', { job: first })).toBe(
-      succeeded.getTime() / 1000,
-    );
     expect(
-      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', { job: second }),
+      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', {
+        job: first,
+        module: owners.ofJob(first),
+      }),
+    ).toBe(succeeded.getTime() / 1000);
+    expect(
+      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', {
+        job: second,
+        module: owners.ofJob(second),
+      }),
     ).toBeUndefined();
-    expect(sampleOf(page, 'purlay_job_consecutive_failures', { job: second })).toBe(3);
+    expect(
+      sampleOf(page, 'purlay_job_consecutive_failures', {
+        job: second,
+        module: owners.ofJob(second),
+      }),
+    ).toBe(3);
     // Every planned job has its failure count, whether or not it has ever run.
     for (const { job } of PLAN) {
-      expect(sampleOf(page, 'purlay_job_consecutive_failures', { job })).toBeDefined();
+      expect(
+        sampleOf(page, 'purlay_job_consecutive_failures', { job, module: owners.ofJob(job) }),
+      ).toBeDefined();
     }
   });
 });
@@ -164,7 +179,7 @@ describe('integration: what a person does is counted, and nothing of theirs is o
 
     await until(
       'purlay_http_request_duration_seconds_count',
-      { method: 'POST', route: '/api/channels/:channelId/messages', status: '2xx' },
+      { method: 'POST', route: '/api/channels/:channelId/messages', status: '2xx', module: 'chat' },
       1,
     );
     const text = await scrapeText();
@@ -174,6 +189,7 @@ describe('integration: what a person does is counted, and nothing of theirs is o
         method: 'POST',
         route: '/api/workspaces',
         status: '2xx',
+        module: 'core',
       }),
     ).toBe(1);
     for (const theirs of [

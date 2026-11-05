@@ -4,6 +4,9 @@ import { aRecordingLogger } from '../../testing/doubles';
 import { readExposition, sampleOf, type ReadPage } from '../../testing/exposition';
 import { jobFamilies, jobMetrics, type JobRun } from './metrics';
 
+/** Two modules' worth of owners, so a label that is not looked up shows. */
+const moduleOf = (job: string): string => (job === 'purge:retention' ? 'chat' : 'core');
+
 const KNOWN = ['sweep:sessions', 'purge:retention', 'sweep:orphans'] as const;
 
 const pageOf = (families: Parameters<typeof exposition>[0]): ReadPage =>
@@ -26,32 +29,53 @@ const RUNS: readonly JobRun[] = [
 
 describe('the scheduled jobs on the page', () => {
   test('say when each last succeeded and how often it has failed since, by the name it is planned as', () => {
-    const page = pageOf(jobFamilies(KNOWN, RUNS));
+    const page = pageOf(jobFamilies(KNOWN, RUNS, moduleOf));
     expect(sampleOf(page, 'purlay_jobs_status_readable')).toBe(1);
     expect(
-      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', { job: 'sweep:sessions' }),
+      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', {
+        job: 'sweep:sessions',
+        module: 'core',
+      }),
     ).toBe(Date.parse('2026-10-31T09:15:00.000Z') / 1000);
-    expect(sampleOf(page, 'purlay_job_consecutive_failures', { job: 'purge:retention' })).toBe(2);
-    expect(sampleOf(page, 'purlay_job_consecutive_failures', { job: 'sweep:sessions' })).toBe(0);
+    expect(
+      sampleOf(page, 'purlay_job_consecutive_failures', { job: 'purge:retention', module: 'chat' }),
+    ).toBe(2);
+    expect(
+      sampleOf(page, 'purlay_job_consecutive_failures', { job: 'sweep:sessions', module: 'core' }),
+    ).toBe(0);
+  });
+
+  test('every job series says which module the job is for, one of a short list', () => {
+    const page = pageOf(jobFamilies(KNOWN, RUNS, moduleOf));
+    const series = page.samples
+      .filter((sample) => sample.name === 'purlay_job_consecutive_failures')
+      .map((sample) => `${sample.labels['job'] ?? ''} ${sample.labels['module'] ?? ''}`)
+      .sort();
+    expect(series).toEqual(['purge:retention chat', 'sweep:orphans core', 'sweep:sessions core']);
   });
 
   test('a job that never ran has no last success, and no failures counted', () => {
-    const page = pageOf(jobFamilies(KNOWN, RUNS));
+    const page = pageOf(jobFamilies(KNOWN, RUNS, moduleOf));
     expect(
-      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', { job: 'sweep:orphans' }),
+      sampleOf(page, 'purlay_job_last_success_timestamp_seconds', {
+        job: 'sweep:orphans',
+        module: 'core',
+      }),
     ).toBeUndefined();
-    expect(sampleOf(page, 'purlay_job_consecutive_failures', { job: 'sweep:orphans' })).toBe(0);
+    expect(
+      sampleOf(page, 'purlay_job_consecutive_failures', { job: 'sweep:orphans', module: 'core' }),
+    ).toBe(0);
   });
 
   test('a row for a job the plan does not name adds no series', () => {
-    const page = pageOf(jobFamilies(KNOWN, RUNS));
+    const page = pageOf(jobFamilies(KNOWN, RUNS, moduleOf));
     expect(page.samples.filter((sample) => sample.labels['job'] === 'sweep:retired')).toEqual([]);
     const jobs = new Set(page.samples.flatMap((sample) => sample.labels['job'] ?? []));
     expect([...jobs].sort()).toEqual([...KNOWN].sort());
   });
 
   test('a record that could not be read is said as 0, with no job series that would look current', () => {
-    const page = pageOf(jobFamilies(KNOWN, undefined));
+    const page = pageOf(jobFamilies(KNOWN, undefined, moduleOf));
     expect(sampleOf(page, 'purlay_jobs_status_readable')).toBe(0);
     expect(page.samples).toHaveLength(1);
   });
@@ -63,6 +87,7 @@ describe('reading the record for a scrape', () => {
     let failing = true;
     const read = jobMetrics({
       known: KNOWN,
+      moduleOf,
       log,
       read: async () => {
         if (failing) throw new Error('connection refused');
@@ -90,6 +115,7 @@ describe('reading the record for a scrape', () => {
     const { log, lines } = aRecordingLogger();
     const read = jobMetrics({
       known: KNOWN,
+      moduleOf,
       log,
       timeoutMs: 20,
       read: async () => await new Promise<readonly JobRun[]>(() => undefined),
