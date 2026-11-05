@@ -96,6 +96,98 @@ const VIOLATIONS: readonly Violation[] = [
     path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
     source: "import { sql } from 'kysely';\n\nexport const use = (): unknown => sql;\n",
   },
+  // A module behind its typed handle takes the handle, not the whole database's executor (D-271). Chat is not yet; the
+  // fence names it, and leaves it when no file of it does. `enforce-a` stands for a module that is.
+  {
+    rule: "a feature behind its handle does not take the whole database's executor (D-271)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import type { Executor } from '@purlay/db';\n\nexport const use = (database: Executor): unknown => database;\n",
+  },
+  {
+    rule: "a feature behind its handle does not take the whole database's transaction (D-271)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import type { Transaction } from '@purlay/db';\n\nexport const use = (transaction: Transaction): unknown => transaction;\n",
+  },
+  {
+    rule: "a feature behind its handle does not widen to the whole database's schema (D-271)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import type { Database } from '@purlay/db';\n\nexport type Widened = keyof Database;\n",
+  },
+  {
+    rule: "a feature behind its handle may import the builder's types, and its tests the whole executor (control)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-b/__enforcement__.test.ts',
+    source:
+      "import type { Executor, Selectable } from '@purlay/db';\n\nexport const use = (database: Executor, row: Selectable<{ id: string }>): unknown => [database, row];\n",
+    allowed: true,
+  },
+  {
+    rule: "a feature behind its handle may import the builder's types (control)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-b/__enforcement__.ts',
+    source:
+      "import type { Selectable } from '@purlay/db';\n\nexport const use = (row: Selectable<{ id: string }>): unknown => row;\n",
+    allowed: true,
+  },
+  {
+    rule: "chat may still take the whole database's executor, until its functions are behind its handle (control)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import type { Executor } from '@purlay/db';\n\nexport const use = (database: Executor): unknown => database;\n",
+    allowed: true,
+  },
+  // A table named at run time is invisible to the compiler and to the scan of the text (D-271).
+  {
+    rule: 'a feature builds no table name at run time: `sql.raw` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (table: string): unknown => sql.raw(table);\n",
+  },
+  {
+    rule: 'a feature builds no table name at run time: `sql.table` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (table: string): unknown => sql.table(table);\n",
+  },
+  {
+    rule: 'a feature builds no table name at run time: `sql.id` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (table: string): unknown => sql.id(table);\n",
+  },
+  {
+    rule: 'a feature builds no table name at run time: `sql.lit` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (table: string): unknown => sql.lit(table);\n",
+  },
+  {
+    rule: 'a feature may write `sql.ref` and a `sql` template, which name what the text says (control)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (): unknown => [sql.ref('messages.id'), sql`count(*)::int`];\n",
+    allowed: true,
+  },
+  {
+    rule: 'a feature’s tests may build a table name, as they build everything (control)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.test.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (table: string): unknown => sql.id(table);\n",
+    allowed: true,
+  },
   {
     rule: 'the core may write raw SQL, as it does today (control)',
     ruleId: 'no-restricted-imports',

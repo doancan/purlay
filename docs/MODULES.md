@@ -167,7 +167,11 @@ core's it names* — never the combined schema (`features/<id>/schema.ts`: `Modu
 there is no second list of who owns what) — and a query over any other table does not compile. The handle is a type over
 the object every caller already passes, not a wrapper: nothing is checked at run time, and no caller changes (D-271). It
 holds the builder API only: it does not tell a read of a core table from a write, and it does not see raw `sql`. A read
-across modules goes through a port. Raw `sql` is the way round a typed handle, so a lint rule bans it in `features/`
+across modules goes through a port. The seams that are not ports yet are listed, each with why, and may only shrink: chat's
+four writes of a core table (`CORE_WRITES` in `module-tables.test.ts`: a sent file is claimed by its message, a scheduled
+message claims its upload, a message adds to the workspace's storage counter, missed mail moves the person's
+`missed_mail_since`), and the three files of `cli/` that seed or measure a demo and name chat's channels (`demo-seed.ts`,
+`demo-script.ts`, `budget-latency.ts`). Raw `sql` is the way round a typed handle, so a lint rule bans it in `features/`
 (chat is exempt for now: its templates are almost all expression fragments, `count(*)::int`, `state_version + 1`, and a
 scan of the text for a table another module owns is what polices them, D-271); a table is named only in the manifest's
 `data` hooks, which receive an executor of the module's own. This is what makes "no foreign key between modules" mean more
@@ -350,7 +354,9 @@ until then it is a stated intent and not a guarantee.
 | The core imports no module | the same lint, on `modules/` and `platform/` | 1 |
 | The core's modules import none of chat's | the lint that keeps `modules/` and `platform/` from importing a feature, now that chat is `features/chat`; the core's tests may — **built** | 9 |
 | The core names none of chat's tables | `core-tables.test.ts`, reading the tables from `TABLE_OWNERS`, with an empty allow-list that may only shrink, and the mutation `core-sweep-names-a-chat-table` — **built** | 10 |
-| No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built** | 5 |
+| No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built**; chat is the exemption, and is policed by the text scan below, not ended (D-271) | 5 |
+| A module's raw `sql` and string-named tables name only its own tables and the core tables it reads | `module-tables.test.ts`, for every folder under `features/` (found, not listed): the tables from `TABLE_OWNERS` and `features/<id>/schema.ts`'s `CORE_READS`, a template's `from`, `join`, `into`, `update`, a column written `table.column`, `tableExists`, `Database['table']`, with comments stripped; a module with no `schema.ts` fails; a write of a core table is held to `CORE_WRITES`, which only shrinks; and the lint, which bans `sql.raw`, `sql.table`, `sql.id` and `sql.lit` in every feature (they build a name at run time) — **built** (D-271), as far as a scan for a literal sees; mutations `module-tables-scan-ignores-sql-templates`, `module-tables-scan-allows-every-owner` and `module-tables-core-writes-not-held-to-list` | 9 |
+| A module that is behind its typed handle takes the handle and not the whole database's executor | the lint: `Executor`, `Transaction`, `Database` and `DB` from `@purlay/db` are refused in a feature outside `NOT_YET_BEHIND_THEIR_HANDLE` (`eslint.config.mjs`, chat only, and it only shrinks), not in tests; shown by `verify:enforcement` — **built for issues** (D-271) | 9 |
 | No read of another module's tables | the typed handle (`ModuleSchema`, `features/<id>/schema.ts`): a module's functions take it, and a query over a table that is neither the module's nor named in the schema does not compile; `module-db.test.ts` asks the compiler about it, in both directions of assignability — **built for issues** (D-271), chat's functions still take the whole database's executor; the mutations `module-schema-ignores-ownership` and `module-schema-forgets-core-reads` | 9 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
@@ -479,7 +485,7 @@ commit beside this list.
   the manifests.
   `table-ownership.integration.test.ts` holds the list to the database, and a key across owners fails it. A core
   migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
-- **The table's schema** (D-271): `features/<id>/schema.ts` makes `<Id>Db` and `<Id>Tx` of `ModuleSchema<'<id>', CoreReads>`, naming the core tables the module reads; the module's functions take them in place of `Executor` and `Transaction`, and a core table added to the list is a line a reviewer reads. `module-db.test.ts` holds what the type refuses.
+- **The table's schema** (D-271): `features/<id>/schema.ts` makes `<Id>Db` and `<Id>Tx` of `ModuleSchema<'<id>', CoreReads>`, naming the core tables the module reads; the module's functions take them in place of `Executor` and `Transaction`, and a core table added to the list is a line a reviewer reads. `module-db.test.ts` holds what the type refuses, and `module-tables.test.ts` fails for a module with no `schema.ts` and reads its `CORE_READS`.
 - **The table's lifecycle**: every owned table needs its erasure and retention decision in `TABLE_LIFECYCLE`
   (`packages/db/src/table-lifecycle.ts`); a table with none does not compile, and `table-lifecycle.test.ts` holds the
   list to `TABLE_OWNERS`. The compiler does not check that a `deleted` or `window` decision is true (see the silent gaps).

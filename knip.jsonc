@@ -36,6 +36,9 @@
       // `demo-session.ts` likewise: the browser suite's fixtures run it for a session the seed did
       // not make (`apps/web/e2e/fixtures.ts`, `freshSessionOf`). `storage-init.ts` is the command of
       // the production compose file's one-shot `storage-init` service (D-144), which knip does not read.
+      // `features/<id>/schema.ts` is read by `module-tables.test.ts` with an `import()` of a path it works out from the
+      // folders it finds under `features/`, so that a module added later is held without the test being told; knip reads
+      // imports it can resolve, not a computed path. Not dead: a module's schema is what that test holds its source to (D-271).
       // `testing/fresh-server.ts` is run by the setup wizard's browser spec (`apps/web/e2e/setup.e2e.ts`) as a
       // subprocess: a server with nobody on it, GitHub's stand-in and a relay beside it — the state `scripts/demo.ts`,
       // which seeds people, cannot give.
@@ -47,6 +50,7 @@
         "src/cli/demo-session.ts",
         "src/cli/storage-init.ts",
         "src/cli/throwaway-database.ts",
+        "src/features/*/schema.ts",
         "src/testing/fresh-server.ts",
       ],
     },

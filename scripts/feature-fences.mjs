@@ -15,12 +15,15 @@ export const featureIds = (dir) =>
  * One block per feature: below the doors like a module, taking its executor as an argument, and importing
  * no other feature. One block each, because ESLint replaces a rule rather than merging it and the rule has
  * to name the others.
+ *
+ * `testPathsFor` gives a feature's tests their own paths, where they are held to less than the rest of it (they may hand
+ * a service the whole database's executor): a block after the feature's own, for its `*.test.ts` files, when it is given.
  */
-export const featureFences = (dir, ids, noTransportTypes, pathsFor) =>
-  ids.map((id) => {
+export const featureFences = (dir, ids, noTransportTypes, pathsFor, testPathsFor) =>
+  ids.flatMap((id) => {
     const others = ids.filter((other) => other !== id);
-    return {
-      files: [`${dir}/${id}/**/*.ts`],
+    const fence = (files, paths) => ({
+      files,
       rules: {
         'no-restricted-imports': [
           'error',
@@ -36,9 +39,15 @@ export const featureFences = (dir, ids, noTransportTypes, pathsFor) =>
                     },
                   ]),
             ],
-            paths: pathsFor(id),
+            paths,
           },
         ],
       },
-    };
+    });
+    return [
+      fence([`${dir}/${id}/**/*.ts`], pathsFor(id)),
+      ...(testPathsFor === undefined
+        ? []
+        : [fence([`${dir}/${id}/**/*.test.ts`], testPathsFor(id))]),
+    ];
   });

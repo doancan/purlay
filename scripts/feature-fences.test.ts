@@ -60,4 +60,24 @@ describe('the fence of a feature', () => {
     expect(optionsOf(fences[0]).paths).toEqual([database]);
     expect(optionsOf(fences[1]).paths).toEqual([database, exempt]);
   });
+
+  test('may give the tests of a feature paths of their own, in a block after the feature’s', () => {
+    const wholeDatabase = { name: '@purlay/db', message: 'w' };
+    const fences = featureFences(
+      'd',
+      ['chat', 'notes'],
+      transport,
+      (id) => [database, ...(id === 'notes' ? [wholeDatabase] : [])],
+      () => [database],
+    );
+    expect(fences.map((fence) => fence.files)).toEqual([
+      ['d/chat/**/*.ts'],
+      ['d/chat/**/*.test.ts'],
+      ['d/notes/**/*.ts'],
+      ['d/notes/**/*.test.ts'],
+    ]);
+    expect(optionsOf(fences[2]).paths).toEqual([database, wholeDatabase]);
+    expect(optionsOf(fences[3]).paths).toEqual([database]);
+    expect(optionsOf(fences[3]).patterns).toEqual(optionsOf(fences[2]).patterns);
+  });
 });
