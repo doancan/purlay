@@ -352,16 +352,23 @@ const sidebarOf = (page: Page): Locator => page.getByRole('complementary', { nam
 /**
  * Opens what holds the navigation where this width keeps it behind a toggle: the "Open navigation" button,
  * waited for and pressed. At a wide width it is in place and nothing is done. Chosen by the width, never by
- * looking at whether the toggle happens to be drawn yet: a probe answers for the instant it is asked.
+ * looking at whether the toggle happens to be drawn yet: a probe answers for the instant it is asked. For a
+ * page whose navigation is known to be closed (just loaded, or after a navigation, which closes the overlay).
  */
 export const openNavigation = async (page: Page): Promise<void> => {
   if (!isNarrow(page)) return;
   await page.getByRole('button', { name: 'Open navigation' }).click();
 };
 
-/** Opens the sidebar if this width keeps it behind its toggle, and returns it. Called with it closed. */
+/**
+ * Opens the sidebar if this width keeps it behind its toggle, and returns it. Safe to call when it is open:
+ * the frame is waited for until it shows either the toggle or the open sidebar (never both), and only the
+ * absence of the sidebar, once one of them is there, sends the person to the toggle.
+ */
 export const openNav = async (page: Page): Promise<Locator> => {
-  await openNavigation(page);
+  const toggle = page.getByRole('button', { name: 'Open navigation' });
+  await expect(toggle.or(sidebarOf(page))).toBeVisible();
+  if ((await sidebarOf(page).count()) === 0) await toggle.click();
   const sidebar = sidebarOf(page);
   await expect(sidebar).toBeVisible();
   return sidebar;
