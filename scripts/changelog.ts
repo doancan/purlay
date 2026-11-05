@@ -1,14 +1,15 @@
 /**
  * The shape of a changelog entry (D-185; the format is Keep a Changelog 1.1.0).
  *
- * A release's notes are categories of one-line bullets — Added, Changed, Deprecated, Removed, Fixed,
- * Security — so that a person can scan what a version did in two minutes, not read a transcript. The
+ * A release's notes are categories of one-line bullets — Featured, Added, Changed, Deprecated, Removed,
+ * Fixed, Security — so that a person can scan what a version did in two minutes, not read a transcript. The
  * shape lives here so that the command that cuts a release (`scripts/release.ts`) and the test that
  * holds the files (`scripts/changelog.test.ts`) judge the same thing.
  */
 
 /** The categories, in the order a release lists them. */
 export const CATEGORIES = [
+  'Featured',
   'Added',
   'Changed',
   'Deprecated',
@@ -16,6 +17,12 @@ export const CATEGORIES = [
   'Fixed',
   'Security',
 ] as const;
+
+/**
+ * How many bullets Featured may hold. It is the big things of a release, drawn as cards above the rest; a
+ * release that features everything features nothing, so the grammar refuses a fourth.
+ */
+export const FEATURED_MAX = 3;
 
 /** What Unreleased says while it holds nothing. */
 export const NOTHING = '_Nothing yet._';
@@ -27,7 +34,9 @@ export const NOTHING = '_Nothing yet._';
  * - every `###` heading is a category, once, and in the order of `CATEGORIES`;
  * - nothing sits above the first category, and no heading of another level appears;
  * - a category holds bullets (`- `), with a continuation indented two spaces under the bullet it
- *   continues, and is not empty.
+ *   continues, and is not empty;
+ * - `Featured`, which comes first and is only there when the release has something big, holds at most
+ *   `FEATURED_MAX` bullets.
  */
 export const problemsIn = (body: string): readonly string[] => {
   const problems: string[] = [];
@@ -41,6 +50,10 @@ export const problemsIn = (body: string): readonly string[] => {
   const closeCategory = (): void => {
     if (current !== undefined && current !== UNKNOWN && bullets === 0)
       problems.push(`"### ${current}" has no bullet under it`);
+    if (current === 'Featured' && bullets > FEATURED_MAX)
+      problems.push(
+        `"### Featured" holds ${String(bullets)} bullets; at most ${String(FEATURED_MAX)} are big enough to feature`,
+      );
   };
 
   for (const [index, line] of body.split('\n').entries()) {

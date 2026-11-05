@@ -11,6 +11,7 @@ import type { ClientStorage } from '../../data/browser-storage';
 import { installDom } from '../../testing/dom';
 import { memoryStorage } from '../../testing/fakes';
 import { aSignedInApi } from '../../testing/fixtures';
+import { Fireworks } from '../../ui/fireworks';
 import { notesFor } from '../../testing/release-notes';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
@@ -47,12 +48,19 @@ const visit = async (
     path = '/w/acme',
     api = {},
   } = options;
-  const view = await renderApp(<Outlet />, {
-    path,
-    api: aSignedInApi({ ...version(running), ...api }),
-    storage,
-    releaseNotes: notes,
-  });
+  // The frame draws the fireworks (`app.tsx`); this harness has no frame, so it brings them.
+  const view = await renderApp(
+    <>
+      <Outlet />
+      <Fireworks />
+    </>,
+    {
+      path,
+      api: aSignedInApi({ ...version(running), ...api }),
+      storage,
+      releaseNotes: notes,
+    },
+  );
   await settle();
   return view;
 };
@@ -69,9 +77,42 @@ describe('the release notes after an update', () => {
     const view = await visit({ storage });
     const dialog = await view.findByRole('dialog', DIALOG);
     expect(within(dialog).getByText('Released Oct 26, 2026.')).toBeDefined();
-    expect(within(dialog).getByRole('heading', { level: 3, name: 'Added' })).toBeDefined();
-    expect(within(dialog).getByRole('heading', { level: 3, name: 'Fixed' })).toBeDefined();
-    expect(within(dialog).getAllByRole('listitem')).toHaveLength(3);
+    // What the release is about comes first, in a light blue block, each big thing a title and its sentence.
+    const featured = within(dialog)
+      .getByRole('heading', { level: 3, name: 'Featured' })
+      .closest('section');
+    expect(featured?.className).toContain('bg-accent-subtle');
+    expect(featured?.textContent).toContain('Editor');
+    expect(featured?.textContent).toContain('It reads what you paste: a table stays a table');
+    // It is the first thing in the window, ahead of every category.
+    const headings = within(dialog)
+      .getAllByRole('heading', { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(headings).toEqual(['Featured', 'New2', 'Fixed1', 'Security1']);
+    // Every other category is a plain list under a quiet heading — a dot, a word, a count — never a pill that
+    // would read as a button: there is no button in the window but the ones that act.
+    expect(
+      within(dialog)
+        .getAllByRole('button')
+        .map((button) => button.textContent || button.getAttribute('aria-label'))
+        .sort(),
+    ).toEqual(['Close', 'Got it']);
+    const added = within(dialog)
+      .getByRole('heading', { level: 3, name: /^New/ })
+      .closest('section');
+    if (added === null) throw new Error('the New category has no section');
+    expect(within(added).getAllByRole('listitem')).toHaveLength(2);
+    // The area is a small label above the words; a bullet with none is its words alone.
+    expect(within(dialog).getByText('Messages').tagName).toBe('SPAN');
+    expect(within(dialog).getByText('A bullet that names no area')).toBeDefined();
+    // It is a link out to the release, in a new tab, and says so.
+    const github = within(dialog).getByRole('link', { name: /View on GitHub/ });
+    expect(github.getAttribute('href')).toBe(
+      'https://github.com/doancan/purlay/releases/tag/v1.0.0',
+    );
+    expect(github.getAttribute('target')).toBe('_blank');
+    // Its scrollbar is drawn under the pointer only.
+    expect(within(dialog).getByRole('region').className).toContain('scrollbar-hover');
     expect(within(dialog).getByText('day dividers').tagName).toBe('CODE');
     expect(storage.data[RELEASE_NOTES_SEEN_KEY]).toBeUndefined();
 
@@ -80,6 +121,30 @@ describe('the release notes after an update', () => {
     expect(isOpen(view)).toBe(false);
     expect(storage.data[RELEASE_NOTES_SEEN_KEY]).toBe('1.0.0');
     view.unmount();
+  });
+
+  test('opens with fireworks over it — a few shows, for a release — and none for a person who asked for less motion', async () => {
+    const view = await visit({ storage: memoryStorage() });
+    await view.findByRole('dialog', DIALOG);
+    expect(view.queryByTestId('fireworks')).not.toBeNull();
+    view.unmount();
+
+    const original = globalThis.matchMedia;
+    // A whole MediaQueryList: the rest of the app listens to its own queries on the same function.
+    globalThis.matchMedia = ((query: string) => ({
+      matches: query.includes('reduce'),
+      media: query,
+      addEventListener: (): void => undefined,
+      removeEventListener: (): void => undefined,
+    })) as unknown as typeof matchMedia;
+    try {
+      const calm = await visit({ storage: memoryStorage() });
+      await calm.findByRole('dialog', DIALOG);
+      expect(calm.queryByTestId('fireworks')).toBeNull();
+      calm.unmount();
+    } finally {
+      globalThis.matchMedia = original;
+    }
   });
 
   test('Escape closes it and remembers the version as the button does', async () => {

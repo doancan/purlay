@@ -9,6 +9,7 @@ import {
   RELEASE_CATEGORIES,
   RELEASE_TAG,
   REPOSITORY_URL,
+  readItem,
   readReleaseNotes,
   releasePage,
 } from './index';
@@ -92,12 +93,88 @@ describe('reading a release’s notes', () => {
         {
           category: 'Added',
           items: [
-            '**Search** — find by `author:` (D-1)',
-            '**Threads** — a long one continued here',
+            {
+              markdown: '**Search** — find by `author:` (D-1)',
+              area: 'Search',
+              body: 'find by `author:` (D-1)',
+            },
+            {
+              markdown: '**Threads** — a long one continued here',
+              area: 'Threads',
+              body: 'a long one continued here',
+            },
           ],
         },
-        { category: 'Fixed', items: ['**Feed** — scroll stays'] },
+        {
+          category: 'Fixed',
+          items: [{ markdown: '**Feed** — scroll stays', area: 'Feed', body: 'scroll stays' }],
+        },
       ],
+    });
+  });
+
+  test('reads Featured first, and a bullet with no area as its words alone (D-261)', () => {
+    const notes = readReleaseNotes(
+      [
+        '# Purlay v2.0.0 — 2026-12-01',
+        '',
+        '### Featured',
+        '',
+        '- **Editor** — it reads what you paste',
+        '',
+        '### Security',
+        '',
+        '- plain words, no area',
+        '- **Sign-in** — a — dash inside is kept',
+        '',
+      ].join('\n'),
+    );
+    expect(notes?.groups.map((group) => group.category)).toEqual(['Featured', 'Security']);
+    expect(notes?.groups[1]?.items).toEqual([
+      { markdown: 'plain words, no area', area: null, body: 'plain words, no area' },
+      {
+        markdown: '**Sign-in** — a — dash inside is kept',
+        area: 'Sign-in',
+        body: 'a — dash inside is kept',
+      },
+    ]);
+  });
+
+  describe('telling a bullet’s area from its words (D-260)', () => {
+    test.each([
+      ['**Messages** — it works', 'Messages', 'it works'],
+      ['**Sign-in**   —   spaced out', 'Sign-in', 'spaced out'],
+      ['**A** — **bold** words — and a dash', 'A', '**bold** words — and a dash'],
+      ['**A** —\tafter a tab', 'A', 'after a tab'],
+    ])('%s has the area %s', (markdown, area, body) => {
+      expect(readItem(markdown)).toEqual({ markdown, area, body });
+    });
+
+    test.each([
+      ['no bold at all', 'plain words'],
+      ['a bold word but no dash', '**Messages** it works'],
+      ['a dash with no space before it', '**Messages**— it works'],
+      ['a dash with no space after it', '**Messages** —it works'],
+      ['nothing after the dash', '**Messages** — '],
+      ['a star inside the bold', '**Mess*ages** — it works'],
+      ['an empty bold', '**** — it works'],
+      ['bold that is never closed', '**Messages — it works'],
+    ])('%s is its words alone', (_name, markdown) => {
+      expect(readItem(markdown)).toEqual({ markdown, area: null, body: markdown });
+    });
+
+    test('is linear in the text: a long run of spaces, of stars or of dashes is read in a blink', () => {
+      const size = 200_000;
+      const shapes = [
+        `**a**${' '.repeat(size)}x`,
+        `**a** —${' '.repeat(size)}`,
+        `**${'*'.repeat(size)}`,
+        `**a** ${'— '.repeat(size / 2)}`,
+      ];
+      const started = performance.now();
+      for (const shape of shapes) readItem(shape);
+      // A pattern that backtracks takes seconds at this size; this is a few milliseconds.
+      expect(performance.now() - started).toBeLessThan(1_000);
     });
   });
 
@@ -109,7 +186,7 @@ describe('reading a release’s notes', () => {
     expect(readReleaseNotes(odd)).toEqual({
       version: '1.0.0',
       date: '2026-01-01',
-      groups: [{ category: 'Added', items: ['kept'] }],
+      groups: [{ category: 'Added', items: [{ markdown: 'kept', area: null, body: 'kept' }] }],
     });
   });
 

@@ -343,6 +343,7 @@
   --duration-mark: 200ms;
   --duration-slide: 200ms;
   --duration-celebrate: 3200ms;
+  --duration-celebrate-grand: 4500ms;
   --duration-nudge: 200ms;
   --easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -398,6 +399,7 @@
     --duration-mark: 0ms;
     --duration-slide: 0ms;
     --duration-celebrate: 0ms;
+    --duration-celebrate-grand: 0ms;
     --duration-nudge: 0ms;
   }
 }

@@ -2141,11 +2141,13 @@ export const tr = {
   'releaseNotes.title': 'Purlay {version} sürümündeki yenilikler',
   'releaseNotes.description': '{date} tarihinde yayımlandı.',
   'releaseNotes.close': 'Anladım',
-  'releaseNotes.category.Added': 'Eklenenler',
-  'releaseNotes.category.Changed': 'Değişenler',
-  'releaseNotes.category.Deprecated': 'Kullanımdan kalkacaklar',
-  'releaseNotes.category.Removed': 'Kaldırılanlar',
-  'releaseNotes.category.Fixed': 'Düzeltilenler',
+  'releaseNotes.github': 'GitHub’da görüntüle',
+  'releaseNotes.category.Featured': 'Öne çıkanlar',
+  'releaseNotes.category.Added': 'Yeni',
+  'releaseNotes.category.Changed': 'İyileştirme',
+  'releaseNotes.category.Deprecated': 'Kullanımdan kalkıyor',
+  'releaseNotes.category.Removed': 'Kaldırıldı',
+  'releaseNotes.category.Fixed': 'Düzeltme',
   'releaseNotes.category.Security': 'Güvenlik',
 
   // ── Klavye kısayolları (UX §7) ──────────────────────────────────────────

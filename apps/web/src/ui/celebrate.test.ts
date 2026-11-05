@@ -16,4 +16,15 @@ describe('celebrate', () => {
     celebrate();
     expect(heard).toHaveBeenCalledTimes(2);
   });
+
+  test('says how big the moment is: small by default, grand for a release', () => {
+    const asked: string[] = [];
+    const stop = onCelebrate((size) => {
+      asked.push(size);
+    });
+    celebrate();
+    celebrate('grand');
+    stop();
+    expect(asked).toEqual(['small', 'grand']);
+  });
 });
