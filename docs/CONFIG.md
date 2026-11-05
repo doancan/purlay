@@ -572,6 +572,9 @@ without WAL archiving, the API's own port published for Nginx Proxy Manager as a
 |---|---|---|
 | `PURLAY_HTTP_PORT` | ✅ (Dockhand file only) | The host port the API is published on; Nginx Proxy Manager forwards the domain to `http://<server>:<port>` with Websockets Support on. Plain HTTP |
 | `PURLAY_HTTP_BIND` | — (Dockhand file only) | The host address that port is bound to; every address unless set. Set it to the address only Nginx Proxy Manager reaches when the network is not your own |
+| `BACKUP_EVERY_MINUTES` | — (Dockhand file only) | How often the `backup` service dumps the database (D-262); default `60`. A dump is never older than this when an update replaces the API |
+| `BACKUP_KEEP` | — (Dockhand file only) | How many dumps the `backup` service keeps, newest first; default `48` (two days at the default interval) |
+| `BACKUP_MEMORY_LIMIT` | — (Dockhand file only) | The `backup` container's memory bound; default `256m` |
 
 `HTTP_PORT`, `HTTPS_PORT`, `PROXY_MEMORY_LIMIT`, `WAL_ARCHIVE`, `WAL_ARCHIVE_TIMEOUT` and `WAL_ARCHIVE_PATH` are not read
 by it. Nginx Proxy Manager is then the one proxy `TRUST_PROXY` means, and its forwarded headers are what this

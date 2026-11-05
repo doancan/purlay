@@ -102,11 +102,37 @@ describe('integration: the Dockhand compose file', () => {
 
   const dockhand = model(DOCKHAND);
   const production = model(PRODUCTION);
-  test('has the services of the production stack but its Caddy, no more and no fewer', () => {
+  test('has the services of the production stack but its Caddy, and a backup of its own', () => {
     expect(Object.keys(dockhand.services).sort()).toEqual(
-      Object.keys(production.services)
-        .filter((name) => name !== 'proxy')
-        .sort(),
+      [...Object.keys(production.services).filter((name) => name !== 'proxy'), 'backup'].sort(),
+    );
+  });
+
+  test('the backup dumps the database with PostgreSQL’s own pg_dump, hardened, into a volume of its own (D-262)', () => {
+    const backup = dockhand.services['backup'];
+    // The database's image, so pg_dump is the server's own version.
+    expect(backup?.image).toBe(dockhand.services['postgres']?.image ?? '');
+    expect(backup?.['read_only']).toBe(true);
+    expect(backup?.['cap_drop']).toEqual(['ALL']);
+    expect(backup?.['security_opt']).toEqual(['no-new-privileges:true']);
+    expect(backup?.volumes?.map((volume) => [volume.type, volume.source, volume.target])).toEqual([
+      ['volume', 'backups', '/backups'],
+    ]);
+    expect(backup?.environment).toMatchObject({
+      PGHOST: 'postgres',
+      PGUSER: 'purlay',
+      PGDATABASE: 'purlay',
+      PGPASSWORD: ENVIRONMENT['POSTGRES_PASSWORD'] ?? '',
+      BACKUP_EVERY_MINUTES: '60',
+      BACKUP_KEEP: '48',
+    });
+    const script = ((backup?.['command'] as string[] | undefined) ?? []).join('\n');
+    // Written aside and renamed: a file by the dump's name is always whole.
+    expect(script).toContain('pg_dump --format=custom');
+    expect(script).toMatch(/mv "\/backups\/\.\$+name\.partial" "\/backups\/\$+name"/);
+    // A dump that stopped is a container that is unhealthy, not a surprise on the day it is needed.
+    expect((backup?.['healthcheck'] as { test?: string[] } | undefined)?.test?.join(' ')).toContain(
+      'BACKUP_EVERY_MINUTES * 2',
     );
   });
 

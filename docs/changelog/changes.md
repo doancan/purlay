@@ -34,11 +34,13 @@ have it.
 
 ### Added
 
+- **Operations** — A release's image is also tagged `release` and its version, so a Dockhand server can follow releases on its own; the Dockhand stack backs the database up every hour (D-262)
 - **Editor** — Markdown blocks and Markdown files have a Source and a Preview view, and a checklist button joins the formatting row (D-259)
 - **Editor** — A text of 500 lines or more, or a table of more than 200 rows, is offered as a file instead of being left too long to send (D-259)
 
 ### Changed
 
+- **Operations** — `bun run release` with no kind prepares a patch release (`0.3.0` → `0.3.1`); `minor`, `major` or an exact version are asked for by name (D-263)
 - **Operations** — `docker-compose.dockhand.yml` no longer runs Caddy: it publishes the API on `PURLAY_HTTP_PORT` for Nginx Proxy Manager to forward to, as purlay.app runs, and no longer needs `PROXY_NETWORK` (D-258)
 - **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)
 - **Operations** — the upgrade drops `attachments.message_id` and `attachments.channel_id`, and stops with a count, changing nothing, if a sent file's link is missing from chat's table; restore the backup and fix the data before deploying again (D-250)

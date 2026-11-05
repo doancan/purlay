@@ -1,0 +1,61 @@
+# A release's image gets its version and `release` as names (D-262), so a server that follows `:release`
+# (a Dockhand stack, docs/DEPLOY.md) updates to each release and nothing between. Nothing is built: the
+# tested image of the release's commit is given two more names. See scripts/release-image-tag.sh.
+#
+# Its own workflow because it writes packages, which the deploy's release job never may.
+name: release-image
+
+on:
+  # After a deploy, which is what publishes a release; most deploys are not one, and change nothing here.
+  workflow_run:
+    workflows: [deploy]
+    types: [completed]
+    branches: [main]
+  # For a release already out, by its tag; only the latest one is accepted.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The release tag to give `release`, e.g. v1.2.3 (it must be the latest release)'
+        required: true
+        type: string
+
+concurrency:
+  group: release-image
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The tags, to tell whether this commit is a release and which commit a tag is.
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: name the release's image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          export IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}-api"
+          scripts/release-image-tag.sh ${TAG:+"$TAG"}
