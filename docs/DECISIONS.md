@@ -12787,6 +12787,14 @@ off could not be told apart from one that is on in any of them.
    (`auditActionsOf`), so a server that does not run issues does not invite a filter on `issue.created`. A row of a module
    that is off is still on the page, said as it always was. The sentence for each action stays in the page's exhaustive
    `switch`, which does not compile for an action without one.
+5. **Notification kinds and search sources are manifest fields.** `notifications` lists each kind a module sends with
+   whether it needs the person, is pushed and is mailed (chat's are `CHAT_NOTIFICATION_KINDS`, in the order of the wire's
+   `NotificationType`, so the contract is unchanged); `notification-kinds.test.ts` holds the wire's list, `NEEDS_YOU` and
+   the database's enum to the declarations, and the missed-mail letter reads its kinds from them. `searchSources` lists the
+   ids a module adds to a search. The composition offers a module's kinds and sources only while it runs. **Not done:** a
+   fan-out over several sources. A search answers `MessagePage`, messages only; a second source needs a result that names
+   its source, which changes the wire and is its own decision, so the field and its checks are here and the fan-out is
+   not. The push words and the web's inbox categories stay written per reason, in the core and the client.
 
 **Rejected.** *A permission model of grants, rows per role*: three roles and a handful of rules do not need one, and a
 table in the database would make who may do what a thing an operator can get wrong; the minimum role is the rule that has
