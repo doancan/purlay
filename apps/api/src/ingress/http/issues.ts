@@ -13,40 +13,38 @@ import { createIssue, deleteIssue, issuePage, updateIssue } from '../../features
 import { requireLiveSession } from '../../modules/auth/sessions';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
-import type { Atomically } from '../../platform/transactions';
+import { atomicallyOn } from '../../platform/transactions';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
 
 /**
- * What these routes need beyond a channel's: the transaction boundary of the issues module's share of the
- * database (`features/issues/budget.ts`). Every statement they run, a read as much as a write, goes through it,
- * so a module of many slow requests holds a third of the pool at most and chat's sends are never queued behind it.
- *
- * Who may ask is settled first, by one plain read outside the share: a signed-in person who is not in the workspace
- * must not be able to hold slots and make its members' requests wait for one.
+ * Every statement these routes run is held to the issues module's share of the database by the database they are
+ * handed (`features/issues/budget.ts`, `platform/module-budget.ts`). Who may ask is settled first, by the core's read of
+ * the membership, outside the share: a person who is not in the workspace must not be able to hold its slots.
  */
 export interface IssueDependencies extends ChannelDependencies {
-  readonly atomically: Atomically;
   /** What a role may do in a process that runs these modules. */
   readonly permissions: PermissionTable;
 }
 
 /** `GET /api/workspaces/:workspaceId/issues?status=&before=&limit=` — newest first. */
 export const listIssues = async (
-  { auth, database, atomically }: IssueDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   workspaceId: string,
 ): Promise<IssuePage> => {
   const { userId } = await requireSession(auth, request);
   const query = validated(IssueQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await atomically(async (transaction) => await issuePage(transaction, context, query));
+  return await atomicallyOn(database)(
+    async (transaction) => await issuePage(transaction, context, query),
+  );
 };
 
 /** `POST /api/workspaces/:workspaceId/issues` — `201` with the issue, open. */
 export const postIssue = async (
-  { auth, database, atomically, clock }: IssueDependencies,
+  { auth, database, clock }: ChannelDependencies,
   request: Request,
   workspaceId: string,
   body: unknown,
@@ -54,7 +52,7 @@ export const postIssue = async (
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(CreateIssueRequest, body);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await atomically(async (transaction) => {
+  return await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
     return await createIssue(transaction, clock, context, input);
   });
@@ -62,7 +60,7 @@ export const postIssue = async (
 
 /** `PATCH /api/workspaces/:workspaceId/issues/:issueId` — the issue as it is now. */
 export const patchIssue = async (
-  { auth, database, atomically, clock }: IssueDependencies,
+  { auth, database, clock }: ChannelDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -71,7 +69,7 @@ export const patchIssue = async (
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(UpdateIssueRequest, body);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await atomically(async (transaction) => {
+  return await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
     return await updateIssue(transaction, clock, context, issueId, input);
   });
@@ -79,14 +77,14 @@ export const patchIssue = async (
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */
 export const removeIssue = async (
-  { auth, database, atomically, clock, permissions }: IssueDependencies,
+  { auth, database, clock, permissions }: IssueDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
 ): Promise<void> => {
   const { userId, sessionId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  await atomically(async (transaction) => {
+  await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
     await deleteIssue(transaction, clock, context, permissions, issueId);
   });

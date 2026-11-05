@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import {
   Kysely,
   PostgresDialect,
+  type KyselyPlugin,
   Transaction as KyselyTransaction,
   type PostgresPool,
 } from 'kysely';
@@ -86,20 +87,138 @@ export const readCaFile = (path: string): string => {
   }
 };
 
-/** Every failure to obtain a connection is the same fact to a caller: there was none. */
-const unavailableWhenEmpty = (pool: pg.Pool): PostgresPool => ({
-  options: pool.options,
+/** What a caller holds for as long as it holds a connection: a share of the pool, handed back with the connection. */
+export interface ConnectionLease {
+  /** The session's `statement_timeout` for this connection; the pool's own when absent. */
+  readonly statementTimeoutMs?: number;
+  /** Called once, when the connection goes back to the pool. */
+  readonly release: () => void;
+}
+
+/**
+ * Asked for each connection a leasing executor takes. It may wait, and refuse by throwing, which reaches the caller of
+ * the query as it is. `undefined` is no lease: the connection is taken as the pool gives it.
+ */
+export type LeaseConnection = () => Promise<ConnectionLease | undefined>;
+
+/** The pool an executor was made on, its connections' statement limit (ms), and the plugins put on it since. */
+interface PoolOfExecutor {
+  readonly pool: pg.Pool;
+  readonly statementTimeoutMs: number;
+  readonly plugins: readonly KyselyPlugin[];
+}
+
+/** Which pool each executor takes its connections from, so that another can be made on the same one. */
+const poolsOfExecutors = new WeakMap<object, PoolOfExecutor>();
+
+/** The `statement_timeout` a connection was last given, where it is not the pool's own. */
+const statementTimeouts = new WeakMap<pg.PoolClient, number>();
+
+/** Gives a connection the limit wanted, telling the server only when it differs from what the connection has. */
+const alignStatementTimeout = async (
+  client: pg.PoolClient,
+  wanted: number,
+  pool: PoolOfExecutor,
+): Promise<void> => {
+  const current = statementTimeouts.get(client) ?? pool.statementTimeoutMs;
+  if (current === wanted) return;
+  await client.query('select set_config($1, $2, false)', ['statement_timeout', String(wanted)]);
+  statementTimeouts.set(client, wanted);
+};
+
+/**
+ * The pool as Kysely takes connections from it. Every failure to obtain one is the same fact to a caller: there was
+ * none. With a `lease`, each connection is asked of it first and handed back to it; either way it arrives with the
+ * statement limit its holder asked for, since one holder's five seconds are not the next holder's to find.
+ */
+const connectionsOf = (pool: PoolOfExecutor, lease?: LeaseConnection): PostgresPool => ({
+  options: pool.pool.options,
   connect: async (): Promise<pg.PoolClient> => {
+    const leased = await lease?.();
+    let client: pg.PoolClient;
     try {
-      return await pool.connect();
+      client = await pool.pool.connect();
     } catch (error) {
+      leased?.release();
       throw new DatabaseUnavailableError(error);
     }
+    try {
+      await alignStatementTimeout(
+        client,
+        leased?.statementTimeoutMs ?? pool.statementTimeoutMs,
+        pool,
+      );
+    } catch (error) {
+      // Its state is unknown: the pool discards it.
+      client.release(error instanceof Error ? error : new Error(String(error)));
+      leased?.release();
+      throw error;
+    }
+    if (leased !== undefined) {
+      const giveBack = client.release.bind(client);
+      let released = false;
+      client.release = (error?: Error | boolean): void => {
+        if (!released) {
+          released = true;
+          leased.release();
+        }
+        giveBack(error);
+      };
+    }
+    return client;
   },
   end: async (): Promise<void> => {
-    await pool.end();
+    await pool.pool.end();
   },
 });
+
+/** A Kysely that remembers its pool and plugins, so that `leasingExecutor` can open one like it. */
+class PooledKysely<T> extends Kysely<T> {
+  private readonly known: PoolOfExecutor;
+
+  constructor(known: PoolOfExecutor) {
+    super({ dialect: new PostgresDialect({ pool: connectionsOf(known) }) });
+    this.known = known;
+    poolsOfExecutors.set(this, known);
+  }
+
+  override withPlugin(plugin: KyselyPlugin): Kysely<T> {
+    const derived = super.withPlugin(plugin);
+    poolsOfExecutors.set(derived, { ...this.known, plugins: [...this.known.plugins, plugin] });
+    return derived;
+  }
+}
+
+/** Opens Kysely on a pool; `statementTimeoutMs` is the pool's own (`0`: none). */
+export const executorOnPool = <T = DB>(pool: pg.Pool, statementTimeoutMs = 0): Kysely<T> =>
+  new PooledKysely<T>({ pool, statementTimeoutMs, plugins: [] });
+
+/** Lets a test's double (`testing/doubles.ts`) be leased: every connection it is asked for fails with `failure`. */
+export const leasableStandIn = (standIn: Executor, failure: Error): Executor => {
+  const pool = {
+    options: {},
+    connect: (): Promise<never> => Promise.reject(failure),
+    end: (): Promise<void> => Promise.resolve(),
+  } as unknown as pg.Pool;
+  poolsOfExecutors.set(standIn, { pool, statementTimeoutMs: 0, plugins: [] });
+  return standIn;
+};
+
+/**
+ * An executor on the pool of `database`, every connection of which is first asked of `lease` (`apps/api`'s module
+ * budgets). A transaction is returned as it is: it holds its connection already, and a test's joins the test's.
+ */
+export const leasingExecutor = (database: Executor, lease: LeaseConnection): Executor => {
+  if (isTransaction(database)) return database;
+  const known = poolsOfExecutors.get(database);
+  if (known === undefined) {
+    throw new Error('this executor was not made on a pool this package knows: it cannot be leased');
+  }
+  const leasing = new Kysely<DB>({
+    dialect: new PostgresDialect({ pool: connectionsOf(known, lease) }),
+  });
+  return known.plugins.reduce((plugged, plugin) => plugged.withPlugin(plugin), leasing);
+};
 
 /** What a connection for migrating needs from the process; the limits are not its to choose. */
 export type MigrationConnection = Pick<
@@ -118,7 +237,7 @@ export type MigrationConnection = Pick<
  * node that fails to migrate exits and starts again to be cancelled at the same point.
  * The idle-in-transaction limit stays: the runner is never idle inside its transaction.
  */
-export const createMigrationDatabase = (connection: MigrationConnection): Kysely<DB> =>
+export const createMigrationDatabase = (connection: MigrationConnection): Executor =>
   createDatabase({
     ...connection,
     poolSize: 1,
@@ -126,7 +245,7 @@ export const createMigrationDatabase = (connection: MigrationConnection): Kysely
     connectionTimeoutMs: 10_000,
   });
 
-export const createDatabase = (options: DatabaseOptions): Kysely<DB> => {
+export const createDatabase = (options: DatabaseOptions): Executor => {
   const pool = new pg.Pool({
     connectionString: options.connectionString,
     max: options.poolSize ?? 10,
@@ -145,7 +264,7 @@ export const createDatabase = (options: DatabaseOptions): Kysely<DB> => {
       : {}),
   });
   pool.on('error', (error) => options.onPoolError?.(error));
-  return new Kysely<DB>({ dialect: new PostgresDialect({ pool: unavailableWhenEmpty(pool) }) });
+  return executorOnPool(pool, options.statementTimeoutMs ?? POOL_DEFAULTS.statementTimeoutMs);
 };
 
 /**

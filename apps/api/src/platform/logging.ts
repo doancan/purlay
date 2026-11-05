@@ -133,6 +133,8 @@ export interface RequestScope {
    * the upgrade for a socket. What the audit trail names as who acted (D-116); never logged.
    */
   sessionId?: string;
+  /** The module whose route this is, once the router knows it (`noteModule`): the share of the database that holds it. */
+  module?: string;
 }
 
 const scope = new AsyncLocalStorage<RequestScope>();
@@ -160,6 +162,12 @@ export const currentRequest = (): RequestScope | undefined => scope.getStore();
 export const noteSession = (sessionId: string): void => {
   const request = scope.getStore();
   if (request !== undefined) request.sessionId = sessionId;
+};
+
+/** Notes the module a request or frame belongs to; outside a request there is none to note. */
+export const noteModule = (module: string): void => {
+  const request = scope.getStore();
+  if (request !== undefined) request.module = module;
 };
 
 const wrap = (instance: pino.Logger): Logger => {
