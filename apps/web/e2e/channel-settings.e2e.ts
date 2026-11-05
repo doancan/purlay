@@ -121,3 +121,47 @@ test('an admin restores an archived channel from General, and it is back in a me
 
   await expect(await navLink(alice, made.name)).toBeVisible();
 });
+
+test('a channel renamed after its list was read and before its subscription was answered shows its new name without a reload', async ({
+  page,
+  signIn,
+  room,
+  api,
+}) => {
+  const made = await room({ members: ['dogancan', 'alice'] });
+  // The page's SUBSCRIBE is held on its way to the server: the lists are read, the socket is open and
+  // listening to the person's own topic, and the channel's topic has nobody on it yet — the window that
+  // a slow network or a busy node opens for as long as it likes, made as long as this test needs.
+  const held: (string | Buffer)[] = [];
+  let release = (): void => undefined;
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer();
+    let holding = true;
+    release = (): void => {
+      holding = false;
+      for (const frame of held.splice(0)) server.send(frame);
+    };
+    ws.onMessage((frame) => {
+      if (holding && typeof frame === 'string' && frame.includes('"op":"SUBSCRIBE"')) {
+        held.push(frame);
+        return;
+      }
+      server.send(frame);
+    });
+    server.onMessage((frame) => {
+      ws.send(frame);
+    });
+  });
+  await signIn();
+  await page.goto(made.path);
+  await expect(page.getByRole('heading', { level: 1, name: made.name })).toBeVisible();
+  await expect.poll(() => held.length).toBe(1);
+
+  // The room's maker renames it: the frame goes to the channel's topic, which no socket of the page is on.
+  const renamed = `${made.name}-renamed`;
+  await api('carol').patch(`/api/channels/${made.id}`, { name: renamed });
+  release();
+
+  await expect(page.getByRole('heading', { level: 1, name: renamed })).toBeVisible();
+  await expect(await navLink(page, renamed)).toBeVisible();
+});
