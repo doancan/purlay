@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useApi } from '../../data/api-provider';
 import { keys } from '../../data/keys';
 import { useMembers } from '../../data/queries';
-import { useEngine, usePresenceEpoch } from '../../realtime/realtime-provider';
+import { useConnectedOnce, useEngine, usePresenceEpoch } from '../../realtime/realtime-provider';
 import { useWorkspace } from './workspace';
 
 export const PresenceReader = (): null => {
@@ -22,6 +22,7 @@ export const PresenceReader = (): null => {
   const engine = useEngine();
   const { workspace } = useWorkspace();
   const epoch = usePresenceEpoch();
+  const connected = useConnectedOnce();
   const members = useMembers(workspace.id);
   // Who is in it, not when that was read: a reconnect reads the members again, and the same people
   // must not read presence at once — the grace after it is what keeps a restarted node's team on.
@@ -44,7 +45,9 @@ export const PresenceReader = (): null => {
     gcTime: 0,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    enabled: members.data !== undefined,
+    // Not before the socket has opened: presence frames are heard from then, so a snapshot read earlier
+    // has a gap before it in which somebody coming or going is in neither. No socket, no dots.
+    enabled: members.data !== undefined && connected,
   });
 
   // Somebody who left the workspace is never told of again (D-136 §1): what was heard of them goes,

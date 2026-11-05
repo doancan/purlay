@@ -500,15 +500,21 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.channels });
     // An incident moved while away (D-137): its frame went to a socket that was down.
     void client.invalidateQueries({ queryKey: families.incident });
-    // So did a notification's, on the person's own topic (D-106).
-    void client.invalidateQueries({ queryKey: families.notifications });
-    // And what the person saved or let go on another device (D-128), on the same topic.
-    void client.invalidateQueries({ queryKey: families.saved });
-    // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
-    // the person's own topic, which a socket that was down never hears (D-124).
-    void client.invalidateQueries({ queryKey: keys.me });
-    // And a profile changed while away (D-131), which no frame will now say.
-    void client.invalidateQueries({ queryKey: families.members });
+  };
+
+  /**
+   * What the person's own topic says, read again: a notification (D-106), what they saved or let go on
+   * another device (D-128), a workspace's name, their role or Deep Work (D-124) and a profile (D-131).
+   * Their frames go to a socket that is open, so each was read before the socket was, or while it was
+   * down, and no frame says it moved. The API has no version to ask, so the cached reads themselves are
+   * read again — only those that hold data, once per open, never on a timer.
+   */
+  const readUserTopicAgain = (): void => {
+    // Only the memberships: what is under `me` beside them (quiet hours, missed mail) has no frame.
+    void client.invalidateQueries({ queryKey: keys.me, exact: true });
+    readAgain(client, families.members);
+    readAgain(client, families.notifications);
+    readAgain(client, families.saved);
   };
 
   /** Waits on the injected schedule; false when the page stopped meanwhile. */
@@ -805,6 +811,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     }
     forgetPresence?.();
     forgetPresence = null;
+    // Whatever the page read before this open may have moved since: the first open owes it as a reopen does.
+    readUserTopicAgain();
     // The first open is the page loading; every later one is a return from a gap.
     if (opened || resumeOnOpen) {
       resync();
