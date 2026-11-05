@@ -242,8 +242,10 @@ chat the team already uses.
 - **Making one** is an owner's or an admin's: **Invite people…** in the workspace menu opens a dialog
   with **Make a link**, the link once made with **Copy**, and a way to the links still open — who made
   each and until when, each with **Revoke** — on the Invitations page. A member does not see the entry.
-- **By email** (D-179 §5), only where the server can send mail (the same answer the sign-in screen
-  reads, `GET /api/auth/methods`; without it, or until it has answered, the dialog is exactly the above).
+- **By email** (D-179 §5), from both the dialog and Settings → Invitations, where the server can send
+  mail (the same answer the sign-in screen reads, `GET /api/auth/methods`). While that answer loads,
+  the form says it is checking; a failure offers **Retry**, and a server without mail says to share a
+  link instead. Making a link remains available in all three states.
   An **Email addresses** field above the link takes addresses as chips: Enter or a comma, or a paste of
   several, makes each a chip; × or Backspace on an empty field removes one; an address typed again, in any
   case, is one chip, and at most twenty are taken. A chip that is not an address stays, red with a glyph
@@ -263,6 +265,15 @@ chat the team already uses.
   name), the workspace, an **Accept the invitation** button whose link carries the token after `#`, until
   when it works, and that it can be ignored if unexpected; its subject is fixed text, and the names in it
   are cut, stripped of line breaks and of anything that reads as a web address.
+  Both entry points use the same form and result wording. Once a link is made, **Make another link**
+  makes a separate invitation without leaving the screen; a note says previous links stay open until
+  expiry or revocation. Closing the dialog forgets its one-time token, including a response that arrives
+  after it closes.
+- **Managing links**, on Settings → Invitations, lists every open link, newest first, with **Load older
+  links** to continue by cursor. A failed older read keeps the rows already loaded and offers the same
+  action to try again. **Revoke** is busy for that row while it asks; a success removes the row and says
+  *Link revoked*. If that is the link in the copy field, the field is removed too. A failed refresh after
+  a successful revocation keeps the revoked row removed and offers **Retry** beside the refresh error.
 
 **Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
 with a role each: a labelled select where the person may change it, the role in words where they may
@@ -367,6 +378,8 @@ it. On a narrow window the navigation opens as the sidebar does.
 
 - **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away; and
   the **Name**, with its own Save, where it is the person's — an account GitHub made shows GitHub's (D-235).
+  During a save, the fields and the device-time-zone shortcut are held. Changing the profile's zone updates
+  quiet hours on that clock immediately; a profile refreshed after a change on another device does the same.
 - **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
 - **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126,
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
@@ -377,6 +390,9 @@ it. On a narrow window the navigation opens as the sidebar does.
   Then **Quiet hours** (D-234): off, or a start and an end — one earlier than the start runs past midnight, and
   says so — and the days a window starts on, named in the reader's language, read on the clock of the profile's
   time zone, which the card names; with no time zone on the profile it says so and leads to Profile.
+  A failed read offers **Retry**. An empty start or end time is said on the field and cannot save the old
+  value instead; the controls are held while saving. Email and channel-notification switches keep their
+  chosen state while waiting, prevent overlapping writes, and restore the previous value on a refusal.
   **Email** (D-240), only where the server can send mail and the person's address is verified: one check box,
   *Email me about direct messages and mentions I haven't read*, off until checked, applied when it is checked,
   with a sentence saying when a letter goes (fifteen minutes unread, never in Deep Work or quiet hours, at most
@@ -469,7 +485,8 @@ it. On a narrow window the navigation opens as the sidebar does.
   nothing: it has left their sidebar, and a tab open on it shows *not found*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
-- **Invitations** — making a link and the links still open, as *Invitations* below says.
+- **Invitations** — the email invitation form and link creation, shared with **Invite people…**;
+  the links still open, with pagination and revocation, as *Invitations* above says.
 - **Integrations** — the GitHub connection, as below; and, only where the server has a GitHub App (D-246), a
   **GitHub issues** card: *Not connected* or *Installed on acme since …* (*Suspended* when GitHub says so, with a
   sentence that nothing is written to it), **Connect on GitHub** (or **Connect again**) — a full navigation to
@@ -1098,6 +1115,17 @@ textarea) and the webhook secret, with the callback and webhook addresses to cop
 itself before it is kept, with `key-rejected` and `app-mismatch` said in the wizard's three parts; its secrets
 never shown again; **Disconnect** asks once and says that links, the workspace token and feeds stay — over one query
 that is read again after every change and never polled:
+
+Each policy group and each connection form holds its controls until its request finishes. Accepted
+policy, provider connection/disconnection and workspace-creator changes stay reflected even if refreshing
+the page's data fails; that failure offers **Retry** alongside the last known settings. Only the public
+view of a connection is cached, never its credentials. Cancelling a connection form forgets its secrets
+and unsaved fields; opening a replacement starts from the latest public settings. Each disconnect
+question starts afresh, including after a last-channel refusal was cancelled. The workspace-creator
+choices follow refreshed settings until an unsaved edit is made. Accounts kept from a previous search
+cannot be suspended while the new results are loading, and an account change holds the other account
+actions until it finishes. A failed account-list read asks to retry reading, without claiming a preceding
+account change was undone.
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
   sentence on what that stops), the callback address with **Copy**, **Replace credentials** (or **Connect

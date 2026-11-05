@@ -46,6 +46,7 @@ export const GitHubCard = ({
   const filled = clientId.trim() !== '' && clientSecret.trim() !== '';
 
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     setOutcome(null);
@@ -59,7 +60,7 @@ export const GitHubCard = ({
         setClientSecret('');
         setOpen(false);
         setOutcome({ ok: true, words: t('settings.server.github.saved') });
-        await refresh();
+        await refresh({ github: { clientId: clientId.trim(), clientSecret: { set: true } } });
       }
     } catch (caught) {
       setFailure(caught);
@@ -118,6 +119,7 @@ export const GitHubCard = ({
               }}
             >
               <TextField
+                readOnly={busy}
                 label={t('setup.github.clientId')}
                 value={clientId}
                 autoComplete="off"
@@ -131,6 +133,7 @@ export const GitHubCard = ({
                 }}
               />
               <TextField
+                readOnly={busy}
                 label={t('setup.github.clientSecret')}
                 type="password"
                 value={clientSecret}
@@ -147,7 +150,7 @@ export const GitHubCard = ({
               />
               {failed !== null && <ProbeFailure result={failed} />}
               {failure !== null && <ChangeFailure failure={failure} />}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" variant="primary" busy={busy} disabled={!filled || busy}>
                   {failed === null ? t('settings.server.github.save') : t('setup.tryAgain')}
                 </Button>
@@ -157,6 +160,8 @@ export const GitHubCard = ({
                     disabled={busy}
                     onClick={() => {
                       setOpen(false);
+                      setClientId(github?.clientId ?? '');
+                      setClientSecret('');
                       setResult(null);
                       setFailure(null);
                     }}
@@ -183,7 +188,12 @@ export const GitHubCard = ({
         <Inset className="flex-row flex-wrap items-center gap-2">
           <Button
             variant={github === null ? 'primary' : 'secondary'}
+            disabled={busy}
             onClick={() => {
+              setClientId(github?.clientId ?? '');
+              setClientSecret('');
+              setResult(null);
+              setFailure(null);
               setOpen(true);
               setOutcome(null);
             }}
@@ -212,6 +222,8 @@ export const GitHubCard = ({
         title={t('settings.server.github.disconnectTitle')}
         body={t('settings.server.github.disconnectBody')}
         done={() => {
+          setOpen(false);
+          setClientSecret('');
           setOutcome({ ok: true, words: t('settings.server.github.disconnected') });
         }}
       />
@@ -241,6 +253,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
   const filled = smtpUrl.trim() !== '' && from.trim() !== '';
 
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     setOutcome(null);
@@ -255,7 +268,14 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
         setSmtpUrl('');
         setOpen(false);
         setOutcome({ ok: true, words: t('settings.server.email.saved') });
-        await refresh();
+        const address = new URL(smtpUrl.trim());
+        await refresh({
+          smtp: {
+            address: { set: true, host: `${address.protocol}//${address.host}` },
+            from: from.trim(),
+            allowPlaintext,
+          },
+        });
       }
     } catch (caught) {
       setFailure(caught);
@@ -312,6 +332,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
               }}
             >
               <MailServerField
+                readOnly={busy}
                 value={smtpUrl}
                 invalid={field === 'smtpUrl'}
                 onChange={(value) => {
@@ -320,6 +341,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
                 }}
               />
               <TextField
+                readOnly={busy}
                 label={t('setup.email.from')}
                 hint={t('setup.email.fromHint')}
                 value={from}
@@ -334,6 +356,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
               />
               <label className="flex items-start gap-3">
                 <Checkbox
+                  disabled={busy}
                   checked={allowPlaintext}
                   onChange={(event) => {
                     setAllowPlaintext(event.target.checked);
@@ -351,7 +374,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
               </p>
               {failed !== null && <ProbeFailure result={failed} />}
               {failure !== null && <ChangeFailure failure={failure} />}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" variant="primary" busy={busy} disabled={!filled || busy}>
                   {failed === null ? t('settings.server.email.save') : t('setup.tryAgain')}
                 </Button>
@@ -361,6 +384,9 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
                     disabled={busy}
                     onClick={() => {
                       setOpen(false);
+                      setSmtpUrl('');
+                      setFrom(smtp?.from ?? '');
+                      setAllowPlaintext(smtp?.allowPlaintext ?? false);
                       setResult(null);
                       setFailure(null);
                     }}
@@ -387,7 +413,13 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
         <Inset className="flex-row flex-wrap items-center gap-2">
           <Button
             variant={smtp === null ? 'primary' : 'secondary'}
+            disabled={busy}
             onClick={() => {
+              setSmtpUrl('');
+              setFrom(smtp?.from ?? '');
+              setAllowPlaintext(smtp?.allowPlaintext ?? false);
+              setResult(null);
+              setFailure(null);
               setOpen(true);
               setOutcome(null);
             }}
@@ -416,6 +448,8 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
         title={t('settings.server.email.disconnectTitle')}
         body={t('settings.server.email.disconnectBody')}
         done={() => {
+          setOpen(false);
+          setSmtpUrl('');
           setOutcome({ ok: true, words: t('settings.server.email.disconnected') });
         }}
       />

@@ -40,6 +40,7 @@ import { isTransient } from './errors';
 import { claimFor } from './browser-storage';
 import { useClientStorage } from './storage-provider';
 import { keys } from './keys';
+import { profileTimeZoneChanged } from './cache';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -56,6 +57,9 @@ export const useMe = (): UseQueryResult<MeResponse> => {
       const before = client.getQueryData<MeResponse>(keys.me);
       if (before !== undefined && before.user.id !== me.user.id) {
         client.removeQueries({ predicate: (query) => query.queryKey[0] !== keys.me[0] });
+      }
+      if (before?.user.id === me.user.id && before.profile.timeZone !== me.profile.timeZone) {
+        profileTimeZoneChanged(client, me.profile.timeZone);
       }
       // Before the answer reaches a screen, so no composer reads somebody else's draft (#694).
       claimFor(storage, me.user.id);

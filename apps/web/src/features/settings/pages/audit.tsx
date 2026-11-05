@@ -511,6 +511,21 @@ export const AuditPage = (): React.JSX.Element => {
           )}
           {/* An older page that failed says so where it was asked for: silent, "the end of the log" and
             "the request failed" looked the same. The button below asks again. */}
+          {trail.isError && trail.data !== undefined && !trail.isFetchNextPageError && (
+            <div className="flex flex-wrap items-center gap-3 border-t-hairline border-border-subtle px-6 py-3 max-narrow:px-4">
+              <p role="alert" className="min-w-0 flex-1 text-label text-danger-text">
+                {t('audit.refreshFailed')}
+              </p>
+              <Button
+                busy={trail.isFetching}
+                onClick={() => {
+                  void trail.refetch();
+                }}
+              >
+                {t('common.retry')}
+              </Button>
+            </div>
+          )}
           {trail.isFetchNextPageError && (
             <p
               role="alert"
