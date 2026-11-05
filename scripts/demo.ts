@@ -6,6 +6,7 @@
  *   bun run demo -- --no-build         serve the build that is already in apps/web/dist
  *   bun run demo -- --port 4200 --db purlay_demo_two --manifest /tmp/world.json
  *   bun run demo -- --modules none     serve the core alone (D-250): the seed is still made with every module
+ *   bun run demo -- --tls-cert c.pem --tls-key k.pem   serve https with that certificate (the browser tests' WebKit)
  *
  * **It can only ever touch a database it created.** The name must start with
  * `purlay_demo` or `purlay_e2e`, and it is dropped and recreated on every start — so
@@ -58,7 +59,17 @@ const demoUrl = ((): string => {
   url.pathname = `/${databaseName}`;
   return url.toString();
 })();
-const origin = `http://localhost:${String(port)}`;
+// `--tls-cert <file> --tls-key <file>`: the same origin over https, for an engine that will not carry a `Secure`
+// cookie over http (WebKit on Linux). The API behind it stays on http; only the browser's side is https. The
+// caller made the certificate, so the caller can also trust it.
+const certPath = flag('--tls-cert');
+const keyPath = flag('--tls-key');
+if ((certPath === undefined) !== (keyPath === undefined)) {
+  process.stderr.write('--tls-cert and --tls-key go together\n');
+  process.exit(1);
+}
+const tls = certPath !== undefined;
+const origin = `${tls ? 'https' : 'http'}://localhost:${String(port)}`;
 
 const say = (line: string): void => {
   process.stdout.write(`${line}\n`);
@@ -193,10 +204,15 @@ if (!(await ready())) {
 }
 
 // ── 5. One origin ────────────────────────────────────────────────────────────
+const certificate = ((): { cert: string; key: string } | undefined => {
+  if (certPath === undefined || keyPath === undefined) return undefined;
+  return { cert: readFileSync(certPath, 'utf8'), key: readFileSync(keyPath, 'utf8') };
+})();
 const front = startFront({
   api: `http://localhost:${String(apiPort)}`,
   sessions,
   port,
+  ...(certificate === undefined ? {} : { tls: certificate }),
 });
 
 // Parsed by the browser tests' web-server wait; keep it one line.
@@ -205,7 +221,9 @@ say('');
 say('  Sign in as a demo person (GitHub is not reachable from here):');
 for (const name of Object.keys(sessions)) say(`    ${origin}/__demo/login?as=${name}`);
 say('');
-say('  Chromium or Firefox: the session cookie is Secure, which they accept on localhost.');
+say(
+  '  Chromium or Firefox: the session cookie is Secure, which they accept on localhost over http.',
+);
 say('  Ctrl-C stops everything. The database is thrown away on the next start.');
 
 const stop = async (): Promise<void> => {

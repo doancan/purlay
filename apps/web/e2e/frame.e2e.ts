@@ -5,15 +5,13 @@
  * application the browser no longer provides on its own.
  */
 import { expect, focused, tabTo, test } from './fixtures';
+import { onEngine, WEBKIT_TAB } from './support';
 
 test.describe('the keyboard', () => {
   test('the first Tab finds the skip link, and following it moves focus to main', async ({
     page,
   }) => {
-    test.skip(
-      ['webkit'].includes(test.info().project.name),
-      "macOS WebKit's Tab moves between form controls only unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
-    );
+    test.skip(onEngine(test.info(), 'webkit'), WEBKIT_TAB);
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.keyboard.press('Tab');
@@ -25,10 +23,7 @@ test.describe('the keyboard', () => {
   test('every control on the sign-in screen is reachable by Tab, in a handful of presses', async ({
     page,
   }) => {
-    test.skip(
-      ['webkit'].includes(test.info().project.name),
-      "macOS WebKit's Tab moves between form controls only unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
-    );
+    test.skip(onEngine(test.info(), 'webkit'), WEBKIT_TAB);
     await page.goto('/sign-in');
     const presses = await tabTo(page, page.getByRole('link', { name: 'Continue with GitHub' }));
     expect(presses).toBeLessThanOrEqual(3);
@@ -79,7 +74,7 @@ test.describe('the theme', () => {
     page,
   }, info) => {
     test.skip(
-      ['webkit', 'firefox'].includes(test.info().project.name),
+      onEngine(test.info(), 'webkit', 'firefox'),
       'only Chromium reports a first-paint performance entry (docs/spikes/cross-browser.md)',
     );
     await page.addInitScript(() => {

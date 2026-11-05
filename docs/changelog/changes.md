@@ -26,6 +26,7 @@ have it.
 ### Added
 
 - **Operations** — A node lets only so many sockets replay at once after a reconnect, `SOCKET_REPLAY_CONCURRENCY` (50 unless set); the rest wait their turn and see a later answer, which holds the memory of a mass reconnect down; one that waits past fifteen seconds is told the service is busy and sends again (D-84)
+- **Operations** — CI runs the browser suite on Safari's engine (WebKit) as a job of its own, reported on every pull request that can move a screen and not yet required; what the engine cannot do is skipped in the test, with why (D-61)
 - **Operations** — `SOCKET_MAX_CONNECTIONS` sets how many WebSockets one node holds open before it answers `503`; unset stays 2000, and the deployment guide says to size it by measured fan-out (D-84)
 - **Operations** — `REDIS_KEY_PREFIX` names the namespace of every key and of the bus channel in the shared Redis, so two deployments on one Redis no longer hear each other's frames or share presence and rate limits; unset keeps the names as they were (D-201)
 - **Operations** — Run Purlay on a server managed with Dockhand, behind Nginx Proxy Manager, from one compose file (`docker-compose.dockhand.yml`, D-258)

@@ -8,7 +8,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { shellReady } from './support';
+import { onEngine, shellReady, WEBKIT_TAB } from './support';
 
 /** What the focused element shows, measured in the page: a ring on it or on one of its two parents. */
 const ringOfFocused = async (
@@ -69,8 +69,8 @@ test.describe('focus', () => {
     api,
   }) => {
     test.skip(
-      ['webkit', 'firefox'].includes(test.info().project.name),
-      "past the last element Firefox under Playwright keeps focus on it rather than going round, and macOS WebKit's Tab skips links (docs/spikes/cross-browser.md)",
+      onEngine(test.info(), 'webkit', 'firefox'),
+      `past the last element Firefox under Playwright keeps focus on it rather than going round (docs/spikes/cross-browser.md); and ${WEBKIT_TAB}`,
     );
     const made = await room({ members: ['dogancan', 'carol'] });
     const root = await api('carol').say(made.id, 'a question with an answer?');
@@ -118,10 +118,7 @@ test.describe('focus', () => {
     room,
     api,
   }) => {
-    test.skip(
-      ['webkit'].includes(test.info().project.name),
-      "macOS WebKit's Tab skips links and buttons unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
-    );
+    test.skip(onEngine(test.info(), 'webkit'), WEBKIT_TAB);
     const made = await room({ members: ['dogancan', 'carol'] });
     const older = await api('carol').say(
       made.id,
