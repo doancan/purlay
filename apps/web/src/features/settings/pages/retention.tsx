@@ -57,7 +57,7 @@ export const RetentionCard = (): React.JSX.Element => {
 
   const save = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
-    if (next === undefined) return;
+    if (busy || next === undefined || next === now) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -124,6 +124,7 @@ export const RetentionCard = (): React.JSX.Element => {
           <>
             <SettingsRow label={t('retention.label')} htmlFor={selectId} fill>
               <Select
+                disabled={busy}
                 id={selectId}
                 className="w-full"
                 value={next === null ? FOREVER : String(next)}

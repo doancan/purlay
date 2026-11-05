@@ -25,7 +25,7 @@ import { person } from '../../../testing/user';
 import { SetupFailure } from '../../setup/client';
 import { REASONS, reasonWords } from '../../setup/errors';
 import type { ServerClient } from '../server-client';
-import { ServerClientProvider } from '../server-context';
+import { SERVER_SETTINGS_KEY, ServerClientProvider } from '../server-context';
 
 installDom();
 
@@ -623,6 +623,24 @@ describe('Settings → Server, the forms and what stops them', () => {
     await person().type(email.getByLabelText('Sender'), 'purlay@example.test');
     return { view, email };
   };
+
+  test('connection credentials cannot change while their probe is in flight', async () => {
+    for (const kind of ['github', 'smtp'] as const) {
+      const client = aClient({ [kind]: () => new Promise(() => undefined) });
+      const opened = kind === 'github' ? await openGithub(client) : await openEmail(client);
+      const scope = 'github' in opened ? opened.github : opened.email;
+      const submit = scope
+        .getAllByRole<HTMLButtonElement>('button')
+        .find((button) => button.type === 'submit');
+      if (submit === undefined) throw new Error('missing connection submit');
+      await person().click(submit);
+      expect(
+        scope.getByLabelText<HTMLInputElement>(kind === 'github' ? 'Client secret' : 'Mail server')
+          .readOnly,
+      ).toBe(true);
+      opened.view.unmount();
+    }
+  });
 
   test('a GitHub try that never reached the server says so, and keeps what was typed', async () => {
     const { view, github } = await openGithub(
@@ -1278,6 +1296,42 @@ describe('Settings → Server → Accounts (D-233)', () => {
     view.unmount();
   });
 
+  test('an account suspension cannot be cancelled or overlap another account action while pending', async () => {
+    const view = await render(
+      aClient({
+        accounts: () => Promise.resolve([ADA, GRACE]),
+        suspend: () => new Promise(() => undefined),
+      }),
+    );
+    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
+    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
+    expect(
+      rowOf(view, 'Ada Lovelace').getByRole<HTMLButtonElement>('button', { name: 'Cancel' })
+        .disabled,
+    ).toBe(true);
+    expect(
+      rowOf(view, 'Grace Hopper').getByRole<HTMLButtonElement>('button', {
+        name: 'Lift suspension',
+      }).disabled,
+    ).toBe(true);
+    view.unmount();
+  });
+
+  test('accounts left over from a previous search cannot be suspended while new results are pending', async () => {
+    const view = await render(
+      aClient({
+        accounts: (words) => (words === '' ? Promise.resolve([ADA]) : new Promise(() => undefined)),
+      }),
+    );
+    await person().type(card(view, 'Accounts').getByRole('searchbox'), 'grace');
+    await settle();
+    expect(
+      rowOf(view, 'Ada Lovelace').getByRole<HTMLButtonElement>('button', { name: 'Suspend' })
+        .disabled,
+    ).toBe(true);
+    view.unmount();
+  });
+
   test('lifting asks nothing; a refusal is said on the card', async () => {
     const lifted: string[] = [];
     const view = await render(
@@ -1569,6 +1623,332 @@ describe('Settings → Server — the GitHub App (D-246)', () => {
     await person().click(dialog.getByRole('button', { name: 'Disconnect' }));
     await settle();
     expect(disconnected).toBe('github-app');
+    view.unmount();
+  });
+});
+
+describe('Settings → Server pending policies', () => {
+  test('a pending sign-up policy holds the radio group until its request finishes', async () => {
+    const view = await render(aClient({ policy: () => new Promise(() => undefined) }));
+    const group = within(await view.findByRole('radiogroup', { name: 'Sign-up policy' }));
+    const radios = group.getAllByRole<HTMLInputElement>('radio');
+    const unselected = radios.find((radio) => !radio.checked);
+    if (unselected === undefined) throw new Error('no alternative policy');
+    await person().click(unselected);
+    expect(radios.every((radio) => radio.disabled)).toBe(true);
+    view.unmount();
+  });
+
+  test('a pending sign-in rule holds both related groups', async () => {
+    const view = await render(aClient({ policy: () => new Promise(() => undefined) }));
+    await person().click(card(view, 'How people sign in').getByRole('radio', { name: /Required/ }));
+    const radios = card(view, 'How people sign in').getAllByRole<HTMLInputElement>('radio');
+    expect(radios.every((radio) => radio.disabled)).toBe(true);
+    view.unmount();
+  });
+
+  test('session lifetime choices cannot overlap while saving', async () => {
+    const view = await render(aClient({ policy: () => new Promise(() => undefined) }));
+    const idle = card(view, 'How long a session lasts').getByLabelText<HTMLSelectElement>(
+      'Sign out when unused for',
+    );
+    await person().selectOptions(idle, '24');
+    expect(idle.disabled).toBe(true);
+    expect(
+      card(view, 'How long a session lasts').getByLabelText<HTMLSelectElement>(
+        'Sign in again after',
+      ).disabled,
+    ).toBe(true);
+    view.unmount();
+  });
+
+  test('a saved policy remains selected when refreshing fails and a visible Retry recovers', async () => {
+    let failed = false;
+    let answer = anAnswer();
+    const view = await render(
+      aClient({
+        settings: () =>
+          failed
+            ? Promise.reject(new SetupFailure(503, 'NETWORK', 'offline'))
+            : Promise.resolve(answer),
+        policy: (change) => {
+          answer = { ...answer, settings: { ...answer.settings, ...change } };
+          failed = true;
+          return Promise.resolve();
+        },
+      }),
+    );
+    const group = within(await view.findByRole('radiogroup', { name: 'Sign-up policy' }));
+    const unselected = group
+      .getAllByRole<HTMLInputElement>('radio')
+      .find((radio) => !radio.checked);
+    if (unselected === undefined) throw new Error('no alternative policy');
+    await person().click(unselected);
+    await settle();
+    expect(unselected.checked).toBe(true);
+    expect(main(view).queryByText('Nothing was changed. Try again.') === null).toBe(true);
+    expect(main(view).getByRole('button', { name: 'Retry' })).toBeDefined();
+    failed = false;
+    await person().click(main(view).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(main(view).queryByRole('button', { name: 'Retry' })).toBeNull();
+    view.unmount();
+  });
+});
+
+describe('Settings → Server confirmed changes and dismissed forms', () => {
+  test('replacement starts with the latest public credentials after another settings refresh', async () => {
+    const view = await render(aClient({ settings: () => Promise.resolve(CONNECTED) }));
+    act(() => {
+      view.world.client.setQueryData(SERVER_SETTINGS_KEY, {
+        ...CONNECTED,
+        settings: {
+          ...CONNECTED.settings,
+          github: { clientId: 'latest-client', clientSecret: { set: true } },
+        },
+      });
+    });
+    await settle();
+    const section = card(view, 'Sign in with GitHub');
+    await person().click(section.getByRole('button', { name: 'Replace credentials' }));
+    expect(section.getByLabelText<HTMLInputElement>('Client ID').value).toBe('latest-client');
+    view.unmount();
+  });
+
+  test('workspace creators follow refreshed settings until there is an unsaved edit', async () => {
+    const view = await render(aClient());
+    const update = async (kind: 'first' | 'anyone'): Promise<void> => {
+      act(() => {
+        view.world.client.setQueryData(SERVER_SETTINGS_KEY, {
+          ...anAnswer(),
+          settings: { ...anAnswer().settings, workspaceCreators: { kind } },
+        });
+      });
+      await settle();
+    };
+    await update('anyone');
+    const section = card(view, 'Who can create workspaces');
+    expect(section.getByRole<HTMLInputElement>('radio', { name: /Anyone/ }).checked).toBe(true);
+    await person().click(section.getByRole('radio', { name: /Only these GitHub accounts/ }));
+    await person().type(section.getByLabelText('GitHub logins'), 'ada');
+    await update('first');
+    expect(section.getByLabelText<HTMLInputElement>('GitHub logins').value).toBe('ada');
+    view.unmount();
+  });
+
+  test('repairing an unreadable credential clears its reentry warning even if the refresh fails', async () => {
+    let saved = false;
+    const view = await render(
+      aClient({
+        settings: () =>
+          saved
+            ? Promise.reject(new SetupFailure(503, 'NETWORK', 'offline'))
+            : Promise.resolve(anAnswer({ needsReentry: ['github'] })),
+        github: () => {
+          saved = true;
+          return Promise.resolve({ ok: true });
+        },
+      }),
+    );
+    const section = card(view, 'Sign in with GitHub');
+    await person().type(section.getByLabelText('Client ID'), 'new-client');
+    await person().type(section.getByLabelText('Client secret'), 'new-secret');
+    await person().click(section.getByRole('button', { name: 'Try the connection and save' }));
+    await settle();
+    expect(section.queryByText(en['settings.server.reentry']) === null).toBe(true);
+    expect(section.queryByLabelText('Client secret') === null).toBe(true);
+    view.unmount();
+  });
+
+  test.each([
+    ['Sign in with GitHub', 'Connect GitHub', ['Client secret']],
+    ['Sign in with Google', 'Connect Google', ['Client secret']],
+    ['Single sign-on', 'Connect single sign-on', ['Client secret']],
+    ['E-mail', 'Connect a mail server', ['Mail server']],
+    [
+      'GitHub App for issues',
+      'Connect the GitHub App',
+      ['Client secret', 'Private key', 'Webhook secret'],
+    ],
+  ] as const)('cancelling %s forgets its credentials', async (title, connect, secrets) => {
+    const view = await render(aClient());
+    const section = card(view, title);
+    await person().click(section.getByRole('button', { name: connect }));
+    for (const label of secrets)
+      await person().type(section.getByLabelText(label), 'do-not-retain');
+    await person().click(section.getByRole('button', { name: 'Cancel' }));
+    await person().click(section.getByRole('button', { name: connect }));
+    for (const label of secrets) {
+      expect(section.getByLabelText<HTMLInputElement | HTMLTextAreaElement>(label).value).toBe('');
+    }
+    view.unmount();
+  });
+
+  test('a cancelled last-channel refusal is weighed again when the dialog is reopened', async () => {
+    const confirmations: boolean[] = [];
+    const view = await render(
+      aClient({
+        settings: () => Promise.resolve(CONNECTED),
+        disconnect: (_channel, confirm) => {
+          confirmations.push(confirm);
+          return Promise.reject(
+            new SetupFailure(409, 'SERVER_CHANGE_REFUSED', 'no', null, {}, null, 'last-channel'),
+          );
+        },
+      }),
+    );
+    const email = card(view, 'E-mail');
+    await person().click(email.getByRole('button', { name: 'Disconnect' }));
+    await person().click(
+      within(view.getByRole('dialog')).getByRole('button', { name: 'Disconnect' }),
+    );
+    await settle();
+    expect(
+      within(view.getByRole('dialog')).queryByRole('button', { name: 'Disconnect anyway' }) !==
+        null,
+    ).toBe(true);
+    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    await person().click(email.getByRole('button', { name: 'Disconnect' }));
+    expect(
+      within(view.getByRole('dialog')).queryByRole('button', { name: 'Disconnect anyway' }) ===
+        null,
+    ).toBe(true);
+    await person().click(
+      within(view.getByRole('dialog')).getByRole('button', { name: 'Disconnect' }),
+    );
+    expect(confirmations).toEqual([false, false]);
+    view.unmount();
+  });
+
+  test.each(['github', 'google', 'oidc', 'smtp', 'githubApp'] as const)(
+    'an accepted %s connection survives a failed refresh without caching secrets',
+    async (kind) => {
+      let saved = false;
+      const accepted = (): Promise<ProbeResult> => {
+        saved = true;
+        return Promise.resolve({ ok: true });
+      };
+      const view = await render(
+        aClient({
+          settings: () =>
+            saved
+              ? Promise.reject(new SetupFailure(503, 'NETWORK', 'offline'))
+              : Promise.resolve(anAnswer()),
+          [kind]: accepted,
+        }),
+      );
+      const title = {
+        github: 'Sign in with GitHub',
+        google: 'Sign in with Google',
+        oidc: 'Single sign-on',
+        smtp: 'E-mail',
+        githubApp: 'GitHub App for issues',
+      }[kind];
+      const section = card(view, title);
+      const connect = {
+        github: 'Connect GitHub',
+        google: 'Connect Google',
+        oidc: 'Connect single sign-on',
+        smtp: 'Connect a mail server',
+        githubApp: 'Connect the GitHub App',
+      }[kind];
+      await person().click(section.getByRole('button', { name: connect }));
+      const fields =
+        kind === 'smtp'
+          ? {
+              'Mail server': 'smtps://alice:never-cache-this@mail.example.test:465',
+              Sender: 'mail@example.test',
+            }
+          : {
+              'Client ID': 'client-id',
+              'Client secret': 'never-cache-this',
+              ...(kind === 'oidc' ? { Issuer: 'https://id.example.test' } : {}),
+              ...(kind === 'githubApp'
+                ? {
+                    'App ID': '123',
+                    'App slug': 'our-app',
+                    'Private key': 'never-cache-this',
+                    'Webhook secret': 'never-cache-this',
+                  }
+                : {}),
+            };
+      for (const [label, value] of Object.entries(fields))
+        await person().type(section.getByLabelText(label), value);
+      await person().click(
+        section.getByRole('button', {
+          name: kind === 'smtp' ? 'Send a test message and save' : 'Try the connection and save',
+        }),
+      );
+      await settle();
+      expect(section.queryByText('Connected') !== null).toBe(true);
+      const held = view.world.client.getQueryData<ServerSettingsAnswer>(SERVER_SETTINGS_KEY);
+      expect(held?.settings[kind] !== null).toBe(true);
+      expect(JSON.stringify(held).includes('never-cache-this')).toBe(false);
+      if (kind === 'smtp')
+        expect(held?.settings.smtp?.address.host).toBe('smtps://mail.example.test:465');
+      expect(main(view).queryByRole('button', { name: 'Retry' }) !== null).toBe(true);
+      view.unmount();
+    },
+  );
+
+  test('an accepted disconnect remains disconnected when refreshing fails', async () => {
+    let saved = false;
+    const view = await render(
+      aClient({
+        settings: () =>
+          saved
+            ? Promise.reject(new SetupFailure(503, 'NETWORK', 'offline'))
+            : Promise.resolve(CONNECTED),
+        disconnect: () => {
+          saved = true;
+          return Promise.resolve();
+        },
+      }),
+    );
+    const github = card(view, 'Sign in with GitHub');
+    await person().click(github.getByRole('button', { name: 'Disconnect' }));
+    await person().click(
+      within(view.getByRole('dialog')).getByRole('button', { name: 'Disconnect' }),
+    );
+    await settle();
+    expect(github.queryByText('Not connected') !== null).toBe(true);
+    expect(
+      view.world.client.getQueryData<ServerSettingsAnswer>(SERVER_SETTINGS_KEY)?.channels.github,
+    ).toBe(false);
+    view.unmount();
+  });
+
+  test('accepted workspace creators do not offer saving the same change again after a failed refresh', async () => {
+    let saved = false;
+    const view = await render(
+      aClient({
+        settings: () =>
+          saved
+            ? Promise.reject(new SetupFailure(503, 'NETWORK', 'offline'))
+            : Promise.resolve(anAnswer()),
+        creators: () => {
+          saved = true;
+          return Promise.resolve();
+        },
+      }),
+    );
+    const section = card(view, 'Who can create workspaces');
+    await person().click(section.getByRole('radio', { name: /Anyone/ }));
+    await person().click(section.getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(section.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true);
+    view.unmount();
+  });
+
+  test('an account read failure explains that it could not load the list', async () => {
+    const view = await render(
+      aClient({ accounts: () => Promise.reject(new SetupFailure(503, 'NETWORK', 'offline')) }),
+    );
+    const section = card(view, 'Accounts');
+    expect(section.queryByText('Nothing was changed. Try again.') === null).toBe(true);
+    expect(
+      section.queryByText('Could not read the accounts. Retry to get the current list.') !== null,
+    ).toBe(true);
     view.unmount();
   });
 });

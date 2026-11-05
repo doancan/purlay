@@ -208,11 +208,13 @@ export const CopyField = ({
 export const MailServerField = ({
   value,
   invalid,
+  readOnly = false,
   error,
   onChange,
 }: {
   readonly value: string;
   readonly invalid: boolean;
+  readonly readOnly?: boolean;
   /** The server's refusal of the address itself, said under the field. */
   readonly error?: string;
   readonly onChange: (value: string) => void;
@@ -227,6 +229,7 @@ export const MailServerField = ({
           hint={t('setup.email.urlHint')}
           type={reveal ? 'text' : 'password'}
           value={value}
+          readOnly={readOnly}
           autoComplete="off"
           spellCheck={false}
           maxLength={SMTP_URL_MAX}

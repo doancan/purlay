@@ -25,6 +25,7 @@ interface ChoicesProps<V extends string> {
   readonly value: V;
   readonly choices: readonly Choice<V>[];
   readonly onChange: (value: V) => void;
+  readonly disabled?: boolean;
 }
 
 export const Choices = <V extends string>({
@@ -32,12 +33,14 @@ export const Choices = <V extends string>({
   value,
   choices,
   onChange,
+  disabled = false,
 }: ChoicesProps<V>): React.JSX.Element => {
   const name = useId();
   return (
     <div
       role="radiogroup"
       aria-label={label}
+      aria-busy={disabled || undefined}
       className={cn(
         'grid w-full gap-3 max-narrow:grid-cols-1',
         // Four fit one row (the themes); a fifth would leave one alone on the next.
@@ -57,6 +60,7 @@ export const Choices = <V extends string>({
             )}
           >
             <Radio
+              disabled={disabled}
               name={name}
               value={choice.value}
               checked={chosen}

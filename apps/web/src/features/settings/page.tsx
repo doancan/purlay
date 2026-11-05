@@ -157,12 +157,12 @@ export const SettingsRow = ({
     </div>
     <div
       className={cn(
-        'flex min-w-0 items-center gap-2',
+        'flex min-w-0 items-center gap-2 max-narrow:w-full',
         wide
           ? 'w-full'
           : fill
             ? 'w-full max-w-field shrink-0 max-narrow:max-w-none'
-            : 'shrink-0 justify-end max-narrow:justify-start',
+            : 'max-w-field shrink-0 justify-end max-narrow:max-w-none max-narrow:justify-start',
       )}
     >
       {children}
@@ -238,7 +238,7 @@ export const SettingsTextRow = ({
           aria-invalid={error === undefined ? undefined : true}
           aria-describedby={describedBy === '' ? undefined : describedBy}
           className={cn(
-            'h-control w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted max-narrow:h-touch',
+            'h-control w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal',
             error === undefined ? 'border-border-strong' : 'border-danger',
             className,
           )}

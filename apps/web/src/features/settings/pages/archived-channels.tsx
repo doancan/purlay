@@ -6,6 +6,7 @@
  * A name taken since it was archived is refused, and said: the other channel is renamed first.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ArchivedChannel } from '@purlay/types';
 import { useState } from 'react';
 import { useApi } from '../../../data/api-provider';
 import { isApiError } from '../../../data/errors';
@@ -33,9 +34,14 @@ export const ArchivedChannelsCard = (): React.JSX.Element => {
   });
 
   const restore = async (channelId: string, name: string): Promise<void> => {
+    if (restoring !== null) return;
     setRestoring(channelId);
     try {
       await api.restoreChannel(channelId);
+      await client.cancelQueries({ queryKey: keys.archivedChannels(workspace.id) });
+      client.setQueryData<ArchivedChannel[]>(keys.archivedChannels(workspace.id), (held) =>
+        held?.filter((channel) => channel.id !== channelId),
+      );
       show({ message: t('settings.archived.restored', { channel: `#${name}` }) });
     } catch (failure) {
       show({
@@ -45,11 +51,11 @@ export const ArchivedChannelsCard = (): React.JSX.Element => {
             : `${t('settings.archived.failed', { channel: `#${name}` })} ${describe(failure)}`,
       });
     } finally {
-      setRestoring(null);
       await Promise.all([
         client.invalidateQueries({ queryKey: keys.archivedChannels(workspace.id) }),
         client.invalidateQueries({ queryKey: keys.channels(workspace.id) }),
       ]);
+      setRestoring(null);
     }
   };
 

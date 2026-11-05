@@ -147,7 +147,7 @@ export const AddressChips = ({
               add(`${draft} ${text}`);
             }
           }}
-          className="h-control min-w-0 flex-1 basis-1/3 bg-transparent px-2 text-body text-ink outline-none placeholder:text-ink-muted max-narrow:h-touch"
+          className="h-control min-w-0 flex-1 basis-1/3 bg-transparent px-2 text-body text-ink outline-none placeholder:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
         />
       </div>
       <p id={hintId} className="text-caption text-ink-muted">
