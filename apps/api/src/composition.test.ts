@@ -12,6 +12,7 @@ import {
 } from './composition';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
+import type { JobWork } from './modules/jobs/jobs';
 import type { AttachmentReader } from './modules/attachments/readable';
 import { noPushNotices, type PushNotices } from './modules/push/notices';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
@@ -19,7 +20,13 @@ import { attachmentNotFound, AppError } from './platform/errors';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
 
 const another: BundledModule = {
-  manifest: { id: 'other', requires: [], optional: [], provides: [] },
+  manifest: {
+    id: 'other',
+    requires: [],
+    optional: [],
+    provides: [],
+    budget: { none: 'a test module' },
+  },
   workspaceChannels: { ...noWorkspaceChannels },
 };
 
@@ -48,7 +55,7 @@ const outcomeOf = async (reading: Promise<{ readonly id: string }>): Promise<str
 };
 
 const moduleReading = (id: string, reader: AttachmentReader): BundledModule => ({
-  manifest: { id, requires: [], optional: [], provides: [] },
+  manifest: { id, requires: [], optional: [], provides: [], budget: { none: 'a test module' } },
   readAttachment: reader,
 });
 
@@ -166,7 +173,13 @@ describe('the application as its modules make it', () => {
   describe('the push notices', () => {
     const notices: PushNotices = { of: () => Promise.resolve([]) };
     const noticing: BundledModule = {
-      manifest: { id: 'noticing', requires: [], optional: [], provides: [] },
+      manifest: {
+        id: 'noticing',
+        requires: [],
+        optional: [],
+        provides: [],
+        budget: { none: 'a test module' },
+      },
       pushNotices: notices,
     };
 
@@ -183,7 +196,7 @@ describe('the application as its modules make it', () => {
       requires: readonly string[],
       table: 'issues' | 'mentions' | 'channels',
     ): BundledModule => ({
-      manifest: { id, requires, optional: [], provides: [] },
+      manifest: { id, requires, optional: [], provides: [], budget: { none: 'a test module' } },
       userErased: (): Promise<void> => {
         calls.push(id);
         return Promise.resolve();
@@ -228,7 +241,14 @@ describe('the application as its modules make it', () => {
 
     test('stops a build whose module claims a route the core has, or one another module has', () => {
       const claiming = (id: string, routes: string[]): BundledModule => ({
-        manifest: { id, requires: [], optional: [], provides: [], routes },
+        manifest: {
+          id,
+          requires: [],
+          optional: [],
+          provides: [],
+          budget: { none: 'a test module' },
+          routes,
+        },
       });
       expect(() => composeFor([claiming('notes', ['/api/me'])], undefined)).toThrow(
         /"notes" owns the route "\/api\/me", which overlaps the core's/,
@@ -338,5 +358,83 @@ describe('what the boot starts for a module', () => {
     startWhereRunning(compose([], [chatModule, issuesModule]), 'chat', start);
     startWhereRunning(compose([], []), 'chat', start);
     expect(started).toEqual(['started']);
+  });
+});
+
+describe('the share of the database each module declares (D-250 rule 7)', () => {
+  test('every module of the build says it, chat that it has none and why, issues its third of the pool', () => {
+    for (const { manifest } of bundledModules) expect(manifest.budget).toBeDefined();
+    const chat = chatModule.manifest.budget;
+    expect('none' in chat && chat.none).toContain('chat');
+    const { budget } = issuesModule.manifest;
+    expect('poolShare' in budget && budget.poolShare(30)).toEqual({
+      maxConcurrent: 10,
+      queueTimeoutMs: 1_000,
+      statementTimeoutMs: 5_000,
+    });
+  });
+
+  test('a build with a module that says nothing of it does not start', () => {
+    expect(() =>
+      composeFor(
+        // @ts-expect-error a module without a `budget` is not a BundledModule
+        [{ manifest: { id: 'other', requires: [], optional: [], provides: [] } }],
+        undefined,
+      ),
+    ).toThrow(/"other" does not say what it may take of the database/);
+  });
+});
+
+describe('the work of the jobs a module names', () => {
+  const work: JobWork = () => Promise.resolve({ done: 1 });
+  const withJobs = (
+    manifest: { jobs?: string[]; retention?: string[] },
+    jobWork?: Record<string, JobWork>,
+  ): BundledModule => ({
+    manifest: { ...another.manifest, ...manifest },
+    ...(jobWork === undefined ? {} : { jobWork }),
+  });
+
+  test('a job the manifest names with no work, and work it does not name, each stop the build', () => {
+    expect(() => compose([], [withJobs({ jobs: ['other:send'] })])).toThrow(
+      '"other" names the jobs other:send in its manifest and supplies no work for them',
+    );
+    expect(() => compose([], [withJobs({ retention: ['purge:other'] }, {})])).toThrow(
+      '"other" names the jobs purge:other in its manifest and supplies no work for them',
+    );
+    expect(() => compose([], [withJobs({}, { 'purge:other': work })])).toThrow(
+      '"other" supplies work for purge:other, which its manifest does not name under jobs or retention',
+    );
+  });
+
+  test('retention work is the process’s whichever modules run, and a job’s waits for its module', () => {
+    const module = withJobs(
+      { jobs: ['other:send'], retention: ['purge:other'] },
+      { 'other:send': work, 'purge:other': work },
+    );
+    const off = compose([], [module]);
+    expect(Object.keys(off.jobWork).sort()).toEqual(['other:send', 'purge:other']);
+    expect(off.closedJob('other:send')).toBe(true);
+    expect(off.closedJob('purge:other')).toBe(false);
+    expect(compose([module], [module]).closedJob('other:send')).toBe(false);
+  });
+
+  test('chat’s purge and sweeps are retention, its mail a job, and none is closed but the mail with chat off', () => {
+    const alone = compositionFor('none');
+    expect(Object.keys(alone.jobWork).sort()).toEqual([
+      'mail:missed',
+      'purge:retention',
+      'sweep:github-deliveries',
+      'sweep:link-previews',
+    ]);
+    expect(chatModule.manifest.retention).toEqual([
+      'purge:retention',
+      'sweep:link-previews',
+      'sweep:github-deliveries',
+    ]);
+    expect(
+      ['purge:retention', 'sweep:link-previews', 'sweep:github-deliveries'].map(alone.closedJob),
+    ).toEqual([false, false, false]);
+    expect(alone.closedJob('mail:missed')).toBe(true);
   });
 });

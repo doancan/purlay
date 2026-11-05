@@ -3,7 +3,7 @@ import { bundledModules, type BundledModule } from '../composition';
 import { EXHAUSTIVE_MODULE_LIMIT, moduleCells, subsetsOf } from './module-cells';
 
 const aModule = (id: string, requires: readonly string[] = []): BundledModule => ({
-  manifest: { id, requires, optional: [], provides: [] },
+  manifest: { id, requires, optional: [], provides: [], budget: { none: 'a test module' } },
 });
 
 const idsOf = (carried: readonly BundledModule[]): string[] =>

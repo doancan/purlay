@@ -23,6 +23,10 @@ describe('who owns a route or a job', () => {
 
   test('a job is a module’s when its manifest lists it, the core’s when the core does, or nobody’s', () => {
     expect(owners.ofJob('mail:missed')).toBe('chat');
+    // A purge or a sweep a module keeps (`retention`) is the module's, though it runs whether the module does or not.
+    for (const job of ['purge:retention', 'sweep:link-previews', 'sweep:github-deliveries']) {
+      expect(owners.ofJob(job)).toBe('chat');
+    }
     expect(owners.ofJob('sweep:sessions')).toBe(CORE_OWNER);
     expect(owners.ofJob('no:such-job')).toBe(NO_OWNER);
   });

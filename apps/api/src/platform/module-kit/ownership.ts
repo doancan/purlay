@@ -1,7 +1,7 @@
 /**
  * Which module a route or a job belongs to, for the label `module` on `/metrics` and in the logs (D-250 rule 7).
  *
- * Read from what is already the authority: the core's claims and each manifest's `routes` and `jobs`, so a route or a job
+ * Read from what is already the authority: the core's claims and each manifest's `routes`, `jobs` and `retention`, so a route or a job
  * added to either is labelled with no list of its own. The answer is one of a short closed set — `core`, a module id the
  * code spells, or `none` — never anything a caller sent, so it adds series only as modules are added.
  */
@@ -33,6 +33,9 @@ export const ownersOf = (manifests: readonly ModuleManifest[], core: CoreClaims)
     ofJob: (job) =>
       core.jobs.includes(job)
         ? CORE_OWNER
-        : (manifests.find((manifest) => (manifest.jobs ?? []).includes(job))?.id ?? NO_OWNER),
+        : (manifests.find(
+            (manifest) =>
+              (manifest.jobs ?? []).includes(job) || (manifest.retention ?? []).includes(job),
+          )?.id ?? NO_OWNER),
   };
 };

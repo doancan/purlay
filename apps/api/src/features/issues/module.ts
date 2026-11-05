@@ -11,6 +11,7 @@
  */
 import { tableExists, type Transaction } from '@purlay/db';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
+import { issuesBudget } from './budget';
 import { issuesExport } from './export';
 import { issuesPersonalExport } from './personal-export';
 
@@ -36,6 +37,8 @@ export const issuesModule = {
     requires: [],
     optional: [],
     provides: [],
+    // A third of the pool, so that a module whose queries are slow cannot make chat's sends queue (`budget.ts`).
+    budget: { poolShare: issuesBudget },
     routes: ['/api/workspaces/:workspaceId/issues', '/api/workspaces/:workspaceId/issues/**'],
     jobs: [],
   },

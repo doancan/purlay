@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { ClientFrame, ServerFrame } from '@purlay/types';
-import { bundledModules, type BundledModule } from './composition';
+import { bundledModules, composition, type BundledModule } from './composition';
 import { PLAN } from './modules/jobs/schedule';
 import {
   CORE_CLAIMS,
@@ -21,6 +21,11 @@ const sorted = (names: Iterable<string>): string[] => [...names].sort();
 const carried: readonly BundledModule[] = bundledModules;
 const owned = (kind: 'jobs' | 'frames' | 'events'): string[] =>
   carried.flatMap((module) => module.manifest[kind] ?? []);
+/** A module's retention jobs are jobs too: `bun run job` is asked for them by name. */
+const ownedJobs = (): string[] => [
+  ...owned('jobs'),
+  ...carried.flatMap((module) => module.manifest.retention ?? []),
+];
 
 describe('what the core claims', () => {
   test('every socket operation a client may send is the core’s or exactly one module’s', () => {
@@ -34,12 +39,12 @@ describe('what the core claims', () => {
   });
 
   test('every scheduled job, and every job the command runs, is the core’s or exactly one module’s', () => {
-    expect(sorted([...CORE_JOBS, ...owned('jobs')])).toEqual(sorted(PLAN.map((slot) => slot.job)));
+    expect(sorted([...CORE_JOBS, ...ownedJobs()])).toEqual(sorted(PLAN.map((slot) => slot.job)));
+    // The command lists the core's jobs and takes a module's from the composition, so what it lists is the core's alone.
     const text = readFileSync(join(import.meta.dir, 'cli/jobs.ts'), 'utf8');
-    const runnable = [...text.matchAll(/^ {2}'([a-z]+:[a-z-]+)': /gm)].map(
-      (match) => match[1] ?? '',
-    );
-    expect(sorted([...CORE_JOBS, ...owned('jobs')])).toEqual(sorted(runnable));
+    const listed = [...text.matchAll(/^ {2}'([a-z]+:[a-z-]+)': /gm)].map((match) => match[1] ?? '');
+    expect(sorted(listed)).toEqual(sorted(CORE_JOBS));
+    expect(sorted(Object.keys(composition.jobWork))).toEqual(sorted(ownedJobs()));
   });
 
   test('the socket upgrade is the core’s', () => {
@@ -49,7 +54,14 @@ describe('what the core claims', () => {
   test.each(['/auth/x', '/auth/x/y', '/ws'])(
     'a module that claims %s, which the core answers, is refused',
     (route) => {
-      const manifest = { id: 'notes', requires: [], optional: [], provides: [], routes: [route] };
+      const manifest = {
+        id: 'notes',
+        requires: [],
+        optional: [],
+        provides: [],
+        budget: { none: 'a test module' },
+        routes: [route],
+      };
       let refused: readonly string[] = [];
       try {
         moduleRegistry([manifest], CORE_CLAIMS);

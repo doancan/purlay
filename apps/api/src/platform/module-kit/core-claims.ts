@@ -88,16 +88,16 @@ export const CORE_ROUTES: readonly string[] = [
   '/ws',
 ];
 
-/** The scheduled jobs (`bun run job <name>`) that keep the core's rows tidy and run whichever modules do. */
+/**
+ * The scheduled jobs (`bun run job <name>`) that keep the core's rows tidy and run whichever modules do. A module's own
+ * purge or sweep is its `retention` in the manifest, not listed here.
+ */
 export const CORE_JOBS: readonly string[] = [
   'sweep:orphans',
   'sweep:sessions',
   'reconcile:storage',
-  'sweep:link-previews',
-  'sweep:github-deliveries',
   'sweep:email-sign-ins',
   'sweep:exports',
-  'purge:retention',
   'purge:workspaces',
   'sweep:deletions',
 ];

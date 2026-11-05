@@ -14,19 +14,25 @@
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
+ * The core's jobs are in this file; a module's — here the link-preview and delivery sweeps, the retention purge and the
+ * missed mail, which are chat's — are named by its manifest and come with the composition (`MODULES.md` §2).
+ *
  * It reads the deployment's own configuration, as the API does, so it runs in the same image with
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
-import { purgeRetention } from '../features/chat/messages/retention-purge';
 import { compositionFor } from '../composition';
 import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
-import { reconcileStorage, runJob, sweepEmailSignIns, sweepOrphans } from '../modules/jobs/jobs';
-import { sweepGitHubDeliveries, sweepLinkPreviews } from '../features/chat/sweeps';
+import {
+  reconcileStorage,
+  runJob,
+  sweepEmailSignIns,
+  sweepOrphans,
+  type JobContext,
+} from '../modules/jobs/jobs';
 import { jobReport, neverSucceeded } from '../modules/jobs/report';
-import { mailMissedMessages } from '../features/chat/notifications/missed-mail';
 import { readSettingsToBoot } from '../modules/setup/settings';
 import { credentialCipher } from '../platform/crypto';
 import { smtpMailer } from '../platform/mail';
@@ -60,7 +66,7 @@ const clock = systemClock;
  * The relay the server's settings name, as the API builds it (`runtimeServicesFrom`): read once a run, so a
  * relay changed in Administration is the one the next run sends through. None set, none built.
  */
-const missedMail = async (): Promise<Readonly<Record<string, number>>> => {
+const withMailer: JobContext['withMailer'] = async (use) => {
   const { settings } = await readSettingsToBoot(database, credentialCipher(config.ENCRYPTION_KEY));
   const mailer =
     settings.smtp === undefined
@@ -71,19 +77,32 @@ const missedMail = async (): Promise<Readonly<Record<string, number>>> => {
           SMTP_ALLOW_PLAINTEXT: settings.smtp.allowPlaintext,
         });
   try {
-    return await mailMissedMessages({
-      database,
-      clock,
-      log,
-      send: mailer?.send,
-      appUrl: config.APP_URL,
-    });
+    return await use(mailer?.send);
   } finally {
     mailer?.close();
   }
 };
 
-const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number>>>>> = {
+/** What a module's job is given: this process's connections and settings, nothing the module opens itself. */
+const context: JobContext = {
+  database,
+  clock,
+  log,
+  // Built when a job asks, as each job did: the store is not needed to sweep sessions.
+  get storage() {
+    return storeFor(config);
+  },
+  appUrl: config.APP_URL,
+  withMailer,
+};
+
+type Work = () => Promise<Readonly<Record<string, number>>>;
+
+/**
+ * The core's own jobs. A module's are not listed here: its manifest names them under `jobs` and `retention`, and the
+ * work comes with it through the composition (`features/<id>/jobs.ts`, `MODULES.md` §2), so this file names no module.
+ */
+const coreJobs: Readonly<Record<string, Work>> = {
   'sweep:orphans': async () =>
     await sweepOrphans({ database, clock, log, storage: storeFor(config) }),
   'sweep:sessions': async () => {
@@ -94,13 +113,9 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
     return { removed };
   },
   'reconcile:storage': async () => await reconcileStorage({ database, log }),
-  'sweep:link-previews': async () => await sweepLinkPreviews({ database, clock }),
-  'sweep:github-deliveries': async () => await sweepGitHubDeliveries({ database, clock }),
   'sweep:email-sign-ins': async () => await sweepEmailSignIns({ database, clock }),
   'sweep:exports': async () =>
     await sweepExports({ database, clock, log, storage: storeFor(config) }),
-  'purge:retention': async () =>
-    await purgeRetention({ database, clock, log, storage: storeFor(config) }),
   'purge:workspaces': async () =>
     await purgeWorkspaces(
       { database, clock, log, storage: storeFor(config) },
@@ -113,8 +128,15 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
       log,
       storage: storeFor(config),
     }),
-  'mail:missed': missedMail,
 };
+
+const moduleJobs: Readonly<Record<string, Work>> = Object.fromEntries(
+  Object.entries(composition.jobWork).map(([job, work]): [string, Work] => [
+    job,
+    (): ReturnType<Work> => work(context),
+  ]),
+);
+const jobs: Readonly<Record<string, Work>> = { ...coreJobs, ...moduleJobs };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>
   await database
@@ -123,10 +145,7 @@ const records = async (): Promise<Parameters<typeof jobReport>[1]> =>
     .execute();
 
 /** Runs one job; true when it succeeded. Its failure is recorded and logged by the runner. */
-const runOne = async (
-  job: string,
-  work: () => Promise<Readonly<Record<string, number>>>,
-): Promise<boolean> =>
+const runOne = async (job: string, work: Work): Promise<boolean> =>
   await runJob(
     { database, clock, log: log.child({ module: composition.owner.ofJob(job) }) },
     job,
