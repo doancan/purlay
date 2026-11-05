@@ -680,6 +680,26 @@ CREATE INDEX idx_channel_members_last_read
 > `channels`. The migration therefore creates `channels`, then `messages`, then
 > `channel_members` — or adds the `last_read_message_id` foreign key in a later statement.
 
+### 5.3. `channel_departures`
+
+How a person is no longer in a channel, kept for them alone (D-264). Leaving and being taken out delete the
+membership, so nothing said afterwards who had been in the channel; a socket that was down when its
+`ACCESS_REVOKED` was sent could only be answered *not found*. An archive needs no row: it keeps the memberships
+(D-123 §2). One row per person and channel, replaced by the next departure, and read only to answer that
+person's own refused `SUBSCRIBE`, never for anybody who is not in the channel's workspace now.
+
+```sql
+CREATE TABLE channel_departures (
+    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL CHECK (reason IN ('left', 'removed')),
+    departed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (channel_id, user_id)
+);
+
+CREATE INDEX idx_channel_departures_user ON channel_departures (user_id);
+```
+
 ---
 
 ## 6. Messages & Threads
@@ -2690,6 +2710,7 @@ chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachme
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
 chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
 chat/0005_message_attachments_contract.sql  drops attachments.message_id and channel_id, their keys and indexes, after refusing a link table that lacks a sent file  (D-250; ships in the release after the expand)
+chat/0006_channel_departures.sql  channel_departures: how a person left or was taken out of a channel, for the refusal of their own SUBSCRIBE  (D-264)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 ```
 

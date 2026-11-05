@@ -40,6 +40,8 @@ export const TABLE_OWNERS: Readonly<Record<keyof DB, TableOwner>> = {
 
   // Chat: channels and what is said in them, and the integrations that post into them.
   channel_bookmarks: 'chat',
+  // Why a person left or was taken out of a channel, for the refusal of their own `SUBSCRIBE` (D-264).
+  channel_departures: 'chat',
   channel_members: 'chat',
   channels: 'chat',
   github_app_deliveries: 'chat',

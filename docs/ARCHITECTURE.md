@@ -331,8 +331,10 @@ D-139 §3): a client that must not show one reads the history again after a purg
 **A `SUBSCRIBE` is judged whole.** One channel the person can no longer see makes the whole frame
 `ERROR CHANNEL_NOT_FOUND`, naming none: no `ACK`, no replay for the channels that were fine, and they
 stay unsubscribed (D-34 — the answer for a channel one may not know about is the answer for one that
-is not there). `ACCESS_REVOKED` went to the socket that was closed, and is not replayed. After that
-error a client reads its channel list again, drops the channels it no longer has, and subscribes to
+is not there). `ACCESS_REVOKED` went to the socket that was closed, and is not replayed — except that the
+refusal is followed by it for the channels of that frame the person **was in** and is not (archived, left, removed),
+so a page open on one says why; for a channel they never were in, or that does not exist, the refusal is alone and
+the same bytes (D-264). After that error a client reads its channel list again, drops the channels it no longer has, and subscribes to
 the rest.
 
 **The cursor advances on any live frame — which is safe only once that continuation is complete.**
