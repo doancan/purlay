@@ -15170,4 +15170,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/audit-emissions.test.ts'],
   },
+  {
+    id: 'audit-filter-lists-every-action-whatever-runs',
+    why: 'the audit page offers every action of every module the client knows, so a server that does not run issues invites a filter that can match nothing it does now (D-265)',
+    file: 'apps/web/src/features/settings/pages/audit.tsx',
+    find: '{auditActionsOf(modules).map((action) => (',
+    replace: '{AUDIT_ACTIONS.map((action) => (',
+    tests: ['apps/web/src/features/settings/pages/audit.test.tsx'],
+  },
+  {
+    id: 'audit-actions-offered-ignore-the-running-modules',
+    why: 'every module’s actions are offered whether the server runs it or not, so a module that is off still shows in the filter (D-265)',
+    file: 'apps/web/src/modules/registry.ts',
+    find: '    ...running(modules).flatMap((module) => module.auditActions),',
+    replace: '    ...MODULES.flatMap((module) => module.auditActions),',
+    tests: ['apps/web/src/modules/registry.test.tsx'],
+  },
 ];
