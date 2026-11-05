@@ -14765,4 +14765,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'bullets: /^[-*+] /,',
     tests: ['apps/web/src/features/composer/composer-text.test.ts'],
   },
+  {
+    id: 'erasure-revoke-never-renews-an-expired-token',
+    why: 'an erased person’s expired access token is refused by GitHub, and their grant stays on GitHub with its refresh token valid',
+    file: 'apps/api/src/features/chat/integrations/github-app.ts',
+    find: '  error instanceof GitHubUnauthorized || error instanceof GitHubRevocationRefused;\n',
+    replace: '  error instanceof GitHubUnauthorized && error instanceof GitHubRevocationRefused;\n',
+    tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
+  },
+  {
+    id: 'erasure-revoke-refreshes-after-an-outage',
+    why: 'a GitHub that is down is asked twice, once to revoke and once to refresh, each waiting out its own deadline',
+    file: 'apps/api/src/features/chat/integrations/github-app.ts',
+    find: '      if (!isRefusedToken(refused)) throw refused;\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/github-erasure.integration.test.ts'],
+  },
 ];

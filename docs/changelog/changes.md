@@ -23,6 +23,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Security
+
+- **Accounts** — Erasing an account now also revokes its GitHub App authorization at GitHub when the saved access token has expired, by renewing it with the saved refresh token first, so the grant no longer stays behind (D-246, D-256)
 
 ---
