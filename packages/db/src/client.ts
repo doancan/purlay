@@ -198,7 +198,11 @@ const connectionsOf = (pool: PoolOfExecutor, lease?: LeaseConnection): PostgresP
           leased.release();
         }
         if (cancelling === undefined) giveBack(error);
-        else void cancelling.then(() => giveBack(error));
+        else {
+          void cancelling.then(() => {
+            giveBack(error);
+          });
+        }
       };
     }
     return client;
