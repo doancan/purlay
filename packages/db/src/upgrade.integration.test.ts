@@ -10,7 +10,7 @@
  * (`chat/0005`): from the previous release in one run, from the release that expanded in a run of its own, and
  * refused, with nothing changed, where a link is missing.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,7 +24,13 @@ import {
   type MigrationSet,
 } from './migrator';
 import { splitStatements } from './statements';
-import { closeIntegrationDatabase } from './testing';
+import {
+  backendsGone,
+  closeIntegrationDatabase,
+  CLONE_HOOK_MS,
+  dropDatabases,
+  DROP_HOOK_MS,
+} from './testing';
 
 /** The first migration of the release that expanded: everything before it is the previous release's schema. */
 const EXPAND_RELEASE_STARTS_AT = '0079_attachment_claims.sql';
@@ -47,15 +53,13 @@ const open = (name: string): Kysely<unknown> => {
   });
 };
 
+// Dropped together: each drop makes the server checkpoint, and nine of them one after another outlived the five
+// seconds a hook is given on a loaded runner (`dropDatabases`, #797).
 afterAll(async () => {
   for (const directory of directories) rmSync(directory, { recursive: true, force: true });
-  const admin = open('postgres');
-  for (const name of databases) {
-    await sql`drop database if exists ${sql.id(name)} with (force)`.execute(admin);
-  }
-  await admin.destroy();
+  await dropDatabases(databases);
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 /** The `.sql` files of a directory that are below `end` (or all of them), copied where they can be applied alone. */
 const copiedBelow = (from: string, end: string | undefined): string => {
@@ -89,11 +93,12 @@ const expandRelease = (): { core: string; sets: MigrationSet[] } => ({
  * (trigram, GIN) and drop and make tables by bare name, so a search path that reached the shared schema would reach its
  * tables too.
  */
-const emptyDatabase = async (): Promise<string> => {
+const emptyDatabase = async (template?: string): Promise<string> => {
   const name = `upgrade_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const admin = open('postgres');
   try {
-    await sql`create database ${sql.id(name)}`.execute(admin);
+    if (template === undefined) await sql`create database ${sql.id(name)}`.execute(admin);
+    else await sql`create database ${sql.id(name)} template ${sql.id(template)}`.execute(admin);
   } finally {
     await admin.destroy();
   }
@@ -205,18 +210,44 @@ const linksOf = async (db: Kysely<unknown>): Promise<string[]> =>
       select attachment_id from message_attachments order by attachment_id`.execute(db)
   ).rows.map((row) => row.attachment_id);
 
-/** A database that has run the release that expanded, with rows as that release wrote them. */
+interface ExpandedTemplate {
+  readonly name: string;
+  readonly world: ExpandedWorld;
+  readonly sets: MigrationSet[];
+}
+
+let expandedTemplate: ExpandedTemplate | undefined;
+
+/**
+ * The database that has run the release that expanded, with rows as that release wrote them, made once for the
+ * file: six tests start from it, and replaying every migration for each cost a second apiece, on a runner that
+ * was already late. Nothing is connected to it when it is cloned.
+ */
+beforeAll(async () => {
+  const name = await emptyDatabase();
+  const db = open(name);
+  try {
+    const { core, sets } = expandRelease();
+    const expanded = await migrateToLatest(db, core, { modules: sets });
+    expect(expanded.error).toBeUndefined();
+    expect(expanded.results?.at(-1)?.migrationName).toBe('issues/0001_issues');
+    expandedTemplate = { name, world: await writeLikeTheExpandRelease(db), sets };
+  } finally {
+    await db.destroy();
+  }
+  // A pool that has ended is not yet a connection that has closed, and a clone refuses a source in use.
+  expect(await backendsGone(name, 5_000)).toBe(true);
+}, CLONE_HOOK_MS);
+
+/** A database of its own, copied from the one that has run the release that expanded. */
 const expandedDatabase = async (): Promise<{
   db: Kysely<unknown>;
   world: ExpandedWorld;
   sets: MigrationSet[];
 }> => {
-  const db = open(await emptyDatabase());
-  const { core, sets } = expandRelease();
-  const expanded = await migrateToLatest(db, core, { modules: sets });
-  expect(expanded.error).toBeUndefined();
-  expect(expanded.results?.at(-1)?.migrationName).toBe('issues/0001_issues');
-  return { db, world: await writeLikeTheExpandRelease(db), sets };
+  if (expandedTemplate === undefined) throw new Error('the expand release was not built');
+  const { name, world, sets } = expandedTemplate;
+  return { db: open(await emptyDatabase(name)), world, sets };
 };
 
 describe('integration: upgrading from the previous release', () => {
