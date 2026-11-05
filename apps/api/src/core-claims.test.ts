@@ -49,7 +49,14 @@ describe('what the core claims', () => {
   test.each(['/auth/x', '/auth/x/y', '/ws'])(
     'a module that claims %s, which the core answers, is refused',
     (route) => {
-      const manifest = { id: 'notes', requires: [], optional: [], provides: [], routes: [route] };
+      const manifest = {
+        id: 'notes',
+        requires: [],
+        optional: [],
+        provides: [],
+        budget: { none: 'a test module' },
+        routes: [route],
+      };
       let refused: readonly string[] = [];
       try {
         moduleRegistry([manifest], CORE_CLAIMS);

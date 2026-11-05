@@ -6,6 +6,7 @@ const manifest = (overrides: Partial<ModuleManifest> & { id: string }): ModuleMa
   requires: [],
   optional: [],
   provides: [],
+  budget: { none: 'a test module' },
   ...overrides,
 });
 

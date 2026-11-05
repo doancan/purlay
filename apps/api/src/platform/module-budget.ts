@@ -12,16 +12,10 @@
  */
 import { isTransaction, sql, type Executor } from '@purlay/db';
 import { AppError } from './errors';
-import type { Atomically } from './transactions';
+import type { BudgetLimits, ModuleManifest } from './module-kit/manifest';
+import { atomicallyOn, type Atomically } from './transactions';
 
-export interface ModuleBudget {
-  /** Transactions the module may have open at once; at least one, and below the pool's size. */
-  readonly maxConcurrent: number;
-  /** How long a request waits for a slot before it is refused. */
-  readonly queueTimeoutMs: number;
-  /** The longest any statement of the module may run; PostgreSQL ends it with `57014`. */
-  readonly statementTimeoutMs: number;
-}
+export type ModuleBudget = BudgetLimits;
 
 export interface Slots {
   /** True with a slot, false when none came free within `timeoutMs`. */
@@ -95,5 +89,31 @@ export const budgeted = (module: string, budget: ModuleBudget, executor: Executo
     } finally {
       share.release();
     }
+  };
+};
+
+/**
+ * The transaction boundary of each module of a build, made once from what the manifests declare (`budget`): one
+ * `budgeted` boundary per module with a share, the plain one for a module that declared `none`. Nothing here names a module,
+ * so a module that is added is held to what it says by being asked for. A module the build does not carry is a bug of the
+ * caller, and said.
+ */
+export const transactionsOfModules = (
+  manifests: readonly Pick<ModuleManifest, 'id' | 'budget'>[],
+  executor: Executor,
+  poolMax: number,
+): ((moduleId: string) => Atomically) => {
+  const boundaries = new Map<string, Atomically>(
+    manifests.map(({ id, budget }) => [
+      id,
+      'poolShare' in budget
+        ? budgeted(id, budget.poolShare(poolMax), executor)
+        : atomicallyOn(executor),
+    ]),
+  );
+  return (moduleId) => {
+    const boundary = boundaries.get(moduleId);
+    if (boundary === undefined) throw new Error(`no module "${moduleId}" is carried by this build`);
+    return boundary;
   };
 };

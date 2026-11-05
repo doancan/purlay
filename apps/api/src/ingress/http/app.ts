@@ -259,8 +259,7 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
-import { issuesBudget } from '../../features/issues/budget';
-import { budgeted } from '../../platform/module-budget';
+import { transactionsOfModules } from '../../platform/module-budget';
 import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
@@ -537,17 +536,16 @@ export const createApp = (given: Dependencies): HttpApplication => {
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
-  // Issues' work on the database is held to a share of the pool, so a module that is slow or busy cannot make
-  // chat's sends wait for a connection. Chat is not budgeted: it is what the others are kept from slowing.
-  // Made once, because the share is one count of the transactions open at once across every request.
-  const issueDependencies = {
-    ...dependencies,
-    atomically: budgeted(
-      'issues',
-      issuesBudget(dependencies.config.DATABASE_POOL_MAX),
-      dependencies.database,
-    ),
-  };
+  // Each module's work on the database is held to the share its manifest declares (`budget`), so a module that is slow or
+  // busy cannot make another's requests wait for a connection; a module that declared `none` (chat, which is what the others
+  // are kept from slowing) has the plain boundary. Made once, because a share is one count of the transactions open at once
+  // across every request. A module's routes ask for theirs by its id.
+  const transactionsOf = transactionsOfModules(
+    modules.bundled.map((module) => module.manifest),
+    dependencies.database,
+    dependencies.config.DATABASE_POOL_MAX,
+  );
+  const issueDependencies = { ...dependencies, atomically: transactionsOf('issues') };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),

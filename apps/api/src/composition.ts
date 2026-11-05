@@ -96,7 +96,8 @@ export const registry = moduleRegistry(
 
 export interface Composition {
   readonly modules: readonly BundledModule[];
-  /** The reader of `/api/attachments/:attachmentId`: the core's, widened by the modules that run. */
+  /** Every module this build carries, run or not: what a route table needs to apply each one's declared budget. */
+  readonly bundled: readonly BundledModule[];
   readonly readAttachment: AttachmentReader;
   /** What the push sender is told by: the module's, or nothing where none runs. */
   readonly pushNotices: PushNotices;
@@ -148,6 +149,7 @@ export const compose = (
   }
   return {
     modules,
+    bundled,
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,

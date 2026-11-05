@@ -22,6 +22,11 @@ export const chatModule = {
     requires: [],
     optional: [],
     provides: [],
+    // Chat is what the others are kept from slowing: it takes what the pool gives it, and the budget is the others'
+    // (`MODULES.md` §7, `budget:latency` holds chat's p95 against a busy issues module).
+    budget: {
+      none: 'chat is what the other modules are kept from slowing, so it has no share of its own',
+    },
     // Every route that is about channels, messages and what hangs off them. The ones that are the workspace's own
     // (its members, invitations, exports, retention window, deletion, uploads) and the account's are the core's, and
     // `routes.test.ts` of the door holds the two lists to the routes the application registers.

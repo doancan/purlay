@@ -11,6 +11,7 @@ const module = (id: string, rest: Partial<ModuleManifest> = {}): ModuleManifest 
   requires: [],
   optional: [],
   provides: [],
+  budget: { none: 'a test module with no queries of its own' },
   ...rest,
 });
 
@@ -274,5 +275,65 @@ describe('what two modules, or a module and the core, both claim', () => {
       core,
     );
     expect(idsOf(registry.bundled)).toEqual(['chat', 'notes']);
+  });
+});
+
+describe('a module’s share of the database (D-250 rule 7)', () => {
+  test('a manifest that does not say it does not compile, and the registry refuses it by id', () => {
+    // @ts-expect-error a manifest without `budget` is not a ModuleManifest
+    const incomplete: ModuleManifest = { id: 'issues', requires: [], optional: [], provides: [] };
+    expect(problemsOf(() => moduleRegistry([incomplete]))).toEqual([
+      '"issues" does not say what it may take of the database: give it a `budget`, a share of the pool or `none` with the reason',
+    ]);
+  });
+
+  test('`none` with no reason is refused: leaving the share out must be said, and said why', () => {
+    expect(
+      problemsOf(() => moduleRegistry([module('issues', { budget: { none: '  ' } })])),
+    ).toEqual(['"issues" declares `budget: none` without a reason']);
+  });
+
+  test('a share must give the module a connection and leave the others one, for every pool size', () => {
+    const sharing = (of: (poolMax: number) => number): Partial<ModuleManifest> => ({
+      budget: {
+        poolShare: (poolMax) => ({
+          maxConcurrent: of(poolMax),
+          queueTimeoutMs: 1,
+          statementTimeoutMs: 1,
+        }),
+      },
+    });
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module(
+            'issues',
+            sharing(() => 0),
+          ),
+        ]),
+      ),
+    ).toEqual([
+      '"issues" has a share of 0 connections in a pool of 1: it needs at least one, and the others one too (a pool of one has none to leave)',
+    ]);
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module(
+            'issues',
+            sharing((pool) => pool),
+          ),
+        ]),
+      ),
+    ).toEqual([
+      '"issues" has a share of 2 connections in a pool of 2: it needs at least one, and the others one too (a pool of one has none to leave)',
+    ]);
+    expect(() =>
+      moduleRegistry([
+        module(
+          'issues',
+          sharing((pool) => Math.max(1, pool - 1)),
+        ),
+      ]),
+    ).not.toThrow();
   });
 });

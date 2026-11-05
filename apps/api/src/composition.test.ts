@@ -19,7 +19,13 @@ import { attachmentNotFound, AppError } from './platform/errors';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
 
 const another: BundledModule = {
-  manifest: { id: 'other', requires: [], optional: [], provides: [] },
+  manifest: {
+    id: 'other',
+    requires: [],
+    optional: [],
+    provides: [],
+    budget: { none: 'a test module' },
+  },
   workspaceChannels: { ...noWorkspaceChannels },
 };
 
@@ -48,7 +54,7 @@ const outcomeOf = async (reading: Promise<{ readonly id: string }>): Promise<str
 };
 
 const moduleReading = (id: string, reader: AttachmentReader): BundledModule => ({
-  manifest: { id, requires: [], optional: [], provides: [] },
+  manifest: { id, requires: [], optional: [], provides: [], budget: { none: 'a test module' } },
   readAttachment: reader,
 });
 
@@ -166,7 +172,13 @@ describe('the application as its modules make it', () => {
   describe('the push notices', () => {
     const notices: PushNotices = { of: () => Promise.resolve([]) };
     const noticing: BundledModule = {
-      manifest: { id: 'noticing', requires: [], optional: [], provides: [] },
+      manifest: {
+        id: 'noticing',
+        requires: [],
+        optional: [],
+        provides: [],
+        budget: { none: 'a test module' },
+      },
       pushNotices: notices,
     };
 
@@ -183,7 +195,7 @@ describe('the application as its modules make it', () => {
       requires: readonly string[],
       table: 'issues' | 'mentions' | 'channels',
     ): BundledModule => ({
-      manifest: { id, requires, optional: [], provides: [] },
+      manifest: { id, requires, optional: [], provides: [], budget: { none: 'a test module' } },
       userErased: (): Promise<void> => {
         calls.push(id);
         return Promise.resolve();
@@ -228,7 +240,14 @@ describe('the application as its modules make it', () => {
 
     test('stops a build whose module claims a route the core has, or one another module has', () => {
       const claiming = (id: string, routes: string[]): BundledModule => ({
-        manifest: { id, requires: [], optional: [], provides: [], routes },
+        manifest: {
+          id,
+          requires: [],
+          optional: [],
+          provides: [],
+          budget: { none: 'a test module' },
+          routes,
+        },
       });
       expect(() => composeFor([claiming('notes', ['/api/me'])], undefined)).toThrow(
         /"notes" owns the route "\/api\/me", which overlaps the core's/,
@@ -338,5 +357,29 @@ describe('what the boot starts for a module', () => {
     startWhereRunning(compose([], [chatModule, issuesModule]), 'chat', start);
     startWhereRunning(compose([], []), 'chat', start);
     expect(started).toEqual(['started']);
+  });
+});
+
+describe('the share of the database each module declares (D-250 rule 7)', () => {
+  test('every module of the build says it, chat that it has none and why, issues its third of the pool', () => {
+    for (const { manifest } of bundledModules) expect(manifest.budget).toBeDefined();
+    const chat = chatModule.manifest.budget;
+    expect('none' in chat && chat.none).toContain('chat');
+    const { budget } = issuesModule.manifest;
+    expect('poolShare' in budget && budget.poolShare(30)).toEqual({
+      maxConcurrent: 10,
+      queueTimeoutMs: 1_000,
+      statementTimeoutMs: 5_000,
+    });
+  });
+
+  test('a build with a module that says nothing of it does not start', () => {
+    expect(() =>
+      composeFor(
+        // @ts-expect-error a module without a `budget` is not a BundledModule
+        [{ manifest: { id: 'other', requires: [], optional: [], provides: [] } }],
+        undefined,
+      ),
+    ).toThrow(/"other" does not say what it may take of the database/);
   });
 });

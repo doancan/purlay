@@ -8,6 +8,24 @@
  * Types only: nothing in this folder opens a connection or reads the environment, so a module can import
  * it without pulling the platform in.
  */
+/** What one module may take of the shared database (`platform/module-budget.ts` holds it to this). */
+export interface BudgetLimits {
+  /** Transactions the module may have open at once; at least one, and below the pool's size. */
+  readonly maxConcurrent: number;
+  /** How long a request waits for a slot before it is refused. */
+  readonly queueTimeoutMs: number;
+  /** The longest any statement of the module may run; PostgreSQL ends it with `57014`. */
+  readonly statementTimeoutMs: number;
+}
+
+/**
+ * What a module says of its share of the connection pool (`MODULES.md` §7, D-250 rule 7). Never left out: a module either
+ * is held to a share, worked out from the pool's size, or says it is not and why. The core applies it to every module's
+ * routes the same way, so a module that is added cannot be forgotten.
+ */
+type ModuleBudgetDeclaration =
+  { readonly poolShare: (poolMax: number) => BudgetLimits } | { readonly none: string };
+
 export interface ModuleManifest {
   /** Lowercase letters, digits and hyphens: the word an operator writes in `MODULES`. */
   readonly id: string;
@@ -17,6 +35,8 @@ export interface ModuleManifest {
   readonly optional: readonly string[];
   /** Capabilities this module offers, asked for by name through the core (`MODULES.md` §4). */
   readonly provides: readonly string[];
+  /** The module's share of the database pool, or `none` with the reason it has no need of one. */
+  readonly budget: ModuleBudgetDeclaration;
   /**
    * The HTTP routes the module owns, as path templates: `:name` is one segment and a trailing `**` is the rest.
    * A module that is not run has no route, so a request for one is the `404` of any unknown path
