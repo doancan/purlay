@@ -51,6 +51,7 @@ have it.
 
 ### Fixed
 
+- **Incidents** — A person who opens a channel just as somebody declares an incident in it now sees the banner without a reload: the channel's incident is read again when the subscription is answered, as its pins and bookmarks already were (D-137)
 - **Operations** — Opening a WebSocket now asks who is connecting once at the door instead of twice, so a node let back in by thousands of sockets at once does a quarter fewer session reads and keeps its database connections free longer; who is refused, in what order and with what answer is unchanged (D-84)
 - **Operations** — The memory gauge on the metrics page now says which figure it is: the resident set on Linux, the physical footprint on macOS, which reads well below `ps` there because it leaves out pages the process freed but the system has not yet taken back (D-221)
 - **Search** — A search no longer reads the whole workspace when the words are rare or nowhere: the words, the decision note and the accepted answer are each looked up on their own index and merged, with the same results in the same order (D-105)
