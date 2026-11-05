@@ -110,18 +110,17 @@ reports the backup directory and leaves `.switching` for an operator to investig
 
 ## On a server managed with Dockhand
 
-For a server where [Dockhand](https://dockhand.pro) runs the containers and Nginx Proxy Manager already
-holds ports 80 and 443 (D-258). `docker-compose.dockhand.yml` is the production stack in one file: nothing
-is mounted from a checkout, so it can be pasted into Dockhand's editor or deployed from this repository
-with Git. It publishes no port; its Caddy joins Nginx Proxy Manager's network as `purlay`, and Nginx Proxy
-Manager ends TLS. Linux **amd64** only, as above.
+For a server where [Dockhand](https://dockhand.pro) runs the containers and Nginx Proxy Manager — on that
+server or another — ends TLS (D-258). `docker-compose.dockhand.yml` is the production stack in one file,
+without Caddy: nothing is mounted from a checkout, so it can be pasted into Dockhand's editor or deployed
+from this repository with Git, and the API's own port is published for Nginx Proxy Manager. Linux
+**amd64** only, as above.
 
 1. **Let Dockhand pull the image.** A GHCR package is private unless made public: either add `ghcr.io` as
    a registry in Dockhand with a GitHub username and a classic token with `read:packages`, or make the
    package public in its settings on GitHub. Take the digest of a successful `image` run on `main`:
    `ghcr.io/<owner>/<repo>-api@sha256:…`.
-2. **Find Nginx Proxy Manager's network**: Dockhand's *Networks* page, or `docker network ls` on the
-   server — usually `<its stack>_default`.
+2. **Pick a free port** on the server for the API, e.g. `8190`.
 3. **Make the secrets** once, anywhere with OpenSSL, and keep them in a password manager. Losing
    `ENCRYPTION_KEY` makes the stored integration secrets unreadable:
 
@@ -136,18 +135,19 @@ Manager ends TLS. Linux **amd64** only, as above.
 
 4. **Create the stack** in Dockhand, from Git (this repository, compose file `docker-compose.dockhand.yml`)
    or by pasting the file. Set its environment: `PURLAY_IMAGE` (the digest), `APP_URL` (the public
-   `https://` address, no path), `PROXY_NETWORK`, and the six values above. Any optional variable of
+   `https://` address, no path), `PURLAY_HTTP_PORT`, and the six values above. Any optional variable of
    [CONFIG.md](CONFIG.md#production-deployment) can be added the same way. Deploy it, then read the
    setup code in the `api` container's logs (`SETUP CODE`).
-5. **Add a proxy host** in Nginx Proxy Manager: the domain of `APP_URL`, scheme `http`, forward hostname
-   `purlay`, port `80`, **Websockets Support on** (without it the page loads but messages arrive only on a
-   reload). On its SSL tab, request a certificate and turn on *Force SSL*.
+5. **Add a proxy host** in Nginx Proxy Manager: the domain of `APP_URL`, scheme `http`, the server's
+   address and `PURLAY_HTTP_PORT`, **Websockets Support on** (without it the page loads but messages
+   arrive only on a reload). On its SSL tab, request a certificate and turn on *Force SSL*. With
+   Cloudflare in front of Nginx Proxy Manager, add the client-address lines of
+   [CONFIG.md](CONFIG.md#production-deployment) to its *Advanced* tab.
 6. Open `https://<your-domain>/setup` and complete the setup wizard.
 
 To check the client address, sign in, then in the `postgres` container
 `psql -U purlay -c 'SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1'` must be your address,
-not a `172.…` one. (Caddy reads the `X-Real-IP` that Nginx Proxy Manager sets; with Cloudflare in front, see
-[CONFIG.md](CONFIG.md#production-deployment).)
+not Nginx Proxy Manager's or Cloudflare's.
 
 **Updating** is setting `PURLAY_IMAGE` to a newer digest and redeploying. Dockhand does not do what
 `scripts/deploy.sh` does: there is **no backup before the switch and no automatic way back**, and the
