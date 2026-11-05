@@ -1,0 +1,147 @@
+// Area api-modules-jobs: ids ascending; areas.ts says what belongs here.
+import type { Mutation } from '../mutate';
+
+const JOBS_TESTS = 'apps/api/src/modules/jobs/jobs.integration.test.ts';
+
+export const API_MODULES_JOBS: readonly Mutation[] = [
+  {
+    id: 'core-sweep-names-a-chat-table',
+    why: 'a job of the core deletes from a table chat owns, as the sweeps did before they moved, so the core no longer runs with chat absent (D-250)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .deleteFrom('native_authorizations')",
+    replace: "    .deleteFrom('link_previews')",
+    tests: ['apps/api/src/core-tables.test.ts'],
+  },
+  {
+    id: 'job-failures-not-counted',
+    why: 'a job failing every night looks like one that failed once',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: 'consecutive_failures: sql<number>`consecutive_failures + 1`,',
+    replace: 'consecutive_failures: sql<number>`consecutive_failures`,',
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'job-report-never-overdue',
+    why: 'a scheduler that stopped a week ago still reports every job as well',
+    file: 'apps/api/src/modules/jobs/report.ts',
+    find: 'record.last_success_at.getTime() > STALE_AFTER_MS',
+    replace: 'record.last_success_at.getTime() > STALE_AFTER_MS * 1000',
+    tests: ['apps/api/src/modules/jobs/report.test.ts'],
+  },
+  {
+    id: 'native-sweep-boundary-inclusive',
+    why: 'the sweep takes a code on the very instant it turns a day old instead of after it: the margin the table keeps for whoever reads it is a moment short, and the test that pins it at ±1 s never notices',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .deleteFrom('native_authorizations')\n    .where('expires_at', '<', before)\n",
+    replace: "    .deleteFrom('native_authorizations')\n    .where('expires_at', '<=', before)\n",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'native-sweep-dropped',
+    why: "native sign-in codes are kept forever: digests of a person's sign-ins pile up",
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .deleteFrom('native_authorizations')\n    .where('expires_at', '<', before)\n",
+    replace:
+      "    .deleteFrom('native_authorizations')\n    .where('expires_at', '<', new Date(0))\n",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'orphan-sweep-ignores-age',
+    why: 'an upload a person is still writing a message around is swept out from under them',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "          .where('created_at', '<', cutoff)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'orphan-sweep-takes-sent-files',
+    why: 'the sweep treats a claimed file as one nobody sent, and deletes a message’s files once they are a day old (D-250)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "        .where('claimed_at', 'is', null)\n        .where(\n          'id',\n          'in',\n          transaction\n            .selectFrom('attachments')\n            .select('id')\n            .where('claimed_at', 'is', null)\n",
+    replace:
+      "        .where(\n          'id',\n          'in',\n          transaction\n            .selectFrom('attachments')\n            .select('id')\n",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'passport-sweep-forgets-the-spent',
+    why: 'the daily sweep keeps a spent passport for ever',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: ".where((eb) => eb.or([eb('expires_at', '<', before), eb('consumed_at', '<', before)]))",
+    replace: ".where('expires_at', '<', before)",
+    tests: [JOBS_TESTS],
+  },
+  {
+    id: 'passport-sweep-keeps-the-expired',
+    why: 'the daily sweep keeps an expired passport for ever',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: ".where((eb) => eb.or([eb('expires_at', '<', before), eb('consumed_at', '<', before)]))",
+    replace: ".where('consumed_at', '<', before)",
+    tests: [JOBS_TESTS],
+  },
+  {
+    id: 'reconcile-counts-unsent-files',
+    why: 'the storage reconciliation counts the uploads nobody claimed as kept, and writes the drift it was to cure (D-250)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "        .where('claimed_at', 'is not', null)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'schedule-runs-a-slot-twice',
+    why: 'a job is run again the instant it finishes, because its own time still counts as ahead',
+    file: 'apps/api/src/modules/jobs/schedule.ts',
+    find: 'while (candidate.getTime() <= after.getTime())',
+    replace: 'while (candidate.getTime() < after.getTime())',
+    tests: ['apps/api/src/modules/jobs/schedule.test.ts'],
+  },
+  {
+    id: 'sign-in-sweep-forgets-the-admin-link',
+    why: 'the daily sweep leaves the administrator’s expired link for ever: DATA.md says it goes',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: '  const adminLink = await sweepAdminVerification(dependencies.database, dependencies.clock);\n',
+    replace: '  const adminLink = 0;\n',
+    tests: [JOBS_TESTS],
+  },
+  {
+    id: 'sign-in-sweep-keeps-counters',
+    why: 'every client address that ever asked stays in rate_limits for good',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .where('last_request', '<', String(before.getTime()))\n",
+    replace: "    .where('last_request', '<', '0')\n",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'sign-in-sweep-keeps-old-links',
+    why: 'every address anybody typed stays in verifications for good',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .deleteFrom('verifications')\n    .where('expires_at', '<', before)\n",
+    replace: "    .deleteFrom('verifications')\n    .where('expires_at', '<', new Date(0))\n",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'sign-in-sweep-keeps-state-rows',
+    why: 'abandoned GitHub round trips pile up in verifications, a PKCE verifier each, for good',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .deleteFrom('verifications')\n    .where('expires_at', '<', before)",
+    replace:
+      "    .deleteFrom('verifications')\n    .where('identifier', 'like', 'magic-link:%')\n    .where('expires_at', '<', before)",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'sign-in-sweep-takes-live-tokens',
+    why: 'the sign-in sweep deletes a verification row that has not been expired for a day',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .where('expires_at', '<', before)\n    .executeTakeFirst();\n  const counters",
+    replace:
+      "    .where('expires_at', '<', new Date(before.getTime() + DAY_MS))\n    .executeTakeFirst();\n  const counters",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'sweep-cutoff-widened-past-the-kept-row',
+    why: 'a sweep’s cutoff is moved past now, so it deletes the rows still inside their time along with the expired ones, and a probe that seeds only expired rows passes it (#901)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: '  const before = new Date(dependencies.clock.now().getTime() - DAY_MS);\n',
+    replace: '  const before = new Date(dependencies.clock.now().getTime() + DAY_MS);\n',
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
+];
