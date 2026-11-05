@@ -15244,6 +15244,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/types/src/releases.test.ts'],
   },
   {
+    id: 'e2e-probe-guard-ignores-isvisible',
+    why: 'a browser test that chooses its path by `isVisible()` is no longer refused, so a branch that depends on the instant it is asked comes back',
+    file: 'scripts/e2e-probes.ts',
+    find: 'isVisible|isHidden',
+    replace: 'isHidden',
+    tests: ['scripts/e2e-probes.test.ts'],
+  },
+  {
     id: 'cache-family-nobody-decided-when-it-is-read-again',
     why: 'a family of cached reads is added and no frame that rewrites it is made good for a socket that was not yet listening',
     file: 'apps/web/src/data/keys.ts',

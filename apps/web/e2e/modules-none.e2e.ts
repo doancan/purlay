@@ -8,7 +8,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { openNav, shellReady } from './support';
+import { openNav, openNavigation, shellReady } from './support';
 
 /** The paths chat and issues serve (`/api/workspaces/:id/channels`, `/api/channels/:id/messages`, …): none is asked for here. */
 const CHAT_PATH =
@@ -106,8 +106,7 @@ test.describe('a server with no module', () => {
     await signIn();
     await page.goto(`/w/${world.workspace.slug}/settings`);
     await shellReady(page);
-    const toggle = page.getByRole('button', { name: 'Open navigation' });
-    if (await toggle.isVisible()) await toggle.click();
+    await openNavigation(page);
     const settings = page.getByRole('navigation', { name: 'Settings' });
     await expect(settings.getByRole('link').first()).toBeVisible();
     for (const name of ['Notifications', 'Integrations']) {

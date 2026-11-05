@@ -7,7 +7,7 @@
  * list fails here, rather than shipping unaudited.
  */
 import { expect, test } from './fixtures';
-import { openSettings } from './support';
+import { openNavigation, openSettings } from './support';
 
 const PAGES = [
   ['profile', 'Profile'],
@@ -34,8 +34,7 @@ test.describe('every page of Settings', () => {
     const main = await openSettings(page, tenant.slug, 'profile', 'Profile');
     await expect(main).toBeVisible();
     // On a narrow window the navigation is behind its toggle.
-    const toggle = page.getByRole('button', { name: 'Open navigation' });
-    if (await toggle.isVisible()) await toggle.click();
+    await openNavigation(page);
     const navigation = page.getByRole('navigation', { name: 'Settings' });
     await expect(navigation).toBeVisible();
     const offered = await navigation

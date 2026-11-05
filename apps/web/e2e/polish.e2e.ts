@@ -6,6 +6,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { openNavigation } from './support';
 
 const channelPath = (slug: string, id: string): string => `/w/${slug}/c/${id}`;
 
@@ -159,18 +160,15 @@ test.describe('readable, in whichever theme this project is', () => {
     await page.keyboard.press('Escape');
 
     // On a narrow window the sidebar is behind its toggle.
-    const toggle = page.getByRole('button', { name: 'Open navigation' });
-    const reachSidebar = async (): Promise<void> => {
-      if (await toggle.isVisible()) await toggle.click();
-    };
-    await reachSidebar();
+    await openNavigation(page);
     await page.getByRole('button', { name: 'New channel' }).click();
     const create = page.getByRole('dialog', { name: 'New channel' });
     await expect(create).toBeVisible();
     await expectNoAxe(create);
     await page.keyboard.press('Escape');
 
-    await reachSidebar();
+    // Closing the dialog leaves the navigation as it was: open, over the page, on a narrow window.
+    await expect(create).toHaveCount(0);
     await page.getByRole('button', { name: /^Account: / }).click();
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
