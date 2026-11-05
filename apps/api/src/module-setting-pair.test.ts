@@ -13,6 +13,7 @@ import {
 } from '@purlay/db';
 import { bundledModules, registry } from './composition';
 import { moduleRegistry } from './platform/module-kit/registry';
+import { moduleCells } from './testing/module-cells';
 
 const migrateRefuses = (setting: string | undefined): boolean => {
   try {
@@ -76,6 +77,19 @@ describe('db:migrate and the API read MODULES alike', () => {
   test.each(ACCEPTED)('both accept %p', (setting) => {
     expect(migrateRefuses(setting)).toBe(false);
     expect(apiRefuses(setting)).toBe(false);
+  });
+
+  test('both accept the setting of every cell of the matrix, which the literals above need not name', () => {
+    for (const cell of moduleCells(bundledModules)) {
+      expect({ cell: cell.label, migrate: migrateRefuses(cell.setting) }).toEqual({
+        cell: cell.label,
+        migrate: false,
+      });
+      expect({ cell: cell.label, api: apiRefuses(cell.setting) }).toEqual({
+        cell: cell.label,
+        api: false,
+      });
+    }
   });
 
   test.each(REFUSED)('both refuse %p', (setting) => {

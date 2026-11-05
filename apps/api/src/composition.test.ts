@@ -10,13 +10,19 @@ import {
   startWhereRunning,
   type BundledModule,
 } from './composition';
+import { PRODUCT_MIGRATION_SETS } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
 import type { AttachmentReader } from './modules/attachments/readable';
 import { noPushNotices, type PushNotices } from './modules/push/notices';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
 import { attachmentNotFound, AppError } from './platform/errors';
+import { CORE_EVENTS, CORE_FRAMES, CORE_JOBS } from './platform/module-kit/core-claims';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
+import { moduleCells } from './testing/module-cells';
+import { concretePath } from './testing/module-smoke';
+
+const bundle: readonly BundledModule[] = bundledModules;
 
 const another: BundledModule = {
   manifest: { id: 'other', requires: [], optional: [], provides: [] },
@@ -53,9 +59,12 @@ const moduleReading = (id: string, reader: AttachmentReader): BundledModule => (
 });
 
 describe('the application as its modules make it', () => {
-  test('carries chat and issues, and the registry of the build is sound', () => {
-    expect(bundledModules.map((module) => module.manifest.id)).toEqual(['chat', 'issues']);
-    expect(registry.resolve(undefined).map((module) => module.id)).toEqual(['chat', 'issues']);
+  test('carries modules, and the registry of the build is sound', () => {
+    const carried = bundledModules.map((module) => module.manifest.id);
+    expect(carried).toContain('chat');
+    expect(carried).toContain('issues');
+    expect(new Set(carried).size).toBe(carried.length);
+    expect(registry.resolve(undefined).map((module) => module.id)).toEqual(carried);
   });
 
   test('in a build with no module at all, the core stands alone: no hook, nobody for the channels, a purge of its own, its own exports', () => {
@@ -239,12 +248,16 @@ describe('the application as its modules make it', () => {
     });
 
     test('is the same for a build’s own modules whatever the setting', () => {
-      expect(compositionFor(undefined).workspacePurge.tables).toEqual(
-        compositionFor('issues').workspacePurge.tables,
-      );
-      expect(compositionFor('none').workspacePurge.tables).toEqual(
-        compositionFor('chat').workspacePurge.tables,
-      );
+      const cells = moduleCells(bundledModules);
+      expect(cells.length).toBeGreaterThan(1);
+      const tablesOf = (cell: (typeof cells)[number]): readonly string[] =>
+        cell.composition.workspacePurge.tables;
+      for (const cell of cells) {
+        expect({ cell: cell.label, tables: tablesOf(cell) }).toEqual({
+          cell: cell.label,
+          tables: cells[0] === undefined ? [] : tablesOf(cells[0]),
+        });
+      }
     });
   });
 
@@ -259,21 +272,49 @@ describe('the application as its modules make it', () => {
       expect(compositionFor('issues, chat').modules).toEqual(bundledModules);
     });
 
-    test('a module left out has no migration set, its routes and jobs are closed', () => {
+    test('in every cell of the matrix a module left out has no migration set and its routes, jobs, frames and events are closed', () => {
+      const cells = moduleCells(bundledModules);
+      expect(cells.length).toBeGreaterThan(bundledModules.length);
+      const withSets = new Set<string>(PRODUCT_MIGRATION_SETS.map((set) => set.id));
+      for (const cell of cells) {
+        const seen = cell.composition;
+        expect(seen.migrationSets.map((set) => set.id)).toEqual(
+          cell.ids.filter((id) => withSets.has(id)),
+        );
+        for (const { manifest } of bundle) {
+          const closed = !cell.ids.includes(manifest.id);
+          const said = (what: string): string => `${cell.label}: ${manifest.id} ${what}`;
+          for (const route of manifest.routes ?? []) {
+            expect({ [said(route)]: seen.closed(concretePath(route)) }).toEqual({
+              [said(route)]: closed,
+            });
+          }
+          for (const job of manifest.jobs ?? []) {
+            expect({ [said(job)]: seen.closedJob(job) }).toEqual({ [said(job)]: closed });
+          }
+          for (const op of manifest.frames ?? []) {
+            expect({ [said(op)]: seen.closedFrame(op) }).toEqual({ [said(op)]: closed });
+          }
+          for (const event of manifest.events ?? []) {
+            expect({ [said(event)]: seen.closedEvent(event) }).toEqual({ [said(event)]: closed });
+          }
+        }
+        // What the core claims is open in every cell, whatever runs.
+        for (const op of CORE_FRAMES) expect(seen.closedFrame(op)).toBe(false);
+        for (const event of CORE_EVENTS) expect(seen.closedEvent(event)).toBe(false);
+        for (const job of CORE_JOBS) expect(seen.closedJob(job)).toBe(false);
+      }
+    });
+
+    test('chat’s and issues’ own paths stay as the manifests give them, and the core’s stay open', () => {
       const all = compositionFor(undefined);
-      expect(all.migrationSets.map((set) => set.id)).toEqual(['chat', 'issues']);
       expect(all.closed('/api/channels/c1')).toBe(false);
-      expect(all.closed('/api/workspaces/w1/issues')).toBe(false);
       expect(all.closed('/api/workspaces/w1/issues/i1')).toBe(false);
       expect(all.closedJob('mail:missed')).toBe(false);
-
       const chatOnly = compositionFor('chat');
-      expect(chatOnly.migrationSets.map((set) => set.id)).toEqual(['chat']);
       expect(chatOnly.closed('/api/workspaces/w1/issues')).toBe(true);
-      expect(chatOnly.closed('/api/workspaces/w1/issues/i1')).toBe(true);
       expect(chatOnly.closed('/api/channels/c1')).toBe(false);
       const issuesOnly = compositionFor('issues');
-      expect(issuesOnly.migrationSets.map((set) => set.id)).toEqual(['issues']);
       expect(issuesOnly.closed('/api/workspaces/w1/issues')).toBe(false);
       expect(issuesOnly.closed('/api/channels/c1')).toBe(true);
       expect(issuesOnly.closed('/api/workspaces/w1/channels')).toBe(true);
@@ -311,18 +352,14 @@ describe('the application as its modules make it', () => {
 
 describe('what the boot says about modules', () => {
   test('names the ones a process runs and the ones the build carries and it does not', () => {
-    expect(moduleReport(compositionFor(undefined))).toEqual({
-      running: ['chat', 'issues'],
-      notRun: [],
-    });
-    expect(moduleReport(compositionFor('issues'))).toEqual({
-      running: ['issues'],
-      notRun: ['chat'],
-    });
-    expect(moduleReport(compositionFor('none'))).toEqual({
-      running: [],
-      notRun: ['chat', 'issues'],
-    });
+    const carried = bundledModules.map((module) => module.manifest.id);
+    for (const cell of moduleCells(bundledModules)) {
+      expect({ cell: cell.label, ...moduleReport(cell.composition) }).toEqual({
+        cell: cell.label,
+        running: cell.ids,
+        notRun: carried.filter((id) => !cell.ids.includes(id)),
+      });
+    }
   });
 });
 
