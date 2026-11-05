@@ -123,7 +123,7 @@ export const ChannelList = (): React.JSX.Element => {
           />
         ) : (
           <>
-            <ul className="flex flex-col">
+            <ul className="flex flex-col gap-1">
               {shown.map(({ channel }) => (
                 <li key={channel.id}>
                   <ChannelRow

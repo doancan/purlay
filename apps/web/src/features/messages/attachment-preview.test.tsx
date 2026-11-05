@@ -140,8 +140,29 @@ describe('the preview in a message', () => {
     expect(within(region).getByText('The file could not be read.')).toBeDefined();
     await person().click(within(region).getByRole('button', { name: 'Retry' }));
     await settle();
-    // A heading in a message is drawn as one, not made a page heading (`render-content.tsx`).
-    expect(within(region).getByText('Notes').className).toContain('font-semibold');
+    // A Markdown file is its own block (D-259), opened on its preview. A heading in a message is drawn
+    // as one, not made a page heading (`render-content.tsx`).
+    const drawn = view.getByRole('region', { name: 'Preview of the md block' });
+    expect(within(drawn).getByText('Notes').className).toContain('font-semibold');
+  });
+
+  test('a Markdown file opens on its preview, and Source shows the words as written (D-259)', async () => {
+    const view = await visit(file('notes.md'), () => Promise.resolve('# Notes\n\n- **one**'));
+    await person().click(view.getByRole('button', { name: 'Preview notes.md' }));
+    await settle();
+    expect(view.getByRole('button', { name: 'Preview' }).getAttribute('aria-pressed')).toBe('true');
+    expect(view.container.querySelector('pre')).toBeNull();
+    await person().click(view.getByRole('button', { name: 'Source' }));
+    expect(view.container.querySelector('pre')?.textContent).toContain('# Notes');
+    expect(view.container.querySelector('pre')?.textContent).toContain('- **one**');
+  });
+
+  test('a long Markdown file says it was cut, once, under the block', async () => {
+    const long = `# Notes\n${'word\n'.repeat(20_000)}`;
+    const view = await visit(file('notes.md'), () => Promise.resolve(long));
+    await person().click(view.getByRole('button', { name: 'Preview notes.md' }));
+    await settle();
+    expect(view.getAllByText(/The file goes on/).length).toBe(1);
   });
 
   test('a file it cannot read in place has no Preview', async () => {

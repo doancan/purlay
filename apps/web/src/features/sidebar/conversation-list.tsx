@@ -71,7 +71,7 @@ export const ConversationList = (): React.JSX.Element | null => {
         {channels.isSuccess && all.length === 0 ? (
           <p className="px-2 py-1 text-caption text-nav-ink-muted">{t('conversations.empty')}</p>
         ) : (
-          <ul className="flex flex-col">
+          <ul className="flex flex-col gap-1">
             {list.map(({ group }) => {
               const current = group.id === currentId;
               return (

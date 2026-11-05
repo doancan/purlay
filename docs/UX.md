@@ -530,6 +530,11 @@ page of the same name.
   beside the picture close it, and focus goes back to the thumbnail; `←` `→` step through the message's
   pictures and stop at either end. While the picture loads its thumbnail stands in its place; one that
   does not load says so, with Retry. ⌘/Ctrl-click still opens the image in a tab.
+- **A fenced block named `md` or `markdown` has two views** (D-259): *Source*, as every block, and *Preview*, the
+  Markdown drawn as a message is (links, lists, quotes, tables; raw HTML is words), chosen by two buttons in its
+  header. Copy is the source in both. A Markdown **file's** preview (the eye beside it) opens on *Preview* with
+  *Source* one press away, in the block's own box — and neither ever lets what it draws stretch the feed: a
+  preview that scrolls the page away from the button that opened it is a defect.
 - **One edge, no bubbles** (D-187, which reverses D-119 and returns to D-100's flat rows). Every message — yours included — hangs from the left of
   the feed, with an avatar in a fixed column and the author's name over the first message of a group, the way
   Slack draws it. There is no bubble and no tint: the words sit on the page, so a code block, a table or a quote
@@ -772,6 +777,29 @@ language. A table or formatting says so with **Paste as text** one step away, a 
 either keeps later edits as above; inside code a paste is always the words as they are, and
 `Cmd/Ctrl+Shift+V` pastes the words as they are anywhere. A block always starts on a line of its own — after
 words on the same line a fence is not one.
+
+**What else a paste is** (D-259). *Words win over a picture of them*: a spreadsheet's range or a Word table
+comes with a picture of itself, and its words are what was copied; a screenshot, with no words, is uploaded
+and named for the second it was pasted (`pasted-image-…png`), and so is a file listed only under the
+clipboard's items. A file copied in the Finder or the Explorer keeps its own name. *One line of code* —
+a shell command, a path with its line, `FOO=bar`, a whole statement — becomes inline code, and only when the
+whole line is that; a sentence with a command in it, an IBAN or an amount stays words. *A few lines of
+certain code* (JSON, SQL, Go, Python, a stack trace…) are a block in their language; `Owner: Ali` over
+`Due: Friday` is a chat message, never YAML. *Markdown someone wrote* — a note with headings, lists, a table or
+a link — is drawn as Markdown and not shown as a code block. *A URL pasted over selected words* makes them the
+link. *A column of numbers in a table* is aligned to the right, its words untouched. *A text of 500 lines or
+more, or more than a message holds, or a table of more than 200 rows* stays where it was pasted, and a row
+under the box asks whether to send it as a file (`.md`, `.txt`, its language's, or a `.csv` Excel opens):
+**Send as file** takes the words out and uploads them, **Keep as text** closes the row; it stays until
+answered, until the words are edited away or the message is sent, and is never a toast, which a phone's thumb
+would miss. **Code or a code block?** — inline code is a word or a line in the middle of a sentence; a block
+is lines of its own, in a card with Copy and Wrap, coloured in its language.
+
+**Lists and tasks** (D-259). A **Task list** button in the formatting row marks the lines it touches with `- [ ] `
+(and takes them off again, box and all); `Shift+Enter` in a task carries on with an empty box, an empty task ends
+the list. A list copied as plain words — `•` bullets, `☐` `☑` boxes, `1)` numbers that count on — is pasted as a
+Markdown list, **Paste as text** one step away; a dash is never read (it is a speaker in a dialogue), and neither
+is a lone bullet or a `2)` out of order.
 
 **Slash commands** (D-214). A `/` at the very start opens a list of commands, narrowed as letters are
 typed; arrows move, Tab (or Enter, until the command is whole) writes it out with a space for its words, Esc
