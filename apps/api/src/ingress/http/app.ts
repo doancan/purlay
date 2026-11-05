@@ -229,6 +229,7 @@ import {
 import { modulesInfoFamily, serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
+import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
 import { PLAN } from '../../modules/jobs/schedule';
 import { EDGE_ROUTE, answerMetrics, methodLabel, routeLabel, statusLabel } from './metrics';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
@@ -491,12 +492,24 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const closedRoute = (request: Request): boolean => modules.closed(new URL(request.url).pathname);
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
+  /** The module that owns a route as registered; the request log names it for a module's route only. */
+  const moduleOfRoute = (route: string | undefined): string =>
+    modules.owner.ofRoute(routeLabel(route));
+  const moduleField = (route: string | undefined): { module?: string } => {
+    const owner = moduleOfRoute(route);
+    return owner === CORE_OWNER || owner === NO_OWNER ? {} : { module: owner };
+  };
   /** One request's line on the page: never its path as sent, only the route it was registered as. */
   const observe = (method: string, route: string | undefined, status: number): void => {
     const started = currentRequest()?.startedAt;
     if (started === undefined) return;
     metrics.httpDuration.observe(
-      { method: methodLabel(method), route: routeLabel(route), status: statusLabel(status) },
+      {
+        method: methodLabel(method),
+        route: routeLabel(route),
+        status: statusLabel(status),
+        module: moduleOfRoute(route),
+      },
       (performance.now() - started) / 1000,
     );
   };
@@ -550,6 +563,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
     known: PLAN.map((slot) => slot.job),
+    moduleOf: modules.owner.ofJob,
     log,
   });
   // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
@@ -764,7 +778,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
       }
       const where = writtenPath(route, path);
       // The client is told INTERNAL and nothing else; the cause is written here.
-      if (refusal.status === 500) log.error('request failed', { err: error, path: where });
+      if (refusal.status === 500)
+        log.error('request failed', { err: error, path: where, ...moduleField(route) });
       // Said by the name of the reference, so a pairing defect is not hidden by the 404 (D-139 §2).
       const gone = goneMessageReference(error);
       if (gone !== undefined) {
@@ -797,6 +812,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       write('request', {
         method: request.method,
         path: writtenPath(route, path),
+        ...moduleField(route),
         status,
         ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
       });

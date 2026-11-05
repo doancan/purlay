@@ -177,7 +177,7 @@ value.
 
 - the boot logs one `info` line, `the modules this process runs`, with `running` and `notRun` (the modules the build
   carries and this process leaves out);
-- `/metrics` (behind `METRICS_TOKEN`) carries `purlay_modules_info{module="<id>"} 1` for each running module;
+- `/metrics` (behind `METRICS_TOKEN`) carries `purlay_modules_info{module="<id>"} 1` for each running module, and every HTTP request and scheduled-job series carries the `module` that owns its route or job;
 - signed in, `GET /api/me` answers `modules`, the ids this server runs (the page draws the screens of those only);
 - a path of a module that is off answers the plain `404` of any unknown path, for example
   `GET /api/workspaces/<id>/issues` with a session on a node that does not run `issues`; the public `GET /api/client`

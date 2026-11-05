@@ -3,6 +3,7 @@
  * UTC, and a loop that sleeps until the next one is due, runs it, and stops when it is told to.
  */
 import { describe, expect, test } from 'bun:test';
+import { composition } from '../../composition';
 import { PLAN, nextRun, runSchedule, type Slot } from './schedule';
 
 const at = (iso: string): Date => new Date(iso);
@@ -88,6 +89,7 @@ describe('the loop', () => {
         return Promise.resolve(1);
       },
       stopped: () => stop,
+      moduleOf: () => 'core',
       log: { info: (msg) => said.push(msg), error: (msg) => said.push(msg) },
     });
     expect(ran).toEqual(['jobs:first']);
@@ -105,6 +107,7 @@ describe('the loop', () => {
         return Promise.resolve(0);
       },
       stopped: () => true,
+      moduleOf: () => 'core',
       log: { info: () => undefined, error: () => undefined },
     });
     expect(ran).toEqual([]);
@@ -128,6 +131,7 @@ describe('the loop', () => {
         return Promise.resolve(job === 'reconcile:storage' ? 1 : 0);
       },
       stopped: () => stop,
+      moduleOf: (job) => (job === 'mail:missed' ? 'chat' : 'core'),
       log: {
         info: (msg, fields = {}) => said.push({ msg, fields }),
         error: (msg, fields = {}) => said.push({ msg, fields }),
@@ -144,7 +148,17 @@ describe('the loop', () => {
     ]);
     expect(said.find((s) => s.fields['job'] === 'reconcile:storage')).toMatchObject({
       msg: 'a scheduled job exited with a failure',
-      fields: { exitCode: 1 },
+      fields: { exitCode: 1, module: 'core' },
     });
+    expect(said.find((s) => s.fields['job'] === 'mail:missed')).toMatchObject({
+      msg: 'a scheduled job ran',
+      fields: { module: 'chat' },
+    });
+  });
+});
+
+describe('the plan and its modules', () => {
+  test('every job the scheduler plans belongs to the core or to a module', () => {
+    expect(PLAN.filter((slot) => composition.owner.ofJob(slot.job) === 'none')).toEqual([]);
   });
 });

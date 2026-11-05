@@ -60,6 +60,8 @@ export interface SchedulePorts {
   readonly run: (job: string) => Promise<number>;
   /** True once the container is being stopped. */
   readonly stopped: () => boolean;
+  /** The module a job is for, said with its outcome so a failing job names the module that owns it. */
+  readonly moduleOf: (job: string) => string;
   readonly log: {
     readonly info: (msg: string, fields?: Record<string, unknown>) => void;
     readonly error: (msg: string, fields?: Record<string, unknown>) => void;
@@ -73,11 +75,12 @@ export interface SchedulePorts {
 export const FIRST_RUN = 'jobs:first';
 
 export const runSchedule = async (ports: SchedulePorts): Promise<void> => {
-  const { plan, clock, sleep, run, stopped, log } = ports;
+  const { plan, clock, sleep, run, stopped, moduleOf, log } = ports;
   const report = async (job: string): Promise<void> => {
     const exitCode = await run(job);
-    if (exitCode === 0) log.info('a scheduled job ran', { job });
-    else log.error('a scheduled job exited with a failure', { job, exitCode });
+    if (exitCode === 0) log.info('a scheduled job ran', { job, module: moduleOf(job) });
+    else
+      log.error('a scheduled job exited with a failure', { job, module: moduleOf(job), exitCode });
   };
   let from = clock.now();
   if (stopped()) return;

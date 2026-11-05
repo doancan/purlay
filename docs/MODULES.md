@@ -271,8 +271,13 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   are shared by every module in a process, so a module that serves a great many requests, or heavy ones, can
   still slow chat's sends on a shared process, budget or no budget (an unpaced reader of issues' list, three
   hundred requests a second, tripled chat's p95 on a laptop);
-- every log line and metric carries `module`. **Not built**: the boot line and `purlay_modules_info` name the
-  modules a process runs, and nothing else carries the label yet.
+- metrics and logs name the module. **Built**: the HTTP request histogram and the scheduled-job series carry `module`
+  (`core`, a module id, or `none` for a route no one owns), read from the core's claims and the manifests' `routes` and
+  `jobs` (`platform/module-kit/ownership.ts`), the request line and `request failed` carry it for a module's route, a
+  scheduled job's lines carry it, and the boot line and `purlay_modules_info` name the modules a process runs. **Not built**:
+  the label on `purlay_rate_limited_total` (a refused socket frame is counted where its operation is not known), on the
+  push and mail failure counters, on a log line that is not a request's or a job's, and a counter of the share's own refusals
+  (they are visible as `module="issues",status="5xx"` of the request histogram).
 
 ## 8. What holds each rule
 
