@@ -1,26 +1,27 @@
 # Purlay on a server managed with Dockhand, behind Nginx Proxy Manager (docs/DEPLOY.md, D-258).
 #
-# The same stack as docker-compose.production.yml — the API, the scheduler, PostgreSQL, Garage and a
-# Caddy in front of the API — in ONE file, so it can be pasted into Dockhand's editor or deployed from
-# Git without a checkout beside it: the two configuration files the production stack mounts from
-# `docker/` are written inline below (`configs: content:`, Docker Compose 2.23.1 or later). Two
-# things differ, and only these (scripts/dockhand-compose.integration.test.ts holds the rest equal):
+# The same stack as docker-compose.production.yml — the API, the scheduler, PostgreSQL and Garage — in
+# ONE file, so it can be pasted into Dockhand's editor or deployed from Git without a checkout beside it:
+# Garage's configuration, which the production stack mounts from `docker/`, is written inline below
+# (`configs: content:`, Docker Compose 2.23.1 or later). What differs, and only this
+# (scripts/dockhand-compose.integration.test.ts holds the rest equal):
 #
-# - **No port is published.** Nginx Proxy Manager holds 80 and 443, and its certificate. Caddy here
-#   listens on plain HTTP inside the stack, and joins Nginx Proxy Manager's Docker network
-#   (`PROXY_NETWORK`) as `purlay`: in Nginx Proxy Manager, forward the domain to `http://purlay:80`
-#   with Websockets Support on. Caddy keeps its other duties: /metrics refused from outside, a
-#   request held while the API restarts, no query string in the access log.
-# - **Two proxies, one client address.** The API trusts exactly one proxy (`TRUST_PROXY`, D-81), so
-#   Caddy takes the client's address from the `X-Real-IP` Nginx Proxy Manager sets, trusting it only
-#   from a private address, and passes that one address on as `X-Forwarded-For`.
+# - **No Caddy: the API's own port is published**, on `PURLAY_HTTP_PORT` (bound to `PURLAY_HTTP_BIND`,
+#   every address unless set), for Nginx Proxy Manager — on this server or another — which holds 80
+#   and 443 and the certificate. In Nginx Proxy Manager, forward the domain to
+#   `http://<this server>:<PURLAY_HTTP_PORT>` with Websockets Support on. The port speaks plain HTTP:
+#   bind it to an address only the proxy reaches where the network is not your own.
+#   Nginx Proxy Manager is the one proxy `TRUST_PROXY` means (D-81): it must send the client as the
+#   last X-Forwarded-For entry, which it does unless Cloudflare is in front of it (docs/CONFIG.md).
+#   What Caddy did is the proxy's or the API's: /metrics answers 404 without METRICS_TOKEN (D-221),
+#   and a request made while the API restarts fails rather than waits.
 # - WAL archiving (D-202) is not offered: it needs a script mounted into PostgreSQL. Back up with
 #   the database's own dumps, or use docker-compose.production.yml when point-in-time recovery is
 #   wanted.
 #
 # Its inputs are the variables of docker-compose.production.yml (docs/CONFIG.md), without
-# HTTP_PORT, HTTPS_PORT and the WAL_ARCHIVE ones, and with PROXY_NETWORK, the name of Nginx Proxy
-# Manager's Docker network. Set them in Dockhand's environment for the stack.
+# HTTP_PORT, HTTPS_PORT, PROXY_MEMORY_LIMIT and the WAL_ARCHIVE ones, and with PURLAY_HTTP_PORT
+# (required) and PURLAY_HTTP_BIND. Set them in Dockhand's environment for the stack.
 
 # Every container's log, bounded: Docker's json-file driver keeps everything unless told, and a
 # server whose disk its own logs filled stops writing the database next. Five files of 50 MB each per
@@ -129,6 +130,9 @@ services:
     # The process drains for up to ten seconds (D-72); give it a margin to exit
     # before the runtime kills it.
     stop_grace_period: 15s
+    # The one published port, for Nginx Proxy Manager: plain HTTP (see the head of this file).
+    ports:
+      - '${PURLAY_HTTP_BIND:-0.0.0.0}:${PURLAY_HTTP_PORT:?set PURLAY_HTTP_PORT to the port Nginx Proxy Manager forwards to}:3001'
     environment:
       <<: *environment
       PORT: '3001'
@@ -136,8 +140,8 @@ services:
       TRUST_PROXY: 'true'
       # One node, or several: one takes the lock and migrates, the rest wait (D-93).
       MIGRATE_ON_START: 'true'
-      # The bearer token a scraper on this network reads /metrics with (D-221); empty is off. The proxy
-      # never passes /metrics from outside (docker/Caddyfile), so a Prometheus scrapes api:3001.
+      # The bearer token a scraper reads /metrics with (D-221); empty is off. Here no Caddy refuses
+      # /metrics from outside, so set it only once Nginx Proxy Manager refuses that path itself.
       METRICS_TOKEN: ${METRICS_TOKEN:-}
     depends_on:
       postgres:
@@ -257,36 +261,6 @@ services:
       retries: 20
       start_period: 5s
 
-  # Plain HTTP behind Nginx Proxy Manager, which ends TLS. No port is published: it is reached on
-  # Nginx Proxy Manager's network as `purlay`. WebSockets pass through `reverse_proxy` unchanged.
-  proxy:
-    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
-    restart: unless-stopped
-    logging: *logging
-    # Measured bounds, not a guess (docs/spikes/resources.md, #639): a runaway takes this
-    # container down, not the host. Raised with PROXY_MEMORY_LIMIT on a larger server.
-    mem_limit: ${PROXY_MEMORY_LIMIT:-256m}
-    pids_limit: 128
-    configs:
-      - source: caddyfile
-        target: /etc/caddy/Caddyfile
-    volumes:
-      - proxy-data:/data
-      - proxy-config:/config
-    networks:
-      default:
-      edge:
-        aliases: [purlay]
-    depends_on:
-      api:
-        condition: service_healthy
-
-networks:
-  # Nginx Proxy Manager's own network, made by its stack: this one only joins it.
-  edge:
-    external: true
-    name: ${PROXY_NETWORK:?set PROXY_NETWORK to the name of Nginx Proxy Manager's Docker network}
-
 configs:
   # docker/garage.production.toml, as it is: a test keeps the two the same.
   garage:
@@ -322,62 +296,6 @@ configs:
       [admin]
       api_bind_addr = "0.0.0.0:3903"
 
-  # docker/Caddyfile for a site behind one more proxy: plain HTTP, and the client's address taken
-  # from that proxy alone.
-  caddyfile:
-    content: |
-      {
-      	servers {
-      		# Nginx Proxy Manager reaches Caddy from its Docker network, a private address. Only from
-      		# there is a client address believed, and only X-Real-IP: Nginx Proxy Manager sets it to the
-      		# peer it saw, over anything the client sent. Its X-Forwarded-For is not used, because it
-      		# APPENDS to the client's own, so its first entry is whatever the client wrote.
-      		trusted_proxies static private_ranges
-      		client_ip_headers X-Real-IP
-      	}
-      }
-
-      :80 {
-      	# The API serves HTTP, the WebSocket upgrade and the built client on the same
-      	# origin (D-61), so there is one upstream and no routing here.
-      	#
-      	# Compression is the proxy's: the API sends files and JSON as they are.
-      	encode zstd gzip
-
-      	# The API's /metrics is for a scraper on the stack's own network (D-221): from the internet it is
-      	# not there, whether or not METRICS_TOKEN is set.
-      	@metrics path /metrics /metrics/*
-      	respond @metrics 404
-
-      	reverse_proxy api:3001 {
-      		# The API trusts one proxy and reads the last X-Forwarded-For entry (D-81): it is given
-      		# the client alone, not the client and Nginx Proxy Manager.
-      		header_up X-Forwarded-For {client_ip}
-      		# Only a ready node receives traffic.
-      		health_uri /health/ready
-      		health_interval 5s
-      		# A request that arrives while the API restarts waits up to 30 s (#636).
-      		lb_try_duration 30s
-      		lb_try_interval 250ms
-      		# Tried again only if it never reached the API (#666).
-      		lb_retry_match {
-      			expression false
-      		}
-      	}
-
-      	# The access log records the path, never the query: an OAuth callback carries a one-time
-      	# code, and a search what was searched for.
-      	log {
-      		output stdout
-      		format filter {
-      			wrap json
-      			request>uri regexp \?.* ""
-      		}
-      	}
-      }
-
 volumes:
   postgres-data:
   garage-data:
-  proxy-data:
-  proxy-config:
