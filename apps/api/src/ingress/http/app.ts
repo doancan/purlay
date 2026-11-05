@@ -542,6 +542,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     userWrites,
     metrics,
     closedFrame: modules.closedFrame,
+    frameOwner: modules.owner.ofFrame,
     closedEvent: modules.closedEvent,
   });
   metrics.registry.gauge(
@@ -792,7 +793,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
           path: where,
         });
       }
-      if (refusal.body.error.code === 'RATE_LIMITED') metrics.rateLimited.inc({ door: 'http' });
+      if (refusal.body.error.code === 'RATE_LIMITED')
+        metrics.rateLimited.inc({ door: 'http', module: moduleOfRoute(route) });
       if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
         set.headers['retry-after'] = String(error.retryAfterSeconds);
       }

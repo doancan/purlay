@@ -104,7 +104,10 @@ const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_
 
 // What this process counts for `/metrics` (D-221): one registry, handed to everything that records.
 // Kept whether or not METRICS_TOKEN is set — counting is cheap; without it the page is never served.
-const metrics = serverMetrics();
+const metrics = serverMetrics(
+  undefined,
+  modules.bundled.map((module) => module.manifest.id),
+);
 log.info(
   config.METRICS_TOKEN === undefined
     ? 'metrics are off: METRICS_TOKEN is unset'
@@ -127,6 +130,7 @@ const push =
         attention,
         notices: modules.pushNotices,
         failures: metrics.pushFailures,
+        owner: modules.pushOwner,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
         post: async (url, headers, body) =>
           await postExternal(url, headers, body, {
