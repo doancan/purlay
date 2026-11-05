@@ -39,12 +39,15 @@ const projects = [
  * One project alone: `PURLAY_E2E_PROJECT=chromium-dark bun run test:e2e`. The pipeline runs the four
  * as four jobs, so each has a machine to itself — the suite fits its time, and a latency measured
  * there is the page's, not three other browsers' and servers' sharing two cores. Only that project's
- * server starts. A name that is not a project refuses to run, rather than running all four.
+ * server starts. The name of an engine (`webkit`) runs that engine's project alone, below. A name that is
+ * neither refuses to run, rather than running all four.
  */
 const only = process.env['PURLAY_E2E_PROJECT'] ?? '';
-if (only !== '' && !projects.some((definition) => definition.name === only)) {
+const ENGINES = { webkit: 'Desktop Safari', firefox: 'Desktop Firefox' } as const;
+const isEngine = (name: string): name is keyof typeof ENGINES => name in ENGINES;
+if (only !== '' && !isEngine(only) && !projects.some((definition) => definition.name === only)) {
   throw new Error(
-    `PURLAY_E2E_PROJECT names ${only}; it takes ${projects.map((definition) => definition.name).join(', ')}`,
+    `PURLAY_E2E_PROJECT names ${only}; it takes ${[...projects.map((definition) => definition.name), ...Object.keys(ENGINES)].join(', ')}`,
   );
 }
 const chosen = projects.filter((definition) => only === '' || definition.name === only);
@@ -94,19 +97,18 @@ const project = (definition: (typeof projects)[number], index: number): Project 
 });
 
 /**
- * Engines beyond Chromium, opt in: `PURLAY_E2E_ENGINES=webkit,firefox bun run test:e2e`. Not in CI,
- * and so not a second browser tool (CONTRIBUTING §1.12): a way for anyone to see the suite on Safari's
- * or Firefox's engine. Light, wide, and with no screenshots — a baseline is one engine's. What each
- * engine cannot do as the suite asks is skipped by name in the test, with why
+ * Engines beyond Chromium: `PURLAY_E2E_ENGINES=webkit,firefox bun run test:e2e` adds them to a run, and
+ * `PURLAY_E2E_PROJECT=webkit` runs one alone, which is how CI runs WebKit (a job of its own beside the
+ * Chromium four; Firefox is opt in only). Light, wide, and with no screenshots — a baseline is one
+ * engine's. What an engine cannot do as the suite asks is skipped in the test, by engine and with why
  * (`docs/spikes/cross-browser.md`). A name that is not one of these refuses to run, rather than
  * running Chromium alone and looking like it ran the rest.
  */
-const ENGINES = { webkit: 'Desktop Safari', firefox: 'Desktop Firefox' } as const;
-const isEngine = (name: string): name is keyof typeof ENGINES => name in ENGINES;
-const engines = (process.env['PURLAY_E2E_ENGINES'] ?? '')
-  .split(',')
-  .map((name) => name.trim())
-  .filter((name) => name !== '')
+const engines = [
+  ...(process.env['PURLAY_E2E_ENGINES'] ?? '').split(',').map((name) => name.trim()),
+  ...(isEngine(only) ? [only] : []),
+]
+  .filter((name, at, names) => name !== '' && names.indexOf(name) === at)
   .map((name) => {
     if (!isEngine(name)) {
       throw new Error(
