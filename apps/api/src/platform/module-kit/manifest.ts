@@ -39,6 +39,15 @@ export interface PermissionDeclaration {
   readonly minimumRole: UserRole;
 }
 
+/**
+ * Audit actions the module records (D-26), and the permission that reads them from the trail: the core's `audit.read`, or
+ * a permission the module declares. An action the module writes and does not list fails `audit-emissions.test.ts`.
+ */
+export interface AuditActionGroup {
+  readonly read: string;
+  readonly actions: readonly string[];
+}
+
 export interface ModuleManifest {
   /** Lowercase letters, digits and hyphens: the word an operator writes in `MODULES`. */
   readonly id: string;
@@ -82,4 +91,6 @@ export interface ModuleManifest {
   readonly retention?: readonly string[];
   /** What a role may do in the module that is not just "be a member", as names the services ask (`permissions.ts`). */
   readonly permissions?: readonly PermissionDeclaration[];
+  /** The actions the module writes to the audit trail, with who may read them (`audit-access.ts`). */
+  readonly auditActions?: readonly AuditActionGroup[];
 }

@@ -3,10 +3,11 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { USER_ROLES } from '../../testing/roles';
-import { permissionTable } from './permissions';
+import { CORE_PERMISSIONS, permissionTable } from './permissions';
 
 describe('the permission table', () => {
   const table = permissionTable([
+    ...CORE_PERMISSIONS,
     { name: 'issues.delete-any', minimumRole: 'admin' },
     { name: 'notes.publish', minimumRole: 'owner' },
     { name: 'notes.read', minimumRole: 'member' },
@@ -19,8 +20,13 @@ describe('the permission table', () => {
     expect(held('notes.publish')).toEqual(['owner']);
   });
 
+  test('the core holds the audit trail for an owner and an admin', () => {
+    expect(table.holds('member', 'audit.read')).toBe(false);
+    expect(table.holds('admin', 'audit.read')).toBe(true);
+  });
+
   test('a permission nobody declared is held by nobody, the owner included', () => {
     expect(USER_ROLES.filter((role) => table.holds(role, 'notes.delete'))).toEqual([]);
-    expect(permissionTable([]).holds('owner', 'notes.read')).toBe(false);
+    expect(permissionTable([]).holds('owner', 'audit.read')).toBe(false);
   });
 });

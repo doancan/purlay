@@ -353,9 +353,13 @@ describe('a module’s share of the database (D-250 rule 7)', () => {
   });
 });
 
-describe('the permissions a module declares', () => {
+describe('the permissions and audit actions a module declares', () => {
   const notes = (rest: Partial<ModuleManifest> = {}): ModuleManifest =>
-    module('notes', { permissions: [{ name: 'notes.publish', minimumRole: 'admin' }], ...rest });
+    module('notes', {
+      permissions: [{ name: 'notes.publish', minimumRole: 'admin' }],
+      auditActions: [{ read: 'notes.publish', actions: ['note.created'] }],
+      ...rest,
+    });
 
   test('a sound declaration registers', () => {
     expect(() => moduleRegistry([notes()], CORE_CLAIMS)).not.toThrow();
@@ -372,6 +376,7 @@ describe('the permissions a module declares', () => {
               { name: 'notes.publish', minimumRole: 'admin' },
               { name: 'notes.publish', minimumRole: 'owner' },
             ],
+            auditActions: [],
           }),
         ]),
       ),
@@ -382,11 +387,49 @@ describe('the permissions a module declares', () => {
     ]);
   });
 
-  test('a module cannot own a permission the core already has', () => {
+  test('two modules, or a module and the core, cannot both own a permission or an audit action', () => {
     expect(
       problemsOf(() =>
-        moduleRegistry([notes()], { ...CORE_CLAIMS, permissions: ['notes.publish'] }),
+        moduleRegistry(
+          [
+            notes(),
+            module('wiki', {
+              permissions: [{ name: 'wiki.edit', minimumRole: 'member' }],
+              auditActions: [{ read: 'audit.read', actions: ['note.created', 'member.joined'] }],
+            }),
+          ],
+          CORE_CLAIMS,
+        ),
       ),
-    ).toEqual(['"notes" owns the permission "notes.publish", which is the core\'s']);
+    ).toEqual([
+      '"notes" and "wiki" both own the audit action "note.created"',
+      '"wiki" owns the audit action "member.joined", which is the core\'s',
+    ]);
+  });
+
+  test("the permission that reads an action is the core's or the module's own, never another module's", () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry(
+          [
+            notes({ auditActions: [{ read: 'wiki.edit', actions: ['note.created'] }] }),
+            module('wiki', { permissions: [{ name: 'wiki.edit', minimumRole: 'member' }] }),
+          ],
+          CORE_CLAIMS,
+        ),
+      ),
+    ).toEqual([
+      '"notes" has audit actions read by "wiki.edit", which is neither the core\'s permission nor one of its own',
+    ]);
+  });
+
+  test('an audit action is a noun and a past tense, as the trail names them', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          notes({ auditActions: [{ read: 'notes.publish', actions: ['Created'] }] }),
+        ]),
+      ),
+    ).toEqual(['"notes" lists the audit action "Created", which is not like "issue.created"']);
   });
 });
