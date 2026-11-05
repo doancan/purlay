@@ -4,6 +4,7 @@
  * many ask. What a screen does once drawn is the screen's own tests'.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
+import { person } from '../testing/user';
 import { installDom } from '../testing/dom';
 import { IDS, aSignedInApi } from '../testing/fixtures';
 import { renderApp } from '../testing/render';
@@ -98,5 +99,19 @@ describe('what stands in for a screen while its chunk comes', () => {
     const view = await renderApp(<Waiting kind="plain" />);
     expect(view.container.querySelector('header')).toBeNull();
     expect(view.getByRole('status')).toBeDefined();
+  });
+});
+
+describe('the shell across a change between the core’s routes and a module’s', () => {
+  test('is built once: a menu opened on the sidebar of a core screen is still there on a module’s', async () => {
+    const { findByRole, getByRole } = await renderApp(<Outlet />, {
+      path: '/w/acme/settings',
+      api: aSignedInApi(),
+    });
+    const sidebar = await findByRole('complementary', { name: 'Workspace' });
+    await person().click(await findByRole('link', { name: 'Open questions' }));
+    expect(await findByRole('heading', { level: 1, name: /Open questions/ })).toBeDefined();
+    // The same element, not an equal one: a shell built again would have closed a menu opened on it.
+    expect(getByRole('complementary', { name: 'Workspace' }) === sidebar).toBe(true);
   });
 });
