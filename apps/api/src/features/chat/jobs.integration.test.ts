@@ -28,14 +28,14 @@ describe('integration: the work chat supplies for its jobs', () => {
     log: aRecordingLogger().log,
     storage: aMemoryStore(),
     appUrl: 'http://localhost:3000',
-    withMailer: async (use) => {
+    withMailer: async (use): ReturnType<typeof use> => {
       relays.push(undefined);
       return await use(undefined);
     },
   });
 
   test('is exactly the jobs and the retention its manifest names', () => {
-    const named = [...(chatModule.manifest.jobs ?? []), ...(chatModule.manifest.retention ?? [])];
+    const named = [...chatModule.manifest.jobs, ...chatModule.manifest.retention];
     expect(Object.keys(chatJobWork).sort()).toEqual(named.sort());
   });
 
