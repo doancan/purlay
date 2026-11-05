@@ -32,6 +32,25 @@ describe('integration: the scheduled jobs of the modules a process runs', () => 
     }
   }, 30_000);
 
+  test('a job that finished and a job left alone are each logged with the module they are for', async () => {
+    const lineSaying = (said: string, msg: string): Record<string, unknown> | undefined =>
+      said
+        .split('\n')
+        .filter((line) => line.startsWith('{'))
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .find((line) => String(line['msg']).startsWith(msg));
+    const ran = await job('sweep:sessions', 'none');
+    expect(lineSaying(ran.said, 'a scheduled job finished')).toMatchObject({
+      job: 'sweep:sessions',
+      module: 'core',
+    });
+    const left = await job('mail:missed', 'none');
+    expect(lineSaying(left.said, 'the job belongs to a module that is not run')).toMatchObject({
+      job: 'mail:missed',
+      module: 'chat',
+    });
+  }, 30_000);
+
   test('the status report leaves the closed jobs out, so none of them is overdue', async () => {
     const { said } = await job('jobs:status', 'none');
     expect(said).toContain('sweep:sessions');

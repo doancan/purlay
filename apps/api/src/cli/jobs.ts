@@ -127,7 +127,11 @@ const runOne = async (
   job: string,
   work: () => Promise<Readonly<Record<string, number>>>,
 ): Promise<boolean> =>
-  await runJob({ database, clock, log }, job, work).then(
+  await runJob(
+    { database, clock, log: log.child({ module: composition.owner.ofJob(job) }) },
+    job,
+    work,
+  ).then(
     () => true,
     () => false,
   );
@@ -148,7 +152,10 @@ try {
       if (!(await runOne(job, work))) process.exitCode = 1;
     }
   } else if (composition.closedJob(name)) {
-    log.info('the job belongs to a module that is not run; nothing to do', { job: name });
+    log.info('the job belongs to a module that is not run; nothing to do', {
+      job: name,
+      module: composition.owner.ofJob(name),
+    });
   } else {
     const work = jobs[name];
     if (work === undefined) {
