@@ -98,9 +98,15 @@ const TAKEN_BY_INDEX: Readonly<Record<string, AppErrorBody>> = {
 const UNIQUE = '23505';
 const TOO_LONG = '22001';
 const CHECK = '23514';
+/** `query_canceled`: a statement ran past its time limit, a module's (`budget`) or the pool's own. */
+const QUERY_CANCELED = '57014';
 
 /** The one mapping from a refused statement to a refusal, or `undefined` if it is not the client's doing. */
 const refusalForViolation = ({ sqlstate, constraint }: Violation): AppErrorBody | undefined => {
+  // The database is busy, as the pool being empty is, and a client retries: not a defect it was told of as one.
+  if (sqlstate === QUERY_CANCELED) {
+    return { code: 'DATABASE_UNAVAILABLE', message: 'The service is busy. Try again shortly.' };
+  }
   if (sqlstate === UNIQUE && constraint !== undefined) return TAKEN_BY_INDEX[constraint];
   if (sqlstate === TOO_LONG || sqlstate === CHECK) {
     // Which column, and which rule, is the schema's business. The client is told
