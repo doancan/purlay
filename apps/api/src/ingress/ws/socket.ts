@@ -43,6 +43,7 @@ import { refusalFor } from '../http/errors';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
 import type { ServerMetrics } from '../../platform/metrics';
+import { NO_OWNER } from '../../platform/module-kit/ownership';
 
 export interface SocketDependencies {
   readonly config: Pick<Config, 'APP_URL' | 'SOCKET_MAX_CONNECTIONS' | 'SOCKET_REPLAY_CONCURRENCY'>;
@@ -60,6 +61,8 @@ export interface SocketDependencies {
   readonly userWrites: RateLimiter;
   /** The operations of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedFrame?: (op: string) => boolean;
+  /** The module that owns a frame's operation (`composition.ts`): the label of a refusal for the rate; absent, `none`. */
+  readonly frameOwner?: (op: string) => string;
   /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedEvent?: (event: string) => boolean;
   /** Defaults to `SOCKET_CONNECTION_LIMITS.perUser` and the configuration's `SOCKET_MAX_CONNECTIONS`; a test passes less. */
@@ -129,6 +132,19 @@ export interface SocketLifecycle {
  * first connection refuses loudly instead of every connection running with no
  * backpressure at all.
  */
+const OPERATION_IN_TEXT = /"op"\s*:\s*"([A-Z_]+)"/;
+
+/**
+ * The operation a frame names, found without parsing it: a frame refused for the rate is refused before it is read, so that
+ * bytes that are not a frame cost nothing (`routeFrame`), and the label of its refusal must not cost more. A word the text
+ * only seems to name is no harm: the owner of an operation nobody has is `none`.
+ */
+const operationOf = (raw: unknown): string => {
+  if (typeof raw === 'string') return OPERATION_IN_TEXT.exec(raw)?.[1] ?? '';
+  const op: unknown = typeof raw === 'object' && raw !== null ? Reflect.get(raw, 'op') : undefined;
+  return typeof op === 'string' ? op : '';
+};
+
 const outboundBufferOf = (raw: object): (() => number) => {
   const read: unknown = Reflect.get(raw, 'getBufferedAmount');
   if (typeof read !== 'function') {
@@ -340,7 +356,10 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
               // A frame or a send refused for the rate, counted as the HTTP door counts its 429s.
               for (const reply of replies) {
                 if (reply.event === 'ERROR' && reply.data.code === 'RATE_LIMITED') {
-                  dependencies.metrics?.rateLimited.inc({ door: 'socket' });
+                  dependencies.metrics?.rateLimited.inc({
+                    door: 'socket',
+                    module: dependencies.frameOwner?.(operationOf(raw)) ?? NO_OWNER,
+                  });
                 }
               }
               // Through the hub, so a replay burst is held to the same mark as the

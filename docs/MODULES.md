@@ -282,10 +282,15 @@ Modules share a process, an event loop and a connection pool, so they are kept a
 - metrics and logs name the module. **Built**: the HTTP request histogram and the scheduled-job series carry `module`
   (`core`, a module id, or `none` for a route no one owns), read from the core's claims and the manifests' `routes` and
   `jobs` (`platform/module-kit/ownership.ts`), the request line and `request failed` carry it for a module's route, a
-  scheduled job's lines carry it, and the boot line and `purlay_modules_info` name the modules a process runs. **Not built**:
-  the label on `purlay_rate_limited_total` (a refused socket frame is counted where its operation is not known), on the
-  push and mail failure counters, on a log line that is not a request's or a job's, and a counter of the share's own refusals
-  (they are visible as `module="issues",status="5xx"` of the request histogram).
+  scheduled job's lines carry it, and the boot line and `purlay_modules_info` name the modules a process runs. So do the three
+  counters that were not labelled: `purlay_rate_limited_total` by the owner of the route (HTTP door) or of the frame's
+  operation (socket door, `ofFrame`: read from the frame's text without parsing it, because a frame over the rate is refused
+  before it is read; a frame that names no operation is `none`), `purlay_push_failures_total` by the module whose notices the
+  sender delivers (`pushOwner` of the composition: chat's, or `core` where none runs) and `purlay_mail_failures_total`, whose
+  every letter is the core's (invitations and sign-in links; a module's job posts from the job command, which keeps no
+  counters). The label is one of `core`, a module id the build carries or, for the rate counter, `none`, and each series is made at
+  zero from the start (`serverMetrics` is given the ids). **Not built**: the label on a log line that is not a request's or a
+  job's, and a counter of the share's own refusals (they are visible as `module="issues",status="5xx"` of the request histogram).
 
 ## 8. What holds each rule
 
@@ -307,7 +312,7 @@ until then it is a stated intent and not a guarantee.
 | A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built, applied from each manifest's `budget`** (issues a third of the pool; chat `none`); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, `module-budget.integration.test.ts` holds the boundary each declaration makes, and the mutations `issues-routes-outside-their-budget` and `module-budget-declaration-ignored` hold the wiring | 5 |
 | Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred — **built** (D-260); mutations `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
 | A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
-| `cli/` and `ingress/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`; a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file` and `ingress-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
+| `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` only `router.ts`, which still runs chat's three socket operations itself (the manifest has no field for a module's frame handler); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |

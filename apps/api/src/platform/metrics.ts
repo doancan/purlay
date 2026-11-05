@@ -17,6 +17,7 @@ import {
   type MetricFamily,
   type Sample,
 } from './exposition';
+import { CORE_OWNER, NO_OWNER } from './module-kit/ownership';
 
 /** The values of a series' labels, one per name the family declared. */
 type LabelValues<L extends string> = Readonly<Record<L, string>>;
@@ -214,12 +215,19 @@ const thisProcess: ProcessReadings = {
 export interface ServerMetrics {
   readonly registry: MetricsRegistry;
   readonly httpDuration: Histogram<'method' | 'route' | 'status' | 'module'>;
-  readonly rateLimited: Counter<'door'>;
-  readonly pushFailures: Counter<'reason'>;
-  readonly mailFailures: Counter;
+  readonly rateLimited: Counter<'door' | 'module'>;
+  readonly pushFailures: Counter<'reason' | 'module'>;
+  readonly mailFailures: Counter<'module'>;
 }
 
-export const serverMetrics = (readings: ProcessReadings = thisProcess): ServerMetrics => {
+/**
+ * `modules` are the ids of the modules the build carries: the `module` label of the counters below is one of them, `core`,
+ * or `none` (`platform/module-kit/ownership.ts`), so the series each can have are known from the start and are made at zero.
+ */
+export const serverMetrics = (
+  readings: ProcessReadings = thisProcess,
+  modules: readonly string[] = [],
+): ServerMetrics => {
   const registry = createMetricsRegistry();
   registry.gauge(
     'purlay_process_uptime_seconds',
@@ -239,24 +247,29 @@ export const serverMetrics = (readings: ProcessReadings = thisProcess): ServerMe
   );
   const rateLimited = registry.counter(
     'purlay_rate_limited_total',
-    'Requests and socket frames refused for the rate, by the door they came through.',
-    ['door'],
+    'Requests and socket frames refused for the rate, by the door they came through and the module that owns the route or the frame’s operation (`core`, a module id, or `none` for a frame that names no operation).',
+    ['door', 'module'],
   );
   const pushFailures = registry.counter(
     'purlay_push_failures_total',
-    'Web Push deliveries that did not reach their push service, by reason.',
-    ['reason'],
+    'Web Push deliveries that did not reach their push service, by reason and the module whose notice it was (`core`, or a module id).',
+    ['reason', 'module'],
   );
   const mailFailures = registry.counter(
     'purlay_mail_failures_total',
-    'Letters the mail relay did not accept.',
-    [],
+    'Letters the mail relay did not accept, by the module that sent them (`core`, or a module id).',
+    ['module'],
   );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
-  for (const door of RATE_DOORS) rateLimited.inc({ door }, 0);
-  for (const reason of PUSH_FAILURES) pushFailures.inc({ reason }, 0);
-  mailFailures.inc({}, 0);
+  const owners = [CORE_OWNER, ...modules];
+  for (const door of RATE_DOORS) {
+    for (const module of [...owners, NO_OWNER]) rateLimited.inc({ door, module }, 0);
+  }
+  for (const reason of PUSH_FAILURES) {
+    for (const module of owners) pushFailures.inc({ reason, module }, 0);
+  }
+  for (const module of owners) mailFailures.inc({ module }, 0);
   return { registry, httpDuration, rateLimited, pushFailures, mailFailures };
 };
 

@@ -22,6 +22,7 @@ import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import type { Config } from './config';
 import type { Logger } from './logging';
 import type { Counter } from './metrics';
+import { CORE_OWNER } from './module-kit/ownership';
 
 /** One message: to one address, in plain text and HTML. */
 export interface MailMessage {
@@ -194,10 +195,10 @@ export interface MailInFlight {
   /** The set the outboxes add to; theirs to write, nobody else's. */
   readonly running: Set<Promise<void>>;
   /** Where a letter the relay did not take is counted, whichever relay it was (D-221); absent, it is not. */
-  readonly failures?: Counter;
+  readonly failures?: Counter<'module'>;
 }
 
-export const mailInFlight = (log: Logger, failures?: Counter): MailInFlight => {
+export const mailInFlight = (log: Logger, failures?: Counter<'module'>): MailInFlight => {
   const running = new Set<Promise<void>>();
   return {
     running,
@@ -219,7 +220,9 @@ export const outbox = (send: SendMail, log: Logger, shared?: MailInFlight): Outb
         // Not the caller's to know: they were answered already, the same whatever happened. Said
         // here, by what it was for — never to whom, never what it said.
         .catch((error: unknown) => {
-          shared?.failures?.inc({});
+          // Every letter this process posts is the core's (invitations, sign-in links): a module's job posts from the
+          // command that runs it, which keeps no counters.
+          shared?.failures?.inc({ module: CORE_OWNER });
           // The relay's code only: its words can quote the recipient back.
           log.error('mail could not be sent', {
             purpose,

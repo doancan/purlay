@@ -35,7 +35,7 @@ import {
   permissionTable,
   type PermissionTable,
 } from './platform/module-kit/permissions';
-import { ownersOf, type Owners } from './platform/module-kit/ownership';
+import { CORE_OWNER, ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
@@ -135,6 +135,8 @@ export interface Composition {
   readonly readAttachment: AttachmentReader;
   /** What the push sender is told by: the module's, or nothing where none runs. */
   readonly pushNotices: PushNotices;
+  /** The module whose notices that is, for the push failure counter's label; the core where none runs. */
+  readonly pushOwner: string;
   readonly workspaceCreated: WorkspaceCreated;
   readonly userErased: UserErased;
   readonly workspaceChannels: WorkspaceChannels;
@@ -195,6 +197,7 @@ export const compose = (
     ...CORE_PERMISSIONS,
     ...modules.flatMap((module) => module.manifest.permissions ?? []),
   ]);
+  const noticing = modules.find((module) => module.pushNotices !== undefined);
   return {
     modules,
     bundled,
@@ -208,8 +211,8 @@ export const compose = (
       ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,
     ]),
-    pushNotices:
-      modules.find((module) => module.pushNotices !== undefined)?.pushNotices ?? noPushNotices,
+    pushNotices: noticing?.pushNotices ?? noPushNotices,
+    pushOwner: noticing?.manifest.id ?? CORE_OWNER,
     workspaceCreated,
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,
