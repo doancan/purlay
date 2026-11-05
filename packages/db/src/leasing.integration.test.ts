@@ -8,6 +8,7 @@ import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import {
   createDatabase,
+  executorOnPool,
   isTransaction,
   leasingExecutor,
   type ConnectionLease,
@@ -187,6 +188,49 @@ describe('integration: an executor that leases its connections', () => {
       const later = sql`select pg_sleep(0.3), 1 as ok`.execute(database);
       controller.abort(new Error('past its deadline'));
       expect((await later).rows).toHaveLength(1);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  test('says so, and leaves the statement to its own limit, when the cancellation cannot be made', async () => {
+    const pool = new pg.Pool({ connectionString: url(), max: 1 });
+    const reported: Error[] = [];
+    const database = executorOnPool(pool, 0, (error) => reported.push(error));
+    try {
+      const controller = new AbortController();
+      const leasing = leasingExecutor(database, () =>
+        Promise.resolve({ signal: controller.signal, release: (): void => undefined }),
+      );
+      const running = thrown(async () => await sql`select pg_sleep(0.6)`.execute(leasing));
+      await Bun.sleep(100);
+      // Where the control connection would go, nothing answers: the statement is the pool's to end.
+      pool.options.connectionString = 'postgres://nobody@127.0.0.1:1/none';
+      controller.abort(new Error('past its deadline'));
+      expect(await running).toBeUndefined();
+      const until = performance.now() + 5_000;
+      while (reported.length === 0 && performance.now() < until) await Bun.sleep(20);
+      expect(reported.length).toBeGreaterThan(0);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  test('refuses a lease whose statement limit the server cannot take, gives everything back and leaves the pool usable', async () => {
+    const database = createDatabase({ connectionString: url(), poolSize: 1 });
+    try {
+      let released = 0;
+      const leasing = leasingExecutor(database, () =>
+        Promise.resolve({
+          statementTimeoutMs: Number.NaN,
+          release: (): void => {
+            released += 1;
+          },
+        }),
+      );
+      expect(await thrown(async () => await sql`select 1`.execute(leasing))).toBeInstanceOf(Error);
+      expect(released).toBe(1);
+      await sql`select 1`.execute(database);
     } finally {
       await database.destroy();
     }
