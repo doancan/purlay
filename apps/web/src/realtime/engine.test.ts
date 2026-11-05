@@ -489,6 +489,7 @@ describe('a reconnect', () => {
     w.client.setQueryData(keys.unresolved(WS), { pageParams: [], pages: [] });
     w.client.setQueryData(keys.incident(CH), { incident: null });
     w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.saved(WS), { pageParams: [], pages: [] });
     w.engine.start();
     w.open();
     const waiting = w.engine.send({ channelId: CH, content: 'a' });
@@ -516,6 +517,8 @@ describe('a reconnect', () => {
     expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
     // So did a notification: its frame went to the person's topic while nobody listened.
     expect(w.client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(true);
+    // And what the person saved or let go on another device, told on the same topic (D-128).
+    expect(w.client.getQueryState(keys.saved(WS))?.isInvalidated).toBe(true);
     expect(w.engine.store.getState().status).toBe('open');
   });
 
@@ -1118,7 +1121,7 @@ describe('Deep Work changed in another tab (#526)', () => {
       w.deliver(
         frame({
           event: 'PRESENCE',
-          data: { changes: [{ userId: alice, online, version }] },
+          data: { changes: [{ userId: alice, online, away: false, version }] },
           ts: T0,
         }),
       );
@@ -1126,12 +1129,88 @@ describe('Deep Work changed in another tab (#526)', () => {
     say(false, 20);
     // An online said before she left, heard after: kept out.
     say(true, 10);
-    expect(w.engine.store.getState().presence[alice]).toEqual({ online: false, version: 20 });
+    expect(w.engine.store.getState().presence[alice]).toEqual({
+      online: false,
+      away: false,
+      version: 20,
+    });
     say(true, 30);
-    expect(w.engine.store.getState().presence[alice]).toEqual({ online: true, version: 30 });
+    expect(w.engine.store.getState().presence[alice]).toEqual({
+      online: true,
+      away: false,
+      version: 30,
+    });
     // A snapshot read before the latest change is kept out too.
-    w.engine.applyPresence([{ userId: alice, online: false, version: 25 }]);
+    w.engine.applyPresence([{ userId: alice, online: false, away: false, version: 25 }]);
     expect(w.engine.store.getState().presence[alice]?.online).toBe(true);
+  });
+
+  test('a later away replaces an earlier active, an earlier one does not (D-257)', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const alice = '0199155c-6200-7b7f-8c11-0000000000a1';
+    const say = (away: boolean, version: number): void => {
+      w.deliver(
+        frame({
+          event: 'PRESENCE',
+          data: { changes: [{ userId: alice, online: true, away, version }] },
+          ts: T0,
+        }),
+      );
+    };
+    say(false, 10);
+    say(true, 20);
+    expect(w.engine.store.getState().presence[alice]).toEqual({
+      online: true,
+      away: true,
+      version: 20,
+    });
+    // An active said before she went away, heard after: kept out.
+    say(false, 15);
+    expect(w.engine.store.getState().presence[alice]?.away).toBe(true);
+    say(false, 30);
+    expect(w.engine.store.getState().presence[alice]?.away).toBe(false);
+  });
+
+  test('the away choice heard of yourself keeps every device’s menu right, newest wins (D-257)', () => {
+    const w = world();
+    w.client.setQueryData(keys.me, aSession());
+    w.engine.start();
+    w.open();
+    const me = aSession().user.id;
+    const say = (version: number, chosen?: boolean): void => {
+      w.deliver(
+        frame({
+          event: 'PRESENCE',
+          data: {
+            changes: [
+              {
+                userId: me,
+                online: true,
+                away: chosen ?? false,
+                version,
+                ...(chosen === undefined ? {} : { chosen }),
+              },
+            ],
+          },
+          ts: T0,
+        }),
+      );
+    };
+    const chosen = (): boolean | undefined =>
+      w.client.getQueryData<MeResponse>(keys.me)?.awayChosen;
+    // Chosen on another device: this one's menu now offers to appear active.
+    say(10, true);
+    expect(chosen()).toBe(true);
+    // Said before that, heard after: kept out, as the presence itself is.
+    say(5, false);
+    expect(chosen()).toBe(true);
+    // A change that does not say (an offline one) leaves the choice as it was.
+    say(20);
+    expect(chosen()).toBe(true);
+    say(30, false);
+    expect(chosen()).toBe(false);
   });
 
   describe('who is online is read again a grace after a reconnect (D-136 §4)', () => {
@@ -1332,6 +1411,7 @@ describe('is the session still there', () => {
       mustEnrolTwoFactor: false,
       scheduledDeletions: [],
       modules: ['chat'],
+      awayChosen: false,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
@@ -1710,6 +1790,57 @@ describe('what happened between a list being read and the channel being subscrib
     expect(w.client.getQueryState(keys.files(CH))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.pins(CH))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.files(OTHER_CH))?.isInvalidated).toBe(false);
+  });
+
+  test('a channel’s incident read before the subscription was answered is read again (D-137)', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    // Read as the channel opened — "no incident" — and declared before the server began to send: no frame
+    // will say so, because the frame went out while this socket was not yet listening to the channel.
+    w.client.setQueryData(keys.incident(CH), { incident: null });
+    w.client.setQueryData(keys.incident(OTHER_CH), { incident: null });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.incident(OTHER_CH))?.isInvalidated).toBe(false);
+  });
+
+  test('the channel lists read before the subscription was answered are read again: a rename, an incident mark or a counter changed in the gap is in no frame', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    // CHANNEL_UPDATED, INCIDENT_UPDATED and CHANNEL_STATE each rewrite a row of these lists, and each went out
+    // while this socket was not yet listening to the channel (or, for the last, not yet open at all).
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    answerAll(w);
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+  });
+
+  test('the open questions and a search read before the subscription was answered are read again: a reply, a resolution or an edit in the gap is in no frame', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.unresolved(WS), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.unresolved(WS, CH), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.search(WS, 'words', null, null), { pages: [], pageParams: [] });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.unresolved(WS))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.unresolved(WS, CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.search(WS, 'words', null, null))?.isInvalidated).toBe(true);
+  });
+
+  test('an open edit history read before the subscription was answered is read again: a version its author removed in the gap is in no frame (D-135)', () => {
+    const MESSAGE = '0199155c-6200-7b7f-8c11-000000000002';
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.messageVersions(MESSAGE), []);
+    answerAll(w);
+    expect(w.client.getQueryState(keys.messageVersions(MESSAGE))?.isInvalidated).toBe(true);
   });
 
   /**

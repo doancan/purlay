@@ -13,6 +13,7 @@ import {
   GITHUB_URL_DEFAULT,
   type Config,
 } from '../platform/config';
+import { composition } from '../composition';
 import type { Dependencies } from '../ingress/http/app';
 import type { RateBudget } from '../realtime/rate-limiter';
 import type { Timers } from '../realtime/hub';
@@ -105,6 +106,8 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   APP_URL: 'https://purlay.test',
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
+  SOCKET_MAX_CONNECTIONS: 2_000,
+  SOCKET_REPLAY_CONCURRENCY: 50,
   TRUST_PROXY: false,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,
@@ -256,6 +259,7 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
   workspaceCreators: () => Promise.resolve({ kind: 'anyone' }),
   // Chat is part of what a test runs against, as it is in the application.
   workspaceChannels: chatWorkspaceChannels,
+  composition,
 });
 
 /**
@@ -265,14 +269,18 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
 export const aManualTimers = (): Timers & {
   /** Fires every timer armed and not cleared, as if their time had come. */
   readonly runAll: () => void;
+  /** Fires only the timers armed for `ms` or less: a grace runs, five quiet minutes do not. */
+  readonly runUpTo: (ms: number) => void;
   readonly pending: () => number;
 } => {
   const armed = new Map<number, () => void>();
+  const lengths = new Map<number, number>();
   let next = 0;
   return {
-    set: (callback: () => void): number => {
+    set: (callback: () => void, ms: number): number => {
       next += 1;
       armed.set(next, callback);
+      lengths.set(next, ms);
       return next;
     },
     clear: (handle: unknown): void => {
@@ -281,6 +289,11 @@ export const aManualTimers = (): Timers & {
     runAll: (): void => {
       const due = [...armed];
       armed.clear();
+      for (const [, fire] of due) fire();
+    },
+    runUpTo: (ms: number): void => {
+      const due = [...armed].filter(([handle]) => (lengths.get(handle) ?? 0) <= ms);
+      for (const [handle] of due) armed.delete(handle);
       for (const [, fire] of due) fire();
     },
     pending: (): number => armed.size,

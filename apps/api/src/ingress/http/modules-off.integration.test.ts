@@ -10,6 +10,8 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { compose, composition } from '../../composition';
+import { chatModule } from '../../features/chat/module';
+import { issuesModule } from '../../features/issues/module';
 import { fixedClock } from '../../platform/clock';
 import { theDefaultChannelOf } from '../../testing/channels';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -87,7 +89,9 @@ describe('integration: an application with no module is the core alone', () => {
       const modulesOf = async (modules: typeof composition): Promise<unknown> =>
         ((await caller(db, modules)('GET', '/api/me', ada)).body as { modules: unknown }).modules;
       expect(await modulesOf(compose([]))).toEqual([]);
-      expect(await modulesOf(composition)).toEqual(['chat']);
+      expect(await modulesOf(composition)).toEqual(['chat', 'issues']);
+      expect(await modulesOf(compose([chatModule]))).toEqual(['chat']);
+      expect(await modulesOf(compose([issuesModule]))).toEqual(['issues']);
     });
   });
 
@@ -274,6 +278,42 @@ describe('integration: an application with no module is the core alone', () => {
       expect(await status(off, 'GET', `/api/attachments/${loose}`, ada)).toBe(200);
       expect(await status(off, 'GET', `/api/attachments/${loose}`, bob)).toBe(404);
       expect(await status(off, 'DELETE', `/api/attachments/${loose}`, ada)).toBe(204);
+    });
+  });
+
+  test('the matrix: each module alone answers for its own paths and closes the other’s', async () => {
+    await withRollback(async (db) => {
+      const ada = await aSignedInUser(db, clock, 'cell-ada');
+      const slug = aUniqueSlug('cell');
+      const made = await caller(db, composition)('POST', '/api/workspaces', ada, {
+        name: slug,
+        slug,
+      });
+      const workspaceId = (made.body as { id: string }).id;
+      const issuesPath = `/api/workspaces/${workspaceId}/issues`;
+      const channelsPath = `/api/workspaces/${workspaceId}/channels`;
+      const unknown = (await caller(db, compose([]))('GET', '/api/no-such-thing/x', ada)).body;
+
+      const chatOnly = caller(db, compose([chatModule]));
+      expect((await chatOnly('GET', channelsPath, ada)).status).toBe(200);
+      expect(await chatOnly('GET', issuesPath, ada)).toEqual({ status: 404, body: unknown });
+      expect(await chatOnly('POST', issuesPath, ada, { title: 'x' })).toEqual({
+        status: 404,
+        body: unknown,
+      });
+      expect(await chatOnly('DELETE', `${issuesPath}/${workspaceId}`, null)).toEqual({
+        status: 404,
+        body: unknown,
+      });
+
+      const issuesOnly = caller(db, compose([issuesModule]));
+      expect((await issuesOnly('GET', issuesPath, ada)).status).toBe(200);
+      expect(await issuesOnly('GET', channelsPath, ada)).toEqual({ status: 404, body: unknown });
+      expect((await issuesOnly('GET', issuesPath, null)).status).toBe(401);
+
+      const coreOnly = caller(db, compose([]));
+      expect(await coreOnly('GET', issuesPath, ada)).toEqual({ status: 404, body: unknown });
+      expect(await coreOnly('GET', issuesPath, null)).toEqual({ status: 404, body: unknown });
     });
   });
 });

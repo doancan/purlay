@@ -228,7 +228,7 @@ export const serverMetrics = (readings: ProcessReadings = thisProcess): ServerMe
   );
   registry.gauge(
     'purlay_process_resident_memory_bytes',
-    'Resident memory of this process, in bytes.',
+    'Memory this process holds, in bytes, as Bun reports it: the resident set on Linux, the physical footprint on macOS, which leaves out pages freed but not yet handed back and so reads below ps.',
     readings.residentBytes,
   );
   const httpDuration = registry.histogram(
@@ -263,3 +263,16 @@ export const serverMetrics = (readings: ProcessReadings = thisProcess): ServerMe
 /** The page, from what the registry holds and what was read for this scrape alone. */
 export const renderMetrics = (metrics: ServerMetrics, read: readonly MetricFamily[] = []): string =>
   exposition([...metrics.registry.families(), ...read]);
+
+/**
+ * Which modules this process runs (`MODULES.md` §3): one series per running module, each `1`, read for the
+ * scrape because the set is the process's and does not change while it lives. A process that runs none has
+ * the family and no series, so `count(purlay_modules_info)` is `0` rather than absent. The label values are
+ * module ids the code spells, never anything a caller sent.
+ */
+export const modulesInfoFamily = (running: readonly string[]): MetricFamily => ({
+  name: 'purlay_modules_info',
+  help: 'The modules this process runs, one series of value 1 each.',
+  type: 'gauge',
+  samples: running.map((module) => ({ suffix: '', labels: { module }, value: 1 })),
+});

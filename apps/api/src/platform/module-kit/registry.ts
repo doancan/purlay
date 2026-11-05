@@ -8,7 +8,16 @@
  *
  * Pure: it reads no environment and opens nothing. The composition root passes the setting in.
  */
+import {
+  MODULE_ID,
+  ModulesSettingError,
+  parseModulesSetting,
+  unmetRequirements,
+  type ModulesSetting,
+} from '@purlay/db';
+import type { CoreClaims } from './core-claims';
 import type { ModuleManifest } from './manifest';
+import { templatesOverlap } from './routes';
 
 /**
  * The first path segment of every route the contract gives today. A module's id may not be one of these:
@@ -44,9 +53,7 @@ export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
   'ws',
 ]);
 
-/** The setting that runs the core alone: written out, because blank is read as unset. */
-const NONE = 'none';
-const MODULE_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const MODULES_SUBJECT = 'MODULES cannot start this process';
 const CAPABILITY = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
 
 /** A setting or a bundle that cannot start. `problems` is every reason, one sentence each. */
@@ -78,10 +85,15 @@ export interface ModuleRegistry {
  * Throws `ModuleConfigError` for an id that is malformed, reserved or repeated; a requirement or partner
  * that is not a module of this build, or is the module itself; a capability two modules both provide; and
  * a cycle among `requires` and `optional`, which would leave no order to start them in. Mutual `optional`
- * partners are a cycle too: one of the two must be the one that knows the other.
+ * partners are a cycle too: one of the two must be the one that knows the other. And for what `core` claims, given by the
+ * build (`CORE_CLAIMS`): a route, job, socket operation or server event that two modules both list, or that a module lists
+ * and the core already has — routes by `ownsPath`'s rules, a template overlapping another when some path matches both.
  */
-export const moduleRegistry = (manifests: readonly ModuleManifest[]): ModuleRegistry => {
-  const problems = bundleProblems(manifests);
+export const moduleRegistry = (
+  manifests: readonly ModuleManifest[],
+  core: Partial<CoreClaims> = {},
+): ModuleRegistry => {
+  const problems = bundleProblems(manifests, core);
   if (problems.length > 0)
     throw new ModuleConfigError('the modules of this build are wrong', problems);
   const bundled = [...manifests];
@@ -94,7 +106,10 @@ export const moduleRegistry = (manifests: readonly ModuleManifest[]): ModuleRegi
   };
 };
 
-const bundleProblems = (manifests: readonly ModuleManifest[]): string[] => {
+const bundleProblems = (
+  manifests: readonly ModuleManifest[],
+  core: Partial<CoreClaims>,
+): string[] => {
   const problems: string[] = [];
   const ids = new Set<string>();
   const providedBy = new Map<string, string>();
@@ -145,6 +160,8 @@ const bundleProblems = (manifests: readonly ModuleManifest[]): string[] => {
     }
   }
 
+  problems.push(...overlapProblems(manifests, core));
+
   // The order only means something when the graph is sound, so a cycle is looked for last.
   if (problems.length === 0) {
     const { stuck } = startOrder(manifests);
@@ -157,47 +174,81 @@ const bundleProblems = (manifests: readonly ModuleManifest[]): string[] => {
   return problems;
 };
 
+/** The words for each kind of claim, in the order they are reported. */
+const CLAIM_KINDS = [
+  ['routes', 'route'],
+  ['jobs', 'job'],
+  ['frames', 'socket operation'],
+  ['events', 'server event'],
+] as const;
+
+/** Two claims of one kind clash: the same name, or for a route a template with a path in common. */
+const clash = (kind: keyof CoreClaims, first: string, second: string): boolean =>
+  kind === 'routes' ? templatesOverlap(first, second) : first === second;
+
+/** What two modules both claim, and what a module claims that the core already has. */
+const overlapProblems = (
+  manifests: readonly ModuleManifest[],
+  core: Partial<CoreClaims>,
+): string[] => {
+  const problems: string[] = [];
+  for (const [kind, noun] of CLAIM_KINDS) {
+    manifests.forEach((manifest, index) => {
+      for (const claim of manifest[kind] ?? []) {
+        for (const theirs of core[kind] ?? []) {
+          if (!clash(kind, claim, theirs)) continue;
+          problems.push(
+            kind === 'routes'
+              ? `"${manifest.id}" owns the ${noun} "${claim}", which overlaps the core's "${theirs}"`
+              : `"${manifest.id}" owns the ${noun} "${claim}", which is the core's`,
+          );
+        }
+        for (const other of manifests.slice(index + 1)) {
+          for (const theirs of other[kind] ?? []) {
+            if (!clash(kind, claim, theirs)) continue;
+            problems.push(
+              kind === 'routes'
+                ? `"${manifest.id}" and "${other.id}" both own routes that overlap: "${claim}" and "${theirs}"`
+                : `"${manifest.id}" and "${other.id}" both own the ${noun} "${claim}"`,
+            );
+          }
+        }
+      }
+    });
+  }
+  return problems;
+};
+
 const enabledBy = (
   bundled: readonly ModuleManifest[],
   setting: string | undefined,
 ): readonly ModuleManifest[] => {
-  if (setting === undefined) return bundled;
-  if (setting.trim() === '') return bundled;
-  if (setting.trim() === NONE) return [];
-
-  const problems: string[] = [];
-  const named = new Set<string>();
-  const known = new Map(bundled.map((manifest) => [manifest.id, manifest]));
-  const items = setting.split(',').map((item) => item.trim());
-
-  for (const item of items) {
-    if (item === '') {
-      problems.push('MODULES has an empty item: a doubled or trailing comma');
-    } else if (named.has(item)) {
-      problems.push(`MODULES names "${item}" twice`);
-    } else if (!known.has(item)) {
-      problems.push(
-        `MODULES names "${item}", which this build does not have (it has: ${idsOf(bundled)})`,
-      );
+  // The shape of the setting is `parseModulesSetting`'s, the reading `db:migrate` takes too; what a module
+  // requires of another is `unmetRequirements`, over these manifests, the one `db:migrate` asks too.
+  let parsed: ModulesSetting;
+  try {
+    parsed = parseModulesSetting(
+      setting,
+      bundled.map((manifest) => manifest.id),
+    );
+  } catch (error) {
+    if (error instanceof ModulesSettingError) {
+      throw new ModuleConfigError(MODULES_SUBJECT, error.problems);
     }
-    named.add(item);
+    throw error;
   }
+  if (parsed.kind === 'all') return bundled;
+  if (parsed.kind === 'none') return [];
 
+  const named = new Set(parsed.ids);
   const enabled = bundled.filter((manifest) => named.has(manifest.id));
-  for (const manifest of enabled) {
-    for (const required of manifest.requires) {
-      if (!named.has(required)) {
-        problems.push(`"${manifest.id}" requires "${required}", which MODULES does not enable`);
-      }
-    }
-  }
-  if (problems.length > 0)
-    throw new ModuleConfigError('MODULES cannot start this process', problems);
+  const problems = unmetRequirements(
+    parsed.ids,
+    Object.fromEntries(bundled.map((manifest) => [manifest.id, manifest.requires])),
+  );
+  if (problems.length > 0) throw new ModuleConfigError(MODULES_SUBJECT, problems);
   return enabled;
 };
-
-const idsOf = (manifests: readonly ModuleManifest[]): string =>
-  manifests.length === 0 ? 'none' : manifests.map((manifest) => manifest.id).join(', ');
 
 /**
  * Partners before the modules that use them, and the modules that wait on one another and so can never

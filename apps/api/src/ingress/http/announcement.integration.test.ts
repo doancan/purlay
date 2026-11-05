@@ -432,6 +432,7 @@ describe('integration: writing in an announcement channel over the socket', () =
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         presence: inMemoryPresenceRegistry(clock),
         attention: inMemoryAttention(clock),
+        online: { active: () => undefined },
         log,
         sessionLifetime: () => NO_SESSION_LIFETIME,
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },

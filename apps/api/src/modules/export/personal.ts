@@ -50,9 +50,14 @@ export const exportPerson = async (
   try {
     const { tables, schema, objects } = await snapshotOn(database)(async (transaction) => {
       const counted: Record<string, number> = {};
-      const workspaces = personalCatalogue.workspaces(person.id);
+      const absent = await personalCatalogue.absent(transaction);
+      const workspaces = personalCatalogue.workspaces(person.id, absent);
       for (const name of personalCatalogue.order) {
         const table = personalCatalogue.table(name);
+        if (absent.includes(name)) {
+          counted[name] = 0;
+          continue;
+        }
         counted[name] = await readTable(
           transaction,
           name,

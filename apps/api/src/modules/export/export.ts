@@ -101,6 +101,10 @@ export const readTables = async (
   const people = catalogue.people(scope);
   for (const name of catalogue.order) {
     const table = catalogue.table(name);
+    if (scope.absent?.includes(name) === true) {
+      counted[name] = 0;
+      continue;
+    }
     counted[name] = await readTable(
       transaction,
       name,

@@ -74,6 +74,8 @@ import {
   SearchPage,
   SearchQuery,
   SendMessageRequest,
+  SetAwayRequest,
+  SetAwayResponse,
   SetDeepWorkRequest,
   SetNotificationLevelRequest,
   SetThreadFollowRequest,
@@ -187,6 +189,14 @@ export const ENDPOINTS = [
     path: '/api/me',
     auth: 'session',
     responses: { 200: MeResponse },
+  }),
+  read({
+    id: 'setAway',
+    method: 'PUT',
+    path: '/api/me/away',
+    auth: 'session',
+    body: SetAwayRequest,
+    responses: { 200: SetAwayResponse },
   }),
   read({
     id: 'listWorkspaces',

@@ -476,6 +476,71 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('the issues module’s actions are said by who did them and to what, never by words, in English and in Turkish (D-254)', async () => {
+    const entries = page([
+      anEntry(6, { action: 'issue.created', targetType: 'issue', targetId: entryId(60) }),
+      anEntry(5, {
+        action: 'issue.status_changed',
+        targetType: 'issue',
+        targetId: entryId(60),
+        metadata: { from: 'open', to: 'done' },
+      }),
+      anEntry(4, {
+        action: 'issue.status_changed',
+        targetType: 'issue',
+        targetId: entryId(60),
+        metadata: { from: 'done', to: 'open' },
+      }),
+      anEntry(3, {
+        action: 'issue.assigned',
+        targetType: 'issue',
+        targetId: entryId(60),
+        metadata: { from: '', to: IDS.alice },
+      }),
+      anEntry(2, {
+        action: 'issue.assigned',
+        targetType: 'issue',
+        targetId: entryId(60),
+        metadata: { from: IDS.alice, to: '' },
+      }),
+      anEntry(1, { action: 'issue.deleted', targetType: 'issue', targetId: entryId(60) }),
+    ]);
+    const english = await openPage({ audit: () => Promise.resolve(entries) });
+    expect(lines(english)).toEqual([
+      `${ME.displayName} made an issue`,
+      `${ME.displayName} marked an issue done`,
+      `${ME.displayName} marked an issue open`,
+      `${ME.displayName} changed who an issue is given to`,
+      `${ME.displayName} changed who an issue is given to`,
+      `${ME.displayName} deleted an issue`,
+    ]);
+    english.unmount();
+    const session = aSession();
+    const turkish = await renderApp(<Outlet />, {
+      path: '/w/acme/settings/audit',
+      locale: 'tr',
+      api: aSignedInApi({
+        me: () => Promise.resolve(session),
+        audit: () => Promise.resolve(entries),
+      }),
+    });
+    await settle();
+    await turkish.findByRole('heading', { level: 1, name: 'Denetim kaydı' });
+    await settle();
+    const rows = within(turkish.getByRole('list', { name: 'Denetim kaydı' }))
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector('[data-audit-line]')?.textContent ?? '');
+    expect(rows).toEqual([
+      `${ME.displayName} bir sorun açtı`,
+      `${ME.displayName} bir sorunu bitti olarak işaretledi`,
+      `${ME.displayName} bir sorunu açık olarak işaretledi`,
+      `${ME.displayName} bir sorunun atandığı kişiyi değiştirdi`,
+      `${ME.displayName} bir sorunun atandığı kişiyi değiştirdi`,
+      `${ME.displayName} bir sorunu sildi`,
+    ]);
+    turkish.unmount();
+  });
+
   test('somebody added to a channel is said with whom, and the channel only to a viewer who can see it', async () => {
     const view = await openPage({
       audit: () =>

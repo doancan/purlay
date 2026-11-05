@@ -288,8 +288,10 @@ const uploadRefusal = (
     case 'REAUTHENTICATION_REQUIRED':
     case 'ROUTE_NOT_FOUND':
     case 'SAVED_LIMIT':
+    case 'ISSUES_LIMIT':
     case 'SIGN_IN_LINK_NOT_FOUND':
     case 'THREAD_NOT_RESOLVABLE':
+    case 'ISSUE_NOT_FOUND':
     case 'USER_NOT_FOUND':
     case 'VALIDATION_FAILED':
     case 'WEBHOOK_SIGNATURE_INVALID':

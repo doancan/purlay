@@ -12,6 +12,10 @@
  * below — because a screen that only works in one theme is the failure D-53 names, and a
  * narrow window is a thing `UX.md` §2 promises not to break.
  */
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/test';
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number];
@@ -39,12 +43,15 @@ const projects = [
  * One project alone: `PURLAY_E2E_PROJECT=chromium-dark bun run test:e2e`. The pipeline runs the four
  * as four jobs, so each has a machine to itself — the suite fits its time, and a latency measured
  * there is the page's, not three other browsers' and servers' sharing two cores. Only that project's
- * server starts. A name that is not a project refuses to run, rather than running all four.
+ * server starts. The name of an engine (`webkit`) runs that engine's project alone, below. A name that is
+ * neither refuses to run, rather than running all four.
  */
 const only = process.env['PURLAY_E2E_PROJECT'] ?? '';
-if (only !== '' && !projects.some((definition) => definition.name === only)) {
+const ENGINES = { webkit: 'Desktop Safari', firefox: 'Desktop Firefox' } as const;
+const isEngine = (name: string): name is keyof typeof ENGINES => name in ENGINES;
+if (only !== '' && !isEngine(only) && !projects.some((definition) => definition.name === only)) {
   throw new Error(
-    `PURLAY_E2E_PROJECT names ${only}; it takes ${projects.map((definition) => definition.name).join(', ')}`,
+    `PURLAY_E2E_PROJECT names ${only}; it takes ${[...projects.map((definition) => definition.name), ...Object.keys(ENGINES)].join(', ')}`,
   );
 }
 const chosen = projects.filter((definition) => only === '' || definition.name === only);
@@ -94,19 +101,18 @@ const project = (definition: (typeof projects)[number], index: number): Project 
 });
 
 /**
- * Engines beyond Chromium, opt in: `PURLAY_E2E_ENGINES=webkit,firefox bun run test:e2e`. Not in CI,
- * and so not a second browser tool (CONTRIBUTING §1.12): a way for anyone to see the suite on Safari's
- * or Firefox's engine. Light, wide, and with no screenshots — a baseline is one engine's. What each
- * engine cannot do as the suite asks is skipped by name in the test, with why
+ * Engines beyond Chromium: `PURLAY_E2E_ENGINES=webkit,firefox bun run test:e2e` adds them to a run, and
+ * `PURLAY_E2E_PROJECT=webkit` runs one alone, which is how CI runs WebKit (a job of its own beside the
+ * Chromium four; Firefox is opt in only). Light, wide, and with no screenshots — a baseline is one
+ * engine's. What an engine cannot do as the suite asks is skipped in the test, by engine and with why
  * (`docs/spikes/cross-browser.md`). A name that is not one of these refuses to run, rather than
  * running Chromium alone and looking like it ran the rest.
  */
-const ENGINES = { webkit: 'Desktop Safari', firefox: 'Desktop Firefox' } as const;
-const isEngine = (name: string): name is keyof typeof ENGINES => name in ENGINES;
-const engines = (process.env['PURLAY_E2E_ENGINES'] ?? '')
-  .split(',')
-  .map((name) => name.trim())
-  .filter((name) => name !== '')
+const engines = [
+  ...(process.env['PURLAY_E2E_ENGINES'] ?? '').split(',').map((name) => name.trim()),
+  ...(isEngine(only) ? [only] : []),
+]
+  .filter((name, at, names) => name !== '' && names.indexOf(name) === at)
   .map((name) => {
     if (!isEngine(name)) {
       throw new Error(
@@ -117,6 +123,39 @@ const engines = (process.env['PURLAY_E2E_ENGINES'] ?? '')
   });
 const servers = [...chosen.map((definition) => definition.name), ...engines];
 
+/**
+ * WebKit is served over https, with a certificate made for the run. The session cookie is `Secure` and
+ * `__Host-`, and WebKit on Linux does not send one to `http://localhost` (macOS WebKit, Chromium and
+ * Firefox do): signed in by that cookie, every page came up signed out. The tests trust the certificate
+ * through `ignoreHTTPSErrors` for this origin only.
+ */
+const overTls = (name: string): boolean => name === 'webkit';
+const schemeOf = (name: string): string => (overTls(name) ? 'https' : 'http');
+/**
+ * The certificate WebKit's origin is served with, made once for the machine and trusted by name: the
+ * test process's own requests (`support.ts` makes rooms through the real API) reach that origin too, and
+ * Node is told to trust this one certificate (`NODE_EXTRA_CA_CERTS`, read by the workers as they start),
+ * never to skip validation. The main process makes it before any worker exists; a worker finds it there.
+ */
+const TLS_DIR = join(tmpdir(), 'purlay-e2e-tls');
+const TLS_CERT = join(TLS_DIR, 'localhost.crt');
+const TLS_KEY = join(TLS_DIR, 'localhost.key');
+// Made into the temporary directory, which the machine clears; long enough that it never expires under a run.
+const TLS_VALID_DAYS = 3650;
+if (servers.some(overTls)) {
+  if (!existsSync(TLS_CERT) || !existsSync(TLS_KEY)) {
+    mkdirSync(TLS_DIR, { recursive: true });
+    execFileSync(
+      'openssl',
+      ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', String(TLS_VALID_DAYS)]
+        .concat(['-keyout', TLS_KEY, '-out', TLS_CERT, '-subj', '/CN=localhost'])
+        .concat(['-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1']),
+      { stdio: 'ignore' },
+    );
+  }
+  process.env['NODE_EXTRA_CA_CERTS'] = TLS_CERT;
+}
+
 const engineProject = (engine: keyof typeof ENGINES, index: number): Project => ({
   name: engine,
   ignoreSnapshots: true,
@@ -124,7 +163,8 @@ const engineProject = (engine: keyof typeof ENGINES, index: number): Project => 
     ...devices[ENGINES[engine]],
     colorScheme: 'light',
     viewport: { width: 1440, height: 900 },
-    baseURL: `http://localhost:${String(portOf(index))}`,
+    baseURL: `${schemeOf(engine)}://localhost:${String(portOf(index))}`,
+    ignoreHTTPSErrors: overTls(engine),
   },
 });
 
@@ -168,10 +208,11 @@ export default defineConfig({
   ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
   webServer: servers.map((name, index) => ({
-    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
+    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}${overTls(name) ? `--tls-cert ${TLS_CERT} --tls-key ${TLS_KEY} ` : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
-    url: `http://localhost:${String(portOf(index))}/health`,
+    url: `${schemeOf(name)}://localhost:${String(portOf(index))}/health`,
+    ignoreHTTPSErrors: overTls(name),
     // Building, migrating and seeding two hundred messages through the real API.
     timeout: 240_000,
     reuseExistingServer: !ci,

@@ -24,7 +24,7 @@ import {
   purgeWorkspaceContent,
   purgeWorkspaces,
 } from '../../modules/workspaces/deletion-purge';
-import { chatWorkspacePurge } from '../../features/chat/messages/workspace-purge';
+import { composition } from '../../composition';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -162,6 +162,10 @@ const aLivedInWorkspace = async (
     name: 'mine',
     query: { q: 'question' },
   });
+  await call('POST', `/api/workspaces/${workspaceId}/issues`, owner, {
+    title: 'Fix the runbook',
+    assigneeId: member.userId,
+  });
   await call('POST', `/api/workspaces/${workspaceId}/invitations`, owner);
   await call('PUT', `/api/workspaces/${workspaceId}/integrations/github`, owner, {
     token: 'ghp_deletion',
@@ -204,7 +208,7 @@ const askToDelete = async (db: Executor, seeded: Seeded): Promise<void> => {
 const runAt = (db: Executor, at: Date, store: MemoryStore): ReturnType<typeof purgeWorkspaces> =>
   purgeWorkspaces(
     { database: db, clock: fixedClock(at), log: aRecordingLogger().log, storage: store },
-    chatWorkspacePurge,
+    composition.workspacePurge,
   );
 
 const workspaceRow = async (
@@ -235,19 +239,69 @@ const nonZero = (counts: Record<string, number>): string[] =>
     .map(([table]) => table)
     .sort();
 
+/** What the core's own steps empty: the tables that are not a module's to list. */
+const EMPTIED_BY_THE_CORE_STEPS = [
+  'messages',
+  'attachments',
+  'workspace_exports',
+  'channels',
+  'workspace_members',
+];
+
+/**
+ * Tables with a `workspace_id` that no purge empties, each with why. It may only shrink: a module's table does not
+ * belong here but in its `workspacePurge.tables`, because a purged workspace keeps its row as a tombstone, so a key
+ * that cascades from it never fires.
+ */
+const NOT_PURGED: Readonly<Record<string, string>> = {
+  audit_log: 'the trail of who changed what stays after the workspace goes',
+  // Not a tombstone's cascade: the keys run from these to `attachments`, whose rows the purge does delete.
+  message_attachments:
+    'goes with its attachment, by a composite key that cascades from a deleted row',
+  scheduled_message_attachments:
+    'goes with its attachment, by a composite key that cascades from a deleted row',
+};
+const MAX_NOT_PURGED = 3;
+
+/** Every table with a column named `workspace_id`, whether or not a key ties it to `workspaces`. */
+const withWorkspaceColumn = async (db: Executor): Promise<string[]> =>
+  (
+    await sql<{ table: string }>`
+      select distinct table_name as table from information_schema.columns
+      where table_schema = current_schema() and column_name = 'workspace_id'
+      order by 1
+    `.execute(db)
+  ).rows.map((row) => row.table);
+
 describe('integration: the workspace purge', () => {
   test('every table that refers to a workspace is one the erasure empties, or a trail it keeps', async () => {
     await withRollback(async (db) => {
       const emptied = [
-        'messages',
-        'attachments',
-        'workspace_exports',
-        'channels',
-        'workspace_members',
-        ...chatWorkspacePurge.tables,
+        ...EMPTIED_BY_THE_CORE_STEPS,
+        ...composition.workspacePurge.tables,
         ...CORE_REMAINING_TABLES,
       ];
       expect(await referring(db)).toEqual([...emptied, 'audit_log', 'server_audit_log'].sort());
+    });
+  });
+
+  test('every table with a workspace_id is emptied by the purge, or is in the short list of those that are not', async () => {
+    await withRollback(async (db) => {
+      const emptied = new Set<string>([
+        ...EMPTIED_BY_THE_CORE_STEPS,
+        ...composition.workspacePurge.tables,
+        ...CORE_REMAINING_TABLES,
+      ]);
+      const present = await withWorkspaceColumn(db);
+      expect(
+        present.filter((table) => !emptied.has(table) && !(table in NOT_PURGED)),
+        'A table with a workspace_id is its module’s to list in `workspacePurge.tables`: the workspace keeps its row as a tombstone, so no key cascades and the rows would stay for ever.',
+      ).toEqual([]);
+      // An entry for a table that is gone, or that the purge now empties, is a line to delete.
+      expect(
+        Object.keys(NOT_PURGED).filter((table) => !present.includes(table) || emptied.has(table)),
+      ).toEqual([]);
+      expect(Object.keys(NOT_PURGED).length).toBeLessThanOrEqual(MAX_NOT_PURGED);
     });
   });
 
@@ -266,6 +320,7 @@ describe('integration: the workspace purge', () => {
           'channels',
           'github_integrations',
           'incidents',
+          'issues',
           'mentions',
           'messages',
           'notifications',
@@ -340,7 +395,7 @@ describe('integration: the workspace purge', () => {
       await purgeWorkspaceContent(
         { database: db, clock: fixedClock(DUE), log: aRecordingLogger().log, storage: store },
         doomed.workspaceId,
-        chatWorkspacePurge,
+        composition.workspacePurge,
       );
       expect(await serverLines(db, doomed.workspaceId)).toHaveLength(1);
     });

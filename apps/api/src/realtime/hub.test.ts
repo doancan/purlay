@@ -256,6 +256,46 @@ describe('live frames held while a subscription replays', () => {
   });
 });
 
+describe('the events of a module this process does not run', () => {
+  const sentTo = (closedEvent: ((event: string) => boolean) | undefined): string[] => {
+    const hub = createSocketHub(
+      anAuthThatMustNotBeTouched(),
+      fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      {
+        log: createLogger({ level: 'silent' }),
+        leave: () => undefined,
+        listen: () => undefined,
+        ...(closedEvent === undefined ? {} : { closedEvent }),
+      },
+    );
+    const events: string[] = [];
+    void hub
+      .opened(
+        's',
+        {
+          send: (payload) => events.push((JSON.parse(payload) as { event: string }).event),
+          buffered: () => 0,
+          close: () => undefined,
+        },
+        new Request('https://purlay.test/ws'),
+      )
+      .catch(() => undefined);
+    // Another node that runs the module may have published both: the hub is where this node's own list is held to.
+    hub.deliver('s', { event: 'PONG', data: {}, ts: 1 });
+    hub.deliver('s', { event: 'ACK', data: { channels: [] }, ts: 2 });
+    return events;
+  };
+
+  test('are dropped at delivery, and the rest of what is delivered is written', () => {
+    expect(sentTo((event) => event === 'PONG')).toEqual(['ACK']);
+  });
+
+  test('are all written where no event is closed', () => {
+    expect(sentTo(undefined)).toEqual(['PONG', 'ACK']);
+    expect(sentTo(() => false)).toEqual(['PONG', 'ACK']);
+  });
+});
+
 describe('a connection with no identity', () => {
   test('is told its session has ended and is closed, with nothing armed for it', async () => {
     const hub = createSocketHub(

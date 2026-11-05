@@ -131,9 +131,13 @@ purlay/
 │   │       ├── features/        the modules of the product (D-250, `MODULES.md`): one folder each, below the
 │   │       │                  doors like `modules/`, importing no other feature and no `modules/` code the
 │   │       │                  other way round
-│   │       │   └── chat/        channels, messages, reactions, pins, saved, search, presence, bookmarks,
-│   │       │                  incidents, the GitHub integration and the inbox: what the product was before
-│   │       │                  it was a set of modules. It still writes raw SQL; the others may not
+│   │       │   ├── chat/        channels, messages, reactions, pins, saved, search, presence, bookmarks,
+│   │       │   │              incidents, the GitHub integration and the inbox: what the product was before
+│   │       │   │              it was a set of modules. It still writes raw SQL; the others may not
+│   │       │   └── issues/      a workspace's issues (D-254): its manifest and data hooks, with a migration
+│   │       │                  set of its own (`packages/db/migrations/issues/`). The route table is in
+│   │       │                  `ingress/http/issues.ts`; every module is listed in `composition.ts`
+│   │       │                  (`bundledModules`) and in `MODULES.md` §11, which also says how to add one
 │   │       ├── modules/         the core's business rules; no HTTP or WS types cross this line, and none of
 │   │       │                  it imports a feature
 │   │       │   ├── auth/        the sign-in library (Better Auth) and what sits on it: sessions (token SHA-256 at rest)
@@ -158,7 +162,9 @@ purlay/
 │           ├── app/             providers (one tree, every port optional), the frame, the outlet,
 │           │                    and deferred.ts: the deferred chunk — settings, image viewer, the
 │           │                    overlays opened on purpose — fetched once the browser is idle (D-159, D-163)
-│           ├── features/        vertical slices: chat, threads, palette, notifications, auth
+│           ├── features/        vertical slices: chat, threads, palette, notifications, auth, and the modules'
+│           │                  screens (`chat/load.tsx`, `issues/load.tsx`): each a lazy chunk behind
+│           │                  `ModuleGate`, shown only where `GET /api/me` lists the module (`MODULES.md` §6)
 │           ├── ui/              primitives on Radix where focus and ARIA fail silently; token classes only
 │           ├── components/      shared pieces: Icon (the one door to the icon set), CodeBlock, Markdown
 │           ├── theme/           light, dark and system — per device, set before first paint (D-98)
@@ -248,7 +254,8 @@ What the shape is for, which the types do not say:
   channel's box, never a thread's reply box (D-171); it hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. `ACTIVE` is the client's
   word that its page is in front of the person in a workspace: answered with nothing, heard only by the
-  push sender, which holds that workspace's pushes for its window (D-143). Each frame joined the union
+  push sender, which holds that workspace's pushes for its window (D-143), and — as the person's own
+  word that they are using Purlay — by presence, which counts it against `AWAY_AFTER_MS` (D-257). Each frame joined the union
   with its feature, so an exhaustive switch breaks where a case is unhandled rather than carrying
   stubs for features that do not exist.
 
@@ -374,6 +381,17 @@ late: a storm of 300 sockets reconnecting at once pulled 90,000 frames. It is pa
 per message, bounded by the replay's own caps (§5.5), and spread by the backoff's jitter (D-76). A
 narrower window would be cheaper and would lose the late send D-65 exists to catch.
 
+**A node replays only so many sockets at once.** A replay holds its frames (up to 1,000, or 1 MiB) from the read
+until they are written, about 0.4 MB measured, so 2,000 sockets reconnecting together held about 800 MB at the same
+moment (`DEPLOY.md`, *Memory after a mass reconnect*). `SOCKET_REPLAY_CONCURRENCY` (50 unless set) is how many
+subscriptions of one node may be reading and building a replay at once; the others wait, in the order they asked,
+and the client sees only a later `ACK`. The turn covers the replay and nothing else: the channels are authorised
+and subscribed before the wait, so the order of D-83 is unchanged, and a connection's frames are still handled one
+at a time, so a connection waiting for its turn delays only itself. A wait past fifteen seconds, which is under the
+25 s of silence after which a client sends a `PING`, is answered as an overloaded server always is: `ERROR` with `DATABASE_UNAVAILABLE` and
+the frame's `refId`, whatever was subscribed for it undone, and the client sends the chunk again after a growing wait
+(above). A connection that closed while it waited reads nothing. A lone reconnect never waits, and a subscription with no cursor, which replays nothing, is not held at all. (#1029)
+
 **A subscription is bounded, and costs the same whatever it names.** One frame names at most
 `SUBSCRIBE_MAX_CHANNELS`, each once. Every channel is authorised in one query before any is
 subscribed — one the caller cannot see refuses the frame, and nothing is left half-subscribed — and
@@ -398,8 +416,11 @@ about none, so one added later cannot slip past (#412).
   N times the quota (D-25). **The number is decided (D-198, closing O-4)** — 10 frames/second with a
   burst of 60, measured against what a page sends (`bun run measure:frames`).
   **The budget is also the user's:** `MESSAGE_SEND` is charged to a per-user bucket shared with HTTP's
-  writes, and a user (20) and a node (2,000) may hold only so many sockets, refused at the upgrade with
-  `429` / `503` (D-84, amended; provisional, O-4).
+  writes, and a user (20) and a node (`SOCKET_MAX_CONNECTIONS`, 2,000 unless set) may hold only so many sockets, refused at the
+  upgrade with `429` / `503` (D-84, amended; provisional, O-4). The node's number is per node, a CPU and fan-out
+  decision (`DEPLOY.md`, *Sizing a node's sockets*). **The session is checked before the cap**, so a handshake the
+  node refuses with `503` has still cost the session queries; the order is kept because answering `503` first would
+  tell a caller with no session that the node is full, and it is the owner's to change (#1027).
 - HTTP has limits of its own behind the same seam: `/auth/*` per client address, mutations per signed-in
   user at the socket's budget, so `POST /messages` is no cheaper than a frame. A refusal is `429`
   with `Retry-After`. Provisional, as above (D-81).
@@ -449,7 +470,11 @@ the type refuses the pool (D-77).
   `CLOSE_CODES.RESTARTING` so they replay from their cursors, which is the logic that already exists
   (D-190). Typing, who is online and the limiters that are keyed beyond one connection are shared the
   same way and fall back to this node's own answer (`realtime/redis-presence.ts`, `redis-limiter.ts`).
-  Without `REDIS_URL` none of it is built.
+  Without `REDIS_URL` none of it is built. **Every key and the channel are named in one place**
+  (`platform/redis-names.ts`), under a namespace: `purlay` unless `REDIS_KEY_PREFIX` says another, so
+  two deployments that share one Redis (staging and production) each have a `<namespace>:bus` and their own
+  `<namespace>:rl:`, `:typing:`, `:online:` and `:modules` names, and hear nothing of each other. A test fails
+  on a `purlay:` name written out in any other file.
 
 **Delivery is isolated per subscriber.** The message is committed before the bus fans it out, so a
 send that throws for one socket is logged with that socket's id (never the frame) and the rest still
@@ -481,6 +506,15 @@ grace after their last closes, every change at a version that only grows; its re
 two nodes is announced once by each, a frame too many and never a wrong answer; **for online, one node
 alone is wrong on two** (a person online on one is offline to the other), so the shared adapter comes
 before a second node does (D-25, D-136 §5).
+
+Online has a second half, **away** (D-257): online and either idle for `AWAY_AFTER_MS` (five minutes
+without an `ACTIVE` word from any of the person's pages) or away by their own choice (`users.away_chosen`).
+It is told on the same `PRESENCE` change as `away`, at the same versions. One node keeps the last word per
+person in memory; several keep it in the person's Redis record (D-201) with an idle index swept on every
+renewal, so an idle lapse may be told up to one renewal late. A socket back inside the grace changes
+nothing; an arrival after being offline starts active; offline always wins. Every change is also told on
+the person's own `user:` topic, so their own avatar follows what everybody else hears, and, while they are online, says
+`chosen` there alone, so the account menu on each of their devices knows the choice.
 
 ### 6.2. `RateLimiter`
 
@@ -1052,12 +1086,14 @@ what was still open. `apps/api/src/lifecycle.ts`. (D-72)
 
 The cloud runs several API nodes behind a sticky-session load balancer, with `REDIS_URL` set so that
 the bus, presence and the limiters are shared (D-201). Nothing above changes: the three seams in §6 were
-placed for exactly this, and background work already runs outside the API process (D-30), so no job
-needs a distributed lock. The balancer's configuration is #115's, not this section's: a socket lives on
+placed for exactly this. The jobs of the `jobs` module run outside the API process (D-30); the scheduled-message
+and reminder delivery loops run inside it, and are safe on several nodes because each claims its due rows with
+`FOR UPDATE SKIP LOCKED`, so no job needs a distributed lock. The balancer's configuration is #115's, not this section's: a socket lives on
 the node that accepted it, which is why the per-connection frame limiter stays in that node's process
 (D-201), and why a node that loses its Redis sends its sockets back to replay rather than leaving them
 silent. A node reports ready only after it has reached Redis once; a node that has, and loses it, serves
-on, degraded, and says so in its log.
+on, degraded, and says so in its log. Every node of one cluster sets the same `REDIS_KEY_PREFIX`; clusters
+that share a Redis set different ones (§6), because nothing else keeps their bus and their records apart.
 
 
 **Thread knowledge (D-204).** ThreadSummary optionally includes knowledge; old rows omit it. A message page hydrates root metadata and bounded live-answer previews in one batched join. Metadata writes advance both knowledge_version (editor concurrency) and state_version (event ordering), so the existing changed_at trigger includes them in reconnect replay. THREAD_UPDATED carries the additive summary. Answer revisions update previews in held client lists; deleted roots drop decision metadata. Saved searches are database-backed personal filters; no new event, scheduler or external service is introduced.

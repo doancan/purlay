@@ -8,15 +8,14 @@
  * breakpoint it is not in the layout: it opens with the sidebar, in the same overlay.
  */
 import { useI18n } from '../../i18n/i18n-provider';
+import { running, type RailEntry as Entry } from '../../modules/registry';
+import type { RouteName } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Tooltip } from '../../ui/tooltip';
 import { InboxLink } from '../inbox/inbox-link';
-import { SavedLink } from '../saved/saved-link';
-import { DraftsLink } from '../drafts/drafts-link';
-import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { RailItemContent, railItemClasses } from './rail-item';
-import { WhenRun } from './module-gate';
+import { useSession } from '../session/session';
 import { useWorkspace } from './workspace';
 
 /** The conversations: the workspace's front door, which opens the channel you were last in. */
@@ -63,6 +62,41 @@ const SettingsLink = (): React.JSX.Element => {
   );
 };
 
+/** A place that is a link and no more: the page it opens is the one it says it is on. */
+const PlaceLink = ({ entry }: { readonly entry: Entry }): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  const { match } = useRoute();
+  const current = match.name === entry.route;
+  return (
+    <Tooltip content={t(entry.label)} side="right">
+      <Link
+        to={entry.route}
+        params={{ slug: workspace.slug }}
+        {...(current ? { 'aria-current': 'page' as const } : {})}
+        className={railItemClasses(current)}
+      >
+        <RailItemContent glyph={entry.glyph} label={t(entry.label)} />
+      </Link>
+    </Tooltip>
+  );
+};
+
+/**
+ * The places that are more than a link — a dot, a count, a panel — and so draw themselves, by the route they are
+ * on the rail for. Every other entry a manifest lists is a `PlaceLink`.
+ */
+const OWN_ITEMS: Partial<Record<RouteName, () => React.JSX.Element>> = {
+  workspace: ChannelsLink,
+  inbox: InboxLink,
+  questions: OpenQuestionsLink,
+};
+
+const RailItem = ({ entry }: { readonly entry: Entry }): React.JSX.Element => {
+  const Own = OWN_ITEMS[entry.route];
+  return Own === undefined ? <PlaceLink entry={entry} /> : <Own />;
+};
+
 interface RailProps {
   /** Inside the narrow window's overlay: as tall as the panel. */
   readonly overlay?: boolean;
@@ -70,6 +104,7 @@ interface RailProps {
 
 export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
   const { t } = useI18n();
+  const { modules } = useSession();
   return (
     <nav
       aria-label={t('rail.label')}
@@ -82,14 +117,11 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
       <div className="h-drag w-full shrink-0" />
       {/* The first place sits level with the workspace's name in the sidebar's header. */}
       <div className="flex flex-col items-center gap-4 pt-1">
-        <WhenRun module="chat">
-          <ChannelsLink />
-          <InboxLink />
-          <OpenQuestionsLink />
-          <SearchLink />
-          <SavedLink />
-          <DraftsLink />
-        </WhenRun>
+        {running(modules).flatMap((module) =>
+          module.rail.map((entry) => (
+            <RailItem key={`${module.id}.${entry.route}`} entry={entry} />
+          )),
+        )}
       </div>
       <div className="mt-auto">
         <SettingsLink />

@@ -16,6 +16,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import { edit } from '../../features/chat/messages/edit';
 import { send } from '../../features/chat/messages/messages';
+import { chatPushNotices } from '../../features/chat/notifications/push-notices';
 import { PUSH_FAILURES_MAX, createPushSender, type PushPost } from './sender';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import type { VapidKeys } from './vapid';
@@ -184,6 +185,7 @@ const sending = async (
     log: recording.log,
     keys: KEYS,
     attention: heard,
+    notices: chatPushNotices,
     post,
     ...(metrics === undefined ? {} : { failures: metrics.pushFailures }),
   });
@@ -327,6 +329,7 @@ describe('integration: a device is told', () => {
         log: aRecordingLogger().log,
         keys: KEYS,
         attention,
+        notices: chatPushNotices,
         post: service.post,
       });
       const { say } = await sending(db, service.post);
@@ -667,6 +670,7 @@ describe('integration: what the push service answers', () => {
       log: recording.log,
       keys: KEYS,
       attention,
+      notices: chatPushNotices,
       post: () => Promise.reject(new Error('nothing is posted')),
       failures: metrics.pushFailures,
     });
@@ -722,6 +726,7 @@ describe('integration: what the push service answers', () => {
         log: recording.log,
         keys: KEYS,
         attention,
+        notices: chatPushNotices,
         post: () => new Promise(() => undefined),
       });
       const context = room.members['alice']?.context;

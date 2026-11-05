@@ -10,11 +10,14 @@ import { describe, expect, test } from 'bun:test';
 import { createApp } from '../ingress/http/app';
 import {
   CROSS_TENANT,
+  EMPTY_FOR_THE_SEED,
   UNSCOPED,
   WORKSPACE_WIDE_READS,
   documentedEndpoints,
   endpointKey,
+  listEndpoints,
   queriesFor,
+  rowsIn,
   type DocumentedEndpoint,
 } from './cross-tenant';
 import { testDependencies } from './doubles';
@@ -111,6 +114,16 @@ describe('every served endpoint has a cross-tenant case', () => {
     }
   });
 
+  test('the lists of a workspace are found, and a single resource is not one', () => {
+    const keys = listEndpoints().map(([key]) => key);
+    expect(keys).toContain('GET /api/workspaces/:workspaceId/channels');
+    expect(keys).toContain('GET /api/channels/:channelId/messages');
+    expect(keys).not.toContain('GET /api/channels/:channelId');
+    expect(keys).not.toContain('GET /api/messages/:messageId');
+    expect(keys).not.toContain('GET /api/notifications');
+    expect(keys.every((key) => key.startsWith('GET '))).toBe(true);
+  });
+
   test('a further query is crossed after the case’s own, joined to it', () => {
     expect(
       queriesFor({
@@ -143,6 +156,28 @@ describe('every served endpoint has a cross-tenant case', () => {
       if (crossing !== undefined) {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'workspace-wide' });
       }
+    }
+  });
+});
+
+describe('a list that holds nothing proves nothing', () => {
+  test('rows are counted in a bare array and in the arrays of an object, and a single resource has none to count', () => {
+    expect(rowsIn([])).toBe(0);
+    expect(rowsIn([1, 2])).toBe(2);
+    expect(rowsIn({ data: [], nextCursor: null })).toBe(0);
+    expect(rowsIn({ data: [1], nextCursor: null })).toBe(1);
+    expect(rowsIn({ usedBytes: 200 })).toBeUndefined();
+    expect(rowsIn(null)).toBeUndefined();
+  });
+
+  test('only a list the seed cannot fill is excused, and only a list is', () => {
+    const lists = new Set(listEndpoints().map(([key]) => key));
+    for (const [key, reason] of Object.entries(EMPTY_FOR_THE_SEED)) {
+      expect({ key, list: lists.has(key), reason: reason.length > 0 }).toEqual({
+        key,
+        list: true,
+        reason: true,
+      });
     }
   });
 });

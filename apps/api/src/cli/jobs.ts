@@ -23,14 +23,8 @@ import { purgeRetention } from '../features/chat/messages/retention-purge';
 import { compositionFor } from '../composition';
 import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
-import {
-  reconcileStorage,
-  runJob,
-  sweepEmailSignIns,
-  sweepGitHubDeliveries,
-  sweepLinkPreviews,
-  sweepOrphans,
-} from '../modules/jobs/jobs';
+import { reconcileStorage, runJob, sweepEmailSignIns, sweepOrphans } from '../modules/jobs/jobs';
+import { sweepGitHubDeliveries, sweepLinkPreviews } from '../features/chat/sweeps';
 import { jobReport, neverSucceeded } from '../modules/jobs/report';
 import { mailMissedMessages } from '../features/chat/notifications/missed-mail';
 import { readSettingsToBoot } from '../modules/setup/settings';

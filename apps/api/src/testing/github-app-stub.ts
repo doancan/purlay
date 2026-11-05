@@ -79,6 +79,11 @@ interface GitHubAppBehaviour {
   appTokenRefused?: boolean;
   /** Every call fails to connect. */
   unreachable?: boolean;
+  /**
+   * What `DELETE /applications/{client_id}/grant` does: revokes (the default), answers `502`, or never answers so
+   * the caller's deadline is all it hears (`hangs`).
+   */
+  revoke?: 'revokes' | 'fails' | 'hangs';
 }
 
 export interface GitHubAppStub {
@@ -89,7 +94,11 @@ export interface GitHubAppStub {
   /** Every API call asked of it, as `METHOD path`, in order. */
   readonly calls: string[];
   /** Whose token each call carried, in the same order: the App itself, a person, or an installation. */
-  readonly callers: ('app' | 'user' | 'installation')[];
+  readonly callers: ('app' | 'user' | 'installation' | 'client')[];
+  /** The user access tokens a revocation of the grant (`DELETE /applications/{client_id}/grant`) took, in order. */
+  readonly revoked: string[];
+  /** Whether GitHub still takes this user access token, expired or not: a revoked one it does not. */
+  readonly takes: (accessToken: string) => boolean;
   /** The App's callback, as registered on GitHub; set by a test that knows its server's address. */
   callbackUrl: string;
   /** An installation of the App on an account, with its repositories. */
@@ -149,7 +158,10 @@ export const aGitHubAppStub = (
   const items: StubItem[] = [];
   const behaviour: GitHubAppBehaviour = {};
   const calls: string[] = [];
-  const callers: ('app' | 'user' | 'installation')[] = [];
+  const callers: ('app' | 'user' | 'installation' | 'client')[] = [];
+  const revoked: string[] = [];
+  /** Each access token with the refresh token that was given beside it: revoking one takes both. */
+  const refreshOf = new Map<string, string>();
   const codes = new Map<
     string,
     { readonly redirectUri: string; readonly challenge: string | null; spent: boolean }
@@ -166,6 +178,8 @@ export const aGitHubAppStub = (
     behaviour,
     calls,
     callers,
+    revoked,
+    takes: (accessToken) => userTokens.has(accessToken),
     callbackUrl: 'https://purlay.test/api/github-app/callback',
     install: (id, login, repositories, installOptions = {}) => {
       const installation: StubInstallation = {
@@ -298,6 +312,7 @@ export const aGitHubAppStub = (
     const refreshToken = `ghr_${random()}`;
     userTokens.set(accessToken, { expiresAt: now() + ACCESS_SECONDS * 1000 });
     refreshTokens.add(refreshToken);
+    refreshOf.set(accessToken, refreshToken);
     return {
       access_token: accessToken,
       expires_in: ACCESS_SECONDS,
@@ -434,11 +449,45 @@ export const aGitHubAppStub = (
     return Response.json(itemJson(make(), repository), { status: 201 });
   };
 
+  /**
+   * "Delete an app authorization": the App's own client id and secret as HTTP Basic credentials, the person's
+   * access token in the body; `204`, and every token the App holds for that person is gone. `422` for a token it
+   * does not know, the only other answer the documentation gives.
+   */
+  const revokeGrant = async (request: Request, clientId: string): Promise<Response> => {
+    calls.push(`${request.method} ${new URL(request.url).pathname}`);
+    callers.push('client');
+    const mode = behaviour.revoke ?? 'revokes';
+    if (mode === 'hangs') return await new Promise<Response>(() => undefined);
+    if (mode === 'fails') return new Response('', { status: 502 });
+    const expected = `Basic ${Buffer.from(`${GITHUB_APP_STUB.clientId}:${GITHUB_APP_STUB.clientSecret}`).toString('base64')}`;
+    if (
+      clientId !== GITHUB_APP_STUB.clientId ||
+      request.headers.get('authorization') !== expected
+    ) {
+      return Response.json({ message: 'Bad credentials' }, { status: 401 });
+    }
+    const body = (await request.json()) as { access_token?: unknown };
+    const presented = typeof body.access_token === 'string' ? body.access_token : '';
+    if (!userTokens.has(presented)) {
+      return Response.json({ message: 'Validation Failed' }, { status: 422 });
+    }
+    userTokens.delete(presented);
+    const refresh = refreshOf.get(presented);
+    if (refresh !== undefined) refreshTokens.delete(refresh);
+    revoked.push(presented);
+    return new Response(null, { status: 204 });
+  };
+
   const handle = async (request: Request): Promise<Response | undefined> => {
     if (behaviour.unreachable === true) throw new TypeError('fetch failed');
     const url = new URL(request.url);
     const path = url.pathname;
     if (path === '/login/oauth/access_token') return await token(request);
+    const grant = /^\/applications\/([^/]+)\/grant$/.exec(path);
+    if (grant !== null && request.method === 'DELETE') {
+      return await revokeGrant(request, decodeURIComponent(grant[1] ?? ''));
+    }
     const bearer = bearerOf(request);
     const isApp = bearer.startsWith('ey');
     const isUser = bearer.startsWith('ghu_');

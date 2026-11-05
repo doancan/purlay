@@ -20,6 +20,10 @@ import { join, resolve } from 'node:path';
  */
 setDefaultTimeout(60_000);
 
+/** Written in two parts, so that this file does not itself cite a decision or a section that does not exist. */
+const DECISION = 'D-';
+const SECTION = '§';
+
 const SCRIPT = resolve('scripts/check-docs.py');
 const copies: string[] = [];
 
@@ -81,10 +85,12 @@ describe('the document check', () => {
 
   test('fails on a citation of a decision that does not exist', () => {
     const root = aCopy();
-    edit(root, 'docs/PRD.md', (text) => `${text}\nSee D-999.\n`);
+    // Built from pieces so this file is not itself a source that cites a decision that does not exist.
+    const missing = `${DECISION}999`;
+    edit(root, 'docs/PRD.md', (text) => `${text}\nSee ${missing}.\n`);
     const { status, output } = run(root);
     expect(status).toBe(1);
-    expect(output).toContain('D-999');
+    expect(output).toContain(missing);
   });
 
   test('fails on a gap in decision numbering', () => {
@@ -145,5 +151,111 @@ describe('the document check', () => {
     const named = run(invented);
     expect(named.status).toBe(1);
     expect(named.output).toContain('chat/0002_a_file_nobody_wrote.sql');
+  });
+
+  describe('retired claims (D-255)', () => {
+    const plant = (file: string, sentence: string): ReturnType<typeof run> => {
+      const root = aCopy();
+      edit(root, file, (text) => `${text}\n${sentence}\n`);
+      return run(root);
+    };
+
+    test.each([
+      ['a node that refuses to serve beside a peer', 'docs/MODULES.md'],
+      ['nodes of different sets share no bus channel', 'docs/CONFIG.md'],
+      ['the hooks are held only while it runs', 'docs/MODULES.md'],
+      ['`GET /api/client` lists the modules the server runs', 'docs/API.md'],
+      ['`MODULES.md` §9 steps 6–9 do it', 'docs/ARCHITECTURE.md'],
+      ['a disabled module is never mounted', 'docs/OVERVIEW.md'],
+      ['the first 77 files create chat’s tables', 'docs/MODULES.md'],
+      ['a module sets `dataInCore: true` and gives its hooks', 'docs/MODULES.md'],
+      ['every bundled module with `dataInCore` is held', 'docs/CONFIG.md'],
+      ['the compose work may remove this flag', 'docs/OVERVIEW.md'],
+      ['so "no oracle" is exact for paths, bodies and codes', 'docs/MODULES.md'],
+      ['so the public handshake adds nothing to what a closed route’s 404 hides', 'docs/API.md'],
+      ['until then isolation by budget is intent', 'docs/MODULES.md'],
+      ['nothing outside its tests imports it, so no process takes it', 'docs/MODULES.md'],
+    ])('fails on %s', (sentence, file) => {
+      const { status, output } = plant(file, sentence);
+      expect(status).toBe(1);
+      expect(output).toContain('a retired claim is back');
+      expect(output).toContain(file);
+    });
+
+    test('leaves the decision record alone where it quotes what it amends', () => {
+      // D-250 rule 8 still says "refuses to serve", under a note that D-255 amended it.
+      const { status, output } = plant(
+        'docs/DECISIONS.md',
+        '\nA note: it refuses to serve, as D-250 first said.',
+      );
+      expect({ status, output }).toEqual({
+        status: 0,
+        output: expect.stringContaining('[ok]') as string,
+      });
+    });
+
+    test('does not read the changelog, which is history', () => {
+      const { status } = plant('docs/changelog/changes.md', 'A node refuses to serve.');
+      expect(status).toBe(0);
+    });
+  });
+
+  describe('citations in source code', () => {
+    const plantSource = (text: string): ReturnType<typeof run> => {
+      const root = aCopy();
+      writeFileSync(join(root, 'apps/api/src/planted-citation.ts'), `// ${text}\nexport {};\n`);
+      return run(root);
+    };
+
+    test('fails on a section of a document that does not exist', () => {
+      const { status, output } = plantSource(`see \`MODULES.md\` ${SECTION}99`);
+      expect(status).toBe(1);
+      expect(output).toContain('source cites a section that does not exist');
+      expect(output).toContain(`apps/api/src/planted-citation.ts -> MODULES.md ${SECTION}99`);
+    });
+
+    test('fails on a decision that does not exist', () => {
+      const { status, output } = plantSource(`see ${DECISION}998`);
+      expect(status).toBe(1);
+      expect(output).toContain('source cites a decision that does not exist');
+      expect(output).toContain(`${DECISION}998`);
+    });
+
+    test('passes a citation that resolves', () => {
+      const { status } = plantSource('see `MODULES.md` §12 and D-255');
+      expect(status).toBe(0);
+    });
+  });
+
+  describe('the modules the build carries (D-250)', () => {
+    test('fails when ARCHITECTURE.md’s features tree does not name one', () => {
+      const root = aCopy();
+      edit(root, 'docs/ARCHITECTURE.md', (text) =>
+        text.replace('└── issues/', '└── issue-tracker/'),
+      );
+      const { status, output } = run(root);
+      expect(status).toBe(1);
+      expect(output).toContain('a bundled module is missing from ARCHITECTURE.md');
+      expect(output).toContain('issues');
+    });
+
+    test('fails when CONFIG.md’s MODULES row does not name one', () => {
+      const root = aCopy();
+      edit(root, 'docs/CONFIG.md', (text) => text.replace('`chat`, `issues`.', '`chat`.'));
+      const { status, output } = run(root);
+      expect(status).toBe(1);
+      expect(output).toContain('a bundled module is missing from CONFIG.md');
+      expect(output).toContain('issues');
+    });
+
+    test('fails when a module is bundled and no document knows it', () => {
+      const root = aCopy();
+      edit(root, 'apps/api/src/composition.ts', (text) =>
+        text.replace('  issuesModule,\n]', '  issuesModule,\n  notesModule,\n]'),
+      );
+      const { status, output } = run(root);
+      expect(status).toBe(1);
+      expect(output).toContain('notes');
+    });
   });
 });

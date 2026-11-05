@@ -72,12 +72,16 @@ const copiedBelow = (from: string, end: string | undefined): string => {
 /** The previous release's migrations: the core's files below the first of the expand release, and no module's. */
 const previousRelease = (): string => copiedBelow(MIGRATIONS_DIRECTORY, EXPAND_RELEASE_STARTS_AT);
 
-/** The expand release's migrations: all the core's (0079 is its last) and chat's set up to the contract. */
+/**
+ * The expand release's migrations (v0.3.0): all the core's, chat's set up to the contract, and the issues set. What
+ * a production database is at when the contract release starts.
+ */
 const expandRelease = (): { core: string; sets: MigrationSet[] } => ({
   core: copiedBelow(MIGRATIONS_DIRECTORY, undefined),
-  sets: [
-    { id: 'chat', directory: copiedBelow(join(MIGRATIONS_DIRECTORY, 'chat'), CONTRACT_STARTS_AT) },
-  ],
+  sets: PRODUCT_MIGRATION_SETS.map((set) => ({
+    id: set.id,
+    directory: copiedBelow(set.directory, set.id === 'chat' ? CONTRACT_STARTS_AT : undefined),
+  })),
 });
 
 /**
@@ -211,7 +215,7 @@ const expandedDatabase = async (): Promise<{
   const { core, sets } = expandRelease();
   const expanded = await migrateToLatest(db, core, { modules: sets });
   expect(expanded.error).toBeUndefined();
-  expect(expanded.results?.at(-1)?.migrationName).toBe('chat/0004_hidden_messages');
+  expect(expanded.results?.at(-1)?.migrationName).toBe('issues/0001_issues');
   return { db, world: await writeLikeTheExpandRelease(db), sets };
 };
 
@@ -270,11 +274,14 @@ describe('integration: upgrading from the previous release', () => {
       expect(after.error).toBeUndefined();
       expect(after.results?.map((result) => result.migrationName)).toEqual([
         '0079_attachment_claims',
+        '0080_away_chosen',
+        '0081_message_search_branches',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
         'chat/0004_hidden_messages',
         CONTRACT_MIGRATION,
+        'issues/0001_issues',
       ]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
       expect(await columnsOfAttachments(db)).not.toContain('channel_id');
@@ -499,6 +506,27 @@ describe('integration: the contract release on a database that has run the expan
       expect(await columnsOfAttachments(unclaimed.db)).toContain('message_id');
     } finally {
       await unclaimed.db.destroy();
+    }
+  });
+
+  test('counts every file that is not safe to drop the columns over, once each', async () => {
+    const { db, world } = await expandedDatabase();
+    try {
+      // One file lost its link; the other is linked to another message than its own and is also unclaimed. Two
+      // files, counted by file and never twice for failing two conditions.
+      await sql`delete from message_attachments where attachment_id = ${world.keptByTombstone}`.execute(
+        db,
+      );
+      await sql`
+        update message_attachments set message_id = ${world.deletedMessage}
+        where attachment_id = ${world.sent}`.execute(db);
+      await sql`update attachments set claimed_at = null where id = ${world.sent}`.execute(db);
+
+      const refused = await migrateToLatest(db, undefined, { modules: PRODUCT_MIGRATION_SETS });
+      expect(String(refused.error)).toContain('chat/0005 refused: 2 attachment(s)');
+      expect(await columnsOfAttachments(db)).toContain('message_id');
+    } finally {
+      await db.destroy();
     }
   });
 

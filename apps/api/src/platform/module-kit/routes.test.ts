@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ownsPath } from './routes';
+import { ownsPath, templatesOverlap } from './routes';
 
 describe('which paths a module owns', () => {
   const owns = ownsPath([
@@ -33,5 +33,33 @@ describe('which paths a module owns', () => {
   test('ignores a trailing slash and an empty segment, and an empty list owns nothing', () => {
     expect(owns('/api/notifications/')).toBe(true);
     expect(ownsPath([])('/api/notifications')).toBe(false);
+  });
+});
+
+describe('which templates claim a path in common', () => {
+  test('the same template, a name against a literal, and a subtree over what is below it', () => {
+    expect(templatesOverlap('/api/a/b', '/api/a/b')).toBe(true);
+    expect(templatesOverlap('/api/a/:id', '/api/a/b')).toBe(true);
+    expect(templatesOverlap('/api/a/**', '/api/a/b')).toBe(true);
+    expect(templatesOverlap('/api/a/**', '/api/a/b/c/:d')).toBe(true);
+    expect(templatesOverlap('/api/a/**', '/api/a/**')).toBe(true);
+    expect(templatesOverlap('/api/a/:x/c', '/api/a/b/:y')).toBe(true);
+  });
+
+  test('reads a trailing star, as the core spells its catch-all, as the rest of the path', () => {
+    expect(templatesOverlap('/auth/foo', '/auth/*')).toBe(true);
+    expect(templatesOverlap('/auth/*', '/auth/foo/bar')).toBe(true);
+    expect(templatesOverlap('/auth/*', '/auth/**')).toBe(true);
+    expect(templatesOverlap('/auth/*', '/auth')).toBe(false);
+    expect(templatesOverlap('/auth/*', '/other/foo')).toBe(false);
+  });
+
+  test('is not two templates that no path matches both of', () => {
+    expect(templatesOverlap('/api/a/b', '/api/a/c')).toBe(false);
+    expect(templatesOverlap('/api/a/b', '/api/a/b/c')).toBe(false);
+    // A subtree is what is below its prefix, not the prefix.
+    expect(templatesOverlap('/api/a/**', '/api/a')).toBe(false);
+    expect(templatesOverlap('/api/a/**', '/api/b/c')).toBe(false);
+    expect(templatesOverlap('/api/w/:id/x', '/api/w/:id/y')).toBe(false);
   });
 });

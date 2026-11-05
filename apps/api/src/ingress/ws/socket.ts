@@ -24,7 +24,7 @@ import { atomicallyOn, type Atomically } from '../../platform/transactions';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
 import { startLivenessSweep } from '../../realtime/liveness';
-import { onlinePresence, type OnlinePresence } from '../../realtime/online';
+import { offlinePresence, onlinePresence, type OnlinePresence } from '../../realtime/online';
 import { announcePresence } from '../../features/chat/presence/presence';
 import {
   inProcessRateLimiter,
@@ -35,6 +35,7 @@ import {
 import { metered } from '../../realtime/frame-meter';
 import { inMemoryPresenceRegistry } from '../../realtime/presence';
 import type { SharedState } from '../../realtime/shared';
+import { createReplayGate } from '../../realtime/replay-gate';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
@@ -44,7 +45,7 @@ import type { PushSender } from '../../modules/push/sender';
 import type { ServerMetrics } from '../../platform/metrics';
 
 export interface SocketDependencies {
-  readonly config: Pick<Config, 'APP_URL'>;
+  readonly config: Pick<Config, 'APP_URL' | 'SOCKET_MAX_CONNECTIONS' | 'SOCKET_REPLAY_CONCURRENCY'>;
   /** The seam a socket's session is resolved through, as an HTTP request's is (`sessions.ts`). */
   readonly auth: Auth;
   readonly database: Executor;
@@ -59,7 +60,9 @@ export interface SocketDependencies {
   readonly userWrites: RateLimiter;
   /** The operations of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedFrame?: (op: string) => boolean;
-  /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
+  /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
+  readonly closedEvent?: (event: string) => boolean;
+  /** Defaults to `SOCKET_CONNECTION_LIMITS.perUser` and the configuration's `SOCKET_MAX_CONNECTIONS`; a test passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
   /** Who is in front of a workspace's page now (D-143), heard from `ACTIVE`. */
@@ -141,20 +144,32 @@ const outboundBufferOf = (raw: object): (() => number) => {
 
 export const createSocketLifecycle = (dependencies: SocketDependencies): SocketLifecycle => {
   const { log, database, clock } = dependencies;
-  const limits = dependencies.connectionLimits ?? SOCKET_CONNECTION_LIMITS;
-  // Who is online on this node (D-136): told by the hub's own count of each person's sockets.
-  const online = onlinePresence({
-    clock,
-    timers: dependencies.timers ?? systemTimers,
-    log,
-    announce: async (change) => {
-      await announcePresence({ database, bus, clock, log }, change);
-    },
-    ...(dependencies.shared === undefined ? {} : { directory: dependencies.shared.directory }),
-  });
+  const limits = dependencies.connectionLimits ?? {
+    perUser: SOCKET_CONNECTION_LIMITS.perUser,
+    total: dependencies.config.SOCKET_MAX_CONNECTIONS,
+  };
+  // One for the node: what limits the replays is every socket's together, not one connection's.
+  const replayGate = createReplayGate(dependencies.config.SOCKET_REPLAY_CONCURRENCY, log);
+  // Who is online on this node (D-136): told by the hub's own count of each person's sockets. It is chat's news
+  // (`PRESENCE` is in its manifest): a process that does not run chat counts nobody, shares nothing and tells nobody.
+  const online =
+    dependencies.closedEvent?.('PRESENCE') === true
+      ? offlinePresence
+      : onlinePresence({
+          clock,
+          timers: dependencies.timers ?? systemTimers,
+          log,
+          announce: async (change) => {
+            await announcePresence({ database, bus, clock, log }, change);
+          },
+          ...(dependencies.shared === undefined
+            ? {}
+            : { directory: dependencies.shared.directory }),
+        });
   const hub = createSocketHub(dependencies.auth, clock, {
     log,
     presence: online,
+    ...(dependencies.closedEvent === undefined ? {} : { closedEvent: dependencies.closedEvent }),
     // Called from `hub.deliver`, which only runs after `bus` exists.
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);
@@ -309,12 +324,14 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                     : { closedFrame: dependencies.closedFrame }),
                   presence,
                   attention: dependencies.attention,
+                  online,
                   sessionLifetime: () => dependencies.auth.sessionLifetime,
                   log,
                   push: dependencies.push,
                   // The real boundary. D-35: one transaction, published after it returns.
                   atomically,
                   socket: hub,
+                  replayGate,
                 },
                 identity,
                 raw,

@@ -15,7 +15,7 @@ import { sql, type Executor } from '@purlay/db';
 import { CHANGES_OVERLAP_MS, PAGE_LIMIT, type ChangePage, type ChangesQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { ChannelContext } from '../channels/guard';
-import { buildMessages, MESSAGE_COLUMNS } from './reader';
+import { buildMessages, MESSAGE_COLUMNS, type MessageRow } from './reader';
 
 /** The database's own clock, to the millisecond a stamp is kept to. */
 const serverNow = async (executor: Executor): Promise<Date> => {
@@ -54,33 +54,76 @@ const read = (text: string): Cursor => {
   };
 };
 
-export const changesIn = async (
+/**
+ * A walk that has this many changes or fewer ahead of it is read by their ids; a longer one is read as the
+ * channel. An empty poll is the common walk, and the channel's own scan answers it in a time that grows with the
+ * channel (#1018) — `greatest(changed_at, hidden_at)` is no column, so no index can answer it. The ids can be read
+ * from the two indexes that do hold the columns; but a catch-up from a year ago would read nearly the whole of
+ * them twice and be slower than the scan, so the read of ids gives up at this many and the scan takes over.
+ */
+export const IDS_READ_MAX = 1000;
+
+export interface ChangedRows {
+  readonly rows: readonly (MessageRow & { readonly changed_at: Date })[];
+  /** How the rows were found: `ids` from the two indexes, `scan` as the whole channel. */
+  readonly read: 'ids' | 'scan';
+}
+
+export interface ChangeWindow {
+  /** Nothing stamped later than this is in the walk. */
+  readonly asOf: Date;
+  readonly after: Cursor | undefined;
+  /** Nothing stamped before this is in the walk: the cursor's own stamp, or `since` less the overlap. */
+  readonly from: Date;
+  readonly limit: number;
+}
+
+/**
+ * The ids of what changed at or after `from`, for the caller and the channel: a message stamped then, or one
+ * the caller hid then. `undefined` when there are more than `IDS_READ_MAX`, the point where the channel's scan is
+ * cheaper than reading them.
+ *
+ * A row in the walk has `greatest(changed_at, hidden_at)` after `from`, so one of the two is at or after it: the
+ * ids are a superset of the walk and the statement that follows keeps every one of its own conditions. A message
+ * changed between this read and that statement is not in the ids; it is stamped after `asOf` or it is inside the
+ * overlap of the next walk, as a commit that lands after any read always has been.
+ */
+const idsChangedFrom = async (
   executor: Executor,
   context: ChannelContext,
-  query: ChangesQuery,
-): Promise<ChangePage> => {
-  if (query.since !== undefined && query.after !== undefined) {
-    throw refused('after', 'cannot be combined with `since`');
-  }
-  const limit = Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max);
+  from: Date,
+): Promise<string[] | undefined> => {
+  const found = await executor
+    .selectFrom('messages')
+    .select('messages.id')
+    .where('messages.channel_id', '=', context.channelId)
+    .where('messages.changed_at', '>=', from)
+    .unionAll(
+      executor
+        .selectFrom('hidden_messages')
+        .select('hidden_messages.message_id as id')
+        .where('hidden_messages.user_id', '=', context.userId)
+        .where('hidden_messages.channel_id', '=', context.channelId)
+        .where('hidden_messages.hidden_at', '>=', from),
+    )
+    .limit(IDS_READ_MAX + 1)
+    .execute();
+  return found.length > IDS_READ_MAX ? undefined : found.map(({ id }) => id);
+};
 
-  // Only the watermark: where this server's clock is, for a client with nothing to ask since.
-  if (query.since === undefined && query.after === undefined) {
-    return { data: [], nextCursor: null, asOf: (await serverNow(executor)).toISOString() };
-  }
-
-  const cursor = query.after === undefined ? undefined : read(query.after);
-  const since = query.since === undefined ? undefined : new Date(query.since);
-  if (since !== undefined && Number.isNaN(since.getTime())) {
-    throw refused('since', 'is not a time');
-  }
-  const now = await serverNow(executor);
-  // A cursor is made here and is never later than the clock that made it: one that says otherwise would hand a
-  // client a watermark this server never held, and the client would keep it and be told nothing for ever after.
-  if (cursor !== undefined && (cursor.asOf > now || cursor.changedAt > cursor.asOf)) {
-    throw refused('after', 'is not a cursor this server made');
-  }
-  const asOf = cursor?.asOf ?? now;
+/**
+ * The page's rows, in the order things happened. `strategy: 'scan'` is the read of the whole channel and is kept for
+ * the test that holds the other to it: whatever one finds, the other finds, to the byte.
+ */
+export const changedRows = async (
+  executor: Executor,
+  context: ChannelContext,
+  window: ChangeWindow,
+  strategy: 'auto' | 'scan' = 'auto',
+): Promise<ChangedRows> => {
+  const ids =
+    strategy === 'scan' ? undefined : await idsChangedFrom(executor, context, window.from);
+  if (ids?.length === 0) return { rows: [], read: 'ids' };
 
   const changedAt = sql<Date>`greatest(messages.changed_at, personal.hidden_at)`;
   let statement = executor
@@ -94,21 +137,57 @@ export const changesIn = async (
     .select(MESSAGE_COLUMNS)
     .select(changedAt.as('changed_at'))
     .where('messages.channel_id', '=', context.channelId)
-    .where(changedAt, '<=', asOf)
+    .where(changedAt, '<=', window.asOf)
     .orderBy(changedAt, 'asc')
     .orderBy('messages.id', 'asc')
-    // One more than asked for: whether another page exists is answered by reading, not by a COUNT.
-    .limit(limit + 1);
+    // One more than a page: whether another page exists is answered by reading, not by a COUNT.
+    .limit(window.limit);
 
-  if (cursor !== undefined) {
-    statement = statement.where(
-      sql<boolean>`(${changedAt}, messages.id) > (${cursor.changedAt}, ${cursor.messageId}::uuid)`,
-    );
-  } else if (since !== undefined) {
-    statement = statement.where(changedAt, '>', new Date(since.getTime() - CHANGES_OVERLAP_MS));
+  if (ids !== undefined) statement = statement.where('messages.id', 'in', ids);
+  statement =
+    window.after === undefined
+      ? statement.where(changedAt, '>', window.from)
+      : statement.where(
+          sql<boolean>`(${changedAt}, messages.id) > (${window.after.changedAt}, ${window.after.messageId}::uuid)`,
+        );
+  return {
+    rows: await statement.execute(),
+    read: ids === undefined ? ('scan' as const) : ('ids' as const),
+  };
+};
+
+export const changesIn = async (
+  executor: Executor,
+  context: ChannelContext,
+  query: ChangesQuery,
+): Promise<ChangePage> => {
+  if (query.since !== undefined && query.after !== undefined) {
+    throw refused('after', 'cannot be combined with `since`');
   }
+  const limit = Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max);
 
-  const rows = await statement.execute();
+  const cursor = query.after === undefined ? undefined : read(query.after);
+  const since = query.since === undefined ? undefined : new Date(query.since);
+  if (since !== undefined && Number.isNaN(since.getTime())) {
+    throw refused('since', 'is not a time');
+  }
+  const from = cursor?.changedAt ?? (since && new Date(since.getTime() - CHANGES_OVERLAP_MS));
+  const now = await serverNow(executor);
+  // Only the watermark: where this server's clock is, for a client with nothing to ask since.
+  if (from === undefined) return { data: [], nextCursor: null, asOf: now.toISOString() };
+  // A cursor is made here and is never later than the clock that made it: one that says otherwise would hand a
+  // client a watermark this server never held, and the client would keep it and be told nothing for ever after.
+  if (cursor !== undefined && (cursor.asOf > now || cursor.changedAt > cursor.asOf)) {
+    throw refused('after', 'is not a cursor this server made');
+  }
+  const asOf = cursor?.asOf ?? now;
+
+  const { rows } = await changedRows(executor, context, {
+    asOf,
+    after: cursor,
+    from,
+    limit: limit + 1,
+  });
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   return {

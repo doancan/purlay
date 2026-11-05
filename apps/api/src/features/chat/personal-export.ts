@@ -156,8 +156,8 @@ const tables = [
       message_id: 'export',
       channel_id: 'export',
     },
-    (userId) => ({
-      where: sql`attachment_id in (select id from attachments where ${theirFiles(userId)})`,
+    async (userId, _workspaces, executor) => ({
+      where: sql`attachment_id in (select id from attachments where ${await theirFiles(userId, executor)})`,
       order: 'attachment_id',
     }),
   ),
@@ -214,21 +214,8 @@ const tables = [
   ),
 ] as const;
 
-/** The tables chat writes into a person's export. */
-export type ChatPersonalWritten = (typeof tables)[number]['name'];
-
-export const chatPersonalExport: PersonalContribution = {
-  id: 'chat',
-  tables,
-  workspaces: (userId) => [
-    sql`select workspace_id from channels where id in (${theirChannels(userId)})`,
-    sql`select workspace_id from saved_searches where user_id = ${userId}`,
-  ],
-  files: theirFiles,
-};
-
 /** The tables of chat that are not in a person's export, and why. */
-export type ChatPersonalExcluded =
+type ChatPersonalExcluded =
   | 'hidden_messages'
   | 'message_reminders'
   | 'scheduled_messages'
@@ -253,7 +240,7 @@ export type ChatPersonalExcluded =
   | 'link_previews'
   | 'missed_mail_letters';
 
-export const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
+const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
   hidden_messages: 'markers of messages deleted for this person only: other people’s words, hidden',
   message_reminders: 'pending private reminders: transient, gone once they are delivered',
   scheduled_messages: 'pending unsent messages: transient, exported as messages once they are sent',
@@ -286,3 +273,16 @@ export const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, strin
   missed_mail_letters:
     'when each letter about what they missed went, and its stop link’s digest: a credential (D-240)',
 };
+
+export const chatPersonalExport = {
+  id: 'chat',
+  // Made by chat's own set (`chat/0001`): a database migrated without it has no link to export.
+  ownSet: ['message_attachments'],
+  tables,
+  workspaces: (userId: string): RawBuilder<unknown>[] => [
+    sql`select workspace_id from channels where id in (${theirChannels(userId)})`,
+    sql`select workspace_id from saved_searches where user_id = ${userId}`,
+  ],
+  files: theirFiles,
+  excluded: CHAT_PERSONAL_EXCLUDED,
+} satisfies PersonalContribution;

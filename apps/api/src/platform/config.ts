@@ -30,6 +30,7 @@ import {
 } from '@purlay/types';
 import { githubAppKeyProblem } from './github-app-key';
 import { oidcIssuerProblem, oidcNameProblem } from './oidc-address';
+import { REDIS_NAMESPACE_PATTERN } from './redis-names';
 import { smtpUrlProblem } from './smtp-address';
 
 /**
@@ -61,6 +62,17 @@ export const Environment = Type.Object({
   /** The one public origin (D-61): the OAuth callback, and the `Origin` check on
    *  the socket upgrade that stops cross-site hijacking (D-39). There is no CORS. */
   APP_URL: Type.String({ format: 'uri' }),
+
+  /** How many WebSockets this node holds open before it answers a new upgrade `503` (D-84). A per-node
+   *  number: the hosted product's several nodes each hold this many. The default, 2000, is what every
+   *  deployment has always had. Sized by the fan-out the node's CPU carries, not by memory (`DEPLOY.md`). */
+  SOCKET_MAX_CONNECTIONS: Type.Integer({ minimum: 1, maximum: 100_000, default: 2_000 }),
+
+  /** How many of this node's sockets may be replaying at once after a `SUBSCRIBE`; the rest wait their turn, in
+   *  order, and a client sees a later answer. A reconnect storm held about 0.4 MB per replaying socket at the same
+   *  moment; this bounds that (`DEPLOY.md`, *Memory after a mass reconnect*). A wait past fifteen seconds is answered
+   *  `DATABASE_UNAVAILABLE`, which a client retries. Per node, and the number of replays, not of sockets. */
+  SOCKET_REPLAY_CONCURRENCY: Type.Integer({ minimum: 1, maximum: 100_000, default: 50 }),
 
   /** Behind exactly one reverse proxy that sets `X-Forwarded-For`. Without it the
    *  socket's peer is the client and the header is ignored — anyone can write it. */
@@ -191,6 +203,11 @@ export const Environment = Type.Object({
    *  with its credentials. **Unset means off, and nothing connects anywhere**: a self-hosted instance runs
    *  every node-local implementation, which is all one node needs (D-7). A secret. */
   REDIS_URL: Type.Optional(Type.String({ pattern: '^rediss?://[^\\s]+$' })),
+  /** The namespace of every key and of the bus channel in that Redis, so two deployments that share one do
+   *  not hear each other: `staging` makes `staging:bus`, `staging:rl:…`. **Unset is `purlay`**, the name
+   *  every deployment has always had, so nothing already running moves. Every node of one cluster sets the
+   *  same. Needs `REDIS_URL`. */
+  REDIS_KEY_PREFIX: Type.Optional(Type.String({ pattern: REDIS_NAMESPACE_PATTERN })),
 
   /** The bearer token Prometheus scrapes `/metrics` with (D-221). **Unset means off**: the page is
    *  then no page, a `404` like any path nothing serves. At least 32 characters of a token's alphabet,
@@ -398,7 +415,9 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
 
 /** `REDIS_URL` must be an address a client can open. The reason, never the value: it holds a password. */
 const redisProblems = (config: Config): string[] => {
-  if (config.REDIS_URL === undefined) return [];
+  if (config.REDIS_URL === undefined) {
+    return config.REDIS_KEY_PREFIX === undefined ? [] : ['REDIS_KEY_PREFIX: needs REDIS_URL'];
+  }
   try {
     const url = new URL(config.REDIS_URL);
     return url.hostname === '' ? ['REDIS_URL: the address names no host'] : [];

@@ -709,3 +709,140 @@ describe('integration: the migrations of modules (D-250)', () => {
     }
   });
 });
+
+describe('integration: a migration waits for a lock only so long', () => {
+  /**
+   * An `ALTER TABLE` is granted its lock after every transaction already using the table, and
+   * while it waits it is first in line: a plain `SELECT` arriving behind it waits for it, so one
+   * long transaction and one queued migration stop every reader and writer of the table. The
+   * wait is bounded by `lock_timeout`, which counts the wait for a lock and never how long a
+   * granted lock is held, and a migration that fails for it says what to do.
+   */
+  const LOCK_TIMEOUT = 300;
+  const BASE = { '0001_t.sql': 'CREATE TABLE t (id int PRIMARY KEY);' };
+
+  const waiting = async (): Promise<boolean> => {
+    const { rows } = await sql<{ n: string }>`
+      select count(*) as n from pg_locks where locktype = 'relation' and not granted`.execute(
+      integrationDatabase(),
+    );
+    return Number(rows[0]?.n) > 0;
+  };
+
+  const untilWaiting = async (): Promise<void> => {
+    for (let waited = 0; !(await waiting()) && waited < 5000; waited += 10) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(await waiting()).toBe(true);
+  };
+
+  /** A database with table `t` and a session that has `t` in use, until `release` is called. */
+  const withTableInUse = async (
+    run: (databases: {
+      readonly db: Kysely<unknown>;
+      readonly reader: Kysely<unknown>;
+      readonly release: () => Promise<void>;
+    }) => Promise<void>,
+  ): Promise<void> => {
+    const schema = await freshSchema();
+    const db = open(schema);
+    const session = open(schema);
+    const reader = open(schema, 1, '-c lock_timeout=200ms');
+    try {
+      expect((await migrateToLatest(db, migrationsDirectory(BASE))).error).toBeUndefined();
+      await session.connection().execute(async (conn) => {
+        await sql`begin`.execute(conn);
+        await sql`select count(*) from t`.execute(conn);
+        let released = false;
+        const release = async (): Promise<void> => {
+          if (released) return;
+          released = true;
+          await sql`rollback`.execute(conn);
+        };
+        try {
+          await run({ db, reader, release });
+        } finally {
+          await release();
+        }
+      });
+    } finally {
+      await db.destroy();
+      await session.destroy();
+      await reader.destroy();
+    }
+  };
+
+  test('a transactional migration queued behind a long transaction fails, says what to do, and leaves the table free', async () => {
+    await withTableInUse(async ({ db, reader, release }) => {
+      const directory = migrationsDirectory({
+        ...BASE,
+        '0002_change.sql': 'ALTER TABLE t ADD COLUMN extra int;',
+      });
+      const { error, results } = await migrateToLatest(db, directory, {
+        lockTimeoutMilliseconds: LOCK_TIMEOUT,
+      });
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toContain('0002_change');
+      expect(message).toContain('lock');
+      expect(message).toContain('pg_stat_activity');
+      expect(message).toContain('runs again');
+      expect(results).toEqual([{ migrationName: '0002_change', status: 'Error' }]);
+
+      // The queued ALTER is gone: a reader that would wait behind it is answered.
+      expect((await sql`select count(*) as n from t`.execute(reader)).rows).toEqual([{ n: '0' }]);
+      expect(await pendingMigrations(db, directory)).toEqual(['0002_change']);
+
+      // Nothing was half-applied: once the table is free the next start applies it.
+      await release();
+      const retried = await migrateToLatest(db, directory, {
+        lockTimeoutMilliseconds: LOCK_TIMEOUT,
+      });
+      expect(retried.error).toBeUndefined();
+      expect(await pendingMigrations(db, directory)).toEqual([]);
+    });
+  }, 30_000);
+
+  test('a lock held for longer than the timeout once it is granted does not end the migration', async () => {
+    const db = open(await freshSchema());
+    try {
+      expect((await migrateToLatest(db, migrationsDirectory(BASE))).error).toBeUndefined();
+      const directory = migrationsDirectory({
+        ...BASE,
+        '0002_slow.sql':
+          'ALTER TABLE t ADD COLUMN extra int;\nSELECT pg_sleep(0.9);\nUPDATE t SET extra = 1;',
+      });
+      const { error } = await migrateToLatest(db, directory, {
+        lockTimeoutMilliseconds: LOCK_TIMEOUT,
+      });
+      expect(error).toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  }, 30_000);
+
+  const OWN_TIMEOUT = {
+    'a transactional migration that sets its own lock_timeout':
+      'SET LOCAL lock_timeout = 0;\nALTER TABLE t ADD COLUMN extra int;',
+    'a migration that leaves its transaction (it sets its own, as 0058 does)':
+      '-- purlay: no-transaction\nALTER TABLE t ADD COLUMN IF NOT EXISTS extra int;',
+  } as const;
+
+  for (const [kind, file] of Object.entries(OWN_TIMEOUT)) {
+    test(`${kind} is not held to the default`, async () => {
+      await withTableInUse(async ({ db, release }) => {
+        const directory = migrationsDirectory({ ...BASE, '0002_change.sql': file });
+        let settled = false;
+        const running = migrateToLatest(db, directory, {
+          lockTimeoutMilliseconds: LOCK_TIMEOUT,
+        }).finally(() => {
+          settled = true;
+        });
+        await untilWaiting();
+        await new Promise((resolve) => setTimeout(resolve, LOCK_TIMEOUT * 3));
+        expect(settled).toBe(false);
+        await release();
+        expect((await running).error).toBeUndefined();
+      });
+    }, 30_000);
+  }
+});

@@ -302,7 +302,7 @@ describe('the people section', () => {
       });
     const told = (userId: string, online: boolean, version: number): ServerFrame => ({
       event: 'PRESENCE',
-      data: { changes: [{ userId, online, version }] },
+      data: { changes: [{ userId, online, away: false, version }] },
       ts: 0,
     });
 
@@ -311,7 +311,7 @@ describe('the people section', () => {
         aSignedInApi({
           presence: () =>
             Promise.resolve({
-              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
               version: 9,
             }),
         }),
@@ -326,12 +326,51 @@ describe('the people section', () => {
       await expectNoAxeViolations(peopleOf(view));
     });
 
+    test('away peers show the ring and are said away; yourself is the heard state while connected, else nothing (D-257)', async () => {
+      const view = await open(
+        aSignedInApi({
+          presence: () =>
+            Promise.resolve({
+              online: [
+                { userId: ALICE.id, online: true, away: true, version: 5 },
+                { userId: ME.id, online: true, away: true, version: 6 },
+              ],
+              version: 9,
+            }),
+        }),
+      );
+      const rings = (): string[] =>
+        [...peopleOf(view).querySelectorAll('[data-avatar]')]
+          .filter((avatar) => avatar.querySelector('[data-away]') !== null)
+          .map((avatar) => avatar.textContent);
+      // Not connected: yourself is nothing, whatever was heard of you.
+      expect(rings()).toEqual(['AL']);
+      expect(dotted(view)).toEqual([]);
+      expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you']);
+      // Connected, yourself is what the server said: away.
+      act(() => {
+        view.world.sockets.open();
+      });
+      expect(rings()).toEqual(['AL', 'DO']);
+      expect(dotted(view)).toEqual([]);
+      expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you, away']);
+    });
+
+    test('yourself, with nothing heard, is active while connected', async () => {
+      const view = await open(aSignedInApi());
+      expect(dotted(view)).toEqual([]);
+      act(() => {
+        view.world.sockets.open();
+      });
+      expect(dotted(view)).toEqual(['DO']);
+    });
+
     test('a frame moves the dot; one older than what was heard changes nothing', async () => {
       const view = await open(
         aSignedInApi({
           presence: () =>
             Promise.resolve({
-              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
               version: 9,
             }),
         }),
@@ -390,7 +429,10 @@ describe('the people section', () => {
     };
     const CAROL = aUser('carol', '0199155c-6200-7b7f-8c11-0000000000c7');
     const aliceOnline = (): Promise<PresenceSnapshot> =>
-      Promise.resolve({ online: [{ userId: ALICE.id, online: true, version: 5 }], version: 9 });
+      Promise.resolve({
+        online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
+        version: 9,
+      });
     const nobody = (): Promise<PresenceSnapshot> => Promise.resolve({ online: [], version: 20 });
 
     test('read once as the page loads, and not again while nothing happens', async () => {
@@ -467,7 +509,7 @@ describe('the people section', () => {
         aliceOnline,
         (): Promise<PresenceSnapshot> =>
           Promise.resolve({
-            online: [{ userId: CAROL.id, online: true, version: 12 }],
+            online: [{ userId: CAROL.id, online: true, away: false, version: 12 }],
             version: 13,
           }),
       ]);
@@ -508,7 +550,7 @@ describe('the people section', () => {
         api: aSignedInApi({
           presence: () =>
             Promise.resolve({
-              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              online: [{ userId: ALICE.id, online: true, away: false, version: 5 }],
               version: 9,
             }),
         }),

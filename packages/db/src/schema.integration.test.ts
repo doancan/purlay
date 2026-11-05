@@ -120,7 +120,10 @@ describe('integration: the migrated schema', () => {
       order by indexname`.execute(integrationDatabase());
     const names = rows.map((row) => row.name);
     for (const kept of [
+      'idx_messages_accepted_answer',
       'idx_messages_channel_feed',
+      'idx_messages_search_answered',
+      'idx_messages_search_noted',
       'idx_messages_search_folded',
       'idx_messages_sender',
       'idx_messages_thread',

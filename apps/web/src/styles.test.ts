@@ -60,8 +60,11 @@ describe('the edges (D-188)', () => {
   const HOVER_EDGES = new Set(['hover:border-accent-hover', 'group-hover:border-nav-hover']);
   /** An edge colour that depends on hover, on a group's or a peer's hover too, whichever sides it draws. */
   const hoverEdge = (name: string): boolean => /(^|[:-])hover:border-/.test(name);
-  /** An edge drawn in the ink colour, with any variant before it. */
-  const inkEdge = (name: string): boolean => /(^|:)border(-[trblxy])?-ink/.test(name);
+  /**
+   * An edge drawn in the ink colour, with any variant before it. The muted ink is not it: it is the
+   * grey of the away ring (D-257), which reads on a surface where the faint border tokens do not.
+   */
+  const inkEdge = (name: string): boolean => /(^|:)border(-[trblxy])?-ink(?!-muted)/.test(name);
   const classes = application
     .flatMap((path) => classesIn(relative(root, path), readFileSync(path, 'utf8')))
     .map((found) => found.candidate);
@@ -93,7 +96,7 @@ describe('the edges (D-188)', () => {
     ]) {
       expect(inkEdge(name), name).toBe(true);
     }
-    for (const name of ['border-border-strong', 'border-accent']) {
+    for (const name of ['border-border-strong', 'border-accent', 'border-ink-muted']) {
       expect(inkEdge(name), name).toBe(false);
     }
   });

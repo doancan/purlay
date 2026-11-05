@@ -29,6 +29,12 @@ export interface ModuleManifest {
    */
   readonly frames?: readonly string[];
   /**
+   * The events the module's services send to sockets. A process that does not run the module hears none of them, from
+   * its own services or from a node that does run it, and does not take on what telling them needs (who is online is
+   * `PRESENCE`'s): a module that is not run tells nothing about itself (`MODULES.md` §3).
+   */
+  readonly events?: readonly string[];
+  /**
    * The scheduled jobs (`bun run job <name>`) that act for the module's users, mail for one. A scheduler that still
    * runs one of a module that is not run is answered with success and a line saying so: there is nothing for it to
    * do. A sweep or a purge of the module's rows is not listed: rows outlive the module's being off, and keeping

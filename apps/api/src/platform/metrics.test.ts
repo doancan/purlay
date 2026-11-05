@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   HTTP_DURATION_BUCKETS,
   createMetricsRegistry,
+  modulesInfoFamily,
   renderMetrics,
   serverMetrics,
 } from './metrics';
@@ -126,9 +127,34 @@ describe("the server's instruments", () => {
     expect(page.types.get('purlay_http_request_duration_seconds')).toBe('histogram');
   });
 
+  test('say which memory figure the resident gauge is, since ps reads higher on macOS (#1028)', () => {
+    const text = renderMetrics(serverMetrics(fixedProcess));
+    const help = text
+      .split('\n')
+      .find((line) => line.startsWith('# HELP purlay_process_resident_memory_bytes'));
+    expect(help).toContain('resident set on Linux');
+    expect(help).toContain('physical footprint on macOS');
+    expect(help).toContain('below ps');
+  });
+
   test('the real process is read when no readings are handed in', () => {
     const page = readExposition(renderMetrics(serverMetrics()));
     expect(sampleOf(page, 'purlay_process_uptime_seconds')).toBeGreaterThan(0);
     expect(sampleOf(page, 'purlay_process_resident_memory_bytes')).toBeGreaterThan(1024 * 1024);
+  });
+});
+
+describe('the modules on the page', () => {
+  test('are one series of 1 per module, named by the module label', () => {
+    expect(modulesInfoFamily(['chat', 'issues'])).toEqual({
+      name: 'purlay_modules_info',
+      help: 'The modules this process runs, one series of value 1 each.',
+      type: 'gauge',
+      samples: [
+        { suffix: '', labels: { module: 'chat' }, value: 1 },
+        { suffix: '', labels: { module: 'issues' }, value: 1 },
+      ],
+    });
+    expect(modulesInfoFamily([]).samples).toEqual([]);
   });
 });

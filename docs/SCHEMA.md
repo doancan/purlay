@@ -111,6 +111,10 @@ CREATE TABLE users (
     -- account that existed before.
     google_made BOOLEAN NOT NULL DEFAULT FALSE,
 
+    -- Whether the person chose to appear away (D-257, 0080): they are told as away, whatever they do, until
+    -- they choose to appear active again. Idle time makes no one away by this column; it is only the choice.
+    away_chosen BOOLEAN NOT NULL DEFAULT FALSE,
+
     -- Whether the address is one a provider vouched for, or a link sent to it was followed. Better Auth
     -- reads it: an address that is not verified is never linked to by one that is, and an invitation is
     -- accepted only by an account whose address is. FALSE until something says so. (D-179, 0047)
@@ -830,6 +834,16 @@ CREATE INDEX idx_messages_search_folded
     ON messages USING gin (workspace_id, purlay_fold(content) gin_trgm_ops)
     WHERE deleted_at IS NULL;
 
+-- Search asks a message's decision note and its accepted answer apart from its words, one query each
+-- merged under one bound (0081, #1019); an OR over the three could use none of the indexes. Both hold
+-- only the few roots that have a note or an answer, newest first inside a workspace.
+CREATE INDEX idx_messages_search_noted
+    ON messages (workspace_id, id DESC)
+    WHERE decision_note <> '' AND deleted_at IS NULL;
+CREATE INDEX idx_messages_search_answered
+    ON messages (workspace_id, id DESC)
+    WHERE accepted_answer_id IS NOT NULL AND deleted_at IS NULL;
+
 -- "Messages by this user", and the guard against orphaned RESTRICT references.
 CREATE INDEX idx_messages_sender ON messages (sender_id);
 
@@ -847,7 +861,9 @@ CREATE INDEX idx_messages_unresolved
 -- 1,000,000 messages took 4.9 s and deleting a channel did not finish in 60 s. (D-89)
 -- What a client catching up reads: one channel in the order things happened to it (D-194). Added by 0058,
 -- which dropped `idx_messages_channel (channel_id)`: this one leads with the same column, so it serves the
--- foreign key too.
+-- foreign key too. A poll with few changes reads their ids from this index and from `idx_hidden_messages_changes`
+-- and fetches those rows by key; `greatest(changed_at, hidden_at)` is no column, so the channel is scanned only
+-- when more than `IDS_READ_MAX` changes are ahead of the walk (#1018).
 CREATE INDEX idx_messages_changes     ON messages (channel_id, changed_at, id);
 CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
@@ -1399,7 +1415,8 @@ CREATE TABLE channel_bookmarks (
     -- An http or https address; the service parses it as a browser would (`javascript:` is never kept).
     url           TEXT NOT NULL CHECK (char_length(url) BETWEEN 1 AND 2048),
     title         TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 80),
-    -- The bookmark is the channel's: it outlives the account of the person who added it.
+    -- The bookmark is the channel's: it outlives the account of the person who added it. Erasure soft-deletes the
+    -- account, so SET NULL never fires: this keeps naming the anonymised account (D-256).
     added_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -1521,6 +1538,33 @@ CREATE INDEX idx_hidden_messages_workspace ON hidden_messages (workspace_id);
 CREATE INDEX idx_hidden_messages_message   ON hidden_messages (message_id, channel_id);
 CREATE INDEX idx_hidden_messages_channel   ON hidden_messages (channel_id, workspace_id);
 CREATE INDEX idx_hidden_messages_changes   ON hidden_messages (user_id, channel_id, hidden_at, message_id);
+```
+
+### 7.12. `issues`
+
+A workspace's issue (the issues module's set, `issues/0001`): a title, a markdown body, open or done, who it is
+assigned to and who made it. Both people outlive their rows as `NULL`, as a channel's creator does. That the
+assignee is a member of the workspace is the service's check and not a key, so a member who leaves does not
+rewrite their issues. The keys run to the core only (D-250): the table exists where the module's set was applied, and
+a database that never ran it has none.
+
+```sql
+CREATE TYPE issue_status AS ENUM ('open', 'done');
+
+CREATE TABLE issues (
+    id           UUID PRIMARY KEY,                       -- UUIDv7 made by the application: the page's cursor
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    title        TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 200),
+    body         TEXT NOT NULL DEFAULT '' CHECK (char_length(body) <= 10000),
+    status       issue_status NOT NULL DEFAULT 'open',
+    assignee_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_issues_workspace  ON issues (workspace_id, id DESC);
+CREATE INDEX idx_issues_assignee   ON issues (assignee_id) WHERE assignee_id IS NOT NULL;
+CREATE INDEX idx_issues_created_by ON issues (created_by) WHERE created_by IS NOT NULL;
 ```
 
 ## 8. GitHub Integration
@@ -1877,8 +1921,8 @@ CREATE TABLE audit_log (
     -- purge that would erase the audit trail fail loudly.
     workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
 
-    -- Kept when the actor is erased: their row stays, anonymised (D-139 §5). What was
-    -- done survives who did it.
+    -- Kept when the actor is erased: their row stays, anonymised (D-139 §5), and this keeps naming it, because
+    -- SET NULL never fires on a soft deletion (D-256). What was done survives who did it.
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
 
     -- Stable machine-readable verb: 'member.role_changed', 'integration.token_set',
@@ -1932,6 +1976,7 @@ cannot lack it. Append-only is held as `audit_log`'s is — by the sweep in
 ```sql
 CREATE TABLE server_audit_log (
     id            UUID PRIMARY KEY,
+    -- As audit_log's: an erased account is soft-deleted, so this keeps naming the anonymised account (D-256).
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     action        VARCHAR(64) NOT NULL,
     session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
@@ -2638,11 +2683,14 @@ file that leaves its transaction runs statement by statement and must be safe to
 0077_github_token_state.sql github_integrations.token_invalid_at, token_scopes: a token GitHub refused, and the scopes it was saved with  (D-23, amended; #884)
 0078_google_sign_in.sql server_settings.google_client_id, google_client_secret_encrypted, users.google_made: Google's OAuth client, a pair or nothing, and the accounts Google made  (D-251)
 0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
+0080_away_chosen.sql          users.away_chosen: a person's choice to appear away  (D-257)
+0081_message_search_branches.sql idx_messages_search_noted + idx_messages_search_answered: search asks the note and the answer apart from the words  (D-105, #1019)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
 chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
 chat/0005_message_attachments_contract.sql  drops attachments.message_id and channel_id, their keys and indexes, after refusing a link table that lacks a sent file  (D-250; ships in the release after the expand)
+issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

@@ -19,7 +19,7 @@ import { Value } from '@sinclair/typebox/value';
 export type GitHubAppFetch = (
   url: string,
   init: {
-    readonly method: 'GET' | 'POST';
+    readonly method: 'GET' | 'POST' | 'DELETE';
     readonly headers: Record<string, string>;
     readonly body?: string;
     readonly redirect: 'manual';
@@ -107,6 +107,15 @@ export interface GitHubAppApi {
     client: { readonly clientId: string; readonly clientSecret: string },
     refreshToken: string,
   ) => Promise<UserTokens | 'refused'>;
+  /**
+   * A person's authorization of the App revoked on GitHub (`DELETE /applications/{client_id}/grant`): the grant
+   * and every token the App holds for them, the refresh token too. Needs an access token GitHub still takes;
+   * anything but its `204` throws, so a caller that does not care how it ended catches it.
+   */
+  readonly revokeAuthorization: (
+    client: { readonly clientId: string; readonly clientSecret: string },
+    accessToken: string,
+  ) => Promise<void>;
   /** The installation's own short-lived token, for what everybody shares (D-246 §1). */
   readonly installationToken: (jwt: string, installationId: number) => Promise<string>;
   /**
@@ -265,8 +274,10 @@ export interface GitHubAppCaller {
   readonly call: (
     url: string,
     init: {
-      readonly method: 'GET' | 'POST';
+      readonly method: 'GET' | 'POST' | 'DELETE';
       readonly token?: string;
+      /** The App's own client id and secret, as the endpoints that take them ask for them (HTTP Basic). */
+      readonly basic?: { readonly clientId: string; readonly clientSecret: string };
       readonly body?: unknown;
       /** The token endpoint answers JSON only when asked for it by name; the API takes GitHub's own type. */
       readonly accept?: 'application/json';
@@ -280,7 +291,7 @@ export const githubAppCaller = (
   now: () => Date,
   timeoutMs = GITHUB_APP_TIMEOUT_MS,
 ): GitHubAppCaller => ({
-  call: async (url, { method, token, body, accept }): Promise<Response> => {
+  call: async (url, { method, token, basic, body, accept }): Promise<Response> => {
     let response: Response;
     try {
       response = await fetch(url, {
@@ -290,6 +301,11 @@ export const githubAppCaller = (
           'user-agent': 'purlay',
           'x-github-api-version': '2022-11-28',
           ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+          ...(basic === undefined
+            ? {}
+            : {
+                authorization: `Basic ${Buffer.from(`${basic.clientId}:${basic.clientSecret}`).toString('base64')}`,
+              }),
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -408,6 +424,13 @@ export const githubAppApi = (caller: GitHubAppCaller, urls: GitHubAppUrls): GitH
         },
       }),
     ),
+  revokeAuthorization: async (client, accessToken): Promise<void> => {
+    const response = await caller.call(
+      `${urls.api}/applications/${encodeURIComponent(client.clientId)}/grant`,
+      { method: 'DELETE', basic: client, body: { access_token: accessToken } },
+    );
+    await ok(response, 'a revocation');
+  },
   installationToken: async (jwt, installationId): Promise<string> => {
     const response = await caller.call(
       `${urls.api}/app/installations/${String(installationId)}/access_tokens`,

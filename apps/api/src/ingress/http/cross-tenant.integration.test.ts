@@ -14,6 +14,8 @@
  * 4. the owner's identical request succeeds. Without this, a path that routes
  *    nowhere would pass every assertion above — its `404` is just as real.
  *
+ * A second describe below crosses the other boundary, between two workspaces of one member.
+ *
  * Which endpoints must appear here is not decided in this file
  * (`cross-tenant.test.ts`, D-63).
  */
@@ -23,10 +25,13 @@ import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import {
   CROSS_TENANT,
+  EMPTY_FOR_THE_SEED,
+  listEndpoints,
   pathFor,
   queriesFor,
   type Ids,
   requestInit,
+  rowsIn,
 } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
@@ -144,6 +149,30 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       parentId: root,
     }),
   );
+  // The owner's own, one of each, so every list of them has a row to show (the list case needs one).
+  const dueAt = new Date(NOW.getTime() + 3_600_000).toISOString();
+  for (const [method, path, body] of [
+    ['PUT', `/api/messages/${root}/pin`, undefined],
+    ['PUT', `/api/messages/${root}/saved`, {}],
+    ['PUT', `/api/messages/${root}/reminder`, { remindAt: dueAt }],
+    [
+      'PUT',
+      `/api/channels/${channelId}/scheduled/${crypto.randomUUID()}`,
+      { content: 'later', sendAt: dueAt },
+    ],
+    [
+      'PUT',
+      `/api/workspaces/${workspaceId}/saved-searches/${crypto.randomUUID()}`,
+      { name: 'Mine', query: { q: 'question' } },
+    ],
+  ] as const) {
+    expect((await call(db, method, path, cookie, body)).ok).toBe(true);
+  }
+  // An archived channel, for the list of them.
+  const gone = await created(
+    await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'old' }),
+  );
+  expect((await call(db, 'DELETE', `/api/channels/${gone}`, cookie)).status).toBe(204);
   // Somebody the owner can make an admin, or remove.
   const member = await aSignedInUser(db, clock, `${slug}-member`);
   await db
@@ -198,6 +227,12 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   });
   expect(bookmark.status).toBe(201);
   const { id: bookmarkId } = (await bookmark.json()) as { id: string };
+  // An issue of the workspace (D-254).
+  const issue = await call(db, 'POST', `/api/workspaces/${workspaceId}/issues`, cookie, {
+    title: 'Crossing',
+  });
+  expect(issue.status).toBe(201);
+  const { id: issueId } = (await issue.json()) as { id: string };
   // An incoming webhook to revoke (D-245).
   const hook = await call(db, 'POST', `/api/channels/${channelId}/incoming-webhooks`, cookie, {
     name: 'CI',
@@ -261,6 +296,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     versionId: version.id,
     incidentId,
     bookmarkId,
+    issueId,
     webhookId,
     exportId,
   };
@@ -278,6 +314,7 @@ const NEVER_EXISTED: Ids = {
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
   bookmarkId: '00000000-0000-4000-8000-000000000000',
+  issueId: '00000000-0000-4000-8000-000000000000',
   webhookId: '00000000-0000-4000-8000-000000000000',
   exportId: '00000000-0000-4000-8000-000000000000',
 };
@@ -294,6 +331,7 @@ const NOT_A_UUID: Ids = {
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',
   bookmarkId: 'not-a-uuid',
+  issueId: 'not-a-uuid',
   webhookId: 'not-a-uuid',
   exportId: 'not-a-uuid',
 };
@@ -368,5 +406,50 @@ describe('integration: cross-tenant isolation', () => {
         });
       });
     }
+  }
+});
+
+/**
+ * One person in two workspaces, with data in both: what the list of one holds of the other.
+ *
+ * The strangers above are refused before any query runs, so a list that forgot its `workspace_id`
+ * filter would pass them all and show a member the rows of their other workspace.
+ */
+describe('integration: one member, two workspaces', () => {
+  for (const [key, crossing] of listEndpoints()) {
+    const [method = '', path = ''] = key.split(' ');
+    const [, query = ''] = queriesFor(crossing)[0] ?? [];
+
+    test(`${key} lists nothing of the member's other workspace`, async () => {
+      await withRollback(async (db) => {
+        const member = await signedIn(db, 'xt-both');
+        const first = await aTenant(db, member, 'xt-first');
+        const second = await aTenant(db, member, 'xt-second');
+
+        const directions: readonly (readonly [Ids, Ids])[] = [
+          [first, second],
+          [second, first],
+        ];
+        for (const [here, other] of directions) {
+          const own = await call(db, method, pathFor(`${path}${query}`, here), member);
+          expect(own.ok).toBe(true);
+          const text = await own.text();
+          // A list that holds nothing cannot leak: it would pass this case and prove nothing.
+          const isJson = own.headers.get('content-type')?.includes('json') === true;
+          if (isJson && EMPTY_FOR_THE_SEED[key] === undefined && rowsIn(JSON.parse(text)) === 0) {
+            throw new Error(
+              `${key} answered no rows for a workspace that owns data, so this case proves nothing about it: seed a row for it in aTenant`,
+            );
+          }
+          for (const [name, id] of Object.entries<string>({ ...other })) {
+            expect({ endpoint: key, field: name, leaked: text.includes(id) }).toEqual({
+              endpoint: key,
+              field: name,
+              leaked: false,
+            });
+          }
+        }
+      });
+    });
   }
 });

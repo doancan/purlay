@@ -39,6 +39,7 @@ import {
   type Channel,
   type ClientFrame,
   type ErrorCode,
+  type MeResponse,
   type RevokedReason,
   PRESENCE_GRACE_MS,
   type PresenceChange,
@@ -120,12 +121,12 @@ interface RealtimeState {
    */
   readonly typing: Readonly<Record<string, readonly string[]>>;
   /**
-   * Who is online, by person, at the version that said so (D-136): the largest heard wins, so a frame
-   * that arrives late cannot undo a newer one, nor a snapshot read before a change undo the change.
-   * A person not here is unknown — drawn as nothing, never as offline.
+   * Who is online, and whether away (D-257), by person, at the version that said so (D-136): the
+   * largest heard wins, so a frame that arrives late cannot undo a newer one, nor a snapshot read
+   * before a change undo the change. A person not here is unknown — drawn as nothing, never as offline.
    */
   readonly presence: Readonly<
-    Record<string, { readonly online: boolean; readonly version: number }>
+    Record<string, { readonly online: boolean; readonly away: boolean; readonly version: number }>
   >;
   /**
    * Rises when what a workspace's presence was read as may have gone stale: a grace after a
@@ -501,6 +502,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.incident });
     // So did a notification's, on the person's own topic (D-106).
     void client.invalidateQueries({ queryKey: families.notifications });
+    // And what the person saved or let go on another device (D-128), on the same topic.
+    void client.invalidateQueries({ queryKey: families.saved });
     // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
     // the person's own topic, which a socket that was down never hears (D-124).
     void client.invalidateQueries({ queryKey: keys.me });
@@ -603,9 +606,19 @@ export const createEngine = (options: EngineOptions): Engine => {
             readAgain(client, keys.files(channelId));
             readAgain(client, keys.pins(channelId));
             readAgain(client, keys.bookmarks(channelId));
+            // An incident declared in the gap is in no frame either (D-137): its banner would wait for a reload.
+            readAgain(client, keys.incident(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(client, families.thread);
+          // As are the rest, which hold no channel's key but are rewritten by frames on its topic: a channel's
+          // row in every list of channels (its name and topic, its incident mark, its counters — the last
+          // from before the socket was open), the open questions and a search (a reply, a resolution, an
+          // edit), and an open edit history (D-135 §5). Each is in no frame sent before this answer.
+          readAgain(client, families.channels);
+          readAgain(client, families.unresolved);
+          readAgain(client, families.search);
+          readAgain(client, families.messageVersions);
         }
         return;
       }
@@ -756,7 +769,18 @@ export const createEngine = (options: EngineOptions): Engine => {
     if (newer.length === 0) return;
     const next = { ...now };
     for (const change of newer) {
-      next[change.userId] = { online: change.online, version: change.version };
+      next[change.userId] = {
+        online: change.online,
+        away: change.away,
+        version: change.version,
+      };
+      // Only what the person hears of themselves says this: their choice, made on any device (D-257).
+      const { chosen } = change;
+      if (chosen !== undefined) {
+        client.setQueryData<MeResponse>(keys.me, (me) =>
+          me === undefined || me.awayChosen === chosen ? me : { ...me, awayChosen: chosen },
+        );
+      }
     }
     store.setState({ presence: next });
   };

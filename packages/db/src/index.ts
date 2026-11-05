@@ -19,13 +19,16 @@ export {
   type Transaction,
 } from './client';
 export { purgeDeadSessions } from './sessions';
-export { tableExists } from './table-exists';
+export { absentTables, tableExists } from './table-exists';
+export { TABLE_LIFECYCLE, type TableLifecycle } from './table-lifecycle';
+export { TABLE_OWNERS, type TableOwner } from './table-owners';
 /**
  * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).
  */
 export { sql } from 'kysely';
 export type {
+  AliasableExpression,
   Expression,
   ExpressionBuilder,
   RawBuilder,
@@ -34,10 +37,19 @@ export type {
   SqlBool,
 } from 'kysely';
 export {
+  MODULE_ID,
+  ModulesSettingError,
+  parseModulesSetting,
+  unmetRequirements,
+  type ModulesSetting,
+} from './modules-setting';
+export {
   migrateToLatest,
   type MigrateOptions,
   MIGRATIONS_DIRECTORY,
   PRODUCT_MIGRATION_SETS,
+  PRODUCT_MODULE_IDS,
+  PRODUCT_MODULE_REQUIRES,
   setsNamedBy,
   migrationHistoryProblem,
   pendingMigrations,

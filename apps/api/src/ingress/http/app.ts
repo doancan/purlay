@@ -226,7 +226,7 @@ import {
   type CollatedColumn,
   type Readiness,
 } from '../../platform/readiness';
-import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import { modulesInfoFamily, serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
 import { PLAN } from '../../modules/jobs/schedule';
@@ -259,11 +259,15 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
+import { issuesBudget } from '../../features/issues/budget';
+import { budgeted } from '../../platform/module-budget';
+import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
+import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
 import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
@@ -278,7 +282,7 @@ import {
 } from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
-import { composition, type Composition } from '../../composition';
+import type { Composition } from '../../composition';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -375,8 +379,12 @@ export interface Dependencies {
   readonly workspaceChannels?: WorkspaceChannels;
   /** What the modules forget of a person whose account is erased, inside the erasure (D-250); absent, chat's. */
   readonly userErased?: UserErased;
-  /** The modules this process runs; absent, every one the build carries. A path of a module left out is a `404`. */
-  readonly composition?: Composition;
+  /**
+   * The modules this process runs. Required: a caller that forgot it would silently run every module the build carries,
+   * and a path of a module left out is a `404`. The process's own (`index.ts`) is `compositionFor(MODULES)`; a test gets the
+   * whole build's from `testDependencies`.
+   */
+  readonly composition: Composition;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
   readonly collatedColumns?: readonly CollatedColumn[];
   /**
@@ -466,8 +474,8 @@ const answerSetup = <T>(
 const SETUP_PATH = /^\/setup(?:\/|$)/;
 
 export const createApp = (given: Dependencies): HttpApplication => {
-  // The modules this process runs (`composition.ts`): every one the build carries, unless a caller says otherwise.
-  const modules = given.composition ?? composition;
+  // The modules this process runs (`composition.ts`).
+  const modules = given.composition;
   const dependencies = {
     ...given,
     readAttachment: modules.readAttachment,
@@ -522,12 +530,24 @@ export const createApp = (given: Dependencies): HttpApplication => {
     userWrites,
     metrics,
     closedFrame: modules.closedFrame,
+    closedEvent: modules.closedEvent,
   });
   metrics.registry.gauge(
     'purlay_websocket_connections',
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
+  // Issues' work on the database is held to a share of the pool, so a module that is slow or busy cannot make
+  // chat's sends wait for a connection. Chat is not budgeted: it is what the others are kept from slowing.
+  // Made once, because the share is one count of the transactions open at once across every request.
+  const issueDependencies = {
+    ...dependencies,
+    atomically: budgeted(
+      'issues',
+      issuesBudget(dependencies.config.DATABASE_POOL_MAX),
+      dependencies.database,
+    ),
+  };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -803,7 +823,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
     // the 404 of a path nothing serves.
     .get('/metrics', async ({ request, set }) => {
       const page = await answerMetrics(
-        { token: dependencies.config.METRICS_TOKEN, metrics, read: readJobs, log },
+        {
+          token: dependencies.config.METRICS_TOKEN,
+          metrics,
+          read: async () => [modulesInfoFamily(moduleIds), ...(await readJobs())],
+          log,
+        },
         request,
       );
       set.headers['content-type'] = EXPOSITION_CONTENT_TYPE;
@@ -996,7 +1021,22 @@ export const createApp = (given: Dependencies): HttpApplication => {
     })
 
     .post('/api/me/erase', async ({ request, body, set }) =>
-      respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
+      respond(
+        set,
+        await eraseMyAccount(
+          {
+            ...dependencies,
+            bus: sockets.bus,
+            erasureServices: () => ({
+              log,
+              cipher,
+              githubApp: { app: githubApp().app, api: appApi },
+            }),
+          },
+          request,
+          body,
+        ),
+      ),
     )
     .post('/api/me/exports', async ({ request, set }) => {
       const asked = await askForMyExport(dependencies, request);
@@ -1051,6 +1091,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    // Away by choice (D-257): stored, then told again through the presence this node keeps.
+    .put(
+      '/api/me/away',
+      async ({ request, body }) => await setMyAway(dependencies, sockets.online, request, body),
+    )
     .put('/api/me/locale', async ({ request, body, set }) => {
       await setMyLocale(dependencies, request, body);
       set.status = 204;
@@ -1338,6 +1383,26 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/saved/ids',
       async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
     )
+    .get(
+      '/api/workspaces/:workspaceId/issues',
+      async ({ request, params }) =>
+        await listIssues(issueDependencies, request, params.workspaceId),
+    )
+    .post('/api/workspaces/:workspaceId/issues', async ({ request, params, body, set }) => {
+      const issue = await postIssue(issueDependencies, request, params.workspaceId, body);
+      set.status = 201;
+      return issue;
+    })
+    .patch(
+      '/api/workspaces/:workspaceId/issues/:issueId',
+      async ({ request, params, body }) =>
+        await patchIssue(issueDependencies, request, params.workspaceId, params.issueId, body),
+    )
+    .delete('/api/workspaces/:workspaceId/issues/:issueId', async ({ request, params, set }) => {
+      await removeIssue(issueDependencies, request, params.workspaceId, params.issueId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/channels/:channelId/github-feeds',
       async ({ request, params }) => await listFeeds(dependencies, request, params.channelId),
@@ -1898,27 +1963,37 @@ export const createApp = (given: Dependencies): HttpApplication => {
      * (`docs/spikes/elysia.md`) — so a wrong origin and a missing session are
      * refused with a real HTTP status rather than a socket that opens and then
      * closes for a reason the client has to guess at (D-39, §7.2).
+     *
+     * Admission is a guard around the route, not an option of it: the framework runs a socket
+     * route's own `beforeHandle` in the route and then once more inside the upgrade handler it
+     * builds, and ignores the second answer — a second read of the session, and a second look at
+     * the cap, for every admitted socket, whose result nobody reads. A guard's hook runs once.
      */
-    .ws('/ws', {
-      // An upgrade's admission and a socket's open are flows of their own: each served by one instance.
-      beforeHandle: async ({ request, set }) => {
-        const refusal = await within(async () => await sockets.admit(request));
-        if (refusal === undefined) return undefined;
-        set.status = refusal.status;
-        return refusal.body;
+    .guard(
+      {
+        // An upgrade's admission and a socket's open are flows of their own: each served by one instance.
+        beforeHandle: async ({ request, set }) => {
+          const refusal = await within(async () => await sockets.admit(request));
+          if (refusal === undefined) return undefined;
+          set.status = refusal.status;
+          return refusal.body;
+        },
       },
-      open: async (socket) => {
-        await within(async () => {
-          await sockets.open(socket);
-        });
-      },
-      message: (socket, raw) => {
-        sockets.message(socket, raw);
-      },
-      close: (socket, code) => {
-        sockets.close(socket, code);
-      },
-    });
+      (guarded) =>
+        guarded.ws('/ws', {
+          open: async (socket) => {
+            await within(async () => {
+              await sockets.open(socket);
+            });
+          },
+          message: (socket, raw) => {
+            sockets.message(socket, raw);
+          },
+          close: (socket, code) => {
+            sockets.close(socket, code);
+          },
+        }),
+    );
 
   return {
     handle: async (request) => await app.handle(request),

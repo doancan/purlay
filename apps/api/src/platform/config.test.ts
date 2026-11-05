@@ -239,6 +239,47 @@ describe('loading configuration', () => {
   });
 
   /**
+   * The node's socket cap. Unset keeps what every deployment has had; a number outside what a node can
+   * mean (zero would refuse every client, a fraction has no count) is refused where it is read.
+   */
+  test('SOCKET_MAX_CONNECTIONS is a whole number from one to 100000, 2000 unless set', () => {
+    expect(loadConfig(valid).SOCKET_MAX_CONNECTIONS).toBe(2_000);
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '' }).SOCKET_MAX_CONNECTIONS).toBe(2_000);
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '1' }).SOCKET_MAX_CONNECTIONS).toBe(1);
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '5000' }).SOCKET_MAX_CONNECTIONS).toBe(
+      5_000,
+    );
+    expect(loadConfig({ ...valid, SOCKET_MAX_CONNECTIONS: '100000' }).SOCKET_MAX_CONNECTIONS).toBe(
+      100_000,
+    );
+    for (const SOCKET_MAX_CONNECTIONS of ['0', '-1', '100001', '1.5', '2k', 'many']) {
+      expect(refusal({ ...valid, SOCKET_MAX_CONNECTIONS })).toContain('SOCKET_MAX_CONNECTIONS');
+    }
+  });
+
+  /**
+   * How many sockets replay at once. Zero would let no replay run and every subscription would wait out its deadline;
+   * a fraction has no count. Both are refused where they are read.
+   */
+  test('SOCKET_REPLAY_CONCURRENCY is a whole number from one to 100000, 50 unless set', () => {
+    expect(loadConfig(valid).SOCKET_REPLAY_CONCURRENCY).toBe(50);
+    expect(loadConfig({ ...valid, SOCKET_REPLAY_CONCURRENCY: '' }).SOCKET_REPLAY_CONCURRENCY).toBe(
+      50,
+    );
+    expect(loadConfig({ ...valid, SOCKET_REPLAY_CONCURRENCY: '1' }).SOCKET_REPLAY_CONCURRENCY).toBe(
+      1,
+    );
+    expect(
+      loadConfig({ ...valid, SOCKET_REPLAY_CONCURRENCY: '100000' }).SOCKET_REPLAY_CONCURRENCY,
+    ).toBe(100_000);
+    for (const SOCKET_REPLAY_CONCURRENCY of ['0', '-1', '100001', '1.5', '50k', 'many']) {
+      expect(refusal({ ...valid, SOCKET_REPLAY_CONCURRENCY })).toContain(
+        'SOCKET_REPLAY_CONCURRENCY',
+      );
+    }
+  });
+
+  /**
    * A session is a credential that lives this long. Both ends are limits a person
    * chose: a year is the longest a stolen cookie may be worth, and zero would mint
    * sessions that are expired when issued.
@@ -613,6 +654,45 @@ describe('the shared Redis (D-201)', () => {
       if (REDIS_URL.startsWith('http')) expect(message).toContain('(value withheld)');
       expect(message).not.toContain('secret-pw-r');
     }
+  });
+
+  describe('its namespace, REDIS_KEY_PREFIX', () => {
+    const REDIS_URL = 'redis://localhost:6379';
+
+    test('is unset or empty unless somebody names one: the names stay what they were', () => {
+      expect(loadConfig({ ...valid, REDIS_URL }).REDIS_KEY_PREFIX).toBeUndefined();
+      expect(loadConfig({ ...valid, REDIS_URL, REDIS_KEY_PREFIX: '' }).REDIS_KEY_PREFIX).toBe(
+        undefined,
+      );
+    });
+
+    test('takes a short word of letters, digits, dot, underscore and hyphen', () => {
+      for (const REDIS_KEY_PREFIX of ['staging', 'Tenant_7', 'eu-west.1', 'x'.repeat(32)]) {
+        expect(loadConfig({ ...valid, REDIS_URL, REDIS_KEY_PREFIX }).REDIS_KEY_PREFIX).toBe(
+          REDIS_KEY_PREFIX,
+        );
+      }
+    });
+
+    test('refuses anything else at start, naming the variable', () => {
+      for (const REDIS_KEY_PREFIX of [
+        'with space',
+        'a:b',
+        'staging:',
+        '{tag}',
+        '-x',
+        'çay',
+        'x'.repeat(33),
+      ]) {
+        expect(refusal({ ...valid, REDIS_URL, REDIS_KEY_PREFIX })).toContain('REDIS_KEY_PREFIX');
+      }
+    });
+
+    test('needs the Redis it names keys in: alone it is a mistake, said at start', () => {
+      expect(refusal({ ...valid, REDIS_KEY_PREFIX: 'staging' })).toContain(
+        'REDIS_KEY_PREFIX: needs REDIS_URL',
+      );
+    });
   });
 });
 

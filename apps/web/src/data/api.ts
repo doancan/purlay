@@ -1,4 +1,9 @@
 import {
+  Issue,
+  IssuePage,
+  type CreateIssueRequest,
+  type IssueQuery,
+  type UpdateIssueRequest,
   SavedSearch,
   SavedSearchPage,
   type SaveSearchRequest,
@@ -98,6 +103,7 @@ import {
   type CreateWorkspaceRequest,
   type NotificationLevel,
   type SetDeepWorkRequest,
+  SetAwayResponse,
   type ReadNotificationsRequest,
   type ReadThreadRequest,
   type SetThreadFollowRequest,
@@ -237,6 +243,8 @@ export interface Api {
     workspaceId: string,
     input: SetDeepWorkRequest,
   ) => Promise<DeepWorkResponse>;
+  /** Chooses to appear away, or to appear active again (D-257). */
+  readonly setAway: (away: boolean) => Promise<SetAwayResponse>;
   /** What the caller is told about in this channel (D-107). */
   readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
   /** Stars a channel the caller is in, or lets the star go (D-132). */
@@ -347,6 +355,19 @@ export interface Api {
     input: SaveSearchRequest,
   ) => Promise<SavedSearch>;
   readonly deleteSearch: (workspaceId: string, id: string) => Promise<void>;
+  /** The issues module's list, newest first, a page from `query.before` (D-254). */
+  readonly issues: (
+    workspaceId: string,
+    query?: Pick<IssueQuery, 'status' | 'before'>,
+    signal?: AbortSignal,
+  ) => Promise<IssuePage>;
+  readonly createIssue: (workspaceId: string, input: CreateIssueRequest) => Promise<Issue>;
+  readonly updateIssue: (
+    workspaceId: string,
+    issueId: string,
+    input: UpdateIssueRequest,
+  ) => Promise<Issue>;
+  readonly deleteIssue: (workspaceId: string, issueId: string) => Promise<void>;
   readonly resolve: (messageId: string) => Promise<Message>;
   readonly reopen: (messageId: string) => Promise<Message>;
   /** The open questions; with `channelId`, that channel's alone (a channel it cannot see is 404). */
@@ -684,6 +705,8 @@ export const createApi = (http: Http): Api => {
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
     removeChannelMember: (channelId, userId) =>
       http.send('DELETE', `/api/channels/${at(channelId)}/members/${at(userId)}`, options()),
+    setAway: (away) =>
+      http.request('PUT', '/api/me/away', SetAwayResponse, options({ body: { away } })),
     setDeepWork: (workspaceId, input) =>
       http.request(
         'PUT',
@@ -905,6 +928,29 @@ export const createApi = (http: Http): Api => {
       ),
     deleteSearch: (workspaceId, id) =>
       http.send('DELETE', `/api/workspaces/${at(workspaceId)}/saved-searches/${at(id)}`, options()),
+    issues: (workspaceId, query = {}, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/issues`,
+        IssuePage,
+        options({ query: { ...query } }, signal),
+      ),
+    createIssue: (workspaceId, input) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/issues`,
+        Issue,
+        options({ body: input }),
+      ),
+    updateIssue: (workspaceId, issueId, input) =>
+      http.request(
+        'PATCH',
+        `/api/workspaces/${at(workspaceId)}/issues/${at(issueId)}`,
+        Issue,
+        options({ body: input }),
+      ),
+    deleteIssue: (workspaceId, issueId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/issues/${at(issueId)}`, options()),
     resolve: (messageId) =>
       http.request('POST', `/api/messages/${at(messageId)}/resolve`, Message, options()),
     reopen: (messageId) =>

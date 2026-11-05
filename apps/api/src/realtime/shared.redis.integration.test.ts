@@ -5,22 +5,20 @@
  * cut. The fakes in the unit tests say what the code asks for; only a Redis says whether it works.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ServerFrame } from '@purlay/types';
+import { AWAY_AFTER_MS, type ServerFrame } from '@purlay/types';
 import { channelTopic, type Topic } from '../platform/events';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
+import { redisNames } from '../platform/redis-names';
 import { bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
 import { aDroppableProxy, aRealLink, redisUrlForTests, refusedWith } from '../testing/redis';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter } from './rate-limiter';
 import { redisBackplane } from './redis-bus';
 import { redisRateLimiter } from './redis-limiter';
-import {
-  LAPSE_INDEX,
-  ONLINE_PREFIX,
-  redisPresenceDirectory,
-  redisPresenceRegistry,
-} from './redis-presence';
+import { redisPresenceDirectory, redisPresenceRegistry } from './redis-presence';
+
+const names = redisNames();
 
 const silent = createLogger({ level: 'silent' });
 const links: RedisLink[] = [];
@@ -116,12 +114,12 @@ describe('integration: who is online across nodes', () => {
     const b = redisPresenceDirectory(await node(), 'node-b');
     const user = unique('user');
 
-    const first = await a.join(user);
+    const first = await a.join(user, AWAY_AFTER_MS);
     expect(first).not.toBeNull();
-    expect(await b.join(user)).toBeNull();
-    expect(await a.join(user)).toBeNull();
+    expect(await b.join(user, AWAY_AFTER_MS)).toBeNull();
+    expect(await a.join(user, AWAY_AFTER_MS)).toBeNull();
     expect(await b.among([user, unique('nobody')])).toEqual([
-      { userId: user, online: true, version: first ?? 0 },
+      { userId: user, online: true, away: false, version: first ?? 0 },
     ]);
 
     expect(await a.leave(user)).toBeNull();
@@ -131,7 +129,7 @@ describe('integration: who is online across nodes', () => {
     expect(left ?? 0).toBeGreaterThan(first ?? 0);
     expect(await a.among([user])).toEqual([]);
 
-    const back = await a.join(user);
+    const back = await a.join(user, AWAY_AFTER_MS);
     expect(back ?? 0).toBeGreaterThan(left ?? 0);
   });
 
@@ -141,7 +139,7 @@ describe('integration: who is online across nodes', () => {
     const user = unique('user');
     // What a node that died left behind: a claim whose time has passed.
     await link.send('HSET', [
-      `${ONLINE_PREFIX}${user}`,
+      `${names.onlinePrefix}${user}`,
       'n:node-dead',
       String(Date.now() - 1_000),
       'v',
@@ -149,16 +147,20 @@ describe('integration: who is online across nodes', () => {
     ]);
     expect(await live.among([user])).toEqual([]);
     // Nobody live held them, so the node that comes now is the one that makes them online.
-    expect(await live.join(user)).not.toBeNull();
-    expect(await link.send('HEXISTS', [`${ONLINE_PREFIX}${user}`, 'n:node-dead'])).toBe(0);
+    expect(await live.join(user, AWAY_AFTER_MS)).not.toBeNull();
+    expect(await link.send('HEXISTS', [`${names.onlinePrefix}${user}`, 'n:node-dead'])).toBe(0);
   });
 
   test('a person a dead node held and a live node holds is not told offline when the live node leaves late', async () => {
     const link = await node();
     const live = redisPresenceDirectory(link, 'node-live');
     const user = unique('user');
-    await link.send('HSET', [`${ONLINE_PREFIX}${user}`, 'n:node-dead', String(Date.now() - 1_000)]);
-    await live.join(user);
+    await link.send('HSET', [
+      `${names.onlinePrefix}${user}`,
+      'n:node-dead',
+      String(Date.now() - 1_000),
+    ]);
+    await live.join(user, AWAY_AFTER_MS);
     expect(await live.leave(user)).not.toBeNull();
   });
 
@@ -167,12 +169,12 @@ describe('integration: who is online across nodes', () => {
     const b = redisPresenceDirectory(await node(), 'node-b');
     const user = unique('user');
     const snapshot = await a.version();
-    const change = await b.join(user);
+    const change = await b.join(user, AWAY_AFTER_MS);
     expect(change ?? 0).toBeGreaterThan(snapshot);
     // Two people leaving and joining in one millisecond are still ordered.
     const versions: number[] = [];
     for (let n = 0; n < 20; n += 1) {
-      versions.push((await b.leave(user)) ?? 0, (await b.join(user)) ?? 0);
+      versions.push((await b.leave(user)) ?? 0, (await b.join(user, AWAY_AFTER_MS)) ?? 0);
     }
     expect(versions).toEqual([...versions].sort((x, y) => x - y));
     expect(new Set(versions).size).toBe(versions.length);
@@ -182,9 +184,9 @@ describe('integration: who is online across nodes', () => {
     const link = await node();
     const a = redisPresenceDirectory(link, 'node-a');
     const user = unique('user');
-    await a.join(user);
-    expect(await a.join(user)).toBeNull();
-    const ttl = await link.send('PTTL', [`${ONLINE_PREFIX}${user}`]);
+    await a.join(user, AWAY_AFTER_MS);
+    expect(await a.join(user, AWAY_AFTER_MS)).toBeNull();
+    const ttl = await link.send('PTTL', [`${names.onlinePrefix}${user}`]);
     expect(typeof ttl === 'number' && ttl > 25_000).toBe(true);
   });
 });
@@ -207,11 +209,15 @@ describe('integration: people nobody told of (D-201)', () => {
     const dead = redisPresenceDirectory(link, 'node-dead');
     const live = redisPresenceDirectory(await node(), 'node-live');
     const user = unique('user');
-    const joined = (await dead.join(user)) ?? 0;
+    const joined = (await dead.join(user, AWAY_AFTER_MS)) ?? 0;
     // Not due yet: the claim is alive.
     expect(await sweptOf(live, [user])).toEqual([]);
-    await link.send('HSET', [`${ONLINE_PREFIX}${user}`, 'n:node-dead', String(Date.now() - 1_000)]);
-    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), user]);
+    await link.send('HSET', [
+      `${names.onlinePrefix}${user}`,
+      'n:node-dead',
+      String(Date.now() - 1_000),
+    ]);
+    await link.send('ZADD', [names.lapseIndex, String(Date.now() - 1_000), user]);
     const gone = await sweptOf(live, [user]);
     expect(gone).toHaveLength(1);
     expect(gone[0]?.online).toBe(false);
@@ -226,10 +232,10 @@ describe('integration: people nobody told of (D-201)', () => {
     const sweeper = redisPresenceDirectory(await node(), 'node-sweeper');
     const user = unique('user');
     const left = unique('user');
-    await a.join(user);
-    await a.join(left);
+    await a.join(user, AWAY_AFTER_MS);
+    await a.join(left, AWAY_AFTER_MS);
     expect(await a.leave(left)).not.toBeNull();
-    await link.send('ZADD', [LAPSE_INDEX, String(Date.now() - 1_000), user]);
+    await link.send('ZADD', [names.lapseIndex, String(Date.now() - 1_000), user]);
     // The index says lapsed, but the claim is live: the sweep only moves the entry on.
     expect(await sweptOf(sweeper, [user, left])).toEqual([]);
     expect(await sweeper.among([user])).toHaveLength(1);
@@ -241,13 +247,159 @@ describe('integration: people nobody told of (D-201)', () => {
     const sweeper = redisPresenceDirectory(await node(), 'node-sweeper');
     const alone = unique('user');
     const shared = unique('user');
-    await a.join(alone);
-    await a.join(shared);
-    await b.join(shared);
+    await a.join(alone, AWAY_AFTER_MS);
+    await a.join(shared, AWAY_AFTER_MS);
+    await b.join(shared, AWAY_AFTER_MS);
     await a.release([alone, shared]);
     const gone = await sweptOf(sweeper, [alone, shared]);
     expect(gone.map((change) => change.userId)).toEqual([alone]);
     expect(await sweeper.among([alone, shared])).toMatchObject([{ userId: shared }]);
+  });
+});
+
+describe('integration: who is idle across nodes (D-257)', () => {
+  type Directory = ReturnType<typeof redisPresenceDirectory>;
+  /** Sweeps until it has heard of these people: the indexes are shared with every other test's. */
+  const sweptOf = async (
+    directory: Directory,
+    users: readonly string[],
+  ): Promise<{ userId: string; online: boolean; away: boolean; version: number }[]> => {
+    const found: { userId: string; online: boolean; away: boolean; version: number }[] = [];
+    for (let round = 0; round < 20; round += 1) {
+      found.push(...(await directory.sweep()).filter((change) => users.includes(change.userId)));
+    }
+    return found;
+  };
+  const fields = async (link: RedisLink, user: string): Promise<unknown> =>
+    await link.send('HMGET', [`${names.onlinePrefix}${user}`, 'a', 'i']);
+  const idleScore = async (link: RedisLink, user: string): Promise<unknown> =>
+    await link.send('ZSCORE', [names.idleIndex, user]);
+
+  test('a join of somebody nobody held starts them active; a join while held changes neither the word nor the idleness', async () => {
+    const link = await node();
+    const a = redisPresenceDirectory(link, 'node-a');
+    const b = redisPresenceDirectory(await node(), 'node-b');
+    const user = unique('user');
+    await a.join(user, 5_000);
+    const [word, idle] = (await fields(link, user)) as [string, string];
+    expect(idle).toBe('0');
+    expect(Number(await idleScore(link, user))).toBe(Number(word) + 5_000);
+    await Bun.sleep(5);
+    expect(await b.join(user, 5_000)).toBeNull();
+    expect(await a.join(user, 5_000)).toBeNull();
+    expect(await fields(link, user)).toEqual([word, idle]);
+    expect(Number(await idleScore(link, user))).toBe(Number(word) + 5_000);
+  });
+
+  test('a word moves the idle time on, tells nothing while they were not told idle, and is not kept for somebody nobody holds', async () => {
+    const link = await node();
+    const a = redisPresenceDirectory(link, 'node-a');
+    const user = unique('user');
+    await a.join(user, 5_000);
+    const [joined] = (await fields(link, user)) as [string];
+    await Bun.sleep(5);
+    expect(await a.active(user, 7_000)).toBeNull();
+    const [word, idle] = (await fields(link, user)) as [string, string];
+    expect(Number(word)).toBeGreaterThan(Number(joined));
+    expect(idle).toBe('0');
+    expect(Number(await idleScore(link, user))).toBe(Number(word) + 7_000);
+
+    const nobody = unique('user');
+    expect(await a.active(nobody, 7_000)).toBeNull();
+    expect(await link.send('EXISTS', [`${names.onlinePrefix}${nobody}`])).toBe(0);
+    expect(await idleScore(link, nobody)).toBeNull();
+  });
+
+  test('a sweep tells a held person idle once their quiet time has come, once, and a word ends it at a later version', async () => {
+    const link = await node();
+    const a = redisPresenceDirectory(link, 'node-a');
+    const b = redisPresenceDirectory(await node(), 'node-b');
+    const user = unique('user');
+    const quiet = unique('user');
+    const joined = (await a.join(user, 20)) ?? 0;
+    await b.join(user, 20);
+    await a.join(quiet, 60_000);
+    expect(await a.among([user])).toEqual([
+      { userId: user, online: true, away: false, version: joined },
+    ]);
+    await Bun.sleep(30);
+    const idle = await sweptOf(b, [user, quiet]);
+    expect(idle).toHaveLength(1);
+    expect(idle[0]).toMatchObject({ userId: user, online: true, away: true });
+    expect(idle[0]?.version ?? 0).toBeGreaterThan(joined);
+    expect(await sweptOf(a, [user])).toEqual([]);
+    expect(await b.among([user])).toEqual([
+      { userId: user, online: true, away: true, version: idle[0]?.version ?? 0 },
+    ]);
+    expect(await idleScore(link, user)).toBeNull();
+
+    const back = await a.active(user, 60_000);
+    expect(back ?? 0).toBeGreaterThan(idle[0]?.version ?? 0);
+    expect(await a.active(user, 60_000)).toBeNull();
+    expect(await b.among([user])).toEqual([
+      { userId: user, online: true, away: false, version: back ?? 0 },
+    ]);
+    expect(await sweptOf(b, [user])).toEqual([]);
+  });
+
+  test('a retelling bumps the version of somebody held and says their idleness; nobody held is nothing', async () => {
+    const a = redisPresenceDirectory(await node(), 'node-a');
+    const user = unique('user');
+    const joined = (await a.join(user, 20)) ?? 0;
+    const active = await a.retell(user);
+    expect(active).toMatchObject({ userId: user, online: true, away: false });
+    expect(active?.version ?? 0).toBeGreaterThan(joined);
+    await Bun.sleep(30);
+    await sweptOf(a, [user]);
+    const idle = await a.retell(user);
+    expect(idle).toMatchObject({ userId: user, online: true, away: true });
+    expect(await a.among([user])).toEqual(idle === null ? [] : [idle]);
+    expect(await a.retell(unique('user'))).toBeNull();
+  });
+
+  test('going offline takes the idle entry with it: a leave to nobody, a lapsed claim swept, a release; a leave while held keeps it', async () => {
+    const link = await node();
+    const a = redisPresenceDirectory(link, 'node-a');
+    const b = redisPresenceDirectory(await node(), 'node-b');
+    const left = unique('user');
+    const lapsed = unique('user');
+    const released = unique('user');
+    for (const user of [left, lapsed, released]) await a.join(user, 60_000);
+    await b.join(left, 60_000);
+
+    expect(await a.leave(left)).toBeNull();
+    expect(await idleScore(link, left)).not.toBeNull();
+    expect(await b.leave(left)).not.toBeNull();
+    expect(await idleScore(link, left)).toBeNull();
+
+    await link.send('HSET', [
+      `${names.onlinePrefix}${lapsed}`,
+      'n:node-a',
+      String(Date.now() - 1_000),
+    ]);
+    await link.send('ZADD', [names.lapseIndex, String(Date.now() - 1_000), lapsed]);
+    expect(await sweptOf(b, [lapsed])).toMatchObject([{ online: false, away: false }]);
+    expect(await idleScore(link, lapsed)).toBeNull();
+
+    await a.release([released]);
+    expect(await idleScore(link, released)).toBeNull();
+  });
+
+  test('somebody whose idle time came after nobody held them is dropped from the index, not told idle', async () => {
+    const link = await node();
+    const a = redisPresenceDirectory(link, 'node-a');
+    const user = unique('user');
+    await a.join(user, 20);
+    // What a node that died left behind, the lapse not yet swept.
+    await link.send('HSET', [
+      `${names.onlinePrefix}${user}`,
+      'n:node-a',
+      String(Date.now() - 1_000),
+    ]);
+    await Bun.sleep(30);
+    const told = await sweptOf(a, [user]);
+    expect(told.filter((change) => change.away)).toEqual([]);
+    expect(await idleScore(link, user)).toBeNull();
   });
 });
 

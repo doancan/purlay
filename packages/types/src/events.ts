@@ -497,21 +497,40 @@ export const TypingServerFrame = Type.Object({
  */
 export const PRESENCE_GRACE_MS = 30_000;
 
+/**
+ * How long a person who is online may say nothing before they are told as away (D-257): the page's own
+ * word that they are using Purlay (`ACTIVE_EVERY_MS`, at most once a minute) renews the window, so a
+ * person typing never reaches it.
+ */
+export const AWAY_AFTER_MS = 300_000;
+
 /** One person's presence, at a version that only grows on the node that said it. */
 export const PresenceChange = Type.Object(
   {
     userId: Uuid,
     online: Type.Boolean(),
+    /**
+     * Online and idle for `AWAY_AFTER_MS`, or away by the person's choice (D-257); always false when
+     * offline.
+     */
+    away: Type.Boolean(),
     /** Later is larger; a client keeps the largest it has heard for a person (D-136 §3). */
     version: Type.Integer({ minimum: 0 }),
+    /**
+     * Whether the away is the person's own choice (`users.away_chosen`, D-257): only in what the person
+     * hears of themselves while online, so every device of theirs knows the choice; never told to
+     * anybody else, to whom idle and chosen look the same.
+     */
+    chosen: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );
 export type PresenceChange = Static<typeof PresenceChange>;
 
 /**
- * People came online or went offline (D-136): on the `user:` topic of each person who shares a
- * workspace with them, so a stranger never hears it. A list, so changes can be told together.
+ * People came online or went offline, or away or active (D-136, D-257): on the `user:` topic of each
+ * person who shares a workspace with them, and on the person's own, so a stranger never hears it and
+ * the person's own avatar follows it. A list, so changes can be told together.
  */
 export const PresenceFrame = Type.Object({
   event: Type.Literal('PRESENCE'),

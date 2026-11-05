@@ -84,3 +84,41 @@ export default defineConfig({
 engine, light and wide, with screenshots ignored; each limit in the tables above is a `test.skip` that
 names it. Run so: **WebKit 124 passed, 8 skipped; Firefox (in the Linux container) 126 passed, 6
 skipped — green on both.** Chromium's projects skip nothing.
+
+## Status: WebKit is in CI, reported and not yet required (2026-11-05)
+
+CI has a `webkit` job beside the Chromium ones: the suite on WebKit, light, 1440 wide, no screenshots, and none of
+the measuring files. Firefox stays opt in (`PURLAY_E2E_ENGINES=firefox`). A skip is decided by the engine the
+project runs (`onEngine` in `apps/web/e2e/support.ts`), not by the project's name, so any project on an engine
+skips what the engine cannot do.
+
+What the WebKit job does not cover, each a skip that says why:
+
+| Tests | Why |
+|---|---|
+| The Tab specs: `frame.e2e.ts` (skip link, sign-in reachable by Tab), `focus.e2e.ts` (the feed is one Tab stop; every stop shows a ring; every stop in a thread), `navigation.e2e.ts` (skip link in a channel; Tab walks every stop) | macOS WebKit's Tab reaches form controls only. The build Playwright runs on Linux was not measured, so they stay skipped there until a run shows it; the first CI run is the place to try removing the skip. |
+| `frame.e2e.ts` the theme before the first paint | WebKit reports no `first-paint` entry. |
+| `composer.e2e.ts` offline, a send fails with Retry | WebKit's offline emulation does not cut an open WebSocket. |
+| `quote-code.e2e.ts` native paste and the copy button's read-back | Only Chromium lets a test grant the clipboard; the copy is still clicked at 320 pixels, and what it wrote is not read back. |
+| `performance.e2e.ts`, `feed-scale.e2e.ts` heap | CDP is Chromium's. The measuring files do not run in CI's WebKit job at all. |
+
+Changed rather than skipped: the composer hint is asserted as `⌘↵` on a Mac and `Ctrl+Enter` elsewhere, the way
+the product prints it; the channel switch has a WebKit line of 150 ms where Chromium's is 100, from five runs alone
+(p95 99 to 106, p50 93 to 100) and a full run (116 to 129).
+
+New findings, once these tests got past the hint: on WebKit the TypeScript grammar returns `answer = 42;` as one
+token, so the number is not coloured apart from the name (Chromium: `answer`, `=`, `42` each their own). The block
+is coloured, and the test asserts that much on WebKit. Not fixed here; worth a look as a product matter, since it is
+what Safari readers see. Separately, `invitations.e2e.ts:64` and `:103` fail intermittently when many workers run
+at once (7 of 20 on WebKit, 5 of 20 on Chromium at five workers; 0 of 10 on one worker): the click on "Invite
+people…" closes the menu and the dialog never shows. It is load-dependent and not WebKit's.
+
+### Why WebKit is served over https
+
+The first CI run on Linux failed nearly every test at the first wait for the app's frame: the page came up signed
+out. The session cookie is `Secure` and `__Host-`, and WebKit on Linux does not send one to `http://localhost`
+(macOS WebKit, Chromium and Firefox do). So the harness serves the WebKit project over https with a certificate
+`openssl` makes once into the temporary directory (`bun run demo -- --tls-cert … --tls-key …`). The browser project
+trusts it with `ignoreHTTPSErrors`, and the test process's own requests trust that one certificate through
+`NODE_EXTRA_CA_CERTS`; certificate validation is never turned off. The API behind the front stays on http. The product
+is unchanged.

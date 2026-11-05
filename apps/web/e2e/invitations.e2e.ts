@@ -7,7 +7,7 @@
  * a page's are; the screens that show her workspaces take no screenshot.
  */
 import { expect, test } from './fixtures';
-import { apiAs, openNav, openSettings } from './support';
+import { apiAs, openNav, openSettings, openWorkspace } from './support';
 
 test.describe('an invitation', () => {
   test('opened signed out, survives signing in, and joins the workspace it names', async ({
@@ -68,7 +68,7 @@ test.describe('an invitation', () => {
     asPerson,
   }) => {
     await signIn();
-    await page.goto(`/w/${tenant.slug}`);
+    await openWorkspace(page, tenant.slug);
     // Behind the navigation's toggle at a narrow width, in place at a wide one.
     await openNav(page);
     await page.getByRole('button', { name: 'Switch workspace' }).click();
@@ -122,7 +122,7 @@ test.describe('an invitation', () => {
       });
     });
     await signIn();
-    await page.goto(`/w/${tenant.slug}`);
+    await openWorkspace(page, tenant.slug);
     await openNav(page);
     await page.getByRole('button', { name: 'Switch workspace' }).click();
     await page.getByRole('menuitem', { name: 'Invite people…' }).click();

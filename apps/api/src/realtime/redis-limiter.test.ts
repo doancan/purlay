@@ -5,10 +5,13 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { fixedClock } from '../platform/clock';
+import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink } from '../testing/redis';
 import { inProcessRateLimiter } from './rate-limiter';
-import { BUCKET_PREFIX, redisRateLimiter } from './redis-limiter';
+import { redisRateLimiter } from './redis-limiter';
+
+const names = redisNames();
 
 const BUDGET = { perSecond: 10, burst: 3 };
 
@@ -34,7 +37,7 @@ describe('the shared limiter', () => {
     const { limiter } = limiterOn(link);
     expect(await limiter.consume('user-1', 2)).toBe(true);
     expect(await limiter.consume('user-1')).toBe(false);
-    expect(link.scripts[0]?.keys).toEqual([`${BUCKET_PREFIX}writes:user-1`]);
+    expect(link.scripts[0]?.keys).toEqual([`${names.bucketPrefix}writes:user-1`]);
     expect(link.scripts[0]?.args).toEqual(['10', '3', '2']);
     expect(link.scripts[1]?.args).toEqual(['10', '3', '1']);
   });
@@ -47,8 +50,8 @@ describe('the shared limiter', () => {
     await redisRateLimiter({ link, name: 'auth', budget: BUDGET, local, log }).consume('k');
     await redisRateLimiter({ link, name: 'writes', budget: BUDGET, local, log }).consume('k');
     expect(link.scripts.map((s) => s.keys[0])).toEqual([
-      `${BUCKET_PREFIX}auth:k`,
-      `${BUCKET_PREFIX}writes:k`,
+      `${names.bucketPrefix}auth:k`,
+      `${names.bucketPrefix}writes:k`,
     ]);
   });
 
@@ -88,6 +91,6 @@ describe('the shared limiter', () => {
     const { limiter } = limiterOn(link);
     limiter.forget('socket-1');
     await Promise.resolve();
-    expect(link.sent).toEqual([{ command: 'DEL', args: [`${BUCKET_PREFIX}writes:socket-1`] }]);
+    expect(link.sent).toEqual([{ command: 'DEL', args: [`${names.bucketPrefix}writes:socket-1`] }]);
   });
 });

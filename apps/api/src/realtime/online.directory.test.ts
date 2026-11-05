@@ -5,13 +5,16 @@
  * scripts themselves are held against a real Redis (`shared.redis.integration.test.ts`).
  */
 import { describe, expect, test } from 'bun:test';
-import { PRESENCE_GRACE_MS, type PresenceChange } from '@purlay/types';
+import { AWAY_AFTER_MS, PRESENCE_GRACE_MS, type PresenceChange } from '@purlay/types';
 import type { Clock } from '../platform/clock';
 import { aRecordingLogger } from '../testing/doubles';
 import type { Timers } from './hub';
 import { onlinePresence, PRESENCE_NODE_TTL_MS, type PresenceDirectory } from './online';
 
-/** The scripts' rules, in memory: claims with lapse times per person, and versions that only grow. */
+/**
+ * The scripts' rules, in memory: claims with lapse times per person, versions that only grow, and each
+ * person's idleness — when it falls due, and whether it was told (D-257).
+ */
 const sharedRecord = (
   now: () => number,
 ): { directoryFor: (node: string) => PresenceDirectory; down: { value: boolean } } => {
@@ -19,6 +22,10 @@ const sharedRecord = (
   const versions = new Map<string, number>();
   /** The lapse index: people nobody has been told are gone. */
   const due = new Set<string>();
+  /** The idle index: when each person's quiet time comes. */
+  const idleAt = new Map<string, number>();
+  /** Told idle, and not yet told active again. */
+  const toldIdle = new Set<string>();
   const down = { value: false };
   const live = (userId: string): number => {
     const held = claims.get(userId) ?? new Map<string, number>();
@@ -37,14 +44,17 @@ const sharedRecord = (
   return {
     down,
     directoryFor: (node) => ({
-      join: async (userId): Promise<number | null> => {
+      join: async (userId, awayAfterMs): Promise<number | null> => {
         // Slower than a leave, so a leave that was not made to wait for it would overtake it.
         for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
         guard();
         const before = live(userId);
         claims.get(userId)?.set(node, now() + PRESENCE_NODE_TTL_MS);
         due.add(userId);
-        return before > 0 ? null : bump(userId);
+        if (before > 0) return null;
+        toldIdle.delete(userId);
+        idleAt.set(userId, now() + awayAfterMs);
+        return bump(userId);
       },
       leave: async (userId): Promise<number | null> => {
         await Promise.resolve();
@@ -52,12 +62,29 @@ const sharedRecord = (
         claims.get(userId)?.delete(node);
         if (live(userId) > 0) return null;
         due.delete(userId);
+        idleAt.delete(userId);
         return bump(userId);
+      },
+      active: async (userId, awayAfterMs): Promise<number | null> => {
+        await Promise.resolve();
+        guard();
+        if (live(userId) === 0) return null;
+        idleAt.set(userId, now() + awayAfterMs);
+        return toldIdle.delete(userId) ? bump(userId) : null;
+      },
+      retell: async (userId): Promise<PresenceChange | null> => {
+        await Promise.resolve();
+        guard();
+        if (live(userId) === 0) return null;
+        return { userId, online: true, away: toldIdle.has(userId), version: bump(userId) };
       },
       release: async (userIds): Promise<void> => {
         await Promise.resolve();
         guard();
-        for (const userId of userIds) claims.get(userId)?.delete(node);
+        for (const userId of userIds) {
+          claims.get(userId)?.delete(node);
+          if (live(userId) === 0) idleAt.delete(userId);
+        }
       },
       sweep: async (): Promise<readonly PresenceChange[]> => {
         await Promise.resolve();
@@ -66,7 +93,15 @@ const sharedRecord = (
         for (const userId of [...due]) {
           if (live(userId) > 0) continue;
           due.delete(userId);
-          gone.push({ userId, online: false, version: bump(userId) });
+          idleAt.delete(userId);
+          gone.push({ userId, online: false, away: false, version: bump(userId) });
+        }
+        for (const [userId, at] of [...idleAt]) {
+          if (at > now()) continue;
+          idleAt.delete(userId);
+          if (live(userId) === 0 || toldIdle.has(userId)) continue;
+          toldIdle.add(userId);
+          gone.push({ userId, online: true, away: true, version: bump(userId) });
         }
         return gone;
       },
@@ -74,7 +109,16 @@ const sharedRecord = (
         await Promise.resolve();
         guard();
         return userIds.flatMap((userId): PresenceChange[] =>
-          live(userId) > 0 ? [{ userId, online: true, version: versions.get(userId) ?? 0 }] : [],
+          live(userId) > 0
+            ? [
+                {
+                  userId,
+                  online: true,
+                  away: toldIdle.has(userId),
+                  version: versions.get(userId) ?? 0,
+                },
+              ]
+            : [],
         );
       },
       version: async (): Promise<number> => {
@@ -349,5 +393,223 @@ describe('who is online across nodes', () => {
     a.online.arrived('bob');
     await a.online.settled();
     expect((a.told[1]?.version ?? 0) > given).toBe(true);
+  });
+});
+
+describe('who is away across nodes: idleness in the shared record (D-257)', () => {
+  const RENEW_MS = PRESENCE_NODE_TTL_MS / 3;
+  /** Time passes in renewals: every node renews and sweeps at each, as live nodes do. */
+  const pass = async (
+    world: ReturnType<typeof cluster>,
+    nodes: readonly TestNode[],
+    ms: number,
+    speaking?: { readonly node: TestNode; readonly userId: string },
+  ): Promise<void> => {
+    for (let spent = 0; spent < ms; spent += RENEW_MS) {
+      world.now.value += RENEW_MS;
+      for (const each of nodes) {
+        each.timers.fireDue(RENEW_MS);
+        await each.online.settled();
+      }
+      speaking?.node.online.active(speaking.userId);
+      await speaking?.node.online.settled();
+    }
+  };
+  const states = (node: TestNode, userId = 'alice'): [boolean, boolean][] =>
+    node.told.filter((c) => c.userId === userId).map((c) => [c.online, c.away]);
+
+  test('five quiet minutes are told away once, by one node, and a word on the other tells active at a later version', async () => {
+    const world = cluster();
+    const a = world.node();
+    const b = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    b.online.arrived('alice');
+    await b.online.settled();
+    await pass(world, [a, b], AWAY_AFTER_MS - RENEW_MS);
+    expect([...states(a), ...states(b)]).toEqual([[true, false]]);
+    await pass(world, [a, b], 2 * RENEW_MS);
+    expect([...states(a), ...states(b)]).toEqual([
+      [true, false],
+      [true, true],
+    ]);
+    expect(await b.online.onlineAmong(['alice'])).toMatchObject([{ away: true }]);
+    const idle = [...a.told, ...b.told].at(-1)?.version ?? Infinity;
+
+    b.online.active('alice');
+    await b.online.settled();
+    expect(states(b).at(-1)).toEqual([true, false]);
+    expect(b.told.at(-1)?.version).toBeGreaterThan(idle);
+    expect(await a.online.onlineAmong(['alice'])).toMatchObject([{ away: false }]);
+    // Words while active tell nothing: not a frame per word.
+    b.online.active('alice');
+    a.online.active('alice');
+    await a.online.settled();
+    await b.online.settled();
+    expect([...a.told, ...b.told]).toHaveLength(3);
+  });
+
+  test('a person idle on one node and speaking on the other is active', async () => {
+    const world = cluster();
+    const a = world.node();
+    const b = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    b.online.arrived('alice');
+    await b.online.settled();
+    await pass(world, [a, b], 3 * AWAY_AFTER_MS, { node: b, userId: 'alice' });
+    expect([...states(a), ...states(b)]).toEqual([[true, false]]);
+  });
+
+  test('a node that dies while its socket was idle leaves the person active where they speak', async () => {
+    const world = cluster();
+    const dying = world.node();
+    const living = world.node();
+    dying.online.arrived('alice');
+    await dying.online.settled();
+    living.online.arrived('alice');
+    await living.online.settled();
+    // The dying node renews no more; the living one speaks for her.
+    await pass(world, [living], 2 * AWAY_AFTER_MS, { node: living, userId: 'alice' });
+    expect([...states(dying), ...states(living)]).toEqual([[true, false]]);
+    expect(await living.online.onlineAmong(['alice'])).toMatchObject([
+      { online: true, away: false },
+    ]);
+  });
+
+  test('no node tells idleness from its own timers when it shares a record', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    a.online.active('alice');
+    await a.online.settled();
+    expect(a.timers.armed.some((t) => t.ms === AWAY_AFTER_MS)).toBe(false);
+  });
+
+  test('a word for somebody not online here is not recorded', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.active('alice');
+    await a.online.settled();
+    expect(a.told).toEqual([]);
+    expect(await a.online.onlineAmong(['alice'])).toEqual([]);
+  });
+
+  test('somebody who went offline and came back is active again, whatever they were', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    await pass(world, [a], AWAY_AFTER_MS + RENEW_MS);
+    a.online.left('alice');
+    a.timers.fireDue(PRESENCE_GRACE_MS);
+    await a.online.settled();
+    a.online.arrived('alice');
+    await a.online.settled();
+    expect(states(a)).toEqual([
+      [true, false],
+      [true, true],
+      [false, false],
+      [true, false],
+    ]);
+    expect(await a.online.onlineAmong(['alice'])).toMatchObject([{ away: false }]);
+  });
+
+  test('a word the record cannot take is said at warn and tells nothing; the next word corrects it', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    await pass(world, [a], AWAY_AFTER_MS + RENEW_MS);
+    world.record.down.value = true;
+    a.online.active('alice');
+    await a.online.settled();
+    expect(states(a)).toEqual([
+      [true, false],
+      [true, true],
+    ]);
+    expect(
+      a.lines.some(
+        (line) => line['level'] === 'warn' && String(line['msg']).includes('shared record'),
+      ),
+    ).toBe(true);
+    expect(a.lines.filter((line) => line['level'] === 'error')).toEqual([]);
+    world.record.down.value = false;
+    a.online.active('alice');
+    await a.online.settled();
+    expect(states(a).at(-1)).toEqual([true, false]);
+  });
+
+  test('a retelling takes a new version from the record and says the idleness it holds, on any node', async () => {
+    const world = cluster();
+    const a = world.node();
+    const b = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    await pass(world, [a], AWAY_AFTER_MS + RENEW_MS);
+    const idle = a.told.at(-1)?.version ?? Infinity;
+    // Node B holds no socket of hers: the record still knows her.
+    await b.online.retell('alice');
+    await b.online.settled();
+    expect(b.told).toEqual([
+      { userId: 'alice', online: true, away: true, version: expect.any(Number) as number },
+    ]);
+    expect(b.told[0]?.version).toBeGreaterThan(idle);
+    await b.online.retell('bob');
+    await b.online.settled();
+    expect(b.told).toHaveLength(1);
+  });
+
+  test('a retelling the record cannot answer is told from this node’s own record, and only for somebody online here', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    const before = a.told[0]?.version ?? Infinity;
+    world.record.down.value = true;
+    await a.online.retell('alice');
+    await a.online.retell('bob');
+    await a.online.settled();
+    expect(a.told.slice(1)).toEqual([
+      { userId: 'alice', online: true, away: false, version: expect.any(Number) as number },
+    ]);
+    expect(a.told[1]?.version).toBeGreaterThan(before);
+    expect(
+      a.lines.some(
+        (line) => line['level'] === 'warn' && String(line['msg']).includes('shared record'),
+      ),
+    ).toBe(true);
+  });
+
+  test('a record that cannot be reached is answered for from this node’s own record of the last word', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    a.online.arrived('bob');
+    await a.online.settled();
+    world.now.value += AWAY_AFTER_MS - 1;
+    a.online.active('bob');
+    await a.online.settled();
+    world.now.value += 1;
+    world.record.down.value = true;
+    expect(await a.online.onlineAmong(['alice', 'bob'])).toMatchObject([
+      { userId: 'alice', away: true },
+      { userId: 'bob', away: false },
+    ]);
+    await a.online.retell('alice');
+    await a.online.settled();
+    expect(a.told.at(-1)).toMatchObject({ userId: 'alice', away: true });
+  });
+
+  test('a stopped node takes no word and retells nothing', async () => {
+    const world = cluster();
+    const a = world.node();
+    a.online.arrived('alice');
+    await a.online.settled();
+    a.online.stop();
+    a.online.active('alice');
+    await a.online.retell('alice');
+    await a.online.settled();
+    expect(a.told).toHaveLength(1);
   });
 });

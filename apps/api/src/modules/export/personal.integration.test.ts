@@ -101,6 +101,17 @@ const footprint = async (
       added_by: who.userId,
     })
     .execute();
+  // An issue they made, given to somebody else, and the issue somebody else made for them: only the first is theirs.
+  await db
+    .insertInto('issues')
+    .values({
+      id: messageId(next()),
+      workspace_id: room.workspaceId,
+      title: `${words} issue`,
+      assignee_id: null,
+      created_by: who.userId,
+    })
+    .execute();
   // Stored as an upload is, so its key is the one production writes.
   const file = messageId(next());
   await storeUpload(
@@ -543,8 +554,9 @@ describe('integration: a person’s export that fails', () => {
 /**
  * As written when this test was made, before the catalogue moved between modules. A change that is meant says so
  * by changing this, in the same pull request, with the reason. (`google_made` is the Google sign-in change's: a column of
- * `users` it added to a person's own export after this was first frozen; `message_attachments` is chat's link of a
- * file to its message and channel, which `attachments` carried as two columns until chat/0005.)
+ * `users` it added to a person's own export after this was first frozen; `away_chosen` is away presence's, D-257;
+ * `message_attachments` is chat's link of a file to its message and channel, which `attachments` carried as two
+ * columns until chat/0005.)
  */
 const FROZEN_SHAPE: Record<string, unknown> = {
   order: [
@@ -561,6 +573,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'saved_searches',
     'thread_follows',
     'channel_bookmarks',
+    'issues',
   ],
   files: [
     'attachments.ndjson',
@@ -568,6 +581,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'channel_bookmarks.ndjson',
     'channel_members.ndjson',
     'channels.ndjson',
+    'issues.ndjson',
     'manifest.json',
     'message_attachments.ndjson',
     'messages.ndjson',
@@ -584,6 +598,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
       rows: 1,
       columns: [
         'avatar_url',
+        'away_chosen',
         'created_at',
         'deleted_at',
         'display_name',
@@ -706,6 +721,19 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     channel_bookmarks: {
       rows: 2,
       columns: ['added_at', 'added_by', 'channel_id', 'id', 'title', 'url', 'workspace_id'],
+    },
+    issues: {
+      rows: 2,
+      columns: [
+        'body',
+        'created_at',
+        'created_by',
+        'id',
+        'status',
+        'title',
+        'updated_at',
+        'workspace_id',
+      ],
     },
   },
 };

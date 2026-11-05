@@ -3409,6 +3409,29 @@ reads the core's rows only, so a module that is off does not change it. **Reject
 `chat/…`:** `0055` selects one by name and would silently update nothing on a fresh database, and the rename
 gains nothing a new file under a module's directory does not.
 
+*Amended 2026-11-04 — a transactional migration waits ten seconds for a lock, not for ever:* an `ALTER TABLE` is
+granted its lock after every transaction already using the table, and while it waits it is first in line, so a
+plain `SELECT` behind it waits too. Reproduced on a private database: one open transaction holding `ACCESS SHARE`
+on a table, one `ALTER TABLE`, one `SELECT` — the `SELECT` was answered after 8.01 s, when the transaction ended;
+with `lock_timeout = 5s` on the migrating session the `ALTER` failed at 5.05 s and the `SELECT` was answered at the
+same moment. With several nodes migrating as they start, that is an outage as long as the longest transaction.
+Every transactional migration now runs with `lock_timeout` set for its transaction alone (`set_config(…, true)`),
+ten seconds, the value the files that leave their transaction (0010, 0058, 0072) already set for themselves; a
+file that needs another says so with `SET LOCAL lock_timeout`, which comes after. A migration that ends on it fails
+with a message that names the file and what to do (find the long transaction, let it finish or end it, migrate
+again); it is not recorded and runs again from its top, so a restarting node tries again by itself. **The counter-
+risk was measured and is smaller than it looks:** `lock_timeout` counts the wait to *get* a lock and never how long
+a granted one is held, so a backfill is not cut short (an `ALTER` and then 3 s of work under a 1 s limit
+completed), and `chat/0001` on 200,000 messages and 40,000 attachments applied with the default. **Rejected — the
+same limit on files that leave their transaction:** `CREATE INDEX CONCURRENTLY` waits for old snapshots without
+blocking anyone, and `lock_timeout` ends that wait too, leaving an invalid index (measured: failed at 1.0 s with
+an open repeatable-read transaction, `indisvalid = false`); those files bound the statements that queue (`SET
+lock_timeout` before an `ALTER`) and leave the index build alone, as 0058 does. **Rejected — an environment
+variable:** nothing the operator can usefully choose differently; a migration that must wait longer is a
+migration, and says so. **Rejected — retrying the migration inside the process:** the wait is for a transaction
+only a person can judge (end it or wait for it), and a restart already is the retry. Reversibility: free, one
+constant.
+
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
 
 `createDatabase` set a pool size and nothing else (#243). With a pool of two, a third query waited 7,612 ms
@@ -6250,6 +6273,9 @@ the whole team. *No snapshot, frames only* — somebody who opened Purlay before
 
 **Cost of reversing:** the frame, one route, the registry's online half; no migration.
 
+*Amended 2026-11-03 by D-257:* §1's "no idle guess, no away" is withdrawn: away is built, idle for five minutes or
+chosen, as a state and never a duration.
+
 ### D-137. Incident channels: an incident is a state of a channel — #487
 
 **Context.** D-125 §2 put incident channels in Phase 2, from the Superdesign screen `incident-channel.html`:
@@ -6607,6 +6633,9 @@ two-minute window.
 
 **Cost of reversing:** the frame, `platform/attention.ts` and one filter in the push sender; no
 migration.
+
+*Amended 2026-11-03 by D-257:* §1's input list also counts a moving pointer and the wheel, and presence reads the
+same word; the push rule is unchanged.
 
 ### D-144. The production stack prepares its own object store on `up` — #76
 
@@ -10540,7 +10569,8 @@ bookmarks, Teams' tabs).
   again, the first stays, by whom and as named, and nothing is published — a double click or a retry is not
   a second chip. At most `BOOKMARKS_MAX` (20), counted under the channel's row lock (`FOR NO KEY UPDATE`, the
   lock a send's own write takes), so two members adding the last one cannot both get in. `added_by` outlives
-  its person as null: the bookmark is the channel's. The workspace export carries them.
+  its person as null: the bookmark is the channel's. The workspace export carries them. *(Amended 2026-11-04, D-256: erasure
+  soft-deletes the account, so the key's `SET NULL` never fires and `added_by` keeps naming the anonymised account.)*
 - **Read by whoever can see the channel, changed by its members** — the rule pins have (D-130): a visible
   non-member is `403 NOT_A_CHANNEL_MEMBER`; one in another channel, never there, or not a UUID is the one
   `404 BOOKMARK_NOT_FOUND` (D-34). Both suites cover the routes.
@@ -10635,7 +10665,10 @@ pulled by a scraper the operator runs; nobody is sent anything.
 - **No dependency.** The format is a page of rules: HELP and TYPE, three escapes, `+Inf`/`-Inf`/`NaN`, cumulative
   buckets. It is written in `platform/exposition.ts` and held by a strict reader in the tests that refuses what the
   format does not allow.
-- **What is counted is what the code can see honestly, per process.** Uptime and resident memory; sockets open on
+- **What is counted is what the code can see honestly, per process.** Uptime and resident memory (*measured for #1028:
+  Bun's `process.memoryUsage().rss` is the physical footprint on macOS; under load on a Mac the gauge read 125.6 MiB
+  where `footprint` said 125.6 MiB and `ps` 420 MiB, the difference being 266 MiB the process had freed that the
+  system had not yet reclaimed. The gauge is what the process holds; `ps` on macOS is not; the help line says so*); sockets open on
   this process (several nodes are several targets, which Prometheus adds up — D-201 does not change that); each HTTP
   request as one histogram by method, route **as registered** and status class, whose `_count` is the request
   counter, so a second counter would be the same number twice; refusals for the rate at each door; pushes that did
@@ -11996,7 +12029,7 @@ there is no broker).
 1. **The core** is identity, workspaces and tenancy (`WorkspaceContext`), permissions, audit, the domain event bus,
    notifications, attachments, the search fan-out, erasure and export as catalogues modules contribute to, and the
    module registry. Nothing in it names a module. What names chat today — channel visibility, message erasure, the
-   messages in the export catalogue — moves to chat, and `MODULES.md` §9 steps 6–9 do it. Until then the sentence is
+   messages in the export catalogue — moves to chat, and `MODULES.md` §10 steps 6–9 do it. Until then the sentence is
    a goal, and a test of `platform/` holds it once they are done.
 2. **A module is a unit that registers itself**, through a manifest (`MODULES.md` §2). Chat is a module, not the base:
    issues and notes run without it. Modules are **first-party code in this repository**. The manifest is not a trust
@@ -12004,7 +12037,8 @@ there is no broker).
 3. **One build; the modules an instance runs are a setting.** `MODULES` unset or blank means every bundled module, `none`
    means the core alone. An unknown or repeated id, a missing requirement, a cycle, or an id that is a core path segment
    stops the process at boot. A disabled module is not mounted and its web chunk is never requested; a request for it
-   gets the plain `404` of any unknown route, never a distinct answer.
+   gets the plain `404` of any unknown route, never a distinct answer. *(Amended 2026-11-04, D-255 §2: the routes are
+   registered and closed by path, not left unmounted. The answer is the same.)*
 4. **Modules meet through the core, never through each other's code.** By events first; by a port the core defines
    where there are two users or a test boundary; by asking whether a capability exists. A caller that finds it absent
    hides the feature or does nothing. Importing another module is a lint error, and **reading another module's tables
@@ -12033,6 +12067,7 @@ there is no broker).
 8. **A cluster runs one module set.** A node records its module set in the database at boot and refuses to serve beside a
    live peer whose set differs. The release may differ, so a rolling deploy is not blocked. Nodes of different sets also
    share no channel on the bus, so a typo in `MODULES` on one node cannot make it receive another set's frames.
+   *(Amended 2026-11-04, D-255 §1: the node does not refuse and no channel is split per set. The text stays as decided.)*
 9. **Commercial model.** All code stays AGPL and in this repository (D-24); there is still no open core. A self-hosted
    instance can run every module, free. The cloud may price what it operates by the modules a customer runs, never by
    seat (D-43's other rules stand). **This amends** D-1's "the only thing the cloud sells is that we operate it" and
@@ -12060,7 +12095,7 @@ drops them by hand (D-9).
 
 **Decided.** (a) *Existing installs:* the legacy migration rows stay as they are and count as the core's. A rename
 would change the rows `0055` selects by name and the dump the restore rehearsal compares, and gains nothing a new
-file cannot: only files added from now on go under `<module>/`. The cost is that the first 77 files always create
+file cannot: only files added from now on go under `<module>/`. The cost is that the 77 files that existed when this was decided always create
 chat's tables, even where chat is off — inert, which rule 5 already accepts. The release before the first prefixed
 row skips rows it has no file for and says so, so rolling back one release stays possible while module migrations are
 additive. (c) *Workspace-level enablement* is a precondition of selling a package (rule 9).
@@ -12241,3 +12276,260 @@ somebody asks for one. *Turning it on the server* — it would change words peop
 included, without their seeing it first.
 
 **Cost of reversing.** One module and three lines in the composer.
+
+### D-254. Issues, the second module, as small as it can be — builds on D-250
+
+**Context.** D-250 made the architecture and chat its first module, and a rule written for one module is a guess until
+a second one lives by it: chat's tables are the core's own migrations, so every seam that matters for a module with a
+set of its own — its tables absent, its hooks, its routes, its chunk — has so far been argued and never exercised.
+The owner chose to build the second module now, with the least product that touches every seam.
+
+**Decision.** An `issues` module (`features/issues`, `migrations/issues/`, `web/features/issues`) that holds one
+record and says no more.
+
+1. **The record.** A workspace's issue: a title (1 to 200 characters, one line), a markdown body (at most 10 000), a
+   status (`open` or `done`), an assignee (a current member or nobody), who made it, and two times. Listed newest first
+   in keyset pages, narrowed by status; made, changed and deleted. No comments, labels, attachments, notifications,
+   search, frames, or link to GitHub: none is needed to prove a seam, and each is a decision of its own.
+2. **Who may.** Any member makes an issue and changes any issue; the last write wins, there being no version worth
+   conflicting on. **Only its creator, or an owner or an admin, deletes it**, and deleting is for real: nothing hangs
+   off an issue, and a soft delete would be a column and a filter on every read for a record nobody asked to keep
+   (D-9 is about messages). The check is the server's, in the same transaction as the delete.
+3. **Data.** One table in the module's own set, `issues/0001_issues`, owned by `issues`: keys to `workspaces` (cascade)
+   and to `users` (`SET NULL`, as a channel's creator is), every key indexed, no key to another module. The assignee
+   being a member is the service's check under the membership's share lock, not a key: a member who leaves does not
+   rewrite their issues.
+4. **What its hooks do when its table was never made — decided here, as D-250 left it.** Issues is held **whether or not
+   it runs**, as the tables of chat's own set are: its erasure, purge and export contributions are in every process's
+   composition (no flag decides it: every bundled module is held, `composition.ts`), and each asks `tableExists` at the moment it needs the table, the purge for every table it
+   names and the exports through the contribution's `ownSet`. So on a database that never had the set (`MODULES=chat` or
+   `none` on a fresh install) there is nothing to reach and nothing fails, and on one where the set was applied and the
+   module was then turned off the rows are still taken off an erased account's assignments, purged with a deleted
+   workspace and exported. This closes what the first cut of this decision left open — holding the hooks only while the
+   module runs, which would have left a deleted workspace's titles and bodies in the database for good — and it costs
+   what chat's cost: a check per hook, and a catalogue that names a table some databases lack. `module-lifecycle.integration.test.ts`
+   runs every step in every state of the database (core alone, chat's set, issues' set, every set) against every
+   process (no module, each alone, both). A process that *runs* issues on a database without its set is not a cell:
+   readiness refuses it.
+5. **An erased account** leaves its issues as it leaves its messages: the **text stays**, attributed to the anonymised
+   account (D-139 §5), because an issue is the workspace's record and not the person's — erasing it would take a team's
+   plan with its author — and the person's own data in it is only the id the anonymised row already is. **That is a
+   recorded decision, not an oversight**: a person who wants their words gone asks the operator for content erasure, which
+   does not reach issues today (it is about messages), so an issue's words are removed by deleting the issue. The account
+   is taken off any assignment.
+   - **What a title and a body may hold.** A title is one line and uses the `name` format — no newline, control character
+     or bidirectional override (`gpj<RLO>exe` would read as another word), something visible — and a body the
+     `plain-text` format, lines allowed, no NUL: the database cannot store one, and the answer is a `400` naming the
+     field, as chat's names and topics are.
+   - **What is on the trail.** Making, finishing or opening again, giving or taking back, and deleting are written to
+     the audit log in the same transaction (`issue.created`, `issue.status_changed`, `issue.assigned`, `issue.deleted`),
+     by id and by the two values of a change, never the words (D-222); a rewrite of the words is not an entry, since the
+     trail says who did what to whom and not what they wrote.
+   - **How many.** A workspace holds at most 10 000 issues (`ISSUES_PER_WORKSPACE_MAX`); the one after is
+     `409 ISSUES_LIMIT`. **A count, not bytes**: an issue is already bounded by its own limits, so a count bounds the
+     table's share of a workspace with one comparison, made under the workspace's row locked so that two makes at the
+     cap cannot both pass, where byte accounting would be a column every write keeps in step and a second number to
+     explain, for a record nobody keeps ten thousand of on purpose.
+6. **Routes** are `/api/workspaces/:workspaceId/issues` and `/…/issues/:issueId`, in the manifest, so a process that
+   does not run the module answers the plain `404` of any unknown path (D-250 rule 3). `GET /api/me` and
+   `GET /api/client` list `issues` where it runs. *(Amended 2026-11-04, D-255 §5: only `GET /api/me` lists it; the public
+   handshake names no module.)*
+7. **The web** loads the screen as a chunk of the module's own, by one `import()` from `load.tsx`, drawn at
+   `/w/:slug/issues` behind `ModuleGate`, with a rail link and a palette entry only where the session lists the module.
+   `budget:web` fails a build whose initial chunks carry the screen's code.
+
+**Rejected.** *A richer first cut* (comments, labels, assignment by team): each would be argued for its own sake, and a
+module that proves a seam with six features proves it six times. *Soft delete*: above. *Dropping the key to the
+assignee in favour of the service's check alone*: the key is free and keeps the table honest; only the *membership* is
+the service's. *Putting issues' rows in the core's migrations* (what the `dataInCore` flag then named): it would put the module's rows in the core's migrations and defeat the
+first thing the module exists to show. *Holding its hooks only while it runs* (the first cut): it leaves a purged workspace's rows behind where the module was
+turned off, and an erased account's assignments. *Catching the error of a missing table*: an error as control flow, and
+it would hide a real fault.
+
+**Cost of reversing.** Dropping the module is deleting its folders, its row in `bundledModules`, the set's directory and
+its entry in the owner list; its table stays until an operator drops it (D-250 rule 5).
+
+### D-255. Decided in practice (module structure) — builds on D-250, D-254
+
+**Context.** Two modules now run, and building the second one settled several things the first decision either
+left open or got wrong, each of them decided in a pull request and written in no decision. Two sentences of D-250
+rule 8 and one of D-254 §6 are no longer true, and a document that keeps saying them is a defect (`MODULES.md` §8).
+This records what is true. D-250 and D-254 stand otherwise, and their text is not rewritten: each sentence this
+changes carries a note that points here.
+
+**Decision.**
+
+1. **A cluster is told, not stopped.** *Amends D-250 rule 8.* Where nodes share Redis each records its module set in one
+   shared record that lapses by itself (`realtime/module-set.ts`); a node that finds another set logs it once, and
+   once more when the nodes agree, and **keeps serving**; readiness does not change. A node does not refuse beside a
+   peer with another set. Nodes of different sets **share the one bus channel**, because a channel per set would stop
+   a sign-out on one node from closing the sockets of another. What keeps a node out of a module it does not run is
+   the closure of §2, not the channel. A rolling deploy of a new set therefore passes, and the advice to an
+   operator is to finish the roll (`DEPLOY.md`).
+2. **Closed means a path nobody has.** *Amends D-250 rule 3's "not mounted".* Every route of the build is registered, because the
+   application is one typed chain and its type is what the web client reads; a module that is not run is closed by
+   the manifest: its `routes` are answered as any unknown path, before the rate limit and the session; its `frames`
+   as an operation nobody has; its `events` are dropped at delivery, from the node's own services and from a node
+   that does run it (a person's own topic is held by every socket, so a topic would not keep them out); its `jobs`
+   exit `0` with a line. At the edge the order is the same: a closed webhook is not asked for the body rules of a
+   webhook, so it answers whatever its headers say as `/api/no-such-thing` does. A route-ownership test holds the
+   manifests and the registered routes together.
+3. **Data is held whether or not a module runs, and `tableExists` is how.** A module's erasure, purge, export and
+   retention contributions are in every process's composition (every bundled module's) and each asks `tableExists`
+   (`@purlay/db`) at the moment it needs a table the module's own set makes, never remembered, since another node may
+   apply the set while this one runs. Chat's own-set tables and issues' table are held this way (D-254 §4). A process
+   that runs a module on a database without its set is not a cell: readiness refuses it. The alternative, a
+   contribution split into a part held always and a part held where the set is applied, would need the process to
+   know the database's sets when composed.
+4. **An attached file is chat's.** What is attached to a message is judged by chat's `readAttachment`: with chat not run,
+   `GET /api/attachments/:id` and `/thumbnail` answer `ATTACHMENT_NOT_FOUND` for it as for an id that never existed,
+   while an upload nobody attached stays its uploader's. The core names no module; the manifest widens the reader.
+5. **The session carries the modules; the public handshake does not.** *Amends D-254 §6.* `GET /api/me` lists
+   `modules`; `GET /api/client` names none (PR #963). A closed route's body and code are those of an unknown path. Its
+   status is not: for a caller with no session a route of a running module answers `401` and one of a module not run
+   answers `404`, an unknown path always `404`, so the set is observable anonymously from that status (shown by
+   sweeping every route against `MODULES` of none, chat, issues and both), and from `capabilities`
+   (`scheduledMessages`, `messageReminders`, `personalMessageDeletion`, D-58), true only when chat runs and kept
+   because a native client needs them before it signs in. This is accepted and documented (`MODULES.md` §3); the way
+   to remove the status signal is to answer `401` before `404` for every `/api/*` path without a session. The macOS
+   client reading `modules` is issue #958.
+6. **The contract migration of the attachment link is chat's.** The three-release move of `attachments.message_id` and
+   `channel_id` (`MODULES.md` §10, step 8) ends with a step in **chat's own set**, `chat/0005` (the release
+   after `v0.3.0`, which contains the expand), not in the core's migrations: a core migration never names a module's
+   table (D-250 rule 5), and the columns are the link's. It removes the dual write and its allow-list.
+7. **Manifests do not shrink silently.** `module-compat.test.ts` holds the manifests to the last release's, kept in
+   `released-manifests.json`: no new requirement, no capability, route, job, frame or id gone, unless a dated entry
+   under `exceptions` in that file says so, where a reviewer sees it. `bun run release` rewrites the snapshot and
+   clears the exceptions.
+8. **Issues stays minimal.** D-254 stands: no link, no frame, no comments, no notification. Its removal threshold is
+   **decided by the owner at each release, against the measured use**; a measurable rule is required before a package
+   is sold (D-250 rule 9) and does not exist yet.
+9. **Pool isolation is wired for issues, and a gate holds chat against starvation.** *D-250 rule 7 said it would be built
+   before a second module ships; the second module shipped without it, and that was recorded as a debt.* The debt is
+   paid: `budgeted` (`platform/module-budget.ts`: a cap on open transactions, a queue timeout, a `statement_timeout`) is
+   handed to the issues routes (a third of the pool, never more than the pool minus one), chat is not budgeted, and
+   `budget:latency` runs the send path with issues holding its share and fails if chat's p95 passes eight times the
+   quiet p95 of the same run (measured on a 2-core runner: 2.4 to 3.7 times with the budget, about twenty times
+   without). What it does not hold: a busy module's CPU and event-loop cost on a shared process, which can still cost
+   chat about three times its p95 on a small host.
+
+**Rejected.** *Refusing to serve beside a peer with another set* (D-250's text): a rolling deploy of a new set would
+be impossible without an outage, and a typo would be an outage anyway. *A bus channel per set*: a sign-out must reach
+every socket. *Leaving unmounted routes out of the chain*: it breaks the typed client. *Listing modules in the public
+handshake*: a caller who has not signed in would read the instance's packages.
+
+**Cost of reversing.** Documentation and tests only; §1 and §2 are held by `module-set.test.ts` and `modules-off*`, and a
+change of either is a change of those.
+
+### D-256. An erased account stays named where it was the actor or the adder — builds on D-139, D-218, D-26
+
+**Context.** `channel_bookmarks.added_by` and the actor of `server_audit_log` are keyed to `users` with `ON DELETE SET NULL`,
+and the documents said the erasure clears them. It does not: erasing an account soft-deletes and anonymises its row
+(`eraseAccount`, D-139 §5) and `forgetWhatChatKeeps` deletes only what chat holds for the person, so the key never fires.
+
+**Decision.** The owner accepts what the code does. `added_by` and `actor_user_id` keep pointing at the anonymised account,
+which carries no identity (`deleted-user-…`, no address, no profile), and the audit trail keeps its actor. Both tables are
+`anonymised` in `TABLE_LIFECYCLE`. `DATA.md`, `SCHEMA.md` and D-218 say so; a bookmark of an erased person is shown as added by
+that account, not by no one.
+
+**Scope, checked 2026-11-04.** Every key to `users(id)` was set against `TABLE_LIFECYCLE` and what the erasure does. Besides the two
+above, `pinned_messages.pinned_by`, `incident_updates.actor_id`, `incident_responders.added_by`, `incidents.declared_by`,
+`incoming_webhooks.created_by`, `github_integrations`, `github_repo_feeds`, `github_links` and `github_app_installations.connected_by`,
+`workspace_invitations.created_by`, `workspace_exports.requested_by`, `channels.created_by`, `workspaces.created_by`, the message
+columns that name a person, and `setup_state.admin_user_id` keep naming the anonymised account, and the contract shows that account
+(`deleted-user-…`), not `null`. What the erasure does delete or clear is what it says in `eraseAccount` and in chat's and issues'
+`userErased` hooks (an issue's assignee is cleared). The one column that held the person's own data and was not reached was
+`github_app_installations.account_login`: when the App is installed on their personal account (`account_type = 'User'`), it is their
+GitHub login. Chat's hook now replaces it, for the installations they connected, with the name their account now has
+(`deleted-user-…`, the column is `NOT NULL`), in the erasure's transaction (#997). The installation stays the workspace's: its
+`installation_id`, kind and `connected_by` are as they were. An organisation's login names an organisation, not a person, and stays.
+The trail's `{ account }` on `integration.app_connected` and `integration.app_disconnected` names the same login and is **not**
+rewritten: `audit_log` is append-only (I-9), and the trail is kept under the anonymised person (D-139 §5). The owner accepts that
+a public GitHub login of a personal account the App was wired to stays in those lines (and in the structured log's copy of them,
+which carries ids only, D-222), and `DATA.md` says so.
+The comments of migrations 0021, 0040 and 0065 still say an erasure nulls these columns; a migration is checksummed (`migrator.ts`),
+so they stand and this is the correction.
+
+**Cost of reversing.** Clearing them would be a step of the erasure's transaction and a loss of who changed a setting.
+
+### D-257. Away: idle for five minutes, or away by choice — builds on D-136, D-143, D-201; amends D-136 §1
+
+**Context.** D-136 §1 refused "away": a guess at attention reads as a fact about a person. A laptop left open on a
+desk then reads as somebody who is there. The owner asked for it anyway, as Slack has it: somebody who has not used
+Purlay for five minutes shows as away, and a person can say they are away themselves.
+
+**Decision.** `PresenceChange` carries `away`, and the snapshot each person's `away`. **Away is a guess about
+attention, shown as a state — never a duration, never "last seen"** — drawn as a hollow ring in the muted ink where the
+green dot is, and said "away" to a screen reader. Others do not see whether it was idle or chosen.
+1. **The heartbeat is D-143's `ACTIVE` word**: one a minute while a page is visible, focused and used, and at once on
+   the first input after a quiet spell. Its input list grows to a moving pointer and the wheel; the push rule
+   (`attention.heard`) is unchanged, and the frame is not a new one.
+2. **Silence is idleness, decided by the server** (`AWAY_AFTER_MS`, 300 s): a page the browser froze cannot keep
+   anybody green. One node keeps the last word in memory; several keep it in the per-person Redis record (D-201) with
+   an idle index swept on renewal, so an idle lapse may be told up to one renewal late. Any page of the person's
+   keeps them active.
+3. **A socket back inside the grace changes nothing** (D-136 §2): a Wi-Fi blip does not turn an idle person green. An
+   arrival after being offline starts active: opening Purlay is an act.
+4. **Away by choice** (`PUT /api/me/away`, `users.away_chosen`) is stored on the person, wins over activity, holds on
+   every device and workspace and through restarts, and is read by a socket before its first word. The route writes,
+   then tells it again at a new version from the same source as the others, to co-members only (D-136 §1, §3)
+   and to the person themselves.
+   Offline always wins: a choice made offline is stored and tells nobody. `GET /api/me` carries `awayChosen`, and the
+   account menu offers *Set yourself as away* / *Uzakta görün*, and the reverse.
+5. **Your own state is told to you**: every presence change also goes to the person's own `user:` topic, so the avatar
+   on every page of theirs — account menu, People — shows what everybody else is told, chosen on another device or
+   idle, which only the server knows. It is their own state, so nobody new hears anything. Disconnected, a page draws
+   nothing for them rather than the last state it heard. While they are online, what they hear of themselves also
+   carries `chosen`, whether the away is their choice, so the menu on every device of theirs offers the right one of
+   *Set yourself as away* and *Set yourself as active* without a reload; newest version wins, as for the state. Nobody
+   else is ever told `chosen`.
+6. **Accepted edge**: with Redis unreachable for more than five minutes, a person who is speaking can be shown away for
+   up to a minute after it comes back, until their next word.
+7. Unchanged: D-136 §2 to §4 and §7, Deep Work (it does not change away, nor away it), and the push rule (D-143).
+
+**Rejected.** *An idle threshold set per person* — one value is enough for a state, and a setting is a request that
+can come. *"Last seen"* — a clock about a person, the thing D-136 refused. *The page deciding its own idleness* —
+a frozen background tab would stay green. *A separate heartbeat frame* — a frame budget spent (O-4) on what the
+`ACTIVE` word already says.
+
+**Cost of reversing.** The `away` field, the route and the column (a migration to drop it); `ACTIVE` goes back to its
+input list.
+
+### D-258. A one-file stack for Dockhand, behind Nginx Proxy Manager — builds on D-73, D-81, D-94
+
+**Context.** The owner runs servers with [Dockhand](https://dockhand.pro), a web interface that deploys Compose
+stacks, and Nginx Proxy Manager already holds ports 80 and 443 there. `docker-compose.production.yml` does not
+fit: it mounts three files from `docker/` (Dockhand pastes or checks out a compose file, and resolves relative
+paths in a directory of its own), and its Caddy publishes 80 and 443 and asks for certificates. CONFIG.md's
+*behind a proxy of your own* switches Caddy off and publishes the API on a host port, which needs a second
+file beside the first and drops what Caddy does.
+
+**Decision.** `docker-compose.dockhand.yml`: the production stack in one file.
+1. **The same services, held equal by a test.** `dockhand-compose.integration.test.ts` resolves both files with
+   `docker compose config` and fails on any difference but the ones below, so a change to the production stack
+   that is not made here is caught. Garage's configuration is written inline (`configs: content:`, Compose
+   2.23.1 or later) and must be `docker/garage.production.toml` word for word.
+2. **No port is published.** Caddy joins Nginx Proxy Manager's network (`PROXY_NETWORK`, external) as `purlay`
+   and listens on plain HTTP; Nginx Proxy Manager forwards to `http://purlay:80` and ends TLS. The API, the
+   database and the store stay off that network. Caddy keeps its duties: `/metrics` refused from outside
+   (D-221), a request held while the API restarts (#636), no retry of a request the API received (#666), no
+   query string in the access log.
+3. **Two proxies, one client address.** The API trusts one proxy and takes the last `X-Forwarded-For` entry
+   (D-81). Caddy takes the client from the `X-Real-IP` Nginx Proxy Manager sets to the peer it saw, believed
+   only from a private address, and sends the API that address alone. Measured against nginx with Nginx Proxy
+   Manager's headers: a client that wrote `X-Forwarded-For: 6.6.6.6` and `X-Real-IP: 7.7.7.7` reached the
+   API as its own address.
+4. **No WAL archiving** (D-202): it needs a script mounted into PostgreSQL. The production file remains the
+   way to have it.
+5. **Updates are the operator's.** Dockhand pulls and restarts; it does not take `scripts/deploy.sh`'s backup
+   before the switch or restore one after a failed start. DEPLOY.md says so and gives the dump to take first.
+
+**Rejected.** *A Compose override on the production file*: Dockhand takes one file, and the mounted
+files are the problem. *Dropping Caddy and putting the API on Nginx Proxy Manager's network*: `/metrics` would be
+public behind its token alone, a restart would be a 502, and the client address would be Nginx Proxy Manager's
+appended `X-Forwarded-For`, whose first entry the client writes. *Trusting `X-Forwarded-For` from Nginx Proxy
+Manager*: the same reason. *Publishing a host port*: plain HTTP on the server's address, and a second thing to
+firewall.
+
+**Cost of reversing.** One file, its test and a section of DEPLOY.md; a running stack moves to the production
+file by mounting its volumes.

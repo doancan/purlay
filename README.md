@@ -34,6 +34,10 @@ the plan — the disk is ours there — and the export is the same one command e
 **Developer-native.** GitHub Flavored Markdown, fenced code blocks with a language badge and
 line clamping, and GitHub PR/Issue links that render as live cards with CI and review status.
 
+**A small core and modules.** Chat and issues are modules over a core that knows neither. One build, and
+`MODULES` says which a process runs (`MODULES=none` is the core alone); the rows of a module that is off stay and are
+still erased and exported. How a module is built, and the checklist for adding one: [`docs/MODULES.md`](docs/MODULES.md).
+
 ### What Purlay is not
 
 No audio, video or screen sharing. No app marketplace. No workflow builder. No AI summaries. No
@@ -99,7 +103,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 253 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 258 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |

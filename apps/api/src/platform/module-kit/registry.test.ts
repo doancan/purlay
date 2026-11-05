@@ -71,7 +71,13 @@ describe('the setting', () => {
 
   test('does not guess at a different spelling', () => {
     expect(problemsOf(() => registry.resolve('Chat'))).toEqual([
-      'MODULES names "Chat", which this build does not have (it has: chat, issues, notes)',
+      'MODULES names "Chat", which is not a module id: lowercase letters, digits and hyphens, starting with a letter',
+    ]);
+  });
+
+  test('says none must stand alone when it is listed with a module', () => {
+    expect(problemsOf(() => registry.resolve('none,chat'))).toEqual([
+      'MODULES has "none" with other items: none must stand alone',
     ]);
   });
 
@@ -188,5 +194,85 @@ describe('the ids the core owns', () => {
 
   test('are themselves well formed, so a reserved id is never refused for the wrong reason', () => {
     for (const id of RESERVED_MODULE_IDS) expect(id).toMatch(/^[a-z][a-z0-9-]{0,31}$/);
+  });
+});
+
+describe('what two modules, or a module and the core, both claim', () => {
+  const core = {
+    routes: ['/api/me', '/api/workspaces/:workspaceId/members'],
+    jobs: ['sweep:sessions'],
+    frames: ['PING'],
+    events: ['PONG'],
+  };
+
+  test('a route template inside another’s subtree, or the same one, is an overlap, named with both', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module('chat', { routes: ['/api/things/**'] }),
+          module('notes', { routes: ['/api/things/:id/x', '/api/other'] }),
+        ]),
+      ),
+    ).toEqual([
+      '"chat" and "notes" both own routes that overlap: "/api/things/**" and "/api/things/:id/x"',
+    ]);
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module('chat', { routes: ['/api/a/:id'] }),
+          module('notes', { routes: ['/api/a/b'] }),
+        ]),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test('a job, a socket operation and a server event two modules both list are each a problem', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module('chat', { jobs: ['mail:x'], frames: ['SEND'], events: ['SENT'] }),
+          module('notes', { jobs: ['mail:x'], frames: ['SEND'], events: ['SENT'] }),
+        ]),
+      ),
+    ).toEqual([
+      '"chat" and "notes" both own the job "mail:x"',
+      '"chat" and "notes" both own the socket operation "SEND"',
+      '"chat" and "notes" both own the server event "SENT"',
+    ]);
+  });
+
+  test('what the core claims cannot be a module’s, in each of the four kinds', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry(
+          [
+            module('chat', {
+              routes: ['/api/me', '/api/workspaces/:workspaceId/**'],
+              jobs: ['sweep:sessions'],
+              frames: ['PING'],
+              events: ['PONG'],
+            }),
+          ],
+          core,
+        ),
+      ),
+    ).toEqual([
+      '"chat" owns the route "/api/me", which overlaps the core\'s "/api/me"',
+      '"chat" owns the route "/api/workspaces/:workspaceId/**", which overlaps the core\'s "/api/workspaces/:workspaceId/members"',
+      '"chat" owns the job "sweep:sessions", which is the core\'s',
+      '"chat" owns the socket operation "PING", which is the core\'s',
+      '"chat" owns the server event "PONG", which is the core\'s',
+    ]);
+  });
+
+  test('modules that claim different things, beside the core, are a sound build', () => {
+    const registry = moduleRegistry(
+      [
+        module('chat', { routes: ['/api/a/**'], jobs: ['j1'], frames: ['F1'], events: ['E1'] }),
+        module('notes', { routes: ['/api/b'], jobs: ['j2'], frames: ['F2'], events: ['E2'] }),
+      ],
+      core,
+    );
+    expect(idsOf(registry.bundled)).toEqual(['chat', 'notes']);
   });
 });

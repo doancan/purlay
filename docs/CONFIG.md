@@ -22,8 +22,10 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Only `http`/`https`; must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
 | `ERROR_TRACKING_DSN` | — | — | A Sentry-compatible DSN (Sentry, GlitchTip). **Unset means off, and nothing leaves the process.** When set, whatever is logged at `error` is also reported, cleaned exactly as the log is (D-96). A report gives up after five seconds, is never redirected, and carries no absolute path of the machine. Must be `https://` in production; a malformed value refuses to start. **No telemetry is ever collected from a self-hosted deployment** (D-44): there is no default |
-| `MODULES` | — | unset (every module) | Which of the product's modules this process runs, by id, comma-separated: `chat`. **Unset or blank is every module the build carries**; `none` is the core alone — sign-in, workspaces, members, invitations, exports, the trail — and no module. A module that is not run has no route (its paths are the plain `404` of any unknown one, with nothing that says *disabled*), no job that acts for its users, no command and none of its own migrations; the rows it already has stay in the database and are kept whole: an erasure, a workspace's deletion, an export and the retention purge still reach them, and on a database that never had the module's set (a fresh install that starts with `none`) they simply find none (D-250). An unknown or repeated id, an empty item or a module whose requirement is not run stops the process before it listens, naming each. Every node of a cluster runs the same set; with `REDIS_URL` a node that finds another set logs it (and again when they agree) and keeps serving, so a rolling deploy of a new set passes |
+| `MODULES` | — | unset (every module) | Which of the product's modules this process runs, by id, comma-separated: `chat`, `issues`. **Unset or blank is every module the build carries**; `none` is the core alone — sign-in, workspaces, members, invitations, exports, the trail — and no module. A module that is not run has no route (its paths are the plain `404` of any unknown one, with nothing that says *disabled*), no job that acts for its users, no command and none of its own migrations; the rows it already has stay in the database and are kept whole: an erasure, a workspace's deletion, an export and the retention purge still reach them, and on a database that never had the module's set (a fresh install that starts with `none`) they simply find none (D-250). An unknown or repeated id, an id that is not lowercase letters, digits and hyphens (`CHAT`, `None`), an empty item, `none` listed with another id (it must stand alone) or a module whose requirement is not run stops the process before it listens, naming each; `bun run db:migrate` reads the setting the same way, a missing requirement included, and exits 1 naming the problem instead of migrating. **Turning modules off does not make the process smaller**: the build still loads every module's code, and a process run with `MODULES=none` held the same memory as one run with every module (measured twice: resident memory 63.7 MiB unset and 65.5 MiB with `none` on a development start; 111.5 and 112.6 MiB in the reviewer's run). What the setting buys is reachability and data scope — no route, no job, no socket frame and no table of a module that is off — never footprint, so do not choose it to save memory. Every node of a cluster runs the same set; with `REDIS_URL` a node that finds another set logs it (and again when they agree) and keeps serving, so a rolling deploy of a new set passes |
 | `METRICS_TOKEN` | — | — | **Secret.** The bearer token a Prometheus scrapes `GET /metrics` with (D-221, `API.md` §8). **Unset means off**: `/metrics` is then the `404` of any path nothing serves, and so it is to a request without this token or with another — nobody who does not hold it can tell the page exists. 32 to 512 characters of a token's alphabet (`A–Z a–z 0–9 . _ ~ + / -`, then any `=`): `openssl rand -hex 32`. Compared in constant time. Nothing is pushed anywhere: a scraper the operator runs asks, and the page carries no name, address, id or word anybody wrote. See *Metrics for Prometheus* below |
+| `SOCKET_MAX_CONNECTIONS` | — | `2000` | How many WebSockets this node holds open; the next upgrade is answered `503` (`DATABASE_UNAVAILABLE`, "The service is busy") until one closes, and a client reconnects with backoff. **Per node**: a cluster of three holds three times this. A whole number from 1 to 100000, anything else (`0`, `1.5`, `2k`, a negative) stops the process at start naming the variable. The default is what every deployment has always had, so a running one is not moved. It is a limit on one process's CPU and fan-out before it is a memory one: raise it only after measuring your own traffic (`DEPLOY.md`, *Sizing a node's sockets*). The per-account limit (20) is not configurable. The session is still checked before this limit, so refused handshakes cost session queries |
+| `SOCKET_REPLAY_CONCURRENCY` | — | `50` | How many of this node's sockets may be replaying at once after a `SUBSCRIBE`; the rest wait their turn, in the order they asked, and the client sees only a later answer. **Per node**, a count of replays, not of sockets. A whole number from 1 to 100000, anything else stops the process at start naming the variable. A reconnecting socket holds up to 1,000 frames or 1 MiB while its replay is read, about 0.4 MB, so this is what bounds the memory of a mass reconnect (`DEPLOY.md`, *Memory after a mass reconnect*). A subscription that has waited fifteen seconds is answered `DATABASE_UNAVAILABLE` and the client sends it again, so a value too low for the storm shows as `replay refused` lines in the log, not as lost messages. A lone reconnect is not affected |
 | `TRUST_PROXY` | — | `false` | Set `true` behind **exactly one** reverse proxy that sets `X-Forwarded-For`; the last entry is then the client (D-81). Without it the socket's peer address is the client and the header is ignored, because anyone can write it. It keys the sign-in rate limit and fills `sessions.ip_address`. Wrong either way hurts: `false` behind a proxy puts every user in one bucket; `true` with none lets a caller choose its own address |
 
 ## Database
@@ -31,7 +33,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | — | `postgres://user:pass@host:5432/purlay` |
-| `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling |
+| `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling. The issues module takes at most a third of it (rounded down, never more than the pool less one, at least one: `features/issues/budget.ts`); chat is not budgeted |
 | `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. Verifies the server's certificate. `bun run db:migrate` reads it too. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
 | `DATABASE_ALLOW_PLAINTEXT` | — | `false` | Production only: acknowledges that the database link is not encrypted because the network is private (a compose network, a unix socket). Without it production will not start on `DATABASE_SSL=false`. It does not turn TLS off by itself |
 | `DATABASE_SSL_CA_FILE` | — | — | Path to a PEM file of the certificate authority to trust instead of the system's, for a private or managed root. Needs `DATABASE_SSL=true`; a file that cannot be read stops the boot (D-87) |
@@ -44,6 +46,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 |---|---|---|
 | Wait for a free connection | 3 s | The query fails with `DATABASE_UNAVAILABLE` (`503`) instead of queuing |
 | `statement_timeout` | 30 s | The server cancels the statement. Not applied to `db:migrate`, whose index builds take as long as they take |
+| `lock_timeout` | none | Set by the migrator, not the pool: 10 s for each lock a transactional migration asks for, so one that queues behind a long transaction fails instead of holding up the table (D-86, `DEPLOY.md`) |
 | `idle_in_transaction_session_timeout` | 15 s | The server ends a session that opened a transaction and stopped |
 | Idle connection | 30 s | The pool closes a connection nobody has used |
 | `application_name` | `purlay-api` | Shown in `pg_stat_activity`, so a stuck session can be traced to this service |
@@ -327,6 +330,7 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 |---|---|---|---|
 | `CLOUD_MODE` | — | `false` | Enables billing, metering and the operator surfaces. Off means the deployment behaves exactly as it did before the cloud existed |
 | `REDIS_URL` | cloud | — | **Secret.** `redis://` or `rediss://` with its credentials: the shared bus, typing and online presence, and the limiters keyed by user, address or workspace (D-201, D-7, D-25). **Unset means off, and nothing connects anywhere** — the in-process implementations run exactly as they always have, and the self-hosted stack never passes it. A node reports not ready until it has reached Redis once; after that a Redis that goes away is degraded service, not an outage: each node serves its own sockets, limits with a bucket of its own and answers presence from what it knows, and says so in its log. One Redis, one primary (Redis Cluster is not supported: the presence read is one script over many keys). The address is never logged |
+| `REDIS_KEY_PREFIX` | — | `purlay` | The namespace of every key and of the bus channel in the shared Redis, so two deployments that share one (staging beside production, two tenants' clusters) do not hear each other's frames or share presence, typing and rate-limit buckets: `staging` makes `staging:bus`, `staging:rl:…`, `staging:typing:…`, `staging:online:…`, `staging:online-lapse`, `staging:online-idle` and `staging:modules`. **Unset or empty is `purlay`**, the name every deployment has always had, so a running one is not moved. 1 to 32 letters, digits, `.`, `_` or `-`, starting with a letter or digit; the colon after it is added, so a value with one (`a:b`, `staging:`), a space or braces is refused at start, naming the variable. Needs `REDIS_URL`: set alone it is refused. **Every node of one cluster sets the same value**, and changing it on a running cluster moves it to empty names: presence, typing and buckets start over, and a node on the old value and one on the new hear each other's frames no more until all are restarted |
 | `BILLING_PROVIDER_KEY` | cloud | — | **Secret.** Merchant of record (D-43) |
 | `BILLING_WEBHOOK_SECRET` | cloud | — | **Secret.** Signature verification on subscription events |
 | `SMTP_URL` | — | — | **Secret.** The SMTP server sign-in links are sent through, `smtp://` or `smtps://` with its credentials; with `MAIL_FROM`, or neither — neither is email sign-in off (D-138 §6). Mail to a relay past this machine goes only over TLS — `smtps://`, or STARTTLS required on `smtp://` — unless `SMTP_ALLOW_PLAINTEXT=true`: every message carries a sign-in link. Invitations are links, not email (D-115) |
@@ -474,7 +478,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
-`SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
+`SOCKET_MAX_CONNECTIONS`, `SOCKET_REPLAY_CONCURRENCY`, `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), `UPDATE_CHECK` (on unless `false`), and to the API alone `METRICS_TOKEN` (metrics, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack
@@ -560,6 +564,21 @@ proxy_set_header Connection        "upgrade";
 Check it, do not trust it: sign in, then `SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1`
 must be your address, not Cloudflare's.
 
+**With Dockhand and Nginx Proxy Manager** (D-258), use `docker-compose.dockhand.yml` instead: the same stack in
+one file — Garage's and Caddy's configuration written inline, so nothing is mounted from a checkout — with no
+port published and WAL archiving left out. Its one extra variable:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `PROXY_NETWORK` | ✅ (Dockhand file only) | The name of Nginx Proxy Manager's Docker network (`docker network ls`; often `<its stack>_default`). The stack's Caddy joins it as `purlay`, so Nginx Proxy Manager forwards to `http://purlay:80`; nothing else of the stack is on it |
+
+`HTTP_PORT`, `HTTPS_PORT`, `WAL_ARCHIVE`, `WAL_ARCHIVE_TIMEOUT` and `WAL_ARCHIVE_PATH` are not read by it. Caddy there
+listens on plain HTTP and takes the client's address from the `X-Real-IP` that Nginx Proxy Manager sets to the
+peer it saw — believed only from a private address — and gives the API that one address, so `TRUST_PROXY`'s one
+proxy still holds. Nginx Proxy Manager's own `X-Forwarded-For` is not used: it appends to whatever the client
+sent. With Cloudflare in front of Nginx Proxy Manager, `X-Real-IP` is a Cloudflare address unless Nginx Proxy
+Manager restores the client from `CF-Connecting-IP` (its *Advanced* tab, as above); check it the same way.
+
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
 (D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
 nightly, in UTC; and every quarter hour `mail:missed`, the letters to people who asked to be emailed about what
@@ -581,7 +600,9 @@ signal, not a restart — the jobs are tried again on their own schedule. A job 
 at `error`, and so reported to `ERROR_TRACKING_DSN` like the API's errors.
 
 **Metrics for Prometheus** (D-221). Off until `METRICS_TOKEN` is set in `production.env`; the stack passes it
-to the API alone. The page is the API process's own — the time it has run and its memory, the sockets open on
+to the API alone. The page is the API process's own — the time it has run and its memory (as Bun reports it: the resident set on
+Linux, which is what `ps` and `docker stats` show, and on macOS the physical footprint, which reads well below `ps` there
+because it leaves out pages freed but not yet taken back — a development machine's figure, not the server's), the sockets open on
 it, each HTTP request by method, the route as registered (`/api/channels/:channelId`, never the path as sent),
 status class and duration, what was refused for the rate at each door, pushes and letters that did not
 reach their service — and the scheduled jobs' record as `jobs:status` reads it: when each last succeeded
@@ -619,7 +640,10 @@ never through the public origin. A scrape refused for its token is the same `404
 off, and the API's log says `a request for metrics was refused` at `info`. A database that cannot be read
 leaves the rest of the page and says `purlay_jobs_status_readable 0` — alert on it, and on
 `time() - purlay_job_last_success_timestamp_seconds > 172800`, the age past which `jobs:status` calls a job
-overdue. With several API nodes each is its own target; Prometheus adds them up.
+overdue. `purlay_modules_info{module="…"} 1` has one series for each module the process runs, so
+`count by (module) (purlay_modules_info)` is how many nodes run each one during a rolling deploy of a new
+`MODULES`; the boot log says the same once, as `the modules this process runs`, with `running` and `notRun`.
+With several API nodes each is its own target; Prometheus adds them up.
 
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
 never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run

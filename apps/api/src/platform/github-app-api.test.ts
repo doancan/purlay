@@ -138,6 +138,36 @@ describe('one call to GitHub', () => {
     );
   });
 
+  test('a grant is revoked as the App, by its client id and secret, with the person’s token in the body', async () => {
+    const seen: Parameters<GitHubAppFetch>[] = [];
+    const fetch: GitHubAppFetch = async (url, init) => {
+      seen.push([url, init]);
+      return await Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await api(fetch).revokeAuthorization({ clientId: 'Iv23.x', clientSecret: 'shh' }, 'ghu_person');
+    const [url, init] = seen[0] ?? ['', undefined];
+    expect(url).toBe('https://api.github.example/applications/Iv23.x/grant');
+    expect(init?.method).toBe('DELETE');
+    expect(init?.headers).toMatchObject({
+      authorization: `Basic ${Buffer.from('Iv23.x:shh').toString('base64')}`,
+    });
+    expect(JSON.parse(init?.body ?? '{}')).toEqual({ access_token: 'ghu_person' });
+  });
+
+  test('a grant GitHub does not revoke is GitHub unavailable, and says nothing of the token or the secret', async () => {
+    for (const status of [404, 422, 502, 302]) {
+      const error = await failure(
+        api(answering(() => new Response('', { status }))).revokeAuthorization(
+          { clientId: 'Iv23.x', clientSecret: 'shh' },
+          'ghu_person',
+        ),
+      );
+      expect(error).toBeInstanceOf(GitHubUnavailable);
+      expect(String(error)).not.toContain('ghu_person');
+      expect(String(error)).not.toContain('shh');
+    }
+  });
+
   test('an installation GitHub has none of is missing; the App is read as itself', async () => {
     expect(
       await api(answering(() => new Response('', { status: 404 }))).installation('jwt', 5),

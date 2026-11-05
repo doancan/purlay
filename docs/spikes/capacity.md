@@ -18,7 +18,9 @@ load generator:
 - An ACK is timed on the sender's socket. Delivery is timed on twenty sampled listeners; every other
   listener receives and counts frames without parsing them, so the generator's parsing is not what is
   measured.
-- The API's RSS is read with `ps` during the run.
+- The API's RSS is read with `ps` during the run. On macOS `ps` counts pages the process has freed and the system has not yet
+  taken back, so it reads high and does not fall (#1028: 420 MiB by `ps` against 125.6 MiB held, by `footprint` and by
+  `purlay_process_resident_memory_bytes`, after 25 s of load on 300 sockets); the figures below are `ps` figures.
 
 With the script at the end of this file saved as `apps/api/src/cli/.spike/capacity.ts` (it imports
 the API's modules by relative path) and the integration database up:

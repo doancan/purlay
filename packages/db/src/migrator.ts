@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql, type Kysely, type QueryExecutorProvider } from 'kysely';
+import pg from 'pg';
+import { ModulesSettingError, parseModulesSetting, unmetRequirements } from './modules-setting';
 import { DEADLOCK_RETRY, retryOnDeadlock, type Retry, type RetryPolicy } from './retry';
 import { executableText, splitStatements } from './statements';
 
@@ -44,6 +46,17 @@ const LOCK_WAIT_MILLISECONDS = 120_000;
 const LOCK_POLL_FIRST_MILLISECONDS = 25;
 const LOCK_POLL_MAX_MILLISECONDS = 500;
 
+/**
+ * How long a transactional migration waits for any one lock, unless its file says otherwise (D-86, amended). An
+ * `ALTER TABLE` waits for every transaction already using the table, and while it waits every later reader and
+ * writer of the table waits behind it, so an unbounded wait is an outage for as long as the one long
+ * transaction runs. It bounds the wait to get a lock, never how long a granted lock is held: a backfill is
+ * not cut short. The same ten seconds the files that leave their transaction set for themselves.
+ */
+const LOCK_TIMEOUT_MILLISECONDS = 10_000;
+/** SQLSTATE `lock_not_available`: what `lock_timeout` ends a statement with. */
+const LOCK_NOT_AVAILABLE = '55P03';
+
 const TABLE = 'kysely_migration';
 const OPT_OUT = /^--\s*purlay:\s*no-transaction\s*$/;
 
@@ -69,26 +82,60 @@ export interface MigrationSet {
 const SET_ID = /^[a-z][a-z0-9-]*$/;
 
 /**
- * The sets of the modules this build carries (D-250): chat's, in `migrations/chat/`, applied after the core's and
- * recorded as `chat/<file>`. A process applies the ones its `MODULES` names (`setsNamedBy`, `MODULES.md` §3).
+ * The sets of the modules this build carries (D-250), one directory each under `migrations/`, applied after the
+ * core's and recorded as `<module>/<file>`. A process applies the ones its `MODULES` names (`setsNamedBy`, `MODULES.md` §3).
  */
-export const PRODUCT_MIGRATION_SETS: readonly MigrationSet[] = [
+export const PRODUCT_MIGRATION_SETS = [
   { id: 'chat', directory: join(MIGRATIONS_DIRECTORY, 'chat') },
+  { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },
+] as const satisfies readonly MigrationSet[];
+
+/**
+ * Modules of the build that keep no tables of their own, so have no set. Empty today: a module that has a set is
+ * a module id by being in `PRODUCT_MIGRATION_SETS`, and needs nothing here.
+ */
+const MODULES_WITHOUT_A_SET: readonly string[] = [];
+
+/**
+ * The ids of the modules this build carries: every set's id, and the modules that have none. A module that keeps
+ * no tables of its own is still a module a `MODULES` setting may name, so this list is the build's, not
+ * `PRODUCT_MIGRATION_SETS`'s. The DB package cannot import the API's manifests (dependency direction), so the
+ * agreement with them is held by a test, not derived: `module-setting-pair.test.ts` fails by id when the manifests
+ * and this list differ.
+ */
+export const PRODUCT_MODULE_IDS: readonly string[] = [
+  ...PRODUCT_MIGRATION_SETS.map((set) => set.id),
+  ...MODULES_WITHOUT_A_SET,
 ];
 
 /**
- * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every
- * set this build carries, `none` the core alone, otherwise the ones listed. A word that names no set is not this
- * command's to judge — a module may have no tables — and the API refuses the setting in full when it boots.
+ * What each module of the build requires of another, by id, as its manifest says (`requires`). Like
+ * `PRODUCT_MODULE_IDS` it is kept here because the DB package cannot import the API's manifests, and
+ * `module-setting-pair.test.ts` fails when the two differ. It is what lets `db:migrate` refuse a selection the API
+ * would refuse for a missing requirement.
  */
-export const setsNamedBy = (setting: string | undefined): readonly MigrationSet[] => {
-  const words = (setting ?? '')
-    .split(',')
-    .map((word) => word.trim())
-    .filter((word) => word !== '');
-  if (words.length === 0) return PRODUCT_MIGRATION_SETS;
-  if (words.length === 1 && words[0] === 'none') return [];
-  return PRODUCT_MIGRATION_SETS.filter((set) => words.includes(set.id));
+export const PRODUCT_MODULE_REQUIRES: Readonly<Record<string, readonly string[]>> = {
+  chat: [],
+  issues: [],
+};
+
+/**
+ * The sets a `MODULES` setting names, for the command that migrates before the API starts: unset or blank is every
+ * set this build carries, `none` the core alone, otherwise the ones listed. The setting is read by
+ * `parseModulesSetting`, the reading the API boots on too, so what this command refuses the API refuses and the
+ * other way round, a module whose requirement is not named included (`unmetRequirements`, over `requires`).
+ * Throws `ModulesSettingError` naming every problem.
+ */
+export const setsNamedBy = (
+  setting: string | undefined,
+  requires: Readonly<Record<string, readonly string[]>> = PRODUCT_MODULE_REQUIRES,
+): readonly MigrationSet[] => {
+  const parsed = parseModulesSetting(setting, PRODUCT_MODULE_IDS);
+  if (parsed.kind === 'all') return PRODUCT_MIGRATION_SETS;
+  if (parsed.kind === 'none') return [];
+  const unmet = unmetRequirements(parsed.ids, requires);
+  if (unmet.length > 0) throw new ModulesSettingError(unmet);
+  return PRODUCT_MIGRATION_SETS.filter((set) => parsed.ids.includes(set.id));
 };
 
 export interface MigrationResult {
@@ -266,7 +313,14 @@ const verify = (
   return adopt;
 };
 
-const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => {
+const isLockTimeout = (error: unknown): boolean =>
+  error instanceof pg.DatabaseError && error.code === LOCK_NOT_AVAILABLE;
+
+const apply = async <T>(
+  conn: Kysely<T>,
+  file: MigrationFile,
+  lockTimeoutMilliseconds: number,
+): Promise<void> => {
   const record = async (db: QueryExecutorProvider): Promise<void> => {
     await sql`
       insert into ${sql.table(TABLE)} (name, timestamp, checksum)
@@ -275,6 +329,11 @@ const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => 
   };
   if (file.transactional) {
     await conn.transaction().execute(async (trx) => {
+      // Only this transaction's, so nothing outlives it on the connection. A file that needs a
+      // different wait says so itself with `SET LOCAL lock_timeout`, which comes after this.
+      await sql`select set_config('lock_timeout', ${String(lockTimeoutMilliseconds)}, true)`.execute(
+        trx,
+      );
       await sql.raw(file.text).execute(trx);
       await record(trx);
     });
@@ -282,6 +341,19 @@ const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => 
   }
   for (const statement of splitStatements(file.text)) await sql.raw(statement).execute(conn);
   await record(conn);
+};
+
+/** A migration that waited too long for a lock fails with what an operator does about it. */
+const explainLockTimeout = (file: MigrationFile, error: unknown): unknown => {
+  if (!isLockTimeout(error)) return error;
+  return new Error(
+    `migration ${file.name} could not get a lock it needs in time: another transaction is using a table it ` +
+      'changes, and waiting any longer would hold up everything else that uses that table. Nothing it ' +
+      'did is recorded and it runs again from its top at the next start. Find the long transaction ' +
+      '(pg_stat_activity, state and xact_start; pg_locks, granted = false), let it finish or end it, ' +
+      'and migrate again (D-86).',
+    { cause: error },
+  );
 };
 
 /**
@@ -319,6 +391,8 @@ const acquireMigrationLock = async (
 export interface MigrateOptions {
   /** How long to wait for another process's migration to finish. */
   readonly lockWaitMilliseconds?: number;
+  /** How long a transactional migration waits for one lock; the default is ten seconds. For tests. */
+  readonly lockTimeoutMilliseconds?: number;
   /** Called before a migration is run again after PostgreSQL ended it as a deadlock victim. */
   readonly onRetry?: (retry: Retry & { readonly migration: string }) => void;
   /** Attempts and waits for that; the default is `DEADLOCK_RETRY`. */
@@ -338,6 +412,7 @@ export const migrateToLatest = async <T>(
   options: MigrateOptions = {},
 ): Promise<MigrationResultSet> => {
   const lockWaitMilliseconds = options.lockWaitMilliseconds ?? LOCK_WAIT_MILLISECONDS;
+  const lockTimeoutMilliseconds = options.lockTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS;
   const results: MigrationResult[] = [];
   try {
     const sets = await loadSets(directory, options.modules ?? []);
@@ -372,14 +447,14 @@ export const migrateToLatest = async <T>(
             // running it again is the same thing a crash and a restart would do.
             await retryOnDeadlock(
               async () => {
-                await apply(conn, file);
+                await apply(conn, file, lockTimeoutMilliseconds);
               },
               options.deadlockRetry ?? DEADLOCK_RETRY,
               (retry) => options.onRetry?.({ ...retry, migration: file.name }),
             );
           } catch (error) {
             results.push({ migrationName: file.name, status: 'Error' });
-            throw error;
+            throw explainLockTimeout(file, error);
           }
           results.push({ migrationName: file.name, status: 'Success' });
         }

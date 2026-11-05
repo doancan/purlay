@@ -87,6 +87,7 @@ describe('the single-value reads', () => {
           mustEnrolTwoFactor: false,
           scheduledDeletions: [],
           modules: ['chat'],
+          awayChosen: false,
         });
       },
       channels: (workspaceId) => {

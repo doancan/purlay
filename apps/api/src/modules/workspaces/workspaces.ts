@@ -185,6 +185,7 @@ export const meOf = async (
       'is_server_admin',
       'github_id',
       'github_connected_at',
+      'away_chosen',
     ])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
@@ -204,6 +205,7 @@ export const meOf = async (
     isServerAdmin: user.is_server_admin,
     nameFromGitHub: isNameGitHubs(user),
     scheduledDeletions: [...(await scheduledDeletionsOf(executor, userId))],
+    awayChosen: user.away_chosen,
   };
 };
 

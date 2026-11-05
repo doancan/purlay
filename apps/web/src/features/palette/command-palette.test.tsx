@@ -235,11 +235,83 @@ describe('on a server that runs no chat', () => {
     expect(offered.some((row) => row.includes('Settings') || row.includes('Profile'))).toBe(true);
     // Chat's own settings pages are not offered either.
     expect(offered.some((row) => row.includes('Integrations'))).toBe(false);
-    // Typing offers no search of the messages: there are none.
-    const typed = await mount(noChat, '/w/acme');
-    fireEvent.change(typed.input(), { target: { value: 'deploy' } });
+  });
+
+  test('typing offers no search of the messages where chat is not run, and does where it is', async () => {
+    const WORDS = 'prof';
+    const noChat = await mount(
+      apiWith({ me: () => Promise.resolve({ ...aSession(), modules: [] }) }),
+      '/w/acme',
+    );
+    await person().type(noChat.input(), WORDS);
+    // The typed words narrowed the list (a core row matches them), so an absent row is not an unread list.
+    expect(noChat.input().value).toBe(WORDS);
+    expect(noChat.options().some((row) => row.includes('Profile'))).toBe(true);
+    expect(noChat.options().some((row) => row.includes('Search messages'))).toBe(false);
+    noChat.view.unmount();
+
+    const withChat = await mount(apiWith(), '/w/acme');
+    await person().type(withChat.input(), WORDS);
+    expect(withChat.input().value).toBe(WORDS);
+    expect(withChat.options().at(-1)).toBe(`Search messages for “${WORDS}”`);
+  });
+});
+
+describe('issues, a module of its own', () => {
+  test('is offered where the server runs it, beside chat or alone, and takes the person to the screen', async () => {
+    for (const modules of [['chat', 'issues'], ['issues']]) {
+      const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules }) });
+      const { options, view } = await mount(where, '/w/acme');
+      const row = view
+        .queryAllByRole('option')
+        .find((option) => option.textContent.startsWith('Issues'));
+      expect(row).toBeDefined();
+      expect(options().filter((text) => text.startsWith('Issues'))).toHaveLength(1);
+    }
+  });
+
+  test('is listed after the places of chat, in the order of the client’s modules, whichever order the server names them in', async () => {
+    for (const modules of [
+      ['chat', 'issues'],
+      ['issues', 'chat'],
+    ]) {
+      const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules }) });
+      const { options } = await mount(where, '/w/acme');
+      const views = options().filter((text) =>
+        [
+          'Open questions',
+          'Inbox',
+          'Saved',
+          'Drafts and sent',
+          'All unreads',
+          'Search',
+          'Issues',
+        ].includes(text),
+      );
+      expect(views).toEqual([
+        'Open questions',
+        'Inbox',
+        'Saved',
+        'Drafts and sent',
+        'All unreads',
+        'Search',
+        'Issues',
+      ]);
+    }
+  });
+
+  test('choosing it goes to the issues screen of the workspace', async () => {
+    const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules: ['issues'] }) });
+    const { input, here } = await mount(where, '/w/acme');
+    await person().type(input(), 'issues');
+    await person().keyboard('{Enter}');
     await settle();
-    expect(typed.options().some((row) => row.includes('Search messages'))).toBe(false);
+    expect(here()).toBe('/w/acme/issues');
+  });
+
+  test('is not offered where the server does not run it', async () => {
+    const { options } = await mount(apiWith(), '/w/acme');
+    expect(options().some((text) => text.startsWith('Issues'))).toBe(false);
   });
 });
 

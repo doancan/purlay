@@ -334,6 +334,20 @@ export const AuditPage = (): React.JSX.Element => {
       }
       case 'workspace.deletion_cancelled':
         return t('audit.action.workspace.deletion_cancelled', { actor });
+      // By id, never by words (D-254): who, and for a change of status, to what.
+      case 'issue.created':
+        return t('audit.action.issue.created', { actor });
+      case 'issue.status_changed':
+        return t('audit.action.issue.status_changed', {
+          actor,
+          to: t(
+            entry.metadata['to'] === 'done' ? 'issues.status.done' : 'issues.status.open',
+          ).toLowerCase(),
+        });
+      case 'issue.assigned':
+        return t('audit.action.issue.assigned', { actor });
+      case 'issue.deleted':
+        return t('audit.action.issue.deleted', { actor });
       case undefined:
         return t('audit.unknown', { actor, action: entry.action });
     }

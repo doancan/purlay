@@ -21,7 +21,8 @@ import {
   testConfig,
 } from '../../testing/doubles';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
-import { createSocketLifecycle } from './socket';
+import { offlinePresence } from '../../realtime/online';
+import { createSocketLifecycle, type SocketDependencies } from './socket';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
@@ -115,5 +116,37 @@ describe('a socket that closes', () => {
       peakPerSecond: 0,
       refused: 0,
     });
+  });
+});
+
+describe('who is online, in a process that does not run chat', () => {
+  const lifecycleWith = (
+    closedEvent?: (event: string) => boolean,
+  ): ReturnType<typeof createSocketLifecycle> => {
+    const { log } = aRecordingLogger();
+    const dependencies: SocketDependencies = {
+      config: testConfig(),
+      auth: anAuthThatMustNotBeTouched(),
+      database: aDatabaseThatMustNotBeTouched(),
+      clock,
+      log,
+      userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+      attention: nobodyActive,
+      ...(closedEvent === undefined ? {} : { closedEvent }),
+    };
+    return createSocketLifecycle(dependencies);
+  };
+
+  test('is nobody, when the news of presence is closed: the node counts none and tells none', () => {
+    const lifecycle = lifecycleWith((event) => event === 'PRESENCE');
+    expect(lifecycle.online).toBe(offlinePresence);
+  });
+
+  test('is counted as before where presence is open, and where another event only is closed', () => {
+    for (const closedEvent of [undefined, (event: string): boolean => event === 'TYPING']) {
+      const lifecycle = lifecycleWith(closedEvent);
+      expect(lifecycle.online).not.toBe(offlinePresence);
+      lifecycle.online.stop();
+    }
   });
 });

@@ -16,13 +16,19 @@
  * in a submenu, so the four of them do not outnumber everything else in it.
  */
 import { useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { MeResponse } from '@purlay/types';
+import { useApi } from '../../data/api-provider';
+import { useDescribeFailure } from '../../data/failure';
+import { keys } from '../../data/keys';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
+import { useToast } from '../../ui/toast';
 import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from '../../ui/menu';
-import { useOnline } from '../../realtime/realtime-provider';
+import { usePresence } from '../../realtime/realtime-provider';
 import { useSession } from '../session/session';
 import { isMacPlatform, keyLabels } from '../shortcuts/platform';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from './deep-work';
@@ -74,14 +80,14 @@ const DeepWorkItems = (): React.JSX.Element | null => {
 const Identity = ({
   name,
   username,
-  online,
+  presence,
 }: {
   readonly name: string;
   readonly username: string;
-  readonly online: boolean | undefined;
+  readonly presence: 'active' | 'away' | undefined;
 }): React.JSX.Element => (
   <div className="flex items-center gap-3 px-2 pt-2 pb-3">
-    <Avatar size="lg" name={name} username={username} online={online} />
+    <Avatar size="lg" name={name} username={username} presence={presence} />
     <div className="min-w-0 flex-1">
       <div className="truncate text-label font-semibold text-ink">{name}</div>
       <div className="truncate font-mono text-caption text-ink-muted">{`@${username}`}</div>
@@ -89,15 +95,46 @@ const Identity = ({
   </div>
 );
 
+/**
+ * The one item that says how you appear (D-257): "Set yourself as away" until you have, then "Set
+ * yourself as active". The server's answer is written into the session at once; the ring itself
+ * changes when the server's presence frame comes back, not before — the server tells the person their
+ * own change as it tells everyone else, so every page of theirs shows what everyone is told.
+ */
+const AwayItem = ({ chosen }: { readonly chosen: boolean }): React.JSX.Element => {
+  const { t } = useI18n();
+  const api = useApi();
+  const client = useQueryClient();
+  const { show } = useToast();
+  const describe = useDescribeFailure();
+  const choose = (): void => {
+    api.setAway(!chosen).then(
+      ({ away }) => {
+        client.setQueryData<MeResponse>(keys.me, (me) =>
+          me === undefined ? me : { ...me, awayChosen: away },
+        );
+      },
+      (failure: unknown) => {
+        show({ message: `${t('user.awayFailed')} ${describe(failure)}` });
+      },
+    );
+  };
+  return (
+    <MenuItem glyph="person" onSelect={choose}>
+      {t(chosen ? 'user.setActive' : 'user.setAway')}
+    </MenuItem>
+  );
+};
+
 export const AccountMenu = (): React.JSX.Element => {
   const { t } = useI18n();
-  const { user } = useSession();
+  const { user, awayChosen } = useSession();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   const leave = useSignOut();
   const openShortcuts = useShortcutsDoor();
   const mod = useMemo(() => keyLabels(isMacPlatform(navigator)).mod, []);
-  const online = useOnline(user.id, user.id);
+  const presence = usePresence(user.id, user.id);
 
   return (
     <Menu
@@ -111,7 +148,7 @@ export const AccountMenu = (): React.JSX.Element => {
           {/* Named by what it shows, with what it is said before it: the name holds the visible text,
               so a person who says what they see reaches it (WCAG 2.5.3, label in name). */}
           <VisuallyHidden>{t('user.menuFor')}</VisuallyHidden>
-          <Avatar size="md" name={user.displayName} username={user.username} online={online} />
+          <Avatar size="md" name={user.displayName} username={user.username} presence={presence} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-label font-semibold text-nav-ink">
               {user.displayName}
@@ -120,17 +157,22 @@ export const AccountMenu = (): React.JSX.Element => {
               {`@${user.username}`}
             </span>
           </span>
-          {/* The dot is decorative; this is what it says (D-136). */}
-          {online === true ? <VisuallyHidden>{`, ${t('presence.online')}`}</VisuallyHidden> : null}
+          {/* The dot and ring are decorative; this is what it says (D-136). */}
+          {presence !== undefined ? (
+            <VisuallyHidden>
+              {`, ${t(presence === 'away' ? 'presence.away' : 'presence.online')}`}
+            </VisuallyHidden>
+          ) : null}
           <span className="text-nav-ink-muted">
             <Icon name="switch" />
           </span>
         </button>
       }
     >
-      <Identity name={user.displayName} username={user.username} online={online} />
+      <Identity name={user.displayName} username={user.username} presence={presence} />
       <MenuSeparator />
       <DeepWorkItems />
+      <AwayItem chosen={awayChosen} />
       <MenuItem
         glyph="settings"
         shortcut={`${mod},`}

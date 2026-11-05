@@ -4,16 +4,25 @@
  * **Told to the people who share a workspace with them**, each on their own `user:` topic, as a
  * workspace change is (D-124): membership is read as the change is told, so somebody who shares no
  * workspace — or was removed a moment ago — hears nothing. What they hear is that the person has
- * Purlay open, never which workspace: a socket is no workspace's (D-136 §1).
+ * Purlay open, never which workspace: a socket is no workspace's (D-136 §1). **And to the person
+ * themselves**, on their own topic: it is their own state, so nothing new is told to anybody, and
+ * every page of theirs draws their own avatar from what the server says of them — away by choice
+ * from another device, or idle, which only the server knows (D-257).
  *
  * **A workspace's presence** is its members online now, for a member of it; anybody else is told the
  * workspace does not exist, as for every workspace route (D-34).
+ *
+ * **Away is idleness or the person's choice** (D-257): the node says whether they are idle, and their own
+ * `users.away_chosen` is read here as the change is told, and as the snapshot is read, so the first change
+ * heard after an arrival is already away for somebody who chose it — nobody sees active-then-away. Offline
+ * wins: an offline change is never away, and nobody offline is in a snapshot.
  */
 import type { Executor } from '@purlay/db';
 import type { PresenceChange, PresenceSnapshot } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import {
   publication,
+  type Publish,
   publishAfterCommit,
   userTopic,
   type EventBus,
@@ -37,6 +46,16 @@ const coMembers = async (executor: Executor, userId: string): Promise<readonly s
   return [...everyone];
 };
 
+/** Whether the person chose to appear away; false for nobody (an account erased meanwhile). */
+const awayChosen = async (executor: Executor, userId: string): Promise<boolean> =>
+  (
+    await executor
+      .selectFrom('users')
+      .select('away_chosen')
+      .where('id', '=', userId)
+      .executeTakeFirst()
+  )?.away_chosen ?? false;
+
 export const announcePresence = async (
   {
     database,
@@ -51,17 +70,22 @@ export const announcePresence = async (
   },
   change: PresenceChange,
 ): Promise<void> => {
-  const told = await coMembers(database, change.userId);
+  const members = await coMembers(database, change.userId);
+  const chosen = change.online && (await awayChosen(database, change.userId));
+  const state: PresenceChange = { ...change, away: change.online && (change.away || chosen) };
+  // The person last: their own pages follow their own state, as everybody else's do, and while they
+  // are online they also hear whether the away is their choice, so every device's menu knows it (D-257).
+  const own: PresenceChange = change.online ? { ...state, chosen } : state;
+  const tell = (memberId: string, told: PresenceChange): Publish =>
+    publication('PRESENCE', () =>
+      bus.publish(userTopic(memberId), {
+        event: 'PRESENCE',
+        data: { changes: [told] },
+        ts: clock.now().getTime(),
+      }),
+    );
   await publishAfterCommit(log, [
-    told.map((memberId) =>
-      publication('PRESENCE', () =>
-        bus.publish(userTopic(memberId), {
-          event: 'PRESENCE',
-          data: { changes: [change] },
-          ts: clock.now().getTime(),
-        }),
-      ),
-    ),
+    [...members.map((memberId) => tell(memberId, state)), tell(change.userId, own)],
   ]);
 };
 
@@ -78,8 +102,29 @@ export const workspacePresence = async (
     .execute();
   // The version first: anybody who goes online after it is heard by a frame at a later one.
   const version = await online.version();
+  const here = await online.onlineAmong(members.map((member) => member.user_id));
+  // The choices last (D-257). A choice stored before this read is seen here; one stored after it is
+  // told again at a version newer than any read above, which wins. Read before the record, a choice
+  // stored between the reads would pair the old choice with the retelling's version — and a client
+  // keeps the first it hears at a version, so the snapshot could stick until the next change.
+  const chose = new Set(
+    here.length === 0
+      ? []
+      : (
+          await executor
+            .selectFrom('users')
+            .select('id')
+            .where(
+              'id',
+              'in',
+              here.map((change) => change.userId),
+            )
+            .where('away_chosen', '=', true)
+            .execute()
+        ).map((user) => user.id),
+  );
   return {
-    online: [...(await online.onlineAmong(members.map((member) => member.user_id)))],
+    online: here.map((change) => ({ ...change, away: change.away || chose.has(change.userId) })),
     version,
   };
 };

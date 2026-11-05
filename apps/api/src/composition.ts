@@ -11,6 +11,8 @@
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
+import { AppError, attachmentNotFound } from './platform/errors';
+import { issuesModule } from './features/issues/module';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
 import { corePersonalExport } from './modules/export/core-personal-export';
@@ -18,34 +20,38 @@ import {
   assemblePersonalCatalogue,
   type PersonalContribution,
 } from './modules/export/personal-catalogue';
+import { noPushNotices, type PushNotices } from './modules/push/notices';
 import type { UserErased } from './modules/users/erasure';
 import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspaces/channels-port';
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
+import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
 import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
 
-/** What a module may contribute: each slot is the core's, and a module fills the ones it has. */
+/**
+ * What a module may contribute: each slot is the core's, and a module fills the ones it has.
+ *
+ * What it contributes to the lifecycle of its data — an erased account's, a deleted workspace's, an export, who answers
+ * for the channels a member leaves, the columns readiness checks — applies even to a process that does not run it, and
+ * so does every bundled module's, always: a person's right to be erased does not wait for a setting, and a flag that
+ * could say otherwise has no safe value (D-250 rule 5). Only what *acts* (`workspaceCreated`, `readAttachment`,
+ * `pushNotices`, the routes) waits for the module to run. A table that may not exist — a module's own migration set
+ * not applied — is each hook's to ask about with `tableExists`, at the moment it needs the table (`MODULES.md` §5).
+ */
 export interface BundledModule {
   readonly manifest: ModuleManifest;
   /**
-   * Its tables were made by the core's own migrations, so they exist whether or not the module runs. What the module
-   * contributes to the lifecycle of that data — an erased account's, a deleted workspace's, an export, who answers
-   * for the channels a member leaves — then applies even to a process that does not run it: a person's right to be
-   * erased does not wait for a setting. A module whose migration set makes some of its tables (chat's link between
-   * a message and its files, its drafts, reminders and hidden messages) has those tables only where the set was
-   * applied: the hooks ask `tableExists` before they name one, so a database migrated without the set is no failure
-   * and one that has it is still kept whole (`MODULES.md` §5).
-   */
-  readonly dataInCore?: boolean;
-  /**
    * Who may read a file, where the module holds files attached to what it owns. Asked only while the module runs: a
-   * process without it answers for the core's own unsent uploads and for nothing else.
+   * process without it answers for the core's own unsent uploads and for nothing else. Every running module's reader is
+   * asked in turn and a file is readable if any says so; a reader says no by throwing `attachmentNotFound`.
    */
   readonly readAttachment?: AttachmentReader;
+  /** What a write told, for the push sender: asked only while the module runs. */
+  readonly pushNotices?: PushNotices;
   /** Run inside the transaction of a new workspace, once its owner is a member. */
   readonly workspaceCreated?: (...args: Parameters<WorkspaceCreated['run']>) => Promise<void>;
   /** Run inside the transaction of an erased account. */
@@ -58,16 +64,42 @@ export interface BundledModule {
   readonly collatedColumns?: readonly CollatedColumn[];
 }
 
+/**
+ * One reader out of several: a file is readable if any of them says so, and a reader's refusal is its
+ * `attachmentNotFound`. Any other failure is a failure, not a no.
+ */
+const anyReader =
+  (readers: readonly AttachmentReader[]): AttachmentReader =>
+  async (executor, userId, attachmentId) => {
+    for (const read of readers) {
+      try {
+        return await read(executor, userId, attachmentId);
+      } catch (error) {
+        const refusal = error instanceof AppError && error.body.code === 'ATTACHMENT_NOT_FOUND';
+        if (!refusal) throw error;
+      }
+    }
+    throw attachmentNotFound();
+  };
+
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
-export const bundledModules: readonly BundledModule[] = [chatModule];
+export const bundledModules = [
+  chatModule,
+  issuesModule,
+] as const satisfies readonly BundledModule[];
 
 /** The modules of this build, checked: a malformed id, a repeat or a missing partner stops the build's own tests. */
-export const registry = moduleRegistry(bundledModules.map((module) => module.manifest));
+export const registry = moduleRegistry(
+  bundledModules.map((module) => module.manifest),
+  CORE_CLAIMS,
+);
 
 export interface Composition {
   readonly modules: readonly BundledModule[];
   /** The reader of `/api/attachments/:attachmentId`: the core's, widened by the modules that run. */
   readonly readAttachment: AttachmentReader;
+  /** What the push sender is told by: the module's, or nothing where none runs. */
+  readonly pushNotices: PushNotices;
   readonly workspaceCreated: WorkspaceCreated;
   readonly userErased: UserErased;
   readonly workspaceChannels: WorkspaceChannels;
@@ -83,11 +115,15 @@ export interface Composition {
   readonly closedJob: (name: string) => boolean;
   /** Whether a client frame's operation belongs to a module this build carries and this process does not run. */
   readonly closedFrame: (op: string) => boolean;
+  /** Whether a server event belongs to a module this build carries and this process does not run. */
+  readonly closedEvent: (event: string) => boolean;
 }
 
 /**
- * The composition of the modules given. `bundled` is every module the build carries, so that a path of one that is
- * not run is known to be closed: with chat left out, its routes are not routes.
+ * The composition of the modules given, in the order given. `bundled` is every module the build carries, so that a path
+ * of one that is not run is known to be closed: with chat left out, its routes are not routes. Both lists are taken as
+ * ordered: `composeFor` is how a build gets them in the order the registry resolved (`MODULES.md` §3), and the order is
+ * what hook registration, the purge and the export tables follow.
  */
 export const compose = (
   modules: readonly BundledModule[],
@@ -95,11 +131,9 @@ export const compose = (
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
-  // What a process acts with is the modules it runs; what it keeps whole is every module whose rows exist.
-  const holding = [
-    ...modules,
-    ...bundled.filter((module) => !modules.includes(module) && module.dataInCore),
-  ];
+  // What a process acts with is the modules it runs; what it keeps whole is every module the build carries, in the same
+  // order whichever of them run (a module given that the build does not carry follows the build's).
+  const holding = [...bundled, ...modules.filter((module) => !bundled.includes(module))];
   for (const module of modules) {
     if (module.workspaceCreated !== undefined) workspaceCreated.register(module.workspaceCreated);
   }
@@ -114,9 +148,12 @@ export const compose = (
   }
   return {
     modules,
-    readAttachment:
-      modules.find((module) => module.readAttachment !== undefined)?.readAttachment ??
+    readAttachment: anyReader([
+      ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,
+    ]),
+    pushNotices:
+      modules.find((module) => module.pushNotices !== undefined)?.pushNotices ?? noPushNotices,
     workspaceCreated,
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,
@@ -150,17 +187,59 @@ export const compose = (
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.frames ?? []).includes(op),
       ),
+    closedEvent: (event) =>
+      bundled.some(
+        (module) => !modules.includes(module) && (module.manifest.events ?? []).includes(event),
+      ),
   };
 };
 
+/**
+ * The composition for an operator's `MODULES` setting over the modules a build carries: unset is every one, `none` the
+ * core alone. What acts is the running modules in the order the registry resolved, partners first; what is held is every
+ * carried module in the resolved order of the whole build, so the order does not depend on the setting. Throws
+ * `ModuleConfigError` naming every problem, for the process to stop on before it listens.
+ */
+export const composeFor = (
+  carried: readonly BundledModule[],
+  setting: string | undefined,
+): Composition => {
+  const carriedRegistry = moduleRegistry(
+    carried.map((module) => module.manifest),
+    CORE_CLAIMS,
+  );
+  const inResolvedOrder = (manifests: readonly ModuleManifest[]): BundledModule[] =>
+    manifests.flatMap((manifest) => carried.filter((module) => module.manifest === manifest));
+  return compose(
+    inResolvedOrder(carriedRegistry.resolve(setting)),
+    inResolvedOrder(carriedRegistry.resolve(undefined)),
+  );
+};
+
+export const compositionFor = (setting: string | undefined): Composition =>
+  composeFor(bundledModules, setting);
+
 /** What a process runs when nothing says otherwise: every module this build carries. */
-export const composition: Composition = compose(bundledModules);
+export const composition: Composition = compositionFor(undefined);
 
 /**
- * The composition for an operator's `MODULES` setting: unset is every module the build carries, `none` the core
- * alone. Throws `ModuleConfigError` naming every problem, for the process to stop on before it listens.
+ * Starts what belongs to a module, in a process that runs it and in no other: the boot's own work for a module (the
+ * timers of chat's scheduled messages and reminders) must not run where the module is off, whose tables may not be there.
  */
-export const compositionFor = (setting: string | undefined): Composition => {
-  const named = new Set(registry.resolve(setting).map((module) => module.id));
-  return compose(bundledModules.filter((module) => named.has(module.manifest.id)));
+export const startWhereRunning = (running: Composition, id: string, start: () => void): void => {
+  if (running.modules.some((module) => module.manifest.id === id)) start();
 };
+
+/**
+ * What the boot says about modules: the ones this process runs and the ones the build carries but it does not,
+ * by id, so a log line answers "does this node run chat?" without reading its environment.
+ */
+export const moduleReport = (
+  running: Composition,
+  bundled: readonly BundledModule[] = bundledModules,
+): { readonly running: readonly string[]; readonly notRun: readonly string[] } => ({
+  running: running.modules.map((module) => module.manifest.id),
+  notRun: bundled
+    .filter((module) => !running.modules.includes(module))
+    .map((module) => module.manifest.id),
+});

@@ -25,10 +25,11 @@ import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { eraseAccount } from './erasure';
 import { issuePassport } from '../workspaces/invitation-passport';
 import { tokenDigest } from '../../platform/tokens';
-import { acceptInvitation, createInvitation } from '../workspaces/invitations';
+import { acceptInvitation, createInvitation, listInvitations } from '../workspaces/invitations';
 import { inviterMailKey } from '../workspaces/invitation-mail';
 import { aUserRow } from '../../testing/users';
 import { chatUserErased } from '../../features/chat/channels/user-hooks';
+import { channelPins, pinMessage } from '../../features/chat/pins/pins';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -386,6 +387,69 @@ describe('integration: erasing an account', () => {
     });
   });
 
+  test('the sealed tokens and the login the erased person gave the GitHub App go with them, and nobody else’s do (D-246)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      const authorize = async (userId: string, providerUserId: number): Promise<void> => {
+        await db
+          .insertInto('github_user_authorizations')
+          .values({
+            id: messageId(clock.now()),
+            user_id: userId,
+            github_user_id: providerUserId,
+            github_login: `login-${String(providerUserId)}`,
+            access_token_encrypted: 'sealed-access',
+            access_expires_at: null,
+            refresh_token_encrypted: 'sealed-refresh',
+            refresh_expires_at: null,
+            created_at: clock.now(),
+            updated_at: clock.now(),
+          })
+          .execute();
+      };
+      await authorize(ada.userId, 1001);
+      await authorize(bob.userId, 1002);
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const left = await db
+        .selectFrom('github_user_authorizations')
+        .select(['user_id', 'github_login'])
+        .where('user_id', 'in', [ada.userId, bob.userId])
+        .execute();
+      expect(left).toEqual([{ user_id: bob.userId, github_login: 'login-1002' }]);
+    });
+  });
+
+  test('what is revoked at GitHub is asked for after the commit, once for each sealed authorization, and for none where there is none (#993)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      await db
+        .insertInto('github_user_authorizations')
+        .values({
+          id: messageId(clock.now()),
+          user_id: ada.userId,
+          github_user_id: 1001,
+          github_login: 'login-1001',
+          access_token_encrypted: 'sealed-access',
+          access_expires_at: null,
+          refresh_token_encrypted: null,
+          refresh_expires_at: null,
+          created_at: clock.now(),
+          updated_at: clock.now(),
+        })
+        .execute();
+      // Not run by the erasure: it is handed back, for the caller to run when the transaction has ended.
+      const erased = await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      expect(erased.afterCommit).toHaveLength(1);
+      expect((await erase(db, await signedIn(db, room, 'bob'), bob.username)).afterCommit).toEqual(
+        [],
+      );
+    });
+  });
+
   test('the passports made for the erased address go with it, and no other address’s or cookie’s does', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['bob', 'ada']);
@@ -692,6 +756,47 @@ describe('integration: erasing an account', () => {
             await erase(db, await signedIn(db, beside, 'cy'), member(beside, 'cy').username),
         ),
       ).toBe('taken');
+    });
+  });
+
+  test('what they pinned and the links they made keep naming the anonymised account, never nobody (D-256)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      await owner(db, room, 'ada');
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      const said = await sendMessage(db, clock, bob.context, {
+        id: messageId(NOW),
+        content: 'worth keeping',
+      });
+      await pinMessage(db, clock, ada.userId, said.message.id);
+      const workspace = await requireWorkspaceMembership(db, ada.userId, room.workspaceId);
+      await createInvitation(db, clock, workspace);
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+
+      // The keys are `ON DELETE SET NULL`, and an erasure soft-deletes the row: none of them fires.
+      expect(
+        await db
+          .selectFrom('pinned_messages')
+          .select('pinned_by')
+          .where('channel_id', '=', room.channelId)
+          .execute(),
+      ).toEqual([{ pinned_by: ada.userId }]);
+      expect(
+        await db
+          .selectFrom('workspace_invitations')
+          .select('created_by')
+          .where('workspace_id', '=', room.workspaceId)
+          .execute(),
+      ).toEqual([{ created_by: ada.userId }]);
+      // And what the contract shows is the anonymised account.
+      const [pin] = await channelPins(db, bob.context);
+      expect(pin?.pinnedBy?.id).toBe(ada.userId);
+      expect(isErased({ username: pin?.pinnedBy?.username ?? '' })).toBe(true);
+      const bobsContext = await requireWorkspaceMembership(db, bob.userId, room.workspaceId);
+      const [link] = (await listInvitations(db, clock, bobsContext, {})).data;
+      expect(link?.createdBy?.id).toBe(ada.userId);
+      expect(isErased({ username: link?.createdBy?.username ?? '' })).toBe(true);
     });
   });
 

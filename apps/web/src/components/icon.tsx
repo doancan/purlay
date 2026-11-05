@@ -26,6 +26,7 @@ import {
   Bell,
   Bookmark,
   BookmarkCheck,
+  CircleDot,
   Star,
   Pin,
   PinOff,
@@ -142,6 +143,7 @@ const GoogleMark = (props: React.SVGProps<SVGSVGElement>): React.JSX.Element => 
 const glyphs = {
   channel: Hash,
   channels: MessagesSquare,
+  issues: CircleDot,
   inbox: Inbox,
   'private-channel': Lock,
   search: Search,

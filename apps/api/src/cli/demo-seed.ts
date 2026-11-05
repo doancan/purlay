@@ -32,6 +32,7 @@ import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../platform/config';
 import type { Clock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { createLogger } from '../platform/logging';
+import { composition } from '../composition';
 import { createApp } from '../ingress/http/app';
 import { issueSession } from '../modules/auth/sessions';
 import { inProcessEventBus } from '../realtime/bus';
@@ -240,6 +241,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     personalExportRunner: quiet,
     // Nobody is in front of a page here: the seed pushes nothing either way.
     attention: nobodyActive,
+    // The demo is the whole build: its history is chat's.
+    composition,
     rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
   });
 

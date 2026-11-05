@@ -43,6 +43,15 @@ D-139 §4) and `purge:retention` applies nightly (D-27 §1, D-139 §1–3); fore
 (D-139 §7). A backup holds whatever was in the database and the bucket when it was taken, until it
 is rotated out (§4).
 
+What becomes of a table's rows on a person's erasure, and how long they live, is also decided in code, table by
+table, in `packages/db/src/table-lifecycle.ts`: a table without that decision does not compile, and its test holds
+the list to every owned table. This map is the operator's reading of it, not what holds it.
+
+Erasure keeps the `users` row, anonymised, so no key to it that says `ON DELETE SET NULL` or `CASCADE` ever fires. Wherever
+a row below says who made, added, pinned, declared, connected or requested something, that stays, naming the anonymised
+account (D-256); only what a step of the erasure or a hook of a module deletes or clears goes. No table is marked in the
+code as a known gap any longer. What an append-only trail keeps of a person's own data is said in its row below.
+
 | Table | Personal data | Why | How long |
 |---|---|---|---|
 | `users` | GitHub id, username, display name, avatar address, email, whether it is verified, whether they run the server, whether and since when it is suspended (D-233), whether a password sign-in asks for a second step (D-236), since when they asked to be emailed about what they missed (D-240), language, title, time zone, status, when last seen | Who the person is, and how they sign in | Until erasure, which clears or replaces every one of these but the interface language (D-139 §5) |
@@ -64,24 +73,25 @@ is rotated out (§4).
 | `mentions` | Who was mentioned in which message | Notifications and the inbox (D-12) | With its message |
 | `reactions` | Who reacted to what, with which emoji | Reactions | With its message |
 | `pinned_messages` | Who pinned a message | Pins (D-130) | With its message, or until unpinned |
-| `channel_bookmarks` | A link a channel keeps at hand, its name, and who added it | Bookmarks (D-218) | Until removed; with the channel; who added it is cleared on their erasure |
+| `channel_bookmarks` | A link a channel keeps at hand, its name, and who added it | Bookmarks (D-218) | Until removed; with the channel; who added it stays, naming the anonymised account (erasure soft-deletes the row, so the key's `SET NULL` never fires; D-256) |
 | `saved_messages` | Which messages a person saved, and their state | Save for later (D-128) | Until unsaved; on erasure; with the message |
 | `saved_searches` | A person’s named search filters | Personal searches (D-204), never cached results | Until removed; on account erasure; with the workspace |
 | `scheduled_messages` | What a person wrote to be sent later, where, and when | Scheduled messages, delivered by the server while clients are closed | Until sent, cancelled or, once sent or failed, 30 days later; on erasure; with the channel |
 | `scheduled_message_attachments` | Which unsent scheduled message holds a file: ids only | The files a scheduled message will send (D-250) | Until it is sent, edited away or cancelled; with the message or its file |
 | `message_reminders` | When a person asked to be reminded of a message | Reminders, told in the inbox when due | Until delivered or removed; on erasure; with the message |
 | `hidden_messages` | Which messages a person deleted for themselves alone, and when | Deleting a message for oneself, without changing it for anybody else | On erasure; with the message |
+| `issues` | A workspace's issue: its title and markdown body, whether it is done, who it is assigned to and who made it | Issues, a module that is run only where the operator chose it (D-250) | Until deleted by its creator or an admin; with the workspace's purge; an erased person's assignments are cleared, and what they made stays, its words attributed to their anonymised account as a message's are (D-139 §5, D-254); its making, finishing, giving and deleting are on the audit trail by id |
 | `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |
 | `notifications` | What a person was told of, whether they read it, and when a letter mailed it (D-240) | The inbox (D-12), and email about what was missed | With its message; on erasure |
 | `incidents` | Who declared and resolved an incident; its runbook and postmortem | Incident channels (D-137) | For the life of the channel; not touched by content erasure (D-139 §7) |
 | `incident_updates` | Who changed an incident, and what | The incident's timeline (D-137) | With the incident |
 | `incident_responders` | Who responded, and who added them | The incident's responders (D-137 §3) | With the incident |
-| `audit_log` | Who did what in a workspace, from which session | The workspace's trail of who changed what (D-116) | For the life of the workspace; kept, under the anonymised person, after erasure (D-139 §5) |
+| `audit_log` | Who did what in a workspace, from which session | The workspace's trail of who changed what (D-116) | For the life of the workspace; kept, under the anonymised person, after erasure (D-139 §5). The lines for connecting and disconnecting the GitHub App name the account's login, which is the person's own when it is a personal one, and stay as written: the trail is append-only (I-9, D-256) |
 | `github_integrations` | Who connected GitHub; the sealed token, when GitHub first refused it, and the scopes it had when saved | A workspace's GitHub access (D-23) | Until disconnected |
 | `github_repo_feeds` | Who connected a feed; its repository | Repository feeds (D-134) | Until removed |
 | `incoming_webhooks` | Who made a channel's incoming webhook, its name, and when it last posted; the SHA-256 of its secret, never the secret | Posting to a channel from CI and monitoring (D-245) | Until revoked; with the channel; who made it is named as the anonymised person after their erasure (D-139 §5). Never exported. What it posted is a message, kept as messages are |
-| `github_app_installations` | Who connected a workspace's installation of the GitHub App, by id; the GitHub account's login and kind; when it was connected and whether GitHub suspended it | The workspace's reach into its repositories through the App (D-246) | Until disconnected, by an owner or by GitHub's word that it was removed |
-| `github_user_authorizations` | The person, by id; their GitHub login and id; their sealed App access and refresh tokens, never in the clear | Letting Purlay write to GitHub as that person, only when they chose to (D-246) | Until the person stops it, GitHub says they revoked the App, or the account is erased; never exported |
+| `github_user_authorizations` | The person, by id; their GitHub login and id; their sealed App access and refresh tokens, never in the clear | Letting Purlay write to GitHub as that person, only when they chose to (D-246) | Until the person stops it, GitHub says they revoked the App, or the account is erased, which deletes the row (a hook of chat, in the erasure's transaction, since erasure keeps the `users` row and its cascading key never fires); never exported. Once the erasure has committed, GitHub is asked, as the App, to revoke the person's authorization (`DELETE /applications/{client_id}/grant`, with the access token as GitHub's documentation has it), best effort and bounded by the call's ten-second deadline: a GitHub that refuses, fails or does not answer changes nothing about the erasure and is only logged as a warning, without the token, and is not retried. An access token lasts eight hours, so one that has expired is refused by GitHub, and its refresh token then stays valid there until the person revokes the App in their GitHub settings |
+| `github_app_installations` | Who connected a workspace's installation of the GitHub App, by id; the GitHub account's login and kind; when it was connected and whether GitHub suspended it | The workspace's reach into its repositories through the App (D-246) | Until disconnected, by an owner or by GitHub's word that it was removed. The login is theirs when the App is installed on their personal account, and the erasure of whoever connected it replaces it with their anonymised name (`deleted-user-…`); an organisation's login stays (D-256) |
 | `github_app_handshakes` | The person, by id; the SHA-256 of the state of a trip to GitHub, never the state; for an authorization, its PKCE verifier sealed; where to come back to | Bringing a trip to GitHub back to the person who made it (D-246) | Ten minutes, and spent on return; swept |
 | `github_app_deliveries` | None: a delivery's id and its body's digest (D-246) | Telling a repeated delivery to the GitHub App from a new one | `GITHUB_DELIVERIES_KEPT_DAYS` |
 | `github_links` | Who made or linked it, by id; the repository, number, title and state of an issue or pull request a thread points at — a title is the person's own, edited before it was sent | Showing a thread's GitHub work (D-246) | With its root; in a workspace export, never a person's own |
@@ -92,7 +102,7 @@ is rotated out (§4).
 | `personal_exports` | Who asked for an export of their own data, and when; the archive in the object store, which holds their account, settings, the messages they wrote and the files they sent | A person's right of access and portability (D-241) | The archive until it is downloaded, `EXPORT_KEPT_HOURS` pass, or the account is erased, then taken by `sweep:exports` within the hour; the row, ids and times only, as the record that it was made |
 | `object_deletions` | None: storage keys waiting to be deleted | Files whose rows are gone, until the store lets them go (D-141) | Until the store deletes the object |
 | `job_runs` | None | When each scheduled job last ran (D-30) | Always one row per job |
-| `server_audit_log` | Who changed which of the server's own settings, and when: the administrator's id and the session, never a value; for a suspension, also whose account (D-233); for a deleted workspace's erasure, which workspace (D-242); a person's request for and download of their own data, by their id (D-241) | Administration → Server (D-26, D-179 §4.8) | Append-only; the actor and the account are set to null if that account is erased. Never exported |
+| `server_audit_log` | Who changed which of the server's own settings, and when: the administrator's id and the session, never a value; for a suspension, also whose account (D-233); for a deleted workspace's erasure, which workspace (D-242); a person's request for and download of their own data, by their id (D-241) | Administration → Server (D-26, D-179 §4.8) | Append-only; the actor and the account stay, naming the anonymised account if that account is erased (erasure soft-deletes the row, so the keys' `SET NULL` never fires; D-256). Never exported |
 | `server_settings` | None of a person: who may sign up, the sign-in policy (D-239), how long a session lives (D-244), the GitHub app's id and its sealed secret, the GitHub App issues are written through — its id, slug and client id, and its client secret, private key and webhook secret sealed (D-246), the mail relay's sealed address (its password in it) and sender, and the GitHub logins listed as workspace creators (D-155) | The server's own settings, changed in the browser (D-179 §6) | One row for the life of the instance. Never exported; the secrets are never shown, only whether they are set. A listed login is a GitHub account's public name, removed by changing the setting — erasure does not reach it, as it does not reach the instance's configuration |
 | `setup_state` | None of a person: digests of the setup's one-time code and of the claim's token, never either one; the id of the browser that claimed setup; the administrator the setup made, by id; the wrong-code count and lock; the step reached; when a GitHub app and a relay were saved after a try that worked | Setting the server up in the browser (D-179 §4) | One row for the life of the instance. Never exported; the code and the token themselves are never stored — the code is shown only in the log of the start that issued it |
 | `admin_email_verification` | The setup administrator, by id, and the address the link was mailed to; the SHA-256 of the one link that verifies it, never the token; when it was issued | Verifying the administrator's address with a link of the wizard's own, not a magic link (D-179 §4.3) | At most one row, for at most a day: deleted when the link is followed or replaced, when it is tried past its day, by `sweep:email-sign-ins` once the day is over, and on erasure. Never exported |
@@ -163,3 +173,80 @@ is rotated out (§4).
    accounts. A workspace's content erased on a request outside the product is the same: an owner asks,
    or, with none able to, the operator sets `workspaces.deleted_at` a week back and runs
    `bun run job purge:workspaces`. Backups keep it until rotated out (step 4).
+
+---
+
+## 5. Writing a migration for a table that has rows
+
+A migration runs on every instance, on the data that instance holds, and the one on a busy server finds a
+table millions of rows long. Two shipped files learned it from the scale benchmark: `0058` updated every
+`messages` row in one statement (85 s on 1.3M rows) and `0060` added seven columns and seven `CHECK`s whose
+validation scanned the table under `ACCESS EXCLUSIVE` (about a second per 1.3M rows, with every reader and
+writer queued behind it). A shipped migration is not edited (D-86), so the rule is for the next one.
+
+**The rule** (`migration-safety.test.ts`). A migration after the last one that existed when the rule was made
+(`LAST_GRANDFATHERED` there) fails the test when it holds, for a table that grows, any of:
+
+| Statement | Why it hurts | Instead |
+|---|---|---|
+| `UPDATE` or `DELETE` with no `LIMIT` | one transaction writes every row, holds their locks and the WAL until the end | batches of a few thousand rows, each its own transaction, until none is left (below) |
+| `ADD CONSTRAINT … CHECK` or `FOREIGN KEY`, or `ADD COLUMN … CHECK` / `REFERENCES`, without `NOT VALID` | the table is read in full while the lock that stops writers is held | `ADD CONSTRAINT … NOT VALID`, then `VALIDATE CONSTRAINT` as its own statement |
+| `CREATE INDEX` without `CONCURRENTLY`, or `CONCURRENTLY` inside the migrator's transaction | the plain build blocks writes for as long as it takes; `CONCURRENTLY` is refused in a transaction | `-- purlay: no-transaction` at the head of the file and `CREATE INDEX CONCURRENTLY` |
+| `ALTER COLUMN … TYPE` | rewrites the table and every index under `ACCESS EXCLUSIVE` | add a new column, backfill it in batches, switch the readers and writers, drop the old column in a later migration |
+
+**Which tables grow** is not a list kept here: it is `TABLE_LIFECYCLE`. A table whose rows a schedule sweeps
+(`swept`), and a table that is one row for the life of the instance, are exempt; every other table is covered,
+and a table a module adds is covered as soon as it has its lifecycle decision. A file that creates the table
+itself is exempt, since nothing is in it yet.
+
+**The recipe**, from `0058` and `0010`, for a table that has rows:
+
+1. Put `-- purlay: no-transaction` on the first line, so the migrator runs the file one statement at a time
+   (`migrator.ts`), and `SET lock_timeout = '10s';` first, so a statement that cannot get its lock fails instead
+   of queueing every writer behind it. The file must be safe to run again: write each step with `IF [NOT] EXISTS`
+   or as a statement that finds nothing left to do.
+2. **A column**: `ADD COLUMN x … ` with no `NOT NULL` and a constant default is brief (a constant default does
+   not rewrite the table). A `NOT NULL` that the backfill must satisfy is added last, by way of a validated check (step 4).
+3. **A backfill or a delete, in batches.** Each batch takes a bounded set by key and the statement runs until it
+   changes no row. In a file that is outside the transaction, a `DO` block may commit between batches:
+
+   ```sql
+   DO $$
+   DECLARE changed INTEGER;
+   BEGIN
+     LOOP
+       UPDATE messages SET changed_at = created_at
+        WHERE id IN (SELECT id FROM messages WHERE changed_at IS NULL LIMIT 5000);
+       GET DIAGNOSTICS changed = ROW_COUNT;
+       EXIT WHEN changed = 0;
+       COMMIT;
+     END LOOP;
+   END $$;
+   ```
+
+   Index the column the batch selects by first (`CREATE INDEX CONCURRENTLY … WHERE changed_at IS NULL`), or each
+   batch scans the table again.
+4. **A constraint**: `ALTER TABLE t ADD CONSTRAINT c CHECK (…) NOT VALID;` takes the lock for an instant and
+   checks only new writes; `ALTER TABLE t VALIDATE CONSTRAINT c;` then reads the table holding a lock that lets
+   writers through. For `NOT NULL`: `ADD CONSTRAINT … CHECK (x IS NOT NULL) NOT VALID`, `VALIDATE`, `SET NOT NULL`
+   (it uses the validated check and does not scan), `DROP CONSTRAINT`. `0058` ends this way.
+5. **An index**: `CREATE INDEX CONCURRENTLY`, preceded by `DROP INDEX CONCURRENTLY IF EXISTS` of the same name:
+   a build that was cut off leaves an invalid index of that name behind, and `IF NOT EXISTS` would keep it.
+
+**What the test cannot see**, so the author checks it: a table named in a variable or `format()` inside a `DO`
+block; a `LIMIT` in a loop that does not run to the end (any `LIMIT` in the statement counts as a batch);
+`SET NOT NULL`, `ADD UNIQUE` and `ADD PRIMARY KEY`, which scan or build an index too; and how many rows the
+table holds on a real instance. The benchmark that found `0058` and `0060` (the scale run on 1.3M messages) is the
+measurement. Run a migration that touches a growing table against it, or against a copy at that size, before the
+pull request says it is safe.
+
+**When the table is small or empty on every instance** (a table a module creates in the same release, or
+one that holds a handful of rows by decision), the file says so, with a reason, instead of following the recipe:
+
+```sql
+-- purlay: large-table-ok: the table is created in this release, and nothing writes to it before it ships
+```
+
+The reason is at least twenty characters and is read by the test. The marker on a file with nothing to excuse
+fails the test, so it does not outlive the change that needed it. The shipped files that break the rule are in the
+test's `GRANDFATHERED`, each with why, capped, and it only shrinks; a file after the baseline cannot join it.

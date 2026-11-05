@@ -471,6 +471,7 @@ describe('integration: channel visibility', () => {
               versionId: NEVER_EXISTED,
               incidentId: world.incident,
               bookmarkId: world.bookmark,
+              issueId: NEVER_EXISTED,
               webhookId: world.webhook,
               exportId: NEVER_EXISTED,
             });
@@ -517,6 +518,7 @@ describe('integration: channel visibility', () => {
               versionId: world.version,
               incidentId: NEVER_EXISTED,
               bookmarkId: NEVER_EXISTED,
+              issueId: NEVER_EXISTED,
               webhookId: NEVER_EXISTED,
               exportId: NEVER_EXISTED,
             });
@@ -582,6 +584,7 @@ describe('integration: channel visibility', () => {
                 versionId: NEVER_EXISTED,
                 incidentId: NEVER_EXISTED,
                 bookmarkId: NEVER_EXISTED,
+                issueId: NEVER_EXISTED,
                 webhookId: NEVER_EXISTED,
                 exportId: NEVER_EXISTED,
               }),

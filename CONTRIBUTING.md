@@ -103,7 +103,8 @@ failure of the tests that use it.
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
 | `bun run budget:browser -- --project <name>` | Cold load, keystroke to paint and the channel switch as the browser tests measured them for one project, each as its run's median (`PRD.md` §5, D-49), judged as `budget:latency` judges: `-- --keep <file>` fails on a jump past the file's numbers or on a number it has that this run did not measure, and keeps only a run that passed. A run that measured nothing is refused. `-- --remeasure` measures a regression again, the measuring tests alone on one worker, and fails only if it repeats; measuring again that fails is a failure (D-227). Runs in CI's browser jobs, after the measurements; on a developer's machine the tests hold the lines themselves |
-| `bun run ci:changes` | Whether a pull request can move what the browser tests see — the client, the API, a package, the dependencies or `ci.yml` — and so whether CI runs its four browser jobs; on main they always run. CI only |
+| `bun run ci:changes` | Whether a pull request can move what the browser tests see — the client, the API, a package, the dependencies or `ci.yml` — and so whether CI runs its four browser jobs; whether the API, a package, the dependencies or `ci.yml` changed decides the `modules` job. On main they always run. CI only |
+| `bun run modules:smoke` | A module's removal on a real process, for each cell of the module matrix (D-250): a database of its own migrated with `db:migrate` under the cell's `MODULES`, the API started with it, and every path every manifest claims asked for with every method, signed out. A module left out answers as an unknown path does, byte for byte; one that runs answers something else; the core is up. Needs `DATABASE_URL` (it makes and drops databases beside it). Runs in CI's `modules` job, beside the database job |
 | `bun run budget:latency` | The median of three independent API processes' ACK and fan-out p95 measurements, sixty messages each on two real sockets (`PRD.md` §5, D-49); all three trials reported. `-- --record <file>` keeps the summary and raw trials even on regression; `-- --baseline <file>` compares; `-- --keep <file>` compares and replaces the baseline only on success. A regression is measured again, three more trials, once, and fails only if it repeats; `--record` keeps the run judged last (D-227). CI retains the current trials as a seven-day artifact. Legacy single-run baselines remain comparable. Runs in `verify` and in CI's database job |
 | `bun run measure:frames` | The synthetic measurement that closed O-4 (D-198): what a page sends — typing, sending, a paste, switching channels, a resubscription, a full outbox — through the limiter the server runs, as the peak frames a second, the burst, and what was refused |
 | `bun run report:frames <log>…` | The check on that decision in use: over a stretch of the API's log (files, or standard input), each socket's peak frames in a second as the p99 and the maximum, beside the budget, and every refusal — frames, sends, HTTP `429` — which for legitimate use must be none (#61) |
@@ -144,6 +145,10 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 - **Errors:** one `AppError` with a stable machine-readable `code`. A caught error is handled
   or re-thrown. Logging it and continuing is prohibited — that is how silent failures are born.
 - **Never logged:** the list is `ARCHITECTURE.md` §10's, and lives there. Repeating it here is how one copy loses an entry.
+- **A new feature that is a product unit is a module, not a folder.** A module has a manifest, a migration set of its own,
+  data hooks, a lazy web chunk and cells in the module tests, and the steps are a checklist: `docs/MODULES.md` §9
+  (the next D-number; the manifest; the set, its owner and its hooks; the routes and their cross-tenant
+  classification; `bundledModules` and the §11 row; the web gating; the cells and mutations; the release).
 - **Services publish to the `EventBus`; they never touch a socket.** The socket hub subscribes;
   it never touches the database.
 
@@ -227,9 +232,10 @@ What belongs here is the discipline around them:
   screenshots, which you then look at before committing (they depend on the machine's fonts).
   `bun run test:modules-none` serves the same seeded world with `MODULES=none` and drives one spec in a real browser (no chat
   route asked for, no chat screen drawn, no console error); CI runs it beside the suite in each project (D-250).
-  `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, not
-  in CI, with screenshots ignored and each engine's known limits skipped by name
-  (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
+  `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, and
+  `PURLAY_E2E_PROJECT=webkit` runs WebKit alone, as CI's `webkit` job does after `bun run test:e2e:install:webkit`
+  (Firefox is opt in only); screenshots are ignored and each engine's known limits are skipped in the test,
+  by engine, with why (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
   a measurement (`performance.e2e.ts`, `feed-scale.e2e.ts`), and `only` runs those alone, as CI does (D-227).
   `bun run budget:web` fails above 400 KB of initial gzipped JavaScript and names what grew (D-196): a backstop against an accident, never a reason to cut or defer a feature. It also fails when chat's screens are in the shell's chunk and needs the build's source map to say so: `bun run build:web:mapped` first (D-250).
 
@@ -520,11 +526,18 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 - **Releasing and deploying** are D-185, not this section: a merge to `main` deploys to the server by itself,
   and `bun run release -- <patch|minor|major>` opens the pull request whose merge is a release; it also rewrites `apps/api/src/released-manifests.json`, the module manifests the next release is held to (`module-compat.test.ts`), and clears that file's exceptions. A deliberate break of a manifest is a dated entry under `exceptions` there, which a reviewer sees. There is no
   `develop` branch.
-- **The browser jobs run when a screen can have moved.** Eight jobs are most of a run; on a pull
+- **The browser jobs run when a screen can have moved.** Eight jobs (and WebKit's, below) are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or
   `ci.yml` (`bun run ci:changes`), and on main always. Each project is two of them side by side: the
   suite without the measuring tests, and those alone on one worker on a runner of their own, which
   measures a budget regression again before it fails (D-227).
+- **WebKit is a ninth job, reported and not yet required.** `webkit` runs the suite on Safari's engine, light and
+  1440 wide, without the measuring files, whenever the browser jobs run. It is not in `verify`'s `needs`, so a red
+  run shows on the pull request and blocks nothing. To make it required once it has been green for a while
+  (several runs on main and on pull requests, none retried into green): add `webkit` to `GATED` and `SKIPPABLE`
+  in `scripts/ci-gate.ts` and to `verify`'s `needs`; give `changes` a `webkit` output equal to `browser`, which
+  the gate reads to accept a skip; update `scripts/ci-gate.test.ts`; and only then add the check to branch
+  protection, which a human changes.
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
   no service and `schema` runs every test once, with coverage; `verify` needs both and the browser jobs,
   runs whatever they did, and passes only when each succeeded — a failure, a cancellation, a skip or a

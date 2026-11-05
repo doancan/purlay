@@ -5,6 +5,7 @@
  * checks. Nothing in the core names any of it: the composition root (`composition.ts`) reads this object when chat
  * is among the modules a process runs, and leaves it out when it is not.
  */
+import type { ServerEvent } from '@purlay/types';
 import { chatExport } from './export';
 import { chatPersonalExport } from './personal-export';
 import { startWithTheDefaultChannel } from './channels/workspace-hooks';
@@ -12,11 +13,10 @@ import { forgetWhatChatKeeps } from './channels/user-hooks';
 import { requireAttachmentById } from './channels/guard';
 import { chatWorkspaceChannels } from './channels/workspace-channels';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
+import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
 export const chatModule = {
-  // Its tables are in the core's first migrations (`MODULES.md` §5): they exist with chat off.
-  dataInCore: true,
   manifest: {
     id: 'chat',
     requires: [],
@@ -30,6 +30,28 @@ export const chatModule = {
     jobs: ['mail:missed'],
     // What a person does in a channel over the socket: watch it, write in it, say they are typing.
     frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],
+    // What chat's services send to a socket. The core's own — a workspace changing, an access revoked, a session
+    // ended, the acknowledgements, the pong — are not listed, nor is deep work's: they reach every process.
+    events: [
+      'MESSAGE_CREATED',
+      'MESSAGE_HIDDEN',
+      'MESSAGE_REVISED',
+      'MESSAGE_VERSIONS_UPDATED',
+      'THREAD_UPDATED',
+      'REACTIONS_UPDATED',
+      'CHANNEL_STATE',
+      'CHANNEL_ADDED',
+      'CHANNEL_UPDATED',
+      'CHANNELS_UPDATED',
+      'PINS_UPDATED',
+      'BOOKMARKS_UPDATED',
+      'INCIDENT_UPDATED',
+      'REMINDERS_UPDATED',
+      'SAVED_UPDATED',
+      'NOTIFICATIONS_UPDATED',
+      'TYPING',
+      'PRESENCE',
+    ] satisfies readonly ServerEvent[],
     routes: [
       '/api/channels/**',
       '/api/messages/**',
@@ -61,6 +83,8 @@ export const chatModule = {
   },
   // A file attached to a message is chat's: it is read through the channel the message is in.
   readAttachment: requireAttachmentById,
+  // What a message told, for the push sender: the notifications are chat's.
+  pushNotices: chatPushNotices,
   workspaceCreated: startWithTheDefaultChannel,
   userErased: forgetWhatChatKeeps,
   workspaceChannels: chatWorkspaceChannels,

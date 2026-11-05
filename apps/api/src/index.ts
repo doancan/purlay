@@ -12,7 +12,7 @@ import { deliverReminders } from './features/chat/reminders/delivery';
 import { deliverScheduled } from './features/chat/scheduled/delivery';
 import { timedDeliveryLoop } from './features/chat/scheduled/loop';
 import { exportQueue } from './modules/export/queue';
-import { compositionFor, type Composition } from './composition';
+import { compositionFor, moduleReport, startWhereRunning, type Composition } from './composition';
 import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
@@ -77,6 +77,7 @@ const modules = ((): Composition => {
     process.exit(1);
   }
 })();
+log.info('the modules this process runs', moduleReport(modules));
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.
@@ -124,6 +125,7 @@ const push =
         clock: systemClock,
         log,
         attention,
+        notices: modules.pushNotices,
         failures: metrics.pushFailures,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
         post: async (url, headers, body) =>
@@ -159,7 +161,11 @@ const redisUrl = config.REDIS_URL;
 const redis =
   redisUrl === undefined
     ? undefined
-    : connectRedis({ create: () => bunRedisClient(redisUrl), log });
+    : connectRedis({
+        create: () => bunRedisClient(redisUrl),
+        log,
+        namespace: config.REDIS_KEY_PREFIX,
+      });
 const sharing = redis === undefined ? undefined : sharedRealtime(redis, systemClock, log);
 log.info(
   redis === undefined
@@ -370,7 +376,7 @@ if (config.MIGRATE_ON_START === true) {
 }
 services.settle(runtime);
 // Scheduled messages and reminders are chat's (D-250): delivered by a process that runs chat, and by no other.
-if (modules.modules.some((module) => module.manifest.id === 'chat')) timedDelivery.start();
+startWhereRunning(modules, 'chat', timedDelivery.start);
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
 log.info(
   runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',
