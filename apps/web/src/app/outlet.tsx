@@ -4,9 +4,9 @@
  * One switch over the route table, so adding a route is a compile error until it
  * has a screen: a module's routes are drawn from its manifest (`ModuleRoute`) before it, so the
  * core's routes are the cases, and one without a case does not compile.
- * Every signed-in route renders inside `Shell`, which is what makes a person, a
- * workspace and a connection true below it; the sign-in screen and the front door
- * need only the person.
+ * Every route of a workspace renders inside one `Shell`, drawn once below the switch so a change between a
+ * core screen and a module's keeps it standing; it is what makes a person, a workspace and a connection
+ * true below it. The sign-in screen and the front door need only the person.
  *
  * **The gallery is a development tool and is not in the production build.** It is
  * a lazy chunk behind a condition Vite resolves *statically* (`import.meta.env.DEV`
@@ -29,7 +29,7 @@ import { EmailSignInScreen } from '../features/sign-in/email-sign-in-screen';
 import { SignUpScreen } from '../features/sign-in/sign-up-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
-import { isModuleMatch, moduleOf } from '../router/routes';
+import { isModuleMatch, moduleOf, type Match } from '../router/routes';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { ModuleRoute, warmModule } from './module-route';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
@@ -77,6 +77,73 @@ interface OutletProps {
   readonly gallery?: ComponentType | null;
 }
 
+/** A screen, and the workspace's shell it stands in, if any. */
+interface Drawn {
+  /** The workspace whose shell holds the screen; null for a screen that needs none. */
+  readonly slug: string | null;
+  readonly screen: React.JSX.Element;
+}
+
+const bare = (screen: React.JSX.Element): Drawn => ({ slug: null, screen });
+const shelled = (slug: string, screen: React.JSX.Element): Drawn => ({ slug, screen });
+
+const draw = (match: Match, gallery: ComponentType | null): Drawn => {
+  // The modules' routes are drawn from their manifests; what is left is the core's, each a case below.
+  if (isModuleMatch(match)) {
+    return shelled(match.params.slug, <ModuleRoute name={match.name} params={match.params} />);
+  }
+  switch (match.name) {
+    case 'signIn':
+      return bare(<SignInScreen />);
+    case 'signInEmail':
+      return bare(<EmailSignInScreen />);
+    case 'signInNative':
+      return bare(
+        <SessionGate>
+          <LazyNativeSignInScreen />
+        </SessionGate>,
+      );
+    case 'signUp':
+      return bare(<SignUpScreen />);
+    case 'setup':
+      return bare(<LazySetupScreen />);
+    case 'setupVerify':
+      return bare(<LazyVerifyScreen />);
+    case 'home':
+      return bare(
+        <SessionGate>
+          <Home />
+        </SessionGate>,
+      );
+    case 'invite':
+      return bare(<InviteScreen />);
+    case 'mailStop':
+      return bare(<MailStopScreen />);
+    case 'workspace':
+      return shelled(match.params.slug, <WorkspaceHome />);
+    case 'welcome':
+      return shelled(match.params.slug, <WelcomeScreen />);
+    case 'settingsHome':
+      return shelled(match.params.slug, <LazySettingsScreen section={FIRST_SECTION} />);
+    case 'settings':
+      return shelled(match.params.slug, <LazySettingsScreen section={match.params.section} />);
+    case 'gallery': {
+      const Gallery = gallery;
+      return bare(
+        Gallery === null ? (
+          <NotFound />
+        ) : (
+          <Suspense fallback={<Loading />}>
+            <Gallery />
+          </Suspense>
+        ),
+      );
+    }
+    case 'notFound':
+      return bare(<NotFound />);
+  }
+};
+
 export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Element => {
   const { match } = useRoute();
   const owner = match.name === 'notFound' ? null : moduleOf(match.name);
@@ -84,70 +151,9 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
   useEffect(() => {
     warmModule(owner);
   }, [owner]);
-  // The modules' routes are drawn from their manifests; what is left is the core's, each a case below.
-  if (isModuleMatch(match)) return <ModuleRoute name={match.name} params={match.params} />;
-  switch (match.name) {
-    case 'signIn':
-      return <SignInScreen />;
-    case 'signInEmail':
-      return <EmailSignInScreen />;
-    case 'signInNative':
-      return (
-        <SessionGate>
-          <LazyNativeSignInScreen />
-        </SessionGate>
-      );
-    case 'signUp':
-      return <SignUpScreen />;
-    case 'setup':
-      return <LazySetupScreen />;
-    case 'setupVerify':
-      return <LazyVerifyScreen />;
-    case 'home':
-      return (
-        <SessionGate>
-          <Home />
-        </SessionGate>
-      );
-    case 'invite':
-      return <InviteScreen />;
-    case 'mailStop':
-      return <MailStopScreen />;
-    case 'workspace':
-      return (
-        <Shell slug={match.params.slug}>
-          <WorkspaceHome />
-        </Shell>
-      );
-    case 'welcome':
-      return (
-        <Shell slug={match.params.slug}>
-          <WelcomeScreen />
-        </Shell>
-      );
-    case 'settingsHome':
-      return (
-        <Shell slug={match.params.slug}>
-          <LazySettingsScreen section={FIRST_SECTION} />
-        </Shell>
-      );
-    case 'settings':
-      return (
-        <Shell slug={match.params.slug}>
-          <LazySettingsScreen section={match.params.section} />
-        </Shell>
-      );
-    case 'gallery': {
-      const Gallery = gallery;
-      return Gallery === null ? (
-        <NotFound />
-      ) : (
-        <Suspense fallback={<Loading />}>
-          <Gallery />
-        </Suspense>
-      );
-    }
-    case 'notFound':
-      return <NotFound />;
-  }
+  const { slug, screen } = draw(match, gallery);
+  // One `Shell`, drawn here for every screen of a workspace: the front door hands over to a channel by
+  // changing the route, and a shell drawn by each screen would be built again by it, closing a menu
+  // opened on the first.
+  return slug === null ? screen : <Shell slug={slug}>{screen}</Shell>;
 };
