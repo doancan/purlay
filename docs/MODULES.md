@@ -174,7 +174,7 @@ moves into that module.
   the attachment reader) waits for it to run. There was a `dataInCore` flag for this, and it was dropped: every bundled
   module set it, and a `false` would have made a person's erasure wait for a setting (rule 5), so it had no safe value.
   **A module's own set makes some of those tables** (chat's `message_attachments`, `scheduled_messages`,
-  `message_reminders`, `hidden_messages` and `scheduled_message_attachments`; all of issues'), and a database migrated
+  `message_reminders`, `hidden_messages`, `channel_departures` and `scheduled_message_attachments`; all of issues'), and a database migrated
   without the set — a fresh install that runs `MODULES=none` — has none of them. Where they exist the hooks reach them
   whether or not the module runs, so the right to be erased does not wait for a setting; where they do not there is
   nothing to reach. **`tableExists` (`@purlay/db`) is the one primitive for that**, asked at the moment the table is

@@ -105,6 +105,13 @@ export interface ChannelBookmarks {
   workspace_id: string;
 }
 
+export interface ChannelDepartures {
+  channel_id: string;
+  departed_at: Generated<Timestamp>;
+  reason: string;
+  user_id: string;
+}
+
 export interface ChannelMembers {
   channel_id: string;
   id: Generated<string>;
@@ -714,6 +721,7 @@ export interface DB {
   attachments: Attachments;
   audit_log: AuditLog;
   channel_bookmarks: ChannelBookmarks;
+  channel_departures: ChannelDepartures;
   channel_members: ChannelMembers;
   channels: Channels;
   github_app_deliveries: GithubAppDeliveries;

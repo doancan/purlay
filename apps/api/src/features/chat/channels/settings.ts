@@ -34,6 +34,7 @@ import {
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { channelFor } from './channels';
+import { recordDeparture } from './departures';
 
 /** The channel row, locked for the change about to be made; a direct message is not one to change. */
 const lockNamed = async (
@@ -392,7 +393,9 @@ export const leaveChannel = async (
     .where('user_id', '=', context.userId)
     .returning('user_id')
     .executeTakeFirst();
-  return left !== undefined;
+  if (left === undefined) return false;
+  await recordDeparture(executor, context.channelId, context.userId, 'left');
+  return true;
 };
 
 /** What a removal did, for the caller to tell the person's sockets after the commit; null: nothing. */
@@ -484,6 +487,7 @@ export const removeChannelMember = async (
     .where('channel_id', '=', context.channelId)
     .where('user_id', '=', userId)
     .execute();
+  await recordDeparture(executor, context.channelId, userId, 'removed');
   // Somebody's access taken by another hand: a workspace-visible act (D-26). The channel is named by
   // id only, so the trail names it to a reader who can see it and to nobody else (#691).
   await recordAudit(executor, clock, {
