@@ -19,8 +19,9 @@ import { NO_LOG } from '../../platform/events';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
-import { auditTrail, recordAudit } from './audit';
-import { AUDIT_EXPORT_PAGE, exportTrail } from './audit-export';
+import { composition } from '../../composition';
+import { auditTrail as trailAs, recordAudit } from './audit';
+import { AUDIT_EXPORT_PAGE, exportTrail as exportAs } from './audit-export';
 import { sendAuditLinesTo } from './lines';
 
 afterAll(async () => {
@@ -103,6 +104,24 @@ const watched = (
   });
   return { executor, reads: () => reads };
 };
+
+const auditTrail = async (
+  ...[executor, context, query]: [
+    Executor,
+    Parameters<typeof trailAs>[1],
+    Parameters<typeof trailAs>[2],
+  ]
+): ReturnType<typeof trailAs> => await trailAs(executor, context, query, composition.auditAccess);
+const exportTrail = async (
+  ...[executor, clock, log, context, query]: [
+    Executor,
+    Parameters<typeof exportAs>[1],
+    Parameters<typeof exportAs>[2],
+    Parameters<typeof exportAs>[3],
+    Parameters<typeof exportAs>[4],
+  ]
+): ReturnType<typeof exportAs> =>
+  await exportAs(executor, clock, log, context, query, composition.auditAccess);
 
 describe('integration: the trail narrowed (D-222)', () => {
   test('by who acted, by action, and by a window of instants — from inclusive, to exclusive', async () => {

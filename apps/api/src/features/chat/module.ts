@@ -5,7 +5,7 @@
  * checks. Nothing in the core names any of it: the composition root (`composition.ts`) reads this object when chat
  * is among the modules a process runs, and leaves it out when it is not.
  */
-import type { ServerEvent } from '@purlay/types';
+import { CHAT_AUDIT_ACTIONS, type ServerEvent } from '@purlay/types';
 import { chatExport } from './export';
 import { chatPersonalExport } from './personal-export';
 import { startWithTheDefaultChannel } from './channels/workspace-hooks';
@@ -59,6 +59,7 @@ export const chatModule = {
       'TYPING',
       'PRESENCE',
     ] satisfies readonly ServerEvent[],
+    auditActions: [{ read: 'audit.read', actions: CHAT_AUDIT_ACTIONS }],
     routes: [
       '/api/channels/**',
       '/api/messages/**',

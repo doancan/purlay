@@ -10,8 +10,11 @@
  * `ownSet`, which asks `tableExists` for them). `module-lifecycle.integration.test.ts` runs every step in every database state and process.
  */
 import { tableExists, type Transaction } from '@purlay/db';
+import { ISSUES_AUDIT_ACTIONS } from '@purlay/types';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { issuesBudget } from './budget';
+import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
+import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
 import { issuesPersonalExport } from './personal-export';
 
@@ -41,6 +44,10 @@ export const issuesModule = {
     budget: { poolShare: issuesBudget },
     routes: ['/api/workspaces/:workspaceId/issues', '/api/workspaces/:workspaceId/issues/**'],
     jobs: [],
+    permissions: [
+      { name: ISSUES_DELETE_ANY, minimumRole: 'admin' },
+    ] satisfies readonly PermissionDeclaration[],
+    auditActions: [{ read: 'audit.read', actions: ISSUES_AUDIT_ACTIONS }],
   },
   userErased: unassignErasedPerson,
   workspacePurge: issuesWorkspacePurge,

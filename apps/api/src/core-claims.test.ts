@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { ClientFrame, ServerFrame } from '@purlay/types';
+import { AUDIT_ACTIONS, ClientFrame, ServerFrame } from '@purlay/types';
 import { bundledModules, composition, type BundledModule } from './composition';
 import { PLAN } from './modules/jobs/schedule';
 import {
@@ -36,6 +36,20 @@ describe('what the core claims', () => {
   test('every server event is the core’s or exactly one module’s', () => {
     const sent = new Set(ServerFrame.anyOf.map((frame) => frame.properties.event.const));
     expect(sorted([...CORE_EVENTS, ...owned('events')])).toEqual(sorted(sent));
+  });
+
+  test('every audit action the wire names is the core’s or exactly one module’s', () => {
+    const declared = carried.flatMap((module) =>
+      (module.manifest.auditActions ?? []).flatMap((group) => group.actions),
+    );
+    expect(sorted([...CORE_CLAIMS.auditActions, ...declared])).toEqual(sorted(AUDIT_ACTIONS));
+  });
+
+  test('every permission a module declares is read by the registry as its own', () => {
+    for (const { manifest } of carried) {
+      for (const { name } of manifest.permissions ?? [])
+        expect(name.startsWith(`${manifest.id}.`)).toBe(true);
+    }
   });
 
   test('every scheduled job, and every job the command runs, is the core’s or exactly one module’s', () => {
