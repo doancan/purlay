@@ -310,18 +310,19 @@ until then it is a stated intent and not a guarantee.
 | Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; the whole suite is **not** run per cell: no CI job does | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off; every lifecycle step in each cell of database state × process, on real migrated databases (`module-lifecycle.integration.test.ts`) — **built** | 10 |
 | A table says what becomes of its rows on an account's erasure and how long they are kept | `TABLE_LIFECYCLE` over the schema (`packages/db/src/table-lifecycle.ts`): a table without the decision does not compile, and `table-lifecycle.test.ts` holds it to `TABLE_OWNERS` and spells out the tables erasure does not reach — **built** | 10 |
-| A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state; CI migrating each set from the *last release's* database is **not** built | 10 |
+| A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state by hand-written rows; and CI's `modules` job runs `bun run modules:upgrade` (`testing/module-upgrade.ts`): `packages/db` as the **last release tag** has it is extracted with `git archive`, its own migrator makes a database under each `MODULES` an operator could have kept (the cell's modules that release carried, and everything it carried), a copy of each is migrated to head under every cell of the matrix, and each must exit `0` and record the core's files and the cell's sets — an edited released migration fails it by checksum. `module-upgrade.integration.test.ts` runs the same on a release made from this tree less its newest migrations, and the mutations `upgrade-check-starts-from-an-empty-database` and `upgrade-check-migrates-the-core-alone` hold it — **built**. Not covered: a release that wrote rows (the check migrates the schema the release's migrator makes, empty, so a migration that fails only on data is `upgrade.integration.test.ts`'s and `migration-safety.test.ts`'s), and the tag's own dependencies (its migrator runs on the kysely and pg this tree installed) | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release` (`manifests:snapshot`): no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
 | Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** for issues, the one module with a share; it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
+| A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/` and `ingress/http/<id>.ts`) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
 tests build: `module-lifecycle.integration.test.ts` (the database as each valid `MODULES` value leaves it, against a process
 that runs each such value; the cells are made from the bundle by `testing/module-cells.ts`, every subset up to three
 modules and a sample past that, so a third module adds its cells with no test edited), `migration-cells.integration.test.ts`,
-`modules-off*.integration.test.ts`, a real process per `MODULES` in `migrate-on-start.integration.test.ts`, and
+`modules-off*.integration.test.ts`, a real process per cell in `migrate-on-start.integration.test.ts` (its cases are the cells, and the paths and tables each is held to are read from the manifests and the migration sets), the metrics page and the boot report per cell (`metrics.test.ts`, `ingress/http/metrics.test.ts`, `composition.test.ts`), and
 `test:modules-none` in a browser, and `modules:smoke` (`testing/module-smoke.ts`), which CI runs as the `modules` job whenever the
 API, a package, the dependencies or the workflow changed: for each cell, `db:migrate` under its `MODULES`, the API started with the same
 value and no migration of its own, and the paths of the manifests asked for. It is the set of cells run, and the only combinations
@@ -456,7 +457,7 @@ commit beside this list.
   else; `migration-sets.test.ts` lists the set.
 - The **lifecycle matrix cell**: `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment
   reader with the module's set as a database state and the module alone as a process.
-- A **real process** per `MODULES` value in `platform/migrate-on-start.integration.test.ts`.
+- A **real process** per cell in `platform/migrate-on-start.integration.test.ts`: nothing to edit, its cases are made from the bundle.
 - The **smoke cell**: nothing to edit — `modules:smoke` makes its cells from the bundle and its paths from the manifest's `routes`, so a
   module with routes is asked for in every cell. A module whose manifest claims no path fails it (nothing would show it runs).
 - The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
@@ -498,13 +499,16 @@ without an audit action. A module with UI adds its manifest, one
 counted before the web registry and the derived catalogue, and is stale.
 
 **The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
-fixture, and are edited (eleven files): `composition.test.ts`, `module-seams.test.ts` (the entry for the handler `ingress/` keeps), `platform/metrics.test.ts`, `ingress/http/metrics.test.ts`,
+fixture, and are edited (eight files): `module-seams.test.ts` (the entry for the handler `ingress/` keeps),
 `testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
 unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
 integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`
 (the `Ids` field, item 4), the seed in `cross-tenant.integration.test.ts`, and the `channel-visibility.integration` and
 `upgrade.integration` fixtures that need a seeded row or field.
-What grows by itself: the `modules:smoke` cells, the lifecycle matrix and the migration cells.
+What grows by itself: the `modules:smoke` cells, the lifecycle matrix, the migration cells, the real process per cell of
+`migrate-on-start.integration.test.ts`, the cells of `composition.test.ts` and of both metrics tests, the `MODULES` value
+the command and the API must read alike (`module-setting-pair.test.ts`), the `/api/me` module list of `modules-off.integration.test.ts`,
+and `modules:upgrade`; and what a module's code names on the socket (`module-emissions.test.ts`).
 
 **What still goes unnoticed (silent gaps).** `db:migrate` validating `requires` (#985), the cross-owner key list (#986),
 the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
@@ -525,8 +529,8 @@ the statements of the file, not the table's size, and does not see a table named
 
 **What a new module's check needs.** `scripts/check-docs.test.ts` works from a copy of the tracked files, so `git add`
 the module's files first, or it fails with `SCHEMA.md names a migration that is not a file`. The database named in
-`.env.test` must already exist. The check "a real process per `MODULES` value" in `migrate-on-start.integration.test.ts`
-is not enforced for a new module: add its case by hand.
+`.env.test` must already exist. `bun run modules:upgrade` and `module-upgrade.integration.test.ts` read the last release
+tag with `git archive`: a checkout without tags fails the first (it says to fetch them), and a new module needs nothing.
 
 **Recovery when the test database is corrupted.** Editing a migration that has been applied, or adding a `0002` file
 and removing it, makes the persistent test template and database fail with `... was edited after it was applied`: the

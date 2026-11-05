@@ -14,11 +14,14 @@ import {
   sql,
 } from '@purlay/db';
 import type { Executor, MigrationSet } from '@purlay/db';
+import { bundledModules, type BundledModule } from '../composition';
 import { migrateOnStart, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
 import { aRecordingLogger } from '../testing/doubles';
 import { aGitHubPerson } from '../testing/github-sign-in';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS } from '../testing/github-stub';
+import { moduleCells } from '../testing/module-cells';
+import { concretePath } from '../testing/module-smoke';
 
 /**
  * Migrate on start (#248, D-93): against a database that has never been migrated,
@@ -460,78 +463,67 @@ describe('integration: migrate on start', () => {
     }
   }, 60_000);
 
-  test('a node run with MODULES=none migrates the core alone, is ready, and has no chat route', async () => {
-    const { name, db } = await freshDatabase('modules-none');
-    const port = freePort();
-    const node = aNode(
-      name,
-      port,
-      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
-      { MIGRATE_ON_START: 'true', MODULES: 'none' },
-    );
-    try {
-      expect(await until(port, '/health/ready', 200)).toBe(200);
-      expect(await recorded(db)).toEqual(
-        (await everyMigration()).filter((file) => !file.includes('/')),
-      );
-      // A route of a module that is not run is the answer to any path nobody serves.
-      expect(await answer(port, '/api/channels/anything')).toEqual([404, 'ROUTE_NOT_FOUND']);
-      expect(await answer(port, '/api/nothing-like-it')).toEqual([404, 'ROUTE_NOT_FOUND']);
-      const client = (await (
-        await fetch(`http://127.0.0.1:${String(port)}/api/client`)
-      ).json()) as Record<string, unknown>;
-      // The public handshake does not name modules (D-250): it is a signed-in caller's `/api/me` that does.
-      expect(client).not.toHaveProperty('modules');
-    } finally {
-      node.kill();
-      await node.exited;
-      await db.destroy();
-    }
-  }, 60_000);
-
-  for (const [setting, expected] of [
-    [
-      'chat',
-      {
-        sets: ['chat'],
-        issuesTable: false,
-        open: '/api/channels/anything',
-        closed: '/api/workspaces/x/issues',
-      },
-    ],
-    [
-      'issues',
-      {
-        sets: ['issues'],
-        issuesTable: true,
-        open: '/api/workspaces/x/issues',
-        closed: '/api/channels/anything',
-      },
-    ],
-  ] as const) {
-    test(`a node run with MODULES=${setting} migrates the core and that set only, is ready, and answers only its own routes`, async () => {
-      const { name, db } = await freshDatabase(`modules-${setting}`);
+  // One real process per cell of the matrix, made from the bundle (`testing/module-cells.ts`): a module added to the build
+  // adds its process here with no test edited, and the paths and tables it is held to are read from its manifest and
+  // `TABLE_OWNERS`, not written out.
+  const carried: readonly BundledModule[] = bundledModules;
+  for (const cell of moduleCells(carried)) {
+    test(`a node run with ${cell.label} (MODULES=${cell.setting ?? 'unset'}) migrates the core and those sets only, is ready, and answers only their routes`, async () => {
+      const { name, db } = await freshDatabase(`cell-${cell.ids.join('-') || 'none'}`);
       const port = freePort();
       const node = aNode(
         name,
         port,
         Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
-        { MIGRATE_ON_START: 'true', MODULES: setting },
+        cell.setting === undefined
+          ? { MIGRATE_ON_START: 'true' }
+          : { MIGRATE_ON_START: 'true', MODULES: cell.setting },
+        cell.setting === undefined ? ['MODULES'] : [],
       );
       try {
         expect(await until(port, '/health/ready', 200)).toBe(200);
         expect(await recorded(db)).toEqual(
           (await everyMigration()).filter(
-            (file) => !file.includes('/') || expected.sets.some((id) => file.startsWith(`${id}/`)),
+            (file) => !file.includes('/') || cell.ids.some((id) => file.startsWith(`${id}/`)),
           ),
         );
         const { rows } = await sql<{ table_name: string }>`
           select table_name from information_schema.tables
-          where table_schema = current_schema() and table_name = 'issues'`.execute(db);
-        expect(rows.length === 1).toBe(expected.issuesTable);
-        // What the module owns asks who is calling; what it does not is the answer to any path nobody serves.
-        expect(await answer(port, expected.open)).toEqual([401, 'UNAUTHENTICATED']);
-        expect(await answer(port, expected.closed)).toEqual([404, 'ROUTE_NOT_FOUND']);
+          where table_schema = current_schema()`.execute(db);
+        const present = new Set(rows.map((row) => row.table_name));
+        // What a set creates: tables chat and the core made before the sets existed are in the core's own migrations.
+        const createdBy = async (id: string): Promise<string[]> => {
+          const set = PRODUCT_MIGRATION_SETS.find((candidate) => candidate.id === id);
+          if (set === undefined) return [];
+          return (await readMigrationFiles(set.directory, `${id}/`)).flatMap((file) =>
+            [...file.text.matchAll(/create table (?:if not exists )?"?([a-z_]+)"?/gi)].map(
+              (match) => match[1] ?? '',
+            ),
+          );
+        };
+        for (const module of carried) {
+          const id = module.manifest.id;
+          const runs = cell.ids.includes(id);
+          const own = await createdBy(id);
+          expect({ id, tables: own.filter((table) => present.has(table)) }).toEqual({
+            id,
+            tables: runs ? own : [],
+          });
+          // What a module owns asks who is calling (a route that takes no GET answers 404 like any unknown path, so one
+          // route is enough); what it does not own is the answer to any path nobody serves, on every route.
+          const answers = await Promise.all(
+            (module.manifest.routes ?? []).map(
+              async (route) => await answer(port, concretePath(route)),
+            ),
+          );
+          const closed: [number, string] = [404, 'ROUTE_NOT_FOUND'];
+          expect({
+            id,
+            asksWho: answers.some(([status, code]) => status === 401 && code === 'UNAUTHENTICATED'),
+            allClosed: answers.every((seen) => seen[0] === closed[0] && seen[1] === closed[1]),
+          }).toEqual({ id, asksWho: runs, allClosed: !runs });
+        }
+        expect(await answer(port, '/api/nothing-like-it')).toEqual([404, 'ROUTE_NOT_FOUND']);
         const client = (await (
           await fetch(`http://127.0.0.1:${String(port)}/api/client`)
         ).json()) as Record<string, unknown>;

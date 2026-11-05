@@ -7,11 +7,12 @@
  * this file; the page is answered all the same, which is the partial failure it is built for.
  */
 import { describe, expect, test } from 'bun:test';
-import { compositionFor, type Composition } from '../../composition';
+import { bundledModules, compositionFor, type Composition } from '../../composition';
 import { createApp, type HttpApplication } from './app';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { aRecordingLogger, testConfig, testDependencies } from '../../testing/doubles';
 import { readExposition, sampleOf, type ReadPage } from '../../testing/exposition';
+import { moduleCells } from '../../testing/module-cells';
 import {
   holdsMetricsToken,
   methodLabel,
@@ -179,8 +180,8 @@ describe('metrics, switched on', () => {
 });
 
 describe('the modules this process runs, on the page', () => {
-  const modulesOf = async (setting: string | undefined): Promise<string[]> => {
-    const { app } = anApp({ token: TOKEN, modules: compositionFor(setting) });
+  const modulesOf = async (modules: Composition): Promise<string[]> => {
+    const { app } = anApp({ token: TOKEN, modules });
     const page = await pageOf(app);
     expect(page.types.get('purlay_modules_info')).toBe('gauge');
     return page.samples
@@ -192,11 +193,15 @@ describe('the modules this process runs, on the page', () => {
       .sort();
   };
 
-  test('is one series of 1 per running module, and the family alone when none runs', async () => {
-    expect(await modulesOf(undefined)).toEqual(['chat', 'issues']);
-    expect(await modulesOf('issues')).toEqual(['issues']);
-    expect(await modulesOf('chat')).toEqual(['chat']);
-    expect(await modulesOf('none')).toEqual([]);
+  test('is one series of 1 per running module, and the family alone when none runs, in every cell of the matrix', async () => {
+    const cells = moduleCells(bundledModules);
+    expect(cells.some((cell) => cell.ids.length === 0)).toBe(true);
+    for (const cell of cells) {
+      expect({ cell: cell.label, modules: await modulesOf(cell.composition) }).toEqual({
+        cell: cell.label,
+        modules: [...cell.ids].sort(),
+      });
+    }
   });
 
   test('is behind the token as the rest of the page is, and the health answers say none of it', async () => {

@@ -9,7 +9,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import { compose, composition } from '../../composition';
+import { bundledModules, compose, composition } from '../../composition';
 import { chatModule } from '../../features/chat/module';
 import { issuesModule } from '../../features/issues/module';
 import { fixedClock } from '../../platform/clock';
@@ -17,6 +17,7 @@ import { theDefaultChannelOf } from '../../testing/channels';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { twoColourPng } from '../../testing/png';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { moduleCells } from '../../testing/module-cells';
 import { aMemoryStore } from '../../testing/storage';
 import { aUniqueSlug } from '../../testing/users';
 import { createApp } from './app';
@@ -88,10 +89,12 @@ describe('integration: an application with no module is the core alone', () => {
       const ada = await aSignedInUser(db, clock, 'off-me');
       const modulesOf = async (modules: typeof composition): Promise<unknown> =>
         ((await caller(db, modules)('GET', '/api/me', ada)).body as { modules: unknown }).modules;
-      expect(await modulesOf(compose([]))).toEqual([]);
-      expect(await modulesOf(composition)).toEqual(['chat', 'issues']);
-      expect(await modulesOf(compose([chatModule]))).toEqual(['chat']);
-      expect(await modulesOf(compose([issuesModule]))).toEqual(['issues']);
+      for (const cell of moduleCells(bundledModules)) {
+        expect({ cell: cell.label, modules: await modulesOf(cell.composition) }).toEqual({
+          cell: cell.label,
+          modules: cell.ids,
+        });
+      }
     });
   });
 

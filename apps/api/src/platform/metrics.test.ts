@@ -6,6 +6,7 @@ import {
   renderMetrics,
   serverMetrics,
 } from './metrics';
+import { bundledModules } from '../composition';
 import { readExposition, sampleOf } from '../testing/exposition';
 
 const fixedProcess = {
@@ -146,14 +147,13 @@ describe("the server's instruments", () => {
 
 describe('the modules on the page', () => {
   test('are one series of 1 per module, named by the module label', () => {
-    expect(modulesInfoFamily(['chat', 'issues'])).toEqual({
+    const carried = bundledModules.map((module) => module.manifest.id);
+    expect(carried.length).toBeGreaterThan(0);
+    expect(modulesInfoFamily(carried)).toEqual({
       name: 'purlay_modules_info',
       help: 'The modules this process runs, one series of value 1 each.',
       type: 'gauge',
-      samples: [
-        { suffix: '', labels: { module: 'chat' }, value: 1 },
-        { suffix: '', labels: { module: 'issues' }, value: 1 },
-      ],
+      samples: carried.map((id) => ({ suffix: '', labels: { module: id }, value: 1 })),
     });
     expect(modulesInfoFamily([]).samples).toEqual([]);
   });

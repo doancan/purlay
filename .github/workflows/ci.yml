@@ -157,6 +157,8 @@ jobs:
   # claims is asked for with every method — a module that runs asks who is calling, one that does not is the `404`
   # of an unknown path, byte for byte. Beside `schema` rather than after it, and a few seconds of work once the
   # database is up. The suite is not run per cell: its tests build their own composition and read no `MODULES`.
+  # The same job then migrates every cell from the database the last release tag's own migrator made
+  # (`bun run modules:upgrade`), which needs the tags: the checkout fetches them.
   modules:
     needs: changes
     if: needs.changes.outputs.modules == 'true'
@@ -169,6 +171,8 @@ jobs:
         with:
           # No job pushes; the token stays out of .git/config where later steps could read it.
           persist-credentials: false
+          # The last release tag is the starting point of `modules:upgrade`; a shallow checkout has none.
+          fetch-tags: true
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
@@ -180,6 +184,9 @@ jobs:
 
       - name: every cell of the module matrix, on a started API
         run: bun run modules:smoke
+
+      - name: every cell migrated from the database the last release left
+        run: bun run modules:upgrade
 
   # The browser tests: the production build and a seeded real API, in real Chromium,
   # in both themes and at two widths (#139). A job of its own because it needs a
