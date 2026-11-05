@@ -1,5 +1,6 @@
 /** Quotes and code survive the toolbar, native clipboard, preview, send and edit. */
 import { expect, test } from './fixtures';
+import { canGrantClipboard } from './support';
 
 test('quote formatting keeps a list and its blank lines together through preview and send', async ({
   page,
@@ -27,12 +28,16 @@ test('quote formatting keeps a list and its blank lines together through preview
   await expect(page.locator('[data-message-row] blockquote').first().locator('li')).toHaveCount(2);
 });
 
-test('native paste stays inside tilde code and Enter also continues code in an edit and a thread', async ({
+test('native paste stays inside tilde code, and the copy button puts the code back on the clipboard', async ({
   page,
   context,
   signIn,
   room,
-}) => {
+}, info) => {
+  test.skip(
+    !canGrantClipboard(info),
+    'the page reads and writes the real clipboard here, which only Chromium lets a test grant; WebKit and Firefox would ask the person (docs/spikes/cross-browser.md)',
+  );
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const made = await room();
   await signIn();
@@ -56,6 +61,16 @@ test('native paste stays inside tilde code and Enter also continues code in an e
   await expect(row.locator('figure')).toHaveCount(1);
   await row.getByRole('button', { name: 'Copy code', exact: true }).click();
   expect(await page.evaluate(async () => await navigator.clipboard.readText())).toBe(code);
+});
+
+test('Enter also continues code in an edit and a thread', async ({ page, signIn, room }) => {
+  const made = await room({
+    messages: [{ by: 'dogancan', text: '~~~ts\nconst value0 = 0;\n~~~' }],
+  });
+  await signIn();
+  await page.goto(made.path);
+  const row = page.locator('[data-message-row]', { hasText: 'const value0' });
+  await expect(row.locator('figure')).toHaveCount(1);
   await row.focus();
   await page.keyboard.press('e');
   const editor = page.getByRole('textbox', { name: 'Edit your message' });
@@ -78,7 +93,9 @@ test('a quoted code block keeps copy and wrap reachable at 320 pixels, including
   room,
   expectNoAxe,
 }, info) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Only Chromium lets a test grant the clipboard: elsewhere the copy is clicked and what it wrote is not read back.
+  const clipboard = canGrantClipboard(info);
+  if (clipboard) await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const language = 'unsupported-language-with-a-very-long-name';
   const code = `const address = "${'long-address-'.repeat(20)}";\n  keepIndent();\n\n`;
   const quoted = `> \`\`\`${language}\n${code
@@ -97,7 +114,9 @@ test('a quoted code block keeps copy and wrap reachable at 320 pixels, including
   expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(320);
   await figure.getByRole('button', { name: 'Wrap lines', exact: true }).click();
   await copy.click();
-  expect(await page.evaluate(async () => await navigator.clipboard.readText())).toBe(code);
+  if (clipboard) {
+    expect(await page.evaluate(async () => await navigator.clipboard.readText())).toBe(code);
+  }
   await figure.locator('pre').focus();
   await expect(figure.locator('pre')).toBeFocused();
   expect(await figure.evaluate((element) => element.scrollLeft)).toBe(0);

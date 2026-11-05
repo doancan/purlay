@@ -23,7 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { messageId, PAGE_LIMIT } from '@purlay/types';
 import { expect, test } from './fixtures';
-import { apiAs, isNarrow, type Persona, type Tenant } from './support';
+import { apiAs, isNarrow, onEngine, type Persona, type Tenant } from './support';
 
 /** A 2×2 PNG: a real image the API decodes and re-encodes. */
 const PNG = Buffer.from(
@@ -186,7 +186,7 @@ test.describe('a long, heavy channel (O-5, D-199)', () => {
     context,
   }, info) => {
     test.skip(
-      ['webkit', 'firefox'].includes(info.project.name),
+      onEngine(info, 'webkit', 'firefox'),
       'the heap is read through a CDP session, which only Chromium has',
     );
     test.skip(

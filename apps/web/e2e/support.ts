@@ -15,7 +15,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  type BrowserContext,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 import { messageId, type Message } from '@purlay/types';
 
 /** Where the page remembers which version's release notes it has shown (D-248). */
@@ -291,6 +297,36 @@ const NARROW_BELOW_PX = 900;
 
 export const isNarrow = (page: Page): boolean =>
   (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < NARROW_BELOW_PX;
+
+export type Engine = 'chromium' | 'firefox' | 'webkit';
+
+/**
+ * Which engine a test runs on, whatever its project is called: the projects are named for a theme and
+ * a width (`chromium-dark`) or for an engine (`webkit`), and a skip that compared names would run on
+ * every project it did not happen to list.
+ */
+const engineOf = (info: TestInfo): Engine => {
+  const { browserName, defaultBrowserType } = info.project.use;
+  return browserName ?? defaultBrowserType ?? 'chromium';
+};
+
+/**
+ * Why a test whose path is the Tab key does not run on WebKit. macOS WebKit's Tab moves between form controls
+ * only, unless the person turns on "Press Tab to highlight each item"; the build Playwright runs on Linux was
+ * not measured, so these stay skipped there until a run shows it (docs/spikes/cross-browser.md).
+ */
+export const WEBKIT_TAB =
+  "WebKit's Tab does not reach links and buttons as Chromium's does (macOS: form controls only, unless 'Press Tab to highlight each item' is on; Linux not measured) — docs/spikes/cross-browser.md";
+
+/** Whether the test runs on one of these engines. */
+export const onEngine = (info: TestInfo, ...engines: readonly Engine[]): boolean =>
+  engines.includes(engineOf(info));
+
+/**
+ * Whether a test can grant the page the clipboard. Only Chromium knows the permissions; elsewhere
+ * `grantPermissions` throws `Unknown permission` and a page's own reading of the clipboard asks the person.
+ */
+export const canGrantClipboard = (info: TestInfo): boolean => engineOf(info) === 'chromium';
 
 /**
  * The app's frame is up — the sidebar at a desktop width, its toggle at a narrow one — and the

@@ -5,7 +5,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, focused, test, workspaceFor } from './fixtures';
-import { navLink, shellReady, uniqueName } from './support';
+import { navLink, onEngine, shellReady, uniqueName, WEBKIT_TAB } from './support';
 
 const modifier = 'ControlOrMeta';
 
@@ -238,10 +238,7 @@ test.describe('focus', () => {
     signIn,
     room,
   }) => {
-    test.skip(
-      ['webkit'].includes(test.info().project.name),
-      "macOS WebKit's Tab moves between form controls only unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
-    );
+    test.skip(onEngine(test.info(), 'webkit'), WEBKIT_TAB);
     const made = await room({ members: ['dogancan', 'alice'] });
     await signIn();
     await page.goto(made.path);
@@ -265,8 +262,8 @@ test.describe('focus', () => {
     room,
   }) => {
     test.skip(
-      ['webkit', 'firefox'].includes(test.info().project.name),
-      "past the last element Firefox under Playwright keeps focus on it rather than going round, and macOS WebKit's Tab skips links (docs/spikes/cross-browser.md)",
+      onEngine(test.info(), 'webkit', 'firefox'),
+      `past the last element Firefox under Playwright keeps focus on it rather than going round (docs/spikes/cross-browser.md); and ${WEBKIT_TAB}`,
     );
     const made = await room({
       members: ['dogancan', 'alice'],
