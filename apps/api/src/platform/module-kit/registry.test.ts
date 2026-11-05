@@ -227,6 +227,20 @@ describe('what two modules, or a module and the core, both claim', () => {
     ).toHaveLength(1);
   });
 
+  test('a retention job is a job: two modules cannot both name one, nor take one the core has', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module('chat', { retention: ['purge:x'] }),
+          module('notes', { jobs: ['purge:x'] }),
+        ]),
+      ),
+    ).toEqual(['"chat" and "notes" both own the job "purge:x"']);
+    expect(
+      problemsOf(() => moduleRegistry([module('notes', { retention: ['sweep:sessions'] })], core)),
+    ).toEqual(['"notes" owns the job "sweep:sessions", which is the core\'s']);
+  });
+
   test('a job, a socket operation and a server event two modules both list are each a problem', () => {
     expect(
       problemsOf(() =>

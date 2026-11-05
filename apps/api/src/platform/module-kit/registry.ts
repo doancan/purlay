@@ -225,6 +225,12 @@ const CLAIM_KINDS = [
 const clash = (kind: keyof CoreClaims, first: string, second: string): boolean =>
   kind === 'routes' ? templatesOverlap(first, second) : first === second;
 
+/** A module's retention jobs are jobs it owns: the name of one is what `bun run job` is asked for, as of any other. */
+const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly string[] =>
+  kind === 'jobs'
+    ? [...(manifest.jobs ?? []), ...(manifest.retention ?? [])]
+    : (manifest[kind] ?? []);
+
 /** What two modules both claim, and what a module claims that the core already has. */
 const overlapProblems = (
   manifests: readonly ModuleManifest[],
@@ -233,7 +239,7 @@ const overlapProblems = (
   const problems: string[] = [];
   for (const [kind, noun] of CLAIM_KINDS) {
     manifests.forEach((manifest, index) => {
-      for (const claim of manifest[kind] ?? []) {
+      for (const claim of claimsOf(manifest, kind)) {
         for (const theirs of core[kind] ?? []) {
           if (!clash(kind, claim, theirs)) continue;
           problems.push(
@@ -243,7 +249,7 @@ const overlapProblems = (
           );
         }
         for (const other of manifests.slice(index + 1)) {
-          for (const theirs of other[kind] ?? []) {
+          for (const theirs of claimsOf(other, kind)) {
             if (!clash(kind, claim, theirs)) continue;
             problems.push(
               kind === 'routes'

@@ -13,6 +13,7 @@ import { forgetWhatChatKeeps } from './channels/user-hooks';
 import { requireAttachmentById } from './channels/guard';
 import { chatWorkspaceChannels } from './channels/workspace-channels';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
+import { chatJobWork } from './jobs';
 import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
@@ -30,9 +31,10 @@ export const chatModule = {
     // Every route that is about channels, messages and what hangs off them. The ones that are the workspace's own
     // (its members, invitations, exports, retention window, deletion, uploads) and the account's are the core's, and
     // `routes.test.ts` of the door holds the two lists to the routes the application registers.
-    // Only what acts for chat's users. The sweeps and the retention purge keep the rows tidy and keep running whether
-    // chat does or not: the rows are there.
+    // Only what acts for chat's users.
     jobs: ['mail:missed'],
+    // What keeps the rows within their retention keeps running whether chat does or not: the rows are there.
+    retention: ['purge:retention', 'sweep:link-previews', 'sweep:github-deliveries'],
     // What a person does in a channel over the socket: watch it, write in it, say they are typing.
     frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],
     // What chat's services send to a socket. The core's own — a workspace changing, an access revoked, a session
@@ -97,4 +99,6 @@ export const chatModule = {
   export: chatExport,
   personalExport: chatPersonalExport,
   collatedColumns: CHAT_COLLATED_COLUMNS,
+  // The work of `jobs` and `retention` above.
+  jobWork: chatJobWork,
 };
