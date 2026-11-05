@@ -5,6 +5,8 @@
  *
  * Chat's requests are made slow without a clock: a lock on the table a chat read ends at, held by a connection of the
  * test's own, so each one that gets a slot holds a connection until the lock is let go.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

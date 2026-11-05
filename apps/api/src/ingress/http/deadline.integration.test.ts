@@ -6,6 +6,8 @@
  * deadline passes, it is answered `504 REQUEST_TIMEOUT` in the error envelope with its request id, and the database is
  * told to cancel the statement it was waiting in, which is seen on the server and not assumed: the lock is still held, and
  * the statement's own limit is longer than this test waits.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
