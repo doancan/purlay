@@ -27,6 +27,7 @@ import {
   TypingFrame,
   UnsubscribeFrame,
   type ClientOp,
+  type RevokedReason,
   Uuid,
   type ServerFrame,
 } from '@purlay/types';
@@ -39,6 +40,7 @@ import {
   requireChannelById,
   requireChannelsById,
 } from '../features/chat/channels/guard';
+import { departuresFrom } from '../features/chat/channels/departures';
 import { send, type missedIn } from '../features/chat/messages/messages';
 import type { PushSender } from '../modules/push/sender';
 import { replaySince } from '../features/chat/messages/replay';
@@ -204,6 +206,36 @@ const fieldsOf = (parsed: unknown): Record<string, string> => {
 };
 
 /**
+ * The `ACCESS_REVOKED` a refused subscription's person would have been sent had their socket been open: for
+ * the channels they were in and are not, each with why, and for no other (D-264). A channel they never were
+ * in, or that does not exist, adds nothing, so their refusal is the same bytes as for a channel that was never
+ * there (D-34).
+ *
+ * Not being able to say why is not a reason to fail the refusal: the person is told "not found", as they were
+ * before there was a reason to tell, and the failure is written down.
+ */
+const missedRevocations = async (
+  dependencies: RouterDependencies,
+  userId: string,
+  channelIds: readonly string[],
+): Promise<readonly ServerFrame[]> => {
+  let departures: ReadonlyMap<string, RevokedReason>;
+  try {
+    departures = await departuresFrom(dependencies.database, userId, channelIds);
+  } catch (error) {
+    dependencies.log.error('could not read why a refused channel is gone', { err: error });
+    return [];
+  }
+  const byReason = new Map<RevokedReason, string[]>();
+  for (const [channelId, reason] of departures) {
+    byReason.set(reason, [...(byReason.get(reason) ?? []), channelId]);
+  }
+  return [...byReason].map(([reason, ids]) =>
+    frame({ event: 'ACCESS_REVOKED', data: { channelIds: ids, reason } }, dependencies.clock),
+  );
+};
+
+/**
  * Handles one frame and returns what to send back on this connection.
  *
  * Anything published to other connections has already gone to the bus by the
@@ -336,6 +368,12 @@ export const routeFrame = async (
           // Frames that arrived for channels it was never allowed are not released
           // with the error.
           dependencies.socket.drop(identity.socketId, fresh);
+          if (error instanceof AppError && error.body.code === 'CHANNEL_NOT_FOUND') {
+            return [
+              errorFrame(error, clock, parsed.id),
+              ...(await missedRevocations(dependencies, identity.userId, channelIds)),
+            ];
+          }
           throw error;
         }
       }

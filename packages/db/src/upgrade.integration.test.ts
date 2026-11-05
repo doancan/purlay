@@ -312,6 +312,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0003_message_reminders',
         'chat/0004_hidden_messages',
         CONTRACT_MIGRATION,
+        'chat/0006_channel_departures',
         'issues/0001_issues',
       ]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -419,7 +420,10 @@ describe('integration: the contract release on a database that has run the expan
 
       const after = await migrateToLatest(db, undefined, { modules: PRODUCT_MIGRATION_SETS });
       expect(after.error).toBeUndefined();
-      expect(after.results?.map((result) => result.migrationName)).toEqual([CONTRACT_MIGRATION]);
+      expect(after.results?.map((result) => result.migrationName)).toEqual([
+        CONTRACT_MIGRATION,
+        'chat/0006_channel_departures',
+      ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
         'claimed_at',
@@ -629,6 +633,7 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0003_message_reminders',
         'chat/0004_hidden_messages',
         CONTRACT_MIGRATION,
+        'chat/0006_channel_departures',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
