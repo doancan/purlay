@@ -226,7 +226,8 @@ moves into that module.
 **Built (D-250, the web registry).** `apps/web/src/features/<id>/manifest.ts` is data and one loader, no component:
 the module's `id`; `load`, an `import()` of its chunk, which exports one screen for each route; its routes (path
 patterns, all inside `/w/:slug`); the places it puts on the rail and in the palette; its shortcut rows; its settings
-pages; whether its chunk is asked for in the first commit (`preload`); and what stands in for a screen while the
+pages; the audit actions it records (`auditActions`, the same list the API's manifest reads, D-265); whether its chunk is
+asked for in the first commit (`preload`); and what stands in for a screen while the
 chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone). The list of manifests is
 `apps/web/src/modules/registry.ts`, and nothing else names a module to the shell:
 
@@ -236,7 +237,7 @@ chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone).
   screen behind `Suspense` (the stand-in the manifest names). `Outlet` draws the one `Shell` round it and round the
   core's screens of a workspace, so a change from one to the other keeps the shell standing. The core's routes are the `switch`'s cases, and one
   without a case does not compile.
-- **Rail, palette, shortcuts, settings.** Each draws, for the modules the session lists, what the manifests say. An entry
+- **Rail, palette, shortcuts, settings, audit filter.** Each draws, for the modules the session lists, what the manifests say. An entry
   that is more than a link (the inbox's dot and panel, the open-questions count) draws itself, by route, in `rail.tsx`.
   What chat's palette lists from its data (channels, people, mark all read) stays in `use-palette-items.ts`, gated on chat.
 - **The shell holds no module code.** A manifest imports types only, so the registry the shell carries holds no screen,
@@ -245,7 +246,7 @@ chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone).
   module ids from the manifests and looks for each one's screen marker (`screen-of-the-<id>-module`) in the initial
   chunks.
 
-`registry.test.tsx` holds every manifest to the router and to each other: a route the router does not know, a rail
+`registry.test.tsx` holds every manifest to the router and to each other (and the audit actions of the core and the manifests to the wire's list, each once): a route the router does not know, a rail
 entry for another module's route, a palette place that is not the module's own, a settings page or shortcut row placed
 after something that is not there, and a manifest the registry does not list.
 
@@ -429,7 +430,8 @@ commit beside this list.
 - **Audit and permissions** (D-265): an audit action is a value of `AUDIT_ACTIONS` in `@purlay/types` and the name of one
   of the module's list there (`<ID>_AUDIT_ACTIONS`), declared in the manifest's `auditActions` with the permission that
   reads it, and its target a `targetType` in `modules/audit/audit.ts`; it is written in the same transaction by id and
-  never by words (D-222), with the sentence the settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`).
+  never by words (D-222), with the sentence the settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`)
+  and the same list as the web manifest's `auditActions`, which is what the page's filter offers while the module runs.
   A role rule that is the module's own is a permission in the manifest's `permissions`, asked of
   `permissions.holds(context.role, NAME)` with the table the composition makes and the route hands the service
   (`issues.delete-any`). `audit-emissions.test.ts` fails for an action the module's source records and its manifest does not

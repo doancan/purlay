@@ -34,6 +34,7 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { DateField } from '../../../ui/date-field';
 import { href } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
+import { auditActionsOf } from '../../../modules/registry';
 import { AuthorPicker } from '../../search/author-picker';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
@@ -58,7 +59,7 @@ export const AuditPage = (): React.JSX.Element => {
   const api = useApi();
   const describe = useDescribeFailure();
   const { workspace } = useWorkspace();
-  const { user: me } = useSession();
+  const { user: me, modules } = useSession();
   const { search, navigate } = useRoute();
   const members = useMembers(workspace.id);
   const channels = useChannels(workspace.id);
@@ -423,7 +424,7 @@ export const AuditPage = (): React.JSX.Element => {
               }}
             >
               <option value="">{t('audit.filter.anyAction')}</option>
-              {AUDIT_ACTIONS.map((action) => (
+              {auditActionsOf(modules).map((action) => (
                 <option key={action} value={action}>
                   {t(`audit.kind.${action}`)}
                 </option>
