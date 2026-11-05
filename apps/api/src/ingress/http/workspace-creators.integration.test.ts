@@ -6,8 +6,17 @@
  * Inside a transaction that is rolled back (D-46). The first run of an instance is made by emptying
  * `workspaces` inside it, which the rollback puts back.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+  sql,
+  withRollback,
+  type ClonedDatabase,
+  type Executor,
+} from '@purlay/db';
 import { createApp } from './app';
 import { creatorsFromTheSetting, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
@@ -20,9 +29,17 @@ import { recordGitHubSignIn } from '../../modules/auth/identity';
 import { aSession, aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
+// A database of its own (D-228) for the test that empties `workspaces`: truncating takes every table that refers to
+// it, and on the shared database the lock deadlocks (40P01) with any file beside it.
+let own: ClonedDatabase;
+beforeAll(async () => {
+  own = await cloneIntegrationDatabase();
+}, CLONE_HOOK_MS);
+
 afterAll(async () => {
+  await own.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const ORIGIN = 'https://purlay.test';
 const clock = fixedClock(new Date('2026-10-19T12:00:00.000Z'));
@@ -237,7 +254,7 @@ describe('integration: who may make a workspace (D-155)', () => {
       expect(await tryIt(db, undefined, first)).toEqual(ALLOWED);
       // The instance has its workspace now: the next is an invitation away, even for its owner.
       expect(await tryIt(db, undefined, first)).toEqual(REFUSED);
-    });
+    }, own.db);
   });
 
   test('unset, an instance that has a workspace lets nobody make another', async () => {
