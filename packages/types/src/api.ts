@@ -689,6 +689,28 @@ export const NEEDS_YOU = [
   'channel_message',
 ] as const satisfies readonly NotificationType[];
 
+/**
+ * What a kind of notification does, as the module whose kind it is declares it (`MODULES.md` §2, D-265): whether it needs
+ * the person (the badge, the title, the background alert), is pushed to a device, and is mailed when it waits unread.
+ * `NotificationType` is these kinds' names and `NEEDS_YOU` those that need the person, held to each other by
+ * `notification-kinds.test.ts`.
+ */
+export interface NotificationKind {
+  readonly type: NotificationType;
+  readonly needsYou: boolean;
+  readonly pushed: boolean;
+  readonly mailed: boolean;
+}
+
+export const CHAT_NOTIFICATION_KINDS = [
+  { type: 'mention', needsYou: true, pushed: true, mailed: true },
+  { type: 'direct_message', needsYou: true, pushed: true, mailed: true },
+  { type: 'thread_reply', needsYou: true, pushed: true, mailed: false },
+  { type: 'thread_resolved', needsYou: false, pushed: false, mailed: false },
+  { type: 'channel_message', needsYou: true, pushed: true, mailed: false },
+  { type: 'reminder', needsYou: false, pushed: true, mailed: false },
+] as const satisfies readonly NotificationKind[];
+
 /** `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107). */
 export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
 export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;

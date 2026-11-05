@@ -122,7 +122,14 @@ export const CORE_EVENTS: readonly string[] = [
 /** What the core claims of each kind a manifest lists. */
 export type CoreClaims = Readonly<
   Record<
-    'routes' | 'jobs' | 'frames' | 'events' | 'permissions' | 'auditActions',
+    | 'routes'
+    | 'jobs'
+    | 'frames'
+    | 'events'
+    | 'permissions'
+    | 'auditActions'
+    | 'notifications'
+    | 'searchSources',
     readonly string[]
   >
 >;
@@ -134,4 +141,6 @@ export const CORE_CLAIMS: CoreClaims = {
   events: CORE_EVENTS,
   permissions: CORE_PERMISSIONS.map((declared) => declared.name),
   auditActions: CORE_AUDIT_ACTIONS,
+  notifications: [],
+  searchSources: [],
 };
