@@ -56,6 +56,13 @@ export interface NotificationKindDeclaration {
   readonly mailed: boolean;
 }
 
+/**
+ * How long one of the module's requests or frames may run before it is stopped and the database is told to cancel what it
+ * was asked (`MODULES.md` §7, D-270): a number of milliseconds, or `none` with the reason, which a test lists. A module
+ * that says nothing has the platform's default.
+ */
+type ModuleDeadlineDeclaration = { readonly ms: number } | { readonly none: string };
+
 export interface ModuleManifest {
   /** Lowercase letters, digits and hyphens: the word an operator writes in `MODULES`. */
   readonly id: string;
@@ -67,6 +74,8 @@ export interface ModuleManifest {
   readonly provides: readonly string[];
   /** The module's share of the database pool, or `none` with the reason it has no need of one. */
   readonly budget: ModuleBudgetDeclaration;
+  /** How long a request or frame of the module may take; left out, `DEFAULT_DEADLINE_MS` (`platform/request-deadline.ts`). */
+  readonly deadline?: ModuleDeadlineDeclaration;
   /**
    * The HTTP routes the module owns, as path templates: `:name` is one segment and a trailing `**` is the rest.
    * A module that is not run has no route, so a request for one is the `404` of any unknown path

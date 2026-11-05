@@ -111,3 +111,26 @@ This spike concluded that `apps/api` is referenced by nothing and should therefo
 `composite`. **That was wrong about this repository** — the solution `tsconfig.json` references
 `apps/api`, and a referenced project must be composite. Checked before acting on it. The emit is
 kept small by the return-type annotation above instead.
+
+## `wrap`, the hook around a whole request (D-270)
+
+The framework has one hook that runs *around* a request, where the others (`onRequest` … `onAfterResponse`) only run
+before or after one: `wrap`. Its type says *"@private DO_NOT_USE_OR_YOU_WILL_BE_FIRED … Add Higher order function to
+Elysia.fetch"*, and types its argument as a function that returns a function. Used for a per-module request deadline,
+which a hook that cannot stop a handler that never returns cannot give, so it was run before it was written down
+(Elysia 1.4.30, Bun 1.4.4, a scratch application of three routes, deleted):
+
+```
+handle fast     200 fast
+handle slow     504 {"error":"deadline"}   100 ms     (the handler sleeps 500 ms)
+listen slow     504 {"error":"deadline"}   102 ms
+ws              echo hi                                (an upgrade through the wrapped fetch)
+```
+
+It wraps `handle` and a started server alike, and a socket upgrade passes through it untouched. **What had to be
+loosened:** the types — `fn` is cast to what it is at run time, a function from the request's arguments to its response
+— and one thing the first attempt got wrong, which was a host: `http://x/fast` answered `404` with and without `wrap`
+(the router wants `localhost`), so the first run said nothing about the hook. The version is pinned exactly
+(`apps/api/package.json`), and `ingress/http/deadline.integration.test.ts` answers a request that waits on a lock over
+`handle` and over a started server, so an upgrade of the framework that changes the hook fails there.
+

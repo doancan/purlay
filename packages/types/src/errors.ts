@@ -12,7 +12,8 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 411 | 413 | 415 | 426 | 429 | 500 | 503;
+export type HttpStatus =
+  400 | 401 | 403 | 404 | 409 | 411 | 413 | 415 | 426 | 429 | 500 | 503 | 504;
 
 /**
  * Every failure this API can express.
@@ -220,6 +221,12 @@ export const ErrorCode = Type.Union([
    * may be retried. Never told as absence (D-109).
    */
   Type.Literal('STORAGE_UNAVAILABLE'),
+  /**
+   * A module's request or frame ran past its deadline (`MODULES.md` §7, D-270): the server stopped waiting and cancelled what
+   * it had asked of the database. Unlike `DATABASE_UNAVAILABLE` it may have changed something before it ran out, so a
+   * client reads again before it repeats a write that is not idempotent.
+   */
+  Type.Literal('REQUEST_TIMEOUT'),
   /** This server has no Web Push keys: push is switched off by its operator (#78). */
   Type.Literal('PUSH_UNAVAILABLE'),
   /** This server cannot send a sign-in link: no `SMTP_URL` and `MAIL_FROM` (D-138 §6). */
@@ -361,6 +368,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   PUSH_UNAVAILABLE: 503,
   EMAIL_SIGN_IN_UNAVAILABLE: 503,
   DATABASE_UNAVAILABLE: 503,
+  REQUEST_TIMEOUT: 504,
 };
 
 /** Which field failed, and why, in language a person can act on. */

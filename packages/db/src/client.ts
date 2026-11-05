@@ -91,6 +91,8 @@ export const readCaFile = (path: string): string => {
 export interface ConnectionLease {
   /** The session's `statement_timeout` for this connection; the pool's own when absent. */
   readonly statementTimeoutMs?: number;
+  /** When it aborts, the statement the connection is running is cancelled by the database. */
+  readonly signal?: AbortSignal;
   /** Called once, when the connection goes back to the pool. */
   readonly release: () => void;
 }
@@ -106,6 +108,8 @@ interface PoolOfExecutor {
   readonly pool: pg.Pool;
   readonly statementTimeoutMs: number;
   readonly plugins: readonly KyselyPlugin[];
+  /** Where a cancellation that could not be made is said (`DatabaseOptions.onPoolError`). */
+  readonly report?: (error: Error) => void;
 }
 
 /** Which pool each executor takes its connections from, so that another can be made on the same one. */
@@ -127,6 +131,28 @@ const alignStatementTimeout = async (
 };
 
 /**
+ * Asks the database to cancel what `client` is running, from a connection of its own: when a deadline passes the pool is
+ * what is full. A statement already finished is left alone, and one that began in the moment this took may be cancelled
+ * in its place, which its request is told as the database being busy.
+ */
+const cancelStatement = async (pool: PoolOfExecutor, client: pg.PoolClient): Promise<void> => {
+  const control = new pg.Client(pool.pool.options);
+  const report = (error: unknown): void => {
+    pool.report?.(error instanceof Error ? error : new Error(String(error)));
+  };
+  try {
+    await control.connect();
+    await control.query('select pg_cancel_backend($1)', [
+      (client as { processID?: number }).processID,
+    ]);
+  } catch (error) {
+    report(error);
+  } finally {
+    await control.end().catch(report);
+  }
+};
+
+/**
  * The pool as Kysely takes connections from it. Every failure to obtain one is the same fact to a caller: there was
  * none. With a `lease`, each connection is asked of it first and handed back to it; either way it arrives with the
  * statement limit its holder asked for, since one holder's five seconds are not the next holder's to find.
@@ -137,10 +163,11 @@ const connectionsOf = (pool: PoolOfExecutor, lease?: LeaseConnection): PostgresP
     const leased = await lease?.();
     let client: pg.PoolClient;
     try {
+      leased?.signal?.throwIfAborted();
       client = await pool.pool.connect();
     } catch (error) {
       leased?.release();
-      throw new DatabaseUnavailableError(error);
+      throw leased?.signal?.aborted === true ? error : new DatabaseUnavailableError(error);
     }
     try {
       await alignStatementTimeout(
@@ -157,12 +184,25 @@ const connectionsOf = (pool: PoolOfExecutor, lease?: LeaseConnection): PostgresP
     if (leased !== undefined) {
       const giveBack = client.release.bind(client);
       let released = false;
+      // A connection with a cancellation in flight is not handed back until it has been delivered: it would reach the next
+      // statement that connection runs, which is some other request's.
+      let cancelling: Promise<void> | undefined;
+      const cancel = (): void => {
+        if (!released) cancelling = cancelStatement(pool, client);
+      };
+      leased.signal?.addEventListener('abort', cancel, { once: true });
       client.release = (error?: Error | boolean): void => {
         if (!released) {
           released = true;
+          leased.signal?.removeEventListener('abort', cancel);
           leased.release();
         }
-        giveBack(error);
+        if (cancelling === undefined) giveBack(error);
+        else {
+          void cancelling.then(() => {
+            giveBack(error);
+          });
+        }
       };
     }
     return client;
@@ -190,8 +230,17 @@ class PooledKysely<T> extends Kysely<T> {
 }
 
 /** Opens Kysely on a pool; `statementTimeoutMs` is the pool's own (`0`: none). */
-export const executorOnPool = <T = DB>(pool: pg.Pool, statementTimeoutMs = 0): Kysely<T> =>
-  new PooledKysely<T>({ pool, statementTimeoutMs, plugins: [] });
+export const executorOnPool = <T = DB>(
+  pool: pg.Pool,
+  statementTimeoutMs = 0,
+  report?: (error: Error) => void,
+): Kysely<T> =>
+  new PooledKysely<T>({
+    pool,
+    statementTimeoutMs,
+    plugins: [],
+    ...(report === undefined ? {} : { report }),
+  });
 
 /** Lets a test's double (`testing/doubles.ts`) be leased: every connection it is asked for fails with `failure`. */
 export const leasableStandIn = (standIn: Executor, failure: Error): Executor => {
@@ -264,7 +313,11 @@ export const createDatabase = (options: DatabaseOptions): Executor => {
       : {}),
   });
   pool.on('error', (error) => options.onPoolError?.(error));
-  return executorOnPool(pool, options.statementTimeoutMs ?? POOL_DEFAULTS.statementTimeoutMs);
+  return executorOnPool(
+    pool,
+    options.statementTimeoutMs ?? POOL_DEFAULTS.statementTimeoutMs,
+    options.onPoolError,
+  );
 };
 
 /**

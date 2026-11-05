@@ -261,6 +261,7 @@ import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
 import { moduleConnections } from '../../platform/module-budget';
+import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-deadline';
 import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
@@ -547,12 +548,18 @@ export const createApp = (given: Dependencies): HttpApplication => {
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
+  const deadlineOf = deadlinesOf(modules.bundled.map((module) => module.manifest));
   const sockets = createSocketLifecycle({
     ...dependencies,
+    deadlineOf,
     userWrites,
     metrics,
     closedFrame: modules.closedFrame,
     frameOwner: modules.owner.ofFrame,
+    moduleOfFrame: (op) => {
+      const owner = modules.owner.ofFrame(op);
+      return owner === CORE_OWNER || owner === NO_OWNER ? undefined : owner;
+    },
     closedEvent: modules.closedEvent,
   });
   metrics.registry.gauge(
@@ -680,12 +687,53 @@ export const createApp = (given: Dependencies): HttpApplication => {
    */
   const writtenPath = (route: string | undefined, path: string): string =>
     route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);
+  /** What a request's own hooks know that the deadline, which wraps them all, needs to answer in their place. */
+  const requestIds = new WeakMap<Request, string>();
+  const deadlineSignals = new WeakMap<Request, AbortSignal>();
+  /** The answer to a module's request that ran past its deadline: the envelope, with the headers the others carry. */
+  const answerOverrun = (request: Request, module: string): Response => {
+    const { status, body } = refusalFor('UNKNOWN', timedOut(), []);
+    const { pathname } = new URL(request.url);
+    log.warn('request ran past its deadline', {
+      module,
+      method: request.method,
+      path: pathWithoutSecret(pathname),
+    });
+    return Response.json(body, {
+      status,
+      headers: { ...edgeHeaders, 'x-request-id': requestIds.get(request) ?? '' },
+    });
+  };
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
     // What an upload needs, and no more: every other body is bounded at the edge by its length,
     // before it is read (`bodyRefusal`, D-109 §4).
     serve: { maxRequestBodySize: ATTACHMENT_BYTES_MAX },
   })
+    /**
+     * A module's request runs against its module's deadline, whatever it waits for (`platform/request-deadline.ts`, D-270).
+     * `wrap` is the framework's own hook around the whole of a request, "do not use unless you know exactly what you are
+     * doing" in its type's words: `docs/spikes/elysia.md` says what was measured, and `deadline.integration.test.ts` answers
+     * a handler that never returns, over `handle` and over a started server, so an upgrade of the framework that changes it
+     * fails there.
+     */
+    .wrap((fn, request) => {
+      // The framework types what it wraps as a function that returns a function; it is the request's handler, which answers.
+      const handle = fn as unknown as (...given: unknown[]) => Promise<Response> | Response;
+      return async (...args: unknown[]): Promise<Response> => {
+        const module = modules.owner.ofPath(new URL(request.url).pathname);
+        const ms = module === undefined ? undefined : deadlineOf(module);
+        if (module === undefined || ms === undefined) return await handle(...args);
+        return await withDeadline(
+          ms,
+          async (signal) => {
+            deadlineSignals.set(request, signal);
+            return await handle(...args);
+          },
+          () => answerOverrun(request, module),
+        );
+      };
+    })
     /**
      * One error handler for the whole surface, so a status is decided in exactly
      * one place. `set.status` rather than a thrown response: a second way to
@@ -700,6 +748,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       // An id from the edge is kept when well-formed, as a label only (#234).
       const requestId = inboundRequestId(request.headers);
       enterRequest({ requestId, startedAt: performance.now() });
+      requestIds.set(request, requestId);
       // Before anything asks the library: every use of it in this request, and in what the request
       // leaves for after its answer, is of the instance current now (D-179 §4).
       dependencies.services?.pin();
@@ -761,7 +810,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
       // From here the request is its module's. The edge's limits and session reads below are the core's: they never touch
       // the leased database.
       const owner = moduleOfRoute(route);
-      if (owner !== CORE_OWNER && owner !== NO_OWNER) noteModule(owner);
+      if (owner !== CORE_OWNER && owner !== NO_OWNER)
+        noteModule(owner, deadlineSignals.get(request));
       const wait = await admit(request, peerOf(server, request));
       if (wait === undefined) return;
       set.headers['retry-after'] = String(wait);

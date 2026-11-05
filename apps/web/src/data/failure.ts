@@ -171,6 +171,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'GITHUB_ACCOUNT_TAKEN':
       return 'failure.refused';
     case 'DATABASE_UNAVAILABLE':
+    case 'REQUEST_TIMEOUT':
     case 'STORAGE_UNAVAILABLE':
     case 'PUSH_UNAVAILABLE':
     case 'EMAIL_SIGN_IN_UNAVAILABLE':

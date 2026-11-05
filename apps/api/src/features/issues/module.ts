@@ -42,6 +42,8 @@ export const issuesModule = {
     provides: [],
     // A third of the pool, so that a module whose queries are slow cannot make chat's sends queue (`budget.ts`).
     budget: { poolShare: issuesBudget },
+    // Past its own queue (1 s) and statement limit (5 s), well under the default: a list of issues is not a long request.
+    deadline: { ms: 8_000 },
     routes: ['/api/workspaces/:workspaceId/issues', '/api/workspaces/:workspaceId/issues/**'],
     jobs: [],
     permissions: [

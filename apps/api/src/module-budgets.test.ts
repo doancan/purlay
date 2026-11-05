@@ -6,10 +6,8 @@
 import { describe, expect, test } from 'bun:test';
 import { bundledModules } from './composition';
 
-/** The modules that declare `budget: { none }`, with what they say. */
-const EXEMPT_FROM_A_SHARE: Readonly<Record<string, string>> = {
-  chat: 'chat is what the other modules are kept from slowing, so it has no share of its own',
-};
+/** The modules that declare `budget: { none }`, with what they say; empty while every module has a share. */
+const EXEMPT_FROM_A_SHARE: Readonly<Record<string, string>> = {};
 
 describe('the modules that have no share of the pool', () => {
   test('are exactly the ones listed here, each with the reason its manifest gives', () => {

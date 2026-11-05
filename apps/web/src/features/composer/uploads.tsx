@@ -204,6 +204,7 @@ const uploadRefusal = (
       return { text: t('upload.why.pending'), retry: true };
     case 'NETWORK':
     case 'TIMEOUT':
+    case 'REQUEST_TIMEOUT':
       return { text: t('upload.why.network'), retry: true };
     case 'RATE_LIMITED':
       return { text: t('upload.why.busy'), retry: true };

@@ -18,6 +18,8 @@ export interface Owners {
   /** The owner of a route as the router registered it (`/api/channels/:channelId`), not of a path as asked for. */
   readonly ofRoute: (route: string) => string;
   readonly ofJob: (job: string) => string;
+  /** The module a request for a concrete path belongs to, as it was sent, or `undefined` for the core's and no one's. */
+  readonly ofPath: (path: string) => string | undefined;
   /** The owner of a client frame's operation (`SUBSCRIBE`, `PING`); `none` for a word that is no operation. */
   readonly ofFrame: (op: string) => string;
 }
@@ -36,6 +38,8 @@ export const ownersOf = (manifests: readonly ModuleManifest[], core: CoreClaims)
       core.frames.includes(op)
         ? CORE_OWNER
         : (manifests.find((manifest) => (manifest.frames ?? []).includes(op))?.id ?? NO_OWNER),
+
+    ofPath: (path) => byRoute.find((module) => module.owns(path))?.id,
     ofJob: (job) =>
       core.jobs.includes(job)
         ? CORE_OWNER

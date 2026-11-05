@@ -135,6 +135,8 @@ export interface RequestScope {
   sessionId?: string;
   /** The module whose route this is, once the router knows it (`noteModule`): the share of the database that holds it. */
   module?: string;
+  /** Aborts when the module's deadline for this request passes (`request-deadline.ts`): the work stops with the answer. */
+  signal?: AbortSignal;
 }
 
 const scope = new AsyncLocalStorage<RequestScope>();
@@ -165,9 +167,11 @@ export const noteSession = (sessionId: string): void => {
 };
 
 /** Notes the module a request or frame belongs to; outside a request there is none to note. */
-export const noteModule = (module: string): void => {
+export const noteModule = (module: string, signal?: AbortSignal): void => {
   const request = scope.getStore();
-  if (request !== undefined) request.module = module;
+  if (request === undefined) return;
+  request.module = module;
+  if (signal !== undefined) request.signal = signal;
 };
 
 const wrap = (instance: pino.Logger): Logger => {

@@ -14,7 +14,7 @@ import {
 } from '../testing/doubles';
 import { refusalFor } from '../ingress/http/errors';
 import { fixedClock } from '../platform/clock';
-import { createLogger, withinRequest, type Logger } from '../platform/logging';
+import { createLogger, withinRequest, type Logger, type RequestScope } from '../platform/logging';
 import { inProcessEventBus } from './bus';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
@@ -28,15 +28,18 @@ const subscribeWith = async (
   log: Logger,
   id: string,
   closedFrame?: (op: string) => boolean,
+  moduleOfFrame?: (op: string) => string | undefined,
+  scope: RequestScope = { requestId: 'frame-1', startedAt: 0 },
 ): Promise<readonly ServerFrame[]> =>
   await withinRequest(
-    { requestId: 'frame-1', startedAt: 0 },
+    scope,
     async () =>
       await routeFrame(
         {
           database,
           clock,
           ...(closedFrame === undefined ? {} : { closedFrame }),
+          ...(moduleOfFrame === undefined ? {} : { moduleOfFrame }),
           bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
@@ -180,5 +183,106 @@ describe('a frame of a module this process does not run', () => {
       ts: undefined,
       id: undefined,
     });
+  });
+});
+
+describe('a frame of a module', () => {
+  test('is noted as the module’s, so that its share of the database holds what the frame asks of it', async () => {
+    const scope: RequestScope = { requestId: 'frame-3', startedAt: 0 };
+    const { log } = aRecordingLogger();
+    await subscribeWith(
+      aDatabaseThatMustNotBeTouched(),
+      log,
+      '00000000-0000-7000-8000-000000000002',
+      undefined,
+      (op) => (op === 'SUBSCRIBE' ? 'chat' : undefined),
+      scope,
+    );
+    expect(scope.module).toBe('chat');
+  });
+
+  test('of the socket’s own is nobody’s: the core takes its connections as the pool gives them', async () => {
+    const scope: RequestScope = { requestId: 'frame-4', startedAt: 0 };
+    const { log } = aRecordingLogger();
+    await subscribeWith(
+      aDatabaseThatMustNotBeTouched(),
+      log,
+      '00000000-0000-7000-8000-000000000003',
+      undefined,
+      () => undefined,
+      scope,
+    );
+    expect(scope.module).toBeUndefined();
+  });
+});
+
+describe('a frame of a module that runs past its deadline', () => {
+  const stuck = async (
+    scope: RequestScope,
+    deadlineOf: (module: string) => number | undefined,
+  ): Promise<{
+    readonly id: string;
+    readonly replies: readonly ServerFrame[];
+    readonly lines: readonly Record<string, unknown>[];
+  }> => {
+    const id = '00000000-0000-7000-8000-000000000004';
+    const { log, lines } = aRecordingLogger();
+    const replies = await withinRequest(
+      scope,
+      async () =>
+        await routeFrame(
+          {
+            database: aDatabaseThatMustNotBeTouched(),
+            clock,
+            moduleOfFrame: (op) => (op === 'TYPING' ? 'chat' : undefined),
+            deadlineOf,
+            bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
+            // Never answers: whatever the frame waits for, the deadline is what ends the wait.
+            limiter: {
+              ...inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+              consume: () => new Promise<boolean>(() => undefined),
+            },
+            userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+            presence: inMemoryPresenceRegistry(clock),
+            attention: nobodyActive,
+            online: { active: () => undefined },
+            sessionLifetime: () => NO_SESSION_LIFETIME,
+            log,
+            socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
+            atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),
+          },
+          { socketId: 's1', userId: 'u1', sessionId: 'not-read', expiresAt: clock.now() },
+          JSON.stringify({
+            id,
+            op: 'TYPING',
+            payload: { channelId: '00000000-0000-4000-8000-000000000000' },
+          }),
+        ),
+    );
+    return { id, replies, lines };
+  };
+
+  test('is answered REQUEST_TIMEOUT to the frame that was sent, with its module written down, and its signal aborted', async () => {
+    const scope: RequestScope = { requestId: 'frame-5', startedAt: 0 };
+    const { id, replies, lines } = await stuck(scope, () => 30);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({
+      event: 'ERROR',
+      refId: id,
+      data: { code: 'REQUEST_TIMEOUT' },
+    });
+    expect(scope.signal?.aborted).toBe(true);
+    expect(lines.find((line) => line['msg'] === 'frame ran past its deadline')).toMatchObject({
+      module: 'chat',
+      op: 'TYPING',
+    });
+  });
+
+  test('is not stopped when its module has no deadline', async () => {
+    const outcome = await Promise.race([
+      stuck({ requestId: 'frame-6', startedAt: 0 }, () => undefined),
+      Bun.sleep(150).then(() => 'still waiting'),
+    ]);
+    expect(outcome).toBe('still waiting');
   });
 });
