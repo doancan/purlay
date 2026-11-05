@@ -86,6 +86,51 @@ test('somebody looking at a channel an admin archives is told it was archived', 
   ).toHaveCount(0);
 });
 
+test('a channel archived while this page had no connection says so when the connection returns (D-264)', async ({
+  page,
+  signIn,
+  room,
+  api,
+}) => {
+  const made = await room({ members: ['dogancan', 'alice'] });
+  // The page's connection is cut by the test and refused while it is "down"; what the server sent in
+  // the meantime went to nobody, and the archive is among it.
+  let down = false;
+  let cut = (): void => undefined;
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    if (down) {
+      void ws.close();
+      return;
+    }
+    const server = ws.connectToServer();
+    cut = (): void => {
+      void ws.close();
+    };
+    ws.onMessage((frame) => {
+      server.send(frame);
+    });
+    server.onMessage((frame) => {
+      ws.send(frame);
+    });
+  });
+  await signIn('alice');
+  await page.goto(made.path);
+  await expect(page.getByRole('heading', { level: 1, name: made.name })).toBeVisible();
+  await api('dogancan').say(made.id, 'the socket is listening');
+  await expect(
+    page.locator('[data-message-row]', { hasText: 'the socket is listening' }),
+  ).toBeVisible();
+
+  down = true;
+  cut();
+  await api('dogancan').del(`/api/channels/${made.id}`);
+  down = false;
+
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'This channel was archived' }),
+  ).toBeVisible();
+});
+
 test('an admin restores an archived channel from General, and it is back in a member’s sidebar without a reload (D-232)', async ({
   page,
   signIn,

@@ -50,6 +50,7 @@ have it.
 
 ### Fixed
 
+- **Channels** — A channel that was archived, left or taken from you while your connection was down now says so when the connection returns, instead of "not found"; somebody who was never in it is still told nothing (D-264)
 - **Messages** — Opening the preview of a Markdown file no longer scrolls the page away from the button that opened it (D-259)
 - **Editor** — Pasting a very long single line no longer freezes the box for seconds (D-259)
 

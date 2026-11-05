@@ -1495,6 +1495,25 @@ describe('a subscription the server refuses', () => {
     },
   );
 
+  test.each(['archived', 'left', 'removed'] as const)(
+    'for a channel the person was in is followed by the notice that says %s: the channel is gone, with its reason (D-264)',
+    (reason) => {
+      const w = opened([CH, CH2]);
+      refuse(w, 'CHANNEL_NOT_FOUND');
+      // What the server sends behind the refusal, for the channels the person was in and for no other.
+      w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason }, ts: T0 }));
+      expect(w.engine.store.getState().gone).toEqual({ [CH]: reason });
+      expect(w.client.getQueryData<Channel[]>(keys.channels(WS))?.map((c) => c.id)).toEqual([CH2]);
+      expect(w.engine.store.getState().degraded).toEqual({});
+    },
+  );
+
+  test('for a channel the person was never in says nothing of why, as before (D-34)', () => {
+    const w = opened([CH]);
+    refuse(w, 'CHANNEL_NOT_FOUND');
+    expect(w.engine.store.getState().gone).toEqual({});
+  });
+
   test("is reported once: the ERROR that follows the connection's report is not a second, unnamed failure", () => {
     const w = opened([CH]);
     refuse(w, 'INTERNAL');

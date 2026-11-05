@@ -320,6 +320,7 @@ const tables = [
 
 /** The tables of chat that are not in an export, and why. */
 type ChatExcluded =
+  | 'channel_departures'
   | 'hidden_messages'
   | 'message_reminders'
   | 'scheduled_messages'
@@ -340,6 +341,8 @@ type ChatExcluded =
   | 'link_previews';
 
 const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
+  channel_departures:
+    'how each person left a channel, kept only to tell their own socket why it is gone (D-264): their own state',
   hidden_messages: 'messages each person deleted for themselves alone: their own state',
   message_reminders: 'each person’s private reminders: their own state',
   scheduled_messages: 'each person’s private messages not yet sent: theirs until they are sent',

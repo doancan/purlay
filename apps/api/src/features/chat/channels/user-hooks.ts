@@ -15,7 +15,13 @@ export const forgetWhatChatKeeps = async (
   ...[transaction, userId, afterCommit]: Parameters<UserErased['run']>
 ): Promise<void> => {
   // Made by chat's own migration set, so absent from a database migrated without it, where there is nothing to forget.
-  for (const table of ['hidden_messages', 'message_reminders', 'scheduled_messages'] as const) {
+  // `channel_departures` is how they left a channel, which names them (D-264).
+  for (const table of [
+    'hidden_messages',
+    'message_reminders',
+    'scheduled_messages',
+    'channel_departures',
+  ] as const) {
     if (await tableExists(transaction, table)) {
       await transaction.deleteFrom(table).where('user_id', '=', userId).execute();
     }

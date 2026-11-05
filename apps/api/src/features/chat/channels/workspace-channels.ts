@@ -22,6 +22,14 @@ const leaveAll = async (
       eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
     )
     .execute();
+  // Out of the workspace, not out of a channel: no reason is kept to be told later (D-264).
+  await executor
+    .deleteFrom('channel_departures')
+    .where('user_id', '=', userId)
+    .where('channel_id', 'in', (eb) =>
+      eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
+    )
+    .execute();
   return channelIds;
 };
 
