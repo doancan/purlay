@@ -70,7 +70,7 @@ beforeAll(async () => {
 afterEach(async () => {
   for (const socket of held.splice(0)) socket.close();
   await until('every socket to be forgotten', () => app.held().connections === 0);
-});
+}, DROP_HOOK_MS);
 
 afterAll(async () => {
   await app.stop(true);
