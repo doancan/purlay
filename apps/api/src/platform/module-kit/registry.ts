@@ -263,6 +263,8 @@ const CLAIM_KINDS = [
   ['events', 'server event'],
   ['permissions', 'permission'],
   ['auditActions', 'audit action'],
+  ['notifications', 'notification kind'],
+  ['searchSources', 'search source'],
 ] as const;
 
 /** Two claims of one kind clash: the same name, or for a route a template with a path in common. */
@@ -278,6 +280,10 @@ const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly st
       return (manifest.permissions ?? []).map((declared) => declared.name);
     case 'auditActions':
       return (manifest.auditActions ?? []).flatMap((group) => group.actions);
+    case 'notifications':
+      return (manifest.notifications ?? []).map((kind) => kind.type);
+    case 'searchSources':
+      return manifest.searchSources ?? [];
     case 'routes':
     case 'frames':
     case 'events':

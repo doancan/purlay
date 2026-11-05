@@ -433,3 +433,29 @@ describe('the permissions and audit actions a module declares', () => {
     ).toEqual(['"notes" lists the audit action "Created", which is not like "issue.created"']);
   });
 });
+
+describe('the notification kinds and search sources a module declares', () => {
+  const kind = (type: string): NonNullable<ModuleManifest['notifications']>[number] => ({
+    type,
+    needsYou: true,
+    pushed: true,
+    mailed: false,
+  });
+
+  test('two modules cannot both send a kind or both own a source', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry(
+          [
+            module('notes', { notifications: [kind('note_shared')], searchSources: ['notes'] }),
+            module('wiki', { notifications: [kind('note_shared')], searchSources: ['notes'] }),
+          ],
+          CORE_CLAIMS,
+        ),
+      ),
+    ).toEqual([
+      '"notes" and "wiki" both own the notification kind "note_shared"',
+      '"notes" and "wiki" both own the search source "notes"',
+    ]);
+  });
+});
