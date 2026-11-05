@@ -643,6 +643,12 @@ leaves the rest of the page and says `purlay_jobs_status_readable 0` — alert o
 overdue. `purlay_modules_info{module="…"} 1` has one series for each module the process runs, so
 `count by (module) (purlay_modules_info)` is how many nodes run each one during a rolling deploy of a new
 `MODULES`; the boot log says the same once, as `the modules this process runs`, with `running` and `notRun`.
+`purlay_http_request_duration_seconds` and the two `purlay_job_*` families carry `module`: the module that owns the
+route or the job (`core`, `chat`, `issues`, or `none` for the client's catch-all, a request turned away at the edge
+and a path nothing serves), so `sum by (module, status) (rate(purlay_http_request_duration_seconds_count[5m]))` says
+which module is failing and `histogram_quantile(0.95, sum by (module, le) (rate(purlay_http_request_duration_seconds_bucket[5m])))`
+which is slow. The API's request line and its `request failed` line carry `module` for a module's route, and a scheduled
+job's lines carry it for every job. The values are the module ids the build spells, never anything a caller sent.
 With several API nodes each is its own target; Prometheus adds them up.
 
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
