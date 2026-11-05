@@ -6,7 +6,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { composition } from '../composition';
 import { PERMISSIONS } from './permissions';
+import { USER_ROLES } from './roles';
 
 const API = readFileSync(
   fileURLToPath(new URL('../../../../docs/API.md', import.meta.url)),
@@ -48,5 +50,19 @@ describe('the permission table', () => {
       .map((entry) => entry.endpoint)
       .filter((key) => !served.has(key));
     expect(unknown).toEqual([]);
+  });
+
+  test('says of a permission it names what the declaration says, for each role', () => {
+    const named = Object.entries(PERMISSIONS).filter(([, entry]) => entry.permission !== undefined);
+    expect(named.length).toBeGreaterThan(0);
+    for (const [name, { allowed, permission }] of named) {
+      for (const role of USER_ROLES) {
+        expect([name, role, composition.permissions.holds(role, permission ?? '')]).toEqual([
+          name,
+          role,
+          allowed[role],
+        ]);
+      }
+    }
   });
 });
