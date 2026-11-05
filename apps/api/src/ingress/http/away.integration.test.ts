@@ -6,6 +6,8 @@
  *
  * **A database of its own**, cloned and dropped at the end, as `sockets.integration.test.ts` has: the sockets
  * read what the requests wrote, on other connections, so the writes commit (D-46).
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

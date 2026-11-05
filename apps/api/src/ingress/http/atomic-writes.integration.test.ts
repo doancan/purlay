@@ -33,6 +33,7 @@ import {
 } from '../../testing/github-sign-in';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
+import { testNeeding } from '../../testing/needs';
 
 let cloned: ClonedDatabase;
 
@@ -97,35 +98,38 @@ describe('integration: multi-write requests are atomic', () => {
     expect(retry.status).toBe(201);
   });
 
-  test('a channel whose creator row fails to write does not exist, and its name is free', async () => {
-    const alice = await aSignedInUser(cloned.db, clock, 'atomic-ch');
-    const created = await postJson('/api/workspaces', alice.cookie, {
-      name: 'Atomic',
-      slug: aUniqueSlug('atomic-ch'),
-    });
-    const workspace = (await created.json()) as { id: string };
-    const name = `atomic-${crypto.randomUUID().slice(0, 6)}`;
+  testNeeding('chat')(
+    'a channel whose creator row fails to write does not exist, and its name is free',
+    async () => {
+      const alice = await aSignedInUser(cloned.db, clock, 'atomic-ch');
+      const created = await postJson('/api/workspaces', alice.cookie, {
+        name: 'Atomic',
+        slug: aUniqueSlug('atomic-ch'),
+      });
+      const workspace = (await created.json()) as { id: string };
+      const name = `atomic-${crypto.randomUUID().slice(0, 6)}`;
 
-    await whileRefusingInserts('channel_members', async () => {
-      const response = await postJson(`/api/workspaces/${workspace.id}/channels`, alice.cookie, {
+      await whileRefusingInserts('channel_members', async () => {
+        const response = await postJson(`/api/workspaces/${workspace.id}/channels`, alice.cookie, {
+          name,
+        });
+        expect(response.status).toBe(500);
+      });
+
+      const left = await cloned.db
+        .selectFrom('channels')
+        .select('id')
+        .where('workspace_id', '=', workspace.id)
+        .where('name', '=', name)
+        .execute();
+      expect(left).toEqual([]);
+
+      const retry = await postJson(`/api/workspaces/${workspace.id}/channels`, alice.cookie, {
         name,
       });
-      expect(response.status).toBe(500);
-    });
-
-    const left = await cloned.db
-      .selectFrom('channels')
-      .select('id')
-      .where('workspace_id', '=', workspace.id)
-      .where('name', '=', name)
-      .execute();
-    expect(left).toEqual([]);
-
-    const retry = await postJson(`/api/workspaces/${workspace.id}/channels`, alice.cookie, {
-      name,
-    });
-    expect(retry.status).toBe(201);
-  });
+      expect(retry.status).toBe(201);
+    },
+  );
 
   test('a join whose record fails to write leaves nobody in, and the link still opens (D-115)', async () => {
     const owner = await aSignedInUser(cloned.db, clock, 'atomic-inv');

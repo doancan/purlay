@@ -11,6 +11,8 @@
  * won or lost by scheduling, and a test that passes fifteen times in sixteen is
  * worse than none. The sleep sits *after* each request's existence check, so both
  * pass the check before either commits.
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

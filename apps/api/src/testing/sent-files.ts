@@ -1,6 +1,8 @@
 /**
  * An upload a test sends without sending a message: the file's own claim and chat's link to the message, as
  * `linkAttachments` writes them (D-250).
+ *
+ * @needs-modules chat
  */
 import { sql, type Executor } from '@purlay/db';
 

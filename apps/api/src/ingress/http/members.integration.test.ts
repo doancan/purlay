@@ -12,6 +12,7 @@ import { fixedClock } from '../../platform/clock';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { testNeeding } from '../../testing/needs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -99,51 +100,54 @@ describe('integration: managing members over HTTP', () => {
     });
   });
 
-  test('anybody leaves: a member is 204 and gone with their channels, recorded as having left (D-152)', async () => {
-    await withRollback(async (db) => {
-      const { owner, member, workspaceId } = await aTeam(db);
-      const created = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, owner, {
-        name: 'leave-here',
-      });
-      const channelId = ((await created.json()) as { id: string }).id;
-      await db
-        .insertInto('channel_members')
-        .values({ channel_id: channelId, user_id: member.userId, joined_at: NOW })
-        .execute();
+  testNeeding('chat')(
+    'anybody leaves: a member is 204 and gone with their channels, recorded as having left (D-152)',
+    async () => {
+      await withRollback(async (db) => {
+        const { owner, member, workspaceId } = await aTeam(db);
+        const created = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, owner, {
+          name: 'leave-here',
+        });
+        const channelId = ((await created.json()) as { id: string }).id;
+        await db
+          .insertInto('channel_members')
+          .values({ channel_id: channelId, user_id: member.userId, joined_at: NOW })
+          .execute();
 
-      const left = await call(db, 'DELETE', `/api/workspaces/${workspaceId}/membership`, member);
-      expect(left.status).toBe(204);
-      const stillIn = await db
-        .selectFrom('workspace_members')
-        .select('user_id')
-        .where('workspace_id', '=', workspaceId)
-        .where('user_id', '=', member.userId)
-        .executeTakeFirst();
-      expect(stillIn).toBeUndefined();
-      const inChannel = await db
-        .selectFrom('channel_members')
-        .select('user_id')
-        .where('channel_id', '=', channelId)
-        .where('user_id', '=', member.userId)
-        .executeTakeFirst();
-      expect(inChannel).toBeUndefined();
-      const trail = await db
-        .selectFrom('audit_log')
-        .select(['action', 'actor_user_id', 'target_id'])
-        .where('workspace_id', '=', workspaceId)
-        .where('action', '=', 'member.left')
-        .execute();
-      expect(trail).toEqual([
-        { action: 'member.left', actor_user_id: member.userId, target_id: member.userId },
-      ]);
-      // Gone, so the workspace is no longer theirs to leave.
-      expect(
-        await outcome(
-          await call(db, 'DELETE', `/api/workspaces/${workspaceId}/membership`, member),
-        ),
-      ).toBe('404 WORKSPACE_NOT_FOUND');
-    });
-  });
+        const left = await call(db, 'DELETE', `/api/workspaces/${workspaceId}/membership`, member);
+        expect(left.status).toBe(204);
+        const stillIn = await db
+          .selectFrom('workspace_members')
+          .select('user_id')
+          .where('workspace_id', '=', workspaceId)
+          .where('user_id', '=', member.userId)
+          .executeTakeFirst();
+        expect(stillIn).toBeUndefined();
+        const inChannel = await db
+          .selectFrom('channel_members')
+          .select('user_id')
+          .where('channel_id', '=', channelId)
+          .where('user_id', '=', member.userId)
+          .executeTakeFirst();
+        expect(inChannel).toBeUndefined();
+        const trail = await db
+          .selectFrom('audit_log')
+          .select(['action', 'actor_user_id', 'target_id'])
+          .where('workspace_id', '=', workspaceId)
+          .where('action', '=', 'member.left')
+          .execute();
+        expect(trail).toEqual([
+          { action: 'member.left', actor_user_id: member.userId, target_id: member.userId },
+        ]);
+        // Gone, so the workspace is no longer theirs to leave.
+        expect(
+          await outcome(
+            await call(db, 'DELETE', `/api/workspaces/${workspaceId}/membership`, member),
+          ),
+        ).toBe('404 WORKSPACE_NOT_FOUND');
+      });
+    },
+  );
 
   test('the last owner may not leave (409 LAST_OWNER); with a second owner they may', async () => {
     await withRollback(async (db) => {
@@ -157,32 +161,37 @@ describe('integration: managing members over HTTP', () => {
     });
   });
 
-  test('the trail is read as the contract has it, by an owner; a member is refused', async () => {
-    await withRollback(async (db) => {
-      const { owner, member, workspaceId } = await aTeam(db);
-      await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
-        role: 'admin',
+  testNeeding('chat')(
+    'the trail is read as the contract has it, by an owner; a member is refused',
+    async () => {
+      await withRollback(async (db) => {
+        const { owner, member, workspaceId } = await aTeam(db);
+        await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
+          role: 'admin',
+        });
+        const read = await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=10`, owner);
+        expect(read.status).toBe(200);
+        const page: unknown = await read.json();
+        if (!Value.Check(AuditPage, page)) throw new Error('the page is not the contract’s');
+        // Under the change, the channel the workspace started with, made by its creator (D-174) — both
+        // at the frozen clock's one instant, so neither order is promised.
+        expect(page.data.map((entry) => [entry.action, entry.metadata]).sort()).toEqual([
+          ['channel.created', { type: 'public' }],
+          ['member.role_changed', { from: 'member', to: 'admin' }],
+        ]);
+        expect(page.nextCursor).toBeNull();
+        await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
+          role: 'member',
+        });
+        expect(
+          await outcome(await call(db, 'GET', `/api/workspaces/${workspaceId}/audit`, member)),
+        ).toBe('403 FORBIDDEN');
+        expect(
+          await outcome(
+            await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=0`, owner),
+          ),
+        ).toBe('400 VALIDATION_FAILED');
       });
-      const read = await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=10`, owner);
-      expect(read.status).toBe(200);
-      const page: unknown = await read.json();
-      if (!Value.Check(AuditPage, page)) throw new Error('the page is not the contract’s');
-      // Under the change, the channel the workspace started with, made by its creator (D-174) — both
-      // at the frozen clock's one instant, so neither order is promised.
-      expect(page.data.map((entry) => [entry.action, entry.metadata]).sort()).toEqual([
-        ['channel.created', { type: 'public' }],
-        ['member.role_changed', { from: 'member', to: 'admin' }],
-      ]);
-      expect(page.nextCursor).toBeNull();
-      await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
-        role: 'member',
-      });
-      expect(
-        await outcome(await call(db, 'GET', `/api/workspaces/${workspaceId}/audit`, member)),
-      ).toBe('403 FORBIDDEN');
-      expect(
-        await outcome(await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=0`, owner)),
-      ).toBe('400 VALIDATION_FAILED');
-    });
-  });
+    },
+  );
 });

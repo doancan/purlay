@@ -1,5 +1,7 @@
 /**
  * Every table has one owner, and a foreign key does not cross owners except where the list says (D-250).
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';

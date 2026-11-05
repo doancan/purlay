@@ -51,5 +51,27 @@ describe('the module matrix job', () => {
       scripts: Record<string, string>;
     };
     expect(scripts['modules:smoke']).toContain('apps/api/src/testing/module-smoke.ts');
+    expect(scripts['modules:suites']).toContain('apps/api/src/testing/module-suites.ts');
+  });
+});
+
+describe('the suites-per-cell job', () => {
+  const job = workflow.jobs['module-suites'] as
+    (Job & { strategy?: { 'fail-fast'?: boolean; matrix?: { cell?: string[] } } }) | undefined;
+
+  test('runs when the change can move an answer, with Redis, a leg for each cell, and cannot skip or ignore a failure', () => {
+    expect(job?.needs).toBe('changes');
+    expect(job?.if).toBe("needs.changes.outputs.modules == 'true'");
+    expect(job?.env?.['REDIS_URL']).toBeTruthy();
+    expect(job?.strategy?.['fail-fast']).toBe(false);
+    const runs = job?.steps.filter((step) => step.run?.startsWith('bun run modules:suites')) ?? [];
+    expect(runs.map((step) => step.run)).toEqual(['bun run modules:suites -- ${{ matrix.cell }}']);
+    expect(runs[0]?.if).toBeUndefined();
+    expect(runs[0]?.['continue-on-error']).not.toBe(true);
+    expect(job?.steps.some((step) => step.run === 'bun run db:up:tests')).toBe(true);
+  });
+
+  test('is one of the jobs the required check stands for', () => {
+    expect(workflow.jobs['verify']?.needs).toContain('module-suites');
   });
 });

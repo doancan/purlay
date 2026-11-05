@@ -8,18 +8,32 @@
  * refusal, because a skipped required check counts as passed and a gate that reads "nothing failed"
  * passes on nothing having run (`CONTRIBUTING.md` §6.4).
  *
- * The browser jobs are judged too (D-226), and so is `modules`, the job that starts the API once per `MODULES`
- * value: a change they cannot see skips them, and only then is their skip a pass — when `changes` succeeded
+ * The browser jobs are judged too (D-226), and so are `modules`, the job that starts the API once per `MODULES`
+ * value, and `module-suites`, the suites run once per cell: a change they cannot see skips them, and only then is their skip a pass — when `changes` succeeded
  * and said so. Anything else, a skip included, is a refusal.
  *
  *   bun run ci:gate        in CI: reads `NEEDS`, the job's `toJSON(needs)`
  */
 
 /** The jobs `verify` stands for. `ci.yml`'s `needs:` for the job is bound to this list by a test. */
-export const GATED = ['static', 'schema', 'changes', 'browser', 'modules'] as const;
+export const GATED = [
+  'static',
+  'schema',
+  'changes',
+  'browser',
+  'modules',
+  'module-suites',
+] as const;
 
-/** The jobs a change can rightly skip: each has an output of `changes` of its own name that says so. */
-const SKIPPABLE: readonly string[] = ['browser', 'modules'];
+/**
+ * The jobs a change can rightly skip, each with the output of `changes` that says so: the browser jobs by `browser`, and the
+ * two that start the API (the matrix on a started process, and the suites per cell) by `modules`.
+ */
+const SKIPPABLE: Readonly<Record<string, string>> = {
+  browser: 'browser',
+  modules: 'modules',
+  'module-suites': 'modules',
+};
 
 /** Whether `changes` succeeded and said `output` is `false`: this change cannot move what that job sees. */
 const notNeeded = (jobs: Record<string, unknown>, output: string): boolean => {
@@ -57,7 +71,9 @@ export const judge = (needs: string): string[] => {
       typeof job === 'object' && job !== null && 'result' in job && typeof job.result === 'string'
         ? job.result
         : '';
-    const skipIsRight = SKIPPABLE.includes(name) && result === 'skipped' && notNeeded(jobs, name);
+    const skippable = SKIPPABLE[name];
+    const skipIsRight =
+      skippable !== undefined && result === 'skipped' && notNeeded(jobs, skippable);
     if (result !== 'success' && !skipIsRight) {
       reasons.push(`${name} ended ${result === '' ? 'with no result' : result}`);
     }

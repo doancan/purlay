@@ -6,6 +6,8 @@
  * Issues' requests are made slow without a clock: a lock on the table they read, held by a connection of the
  * test's own, so each one that gets a slot holds a connection until the lock is let go. Nothing here is a time
  * limit; what is asserted is what had happened when each answer came.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

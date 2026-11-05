@@ -15,7 +15,7 @@
 import { sql, type Kysely, type Transaction } from 'kysely';
 import pg from 'pg';
 import { executorOnPool } from './client';
-import { migrateToLatest, PRODUCT_MIGRATION_SETS } from './migrator';
+import { migrateToLatest, setsNamedBy, type MigrationSet } from './migrator';
 import type { DB } from './schema';
 
 class Rollback extends Error {
@@ -26,6 +26,14 @@ class Rollback extends Error {
 }
 
 let shared: Kysely<DB> | undefined;
+
+/**
+ * The migration sets the run's databases carry: the ones `MODULES` names, read as `bun run db:migrate` and the API read it
+ * (`setsNamedBy`), so a run started with `MODULES=chat` tests against the database a deployment of that setting has —
+ * the core's tables and chat's, not issues'. Unset is every module the build carries, which is what every run did before
+ * the setting was read here. A setting that cannot be run stops the run with its reasons (`ModulesSettingError`).
+ */
+const setsOfTheRun = (): readonly MigrationSet[] => setsNamedBy(process.env['MODULES']);
 
 /** Refuses rather than skipping when there is nothing to connect to. */
 const integrationUrl = (): string => {
@@ -220,7 +228,7 @@ export const buildIntegrationTemplate = async (name?: string): Promise<string> =
       const templateDb = connect<unknown>(onDatabase(source, template), 1);
       try {
         const { error } = await migrateToLatest(templateDb, undefined, {
-          modules: PRODUCT_MIGRATION_SETS,
+          modules: setsOfTheRun(),
         });
         if (error !== undefined)
           throw new Error('migrating the test template failed', { cause: error });
@@ -244,7 +252,7 @@ export const migrateIntegrationDatabase = async (connectionString?: string): Pro
   const database = connect<unknown>(connectionString ?? integrationUrl(), 1);
   try {
     const { error } = await migrateToLatest(database, undefined, {
-      modules: PRODUCT_MIGRATION_SETS,
+      modules: setsOfTheRun(),
     });
     if (error !== undefined) {
       throw new Error('migrating the test database failed', { cause: error });

@@ -2,6 +2,8 @@
  * Quiet hours (D-234) through real requests: set on the person's own route, read on their profile's
  * clock, and honoured where Deep Work is — a mention written during them is kept and counted, and held
  * back from interrupting (`suppressed_by_deep_work`), one written outside them is not.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

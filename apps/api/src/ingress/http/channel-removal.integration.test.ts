@@ -5,6 +5,8 @@
  *
  * Crossing a tenant and the visibility axis is `cross-tenant.integration.test.ts` and
  * `channel-visibility.integration.test.ts`; the role table is `permissions.integration.test.ts`.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

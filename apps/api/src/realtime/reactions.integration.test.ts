@@ -5,6 +5,8 @@
  *
  * Its own cloned database and a real listener, as `sockets.integration.test.ts`:
  * the commit and the delivery race each other, which one transaction cannot show.
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

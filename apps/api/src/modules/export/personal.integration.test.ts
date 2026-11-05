@@ -6,6 +6,8 @@
  * pat's rows — counted against the database — every channel and workspace they name and no other, not one
  * word, name or address of anybody else's, not the deleted message, and none of pat's secrets. The
  * classification is bound to the catalogue: a table or a column nobody decided on fails here.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtemp, readdir, readFile, stat } from 'node:fs/promises';

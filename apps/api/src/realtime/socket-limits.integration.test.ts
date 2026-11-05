@@ -5,6 +5,8 @@
  * sockets had a hundred budgets (100 sockets × 20 sends were all acknowledged in
  * about eight seconds, against HTTP's ten a second for the same person), and each
  * socket that stopped reading cost 4 MB before it was closed (D-84, amended).
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

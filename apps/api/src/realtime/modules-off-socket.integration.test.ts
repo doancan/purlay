@@ -2,6 +2,8 @@
  * The socket is a way in like any route (D-250, `MODULES.md` §3): a process that does not run chat answers chat's
  * operations as it answers an operation nobody has, writes nothing and tells nobody, and still answers the core's
  * (a ping). Over real sockets, with the same database behind a process that runs chat as the control.
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
