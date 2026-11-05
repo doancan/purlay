@@ -3,7 +3,7 @@
  * leaves which, and how long they are kept. The queries are the ones the workspace code ran itself before it
  * stopped naming chat's tables.
  */
-import type { Executor } from '@purlay/db';
+import { tableExists, type Executor } from '@purlay/db';
 import { visibleChannelIds } from './guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import type { WorkspaceChannels } from '../../../modules/workspaces/channels-port';
@@ -22,14 +22,17 @@ const leaveAll = async (
       eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
     )
     .execute();
-  // Out of the workspace, not out of a channel: no reason is kept to be told later (D-264).
-  await executor
-    .deleteFrom('channel_departures')
-    .where('user_id', '=', userId)
-    .where('channel_id', 'in', (eb) =>
-      eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
-    )
-    .execute();
+  // Out of the workspace, not out of a channel: no reason is kept to be told later (D-264). Made by chat's own set, so
+  // absent where it was never applied; this runs whether chat does or not, and there is then nothing to forget.
+  if (await tableExists(executor, 'channel_departures')) {
+    await executor
+      .deleteFrom('channel_departures')
+      .where('user_id', '=', userId)
+      .where('channel_id', 'in', (eb) =>
+        eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
+      )
+      .execute();
+  }
   return channelIds;
 };
 

@@ -14518,6 +14518,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['scripts/ci-gate.test.ts'],
   },
   {
+    id: 'chat-leaves-a-workspace-without-asking-for-its-table',
+    why: 'a person’s removal from a workspace deletes from a table of chat’s own set though the set was never applied, and answers 500 on a server that runs without chat (D-250, D-264)',
+    file: 'apps/api/src/features/chat/channels/workspace-channels.ts',
+    find: "if (await tableExists(executor, 'channel_departures')) {",
+    replace: 'if (true as boolean) {',
+    tests: ['apps/api/src/features/chat/channels/workspace-channels.integration.test.ts'],
+  },
+  {
     id: 'channel-create-stops-recording-its-audit',
     why: 'a channel is created and the trail says nothing of it: an administrative action nobody can find later (D-26)',
     file: 'apps/api/src/features/chat/channels/channels.ts',
