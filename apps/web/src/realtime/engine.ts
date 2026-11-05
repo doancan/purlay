@@ -604,6 +604,8 @@ export const createEngine = (options: EngineOptions): Engine => {
             readAgain(client, keys.files(channelId));
             readAgain(client, keys.pins(channelId));
             readAgain(client, keys.bookmarks(channelId));
+            // An incident declared in the gap is in no frame either (D-137): its banner would wait for a reload.
+            readAgain(client, keys.incident(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(client, families.thread);

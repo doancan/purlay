@@ -1789,6 +1789,20 @@ describe('what happened between a list being read and the channel being subscrib
     expect(w.client.getQueryState(keys.files(OTHER_CH))?.isInvalidated).toBe(false);
   });
 
+  test('a channel’s incident read before the subscription was answered is read again (D-137)', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    // Read as the channel opened — "no incident" — and declared before the server began to send: no frame
+    // will say so, because the frame went out while this socket was not yet listening to the channel.
+    w.client.setQueryData(keys.incident(CH), { incident: null });
+    w.client.setQueryData(keys.incident(OTHER_CH), { incident: null });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.incident(OTHER_CH))?.isInvalidated).toBe(false);
+  });
+
   /**
    * #347: a read already on its way when the answer came is left to finish — cancelling it stalls
    * the screen driving it — but what it brings back may predate the subscription, so it is read
