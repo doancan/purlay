@@ -7,7 +7,7 @@
  *
  * Nothing is allowed: a call in a spec or its helpers is a finding, whether in an `if`, a loop or a poll.
  */
-export const INSTANT_PROBE = /\.\s*(isVisible|isHidden)\s*\(/;
+const INSTANT_PROBE = /\.\s*(isVisible|isHidden)\s*\(/;
 
 /** The lines of a source text that ask the page an instant question, numbered from 1. */
 export const instantProbes = (source: string): number[] =>
