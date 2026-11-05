@@ -1,0 +1,191 @@
+// Area api-modules-setup-settings: ids ascending; areas.ts says what belongs here.
+import type { Mutation } from '../mutate';
+import { AUTH_TESTS, SERVER_TESTS } from './shared';
+
+const SETTINGS = 'apps/api/src/modules/setup/settings.ts';
+
+const SETTINGS_TESTS = 'apps/api/src/modules/setup/settings.integration.test.ts';
+
+const SETTINGS_UNIT_TESTS = 'apps/api/src/modules/setup/settings.test.ts';
+
+export const API_MODULES_SETUP_SETTINGS: readonly Mutation[] = [
+  {
+    id: 'boot-forgives-every-failure',
+    why: 'a failure that is not a seal that will not open is read as an unset secret and the server serves without it',
+    file: SETTINGS,
+    find: '      if (error instanceof SealBroken && broken !== undefined) {\n',
+    replace: '      if (broken !== undefined) {\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'boot-reentry-not-named',
+    why: 'a secret that cannot be opened is silently unset: nobody is told it needs entering again',
+    file: SETTINGS,
+    find: '        broken(setting);\n        return undefined;\n',
+    replace: '        return undefined;\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'github-app-key-unchecked',
+    why: 'a private key the server cannot sign with is kept, and every installation after it is refused by GitHub (D-246)',
+    file: SETTINGS,
+    find: '    const problem = githubAppKeyProblem(app.privateKey);\n',
+    replace: '    const problem = undefined as string | undefined;\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'ignored-environment-compares-with-empty',
+    why: 'every start names GitHub variables as ignored on a server that never set them',
+    file: SETTINGS,
+    find: "      ['GITHUB_CLIENT_ID', config.GITHUB_CLIENT_ID !== undefined],\n",
+    replace: "      ['GITHUB_CLIENT_ID', config.GITHUB_CLIENT_ID !== ''],\n",
+    tests: [SETTINGS_UNIT_TESTS],
+  },
+  {
+    id: 'ignored-environment-secret-compares-with-empty',
+    why: 'every start names the GitHub secret as ignored on a server that never set it, and an operator is told a variable does nothing that was never there',
+    file: SETTINGS,
+    find: "      ['GITHUB_CLIENT_SECRET', config.GITHUB_CLIENT_SECRET !== undefined],\n",
+    replace: "      ['GITHUB_CLIENT_SECRET', config.GITHUB_CLIENT_SECRET !== ''],\n",
+    tests: [SETTINGS_UNIT_TESTS],
+  },
+  {
+    id: 'oidc-secret-stored-unsealed',
+    why: 'the client secret is written to the settings as typed: anybody with a database dump has the provider’s credential',
+    file: SETTINGS,
+    find: '    written.oidc_client_secret_encrypted = await sealed(\n      cipher,\n      clientSecret,\n      SEALED_IN.oidcClientSecret,\n    );',
+    replace: '    written.oidc_client_secret_encrypted = clientSecret;',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'seed-github-always',
+    why: 'a fresh server with no GitHub variable imports an app with no id, and the wizard finds one connected',
+    file: SETTINGS,
+    find: '  ...(config.GITHUB_CLIENT_ID === undefined || config.GITHUB_CLIENT_SECRET === undefined\n    ? {}\n    : {\n        github:',
+    replace: '  ...(false\n    ? {}\n    : {\n        github:',
+    tests: [SETTINGS_UNIT_TESTS],
+  },
+  {
+    id: 'seed-github-from-half-an-app',
+    why: 'one variable of the pair seeds a GitHub app with an undefined secret, sealed and unusable',
+    file: SETTINGS,
+    find: '  ...(config.GITHUB_CLIENT_ID === undefined || config.GITHUB_CLIENT_SECRET === undefined\n',
+    replace:
+      '  ...(config.GITHUB_CLIENT_ID === undefined && config.GITHUB_CLIENT_SECRET === undefined\n',
+    tests: [SETTINGS_UNIT_TESTS],
+  },
+  {
+    id: 'server-view-shows-the-github-secret',
+    why: "the settings page carries GitHub's client secret",
+    file: SETTINGS,
+    find: '      : { clientId: settings.github.clientId, clientSecret: { set: true } },',
+    replace:
+      '      : { clientId: settings.github.clientId, clientSecret: { set: true, value: settings.github.clientSecret } },',
+    tests: [SERVER_TESTS],
+  },
+  {
+    id: 'server-view-shows-the-relay-login',
+    why: "the settings page carries the relay's address with its user and password",
+    file: SETTINGS,
+    find: 'address: { set: true, host: relayHost(settings.smtp.smtpUrl) },',
+    replace: 'address: { set: true, host: settings.smtp.smtpUrl },',
+    tests: [SERVER_TESTS],
+  },
+  {
+    id: 'settings-creators-any-text',
+    why: 'a listed creator that is no GitHub login is kept, and matches nobody',
+    file: SETTINGS,
+    find: '      if (logins.length === 0 || !logins.every((login) => LOGIN.test(login))) {\n',
+    replace: '      if (logins.length === 0) {\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-creators-empty-list',
+    why: 'a list of creators with nobody on it is left to the database to refuse, and a guard that leans on it lets through what it does not cover',
+    file: SETTINGS,
+    find: '      if (logins.length === 0 || !logins.every((login) => LOGIN.test(login))) {\n',
+    replace: '      if (!logins.every((login) => LOGIN.test(login))) {\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-creators-kept-in-their-case',
+    why: 'a listed login is kept as written, and matched against GitHub’s lower-case login it never equals (D-169)',
+    file: SETTINGS,
+    find: '      const logins = [...creators.logins].map((login) => login.toLowerCase());\n',
+    replace: '      const logins = [...creators.logins];\n',
+    tests: [SETTINGS_TESTS, AUTH_TESTS],
+  },
+  {
+    id: 'settings-finish-cleared-by-a-patch',
+    why: 'a settings patch unfinishes the setup, and `/setup` opens on a live server to whoever reads the log',
+    file: SETTINGS,
+    find: "  if ((patch.setupCompletedAt as unknown) === null)\n    throw new Error('a finished setup stays finished');\n",
+    replace: '',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-github-pair-half-empty',
+    why: 'a GitHub app with an empty secret is kept, and every sign-in through it is refused by GitHub',
+    file: SETTINGS,
+    find: "    if (patch.github.clientId === '' || patch.github.clientSecret === '') {\n",
+    replace: '    if (false) {\n',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-import-every-start',
+    why: 'the environment is copied in on every start, so a change made in the browser is undone by a restart (D-179 §6)',
+    file: SETTINGS,
+    find: "    if (row.imported_from_env_at !== null) return 'already';\n",
+    replace: '',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-import-unlocked',
+    why: 'two processes starting at once both find the row unimported and both import it',
+    file: SETTINGS,
+    find: '      .forUpdate()\n',
+    replace: '',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-relay-address-unparsed',
+    why: 'a relay address no transport can be built from is kept, and every start after stops on it (D-179 §6)',
+    file: SETTINGS,
+    find: "    if (problem !== undefined) throw new Error(`the relay's address: ${problem}`);\n",
+    replace: '',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-secrets-sealed-under-one-context',
+    why: 'both secrets are bound to one column’s name, so a ciphertext moved from one column to the other opens there',
+    file: SETTINGS,
+    find: "  smtpUrl: 'server_settings.smtp_url_encrypted',\n",
+    replace: "  smtpUrl: 'server_settings.github_client_secret_encrypted',\n",
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-sender-not-an-address',
+    why: 'letters are sent from something that is not an address, and every relay refuses them',
+    file: SETTINGS,
+    find: "    if (!ADDRESS.test(patch.smtp.from)) throw new Error('letters come from an address');\n",
+    replace: '',
+    tests: [SETTINGS_TESTS],
+  },
+  {
+    id: 'settings-view-carries-the-github-secret',
+    why: 'the view a response is built from carries the client secret itself, and Administration → Server would show it (D-179 §6)',
+    file: SETTINGS,
+    find: '      : { clientId: settings.github.clientId, clientSecret: { set: true } },\n',
+    replace:
+      '      : { clientId: settings.github.clientId, clientSecret: { set: true, value: settings.github.clientSecret } },\n',
+    tests: [SETTINGS_TESTS, SETTINGS_UNIT_TESTS],
+  },
+  {
+    id: 'settings-view-shows-the-relay-credentials',
+    why: 'the relay’s address is shown with its user and password, and a relay that takes a token as the user has it shown',
+    file: SETTINGS,
+    find: '  return `${parsed.protocol}//${parsed.host}`;\n',
+    replace: '  return parsed.href;\n',
+    tests: [SETTINGS_TESTS, SETTINGS_UNIT_TESTS],
+  },
+];

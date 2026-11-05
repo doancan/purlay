@@ -4,7 +4,7 @@
  * `parse.ts` turns any such node into the characters that were typed as well, so the two layers
  * are each enough on their own. That is why each is tested on its own: through the narrowed tree a
  * construct the engine had stopped refusing would look exactly the same, until the day the
- * narrowing changed (`scripts/mutations.ts`).
+ * narrowing changed (`scripts/mutations/`).
  */
 import { describe, expect, test } from 'bun:test';
 import type { Nodes } from 'mdast';

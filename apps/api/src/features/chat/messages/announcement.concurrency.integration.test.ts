@@ -5,7 +5,7 @@
  * A send reads the sender's role under the workspace row's `KEY SHARE` lock, which a role change's
  * `FOR UPDATE` waits on and waits for (D-111 §2). So a demotion in flight makes the send wait and then
  * refuses it, and a send in flight makes the demotion wait and is kept — made while its sender was an
- * admin. `scripts/mutations.ts` removes the lock and requires the first to fail.
+ * admin. `scripts/mutations/` removes the lock and requires the first to fail.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

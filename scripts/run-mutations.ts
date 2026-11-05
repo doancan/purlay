@@ -1,4 +1,4 @@
-/** `bun run mutate [id ...]`: applies the mutations in `scripts/mutations.ts` (see `scripts/mutate.ts`). */
+/** `bun run mutate [id ...]`: applies the mutations in `scripts/mutations/` (see `scripts/mutate.ts`). */
 import { join } from 'node:path';
 import { acceptable, report, runMutations } from './mutate';
 import { MUTATIONS } from './mutations';

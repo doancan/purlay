@@ -361,7 +361,7 @@ until then it is a stated intent and not a guarantee.
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
-| A bundle has no cycle, repeat or double capability, and no two modules (nor a module and the core, `core-claims.ts`) own the same route template (a subtree or a named segment overlapping another's counts), job, socket operation or server event | the registry, and mutations in `scripts/mutations.ts` | 1 |
+| A bundle has no cycle, repeat or double capability, and no two modules (nor a module and the core, `core-claims.ts`) own the same route template (a subtree or a named segment overlapping another's counts), job, socket operation or server event | the registry, and mutations in `scripts/mutations/` | 1 |
 | `MODULES` is valid | `resolve`, at boot: a process that cannot parse it logs `MODULES cannot be run; exiting` with every problem and exits `1` (`registry.test.ts`, `migrate-on-start.integration.test.ts`) — **built** | 12 |
 | The matrix exists as soon as two cells differ | the cells the tests build (below) and, on a started process, CI's `modules` job (`bun run modules:smoke`): one migrated database and one API per cell, the cells made from the bundle — **built**; and the suites that belong to no module, once per cell (`bun run modules:suites`, below) — **built** | 9 |
 | Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, `modules:smoke` (every path every manifest claims, every method, signed out, on a real process per cell: a module left out answers byte for byte what an unknown path does, a module that runs answers something else), and `test:modules-none`, a browser spec run in the browser job — **built**; and every suite that needs no module, run in each cell with the application that cell starts (`modules:suites`) | 12 |
@@ -563,7 +563,7 @@ commit beside this list.
 - The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
   out of the frame when the server runs none.
 - A **module-listing** row (§11, above) and `composition.test.ts` for what the module contributes.
-- **Mutations**: for each rule above the tests are the only guard of, a mutation in `scripts/mutations.ts` that breaks the
+- **Mutations**: for each rule above the tests are the only guard of, a mutation in `scripts/mutations/` that breaks the
   rule and names the test that must fail (issues added eleven; read `issues-*` there). Insert new entries after
   `core-sweep-names-a-chat-table`, never at the end of the file.
 
