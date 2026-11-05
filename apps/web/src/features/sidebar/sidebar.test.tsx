@@ -316,13 +316,15 @@ describe('the people section', () => {
             }),
         }),
       );
-      expect(dotted(view)).toEqual(['AL']);
-      expect(spoken(view)).toEqual(['Alice, online', 'Bob', 'Dogancan you']);
+      // Not read before the socket is open: nobody is known, so nobody has a dot.
+      expect(dotted(view)).toEqual([]);
       // The person themselves is online while connected, whatever a snapshot said.
       act(() => {
         view.world.sockets.open();
       });
+      await settle();
       expect(dotted(view)).toEqual(['AL', 'DO']);
+      expect(spoken(view)).toEqual(['Alice, online', 'Bob', 'Dogancan you, online']);
       await expectNoAxeViolations(peopleOf(view));
     });
 
@@ -343,14 +345,15 @@ describe('the people section', () => {
         [...peopleOf(view).querySelectorAll('[data-avatar]')]
           .filter((avatar) => avatar.querySelector('[data-away]') !== null)
           .map((avatar) => avatar.textContent);
-      // Not connected: yourself is nothing, whatever was heard of you.
-      expect(rings()).toEqual(['AL']);
+      // Not connected: nothing is known, and yourself is nothing.
+      expect(rings()).toEqual([]);
       expect(dotted(view)).toEqual([]);
-      expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you']);
+      expect(spoken(view)).toEqual(['Alice', 'Bob', 'Dogancan you']);
       // Connected, yourself is what the server said: away.
       act(() => {
         view.world.sockets.open();
       });
+      await settle();
       expect(rings()).toEqual(['AL', 'DO']);
       expect(dotted(view)).toEqual([]);
       expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you, away']);
@@ -379,6 +382,7 @@ describe('the people section', () => {
         view.world.sockets.open();
         view.world.sockets.deliver(told(BOB.id, true, 10));
       });
+      await settle();
       expect(dotted(view)).toEqual(['AL', 'BO', 'DO']);
       act(() => {
         // Bob was offline at the snapshot's version 9: older than his online at 10.
@@ -491,6 +495,7 @@ describe('the people section', () => {
       act(() => {
         view.world.sockets.open();
       });
+      await settle();
       expect(others(view)).toEqual(['AL']);
       act(() => {
         view.world.sockets.sockets.at(-1)?.handlers.closed(1006);
@@ -527,6 +532,10 @@ describe('the people section', () => {
         `/w/acme/c/${IDS.dm}`,
       );
       const headed = (): boolean => view.container.querySelector('header [data-online]') !== null;
+      act(() => {
+        view.world.sockets.open();
+      });
+      await settle();
       expect(others(view)).toEqual(['AL']);
       expect(headed()).toBe(true);
       // Carol joins and Alice leaves; the members are read again, as a frame would have them.
@@ -556,7 +565,12 @@ describe('the people section', () => {
         }),
       });
       await settle();
-      expect(view.getByText(', çevrimiçi')).toBeDefined();
+      act(() => {
+        view.world.sockets.open();
+      });
+      await settle();
+      // Alice, and the person themselves wherever they are drawn, who is online while connected.
+      expect(view.getAllByText(', çevrimiçi').length).toBeGreaterThanOrEqual(2);
     });
   });
 
