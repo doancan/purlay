@@ -13,34 +13,16 @@
  * events chat's services publish through the core's builders in `platform/events.ts` are named there, in the core's file,
  * so they are held by the schema test alone.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 import { ClientFrame, ServerFrame } from '@purlay/types';
 import { bundledModules, type BundledModule } from './composition';
 import { CORE_EVENTS, CORE_FRAMES } from './platform/module-kit/core-claims';
-
-const SOURCE = /\.tsx?$/;
-const NOT_PRODUCTION = /\.(test|integration\.test)\.tsx?$|[\\/]testing[\\/]/;
-
-const filesUnder = (directory: string): string[] =>
-  readdirSync(directory).flatMap((entry) => {
-    const path = join(directory, entry);
-    return statSync(path).isDirectory() ? filesUnder(path) : [path];
-  });
+import { shown, sourcesOf } from './testing/module-sources';
 
 /** Each of `names` that `text` writes as a string literal, in either quote. */
 const namedIn = (text: string, names: readonly string[]): string[] =>
   names.filter((name) => new RegExp(`['"\`]${name}['"\`]`).test(text));
-
-/** The files that are the module's: its folder and, when there is one, its route file. */
-const sourcesOf = (id: string): string[] => {
-  const route = join(import.meta.dir, 'ingress/http', `${id}.ts`);
-  return [
-    ...filesUnder(join(import.meta.dir, 'features', id)),
-    ...(existsSync(route) ? [route] : []),
-  ].filter((file) => SOURCE.test(file) && !NOT_PRODUCTION.test(file));
-};
 
 const carried: readonly BundledModule[] = bundledModules;
 const EVENTS = ServerFrame.anyOf.map((frame) => frame.properties.event.const as string);
@@ -65,13 +47,13 @@ describe('what a module’s code names on the socket', () => {
       for (const file of sourcesOf(id)) {
         const text = readFileSync(file, 'utf8');
         for (const event of namedIn(text, EVENTS)) {
-          if (!ownEvents.has(event)) unlisted.push(`${file}: event ${event}`);
+          if (!ownEvents.has(event)) unlisted.push(`${shown(file)}: event ${event}`);
         }
         for (const op of namedIn(text, OPERATIONS)) {
-          if (!ownOperations.has(op)) unlisted.push(`${file}: operation ${op}`);
+          if (!ownOperations.has(op)) unlisted.push(`${shown(file)}: operation ${op}`);
         }
       }
-      expect(unlisted.map((line) => line.replace(`${import.meta.dir}/`, ''))).toEqual([]);
+      expect(unlisted).toEqual([]);
     },
   );
 });

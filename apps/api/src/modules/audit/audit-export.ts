@@ -28,6 +28,7 @@ import type { Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
+import type { AuditAccess } from '../../platform/module-kit/audit-access';
 import { checkedFilter, recordAudit, requireTrailReader, trailPage } from './audit';
 
 /** Rows a query of the download reads: a page of memory, and a few hundred round trips for 100 000. */
@@ -102,8 +103,9 @@ export const exportTrail = async (
   log: Logger,
   context: WorkspaceContext,
   query: AuditExportQuery,
+  access: AuditAccess,
 ): Promise<TrailDownload> => {
-  requireTrailReader(context);
+  requireTrailReader(context, access);
   const { format, ...filter } = query;
   checkedFilter(filter);
   await atomicallyOn(executor)(async (transaction) => {
@@ -124,10 +126,13 @@ export const exportTrail = async (
   const shape = FORMATS[format];
   const encoder = new TextEncoder();
   const read = async (before?: string): Promise<AuditEntry[]> =>
-    await trailPage(executor, context, filter, {
-      ...(before === undefined ? {} : { before }),
-      limit: AUDIT_EXPORT_PAGE,
-    });
+    await trailPage(
+      executor,
+      context,
+      filter,
+      { ...(before === undefined ? {} : { before }), limit: AUDIT_EXPORT_PAGE },
+      access,
+    );
   const chunkOf = (entries: readonly AuditEntry[], head = ''): Uint8Array =>
     encoder.encode(head + entries.map((entry) => shape.line(exportLineOf(entry))).join(''));
 
