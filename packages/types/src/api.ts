@@ -689,6 +689,28 @@ export const NEEDS_YOU = [
   'channel_message',
 ] as const satisfies readonly NotificationType[];
 
+/**
+ * What a kind of notification does, as the module whose kind it is declares it (`MODULES.md` §2, D-265): whether it needs
+ * the person (the badge, the title, the background alert), is pushed to a device, and is mailed when it waits unread.
+ * `NotificationType` is these kinds' names and `NEEDS_YOU` those that need the person, held to each other by
+ * `notification-kinds.test.ts`.
+ */
+export interface NotificationKind {
+  readonly type: NotificationType;
+  readonly needsYou: boolean;
+  readonly pushed: boolean;
+  readonly mailed: boolean;
+}
+
+export const CHAT_NOTIFICATION_KINDS = [
+  { type: 'mention', needsYou: true, pushed: true, mailed: true },
+  { type: 'direct_message', needsYou: true, pushed: true, mailed: true },
+  { type: 'thread_reply', needsYou: true, pushed: true, mailed: false },
+  { type: 'thread_resolved', needsYou: false, pushed: false, mailed: false },
+  { type: 'channel_message', needsYou: true, pushed: true, mailed: false },
+  { type: 'reminder', needsYou: false, pushed: true, mailed: false },
+] as const satisfies readonly NotificationKind[];
+
 /** `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107). */
 export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
 export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;
@@ -863,6 +885,61 @@ export const AUDIT_ACTIONS = [
   'issue.deleted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/**
+ * Who records each action (`MODULES.md` §2): the core's, and each module's, which its manifest declares. Together they are
+ * `AUDIT_ACTIONS` exactly, each action once (`audit-actions.test.ts`): the wire names the whole vocabulary, a process names
+ * only what it runs.
+ */
+export const CORE_AUDIT_ACTIONS = [
+  'member.role_changed',
+  'member.removed',
+  'member.left',
+  'member.joined',
+  'invitation.created',
+  'invitation.revoked',
+  'workspace.renamed',
+  'retention.changed',
+  'account.erased',
+  'workspace.export_requested',
+  'workspace.exported',
+  'storage.quota_changed',
+  'audit.exported',
+  'workspace.deletion_requested',
+  'workspace.deletion_cancelled',
+] as const satisfies readonly AuditAction[];
+
+export const CHAT_AUDIT_ACTIONS = [
+  'channel.created',
+  'channel.renamed',
+  'channel.archived',
+  'channel.restored',
+  'channel.member_added',
+  'channel.member_removed',
+  'channel.retention_changed',
+  'channel.posting_changed',
+  'integration.token_set',
+  'integration.token_removed',
+  'integration.feed_created',
+  'integration.feed_removed',
+  'integration.webhook_created',
+  'integration.webhook_revoked',
+  'integration.app_connected',
+  'integration.app_disconnected',
+  'integration.issue_created',
+  'integration.work_linked',
+  'integration.feed_secret_regenerated',
+  'message.removed_by_moderator',
+  'content.erased',
+  'retention.purged',
+] as const satisfies readonly AuditAction[];
+
+export const ISSUES_AUDIT_ACTIONS = [
+  'issue.created',
+  'issue.status_changed',
+  'issue.assigned',
+  'issue.deleted',
+] as const satisfies readonly AuditAction[];
 /** One of the recorded actions, by name: what a filter on the trail names (D-222). */
 export const AuditActionName = Type.Union(AUDIT_ACTIONS.map((action) => Type.Literal(action)));
 
