@@ -48,8 +48,8 @@ have it.
 - **Operations** — The metrics page and the logs now say which module a request or a scheduled job is for: the request histogram and the job series carry a `module` label (`core`, `chat`, `issues`, or `none`), and a module's request lines, failed requests and every scheduled job's lines name it, so an operator can tell which module is slow or failing (D-250, D-221)
 - **Operations** — A module's share of the database now holds every query of its routes, reads as well as writes, and a query that runs past its limit is answered `503` for the client to retry instead of `500` (D-266)
 - **Operations** — the counters of requests and socket frames refused for the rate, of pushes that did not reach their service and of letters the mail relay did not accept now carry a `module` label (`core`, `chat`, `issues`, or `none` for a frame that names no operation), so a dashboard can say which module is being refused or failing (D-250)
-- **Operations** — Chat now has a share of the database pool like issues, and the core keeps a reserve the modules cannot take, so signing in and reading a session are not queued behind a busy chat (D-267)
-- **Operations** — A request or socket frame of a module that runs past its deadline (20 seconds, 8 for issues) is now answered `504` with the error envelope instead of hanging, and the database is told to cancel what it was running (D-268)
+- **Operations** — Chat now has a share of the database pool like issues, and the core keeps a reserve the modules cannot take, so signing in and reading a session are not queued behind a busy chat (D-268)
+- **Operations** — A request or socket frame of a module that runs past its deadline (20 seconds, 8 for issues) is now answered `504` with the error envelope instead of hanging, and the database is told to cancel what it was running (D-269)
 - **Sidebar** — Channel and conversation rows have room between them, so a hovered row no longer touches the next (D-259)
 - **Messages** — The image viewer opens with a fade and draws the picture on a shadow, and a thumbnail shows a zoom hint (D-259)
 

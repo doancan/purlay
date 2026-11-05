@@ -1,5 +1,5 @@
 /**
- * A module's request has a deadline, and a failure in one module's handler is that request's alone (`MODULES.md` §7, D-267),
+ * A module's request has a deadline, and a failure in one module's handler is that request's alone (`MODULES.md` §7, D-268),
  * on a real database and a pool of its own.
  *
  * A request is made to wait without a clock: a lock on the table it reads, held by a connection of the test's own. Its

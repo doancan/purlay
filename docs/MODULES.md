@@ -46,7 +46,7 @@ declares:
   `none` with no reason and a share that leaves the module no connection or the others none (§7). Every bundled module
   has a share today; one that declares `none` must also be named, with its reason, in `module-budgets.test.ts`, so an
   exemption is a line a reviewer sees;
-- `deadline` (optional, D-268): how long a request or frame of the module may take before it is answered `504` and its database
+- `deadline` (optional, D-269): how long a request or frame of the module may take before it is answered `504` and its database
   work cancelled: `{ ms }` (a whole number from 1000 to 120000) or `{ none: reason }`, which `module-deadlines.test.ts` lists too;
   left out, 20 s (§7);
 - `retention`: the scheduled jobs that keep its rows within their retention — a purge past the days kept, a sweep of a
@@ -274,7 +274,7 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   whether it may be made (`requireWorkspaceMembership`, through `inTheCore`) take their connections as the pool gives
   them, so a person who is not in a workspace holds no slot of a module they have no part in. And the modules **together**
   may take the pool less what the core keeps (`coreReserve`: a fifth, at least one, none in a pool of one), so that
-  signing in and reading a session are never queued behind a busy module (D-267). **Issues has a share**
+  signing in and reading a session are never queued behind a busy module (D-268). **Issues has a share**
   (`features/issues/budget.ts`): a third of `DATABASE_POOL_MAX`, never more than the pool less one and never fewer than
   one (a pool of one has nothing to leave), a queue timeout of one second and a statement limit of five. A request over
   the share waits its turn and, past the timeout, is answered `503 DATABASE_UNAVAILABLE` (`The issues module's share of
@@ -282,12 +282,12 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   which a client retries. **Chat** (`features/chat/budget.ts`) has what the modules may take
   together less one, so that no module can take every connection the modules share: seven of a pool of ten, a queue
   timeout of three seconds (what the pool itself waits) and the pool's own statement limit, which a connection need not
-  be told again. Chat's numbers are measured (D-267): with chat and issues both saturating their shares, the core's
+  be told again. Chat's numbers are measured (D-268): with chat and issues both saturating their shares, the core's
   reads kept their p95 of 17–91 ms where with no cap they waited about 750 ms for a connection; chat's own sends under
   its own saturation are slower than with no cap (seconds against under one, a freed slot going to the oldest request
-  first), which is the price of the core's reserve, and the table in D-267 says by how much. The share caps the
+  first), which is the price of the core's reserve, and the table in D-268 says by how much. The share caps the
   connections a module holds; it does not cap what a module costs the event loop, which all modules share;
-- a deadline per request and frame, and an error boundary (`platform/request-deadline.ts`, D-268). **A module's request or
+- a deadline per request and frame, and an error boundary (`platform/request-deadline.ts`, D-269). **A module's request or
   frame that runs past its deadline** (`deadline` in the manifest: 20 s by default, 8 s for issues) **is answered
   `504 REQUEST_TIMEOUT`** in the error envelope, with its request id, **whatever it is waiting for**: the framework's `wrap`
   hook runs the whole request against the deadline (`docs/spikes/elysia.md`), and `routeFrame` runs a frame, answering the
@@ -354,8 +354,8 @@ until then it is a stated intent and not a guarantee.
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
 | A module cannot starve the others of connections | the application's one database is leased (`leasingExecutor`, `@purlay/db`) by the share of the module a request belongs to (`moduleConnections`, `platform/module-budget.ts`): a cap on the requests holding a connection, a queue timeout and a `statement_timeout` per module, the modules together held to the pool less the core's reserve — **built, applied from each manifest's `budget`** (issues a third of the pool, chat seven of ten); `issues-budget.integration.test.ts` and `chat-budget.integration.test.ts` fill a share on a pool of their own and find the other module and the core answered, `module-budget.integration.test.ts` and `leasing.integration.test.ts` hold the lease, and the mutations `module-routes-not-noted-as-their-module`, `frames-not-noted-as-their-module`, `application-database-not-leased`, `module-share-ignores-core-reserve`, `membership-read-inside-a-module-share` and `module-budget-declaration-ignored` hold the wiring | 5 |
 | A module's handler cannot take the pool without its module's share | there is no other handle: `app.ts` uses the database it was given once, to lease it, and no feature or door opens a pool (`module-seams.test.ts`); the mutation `application-hands-handlers-a-raw-database` — **built** (D-266) | 12 |
-| A module's request or frame that runs past its deadline is answered and its database work cancelled; a throw in one handler is that request's | `deadline` in the manifest (`request-deadline.ts`): the framework's `wrap` around a module's request, `routeFrame` around its frames, the lease's signal cancelling the statement — **built** (D-268); `deadline.integration.test.ts` (a request waiting on a lock, over `handle` and a started server, the statement gone from `pg_stat_activity`; a handler that throws, the share of one connection still whole), `router.test.ts`, `leasing.integration.test.ts`, `module-deadlines.test.ts`, `registry.test.ts`; mutations `module-requests-have-no-deadline`, `deadline-signal-not-on-the-request`, `deadline-does-not-cancel-the-statement`, `lease-takes-a-connection-past-the-deadline`, `frame-deadline-ignored`, `registry-accepts-any-deadline` and `registry-accepts-a-deadline-none-without-a-reason` | 12 |
-| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts`, and `composition.test.ts` holds that no share takes every connection the modules may share — **built** (D-260, D-266, D-267); mutations `chat-declares-no-budget`, `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
+| A module's request or frame that runs past its deadline is answered and its database work cancelled; a throw in one handler is that request's | `deadline` in the manifest (`request-deadline.ts`): the framework's `wrap` around a module's request, `routeFrame` around its frames, the lease's signal cancelling the statement — **built** (D-269); `deadline.integration.test.ts` (a request waiting on a lock, over `handle` and a started server, the statement gone from `pg_stat_activity`; a handler that throws, the share of one connection still whole), `router.test.ts`, `leasing.integration.test.ts`, `module-deadlines.test.ts`, `registry.test.ts`; mutations `module-requests-have-no-deadline`, `deadline-signal-not-on-the-request`, `deadline-does-not-cancel-the-statement`, `lease-takes-a-connection-past-the-deadline`, `frame-deadline-ignored`, `registry-accepts-any-deadline` and `registry-accepts-a-deadline-none-without-a-reason` | 12 |
+| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts`, and `composition.test.ts` holds that no share takes every connection the modules may share — **built** (D-260, D-266, D-268); mutations `chat-declares-no-budget`, `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
 | A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
 | `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` only `router.ts`, which still runs chat's three socket operations itself (the manifest has no field for a module's frame handler); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
@@ -434,14 +434,14 @@ commit beside this list.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
   for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
   module sends and does not list would reach a process that does not run it.
-- `budget` (D-260, D-266, D-267): required. `{ poolShare: (poolMax) => limits }` (`features/issues/budget.ts`,
+- `budget` (D-260, D-266, D-268): required. `{ poolShare: (poolMax) => limits }` (`features/issues/budget.ts`,
   `features/chat/budget.ts`) or `{ none: '<reason>' }`, which is also a line in `module-budgets.test.ts`: an exemption is a
   decision a reviewer sees (there is none today). A manifest without it does not compile; the registry refuses it at run
   time, and a `none` with no reason, and a share that gives the module no connection or leaves the others none;
   `composition.test.ts` holds that no share takes every connection the modules together may. Nothing else is edited to
   budget a module: `createApp` leases the database every handler gets, and a request or frame is held to the share of the
   module whose `routes` or `frames` it matches.
-- `deadline` (D-268): optional. Left out, a request or frame of the module is answered `504 REQUEST_TIMEOUT` after 20 s and its
+- `deadline` (D-269): optional. Left out, a request or frame of the module is answered `504 REQUEST_TIMEOUT` after 20 s and its
   database work cancelled; `{ ms }` says another, and `{ none: '<reason>' }` — for a route that streams or waits long, which no
   module has — is also a line of `module-deadlines.test.ts`. The registry refuses a deadline under a second, over two minutes, and a
   `none` with no reason. Nothing else is edited: the router wraps every route and frame the module's `routes` and `frames` name.

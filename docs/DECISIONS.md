@@ -12837,7 +12837,7 @@ membership, was outside the share only because one handler happened to put it be
    answered `503 DATABASE_UNAVAILABLE` — the same code as a share in use, and now for every statement that runs past a
    limit, since the pool's own was `500 INTERNAL` — which a client retries.
 5. **An exemption is a line a reviewer reads.** `budget` stays required (D-260); a module that declares `none` must also
-   be named, with its reason, in `module-budgets.test.ts`. Chat was the one until it had a share (D-267).
+   be named, with its reason, in `module-budgets.test.ts`. Chat was the one until it had a share (D-268).
 
 **Rejected.** *A pool per module*: a partition wastes the connections a quiet module holds and a busy one needs, and
 the sum of the pools is what counts against `max_connections`. *A type that hides the raw handle from a module's
@@ -12848,7 +12848,47 @@ the pool is made*: a test's `createApp` would then be unheld, and the budgets wo
 **Cost of reversing.** The lease (`leasingExecutor`, `moduleConnections`), the note in the router and `inTheCore`;
 `transactionsOf` returns. Nothing is stored.
 
-### D-267. Chat has a share of the pool, and the core keeps a reserve the modules cannot take — builds on D-250, D-260, D-266
+### D-267. The latency budget judges the lowest of its trials, with the spread of the floor allowed for — amends D-49, D-227
+
+**Context.** The gate in CI's `schema` job failed on a first attempt and passed on a rerun, on pull requests that changed no
+production code: an ACK p95 of 30.7 and 32.6 ms against a recorded 16.4 to 17.7 ms. It judged the median of three trial p95s
+against the median the last main run kept, at 1.5 times and a 20 ms floor. A trial's p95 is the 57th of sixty sorted
+samples, so one stall moves it by tens of milliseconds. The 80 runs CI had kept as artifacts (240 trials, ACK p95) ran from
+9.8 to 70.5 ms: median 15.9, 90th percentile 20.4, 99th 65.7. Two runs of identical code, compared by that rule in every
+pairing of those 80, failed 4.7% of the time, which is the flake. (A local comparison of 16 interleaved runs of main and a
+candidate gave the same picture: medians 47.5 and 46.7 ms, main's trials from 19 to 99 ms.)
+
+**Decision.**
+1. **The lowest of the three trials is judged, per metric.** A stall only adds to a trial; a real slowdown raises every
+   trial and so the lowest. The lowest of three across the 80 recorded runs lies between 9.8 and 17.0 ms, so the noise a
+   stall makes is gone and what is left is one runner's floor against another's. `--record` and `--keep` still keep
+   every trial beside the summary; a baseline written by the previous rule (a median) is still read, and is only a few
+   milliseconds higher.
+2. **The limit is the most of three:** the recorded number times `REGRESSION_FACTOR` (1.5), the recorded number plus
+   `FLOOR_SPREAD_MS` (10), and the 20 ms floor of interest. The 10 ms is the 7.2 ms spread of the floor above, with room.
+   Nothing else changed: the factor and floor are D-49's and the second look is D-227's, once, never a loop.
+3. **The output says how noisy it was:** each number is printed beside its limit, and one line gives the range of the
+   trials' p95s, so a failure on a noisy machine and one on a slowdown no longer read the same.
+4. **What the rule does is a test, not an opinion** (`budget-latency-noise.test.ts`, over `budget-latency-noise.ts`, the
+   80 runs): over 20,000 seeded pairs, identical code passes in over 99% (every one of the 6,400 exact pairs of runs: 99.86%), a
+   slowdown of 20 ms in every trial fails in over 99% (99.8%) and a tripling in over 99% (99.95%). The limits are
+   proved by mutations: the worst trial taken, the spread forgotten, the spread made 40 ms, the factor dropped.
+
+**What it cannot see, said plainly.** At CI's 16 ms floor, a half as much again is 8 ms, which is the spread of the
+floor itself: that is caught in about a quarter of pairs (doubling, 16 ms, in 83%; +15 ms in 95%). No rule that passes
+identical code 99% of the time separates a runner that is 8 ms quicker from a change that costs 8 ms. Where the baseline is
+larger (a slower runner, a local machine) the factor is what binds and a half as much again fails. A slowdown that is
+only in some of the trials is a stall by this rule; one in a twentieth of messages or more raises the p95 of every trial.
+
+**Rejected.** *Widening the factor*: it loosens what a regression is (D-48) and still fails on the quiet runs it was widened
+for. *More trials*: a stall in a trial is already gone with the lowest of three (no run of the 80 had a lowest trial above
+17.0 ms), and what is left is the runners' own spread, which more trials do not narrow; they cost every run. *A history of
+runs as the baseline*: it narrows the baseline's own spread, but on the same 80 runs, at an 8 ms margin, it moved false
+failures from 0.6% to 0.3%, for a file that has to be migrated. *Retrying until green*: D-49.
+
+**Cost of reversing.** One statistic and one constant in `budget-latency.ts`; the files kept are the same shape.
+
+### D-268. Chat has a share of the pool, and the core keeps a reserve the modules cannot take — builds on D-250, D-260, D-266
 
 **Context.** With the share held at the connection (D-266) chat could have one, and chat declared `none`: a busy chat
 could hold every connection and queue the core's own reads. Measured on a real process at a pool of ten
@@ -12903,7 +12943,7 @@ table.
 **Cost of reversing.** `coreReserve` and `together` in `moduleConnections`, the frame's note, and chat's `budget` back to
 `none` with its line in `module-budgets.test.ts`. Nothing is stored.
 
-### D-268. A module's request has a deadline that answers it and cancels its database work, and a failure in one handler stays its own — builds on D-266, D-267; amends D-250 rule 7
+### D-269. A module's request has a deadline that answers it and cancels its database work, and a failure in one handler stays its own — builds on D-266, D-268; amends D-250 rule 7
 
 **Context.** Isolation by budget (`MODULES.md` §7) bounded what a module takes of the pool and left what a request does
 with its time open: a module's route that waited on a lock, a slow query or a service that never answered held its
@@ -12951,4 +12991,3 @@ finishes. *Cancelling with `pg_cancel_backend` through the pool*: the pool is wh
 
 **Cost of reversing.** `deadline` in the manifest and the wrap, `routeFrame`'s race and the lease's signal; `REQUEST_TIMEOUT`
 stays in the contract, which only adds. Nothing is stored.
-

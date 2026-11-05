@@ -65,7 +65,7 @@ export interface SocketDependencies {
   readonly frameOwner?: (op: string) => string;
   /** The module an operation belongs to, as the router notes it (`realtime/router.ts`); absent, none does. */
   readonly moduleOfFrame?: (op: string) => string | undefined;
-  /** How long a module's frame may take, in ms, or `undefined` for one with no deadline; absent, none has (D-268). */
+  /** How long a module's frame may take, in ms, or `undefined` for one with no deadline; absent, none has (D-269). */
   readonly deadlineOf?: (module: string) => number | undefined;
   /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedEvent?: (event: string) => boolean;

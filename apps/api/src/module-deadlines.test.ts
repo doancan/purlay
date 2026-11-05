@@ -1,6 +1,6 @@
 /**
  * Every module has a deadline for its requests or a reason it has none, and that reason is a line a reviewer sees
- * (`MODULES.md` §7, D-268): a module that declares `deadline: { none }` cannot be added without editing this list. A module
+ * (`MODULES.md` §7, D-269): a module that declares `deadline: { none }` cannot be added without editing this list. A module
  * that says nothing has the platform's default.
  */
 import { describe, expect, test } from 'bun:test';

@@ -1,5 +1,5 @@
 /**
- * How long a module's request or frame may take (`MODULES.md` §7, D-268).
+ * How long a module's request or frame may take (`MODULES.md` §7, D-269).
  *
  * A request that runs past its deadline is answered `504 REQUEST_TIMEOUT` with the error envelope, whatever it is waiting
  * for, and its `signal` aborts: what it had asked of the database is cancelled (`@purlay/db`'s lease) and what it asks

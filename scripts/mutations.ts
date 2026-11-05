@@ -190,12 +190,15 @@ export const MUTATIONS: readonly Mutation[] = [
   },
 
   {
-    id: 'latency-trials-choose-the-best',
-    why: 'one lucky fast trial hides a slowdown sustained in the other two independent processes',
+    id: 'latency-trials-choose-the-worst',
+    why: 'the slowest trial is judged, so one stall on a shared runner fails a change that touched no message path (D-267)',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: 'values.sort((a, b) => a - b)[1]',
-    replace: 'values.sort((a, b) => a - b)[0]',
-    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+    find: '  ackP95Ms: Math.min(...trials.map((trial) => trial.ackP95Ms)),',
+    replace: '  ackP95Ms: Math.max(...trials.map((trial) => trial.ackP95Ms)),',
+    tests: [
+      'apps/api/src/cli/budget-latency.test.ts',
+      'apps/api/src/cli/budget-latency-noise.test.ts',
+    ],
   },
   {
     id: 'latency-trials-accept-incomplete-messages',
@@ -5077,7 +5080,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'latency-regression-never-seen',
     why: 'the ACK round-trip could triple and the budget would report it as fine',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: ': boolean => before !== undefined && value > Math.max(before * factor, NOISE_FLOOR_MS);',
+    find: ': boolean => before !== undefined && value > limitOf(before, factor);',
     replace: ': boolean => before !== undefined && value > Number.POSITIVE_INFINITY;',
     tests: ['apps/api/src/cli/budget-latency.test.ts', 'apps/api/src/cli/budget-browser.test.ts'],
   },
@@ -12683,7 +12686,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'frames-not-noted-as-their-module',
-    why: 'a module’s socket frames are not noted as its own, so its sends take the pool without its share while its routes are held to it (D-267)',
+    why: 'a module’s socket frames are not noted as its own, so its sends take the pool without its share while its routes are held to it (D-268)',
     file: 'apps/api/src/realtime/router.ts',
     find: 'if (owner !== undefined) noteModule(owner);',
     replace: 'void noteModule;',
@@ -12691,7 +12694,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'module-share-ignores-core-reserve',
-    why: 'the modules together may take the whole pool, so chat and issues busy at once queue the core’s sign-in and session reads (D-267)',
+    why: 'the modules together may take the whole pool, so chat and issues busy at once queue the core’s sign-in and session reads (D-268)',
     file: 'apps/api/src/platform/module-budget.ts',
     find: 'const together = slots(Math.max(1, poolMax - coreReserve(poolMax)));',
     replace: 'const together = slots(poolMax);',
@@ -12699,7 +12702,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'chat-share-is-the-whole-pool',
-    why: 'chat may take every connection of the pool, so a busy chat queues the core’s reads and leaves issues none (D-267)',
+    why: 'chat may take every connection of the pool, so a busy chat queues the core’s reads and leaves issues none (D-268)',
     file: 'apps/api/src/features/chat/budget.ts',
     find: 'Math.max(1, poolMax - coreReserve(poolMax) - 1)',
     replace: 'poolMax',
@@ -12710,7 +12713,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'chat-declares-no-budget',
-    why: 'chat declares no share again, without a line in the list of exemptions, so the choice not to hold the busiest module is nobody’s decision (D-267)',
+    why: 'chat declares no share again, without a line in the list of exemptions, so the choice not to hold the busiest module is nobody’s decision (D-268)',
     file: 'apps/api/src/features/chat/module.ts',
     find: 'budget: { poolShare: chatBudget },',
     replace: "budget: { none: 'chat is not held' },",
@@ -12718,7 +12721,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'module-budget-ignores-the-age-of-a-request',
-    why: 'a request that has waited once for its first statement queues again behind newer ones for each statement after, which cost chat’s sends seconds under its own saturation (D-267)',
+    why: 'a request that has waited once for its first statement queues again behind newer ones for each statement after, which cost chat’s sends seconds under its own saturation (D-268)',
     file: 'apps/api/src/platform/module-budget.ts',
     find: 'const after = waiting.findIndex((entry) => entry.rank > rank);',
     replace: 'const after = -1 as number;',
@@ -12726,7 +12729,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'module-requests-have-no-deadline',
-    why: 'a module’s request that waits on a lock or a slow service hangs for as long as it waits instead of being answered at its deadline (D-268)',
+    why: 'a module’s request that waits on a lock or a slow service hangs for as long as it waits instead of being answered at its deadline (D-269)',
     file: 'apps/api/src/ingress/http/app.ts',
     find: 'if (module === undefined || ms === undefined) return await handle(...args);',
     replace: 'return await handle(...args);',
@@ -12734,7 +12737,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'deadline-signal-not-on-the-request',
-    why: 'the deadline answers a request but its signal never reaches the request’s connections, so the statement it waits in runs on after the answer (D-268)',
+    why: 'the deadline answers a request but its signal never reaches the request’s connections, so the statement it waits in runs on after the answer (D-269)',
     file: 'apps/api/src/ingress/http/app.ts',
     find: 'noteModule(owner, deadlineSignals.get(request));',
     replace: 'noteModule(owner);',
@@ -12742,7 +12745,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'deadline-does-not-cancel-the-statement',
-    why: 'a connection whose request ran past its deadline is left running the statement it was asked, holding its slot and its lock wait (D-268)',
+    why: 'a connection whose request ran past its deadline is left running the statement it was asked, holding its slot and its lock wait (D-269)',
     file: 'packages/db/src/client.ts',
     find: "leased.signal?.addEventListener('abort', cancel, { once: true });",
     replace: 'void cancel;',
@@ -12753,7 +12756,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'lease-takes-a-connection-past-the-deadline',
-    why: 'a request past its deadline is still given the connections it asks for next, and goes on working unseen (D-268)',
+    why: 'a request past its deadline is still given the connections it asks for next, and goes on working unseen (D-269)',
     file: 'apps/api/src/platform/module-budget.ts',
     find: '    request.signal?.throwIfAborted();\n',
     replace: '',
@@ -12761,7 +12764,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'frame-deadline-ignored',
-    why: 'a module’s socket frame that waits has no deadline, so the connection’s frames queue behind it and its sender is never told (D-268)',
+    why: 'a module’s socket frame that waits has no deadline, so the connection’s frames queue behind it and its sender is never told (D-269)',
     file: 'apps/api/src/realtime/router.ts',
     find: 'if (owner === undefined || ms === undefined)\n    return await serveFrame(dependencies, identity, frame);',
     replace: 'return await serveFrame(dependencies, identity, frame);',
@@ -12769,7 +12772,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'registry-accepts-any-deadline',
-    why: 'a module declares a deadline of zero or of an hour, which is no deadline or one a proxy gave up on long before (D-268)',
+    why: 'a module declares a deadline of zero or of an hour, which is no deadline or one a proxy gave up on long before (D-269)',
     file: 'apps/api/src/platform/module-kit/registry.ts',
     find: 'return Number.isInteger(deadline.ms) && deadline.ms >= 1_000 && deadline.ms <= DEADLINE_MS_MAX',
     replace: 'return true',
@@ -12777,7 +12780,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'registry-accepts-a-deadline-none-without-a-reason',
-    why: 'a module leaves its requests unbounded in silence, so the choice is nobody’s decision (D-268)',
+    why: 'a module leaves its requests unbounded in silence, so the choice is nobody’s decision (D-269)',
     file: 'apps/api/src/platform/module-kit/registry.ts',
     find: 'return deadline.none.trim() === \'\'\n      ? [`"${id}" declares \\`deadline: none\\` without a reason`]\n      : [];',
     replace: 'return [];',
@@ -15421,5 +15424,43 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '      return (manifest.notifications ?? []).map((kind) => kind.type);',
     replace: '      return [];',
     tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
+    id: 'latency-floor-spread-forgotten',
+    why: 'a runner a few milliseconds quicker than the last one passes a change as a regression, and a gate people re-run has stopped being a gate (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'Math.max(before * factor, before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS)',
+    replace: 'Math.max(before * factor, NOISE_FLOOR_MS)',
+    tests: [
+      'apps/api/src/cli/budget-latency.test.ts',
+      'apps/api/src/cli/budget-latency-noise.test.ts',
+    ],
+  },
+  {
+    id: 'latency-floor-spread-too-wide',
+    why: 'the allowance for one runner differing from another is wide enough that a sustained slowdown of tens of milliseconds passes (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'export const FLOOR_SPREAD_MS = 10;',
+    replace: 'export const FLOOR_SPREAD_MS = 40;',
+    tests: [
+      'apps/api/src/cli/budget-latency.test.ts',
+      'apps/api/src/cli/budget-latency-noise.test.ts',
+    ],
+  },
+  {
+    id: 'latency-limit-ignores-the-factor',
+    why: 'a slowdown of a half as much again at a slow baseline passes because only the spread of the floor is allowed for (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: 'Math.max(before * factor, before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS)',
+    replace: 'Math.max(before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS)',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-noise-unsaid',
+    why: 'the output never says how far apart the trials were, so a run that failed on a noisy machine and one that failed on a slowdown read the same (D-267)',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: '        spreadOf(trials),\n',
+    replace: '',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
   },
 ];
