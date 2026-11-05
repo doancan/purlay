@@ -119,6 +119,21 @@ export const rollChanges = (
   };
 };
 
+/**
+ * The release pull request's answers to `check:pr`'s failure modes (CONTRIBUTING.md §6.9). They
+ * describe what merging does (docs/DEPLOY.md), not the code: a release changes none.
+ */
+const failureModes = (version: string): readonly string[] => [
+  '## Failure modes',
+  '',
+  '- **Refused input:** the version must be newer than the last and the notes in the standard shape; `bun run release` refuses both before it opens this pull request. There is no user input.',
+  '- **Authority:** merging needs the same rights as any pull request to `main`; no code or permission changes.',
+  '- **Concurrency:** the deploy workflow runs one deploy at a time; a merge that lands during one waits for it.',
+  `- **Partial failure:** if the smoke or revision check fails, the deploy restores the database backup and the previous release. The tag v${version} and the GitHub Release are made only after a successful deploy.`,
+  '- **Network and time:** a manual deploy never publishes a GitHub Release, so retrying a failed deploy by hand does not release this version; an automatic run deploys the commit of the run that started it, however late the runner starts.',
+  `- **Volume:** no code changes; the notes move from Unreleased to docs/changelog/v${version}.md.`,
+];
+
 export interface PrepareOptions {
   readonly root: string;
   /** `patch`, `minor`, `major` or x.y.z. */
@@ -198,6 +213,8 @@ export const prepare = (options: PrepareOptions): Prepared => {
       '',
       'Merging this deploys the commit to the server (the deploy workflow), then tags it',
       `v${version} and publishes the GitHub Release.`,
+      '',
+      ...failureModes(version),
     ].join('\n');
     const created = run(
       'gh',

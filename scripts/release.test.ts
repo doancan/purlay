@@ -10,6 +10,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { unansweredFailureModes } from './check-pull-request';
 import {
   type Exec,
   type ExecResult,
@@ -226,6 +227,15 @@ describe('preparing a release', () => {
     expect(create).toContain(`--head ${BRANCH}`);
     expect(create).toContain('deploys');
     expect(create).toContain('v0.1.0');
+  });
+
+  test('answers every failure mode, so check:pr passes on the pull request it opens', () => {
+    const place = checkout(PR);
+    prepare(options(place));
+    const create = place.calls.find((call) => call.startsWith('gh pr create')) ?? '';
+    const body = create.slice(create.indexOf('--body ') + '--body '.length);
+    expect(body).toContain('## Failure modes');
+    expect(unansweredFailureModes(body)).toEqual([]);
   });
 
   test('gives the release an issue of its own, and the pull request closes it', () => {
