@@ -47,9 +47,15 @@ const RESERVED = [...Object.values(PREFIX), 'text-', 'font-'];
 /** Motion is "effectively none" (`UX.md` §9): the longest transition the system allows, in ms. */
 const MAX_DURATION_MS = 200;
 
-/** The one motion allowed to run longer: a celebration is an event, not an interface transition (D-247). */
+/**
+ * The motions allowed to run longer: a celebration is an event, not an interface transition (D-247). The family is
+ * `duration-celebrate` and what is named under it (`duration-celebrate-grand`, D-261), under one and the same cap — five seconds, which a whole release show of
+ * four and a half seconds fits.
+ */
 const CELEBRATION_TOKEN = 'duration-celebrate';
-const MAX_CELEBRATION_MS = 4000;
+const isCelebration = (name: string): boolean =>
+  name === CELEBRATION_TOKEN || name.startsWith(`${CELEBRATION_TOKEN}-`);
+const MAX_CELEBRATION_MS = 5000;
 
 /** The spacing grid, in px. */
 const GRID = 4;
@@ -315,7 +321,7 @@ export const parseTokens = (raw: unknown): Parsed => {
     const { value } = token;
     const match = MS.exec(value);
     if (match === null) return `"${value}" is not a whole number of ms`;
-    const limit = token.name === CELEBRATION_TOKEN ? MAX_CELEBRATION_MS : MAX_DURATION_MS;
+    const limit = isCelebration(token.name) ? MAX_CELEBRATION_MS : MAX_DURATION_MS;
     return Number(match[1]) <= limit
       ? undefined
       : `${value} is longer than the ${String(limit)}ms motion allows (UX §9)`;

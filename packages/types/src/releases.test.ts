@@ -92,13 +92,51 @@ describe('reading a release’s notes', () => {
         {
           category: 'Added',
           items: [
-            '**Search** — find by `author:` (D-1)',
-            '**Threads** — a long one continued here',
+            {
+              markdown: '**Search** — find by `author:` (D-1)',
+              area: 'Search',
+              body: 'find by `author:` (D-1)',
+            },
+            {
+              markdown: '**Threads** — a long one continued here',
+              area: 'Threads',
+              body: 'a long one continued here',
+            },
           ],
         },
-        { category: 'Fixed', items: ['**Feed** — scroll stays'] },
+        {
+          category: 'Fixed',
+          items: [{ markdown: '**Feed** — scroll stays', area: 'Feed', body: 'scroll stays' }],
+        },
       ],
     });
+  });
+
+  test('reads Featured first, and a bullet with no area as its words alone (D-261)', () => {
+    const notes = readReleaseNotes(
+      [
+        '# Purlay v2.0.0 — 2026-12-01',
+        '',
+        '### Featured',
+        '',
+        '- **Editor** — it reads what you paste',
+        '',
+        '### Security',
+        '',
+        '- plain words, no area',
+        '- **Sign-in** — a — dash inside is kept',
+        '',
+      ].join('\n'),
+    );
+    expect(notes?.groups.map((group) => group.category)).toEqual(['Featured', 'Security']);
+    expect(notes?.groups[1]?.items).toEqual([
+      { markdown: 'plain words, no area', area: null, body: 'plain words, no area' },
+      {
+        markdown: '**Sign-in** — a — dash inside is kept',
+        area: 'Sign-in',
+        body: 'a — dash inside is kept',
+      },
+    ]);
   });
 
   test('is null without the heading, and leaves out what is not a category or a bullet', () => {
@@ -109,7 +147,7 @@ describe('reading a release’s notes', () => {
     expect(readReleaseNotes(odd)).toEqual({
       version: '1.0.0',
       date: '2026-01-01',
-      groups: [{ category: 'Added', items: ['kept'] }],
+      groups: [{ category: 'Added', items: [{ markdown: 'kept', area: null, body: 'kept' }] }],
     });
   });
 

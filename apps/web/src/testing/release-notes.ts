@@ -5,6 +5,10 @@ const notesText = (version: string): string =>
   [
     `# Purlay v${version} — 2026-10-26`,
     '',
+    '### Featured',
+    '',
+    '- **Editor** — It reads what you paste: a table stays a table',
+    '',
     '### Added',
     '',
     '- **Messages** — Channels read as a live log with `day dividers` (D-98)',
@@ -13,6 +17,10 @@ const notesText = (version: string): string =>
     '### Fixed',
     '',
     '- **Feed** — The place is kept',
+    '',
+    '### Security',
+    '',
+    '- A bullet that names no area',
     '',
   ].join('\n');
 

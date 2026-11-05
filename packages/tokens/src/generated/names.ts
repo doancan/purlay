@@ -157,6 +157,7 @@ export const durationTokens = [
   'duration-mark',
   'duration-slide',
   'duration-celebrate',
+  'duration-celebrate-grand',
   'duration-nudge',
 ] as const;
 

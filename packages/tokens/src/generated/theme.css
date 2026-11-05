@@ -133,6 +133,7 @@
   --transition-duration-mark: var(--duration-mark);
   --transition-duration-slide: var(--duration-slide);
   --transition-duration-celebrate: var(--duration-celebrate);
+  --transition-duration-celebrate-grand: var(--duration-celebrate-grand);
   --transition-duration-nudge: var(--duration-nudge);
   --ease-standard: var(--easing-standard);
 

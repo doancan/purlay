@@ -399,3 +399,34 @@
     scrollbar-color: var(--border-strong) transparent;
   }
 }
+
+/**
+ * The same bar, drawn only while the pointer is over what scrolls (or a keyboard has focus in it): a long list
+ * that sits quietly until it is touched, and still says it scrolls — and its track keeps the room, so nothing
+ * shifts when the thumb appears (D-261).
+ */
+@utility scrollbar-hover {
+  &::-webkit-scrollbar {
+    width: var(--space-2);
+    height: var(--space-2);
+  }
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: var(--radius-pill);
+    background-color: transparent;
+  }
+  &:hover::-webkit-scrollbar-thumb,
+  &:focus-visible::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    &:hover,
+    &:focus-visible {
+      scrollbar-color: var(--border-strong) transparent;
+    }
+  }
+}

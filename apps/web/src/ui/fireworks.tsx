@@ -5,7 +5,8 @@
  * Plain SVG and CSS keyframes (`index.css`), no library and no canvas: the shapes are drawn once, the
  * motion is the stylesheet's, and its length is the `duration-celebrate` token — 0ms under reduced
  * motion, where it is not drawn at all. Delays are fractions of that one length, so a show keeps its
- * shape whatever the length is. It sits over everything, takes no pointer and is hidden from assistive
+ * shape whatever the length is. A grand show (a release opening, D-261) folds in a second show and, on a wide
+ * screen, the sides, over `duration-celebrate-grand` — one smooth run of about four and a half seconds, then gone. It sits over everything, takes no pointer and is hidden from assistive
  * technology: it is a flourish, never information. It removes itself when its last burst ends.
  */
 import { useEffect, useState } from 'react';
@@ -80,6 +81,27 @@ const SHOWS: readonly (readonly Burst[])[] = [
   ],
 ];
 
+const PALETTE = [ACCENT, WARM, GREEN, RED];
+
+/**
+ * The extra bursts of a bigger moment on a wide screen (a release opening, D-261): two out to the left of the
+ * middle field and two to the right, which the wider view makes room for. Their colours turn with the show, so
+ * the sides are never the same twice, and they open among the middle's own bursts.
+ */
+const flanksFor = (show: number): readonly Burst[] => [
+  burst(-20, 36, 0.2, PALETTE[(show + 1) % 4] ?? ACCENT, { rays: 16, reach: 13, ring: true }),
+  burst(-8, 20, 0.4, PALETTE[(show + 2) % 4] ?? WARM, { reach: 10 }),
+  burst(108, 22, 0.28, PALETTE[(show + 3) % 4] ?? GREEN, { reach: 10 }),
+  burst(120, 38, 0.48, PALETTE[show % 4] ?? RED, { rays: 16, reach: 13, ring: true }),
+];
+
+/** Wide enough that the field can reach past the middle: a phone's portrait would only shrink the show. */
+const isWide = (): boolean =>
+  typeof innerWidth === 'number' && innerHeight > 0 && innerWidth / innerHeight >= 1.3;
+
+/** How far into a grand show its second show begins, as a fraction of the show. */
+const ALSO_AFTER = 0.2;
+
 /** Gap between a rocket setting off and its burst, as a fraction of the show. */
 const CLIMB = 0.16;
 
@@ -143,6 +165,24 @@ const RocketShape = ({ burst: b }: { readonly burst: Burst }): React.JSX.Element
   />
 );
 
+/**
+ * How long a burst's sparks sink, as a fraction of the show (`animate-firework-fall` in `index.css`): the last
+ * burst opens at its `at` and is over `FALL` later, so a run lasts `(last at + FALL)` shows' lengths.
+ */
+const FALL = 0.55;
+
+/**
+ * A grand run's length is the token's, whatever shows it holds: the stylesheet's motion is fractions of
+ * `--duration-celebrate`, so that variable is the token over what the run's bursts add up to — the last one to open
+ * and the time its sparks take to sink — and every grand show lasts the same smooth four and a half seconds.
+ */
+const grandLength = (bursts: readonly Burst[]): React.CSSProperties => {
+  const span = Math.max(...bursts.map((each) => each.at)) + FALL;
+  return {
+    ['--duration-celebrate' as string]: `calc(var(--duration-celebrate-grand) / ${span.toFixed(3)})`,
+  };
+};
+
 export interface FireworksProps {
   /** A number in [0, 1): which show comes up. Injected so a test names the show. */
   readonly random?: () => number;
@@ -160,13 +200,30 @@ const nextShow = (random: () => number): number => {
 
 export const Fireworks = ({ random = Math.random }: FireworksProps): React.JSX.Element | null => {
   // Each celebration is a new run, so one that lands during another restarts cleanly.
-  const [run, setRun] = useState<{ readonly key: number; readonly show: number } | null>(null);
+  // A grand run is two shows' bursts at once, over a longer length, with the sides of a wide screen lit too.
+  const [run, setRun] = useState<{
+    readonly key: number;
+    readonly show: number;
+    readonly grand: boolean;
+    /** Whether the field reaches out to the sides: a grand show on a wide screen. */
+    readonly wide: boolean;
+    /** The second show a grand run folds in, a different one. */
+    readonly also: number | null;
+  } | null>(null);
 
   useEffect(
     () =>
-      onCelebrate(() => {
+      onCelebrate((size) => {
         if (prefersReducedMotion()) return;
-        setRun((previous) => ({ key: (previous?.key ?? 0) + 1, show: nextShow(random) }));
+        const show = nextShow(random);
+        const grand = size === 'grand';
+        setRun((previous) => ({
+          key: (previous?.key ?? 0) + 1,
+          show,
+          grand,
+          wide: grand && isWide(),
+          also: grand ? nextShow(random) : null,
+        }));
       }),
     [random],
   );
@@ -176,7 +233,12 @@ export const Fireworks = ({ random = Math.random }: FireworksProps): React.JSX.E
     if (event.animationName === 'firework-fall') setRun(null);
   };
   if (run === null) return null;
-  const bursts = SHOWS[run.show] ?? [];
+  // The second show opens a fifth of the way in, so the two answer each other instead of going off together.
+  const second = (SHOWS[run.also ?? -1] ?? []).map((each) => ({
+    ...each,
+    at: each.at + ALSO_AFTER,
+  }));
+  const bursts = [...(SHOWS[run.show] ?? []), ...second, ...(run.wide ? flanksFor(run.show) : [])];
   // The last to open is the last to finish: its end ends the show.
   const finale = bursts.reduce<Burst | null>((a, b) => (a === null || b.at >= a.at ? b : a), null);
   return (
@@ -184,11 +246,13 @@ export const Fireworks = ({ random = Math.random }: FireworksProps): React.JSX.E
       key={run.key}
       aria-hidden="true"
       focusable="false"
-      viewBox="0 0 100 100"
+      viewBox={run.wide ? '-30 0 160 100' : '0 0 100 100'}
       preserveAspectRatio="xMidYMid meet"
       className="pointer-events-none fixed inset-0 z-toast size-full"
       data-testid="fireworks"
       data-show={run.show}
+      data-grand={run.grand ? 'true' : undefined}
+      style={run.grand ? grandLength(bursts) : undefined}
     >
       {bursts.map((each, index) => (
         <g key={index} onAnimationEnd={each === finale ? endShow : undefined}>

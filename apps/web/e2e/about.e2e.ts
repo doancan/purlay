@@ -79,6 +79,10 @@ test.describe('the release notes after an update', () => {
     await page.goto(`/w/${tenant.slug}`);
     const dialog = page.getByRole('dialog', { name: `What’s new in Purlay ${RUNNING_VERSION}` });
     await expect(dialog).toBeVisible();
+    // Every category has a quiet heading with its count. The suite runs with reduced motion, and a person who
+    // asked for less gets no fireworks (D-261): the window is the whole of the greeting.
+    await expect(dialog.getByRole('heading', { level: 3 }).first()).toBeVisible();
+    await expect(page.getByTestId('fireworks')).toHaveCount(0);
     await expectNoAxe();
 
     await dialog.getByRole('button', { name: 'Got it' }).click();
@@ -89,6 +93,58 @@ test.describe('the release notes after an update', () => {
 
     await page.reload();
     await expect(page.getByRole('main')).toBeVisible();
+    await expect(dialog).toBeHidden();
+  });
+});
+
+test.describe('the release notes with motion allowed (D-261)', () => {
+  test.use({ reducedMotion: 'no-preference' });
+
+  test('fireworks go up over the window, for the eye only, and the page is as clean as without them', async ({
+    page,
+    signIn,
+    tenant,
+    expectNoAxe,
+  }) => {
+    await page.addInitScript((key) => {
+      if (window.sessionStorage.getItem('about-spec-forgot') === null) {
+        window.sessionStorage.setItem('about-spec-forgot', '1');
+        window.localStorage.removeItem(key);
+      }
+    }, RELEASE_NOTES_SEEN_KEY);
+    await signIn();
+    await page.goto(`/w/${tenant.slug}`);
+    const dialog = page.getByRole('dialog', { name: `What’s new in Purlay ${RUNNING_VERSION}` });
+    await expect(dialog).toBeVisible();
+    const show = page.getByTestId('fireworks');
+    await expect(show).toBeAttached();
+    // Measured in the page, as the suite's other timings are: its own clock, not the test runner's.
+    const shown = await page.evaluate(() => performance.now());
+    // Hidden from a screen reader and out of the pointer's way: a flourish, never information, never in the way.
+    await expect(show).toHaveAttribute('aria-hidden', 'true');
+    expect(await show.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe('none');
+    // Over the window, not behind it: its layer is above the dialog's.
+    const layers = await page.evaluate(() => {
+      const z = (selector: string): number => {
+        const element = document.querySelector(selector);
+        if (element === null) throw new Error(`nothing matches ${selector}`);
+        return Number(getComputedStyle(element).zIndex);
+      };
+      return { show: z('[data-testid="fireworks"]'), dialog: z('[role="dialog"]') };
+    });
+    expect(layers.show).toBeGreaterThan(Number.isNaN(layers.dialog) ? 0 : layers.dialog);
+    // axe reads what is painted: a burst's line over text is a contrast it measures, and it moves. The show is
+    // hidden from assistive technology, so the contract is that the page is clean once it is over — the run ends
+    // by itself, and the layer removes itself — with the window still open under it.
+    await expect(show).toHaveCount(0, { timeout: 10_000 });
+    // One smooth run of about four and a half seconds, then gone — not a chain, not a loop.
+    const lasted = (await page.evaluate(() => performance.now())) - shown;
+    expect(lasted).toBeGreaterThan(3_000);
+    expect(lasted).toBeLessThan(7_000);
+    await expect(dialog).toBeVisible();
+    // The window and what greets it are the subject here; the feed behind a modal is audited by its own tests.
+    await expectNoAxe(dialog);
+    await dialog.getByRole('button', { name: 'Got it' }).click();
     await expect(dialog).toBeHidden();
   });
 });

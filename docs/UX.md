@@ -395,10 +395,17 @@ it. On a narrow window the navigation opens as the sidebar does.
   (`AGPL-3.0-or-later`) and the repository, a link to GitHub in another tab.
 - **What's new in Purlay x.y.z** (D-248) — a window, once per version per browser. The first screen a signed-in person
   opens after the server was updated shows, over it, the notes of the version the server now runs: its title
-  names the version, its description the day it was released, and under it the categories (*Added*, *Changed*,
-  *Deprecated*, *Removed*, *Fixed*, *Security*) each with its lines, each line drawn as the markdown it was written
-  in — the area bold, a name in code. Long notes scroll inside the window, which a keyboard reaches by a stop of its
-  own. Focus is held in it; **Got it**, the close button, **Esc** and a click on the scrim close it, and each
+  names the version and its description the day it was released. What the release is *about* comes first, when it
+  has anything: **Featured** is a light blue block with each big thing as a title and its sentence (at most three,
+  D-261). Then every category is an ordinary list under a quiet heading — a coloured dot, a word (*New* for Added,
+  *Improved* for Changed, *Fixed*, *Security*, *Deprecated*, *Removed*) and how many lines it has — never a pill, which
+  would read as a button; each line has its area (the bold word it starts with) as a small label above its
+  words, drawn as the markdown it was written in, with a hairline between lines. The dot's colour is never the only
+  voice: the word is beside it. A link at the foot opens that release on GitHub in another tab. A new release is greeted
+  by one show of fireworks over the window — two shows' bursts and, on a wide screen, the sides — about four and a half
+  seconds, smooth, then gone; opening the notes by hand shows it too; a person who asked for less motion sees none. Long
+  notes scroll inside the window, which a keyboard reaches by a stop of its own; its scrollbar is drawn only while the
+  pointer is over it (or a keyboard has focus in it), so a quiet window stays quiet. Focus is held in it; **Got it**, the close button, **Esc** and a click on the scrim close it, and each
   of them remembers the version in this browser (`purlay.releaseNotesSeen`), so a reload, a return or another screen
   never opens it again for that version and the next version opens it once more — on a brand-new server as on
   an old one, with no special case. It is not drawn over the setup, the sign-in or the native hand-off, which are
