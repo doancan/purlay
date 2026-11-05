@@ -1,6 +1,6 @@
 /** Settings under narrow screens, delayed responses and failed reads. */
 import { expect, test } from './fixtures';
-import { openSettings } from './support';
+import { openNavigation, openSettings } from './support';
 
 const SECTIONS = [
   ['profile', 'Profile'],
@@ -116,8 +116,7 @@ test('quiet hours retries a failed read, rejects an empty time, and holds edits 
     quietHours: { from: 1230, to: 540, days: [1, 2, 3, 4, 5] },
   });
   const navigateSettings = async (name: string): Promise<void> => {
-    const toggle = page.getByRole('button', { name: 'Open navigation' });
-    if (await toggle.isVisible()) await toggle.click();
+    await openNavigation(page);
     await page
       .getByRole('navigation', { name: 'Settings' })
       .getByRole('link', { name, exact: true })
