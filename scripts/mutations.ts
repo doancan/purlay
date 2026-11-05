@@ -13972,6 +13972,31 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
+    id: 'realtime-file-names-a-chat-file',
+    why: 'a file of the socket layer other than the frame router imports a file of chat, so the layer that carries every module’s frames depends on one of them (D-250)',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: "import type { Clock } from '../platform/clock';",
+    replace:
+      "import type { Clock } from '../platform/clock';\nimport { sweepLinkPreviews } from '../features/chat/sweeps';\nvoid sweepLinkPreviews;",
+    tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
+    id: 'socket-rate-refusal-counted-under-none',
+    why: 'a socket frame refused for the rate is counted under no module though its operation is a module’s, so the module whose frames are flooding is not the one the page names (D-250 rule 7)',
+    file: 'apps/api/src/ingress/ws/socket.ts',
+    find: 'module: dependencies.frameOwner?.(operationOf(raw)) ?? NO_OWNER,',
+    replace: 'module: NO_OWNER,',
+    tests: ['apps/api/src/ingress/http/metrics.integration.test.ts'],
+  },
+  {
+    id: 'push-failures-counted-under-the-core',
+    why: 'a push the service did not take is counted under the core though the notice was a module’s, so the module whose notifications fail is not the one the page names (D-250 rule 7)',
+    file: 'apps/api/src/modules/push/sender.ts',
+    find: 'module: dependencies.owner ?? CORE_OWNER',
+    replace: 'module: CORE_OWNER',
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+  },
+  {
     id: 'socket-presence-kept-without-chat',
     why: 'a socket of a process that does not run chat still counts people online and tells their colleagues, in the news of a module that is off (D-250)',
     file: 'apps/api/src/ingress/ws/socket.ts',

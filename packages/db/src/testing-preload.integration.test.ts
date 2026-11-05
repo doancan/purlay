@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
+import { dropDatabases } from './testing';
 
 describe('integration: the preload', () => {
   test('a run pointed at a database that was never migrated finds it migrated', async () => {
@@ -36,11 +37,8 @@ describe('integration: the preload', () => {
         said: '',
       });
     } finally {
-      // The probe's own run made `${name}_template` and clones of it; the template is ours to drop.
-      await sql`drop database if exists ${sql.id(`${name}_template`)} with (force)`.execute(
-        control,
-      );
-      await sql`drop database if exists ${sql.id(name)} with (force)`.execute(control);
+      // The probe's own run made `${name}_template` and clones of it; both are ours to drop.
+      await dropDatabases([`${name}_template`, name]);
       await control.destroy();
     }
   }, 120_000);
