@@ -42,6 +42,7 @@ import {
 import { send, type missedIn } from '../features/chat/messages/messages';
 import type { PushSender } from '../modules/push/sender';
 import { replaySince } from '../features/chat/messages/replay';
+import type { ReplayGate } from './replay-gate';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { Logger } from '../platform/logging';
@@ -52,6 +53,8 @@ import { requireWorkspaceMembership } from '../platform/tenancy';
 import { noteSessionActivity, type SessionLifetime } from '../modules/auth/session-lifetime';
 import { SESSION_CLOCK } from '../modules/auth/sessions';
 import type { RateLimiter } from './rate-limiter';
+
+const unlimited: ReplayGate = async (work) => await work();
 
 export interface RouterDependencies {
   /**
@@ -90,6 +93,11 @@ export interface RouterDependencies {
    * what follows it, deterministically; production passes nothing.
    */
   readonly readReplay?: typeof missedIn;
+  /**
+   * Holds how many replays run at once on this node (`replay-gate.ts`). Absent, there is no limit: the
+   * composition root passes it, a test of one operation need not.
+   */
+  readonly replayGate?: ReplayGate;
 }
 
 interface SocketGate {
@@ -301,15 +309,23 @@ export const routeFrame = async (
           // every subscription, and nothing below adds one.
           if (!dependencies.socket.isOpen(identity.socketId)) return [];
 
-          const { states, frames } = await replaySince(
-            database,
-            clock,
-            contexts.map((context, index) => ({
-              context,
-              afterMessageId: wanted[index]?.afterMessageId ?? null,
-            })),
-            dependencies.readReplay,
+          const requests = contexts.map((context, index) => ({
+            context,
+            afterMessageId: wanted[index]?.afterMessageId ?? null,
+          }));
+          // Only a replay is held to a turn: a first subscription, with no cursor, has nothing to read, and
+          // making it wait behind a storm would only delay a page that is loading.
+          const turn = requests.some((request) => request.afterMessageId !== null)
+            ? (dependencies.replayGate ?? unlimited)
+            : unlimited;
+          const replay = await turn(async () =>
+            // Gone while it waited its turn: nothing is read for a connection nobody is on.
+            dependencies.socket.isOpen(identity.socketId)
+              ? await replaySince(database, clock, requests, dependencies.readReplay)
+              : null,
           );
+          if (replay === null) return [];
+          const { states, frames } = replay;
           return [frame({ event: 'ACK', data: { channels: states } }, clock, parsed.id), ...frames];
         } catch (error) {
           // Nothing is left half-done behind an error: what this frame subscribed

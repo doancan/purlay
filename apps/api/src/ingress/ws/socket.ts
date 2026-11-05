@@ -35,6 +35,7 @@ import {
 import { metered } from '../../realtime/frame-meter';
 import { inMemoryPresenceRegistry } from '../../realtime/presence';
 import type { SharedState } from '../../realtime/shared';
+import { createReplayGate } from '../../realtime/replay-gate';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
@@ -44,7 +45,7 @@ import type { PushSender } from '../../modules/push/sender';
 import type { ServerMetrics } from '../../platform/metrics';
 
 export interface SocketDependencies {
-  readonly config: Pick<Config, 'APP_URL' | 'SOCKET_MAX_CONNECTIONS'>;
+  readonly config: Pick<Config, 'APP_URL' | 'SOCKET_MAX_CONNECTIONS' | 'SOCKET_REPLAY_CONCURRENCY'>;
   /** The seam a socket's session is resolved through, as an HTTP request's is (`sessions.ts`). */
   readonly auth: Auth;
   readonly database: Executor;
@@ -147,6 +148,8 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     perUser: SOCKET_CONNECTION_LIMITS.perUser,
     total: dependencies.config.SOCKET_MAX_CONNECTIONS,
   };
+  // One for the node: what limits the replays is every socket's together, not one connection's.
+  const replayGate = createReplayGate(dependencies.config.SOCKET_REPLAY_CONCURRENCY, log);
   // Who is online on this node (D-136): told by the hub's own count of each person's sockets. It is chat's news
   // (`PRESENCE` is in its manifest): a process that does not run chat counts nobody, shares nothing and tells nobody.
   const online =
@@ -328,6 +331,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   // The real boundary. D-35: one transaction, published after it returns.
                   atomically,
                   socket: hub,
+                  replayGate,
                 },
                 identity,
                 raw,
