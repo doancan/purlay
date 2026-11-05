@@ -3,7 +3,7 @@
  * every frame means to the cache — against a socket and timers driven by hand.
  */
 import { describe, expect, test } from 'bun:test';
-import { QueryClient, type InfiniteData } from '@tanstack/react-query';
+import { QueryClient, QueryObserver, type InfiniteData } from '@tanstack/react-query';
 import {
   CLOSE_CODES,
   PRESENCE_GRACE_MS,
@@ -522,6 +522,43 @@ describe('a reconnect', () => {
     expect(w.engine.store.getState().status).toBe('open');
   });
 
+  test('the first open reads the person’s own topic again: what changed between the page’s reads and the socket is in no frame', () => {
+    const w = world();
+    w.client.setQueryData(keys.me, { stale: false });
+    w.client.setQueryData(keys.members(WS), []);
+    w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.saved(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.start();
+    w.open();
+    expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.saved(WS))?.isInvalidated).toBe(true);
+    // The channels' lists are the subscription's answer to read again, not the open's.
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(false);
+  });
+
+  test('a change made after the page read the person and before its socket opened shows once it has', async () => {
+    const w = world();
+    let served = { deepWorkUntil: null as string | null };
+    const observer = new QueryObserver(w.client, {
+      queryKey: keys.me,
+      queryFn: (): Promise<{ deepWorkUntil: string | null }> => Promise.resolve({ ...served }),
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    for (let turn = 0; turn < 4; turn++) await Promise.resolve();
+    expect(w.client.getQueryData(keys.me)).toEqual({ deepWorkUntil: null });
+    // Another device starts Deep Work now: its frame goes to a socket that does not exist yet.
+    served = { deepWorkUntil: '2026-10-09T14:00:00.000Z' };
+    w.engine.start();
+    w.open();
+    for (let turn = 0; turn < 4; turn++) await Promise.resolve();
+    expect(w.client.getQueryData(keys.me)).toEqual({ deepWorkUntil: '2026-10-09T14:00:00.000Z' });
+    unsubscribe();
+  });
+
   test('reads the memberships again: a workspace renamed while the socket was down is not replayed', () => {
     const w = world();
     w.client.setQueryData(keys.me, { stale: false });
@@ -531,6 +568,8 @@ describe('a reconnect', () => {
     for (let waited = 0; w.sockets.length < 2 && waited < 10_000; waited += 100) {
       w.timers.advance(100);
     }
+    // The first open read it again; what is read now is the reconnect's.
+    w.client.setQueryData(keys.me, { stale: false });
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
     w.open();
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
@@ -1019,6 +1058,8 @@ describe('the frames', () => {
     w.client.setQueryData(keys.me, { stale: false });
     w.engine.start();
     w.open();
+    // Read again by the open itself; settled again, it is the frame's to read once more.
+    w.client.setQueryData(keys.me, { stale: false });
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
     w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
@@ -1029,11 +1070,12 @@ describe('the frames', () => {
     w.client.setQueryData(keys.members(WS), []);
     w.engine.start();
     w.open();
-    expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(false);
     w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
     for (let waited = 0; w.sockets.length < 2 && waited < 10_000; waited += 100) {
       w.timers.advance(100);
     }
+    w.client.setQueryData(keys.members(WS), []);
+    expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(false);
     w.open();
     expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(true);
   });
@@ -1044,6 +1086,9 @@ describe('the frames', () => {
     w.client.setQueryData(keys.members(IDS.browse), []);
     w.engine.start();
     w.open();
+    // Both were read again by the open; settled again, the frame is what reads one of them.
+    w.client.setQueryData(keys.members(WS), []);
+    w.client.setQueryData(keys.members(IDS.browse), []);
     w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.members(IDS.browse))?.isInvalidated).toBe(false);
@@ -1092,6 +1137,9 @@ describe('Deep Work changed in another tab (#526)', () => {
     w.client.setQueryData(keys.notifications(IDS.browse), { pageParams: [], pages: [] });
     w.engine.start();
     w.open();
+    // Read again by the open; settled again, the frame is what reads one workspace's.
+    w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.notifications(IDS.browse), { pageParams: [], pages: [] });
     w.deliver(frame({ event: 'NOTIFICATIONS_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     const stale = (workspaceId: string): boolean | undefined =>
       w.client.getQueryState(keys.notifications(workspaceId))?.isInvalidated;
@@ -1105,6 +1153,8 @@ describe('Deep Work changed in another tab (#526)', () => {
     w.client.setQueryData([...keys.saved(IDS.browse), 'ids'], []);
     w.engine.start();
     w.open();
+    w.client.setQueryData([...keys.saved(WS), 'ids'], []);
+    w.client.setQueryData([...keys.saved(IDS.browse), 'ids'], []);
     w.deliver(frame({ event: 'SAVED_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     const stale = (workspaceId: string): boolean | undefined =>
       w.client.getQueryState([...keys.saved(workspaceId), 'ids'])?.isInvalidated;
@@ -2258,23 +2308,24 @@ describe('a send whose id the server finds too old (D-33, D-8)', () => {
  * was not yet listening — the gap that found `SAVED_UPDATED` and the open questions each missing.
  */
 describe('every family of cached reads is read again after the gap a frame can fall into', () => {
-  type Where = 'answer' | 'reconnect' | 'both';
+  /** `open`: at every open of the socket, the first too — the person's own topic, which a subscription's answer does not say. */
+  type Where = 'answer' | 'reconnect' | 'open' | 'both';
   /** One real key of each family, and when it is read again; the frames that rewrite it are in `engine.ts`. */
   const DECIDED: Readonly<
     Record<keyof typeof families, { where: Where; key: readonly unknown[] }>
   > = {
     search: { where: 'answer', key: keys.search(WS, 'words', null, null) },
-    saved: { where: 'reconnect', key: keys.saved(WS) },
+    saved: { where: 'open', key: keys.saved(WS) },
     files: { where: 'answer', key: keys.files(CH) },
     channels: { where: 'both', key: keys.channels(WS) },
     messages: { where: 'answer', key: keys.messages(CH) },
     thread: { where: 'both', key: keys.thread('root') },
     unresolved: { where: 'both', key: keys.unresolved(WS) },
-    notifications: { where: 'reconnect', key: keys.notifications(WS) },
+    notifications: { where: 'open', key: keys.notifications(WS) },
     pins: { where: 'answer', key: keys.pins(CH) },
     incident: { where: 'both', key: keys.incident(CH) },
     messageVersions: { where: 'answer', key: keys.messageVersions('message') },
-    members: { where: 'reconnect', key: keys.members(WS) },
+    members: { where: 'open', key: keys.members(WS) },
   };
   const names = Object.keys(DECIDED) as (keyof typeof families)[];
 
@@ -2282,7 +2333,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     expect(names.map(String).sort()).toEqual(Object.keys(families).sort());
   });
 
-  test.each(names.filter((name) => DECIDED[name].where !== 'reconnect'))(
+  test.each(names.filter((name) => ['answer', 'both'].includes(DECIDED[name].where)))(
     'the subscription’s answer reads %s again',
     (name) => {
       const w = world();
@@ -2292,6 +2343,18 @@ describe('every family of cached reads is read again after the gap a frame can f
       w.client.setQueryData(DECIDED[name].key, { pages: [], pageParams: [] });
       expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(false);
       answerAll(w);
+      expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(true);
+    },
+  );
+
+  test.each(names.filter((name) => DECIDED[name].where === 'open'))(
+    'the first open reads %s again: the page read it before the socket was listening',
+    (name) => {
+      const w = world();
+      w.client.setQueryData(DECIDED[name].key, { pages: [], pageParams: [] });
+      w.engine.start();
+      expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(false);
+      w.open();
       expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(true);
     },
   );

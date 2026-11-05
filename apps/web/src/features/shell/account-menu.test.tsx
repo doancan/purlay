@@ -245,6 +245,7 @@ describe('away (D-257)', () => {
     act(() => {
       view.world.sockets.open();
     });
+    await settle();
     expect(door.querySelector('[data-away]')).not.toBeNull();
     expect(door.querySelector('[data-online]')).toBeNull();
     view.unmount();
