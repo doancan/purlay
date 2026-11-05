@@ -71,6 +71,20 @@ const recordNotices = async (page: Page, owner: string | null = null): Promise<v
   }, owner);
 };
 
+/**
+ * Resolves when the page's socket has been answered a subscription (`ACK` with `channels`): from then on it is
+ * told live, and it has read again what a frame before it would have told. Armed before the page is opened,
+ * since the socket is made while it loads.
+ */
+const socketSubscribed = (page: Page): Promise<void> =>
+  new Promise((resolve) => {
+    page.on('websocket', (socket) => {
+      socket.on('framereceived', ({ payload }) => {
+        if (typeof payload === 'string' && /"event":"ACK".*"channels"/.test(payload)) resolve();
+      });
+    });
+  });
+
 test.describe('a tab in the background', () => {
   test.skip(
     () => test.info().project.name !== 'chromium-dark',
@@ -215,6 +229,21 @@ test.describe('a tab in the background', () => {
     await writer.api.join(channel.id);
     const page = await viewer.page();
     await recordNotices(page, viewer.userId);
+    // The socket opens late on every load, as it does on a busy runner: what the page read before it opened is what it
+    // knows until the first answer, and a mention written in that gap is a first look, not news. Held on purpose, so
+    // the test waits for the socket (`socketSubscribed`) and does not depend on it being quick.
+    await page.routeWebSocket('**/ws', (ws) => {
+      const queued: (string | Buffer)[] = [];
+      let server: ReturnType<typeof ws.connectToServer> | null = null;
+      ws.onMessage((m) => {
+        if (server === null) queued.push(m);
+        else server.send(m);
+      });
+      setTimeout(() => {
+        server = ws.connectToServer();
+        for (const m of queued) server.send(m);
+      }, 2500);
+    });
     const path = `/w/${workspace.slug}/c/${channel.id}`;
     const state = async (): Promise<ChannelState | null> =>
       (await viewer.api.get<Channel[]>(`/api/workspaces/${workspace.id}/channels`)).find(
@@ -226,14 +255,26 @@ test.describe('a tab in the background', () => {
         window.dispatchEvent(new Event(next ? 'blur' : 'focus'));
       }, elsewhere);
     };
+    // What the page itself shows, not the server's count: a notice is told only of a badge that *rises* in the
+    // page's own list, and a mention written while that list still holds an older count is a first look, not news.
+    // The row with no mention count on it (the channel's name has no digit) says the page has caught up with the read
+    // this test waited for above.
+    const pageHasCaughtUp = async (): Promise<void> => {
+      const row = await navLink(page, 'notifications');
+      await expect(row).toBeVisible();
+      await expect(row).not.toHaveText(/\d/);
+    };
     const notices = async (): Promise<{ closed: boolean }[]> =>
       await page.evaluate(() => (window.shownNotices ?? []).map(({ closed }) => ({ closed })));
 
     for (const level of ['all', 'mentions', 'none'] as const) {
       await viewer.api.put(`/api/channels/${channel.id}/notification-level`, { level });
+      const subscribed = socketSubscribed(page);
       await page.goto(path);
       await shellReady(page);
+      await subscribed;
       await expect.poll(async () => (await state())?.unreadMentionCount).toBe(0);
+      await pageHasCaughtUp();
       await away(true);
       const words =
         level === 'all' ? 'An ordinary channel message' : `@${viewer.username} ${level}`;
@@ -254,10 +295,13 @@ test.describe('a tab in the background', () => {
     await viewer.api.put(`/api/channels/${channel.id}/notification-level`, { level: 'mentions' });
     const root = await viewer.api.say(channel.id, 'A question for the thread');
     await writer.api.say(channel.id, 'The first answer', { parentId: root.id });
+    const threadSubscribed = socketSubscribed(page);
     await page.goto(`${path}?thread=${root.id}`);
     const thread = page.locator(`[data-thread-root="${root.id}"]`);
     await expect(thread.getByText('The first answer', { exact: true })).toBeVisible();
+    await threadSubscribed;
     await expect.poll(async () => (await state())?.unreadMentionCount).toBe(0);
+    await pageHasCaughtUp();
     await away(true);
     await writer.api.say(channel.id, 'The answer while you are elsewhere', { parentId: root.id });
     await expect(
