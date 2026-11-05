@@ -15107,6 +15107,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['packages/types/src/releases.test.ts'],
   },
   {
+    id: 'cache-family-nobody-decided-when-it-is-read-again',
+    why: 'a family of cached reads is added and no frame that rewrites it is made good for a socket that was not yet listening',
+    file: 'apps/web/src/data/keys.ts',
+    find: "  members: ['members'] as const,\n} as const;",
+    replace: "  members: ['members'] as const,\n  issues: ['issues'] as const,\n} as const;",
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
+  {
     id: 'module-screen-has-a-shell-of-its-own',
     why: "a module's screens are drawn in a shell of their own again, so the front door's hand-over to a channel builds the shell again and closes the menu opened on it",
     file: 'apps/web/src/app/outlet.tsx',
