@@ -7,6 +7,8 @@
  * crossings of every endpoint here are in `cross-tenant.integration.test.ts` and
  * `channel-visibility.integration.test.ts`, which read the endpoint list from
  * `API.md`.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';

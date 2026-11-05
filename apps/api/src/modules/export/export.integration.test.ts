@@ -5,6 +5,8 @@
  * second — every person its rows name and nobody else, a former member without the address or profile
  * they set after they left, and no secret anywhere in its bytes. The classification is bound to the
  * catalogue: a table or a column the database has and the export has not decided on fails here.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { chmod, mkdtemp, readdir, readFile, stat } from 'node:fs/promises';

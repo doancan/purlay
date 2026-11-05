@@ -26,6 +26,7 @@ import {
   aRecordingLogger,
   testDependencies,
 } from '../../testing/doubles';
+import { testNeeding } from '../../testing/needs';
 
 // A database of its own (D-228) for the tests that alter a table: the lock holds until the rollback, and on the
 // shared database it deadlocks (40P01) with any file beside it that touches the table.
@@ -173,15 +174,18 @@ describe('integration: readiness', () => {
     });
   });
 
-  test('a process that runs chat is ready once the set is applied', async () => {
-    await withRollback(async (db) => {
-      expect(await ready(db, compose(bundledModules))).toEqual({
-        status: 200,
-        body: { status: 'ready' },
-        reasons: [],
+  testNeeding('chat', 'issues')(
+    'a process that runs chat is ready once the set is applied',
+    async () => {
+      await withRollback(async (db) => {
+        expect(await ready(db, compose(bundledModules))).toEqual({
+          status: 200,
+          body: { status: 'ready' },
+          reasons: [],
+        });
       });
-    });
-  });
+    },
+  );
 
   test('a process that runs no module is ready on a database where chat’s set is not applied, and where it is', async () => {
     await withRollback(async (db) => {

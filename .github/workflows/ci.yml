@@ -156,9 +156,9 @@ jobs:
   # `MODULES`, the API is started with the same value and no migration of its own, and every path every manifest
   # claims is asked for with every method — a module that runs asks who is calling, one that does not is the `404`
   # of an unknown path, byte for byte. Beside `schema` rather than after it, and a few seconds of work once the
-  # database is up. The suite is not run per cell: its tests build their own composition and read no `MODULES`.
-  # The same job then migrates every cell from the database the last release tag's own migrator made
-  # (`bun run modules:upgrade`), which needs the tags: the checkout fetches them.
+  # database is up. The suites are run per cell by the `module-suites` job below, not here. The same job then migrates
+  # every cell from the database the last release tag's own migrator made (`bun run modules:upgrade`), which needs the
+  # tags: the checkout fetches them.
   modules:
     needs: changes
     if: needs.changes.outputs.modules == 'true'
@@ -187,6 +187,39 @@ jobs:
 
       - name: every cell migrated from the database the last release left
         run: bun run modules:upgrade
+
+  # The integration suites that belong to no module, once per cell of the matrix but the one with every module (which
+  # is `schema`'s own run): for each, a database of the cell's own sets with `MODULES` set — the harness reads it — and
+  # the suites that need a module the cell lacks left out (`MODULES.md` §8). One job per cell, so the run takes as long as
+  # the longest cell (chat's, about the length of `schema`) and not the sum; `module-suites.test.ts` holds this list to
+  # the cells the build has, so a module added to the bundle fails there until its cells are added here.
+  module-suites:
+    needs: changes
+    if: needs.changes.outputs.modules == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ['none', 'chat', 'issues']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - name: start the database and redis
+        run: bun run db:up:tests
+
+      - name: the suites that belong to no module, in this cell
+        run: bun run modules:suites -- ${{ matrix.cell }}
 
   # The browser tests: the production build and a seeded real API, in real Chromium,
   # in both themes and at two widths (#139). A job of its own because it needs a
@@ -413,7 +446,7 @@ jobs:
   # whatever happened before it — a job whose dependency failed is skipped by default, and branch protection
   # counts a skipped required check as passed — and passes only when each job it needs succeeded.
   verify:
-    needs: [static, schema, changes, browser, modules]
+    needs: [static, schema, changes, browser, modules, module-suites]
     if: always()
     runs-on: ubuntu-latest
     # Checkout and Bun's download, then a few milliseconds of judging; the margin is for a slow download.

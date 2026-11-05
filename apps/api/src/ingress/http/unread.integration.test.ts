@@ -1,6 +1,8 @@
 /**
  * "Mark unread from here" (D-212), through the HTTP surface against a real database: where the
  * position lands, what is counted, what is refused, and that it is the one backwards move.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

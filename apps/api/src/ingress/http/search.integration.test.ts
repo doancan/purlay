@@ -5,6 +5,8 @@
  * bounds of `q` read from the contract, the words trimmed before they are measured, the refusals
  * and their statuses, and that what comes back is the contract's shape. The tenant crossing is in
  * `cross-tenant.integration.test.ts`.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';

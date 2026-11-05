@@ -11,6 +11,7 @@ import { aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { testNeeding } from '../../testing/needs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -114,42 +115,45 @@ describe('integration: GET and PUT /api/me/missed-mail', () => {
 });
 
 describe('integration: POST /api/missed-mail/stop', () => {
-  test('without a session, turns it off for the person the letter went to; again is the same; unknown is 404', async () => {
-    await withRollback(async (db) => {
-      const call = caller(db, true);
-      const ada = await aSignedInUser(db, fixedClock(NOW), 'mm-stop');
-      const bob = await aSignedInUser(db, fixedClock(NOW), 'mm-other');
-      for (const person of [ada, bob]) {
+  testNeeding('chat')(
+    'without a session, turns it off for the person the letter went to; again is the same; unknown is 404',
+    async () => {
+      await withRollback(async (db) => {
+        const call = caller(db, true);
+        const ada = await aSignedInUser(db, fixedClock(NOW), 'mm-stop');
+        const bob = await aSignedInUser(db, fixedClock(NOW), 'mm-other');
+        for (const person of [ada, bob]) {
+          await db
+            .updateTable('users')
+            .set({ email_verified: true, missed_mail_since: NOW })
+            .where('id', '=', person.userId)
+            .execute();
+        }
+        const token = randomToken();
         await db
-          .updateTable('users')
-          .set({ email_verified: true, missed_mail_since: NOW })
-          .where('id', '=', person.userId)
+          .insertInto('missed_mail_letters')
+          .values({ user_id: ada.userId, sent_at: NOW, stop_digest: await tokenDigest(token) })
           .execute();
-      }
-      const token = randomToken();
-      await db
-        .insertInto('missed_mail_letters')
-        .values({ user_id: ada.userId, sent_at: NOW, stop_digest: await tokenDigest(token) })
-        .execute();
 
-      const unknown = await call('POST', '/api/missed-mail/stop', null, { token: randomToken() });
-      expect(unknown.status).toBe(404);
-      expect(await unknown.json()).toMatchObject({ error: { code: 'MAIL_LINK_NOT_FOUND' } });
-      for (const body of [{}, { token: 'short' }, { token: token.toUpperCase() }]) {
-        expect((await call('POST', '/api/missed-mail/stop', null, body)).status).toBe(400);
-      }
+        const unknown = await call('POST', '/api/missed-mail/stop', null, { token: randomToken() });
+        expect(unknown.status).toBe(404);
+        expect(await unknown.json()).toMatchObject({ error: { code: 'MAIL_LINK_NOT_FOUND' } });
+        for (const body of [{}, { token: 'short' }, { token: token.toUpperCase() }]) {
+          expect((await call('POST', '/api/missed-mail/stop', null, body)).status).toBe(400);
+        }
 
-      // Opened in Bob's browser: it is still Ada's letter, and Ada's setting.
-      expect((await call('POST', '/api/missed-mail/stop', bob, { token })).status).toBe(204);
-      expect((await call('POST', '/api/missed-mail/stop', null, { token })).status).toBe(204);
-      expect(await (await call('GET', '/api/me/missed-mail', ada)).json()).toEqual({
-        on: false,
-        available: true,
+        // Opened in Bob's browser: it is still Ada's letter, and Ada's setting.
+        expect((await call('POST', '/api/missed-mail/stop', bob, { token })).status).toBe(204);
+        expect((await call('POST', '/api/missed-mail/stop', null, { token })).status).toBe(204);
+        expect(await (await call('GET', '/api/me/missed-mail', ada)).json()).toEqual({
+          on: false,
+          available: true,
+        });
+        expect(await (await call('GET', '/api/me/missed-mail', bob)).json()).toEqual({
+          on: true,
+          available: true,
+        });
       });
-      expect(await (await call('GET', '/api/me/missed-mail', bob)).json()).toEqual({
-        on: true,
-        available: true,
-      });
-    });
-  });
+    },
+  );
 });

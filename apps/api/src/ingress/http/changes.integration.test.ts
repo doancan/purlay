@@ -6,6 +6,8 @@
  * What is checked is the ways a client would be left wrong without noticing: a deletion that is never told, a
  * reaction taken back that is still shown, a message that arrived late under an older id, a page boundary that
  * skips or repeats a change, a cursor that was made up, a channel the caller cannot see.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';

@@ -5,6 +5,8 @@
  * says all three are **permanent** because the value becomes a primary key. Each
  * has a test. So does the pagination contract, because `OFFSET` is prohibited on
  * this table and the alternative has to actually work.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

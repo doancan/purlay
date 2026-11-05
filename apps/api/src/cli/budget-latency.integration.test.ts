@@ -2,6 +2,8 @@
  * The latency budget measured for real (#73): an API process, two signed-in sockets in one channel,
  * every message answered and delivered. The numbers are this machine's; what is held is that they
  * were taken — every message timed both ways — and are not absurd.
+ *
+ * @needs-modules chat, issues
  */
 import { describe, expect, test } from 'bun:test';
 import { measureLatency } from './budget-latency';

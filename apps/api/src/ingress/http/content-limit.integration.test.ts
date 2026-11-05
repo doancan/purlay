@@ -6,6 +6,8 @@
  * languages, so the number is bound here: the database must accept exactly what
  * the contract's maximum allows and refuse one more. Change either without the
  * other and this fails.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

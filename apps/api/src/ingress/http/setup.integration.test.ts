@@ -46,6 +46,7 @@ import {
   type SettingsChange,
 } from '../../modules/setup/runtime';
 import { AUTH_BUDGET, SETUP_BUDGET, SETUP_SECRET_BUDGET } from './rate-limit';
+import { testNeeding } from '../../testing/needs';
 
 const ORIGIN = 'https://purlay.test';
 const cipher = credentialCipher(DEVELOPMENT_ENCRYPTION_KEY);
@@ -337,187 +338,190 @@ const comparableHeaders = (response: Response): Record<string, string> =>
   Object.fromEntries([...response.headers.entries()].filter(([name]) => name !== 'x-request-id'));
 
 describe('integration: the setup over HTTP, start to finish', () => {
-  test('the whole setup: claim, administrator, address, policy, GitHub and mail tried and saved, workspace, finish', async () => {
-    const wizard = await aWizard();
-    const relay = await aRelay();
+  testNeeding('chat')(
+    'the whole setup: claim, administrator, address, policy, GitHub and mail tried and saved, workspace, finish',
+    async () => {
+      const wizard = await aWizard();
+      const relay = await aRelay();
 
-    // Open, and nothing else said.
-    const status = await call(wizard, 'GET', '/setup/status');
-    expect([status.status, await status.json()]).toEqual([200, { open: true, appUrl: ORIGIN }]);
+      // Open, and nothing else said.
+      const status = await call(wizard, 'GET', '/setup/status');
+      expect([status.status, await status.json()]).toEqual([200, { open: true, appUrl: ORIGIN }]);
 
-    const cookie = await claimed(wizard);
-    expect((await stateOf(wizard, cookie)).steps).toEqual(['claim']);
+      const cookie = await claimed(wizard);
+      expect((await stateOf(wizard, cookie)).steps).toEqual(['claim']);
 
-    // The administrator: a weak password refused by its rule's name, then made and signed in.
-    const weak = await call(wizard, 'POST', '/setup/admin', {
-      cookie,
-      body: { ...ADMIN, password: 'short' },
-    });
-    expect([weak.status, await weak.json()]).toEqual([
-      400,
-      {
-        error: {
-          code: 'VALIDATION_FAILED',
-          message: 'Choose another password.',
-          details: { fields: { password: 'too-short' } },
+      // The administrator: a weak password refused by its rule's name, then made and signed in.
+      const weak = await call(wizard, 'POST', '/setup/admin', {
+        cookie,
+        body: { ...ADMIN, password: 'short' },
+      });
+      expect([weak.status, await weak.json()]).toEqual([
+        400,
+        {
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Choose another password.',
+            details: { fields: { password: 'too-short' } },
+          },
         },
-      },
-    ]);
-    const admin = await call(wizard, 'POST', '/setup/admin', { cookie, body: ADMIN });
-    expect(admin.status).toBe(200);
-    const adminBody = await admin.text();
-    expect(JSON.parse(adminBody)).toEqual({ signedIn: true });
-    // The library's cookie and nothing of its body: the session's raw token never leaves the server.
-    // The claim's cookie sent again, and the library's session cookie: nothing else.
-    const names = admin.headers.getSetCookie().map((set) => set.split('=')[0]);
-    expect(names).toEqual([SETUP_COOKIE, SESSION_COOKIE]);
-    const session =
-      cookiesFrom(admin)
-        .split('; ')
-        .find((pair) => pair.startsWith(`${SESSION_COOKIE}=`)) ?? '';
-    const token = session.split('=')[1]?.split('.')[0] ?? '';
-    expect(token.length).toBeGreaterThan(16);
-    expect(adminBody).not.toContain(token);
+      ]);
+      const admin = await call(wizard, 'POST', '/setup/admin', { cookie, body: ADMIN });
+      expect(admin.status).toBe(200);
+      const adminBody = await admin.text();
+      expect(JSON.parse(adminBody)).toEqual({ signedIn: true });
+      // The library's cookie and nothing of its body: the session's raw token never leaves the server.
+      // The claim's cookie sent again, and the library's session cookie: nothing else.
+      const names = admin.headers.getSetCookie().map((set) => set.split('=')[0]);
+      expect(names).toEqual([SETUP_COOKIE, SESSION_COOKIE]);
+      const session =
+        cookiesFrom(admin)
+          .split('; ')
+          .find((pair) => pair.startsWith(`${SESSION_COOKIE}=`)) ?? '';
+      const token = session.split('=')[1]?.split('.')[0] ?? '';
+      expect(token.length).toBeGreaterThan(16);
+      expect(adminBody).not.toContain(token);
 
-    const address = await call(wizard, 'POST', '/setup/address', {
-      cookie,
-      body: { confirmed: true },
-    });
-    expect(address.status).toBe(200);
-    const policy = await call(wizard, 'POST', '/setup/policy', {
-      cookie,
-      body: { signUp: 'invite-only' },
-    });
-    expect(policy.status).toBe(200);
+      const address = await call(wizard, 'POST', '/setup/address', {
+        cookie,
+        body: { confirmed: true },
+      });
+      expect(address.status).toBe(200);
+      const policy = await call(wizard, 'POST', '/setup/policy', {
+        cookie,
+        body: { signUp: 'invite-only' },
+      });
+      expect(policy.status).toBe(200);
 
-    // GitHub: tried, and saved because it worked — the instance serving now has the app.
-    const tried = await call(wizard, 'POST', '/setup/github', {
-      cookie,
-      body: { ...GITHUB_STUB_CREDENTIALS, save: true },
-    });
-    expect([tried.status, await tried.json()]).toEqual([200, { ok: true }]);
-    expect(wizard.github.refusals).toEqual(['bad_verification_code']);
-    const methods = await call(wizard, 'GET', '/api/auth/methods');
-    expect(await methods.json()).toEqual({
-      github: true,
-      email: false,
-      google: false,
-      oidc: null,
-      signUp: 'invite-only',
-      password: true,
-    });
-    const button = await call(wizard, 'GET', '/auth/github');
-    expect(button.status).toBe(302);
-    expect(new URL(button.headers.get('location') ?? '').searchParams.get('client_id')).toBe(
-      GITHUB_STUB_CREDENTIALS.clientId,
-    );
+      // GitHub: tried, and saved because it worked — the instance serving now has the app.
+      const tried = await call(wizard, 'POST', '/setup/github', {
+        cookie,
+        body: { ...GITHUB_STUB_CREDENTIALS, save: true },
+      });
+      expect([tried.status, await tried.json()]).toEqual([200, { ok: true }]);
+      expect(wizard.github.refusals).toEqual(['bad_verification_code']);
+      const methods = await call(wizard, 'GET', '/api/auth/methods');
+      expect(await methods.json()).toEqual({
+        github: true,
+        email: false,
+        google: false,
+        oidc: null,
+        signUp: 'invite-only',
+        password: true,
+      });
+      const button = await call(wizard, 'GET', '/auth/github');
+      expect(button.status).toBe(302);
+      expect(new URL(button.headers.get('location') ?? '').searchParams.get('client_id')).toBe(
+        GITHUB_STUB_CREDENTIALS.clientId,
+      );
 
-    // Mail: the relay is sent the administrator's letter, the try works, the relay is saved.
-    const mailed = await call(wizard, 'POST', '/setup/smtp', {
-      cookie,
-      body: {
-        smtpUrl: smtpOf(relay),
-        from: 'purlay@example.test',
-        allowPlaintext: false,
-        locale: 'en',
-        save: true,
-      },
-    });
-    expect([mailed.status, await mailed.json()]).toEqual([200, { ok: true }]);
-    expect(relay.received.map((message) => message.to)).toEqual([[ADMIN.email]]);
-    expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
-      github: true,
-      email: true,
-      google: false,
-      oidc: null,
-      signUp: 'invite-only',
-      password: true,
-    });
-    let state = await stateOf(wizard, cookie);
-    expect(state.admin).toEqual({ name: ADMIN.name, email: ADMIN.email, emailVerified: false });
-    expect(state.channels).toEqual({ github: true, email: true });
-    expect(state.settings.smtp?.address).toEqual({
-      set: true,
-      host: `smtp://127.0.0.1:${String(relay.port)}`,
-    });
-
-    // The link in the letter, followed by a browser that holds nothing.
-    const verified = await call(wizard, 'POST', '/setup/verify', {
-      body: { token: tokenIn(relay) },
-      client: '198.51.100.9',
-    });
-    expect([verified.status, await verified.json()]).toEqual([200, { verified: true }]);
-
-    const made = await call(wizard, 'POST', '/setup/workspace', {
-      cookie,
-      body: { name: 'Analytical', slug: 'analytical' },
-    });
-    expect(made.status).toBe(201);
-    const workspace = (await made.json()) as { id: string; slug: string };
-    expect(workspace.slug).toBe('analytical');
-    const owner = await wizard.db
-      .selectFrom('workspace_members')
-      .innerJoin('users', 'users.id', 'workspace_members.user_id')
-      .select(['users.email', 'workspace_members.role'])
-      .where('workspace_members.workspace_id', '=', workspace.id)
-      .execute();
-    expect(owner).toEqual([{ email: ADMIN.email, role: 'owner' }]);
-    const channels = await wizard.db
-      .selectFrom('channels')
-      .select('name')
-      .where('workspace_id', '=', workspace.id)
-      .execute();
-    expect(channels.map(({ name }) => name)).toEqual(['general']);
-
-    // The finish is refused until the invitations are passed (skipped here).
-    const early = await call(wizard, 'POST', '/setup/finish', { cookie });
-    expect([early.status, await early.json()]).toEqual([
-      409,
-      {
-        error: {
-          code: 'SETUP_STEP_REFUSED',
-          message: 'Setup cannot be finished yet.',
-          details: { reason: 'out-of-order' },
+      // Mail: the relay is sent the administrator's letter, the try works, the relay is saved.
+      const mailed = await call(wizard, 'POST', '/setup/smtp', {
+        cookie,
+        body: {
+          smtpUrl: smtpOf(relay),
+          from: 'purlay@example.test',
+          allowPlaintext: false,
+          locale: 'en',
+          save: true,
         },
-      },
-    ]);
-    expect((await call(wizard, 'POST', '/setup/invite', { cookie })).status).toBe(200);
-    state = await stateOf(wizard, cookie);
-    expect(state).toMatchObject({
-      steps: SETUP_STEPS.slice(0, -1),
-      appUrl: ORIGIN,
-      githubCallbackUrl: `${ORIGIN}/auth/callback/github`,
-      needsReentry: [],
-      admin: { name: ADMIN.name, email: ADMIN.email, emailVerified: true },
-      workspace: { id: workspace.id, name: 'Analytical', slug: 'analytical' },
-      canFinish: true,
-      finishProblems: [],
-    });
-    // The address check is the status's (public, before the claim): nothing of it here.
-    expect('addressMatches' in state).toBe(false);
-    expect(state.settings.github).toEqual({
-      clientId: GITHUB_STUB_CREDENTIALS.clientId,
-      clientSecret: { set: true },
-    });
+      });
+      expect([mailed.status, await mailed.json()]).toEqual([200, { ok: true }]);
+      expect(relay.received.map((message) => message.to)).toEqual([[ADMIN.email]]);
+      expect(await (await call(wizard, 'GET', '/api/auth/methods')).json()).toEqual({
+        github: true,
+        email: true,
+        google: false,
+        oidc: null,
+        signUp: 'invite-only',
+        password: true,
+      });
+      let state = await stateOf(wizard, cookie);
+      expect(state.admin).toEqual({ name: ADMIN.name, email: ADMIN.email, emailVerified: false });
+      expect(state.channels).toEqual({ github: true, email: true });
+      expect(state.settings.smtp?.address).toEqual({
+        set: true,
+        host: `smtp://127.0.0.1:${String(relay.port)}`,
+      });
 
-    const finished = await call(wizard, 'POST', '/setup/finish', { cookie });
-    expect(finished.status).toBe(204);
-    expect(finished.headers.getSetCookie()).toEqual([
-      `${SETUP_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
-    ]);
+      // The link in the letter, followed by a browser that holds nothing.
+      const verified = await call(wizard, 'POST', '/setup/verify', {
+        body: { token: tokenIn(relay) },
+        client: '198.51.100.9',
+      });
+      expect([verified.status, await verified.json()]).toEqual([200, { verified: true }]);
 
-    // Closed: the status says so, and the holder's own cookie opens nothing any more.
-    expect(await (await call(wizard, 'GET', '/setup/status')).json()).toEqual({
-      open: false,
-      appUrl: ORIGIN,
-    });
-    const after = await call(wizard, 'GET', '/setup/state', { cookie });
-    expect([after.status, await after.json()]).toEqual([404, UNAVAILABLE]);
-    // The administrator's session, made by the setup, is a session.
-    const me = await call(wizard, 'GET', '/api/me', { cookie: session });
-    expect(me.status).toBe(200);
-    expect(await me.json()).toMatchObject({ user: { email: ADMIN.email } });
-  });
+      const made = await call(wizard, 'POST', '/setup/workspace', {
+        cookie,
+        body: { name: 'Analytical', slug: 'analytical' },
+      });
+      expect(made.status).toBe(201);
+      const workspace = (await made.json()) as { id: string; slug: string };
+      expect(workspace.slug).toBe('analytical');
+      const owner = await wizard.db
+        .selectFrom('workspace_members')
+        .innerJoin('users', 'users.id', 'workspace_members.user_id')
+        .select(['users.email', 'workspace_members.role'])
+        .where('workspace_members.workspace_id', '=', workspace.id)
+        .execute();
+      expect(owner).toEqual([{ email: ADMIN.email, role: 'owner' }]);
+      const channels = await wizard.db
+        .selectFrom('channels')
+        .select('name')
+        .where('workspace_id', '=', workspace.id)
+        .execute();
+      expect(channels.map(({ name }) => name)).toEqual(['general']);
+
+      // The finish is refused until the invitations are passed (skipped here).
+      const early = await call(wizard, 'POST', '/setup/finish', { cookie });
+      expect([early.status, await early.json()]).toEqual([
+        409,
+        {
+          error: {
+            code: 'SETUP_STEP_REFUSED',
+            message: 'Setup cannot be finished yet.',
+            details: { reason: 'out-of-order' },
+          },
+        },
+      ]);
+      expect((await call(wizard, 'POST', '/setup/invite', { cookie })).status).toBe(200);
+      state = await stateOf(wizard, cookie);
+      expect(state).toMatchObject({
+        steps: SETUP_STEPS.slice(0, -1),
+        appUrl: ORIGIN,
+        githubCallbackUrl: `${ORIGIN}/auth/callback/github`,
+        needsReentry: [],
+        admin: { name: ADMIN.name, email: ADMIN.email, emailVerified: true },
+        workspace: { id: workspace.id, name: 'Analytical', slug: 'analytical' },
+        canFinish: true,
+        finishProblems: [],
+      });
+      // The address check is the status's (public, before the claim): nothing of it here.
+      expect('addressMatches' in state).toBe(false);
+      expect(state.settings.github).toEqual({
+        clientId: GITHUB_STUB_CREDENTIALS.clientId,
+        clientSecret: { set: true },
+      });
+
+      const finished = await call(wizard, 'POST', '/setup/finish', { cookie });
+      expect(finished.status).toBe(204);
+      expect(finished.headers.getSetCookie()).toEqual([
+        `${SETUP_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
+      ]);
+
+      // Closed: the status says so, and the holder's own cookie opens nothing any more.
+      expect(await (await call(wizard, 'GET', '/setup/status')).json()).toEqual({
+        open: false,
+        appUrl: ORIGIN,
+      });
+      const after = await call(wizard, 'GET', '/setup/state', { cookie });
+      expect([after.status, await after.json()]).toEqual([404, UNAVAILABLE]);
+      // The administrator's session, made by the setup, is a session.
+      const me = await call(wizard, 'GET', '/api/me', { cookie: session });
+      expect(me.status).toBe(200);
+      expect(await me.json()).toMatchObject({ user: { email: ADMIN.email } });
+    },
+  );
 
   test('nothing secret is in any line the server writes, the whole way through', async () => {
     const wizard = await aWizard();

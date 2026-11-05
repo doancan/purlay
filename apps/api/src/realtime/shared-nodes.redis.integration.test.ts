@@ -39,6 +39,7 @@ import type { Timers } from './hub';
 import { onlinePresence, type OnlinePresence } from './online';
 import { redisPresenceDirectory } from './redis-presence';
 import { sharedRealtime } from './shared';
+import { testNeeding } from '../testing/needs';
 
 const names = redisNames();
 
@@ -230,35 +231,38 @@ const created = (frames: readonly ServerFrame[]): string[] =>
   frames.flatMap((f) => (f.event === 'MESSAGE_CREATED' ? [f.data.id] : []));
 
 describe('integration: a frame crosses nodes', () => {
-  test('a message sent through node A reaches the subscribers of both nodes, each once, in order', async () => {
-    const room = await aRoom();
-    const onA = await connect(a, room.bob.cookie);
-    const onB = await connect(b, room.bob.cookie);
-    await subscribe(onA, room.channelId);
-    await subscribe(onB, room.channelId);
+  testNeeding('chat')(
+    'a message sent through node A reaches the subscribers of both nodes, each once, in order',
+    async () => {
+      const room = await aRoom();
+      const onA = await connect(a, room.bob.cookie);
+      const onB = await connect(b, room.bob.cookie);
+      await subscribe(onA, room.channelId);
+      await subscribe(onB, room.channelId);
 
-    const sent: string[] = [];
-    for (let n = 1; n <= 5; n += 1) {
-      const id = messageId(new Date(NOW.getTime() + n));
-      sent.push(id);
-      expect(
-        (
-          await http(a, 'POST', `/api/channels/${room.channelId}/messages`, room.alice.cookie, {
-            id,
-            content: `m${String(n)}`,
-          })
-        ).status,
-      ).toBe(201);
-    }
-    await onB.until((frames) => created(frames).length >= 5, 'five messages on node B');
-    await onA.until((frames) => created(frames).length >= 5, 'five messages on node A');
-    await Bun.sleep(150);
+      const sent: string[] = [];
+      for (let n = 1; n <= 5; n += 1) {
+        const id = messageId(new Date(NOW.getTime() + n));
+        sent.push(id);
+        expect(
+          (
+            await http(a, 'POST', `/api/channels/${room.channelId}/messages`, room.alice.cookie, {
+              id,
+              content: `m${String(n)}`,
+            })
+          ).status,
+        ).toBe(201);
+      }
+      await onB.until((frames) => created(frames).length >= 5, 'five messages on node B');
+      await onA.until((frames) => created(frames).length >= 5, 'five messages on node A');
+      await Bun.sleep(150);
 
-    expect(created(onB.frames)).toEqual(sent);
-    expect(created(onA.frames)).toEqual(sent);
-    await onA.close();
-    await onB.close();
-  });
+      expect(created(onB.frames)).toEqual(sent);
+      expect(created(onA.frames)).toEqual(sent);
+      await onA.close();
+      await onB.close();
+    },
+  );
 
   test('signing out on node A closes the socket node B holds, after saying why', async () => {
     const alice = await aSignedInUser(cloned.db, clock, 'signout');
@@ -273,28 +277,31 @@ describe('integration: a frame crosses nodes', () => {
 });
 
 describe('integration: typing across nodes', () => {
-  test('a person typing through both nodes is announced to the room once, not once per node', async () => {
-    const room = await aRoom();
-    const listener = await connect(a, room.alice.cookie);
-    await subscribe(listener, room.channelId);
-    const onA = await connect(a, room.bob.cookie);
-    const onB = await connect(b, room.bob.cookie);
-    const announce = (client: Client): void => {
-      client.send({ id: messageId(NOW), op: 'TYPING', payload: { channelId: room.channelId } });
-    };
-    const heard = (): number => listener.frames.filter((f) => f.event === 'TYPING').length;
+  testNeeding('chat')(
+    'a person typing through both nodes is announced to the room once, not once per node',
+    async () => {
+      const room = await aRoom();
+      const listener = await connect(a, room.alice.cookie);
+      await subscribe(listener, room.channelId);
+      const onA = await connect(a, room.bob.cookie);
+      const onB = await connect(b, room.bob.cookie);
+      const announce = (client: Client): void => {
+        client.send({ id: messageId(NOW), op: 'TYPING', payload: { channelId: room.channelId } });
+      };
+      const heard = (): number => listener.frames.filter((f) => f.event === 'TYPING').length;
 
-    announce(onA);
-    await listener.until(() => heard() >= 1, 'the first announcement');
-    announce(onB);
-    announce(onA);
-    announce(onB);
-    await Bun.sleep(400);
-    expect(heard()).toBe(1);
-    await listener.close();
-    await onA.close();
-    await onB.close();
-  });
+      announce(onA);
+      await listener.until(() => heard() >= 1, 'the first announcement');
+      announce(onB);
+      announce(onA);
+      announce(onB);
+      await Bun.sleep(400);
+      expect(heard()).toBe(1);
+      await listener.close();
+      await onA.close();
+      await onB.close();
+    },
+  );
 });
 
 describe('integration: presence across nodes', () => {
@@ -311,41 +318,51 @@ describe('integration: presence across nodes', () => {
         : [],
     );
 
-  test('a person with a socket on node B is online to a read on node A, and to a listener on A', async () => {
-    const room = await aRoom();
-    const listener = await connect(a, room.alice.cookie);
-    expect(await presenceOf(a, room.alice.cookie, room.workspaceId)).not.toContain(room.bob.userId);
+  testNeeding('chat')(
+    'a person with a socket on node B is online to a read on node A, and to a listener on A',
+    async () => {
+      const room = await aRoom();
+      const listener = await connect(a, room.alice.cookie);
+      expect(await presenceOf(a, room.alice.cookie, room.workspaceId)).not.toContain(
+        room.bob.userId,
+      );
 
-    const bob = await connect(b, room.bob.cookie);
-    await listener.until(() => changes(listener, room.bob.userId).includes(true), 'Bob online');
-    expect(await presenceOf(a, room.alice.cookie, room.workspaceId)).toContain(room.bob.userId);
+      const bob = await connect(b, room.bob.cookie);
+      await listener.until(() => changes(listener, room.bob.userId).includes(true), 'Bob online');
+      expect(await presenceOf(a, room.alice.cookie, room.workspaceId)).toContain(room.bob.userId);
 
-    await bob.close();
-    await listener.until(() => changes(listener, room.bob.userId).includes(false), 'Bob offline');
-    expect(await presenceOf(a, room.alice.cookie, room.workspaceId)).not.toContain(room.bob.userId);
-    await listener.close();
-  });
+      await bob.close();
+      await listener.until(() => changes(listener, room.bob.userId).includes(false), 'Bob offline');
+      expect(await presenceOf(a, room.alice.cookie, room.workspaceId)).not.toContain(
+        room.bob.userId,
+      );
+      await listener.close();
+    },
+  );
 
-  test('a person on both nodes is told once, and offline only when the last socket closes', async () => {
-    const room = await aRoom();
-    const listener = await connect(a, room.alice.cookie);
-    const onB = await connect(b, room.bob.cookie);
-    await listener.until(() => changes(listener, room.bob.userId).includes(true), 'Bob online');
-    const onA = await connect(a, room.bob.cookie);
-    await Bun.sleep(200);
-    expect(changes(listener, room.bob.userId)).toEqual([true]);
+  testNeeding('chat')(
+    'a person on both nodes is told once, and offline only when the last socket closes',
+    async () => {
+      const room = await aRoom();
+      const listener = await connect(a, room.alice.cookie);
+      const onB = await connect(b, room.bob.cookie);
+      await listener.until(() => changes(listener, room.bob.userId).includes(true), 'Bob online');
+      const onA = await connect(a, room.bob.cookie);
+      await Bun.sleep(200);
+      expect(changes(listener, room.bob.userId)).toEqual([true]);
 
-    await onB.close();
-    await Bun.sleep(400);
-    // Still held on node A: nobody is told he left, and a read agrees.
-    expect(changes(listener, room.bob.userId)).toEqual([true]);
-    expect(await presenceOf(b, room.alice.cookie, room.workspaceId)).toContain(room.bob.userId);
+      await onB.close();
+      await Bun.sleep(400);
+      // Still held on node A: nobody is told he left, and a read agrees.
+      expect(changes(listener, room.bob.userId)).toEqual([true]);
+      expect(await presenceOf(b, room.alice.cookie, room.workspaceId)).toContain(room.bob.userId);
 
-    await onA.close();
-    await listener.until(() => changes(listener, room.bob.userId).includes(false), 'Bob offline');
-    expect(changes(listener, room.bob.userId)).toEqual([true, false]);
-    await listener.close();
-  });
+      await onA.close();
+      await listener.until(() => changes(listener, room.bob.userId).includes(false), 'Bob offline');
+      expect(changes(listener, room.bob.userId)).toEqual([true, false]);
+      await listener.close();
+    },
+  );
 });
 
 /**
@@ -496,14 +513,17 @@ describe('integration: one write quota across nodes (D-81, D-198)', () => {
     throw new Error('the quota was never reached');
   };
 
-  test('a user alternating between the nodes is refused after exactly as many writes as one node alone allows', async () => {
-    const room = await aRoom();
-    const second = await aRoom();
-    const onOne = await sendUntilRefused(room, room.alice.cookie, [a]);
-    const onTwo = await sendUntilRefused(second, second.alice.cookie, [a, b]);
-    expect(onOne).toBeGreaterThan(0);
-    expect(onTwo).toBe(onOne);
-  });
+  testNeeding('chat')(
+    'a user alternating between the nodes is refused after exactly as many writes as one node alone allows',
+    async () => {
+      const room = await aRoom();
+      const second = await aRoom();
+      const onOne = await sendUntilRefused(room, room.alice.cookie, [a]);
+      const onTwo = await sendUntilRefused(second, second.alice.cookie, [a, b]);
+      expect(onOne).toBeGreaterThan(0);
+      expect(onTwo).toBe(onOne);
+    },
+  );
 });
 
 describe('integration: readiness with a shared Redis (D-201)', () => {
@@ -536,7 +556,7 @@ describe('integration: readiness with a shared Redis (D-201)', () => {
 const LOSS_TEST_MS = 20_000;
 
 describe('integration: a node that loses Redis', () => {
-  test(
+  testNeeding('chat')(
     'keeps serving its sockets, and when Redis is back sends them to replay from their cursors',
     async () => {
       const room = await aRoom();
