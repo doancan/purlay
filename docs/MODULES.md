@@ -41,9 +41,10 @@ declares:
   added, and the route table itself is code in `ingress/`, so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
 - `frames`: the client operations on the socket it owns; `events`: the server events its services send; `jobs`: the
   scheduled jobs that act for its users. A process that does not run the module closes all four (§3);
-- `budget` (**required**, D-260): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or `{ none: reason }`.
-  A manifest without it does not compile, and the registry refuses one that has none at run time, a `none` with no
-  reason and a share that leaves the module no connection or the others none (§7);
+- `budget` (**required**, D-260, D-265): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or
+  `{ none: reason }`. A manifest without it does not compile, and the registry refuses one that has none at run time, a
+  `none` with no reason and a share that leaves the module no connection or the others none (§7). A module that declares
+  `none` must also be named, with its reason, in `module-budgets.test.ts`, so an exemption is a line a reviewer sees;
 - `retention`: the scheduled jobs that keep its rows within their retention — a purge past the days kept, a sweep of a
   cache. Unlike `jobs` they run in every process, whichever modules it runs, because the rows are there (§3).
 
@@ -239,20 +240,26 @@ The session says which modules run: `GET /api/me`'s `modules`, not the public `G
 
 Modules share a process, an event loop and a connection pool, so they are kept apart by **budget**:
 
-- a share of the pool: a cap on the transactions a module has open at once, with a queue timeout and a
-  `statement_timeout` set inside them (`budgeted`, `platform/module-budget.ts`). **Every module declares one**
-  (`budget` in the manifest, D-260) and `createApp` applies each declaration through `transactionsOfModules`, which names
-  no module; a module's routes ask for their boundary by its id. **Issues has a share**
-  (`features/issues/budget.ts`, handed to its four routes): a third of
-  `DATABASE_POOL_MAX`, never more than the pool less one and never fewer than one (a pool of one has nothing to
-  leave), a queue timeout of one second and a statement limit of five. A request over the share waits its
-  turn and, past the timeout, is answered `503 DATABASE_UNAVAILABLE` (`The issues module's share of the database
-  is in use. Try again.`), which a client retries. **Chat declares `none`, with its reason**: it is what the others are kept from
-  slowing, and its behaviour and latency are as they were. The share caps the connections a module holds; it
-  does not cap what a module costs the event loop, which all modules share. Not built: a deadline per request and an
-  error boundary around each handler beyond the domain bus's. A module added later cannot leave its share out: its
-  manifest says it or says `none` and why, and its routes take `transactionsOf(<id>)` in `createApp`; what no test sees
-  is a handler that takes `database` and so never asks for it;
+- a share of the pool: a cap on the requests a module has holding a connection at once, with a queue timeout and a
+  `statement_timeout` (`moduleConnections`, `platform/module-budget.ts`, D-265). **Every module declares one** (`budget` in
+  the manifest, D-260), and it is held **at the connection, not at the transaction**: `createApp` leases the one database
+  it hands every handler (`leasingExecutor` of `@purlay/db`), the router notes whose request it is (`noteModule`, from the
+  manifests' `routes`), and every connection that request takes — a read as much as a write — is asked of that module's
+  share. **No handler asks for it, and none can take the pool without it**: the raw database is not reachable from a
+  handler, because the application has no other (`module-seams.test.ts` holds `app.ts` to one use of the database it was
+  given, and the doors and features to no pool of their own). A request holds one slot however many connections it takes,
+  so that a transaction that reads again on the pool cannot wait for itself. **The core stays outside every share**: a
+  route that is the core's, the sign-in library's own session reads, and the guards inside a module's request that decide
+  whether it may be made (`requireWorkspaceMembership`, through `inTheCore`) take their connections as the pool gives
+  them, so a person who is not in a workspace holds no slot of a module they have no part in. **Issues has a share**
+  (`features/issues/budget.ts`): a third of `DATABASE_POOL_MAX`, never more than the pool less one and never fewer than
+  one (a pool of one has nothing to leave), a queue timeout of one second and a statement limit of five. A request over
+  the share waits its turn and, past the timeout, is answered `503 DATABASE_UNAVAILABLE` (`The issues module's share of
+  the database is in use. Try again.`); a statement past the limit is cancelled by the database and answered the same,
+  which a client retries. **Chat declares `none`, with its reason** (and is the one line of `module-budgets.test.ts`): it
+  is what the others are kept from slowing, and its behaviour and latency are as they were. The share caps the
+  connections a module holds; it does not cap what a module costs the event loop, which all modules share. Not built: a
+  deadline per request and an error boundary around each handler beyond the domain bus's;
 - a deadline and an abort signal per `SearchSource`; one that overruns is cancelled, skipped, and the response
   says which (`skipped: [module]`, a wire shape fixed in step 4);
 - the CI latency gate refuses **starvation**, and only that (`budget:latency`): after the quiet trials it runs
@@ -296,8 +303,9 @@ until then it is a stated intent and not a guarantee.
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
-| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built, applied from each manifest's `budget`** (issues a third of the pool; chat `none`); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, `module-budget.integration.test.ts` holds the boundary each declaration makes, and the mutations `issues-routes-outside-their-budget` and `module-budget-declaration-ignored` hold the wiring | 5 |
-| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred — **built** (D-260); mutations `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
+| A module cannot starve the others of connections | the application's one database is leased (`leasingExecutor`, `@purlay/db`) by the share of the module a request belongs to (`moduleConnections`, `platform/module-budget.ts`): a cap on the requests holding a connection, a queue timeout and a `statement_timeout` per module — **built, applied from each manifest's `budget`** (issues a third of the pool; chat `none`); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, `module-budget.integration.test.ts` and `leasing.integration.test.ts` hold the lease, and the mutations `module-routes-not-noted-as-their-module`, `application-database-not-leased`, `membership-read-inside-a-module-share` and `module-budget-declaration-ignored` hold the wiring | 5 |
+| A module's handler cannot take the pool without its module's share | there is no other handle: `app.ts` uses the database it was given once, to lease it, and no feature or door opens a pool (`module-seams.test.ts`); the mutation `application-hands-handlers-a-raw-database` — **built** (D-265) | 12 |
+| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts` — **built** (D-260, D-265); mutations `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
 | A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
 | `cli/` and `ingress/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`; a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file` and `ingress-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
@@ -357,11 +365,12 @@ commit beside this list.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
   for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
   module sends and does not list would reach a process that does not run it.
-- `budget` (D-260): required. `{ poolShare: (poolMax) => limits }` (issues': `features/issues/budget.ts`) or
-  `{ none: '<reason>' }` (chat's). A manifest without it does not compile; the registry refuses it at run time, and a
-  `none` with no reason, and a share that gives the module no connection or leaves the others none. Nothing else is
-  edited to budget a module: `createApp` builds each module's boundary from its declaration (item 4 says how a route
-  takes it).
+- `budget` (D-260, D-265): required. `{ poolShare: (poolMax) => limits }` (issues': `features/issues/budget.ts`) or
+  `{ none: '<reason>' }` (chat's), which is also a line in `module-budgets.test.ts`: an exemption is a decision a reviewer
+  sees. A manifest without it does not compile; the registry refuses it at run time, and a `none` with no reason, and a
+  share that gives the module no connection or leaves the others none. Nothing else is edited to budget a module:
+  `createApp` leases the database every handler gets, and a request is held to the share of the module whose `routes` it
+  matches.
 - `retention`: the scheduled jobs that keep the module's rows within their retention, a purge or a sweep, **in the
   manifest, not in `cli/jobs.ts`**. They run in every process (rows outlive the module's being off); a job that acts for
   the module's users goes under `jobs` and waits for the module to run. The work is `jobWork` of the module's slot in
@@ -422,10 +431,14 @@ commit beside this list.
   and seed it in `aTenant` (`ingress/http/cross-tenant.integration.test.ts`). Without the seed, the same-member
   two-workspace list check passes vacuously for the module's lists.
 - `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
-- **The share of the pool**: the module's routes take their transaction boundary by id, `transactionsOf('<id>')` (as the
-  issues routes take it in `createApp`), not `database`. The declaration is what the manifest says; that a handler asks
-  for it is **not** held by a test for a module whose share is not filled by one (`issues-budget.integration.test.ts` is
-  that test for issues): copy it for a module with a `poolShare`.
+- **The share of the pool**: nothing to write in a handler. The handler is given the application's one database, whose
+  every connection is leased by the module the request belongs to (D-265), so there is no boundary to ask for and no raw
+  handle to take instead; `module-seams.test.ts` holds `app.ts` to one use of the database it was given, and the doors and
+  features to no pool of their own. What is yours is a read that decides whether a request may be made at all (a
+  membership, a session): the core's guards in `platform/tenancy.ts` take their connections outside every share
+  (`inTheCore`), so a person with no part in the module holds none of its slots. Copy `issues-budget.integration.test.ts`
+  for a module with a `poolShare`: a lock on a table its routes read, the share filled, the next request refused as busy
+  and another module's answered meanwhile.
 - **No door names a module's files but its own routes**: `cli/` imports no file under `features/`, and a route file in
   `ingress/` that imports the module is added to `ALLOWED` in `module-seams.test.ts` (the list only shrinks; a core route
   file that needs the module is a port or a manifest field, not an entry); `ingress/http/app.ts` is the one file that may
@@ -487,7 +500,7 @@ audit action edits.
 
 | Where | Files | Why |
 |---|---|---|
-| `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (two routes, and `transactionsOf('<id>')` for a module with a share), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `cli/jobs.ts` is **not** edited, the job command takes a module's jobs from the composition; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
+| `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (its routes), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `cli/jobs.ts` is **not** edited, the job command takes a module's jobs from the composition; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
 | `packages/db` | `src/migrator.ts` (set registration and `PRODUCT_MODULE_REQUIRES`), `src/table-owners.ts`, `src/table-lifecycle.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, its erasure and retention decision, the generated schema |
 | `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |

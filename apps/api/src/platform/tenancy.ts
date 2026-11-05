@@ -28,6 +28,7 @@ import { Value } from '@sinclair/typebox/value';
 import { Uuid, type UserRole } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import { AppError } from './errors';
+import { inTheCore } from './module-budget';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const tenancy: unique symbol = Symbol('WorkspaceContext');
@@ -65,7 +66,7 @@ export const workspaceNotFound = (): AppError =>
  * requires `deleted_at IS NULL`, so a membership row that outlives its workspace
  * mints nothing.
  */
-export const requireWorkspaceMembership = async (
+const workspaceMembership = async (
   executor: Executor,
   userId: string,
   workspaceId: string,
@@ -85,6 +86,9 @@ export const requireWorkspaceMembership = async (
 
   return { workspaceId, userId, role: row.role, [tenancy]: true };
 };
+
+/** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-265). */
+export const requireWorkspaceMembership = inTheCore(workspaceMembership);
 
 /** Not exported either: the deletion's own capability, apart from the workspace's. */
 const deletion: unique symbol = Symbol('DeletionContext');
@@ -108,7 +112,7 @@ export interface DeletionContext {
  * only callers. Once the erasure is done its memberships are gone with everything else, and this is the
  * same `404` as any stranger's.
  */
-export const requireDeletionMembership = async (
+const deletionMembership = async (
   executor: Executor,
   userId: string,
   workspaceId: string,
@@ -128,3 +132,6 @@ export const requireDeletionMembership = async (
 
   return { workspaceId, userId, role: row.role, [deletion]: true };
 };
+
+/** The guard above as the core's own work, as `requireWorkspaceMembership` is. */
+export const requireDeletionMembership = inTheCore(deletionMembership);

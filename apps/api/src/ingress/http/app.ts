@@ -40,7 +40,7 @@ import { readLatestRelease } from './releases';
 import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
-import type { Executor } from '@purlay/db';
+import { leasingExecutor, type Executor } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
 import type { ServicesPin, SettingsChange } from '../../modules/setup/runtime';
@@ -232,7 +232,7 @@ import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
 import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
 import { PLAN } from '../../modules/jobs/schedule';
 import { EDGE_ROUTE, answerMetrics, methodLabel, routeLabel, statusLabel } from './metrics';
-import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
+import { currentRequest, enterRequest, noteModule, type Logger } from '../../platform/logging';
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
@@ -260,7 +260,7 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
-import { transactionsOfModules } from '../../platform/module-budget';
+import { moduleConnections } from '../../platform/module-budget';
 import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
@@ -478,6 +478,15 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const modules = given.composition;
   const dependencies = {
     ...given,
+    // The one database a handler can reach, leased by the module the request belongs to: the module's share of the
+    // pool holds each of its statements, with nothing for a handler to ask for (`platform/module-budget.ts`, D-265).
+    database: leasingExecutor(
+      given.database,
+      moduleConnections(
+        modules.bundled.map((module) => module.manifest),
+        given.config.DATABASE_POOL_MAX,
+      ),
+    ),
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
@@ -549,16 +558,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
-  // Each module's work on the database is held to the share its manifest declares (`budget`), so a module that is slow or
-  // busy cannot make another's requests wait for a connection; a module that declared `none` (chat, which is what the others
-  // are kept from slowing) has the plain boundary. Made once, because a share is one count of the transactions open at once
-  // across every request. A module's routes ask for theirs by its id.
-  const transactionsOf = transactionsOfModules(
-    modules.bundled.map((module) => module.manifest),
-    dependencies.database,
-    dependencies.config.DATABASE_POOL_MAX,
-  );
-  const issueDependencies = { ...dependencies, atomically: transactionsOf('issues') };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -752,10 +751,14 @@ export const createApp = (given: Dependencies): HttpApplication => {
     })
     // Before the handler, after the body is parsed: the body is already bounded by the
     // server (`edge.ts`), and a malformed one is a 400 whoever sends it, with no lookup.
-    .onBeforeHandle(async ({ request, server, set }) => {
+    .onBeforeHandle(async ({ request, server, set, route }) => {
       if (closedRoute(request)) {
         throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
       }
+      // From here the request is its module's. The edge's limits and session reads below are the core's: they never touch
+      // the leased database.
+      const owner = moduleOfRoute(route);
+      if (owner !== CORE_OWNER && owner !== NO_OWNER) noteModule(owner);
       const wait = await admit(request, peerOf(server, request));
       if (wait === undefined) return;
       set.headers['retry-after'] = String(wait);
@@ -1399,21 +1402,20 @@ export const createApp = (given: Dependencies): HttpApplication => {
     )
     .get(
       '/api/workspaces/:workspaceId/issues',
-      async ({ request, params }) =>
-        await listIssues(issueDependencies, request, params.workspaceId),
+      async ({ request, params }) => await listIssues(dependencies, request, params.workspaceId),
     )
     .post('/api/workspaces/:workspaceId/issues', async ({ request, params, body, set }) => {
-      const issue = await postIssue(issueDependencies, request, params.workspaceId, body);
+      const issue = await postIssue(dependencies, request, params.workspaceId, body);
       set.status = 201;
       return issue;
     })
     .patch(
       '/api/workspaces/:workspaceId/issues/:issueId',
       async ({ request, params, body }) =>
-        await patchIssue(issueDependencies, request, params.workspaceId, params.issueId, body),
+        await patchIssue(dependencies, request, params.workspaceId, params.issueId, body),
     )
     .delete('/api/workspaces/:workspaceId/issues/:issueId', async ({ request, params, set }) => {
-      await removeIssue(issueDependencies, request, params.workspaceId, params.issueId);
+      await removeIssue(dependencies, request, params.workspaceId, params.issueId);
       set.status = 204;
       return null;
     })
