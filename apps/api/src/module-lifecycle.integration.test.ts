@@ -491,7 +491,7 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
       }, CLONE_HOOK_MS);
       afterAll(async () => {
         await database.destroy();
-      });
+      }, DROP_HOOK_MS);
 
       test('each set’s tables are there exactly where its set was applied', () => {
         for (const set of PRODUCT_MIGRATION_SETS) {
