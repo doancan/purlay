@@ -30,13 +30,14 @@ export const readJobRuns = async (database: Executor): Promise<readonly JobRun[]
     .execute();
 
 /**
- * The families for the jobs the deployment runs, in the order given. A row for a name not in `known`
+ * The families for the jobs the deployment runs, in the order given, each series naming the module its job is for. A row for a name not in `known`
  * is left out — a job since retired — so the series are the plan's and no more; a job with no row has
  * never succeeded, and has no last success to say.
  */
 export const jobFamilies = (
   known: readonly string[],
   runs: readonly JobRun[] | undefined,
+  moduleOf: (job: string) => string,
 ): readonly MetricFamily[] => {
   const readable: MetricFamily = {
     name: 'purlay_jobs_status_readable',
@@ -54,7 +55,9 @@ export const jobFamilies = (
       type: 'gauge',
       samples: known.flatMap((job) => {
         const at = rowOf(job)?.last_success_at;
-        return at == null ? [] : [{ suffix: '', labels: { job }, value: at.getTime() / 1000 }];
+        return at == null
+          ? []
+          : [{ suffix: '', labels: { job, module: moduleOf(job) }, value: at.getTime() / 1000 }];
       }),
     },
     {
@@ -63,7 +66,7 @@ export const jobFamilies = (
       type: 'gauge',
       samples: known.map((job) => ({
         suffix: '',
-        labels: { job },
+        labels: { job, module: moduleOf(job) },
         value: rowOf(job)?.consecutive_failures ?? 0,
       })),
     },
@@ -73,6 +76,8 @@ export const jobFamilies = (
 export interface JobMetricsDependencies {
   readonly read: () => Promise<readonly JobRun[]>;
   readonly known: readonly string[];
+  /** The module a job is for (`platform/module-kit/ownership.ts`), the label of its series. */
+  readonly moduleOf: (job: string) => string;
   readonly log: Logger;
   readonly timeoutMs?: number;
 }
@@ -81,7 +86,7 @@ export interface JobMetricsDependencies {
 export const jobMetrics = (
   dependencies: JobMetricsDependencies,
 ): (() => Promise<readonly MetricFamily[]>) => {
-  const { read, known, log, timeoutMs = JOB_READ_TIMEOUT_MS } = dependencies;
+  const { read, known, moduleOf, log, timeoutMs = JOB_READ_TIMEOUT_MS } = dependencies;
   let failing = false;
   return async () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -94,13 +99,13 @@ export const jobMetrics = (
       const runs = await Promise.race([read(), late]);
       if (runs === 'late') throw new Error(`no answer within ${String(timeoutMs)} ms`);
       failing = false;
-      return jobFamilies(known, runs);
+      return jobFamilies(known, runs, moduleOf);
     } catch (error) {
       // Not swallowed: the page says it as a 0 a rule can alert on, and the log says why, once.
       if (!failing)
         log.warn('the scheduled jobs’ record could not be read for metrics', { err: error });
       failing = true;
-      return jobFamilies(known, undefined);
+      return jobFamilies(known, undefined, moduleOf);
     } finally {
       clearTimeout(timer);
     }

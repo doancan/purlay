@@ -28,6 +28,7 @@ import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
 import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
+import { ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
@@ -109,6 +110,8 @@ export interface Composition {
   readonly collatedColumns: readonly CollatedColumn[];
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
+  /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
+  readonly owner: Owners;
   /** Whether a path is one a module this build carries owns and this process does not run: the `404` of an unknown route. */
   readonly closed: (path: string) => boolean;
   /** Whether a job belongs to a module this build carries and this process does not run. */
@@ -173,6 +176,10 @@ export const compose = (
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),
+    ),
+    owner: ownersOf(
+      bundled.map((module) => module.manifest),
+      CORE_CLAIMS,
     ),
     closed: ownsPath(
       bundled

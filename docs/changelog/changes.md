@@ -27,6 +27,7 @@ have it.
 
 - **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)
 - **Operations** — the upgrade drops `attachments.message_id` and `attachments.channel_id`, and stops with a count, changing nothing, if a sent file's link is missing from chat's table; restore the backup and fix the data before deploying again (D-250)
+- **Operations** — The metrics page and the logs now say which module a request or a scheduled job is for: the request histogram and the job series carry a `module` label (`core`, `chat`, `issues`, or `none`), and a module's request lines, failed requests and every scheduled job's lines name it, so an operator can tell which module is slow or failing (D-250, D-221)
 
 ### Security
 
