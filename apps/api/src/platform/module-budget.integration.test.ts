@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import {
   closeIntegrationDatabase,
+  DROP_HOOK_MS,
   integrationDatabase,
   leasingExecutor,
   sql,
@@ -11,9 +12,11 @@ import { withinRequest } from './logging';
 import { moduleConnections, inTheCore, type ModuleBudget } from './module-budget';
 import { atomicallyOn } from './transactions';
 
+// A pool ends when its last leased connection has been given back, which is as late as the slowest request still
+// holding one: the time drops wait for, not the five seconds of a hook that waits on nothing (`DROP_HOOK_MS`).
 afterAll(async () => {
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const BUDGET: ModuleBudget = { maxConcurrent: 1, queueTimeoutMs: 30, statementTimeoutMs: 200 };
 const MANIFESTS = [
@@ -71,17 +74,26 @@ describe('integration: a module held to its share of the database', () => {
   test('refuses a request over the cap as the database being busy, after waiting its turn, and counts a transaction once', async () => {
     const db = database();
     let release: () => void = () => undefined;
+    let isInside: () => void = () => undefined;
+    const inside = new Promise<void>((resolve) => {
+      isInside = resolve;
+    });
     const held = asRequest('notes', async () => {
       await atomicallyOn(db)(async (trx) => {
         // Reads inside the transaction, on the pool: the request is one holder, and does not wait for itself.
         await sql`select 1`.execute(db);
         await sql`select 1`.execute(trx);
+        // A holder that takes longer to be inside than a request waits for a slot: a loaded runner's connection.
+        await sql`select pg_sleep(0.1)`.execute(trx);
         await new Promise<void>((resolve) => {
           release = resolve;
+          isInside();
         });
       });
     });
-    await Bun.sleep(30);
+    // Not a pause that guesses how long a connection takes: on a loaded runner a holder that was not inside yet was
+    // never released, and its transaction kept the pool from closing. If it fails to get inside, its failure is said.
+    await Promise.race([inside, held]);
     try {
       const refused = await thrown(
         async () => await asRequest('notes', async () => await sql`select 1`.execute(db)),
