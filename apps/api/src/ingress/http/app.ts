@@ -481,6 +481,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    auditAccess: modules.auditAccess,
     userErased: given.userErased ?? modules.userErased,
     collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   };

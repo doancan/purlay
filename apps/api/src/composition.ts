@@ -29,6 +29,7 @@ import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
 import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
+import { auditAccess, type AuditAccess } from './platform/module-kit/audit-access';
 import {
   CORE_PERMISSIONS,
   permissionTable,
@@ -143,6 +144,8 @@ export interface Composition {
   readonly collatedColumns: readonly CollatedColumn[];
   /** What a role may do: the core's permissions and those of the modules this process runs, and nothing of a module that is not run. */
   readonly permissions: PermissionTable;
+  /** Who reads which audit actions: the permissions above over the actions of every module the build carries. */
+  readonly auditAccess: AuditAccess;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -188,13 +191,18 @@ export const compose = (
     const problem = jobWorkProblem(module);
     if (problem !== undefined) throw new Error(problem);
   }
+  const permissions = permissionTable([
+    ...CORE_PERMISSIONS,
+    ...modules.flatMap((module) => module.manifest.permissions ?? []),
+  ]);
   return {
     modules,
     bundled,
-    permissions: permissionTable([
-      ...CORE_PERMISSIONS,
-      ...modules.flatMap((module) => module.manifest.permissions ?? []),
-    ]),
+    permissions,
+    auditAccess: auditAccess(
+      permissions,
+      holding.flatMap((module) => module.manifest.auditActions ?? []),
+    ),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),

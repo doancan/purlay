@@ -52,6 +52,7 @@ import {
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
 import { auditTrail } from '../../modules/audit/audit';
+import type { AuditAccess } from '../../platform/module-kit/audit-access';
 import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
@@ -85,6 +86,11 @@ export interface WorkspaceDependencies {
   readonly clock: Clock;
   /** The channels of a workspace, as chat answers for them (D-250). */
   readonly workspaceChannels: WorkspaceChannels;
+}
+
+/** What the trail's two routes need besides: who reads which audit actions, in a process that runs these modules. */
+export interface AuditDependencies extends WorkspaceDependencies {
+  readonly auditAccess: AuditAccess;
 }
 
 /** What answers whether the caller may make a workspace (D-155): the server's setting (D-179 §6). */
@@ -347,7 +353,7 @@ export const cancelWorkspaceDeletion = async (
 
 /** `GET /api/workspaces/:workspaceId/audit` — the trail, newest first, narrowed (D-26, #70, D-222). */
 export const readAuditTrail = async (
-  dependencies: WorkspaceDependencies,
+  dependencies: AuditDependencies,
   request: Request,
   workspaceId: string,
 ): Promise<AuditPage> => {
@@ -355,7 +361,7 @@ export const readAuditTrail = async (
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(AuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
-  return await auditTrail(database, context, query);
+  return await auditTrail(database, context, query, dependencies.auditAccess);
 };
 
 /**
@@ -363,7 +369,7 @@ export const readAuditTrail = async (
  * (D-222). An attachment the browser saves, never a page it renders.
  */
 export const exportAuditTrail = async (
-  dependencies: WorkspaceDependencies & { readonly log: Logger },
+  dependencies: AuditDependencies & { readonly log: Logger },
   request: Request,
   workspaceId: string,
 ): Promise<{
@@ -374,7 +380,14 @@ export const exportAuditTrail = async (
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(AuditExportQuery, queryOf(new URL(request.url)));
-  const download = await exportTrail(database, clock, log, context, query);
+  const download = await exportTrail(
+    database,
+    clock,
+    log,
+    context,
+    query,
+    dependencies.auditAccess,
+  );
   return {
     body: download.body,
     headers: {
