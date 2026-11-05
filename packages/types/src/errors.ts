@@ -222,7 +222,7 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('STORAGE_UNAVAILABLE'),
   /**
-   * A module's request or frame ran past its deadline (`MODULES.md` §7, D-269): the server stopped waiting and cancelled what
+   * A module's request or frame ran past its deadline (`MODULES.md` §7, D-270): the server stopped waiting and cancelled what
    * it had asked of the database. Unlike `DATABASE_UNAVAILABLE` it may have changed something before it ran out, so a
    * client reads again before it repeats a write that is not idempotent.
    */

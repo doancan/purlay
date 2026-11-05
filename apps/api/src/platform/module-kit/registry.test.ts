@@ -460,7 +460,7 @@ describe('the notification kinds and search sources a module declares', () => {
   });
 });
 
-describe('a module’s deadline (D-269)', () => {
+describe('a module’s deadline (D-270)', () => {
   test('is left out, a whole number of milliseconds a client could wait for, or `none` with a reason', () => {
     expect(() => moduleRegistry([module('issues')])).not.toThrow();
     expect(() => moduleRegistry([module('issues', { deadline: { ms: 8_000 } })])).not.toThrow();

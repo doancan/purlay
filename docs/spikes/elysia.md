@@ -112,7 +112,7 @@ This spike concluded that `apps/api` is referenced by nothing and should therefo
 `apps/api`, and a referenced project must be composite. Checked before acting on it. The emit is
 kept small by the return-type annotation above instead.
 
-## `wrap`, the hook around a whole request (D-269)
+## `wrap`, the hook around a whole request (D-270)
 
 The framework has one hook that runs *around* a request, where the others (`onRequest` … `onAfterResponse`) only run
 before or after one: `wrap`. Its type says *"@private DO_NOT_USE_OR_YOU_WILL_BE_FIRED … Add Higher order function to

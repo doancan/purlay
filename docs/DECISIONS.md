@@ -12837,7 +12837,7 @@ membership, was outside the share only because one handler happened to put it be
    answered `503 DATABASE_UNAVAILABLE` — the same code as a share in use, and now for every statement that runs past a
    limit, since the pool's own was `500 INTERNAL` — which a client retries.
 5. **An exemption is a line a reviewer reads.** `budget` stays required (D-260); a module that declares `none` must also
-   be named, with its reason, in `module-budgets.test.ts`. Chat was the one until it had a share (D-268).
+   be named, with its reason, in `module-budgets.test.ts`. Chat was the one until it had a share (D-269).
 
 **Rejected.** *A pool per module*: a partition wastes the connections a quiet module holds and a busy one needs, and
 the sum of the pools is what counts against `max_connections`. *A type that hides the raw handle from a module's
@@ -12888,7 +12888,7 @@ failures from 0.6% to 0.3%, for a file that has to be migrated. *Retrying until 
 
 **Cost of reversing.** One statistic and one constant in `budget-latency.ts`; the files kept are the same shape.
 
-### D-268. Chat has a share of the pool, and the core keeps a reserve the modules cannot take — builds on D-250, D-260, D-266
+### D-269. Chat has a share of the pool, and the core keeps a reserve the modules cannot take — builds on D-250, D-260, D-266
 
 **Context.** With the share held at the connection (D-266) chat could have one, and chat declared `none`: a busy chat
 could hold every connection and queue the core's own reads. Measured on a real process at a pool of ten
@@ -12943,7 +12943,7 @@ table.
 **Cost of reversing.** `coreReserve` and `together` in `moduleConnections`, the frame's note, and chat's `budget` back to
 `none` with its line in `module-budgets.test.ts`. Nothing is stored.
 
-### D-269. A module's request has a deadline that answers it and cancels its database work, and a failure in one handler stays its own — builds on D-266, D-268; amends D-250 rule 7
+### D-270. A module's request has a deadline that answers it and cancels its database work, and a failure in one handler stays its own — builds on D-266, D-269; amends D-250 rule 7
 
 **Context.** Isolation by budget (`MODULES.md` §7) bounded what a module takes of the pool and left what a request does
 with its time open: a module's route that waited on a lock, a slow query or a service that never answered held its

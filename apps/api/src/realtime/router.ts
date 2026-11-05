@@ -71,7 +71,7 @@ export interface RouterDependencies {
    * frame belongs to one.
    */
   readonly moduleOfFrame?: (op: string) => string | undefined;
-  /** How long a module's frame may take, in ms, or `undefined` for one with no deadline; absent, none has (D-269). */
+  /** How long a module's frame may take, in ms, or `undefined` for one with no deadline; absent, none has (D-270). */
   readonly deadlineOf?: (module: string) => number | undefined;
   readonly database: Executor;
   /** The write path's transaction boundary (D-35, `platform/transactions.ts`). */
@@ -268,7 +268,7 @@ const missedRevocations = async (
 
 /**
  * Handles one frame and returns what to send back on this connection, within its module's deadline: a frame that runs past
- * it is answered `REQUEST_TIMEOUT`, and what it had asked of the database is cancelled (D-269).
+ * it is answered `REQUEST_TIMEOUT`, and what it had asked of the database is cancelled (D-270).
  *
  * Anything published to other connections has already gone to the bus by the
  * time this returns.

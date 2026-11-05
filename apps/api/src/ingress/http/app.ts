@@ -711,7 +711,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     serve: { maxRequestBodySize: ATTACHMENT_BYTES_MAX },
   })
     /**
-     * A module's request runs against its module's deadline, whatever it waits for (`platform/request-deadline.ts`, D-269).
+     * A module's request runs against its module's deadline, whatever it waits for (`platform/request-deadline.ts`, D-270).
      * `wrap` is the framework's own hook around the whole of a request, "do not use unless you know exactly what you are
      * doing" in its type's words: `docs/spikes/elysia.md` says what was measured, and `deadline.integration.test.ts` answers
      * a handler that never returns, over `handle` and over a started server, so an upgrade of the framework that changes it

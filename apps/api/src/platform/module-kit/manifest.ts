@@ -58,7 +58,7 @@ export interface NotificationKindDeclaration {
 
 /**
  * How long one of the module's requests or frames may run before it is stopped and the database is told to cancel what it
- * was asked (`MODULES.md` §7, D-269): a number of milliseconds, or `none` with the reason, which a test lists. A module
+ * was asked (`MODULES.md` §7, D-270): a number of milliseconds, or `none` with the reason, which a test lists. A module
  * that says nothing has the platform's default.
  */
 type ModuleDeadlineDeclaration = { readonly ms: number } | { readonly none: string };
