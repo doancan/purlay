@@ -1107,8 +1107,9 @@ CREATE INDEX idx_reactions_user ON reactions (user_id);
 ### 7.2. `attachments`
 
 Uploaded before the message exists — the client uploads on paste, then sends the message
-referencing the returned ids — so `message_id` is nullable until the message lands. (D-16, D-109)
-Migration `0018` is the definition, `0027` adds the channel; the bounds below are bound to the contract's `ATTACHMENT_*`
+referencing the returned ids — so it is unclaimed (`claimed_at` null) until the message lands. (D-16, D-109)
+Migration `0018` is the definition (`0027` added a channel and `0079` the claim; `chat/0005` removed the columns of the
+message link again, below); the bounds below are bound to the contract's `ATTACHMENT_*`
 constants by a test that inserts at each and one past it.
 
 ```sql
@@ -1116,10 +1117,6 @@ CREATE TABLE attachments (
     -- The client's UUIDv7, so a retried upload finds the row it made (D-109 §3).
     id            UUID PRIMARY KEY,
     workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    -- NULL while unattached: the uploader's own until then (D-109 §6).
-    message_id    UUID,
-    -- The message's channel, set with message_id: a channel's files are found by it (D-129).
-    channel_id    UUID,
     uploader_id   UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
     -- Opaque keys in the object store. Never a public URL: reads are brokered.
@@ -1134,19 +1131,11 @@ CREATE TABLE attachments (
     width         INTEGER,
     height        INTEGER,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- NULL until a module has taken the upload (a message sent with it): the uploader's own until then (D-109 §6).
+    claimed_at    TIMESTAMPTZ,
 
     CONSTRAINT attachments_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
-    -- In its message's workspace, by a key, not by care (D-90).
-    CONSTRAINT attachments_message_workspace_fkey
-        FOREIGN KEY (message_id, workspace_id) REFERENCES messages (id, workspace_id)
-        ON DELETE CASCADE,
-    -- Linked and channelled together, and the channel is the message's (I-1, D-129).
-    CONSTRAINT attachments_channel_iff_message
-        CHECK ((message_id IS NULL) = (channel_id IS NULL)),
-    CONSTRAINT attachments_message_channel_fkey
-        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
-        ON DELETE CASCADE,
     -- 25 MiB. (D-16)
     CONSTRAINT attachment_size_limit
         CHECK (size_bytes > 0 AND size_bytes <= 26214400),
@@ -1154,25 +1143,27 @@ CREATE TABLE attachments (
     CONSTRAINT attachment_dimensions CHECK (...)
 );
 
-CREATE INDEX idx_attachments_message    ON attachments (message_id) WHERE message_id IS NOT NULL;
--- A person's unattached uploads: counted against the bound (D-109 §5), and swept (#71).
-CREATE INDEX idx_attachments_unattached ON attachments (workspace_id, uploader_id, created_at)
-    WHERE message_id IS NULL;
--- A channel's files, newest message first (D-129).
-CREATE INDEX idx_attachments_channel    ON attachments (channel_id, message_id DESC, id DESC)
-    WHERE message_id IS NOT NULL;
+-- (id, workspace_id) is unique, for chat's link table to key to (0079).
+CREATE UNIQUE INDEX attachments_id_workspace_key ON attachments (id, workspace_id);
+-- A person's unclaimed uploads: counted against the bound (D-109 §5), and swept (#71).
+CREATE INDEX idx_attachments_unclaimed ON attachments (workspace_id, uploader_id, created_at)
+    WHERE claimed_at IS NULL;
 CREATE INDEX idx_attachments_uploader   ON attachments (uploader_id);
 CREATE INDEX idx_attachments_workspace  ON attachments (workspace_id);
 ```
 
-**The link to the message is moving into chat (D-250, `MODULES.md` §10, step 8).** `0079` adds `claimed_at`, which the
-core reads in place of `message_id IS NULL` — null until a module has taken the upload, set in the transaction that
-links it — and makes `(id, workspace_id)` unique so that a table of chat's can key to both. Chat's own migration set
-adds `message_attachments`, below, with the keys `attachments` has to `messages` and a key to `attachments`; it is backfilled
-from `message_id` and `channel_id`, and the two are written together. **`message_id`, `channel_id` and their keys stay for one
-release** — the release before reads them — and go in the next, once nothing does. The readers have moved: the core asks `claimed_at`,
-chat asks `message_attachments`, and a test fails if production code reads either column again; only the send still writes
-them, and the exports still write them as data. The columns go next release.
+**The link to the message is chat's (D-250, `MODULES.md` §10, steps 8 and 10).** `0079` added `claimed_at`, which the core
+reads in place of `message_id IS NULL` — null until a module has taken the upload, set in the transaction that links it —
+and made `(id, workspace_id)` unique so that a table of chat's can key to both. Chat's own migration set added
+`message_attachments`, below, with the keys `attachments` had to `messages` and a key to `attachments`, backfilled from
+`message_id` and `channel_id`. **`chat/0005`** (the release after the one that expanded) drops those two columns, their two
+keys to `messages`, the channel check and their three indexes; the core's table holds a stored object, its uploader, its
+workspace and whether it is claimed, and no key runs from the core to chat. It is a file of chat's set because the core's
+files run first, so a core file dropping the columns would run before `chat/0001` read them; a server that does not run chat
+keeps the two columns, inert. It refuses — fails loudly, with a count, changing nothing — if an attachment names a message the
+link table does not carry the same way, or is not claimed. Going back is the restore of the backup taken before the deploy
+(D-86). Deleting a message no longer deletes its file's row by a key: chat's commands that delete messages drop their files
+first (`dropMessageFiles`).
 
 ```sql
 -- chat/0001_message_attachments.sql
@@ -1193,9 +1184,11 @@ CREATE INDEX idx_message_attachments_message ON message_attachments (message_id)
 CREATE INDEX idx_message_attachments_channel ON message_attachments (channel_id, message_id DESC, attachment_id DESC);
 ```
 
-`packages/db/src/upgrade.integration.test.ts` builds the previous release's schema, puts attachments in it as that
-release wrote them, migrates to head the way a process does and checks the claim, the link, each key on its own and
-that starting again changes nothing.
+`packages/db/src/upgrade.integration.test.ts` builds the previous release's schema and the expand release's, puts
+attachments in them as those releases wrote them (sent, sent with a deleted message, unsent), migrates to head the way a
+process does and checks the claim, the link, each key on its own, that the columns are gone, that a missing or mismatched
+link or an unclaimed sent file is refused with nothing changed, the core alone and chat later, and that starting again
+changes nothing.
 
 ### 7.3. `mentions`
 
@@ -2696,6 +2689,7 @@ chat/0001_message_attachments.sql  chat's set: message_attachments, the link of 
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
 chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
+chat/0005_message_attachments_contract.sql  drops attachments.message_id and channel_id, their keys and indexes, after refusing a link table that lacks a sent file  (D-250; ships in the release after the expand)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 ```
 

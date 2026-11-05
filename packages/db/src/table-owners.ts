@@ -1,7 +1,8 @@
 /**
  * Who owns each table (D-250, `MODULES.md` §5): the core, or one module. A foreign key goes from a module to
  * the core and never the other way, nor between modules, so that a module's tables can be left inert without
- * the core's pointing at them. `table-ownership.integration.test.ts` holds this list to the database.
+ * the core's pointing at them. `table-ownership.integration.test.ts` holds this list to the database, and the
+ * keys to the rule: it has no exceptions (the last, `attachments -> messages`, went with `chat/0005`).
  *
  * An owner is the core or the id of a migration set (`PRODUCT_MIGRATION_SETS`), so there is no list of module names to
  * keep beside the sets: a module whose tables are in the list has a set, and a set is a module of the build
@@ -81,19 +82,15 @@ export const TABLE_OWNERS: Readonly<Record<keyof DB, TableOwner>> = {
 };
 
 /**
- * The foreign keys that break the rule today, as `child -> parent`. **This list may only shrink**: the test
- * fails for a key that is not here, and for one that is here and no longer exists, so removing a line is
- * what a fix looks like. Steps 6–10 of the plan empty it.
- */
-export const CROSS_OWNER_FOREIGN_KEYS: readonly string[] = ['attachments -> messages'];
-
-/**
  * The columns of a core table that a module's set may add, drop or change, as `table.column`: the expand and the
  * contract of a link that moves into a module (`MODULES.md` §10, step 8), and nothing else, because a module adds
  * its own tables and leaves the core's as they are. **This list may only shrink** once the link is done: the cells
  * test (`migration-cells.integration.test.ts`) fails for a change that is not here.
  */
-export const CORE_COLUMNS_A_SET_CHANGES: readonly string[] = [];
+export const CORE_COLUMNS_A_SET_CHANGES: readonly string[] = [
+  'attachments.message_id',
+  'attachments.channel_id',
+];
 
 /**
  * The enum types of the core that a module's set may alter, as `set:type`: `ALTER TYPE ... ADD VALUE` changes

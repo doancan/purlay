@@ -52,14 +52,6 @@ const attach = async (
     context,
     { id, name, bytes },
   );
-  await db
-    .updateTable('attachments')
-    .set((eb) => ({
-      message_id: to,
-      channel_id: eb.selectFrom('messages').select('channel_id').where('id', '=', to),
-    }))
-    .where('id', '=', id)
-    .execute();
   await linkFile(db, {
     id: id,
     workspaceId: room.workspaceId,
@@ -120,8 +112,8 @@ describe('integration: a message’s attachments', () => {
       expect(tombstone?.deletedAt).not.toBeNull();
       expect(tombstone?.attachments).toEqual([]);
       const kept = await db
-        .selectFrom('attachments')
-        .select('id')
+        .selectFrom('message_attachments')
+        .select('attachment_id')
         .where('message_id', '=', root)
         .execute();
       expect(kept).toHaveLength(1);

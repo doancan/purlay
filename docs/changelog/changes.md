@@ -23,6 +23,9 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)
+- **Operations** — the upgrade drops `attachments.message_id` and `attachments.channel_id`, and stops with a count, changing nothing, if a sent file's link is missing from chat's table; restore the backup and fix the data before deploying again (D-250)
 
 ---

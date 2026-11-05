@@ -1,15 +1,12 @@
 /**
- * Guards the move of an attachment's link to its message out of the core (D-250, `MODULES.md` §10, step 9).
+ * Guards the move of an attachment's link to its message out of the core (D-250, `MODULES.md` §10, steps 8 and 9).
  *
- * `attachments.message_id` and `attachments.channel_id` are still written, for one release, so that the release
- * before this one finds what it reads. Nothing in this one may READ them: the core asks `claimed_at` whether an
- * upload is sent, and chat asks `message_attachments` which message and channel a file is in. A production
- * query that names either column on `attachments` fails here, however it is spelled — qualified
- * (`attachments.message_id`), or bare in a statement that selects from, deletes from or updates `attachments`.
- *
- * The allow-list is the one place that WRITES the old columns, the dual write of the link. The exports name the
- * columns as data in their catalogues, which this does not match. In the contract release the columns are
- * dropped, the dual write goes, and the allow-list shrinks to nothing.
+ * `attachments.message_id` and `attachments.channel_id` are dropped (chat/0005) and nothing writes them. The core
+ * asks `claimed_at` whether an upload is sent, and chat asks `message_attachments` which message and channel a
+ * file is in. A production query that names either column on `attachments` fails here, however it is spelled —
+ * qualified (`attachments.message_id`), or bare in a statement that selects from, deletes from or updates
+ * `attachments`. The compiler holds the query builder to the schema; this holds raw SQL, which it cannot, and
+ * the export's bounds, which are text.
  */
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -17,12 +14,6 @@ import { join } from 'node:path';
 
 /** `apps/api/src`: the core's modules, the platform, the features and the rest are all read. */
 const ROOT = join(import.meta.dir, '../../..');
-
-/** Where the old columns may still be named, and why. Empty after the contract release. */
-const WRITES_THE_OLD_COLUMNS: Readonly<Record<string, string>> = {
-  'features/chat/messages/messages.ts':
-    'linkAttachments sets message_id and channel_id (the dual write)',
-};
 
 const sources = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -64,17 +55,8 @@ describe('readers of an attachment’s link to its message', () => {
   test('none reads attachments.message_id or attachments.channel_id', () => {
     const offenders = sources(ROOT)
       .map((path) => ({ path: path.slice(ROOT.length + 1), text: readFileSync(path, 'utf8') }))
-      .filter(({ path }) => !(path in WRITES_THE_OLD_COLUMNS))
       .flatMap(({ path, text }) => readsOldColumns(path, text));
     expect(offenders).toEqual([]);
-  });
-
-  test('the allow-list is only what still writes them', () => {
-    for (const path of Object.keys(WRITES_THE_OLD_COLUMNS)) {
-      expect(readsOldColumns(path, readFileSync(join(ROOT, path), 'utf8')).length).toBeGreaterThan(
-        0,
-      );
-    }
   });
 
   test('the scan can tell: it finds each way of reading, and not the link', () => {

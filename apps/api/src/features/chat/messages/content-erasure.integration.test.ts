@@ -100,8 +100,6 @@ describe('integration: erasing what a person wrote', () => {
         .values({
           id: fileId,
           workspace_id: room.workspaceId,
-          channel_id: room.channelId,
-          message_id: hers,
           uploader_id: ada.userId,
           storage_key: key,
           file_name: 'ada.pdf',
@@ -201,8 +199,6 @@ describe('integration: erasing what a person wrote', () => {
         .values({
           id: fileId,
           workspace_id: room.workspaceId,
-          channel_id: room.channelId,
-          message_id: hers,
           uploader_id: ada.userId,
           storage_key: `w/${room.workspaceId}/${fileId}`,
           file_name: 'a.bin',

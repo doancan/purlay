@@ -100,8 +100,6 @@ describe('integration: an export’s snapshot', () => {
       .values({
         id: fileId,
         workspace_id: room.workspaceId,
-        channel_id: room.channelId,
-        message_id: sent.message.id,
         uploader_id: ada.userId,
         storage_key: key,
         file_name: 'a.bin',
