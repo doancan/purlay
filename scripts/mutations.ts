@@ -13696,9 +13696,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'web-chat-screen-imported-statically',
     why: 'a chat screen is imported at the top of the outlet again, so the shell carries chat whether or not the server runs it (D-250)',
     file: 'apps/web/src/app/outlet.tsx',
-    find: "import { isModuleMatch, moduleOf } from '../router/routes';",
+    find: "import { isModuleMatch, moduleOf, type Match } from '../router/routes';",
     replace:
-      "import { isModuleMatch, moduleOf } from '../router/routes';\nimport { UnreadsScreen } from '../features/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
+      "import { isModuleMatch, moduleOf, type Match } from '../router/routes';\nimport { UnreadsScreen } from '../features/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
     tests: ['apps/web/src/features/chat/chat-chunk.test.ts'],
   },
   {
@@ -15081,6 +15081,15 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "if (dash.length === afterArea.length || !dash.startsWith('—')) return plain;",
     replace: "if (!dash.startsWith('—')) return plain;",
     tests: ['packages/types/src/releases.test.ts'],
+  },
+  {
+    id: 'module-screen-has-a-shell-of-its-own',
+    why: "a module's screens are drawn in a shell of their own again, so the front door's hand-over to a channel builds the shell again and closes the menu opened on it",
+    file: 'apps/web/src/app/outlet.tsx',
+    find: 'return shelled(match.params.slug, <ModuleRoute name={match.name} params={match.params} />);',
+    replace:
+      'return bare(<div className="contents"><Shell slug={match.params.slug}><ModuleRoute name={match.name} params={match.params} /></Shell></div>);',
+    tests: ['apps/web/src/app/module-route.test.tsx'],
   },
   {
     id: 'refusal-tells-a-non-member-why-an-archived-channel-is-gone',
