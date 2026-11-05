@@ -85,15 +85,27 @@ export interface ReleaseNotes {
   readonly groups: readonly ReleaseNotesGroup[];
 }
 
-/** `**Messages** — a sentence`: an area in bold, a dash, and what it did. */
-const AREA = /^\*\*([^*]+)\*\*\s+—\s+([\s\S]+)$/;
-
-/** A bullet's text, split into its area and its words. */
+/**
+ * A bullet's text, split into its area and its words: `**Messages** — a sentence` is an area in bold, a dash with
+ * a space either side, and what it did. Read in one pass with no pattern to backtrack — a bullet is text anybody
+ * who can open a pull request writes, and the scan stays linear however it is spaced. Anything that is not exactly
+ * that shape is its words alone.
+ */
 export const readItem = (markdown: string): ReleaseNotesItem => {
-  const found = AREA.exec(markdown);
-  return found === null
-    ? { markdown, area: null, body: markdown }
-    : { markdown, area: found[1]?.trim() ?? null, body: found[2]?.trim() ?? markdown };
+  const plain = { markdown, area: null, body: markdown };
+  if (!markdown.startsWith('**')) return plain;
+  const close = markdown.indexOf('**', 2);
+  if (close < 3) return plain;
+  const area = markdown.slice(2, close);
+  if (area.includes('*')) return plain;
+  const afterArea = markdown.slice(close + 2);
+  const dash = afterArea.trimStart();
+  // A space before the dash, the dash, and a space after it.
+  if (dash.length === afterArea.length || !dash.startsWith('—')) return plain;
+  const afterDash = dash.slice(1);
+  const words = afterDash.trimStart();
+  if (words.length === afterDash.length || words.trimEnd() === '') return plain;
+  return { markdown, area: area.trim(), body: words.trim() };
 };
 
 /**
