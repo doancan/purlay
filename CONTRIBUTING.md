@@ -291,6 +291,11 @@ worse than one that fails: the failure is loud, the no-op is discovered later by
 **When waiting for something, assert the positive condition.** *Nothing is pending* is trivially
 true before anything starts. Wait for *the thing I expect exists, and it has finished.*
 
+**A browser test does not choose a path by asking the page a question about this instant.** `isVisible()` and
+`isHidden()` answer for the moment they are asked, so a page that is merely not done yet takes the other branch.
+Choose by what is known without looking (the window's width: `openNavigation`), and wait for a state with
+`expect(…).toBeVisible()`. `scripts/e2e-probes.test.ts` refuses the call in any spec or helper.
+
 **Test files are isolated (D-220).** The standard suite and mutation commands use Bun's native
 `--isolate`, keeping browser globals and leftover timers from affecting another file. Keep the
 flag when running a multi-file diagnostic. The whole suite also runs two files at a time,
