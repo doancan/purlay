@@ -232,9 +232,10 @@ What belongs here is the discipline around them:
   screenshots, which you then look at before committing (they depend on the machine's fonts).
   `bun run test:modules-none` serves the same seeded world with `MODULES=none` and drives one spec in a real browser (no chat
   route asked for, no chat screen drawn, no console error); CI runs it beside the suite in each project (D-250).
-  `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, not
-  in CI, with screenshots ignored and each engine's known limits skipped by name
-  (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
+  `PURLAY_E2E_ENGINES=webkit` (or `firefox`, or both) adds Safari's or Firefox's engine to a run, and
+  `PURLAY_E2E_PROJECT=webkit` runs WebKit alone, as CI's `webkit` job does after `bun run test:e2e:install:webkit`
+  (Firefox is opt in only); screenshots are ignored and each engine's known limits are skipped in the test,
+  by engine, with why (`docs/spikes/cross-browser.md`). `PURLAY_E2E_PERFORMANCE=skip` runs every file but the two that write
   a measurement (`performance.e2e.ts`, `feed-scale.e2e.ts`), and `only` runs those alone, as CI does (D-227).
   `bun run budget:web` fails above 400 KB of initial gzipped JavaScript and names what grew (D-196): a backstop against an accident, never a reason to cut or defer a feature. It also fails when chat's screens are in the shell's chunk and needs the build's source map to say so: `bun run build:web:mapped` first (D-250).
 
@@ -525,11 +526,18 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 - **Releasing and deploying** are D-185, not this section: a merge to `main` deploys to the server by itself,
   and `bun run release -- <patch|minor|major>` opens the pull request whose merge is a release; it also rewrites `apps/api/src/released-manifests.json`, the module manifests the next release is held to (`module-compat.test.ts`), and clears that file's exceptions. A deliberate break of a manifest is a dated entry under `exceptions` there, which a reviewer sees. There is no
   `develop` branch.
-- **The browser jobs run when a screen can have moved.** Eight jobs are most of a run; on a pull
+- **The browser jobs run when a screen can have moved.** Eight jobs (and WebKit's, below) are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or
   `ci.yml` (`bun run ci:changes`), and on main always. Each project is two of them side by side: the
   suite without the measuring tests, and those alone on one worker on a runner of their own, which
   measures a budget regression again before it fails (D-227).
+- **WebKit is a ninth job, reported and not yet required.** `webkit` runs the suite on Safari's engine, light and
+  1440 wide, without the measuring files, whenever the browser jobs run. It is not in `verify`'s `needs`, so a red
+  run shows on the pull request and blocks nothing. To make it required once it has been green for a while
+  (several runs on main and on pull requests, none retried into green): add `webkit` to `GATED` and `SKIPPABLE`
+  in `scripts/ci-gate.ts` and to `verify`'s `needs`; give `changes` a `webkit` output equal to `browser`, which
+  the gate reads to accept a skip; update `scripts/ci-gate.test.ts`; and only then add the check to branch
+  protection, which a human changes.
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
   no service and `schema` runs every test once, with coverage; `verify` needs both and the browser jobs,
   runs whatever they did, and passes only when each succeeded — a failure, a cancellation, a skip or a
