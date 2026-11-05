@@ -53,7 +53,15 @@ declares:
 - `auditActions` (D-265): the actions the module writes to the trail, in groups of `{ read, actions }`, `read` being the
   permission that reads those rows (the core's `audit.read`, or one the module declares). The wire's `AUDIT_ACTIONS` is
   every action there is; `CORE_AUDIT_ACTIONS`, `CHAT_AUDIT_ACTIONS` and `ISSUES_AUDIT_ACTIONS` in `@purlay/types` say who
-  owns each, and a test holds the three to the wire's list, each action once.
+  owns each, and a test holds the three to the wire's list, each action once;
+- `notifications` (D-265): the kinds of notification the module sends, each `{ type, needsYou, pushed, mailed }` (chat's are
+  `CHAT_NOTIFICATION_KINDS` in `@purlay/types`): whether it counts for the badge, the title and a background alert, is
+  pushed, and is mailed when it waits unread. `NotificationType`, `NEEDS_YOU` and the database's `notification_type` are held
+  to the declarations by `notification-kinds.test.ts`, and the missed-mail letter takes its kinds from `mailed`;
+- `searchSources` (D-265): the ids of the sources the module adds to a workspace search (chat's is `messages`). A process
+  that does not run the module lists none of them (`composition.searchSources`). **There is no fan-out yet:** a search
+  answers messages, one source, and a second source needs a result that names its source, which is a change of the wire
+  that has its own decision.
 
 That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. What a module
 contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `jobWork`, the work of
@@ -62,8 +70,7 @@ not start; `bun run job` takes the work from the composition and names no module
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
 of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
 and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
-anything:** `notifications` and `searchSources`; and the role rules that are not yet a named permission, which are in
-each service (D-265 §3).
+anything:** the role rules that are not yet a named permission, which are in each service (D-265 §3).
 
 ## 3. Boot
 
@@ -326,6 +333,7 @@ until then it is a stated intent and not a guarantee.
 | A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/` and `ingress/http/<id>.ts`) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
 | Every audit action a module's code records is in its manifest, and every one its manifest lists is recorded | `audit-emissions.test.ts` reads each module's source (and the core's) as `module-emissions.test.ts` reads events', `core-claims.test.ts` holds the manifests' actions and the core's to the wire's `AUDIT_ACTIONS`, each once, the registry refuses an action two owners list and a reading permission that is another module's, and the composition's `auditAccess` judges every module the build carries — **built** (D-265); mutations `audit-trail-read-by-a-member`, `trail-shows-what-the-role-cannot-read`, `registry-accepts-an-audit-action-read-by-a-foreign-permission` and `chat-stops-declaring-its-audit-actions` | 12 |
 | Every permission a module's code asks is in its manifest, and every one its manifest lists is asked | `permission-emissions.test.ts` reads each module's source (and the core's) as `module-emissions.test.ts` reads events', the registry refuses a permission not named for its module and one declared twice, and the composition's `permissions` have a module's own only while it runs — **built** (D-265); mutations `issues-delete-ignores-its-permission`, `issues-permission-asked-is-not-the-one-declared`, `composition-holds-the-permissions-of-a-module-that-is-not-run` and `registry-accepts-a-permission-not-named-for-its-module` | 12 |
+| Every kind of notification and search source a module sends is declared, and the wire's and the database's lists are the declarations | `notification-kinds.test.ts` holds `NotificationType`, `NEEDS_YOU` and the database's enum to the manifests' kinds, each once; the registry refuses a kind or a source two modules both list; `composition.notificationKinds` and `composition.searchSources` have a module's only while it runs — **built** (D-265); mutations `chat-stops-declaring-its-notification-kinds`, `missed-mail-takes-every-pushed-kind`, `composition-queries-the-search-sources-of-modules-that-are-off` and `registry-lets-two-modules-send-one-notification-kind` | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
@@ -423,6 +431,10 @@ commit beside this list.
   that is not declared and for a declared name its source no longer writes; `core-claims.test.ts` for an action the wire
   names that nobody owns, and the registry for a permission not named `<id>.<what>`, one two modules both declare, and a
   reading permission that is another module's.
+- **Notifications and search** (D-265): a kind of notification a module sends is `{ type, needsYou, pushed, mailed }` in
+  its manifest's `notifications` and a value of the database's `notification_type`; a source it adds to a workspace search is
+  an id in `searchSources`. `notification-kinds.test.ts` fails for a kind the wire, `NEEDS_YOU` or the database has and no
+  manifest declares, and for one declared twice; the registry for a kind or a source two modules list.
 
 **4. The routes, in `ingress/`.**
 
