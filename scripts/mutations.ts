@@ -13922,6 +13922,24 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/cli/jobs.integration.test.ts', 'apps/api/src/core-claims.test.ts'],
   },
   {
+    id: 'job-command-names-a-chat-file',
+    why: 'the command that runs the jobs imports a file of chat again, so a third module’s job is wired by hand beside it and forgotten (D-250)',
+    file: 'apps/api/src/cli/jobs.ts',
+    find: "import { compositionFor } from '../composition';",
+    replace:
+      "import { compositionFor } from '../composition';\nimport { purgeRetention } from '../features/chat/messages/retention-purge';\nvoid purgeRetention;",
+    tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
+    id: 'ingress-file-names-a-chat-file',
+    why: 'a route file of the core imports a file of chat, so the core’s doors depend on a module they must run without (D-250)',
+    file: 'apps/api/src/ingress/http/profile.ts',
+    find: "import { UpdateProfileRequest, type Profile } from '@purlay/types';",
+    replace:
+      "import { UpdateProfileRequest, type Profile } from '@purlay/types';\nimport { sweepLinkPreviews } from '../../features/chat/sweeps';\nvoid sweepLinkPreviews;",
+    tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
     id: 'socket-presence-kept-without-chat',
     why: 'a socket of a process that does not run chat still counts people online and tells their colleagues, in the news of a module that is off (D-250)',
     file: 'apps/api/src/ingress/ws/socket.ts',
