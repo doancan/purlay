@@ -258,7 +258,16 @@ test.describe('resolving', () => {
     securityPolicy,
   }, info) => {
     const made = await aQuestion(room, api);
-    const measure = async (reducedMotion: 'reduce' | 'no-preference'): Promise<number[]> => {
+    // What the page was asked to animate while Resolve ran, and nothing about how many frames drew it:
+    // frames are the runner's, and under load a 120 ms fold lands between two of them or on none (#347).
+    interface Fold {
+      readonly animations: number;
+      readonly duration: number;
+      readonly from: Record<string, unknown> | null;
+      readonly to: Record<string, unknown> | null;
+      readonly heightBefore: number;
+    }
+    const resolve = async (reducedMotion: 'reduce' | 'no-preference'): Promise<Fold> => {
       const { colorScheme, viewport } = info.project.use;
       const context = await browser.newContext({
         baseURL: baseURL ?? '',
@@ -287,53 +296,66 @@ test.describe('resolving', () => {
       // Its replies drawn before anything is measured: under load they arrived after Resolve was
       // pressed, and the thread grew as it went — `[163,163,231]`, a size that is not motion (#347).
       await expect(thread.getByText('documented in the postmortem')).toBeVisible();
-      // Press Resolve in the page and sample the height of the panel's thread on every frame until
-      // the panel is gone: the panel keeps its height, and what folds is the thread inside it.
-      const heights = await tab.evaluate(async (rootId) => {
-        const section = document.querySelector<HTMLElement>(`[data-thread-root="${rootId}"]`);
-        const body = section?.querySelector<HTMLElement>('[data-thread-body]') ?? null;
-        const button = [...(section?.querySelectorAll('button') ?? [])].find((b) =>
-          b.textContent.startsWith('Resolve'),
-        );
-        if (body === null || button === undefined) return [-1];
-        // Its height before the press, taken now rather than on a frame: under reduced motion the
-        // thread can be gone by the first frame, and a run that measured nothing proved nothing (#347).
-        const samples: number[] = [body.getBoundingClientRect().height];
-        button.click();
-        await new Promise<void>((resolve) => {
-          const step = (): void => {
-            const live = document.querySelector<HTMLElement>(
-              `[data-thread-root="${rootId}"] [data-thread-body]`,
-            );
-            if (live === null || samples.length > 60) {
-              resolve();
-              return;
-            }
-            samples.push(live.getBoundingClientRect().height);
-            requestAnimationFrame(step);
-          };
-          requestAnimationFrame(step);
-        });
-        return samples;
-      }, made.rootId);
+      // Record every animation the page starts, from before the press, keeping the one it was handed
+      // rather than sampling its effect on frames.
+      await tab.evaluate(() => {
+        const started: Animation[] = [];
+        (window as unknown as { __animations: Animation[] }).__animations = started;
+        // Kept to be called on the element it was called on, which is what `apply` does below.
+        type Animate = (this: Element, ...args: Parameters<Element['animate']>) => Animation;
+        const prototype = Element.prototype as unknown as { animate: Animate };
+        const animate = prototype.animate;
+        prototype.animate = function (this: Element, ...args): Animation {
+          const animation = animate.apply(this, args);
+          started.push(animation);
+          return animation;
+        };
+      });
+      const heightBefore = await thread
+        .locator('[data-thread-body]')
+        .evaluate((body) => body.getBoundingClientRect().height);
+      await thread.getByRole('button', { name: /^Resolve/ }).click();
+      // The server has answered and the panel has closed: the fold, if there was one, is over.
+      await expect(thread).toHaveCount(0);
+      await expect(
+        tab.getByRole('button', { name: /Resolved by Doğancan · 2 replies/ }),
+      ).toBeVisible();
+      const fold = await tab.evaluate((): Omit<Fold, 'heightBefore'> => {
+        const [animation, ...others] = (window as unknown as { __animations: Animation[] })
+          .__animations;
+        if (animation === undefined) {
+          return { animations: 0, duration: 0, from: null, to: null };
+        }
+        const effect = animation.effect as KeyframeEffect;
+        const [from = null, to = null] = effect.getKeyframes();
+        return {
+          animations: 1 + others.length,
+          duration: Number(effect.getTiming().duration),
+          from,
+          to,
+        };
+      });
       await securityPolicy.settle(context);
       await context.close();
-      return heights;
+      return { ...fold, heightBefore };
     };
 
-    const animated = await measure('no-preference');
-    // Several frames in which the thread is shrinking, and getting smaller as it goes.
-    expect(animated.length).toBeGreaterThan(2);
-    expect(animated[0] ?? 0).toBeGreaterThan(animated.at(-1) ?? 0);
+    // Under normal motion: one animation, over the collapse token's 120 ms, folding the thread from the
+    // height it had to none (`overflow: hidden` keeps what is below the line out of sight) and fading it.
+    const animated = await resolve('no-preference');
+    expect(animated.animations).toBe(1);
+    expect(animated.duration).toBe(120);
+    expect(animated.heightBefore).toBeGreaterThan(0);
+    expect(parseFloat(String(animated.from?.['maxHeight']))).toBeCloseTo(animated.heightBefore, 0);
+    expect(animated.from).toMatchObject({ opacity: '1', overflow: 'hidden' });
+    expect(animated.to).toMatchObject({ maxHeight: '0px', opacity: '0', overflow: 'hidden' });
 
     // Resolved once already: reopen through the API so the second run starts from an open thread.
     await api('dogancan').del(`/api/messages/${made.rootId}/resolve`);
-    const instant = await measure('reduce');
-    // No size in between. How many frames it takes is the server's answer time, not motion; the
-    // first is the height before the press, so there is always one to compare.
-    expect(instant.length).toBeGreaterThan(0);
-    // The heights travel with a failure: it has been seen once under load (#347).
-    expect(new Set(instant).size, `heights: ${JSON.stringify(instant)}`).toBe(1);
+    // Under reduced motion the same press resolves the thread, which `resolve` waited to see closed
+    // and Resolved in the feed, and starts no animation at all.
+    const instant = await resolve('reduce');
+    expect(instant.animations).toBe(0);
   });
 });
 
