@@ -84,6 +84,12 @@ interface GitHubAppBehaviour {
    * the caller's deadline is all it hears (`hangs`).
    */
   revoke?: 'revokes' | 'fails' | 'hangs';
+  /**
+   * What a refresh (`POST /login/oauth/access_token`, `grant_type=refresh_token`) does: gives new tokens (the
+   * default), refuses the refresh token as GitHub does for one revoked or expired (`refuses`), answers `502`
+   * (`fails`), or never answers so the caller's deadline is all it hears (`hangs`).
+   */
+  refresh?: 'refreshes' | 'refuses' | 'fails' | 'hangs';
 }
 
 export interface GitHubAppStub {
@@ -97,6 +103,8 @@ export interface GitHubAppStub {
   readonly callers: ('app' | 'user' | 'installation' | 'client')[];
   /** The user access tokens a revocation of the grant (`DELETE /applications/{client_id}/grant`) took, in order. */
   readonly revoked: string[];
+  /** The refresh tokens presented to the token endpoint, in order, whether or not GitHub took them. */
+  readonly refreshed: string[];
   /** Whether GitHub still takes this user access token, expired or not: a revoked one it does not. */
   readonly takes: (accessToken: string) => boolean;
   /** The App's callback, as registered on GitHub; set by a test that knows its server's address. */
@@ -160,6 +168,7 @@ export const aGitHubAppStub = (
   const calls: string[] = [];
   const callers: ('app' | 'user' | 'installation' | 'client')[] = [];
   const revoked: string[] = [];
+  const refreshed: string[] = [];
   /** Each access token with the refresh token that was given beside it: revoking one takes both. */
   const refreshOf = new Map<string, string>();
   const codes = new Map<
@@ -179,6 +188,7 @@ export const aGitHubAppStub = (
     calls,
     callers,
     revoked,
+    refreshed,
     takes: (accessToken) => userTokens.has(accessToken),
     callbackUrl: 'https://purlay.test/api/github-app/callback',
     install: (id, login, repositories, installOptions = {}) => {
@@ -338,7 +348,16 @@ export const aGitHubAppStub = (
     }
     if (body['grant_type'] === 'refresh_token') {
       const presented = body['refresh_token'] ?? '';
-      if (!refreshTokens.delete(presented)) return refused('bad_refresh_token');
+      refreshed.push(presented);
+      const mode = behaviour.refresh ?? 'refreshes';
+      if (mode === 'hangs') return await new Promise<Response>(() => undefined);
+      if (mode === 'fails') return new Response('', { status: 502 });
+      if (mode === 'refuses' || !refreshTokens.delete(presented))
+        return refused('bad_refresh_token');
+      // "Once you use a refresh token, that refresh token and the old user access token will no longer work."
+      for (const [access, refresh] of refreshOf) {
+        if (refresh === presented) userTokens.delete(access);
+      }
       return issueTokens();
     }
     const issued = codes.get(body['code'] ?? '');
@@ -469,7 +488,10 @@ export const aGitHubAppStub = (
     }
     const body = (await request.json()) as { access_token?: unknown };
     const presented = typeof body.access_token === 'string' ? body.access_token : '';
-    if (!userTokens.has(presented)) {
+    // An expired token is refused with the one other answer the documentation gives. The documentation does not
+    // say what GitHub does with an expired one here (#1000): this is the assumption the erasure is proven against.
+    const held = userTokens.get(presented);
+    if (held === undefined || held.expiresAt <= now()) {
       return Response.json({ message: 'Validation Failed' }, { status: 422 });
     }
     userTokens.delete(presented);

@@ -45,7 +45,7 @@ export const forgetWhatChatKeeps = async (
   const authorizations = await transaction
     .deleteFrom('github_user_authorizations')
     .where('user_id', '=', userId)
-    .returning(['id', 'access_token_encrypted'])
+    .returning(['id', 'access_token_encrypted', 'refresh_token_encrypted'])
     .execute();
   for (const authorization of authorizations) {
     afterCommit(async (services) => {

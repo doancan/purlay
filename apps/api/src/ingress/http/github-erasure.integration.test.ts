@@ -157,6 +157,140 @@ describe('integration: erasing an account revokes its GitHub App authorization (
   });
 });
 
+describe('integration: an expired access token is renewed with the refresh token before the revoke (#1000)', () => {
+  /** Everything the database and the log would show a reader of what the erasure left, as one string. */
+  const leftBehind = async (
+    db: Executor,
+    userId: string,
+    lines: Record<string, unknown>[],
+  ): Promise<string> =>
+    JSON.stringify([
+      lines,
+      await db.selectFrom('audit_log').selectAll().where('actor_user_id', '=', userId).execute(),
+    ]);
+
+  test('an access token GitHub refuses as expired is replaced by a refresh, and the grant is revoked with the new one', async () => {
+    await withRollback(async (db) => {
+      const recording = aRecordingLogger();
+      const world = await aWorld(db, { log: recording.log });
+      const theirs = await authorizeMember(world);
+      world.github.expireUserTokens();
+      expect((await erase(world)).status).toBe(204);
+      expect(await rowsOf(db, world.member.userId)).toBe(0);
+      expect(world.github.refreshed).toEqual([theirs.refreshToken]);
+      // The sealed token was tried first and refused; what was revoked is the one the refresh gave.
+      expect(world.github.calls.filter((call) => call === REVOKE)).toHaveLength(2);
+      const [renewed] = world.github.revoked;
+      expect(world.github.revoked).toHaveLength(1);
+      expect(renewed).not.toBe(theirs.accessToken);
+      expect(world.github.takes(renewed ?? '')).toBe(false);
+      expect(world.github.takes(theirs.accessToken)).toBe(false);
+      expect(recording.lines.filter((line) => line['level'] === 'warn')).toEqual([]);
+      expect(
+        revocationWarnings(recording.lines).map((line) => [line['level'], line['msg']]),
+      ).toEqual([
+        ['info', 'github app authorization revoked at GitHub with a renewed access token'],
+      ]);
+      const everything = await leftBehind(db, world.member.userId, recording.lines);
+      for (const secret of [
+        theirs.accessToken,
+        theirs.refreshToken,
+        renewed ?? '',
+        GITHUB_APP_STUB.clientSecret,
+      ]) {
+        expect(everything).not.toContain(secret);
+      }
+    });
+  });
+
+  test('a valid access token is revoked as it is: no refresh is spent', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const theirs = await authorizeMember(world);
+      expect((await erase(world)).status).toBe(204);
+      expect(world.github.refreshed).toEqual([]);
+      expect(world.github.revoked).toEqual([theirs.accessToken]);
+    });
+  });
+
+  test('a refresh token GitHub refuses too is logged as that, and the erasure still completes', async () => {
+    await withRollback(async (db) => {
+      const recording = aRecordingLogger();
+      const world = await aWorld(db, { log: recording.log });
+      const theirs = await authorizeMember(world);
+      world.github.expireUserTokens();
+      world.github.behaviour.refresh = 'refuses';
+      expect((await erase(world)).status).toBe(204);
+      expect(await rowsOf(db, world.member.userId)).toBe(0);
+      expect(world.github.revoked).toEqual([]);
+      const logged = revocationWarnings(recording.lines);
+      expect(logged).toHaveLength(1);
+      expect(logged[0]?.['level']).toBe('warn');
+      expect(String(logged[0]?.['reason'])).toContain('refresh token');
+      const everything = await leftBehind(db, world.member.userId, recording.lines);
+      for (const secret of [
+        theirs.accessToken,
+        theirs.refreshToken,
+        GITHUB_APP_STUB.clientSecret,
+      ]) {
+        expect(everything).not.toContain(secret);
+      }
+    });
+  });
+
+  test('a person with an expired access token and no refresh token has nothing to renew: said, and the rows go', async () => {
+    await withRollback(async (db) => {
+      const recording = aRecordingLogger();
+      const world = await aWorld(db, { log: recording.log });
+      await authorizeMember(world);
+      await db
+        .updateTable('github_user_authorizations')
+        .set({ refresh_token_encrypted: null, refresh_expires_at: null })
+        .where('user_id', '=', world.member.userId)
+        .execute();
+      world.github.expireUserTokens();
+      expect((await erase(world)).status).toBe(204);
+      expect(world.github.refreshed).toEqual([]);
+      expect(revocationWarnings(recording.lines)).toHaveLength(1);
+      expect(await rowsOf(db, world.member.userId)).toBe(0);
+    });
+  });
+
+  for (const [what, behaviour] of [
+    ['answers 5xx', 'fails'],
+    ['never answers', 'hangs'],
+  ] as const) {
+    test(`a GitHub that ${what} to the refresh is waited on once, within the deadline, and the erasure completes`, async () => {
+      await withRollback(async (db) => {
+        const recording = aRecordingLogger();
+        const world = await aWorld(db, { log: recording.log, deadlineMs: 100 });
+        await authorizeMember(world);
+        world.github.expireUserTokens();
+        world.github.behaviour.refresh = behaviour;
+        const started = Date.now();
+        expect((await erase(world)).status).toBe(204);
+        expect(Date.now() - started).toBeLessThan(2_000);
+        expect(world.github.refreshed).toHaveLength(1);
+        expect(await rowsOf(db, world.member.userId)).toBe(0);
+        expect(revocationWarnings(recording.lines)).toHaveLength(1);
+      });
+    });
+  }
+
+  test('a GitHub that is down for the revoke is not asked for a refresh: it would only wait twice', async () => {
+    await withRollback(async (db) => {
+      const recording = aRecordingLogger();
+      const world = await aWorld(db, { log: recording.log });
+      await authorizeMember(world);
+      world.github.expireUserTokens();
+      world.github.behaviour.revoke = 'fails';
+      expect((await erase(world)).status).toBe(204);
+      expect(world.github.refreshed).toEqual([]);
+      expect(revocationWarnings(recording.lines)).toHaveLength(1);
+    });
+  });
+});
+
 type AccountKind = 'User' | 'Organization';
 
 const connect = async (

@@ -12446,7 +12446,7 @@ GitHub login. Chat's hook now replaces it, for the installations they connected,
 The trail's `{ account }` on `integration.app_connected` and `integration.app_disconnected` names the same login and is **not**
 rewritten: `audit_log` is append-only (I-9), and the trail is kept under the anonymised person (D-139 §5). The owner accepts that
 a public GitHub login of a personal account the App was wired to stays in those lines (and in the structured log's copy of them,
-which carries ids only, D-222), and `DATA.md` says so.
+which carries ids only, D-222), and `DATA.md` says so. *(Confirmed by the owner 2026-11-05, #1000: the old GitHub login `{ account }` in those lines is an accepted residue of an erased account. The same change lets the revoke at GitHub renew an expired access token with the refresh token first, best effort, so the grant is not left behind; nothing else about the erasure moved.)*
 The comments of migrations 0021, 0040 and 0065 still say an erasure nulls these columns; a migration is checksummed (`migrator.ts`),
 so they stand and this is the correction.
 
