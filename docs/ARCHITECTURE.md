@@ -381,6 +381,17 @@ late: a storm of 300 sockets reconnecting at once pulled 90,000 frames. It is pa
 per message, bounded by the replay's own caps (§5.5), and spread by the backoff's jitter (D-76). A
 narrower window would be cheaper and would lose the late send D-65 exists to catch.
 
+**A node replays only so many sockets at once.** A replay holds its frames (up to 1,000, or 1 MiB) from the read
+until they are written, about 0.4 MB measured, so 2,000 sockets reconnecting together held about 800 MB at the same
+moment (`DEPLOY.md`, *Memory after a mass reconnect*). `SOCKET_REPLAY_CONCURRENCY` (50 unless set) is how many
+subscriptions of one node may be reading and building a replay at once; the others wait, in the order they asked,
+and the client sees only a later `ACK`. The turn covers the replay and nothing else: the channels are authorised
+and subscribed before the wait, so the order of D-83 is unchanged, and a connection's frames are still handled one
+at a time, so a connection waiting for its turn delays only itself. A wait past fifteen seconds, which is under the
+25 s of silence after which a client sends a `PING`, is answered as an overloaded server always is: `ERROR` with `DATABASE_UNAVAILABLE` and
+the frame's `refId`, whatever was subscribed for it undone, and the client sends the chunk again after a growing wait
+(above). A connection that closed while it waited reads nothing. A lone reconnect never waits, and a subscription with no cursor, which replays nothing, is not held at all. (#1029)
+
 **A subscription is bounded, and costs the same whatever it names.** One frame names at most
 `SUBSCRIBE_MAX_CHANNELS`, each once. Every channel is authorised in one query before any is
 subscribed — one the caller cannot see refuses the frame, and nothing is left half-subscribed — and

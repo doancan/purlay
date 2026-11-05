@@ -107,6 +107,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
   SOCKET_MAX_CONNECTIONS: 2_000,
+  SOCKET_REPLAY_CONCURRENCY: 50,
   TRUST_PROXY: false,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,

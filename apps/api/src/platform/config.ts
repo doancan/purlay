@@ -68,6 +68,12 @@ export const Environment = Type.Object({
    *  deployment has always had. Sized by the fan-out the node's CPU carries, not by memory (`DEPLOY.md`). */
   SOCKET_MAX_CONNECTIONS: Type.Integer({ minimum: 1, maximum: 100_000, default: 2_000 }),
 
+  /** How many of this node's sockets may be replaying at once after a `SUBSCRIBE`; the rest wait their turn, in
+   *  order, and a client sees a later answer. A reconnect storm held about 0.4 MB per replaying socket at the same
+   *  moment; this bounds that (`DEPLOY.md`, *Memory after a mass reconnect*). A wait past fifteen seconds is answered
+   *  `DATABASE_UNAVAILABLE`, which a client retries. Per node, and the number of replays, not of sockets. */
+  SOCKET_REPLAY_CONCURRENCY: Type.Integer({ minimum: 1, maximum: 100_000, default: 50 }),
+
   /** Behind exactly one reverse proxy that sets `X-Forwarded-For`. Without it the
    *  socket's peer is the client and the header is ignored — anyone can write it. */
   TRUST_PROXY: Type.Boolean({ default: false }),
