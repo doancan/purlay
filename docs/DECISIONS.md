@@ -12781,7 +12781,12 @@ off could not be told apart from one that is on in any of them.
    no longer writes fails. **Not done here:** the other role rules in the core and in chat (`context.role === 'member'` in
    workspaces, invitations, members, export, retention, channels, message moderation) are not yet named permissions, and
    chat declares none; each moves when its service is next changed, since the move changes the signature of a service its
-   tests call. The web's audit page follows in its own step.
+   tests call.
+4. **The web reads the same lists.** A web manifest says `auditActions` as the API's does (both from the module's list in
+   `@purlay/types`), and the audit page's filter offers the core's and those of the modules the session lists
+   (`auditActionsOf`), so a server that does not run issues does not invite a filter on `issue.created`. A row of a module
+   that is off is still on the page, said as it always was. The sentence for each action stays in the page's exhaustive
+   `switch`, which does not compile for an action without one.
 
 **Rejected.** *A permission model of grants, rows per role*: three roles and a handful of rules do not need one, and a
 table in the database would make who may do what a thing an operator can get wrong; the minimum role is the rule that has
