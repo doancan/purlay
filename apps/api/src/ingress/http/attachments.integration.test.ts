@@ -2,6 +2,8 @@
  * `/api/attachments/:attachmentId` through the HTTP surface (D-109 §5, §6, #111): who may read the
  * bytes behind an id, how they are served so that nothing in them runs on this origin, and who may
  * throw one away.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

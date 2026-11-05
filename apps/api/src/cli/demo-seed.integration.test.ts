@@ -20,6 +20,7 @@ import {
   plannedMessages,
   seedDemo,
 } from './demo-seed';
+import { testNeeding } from '../testing/needs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -34,7 +35,7 @@ const NOW = new Date('2026-09-09T12:00:00.000Z');
 const SEEDING_MS = 30_000;
 
 describe('integration: the demo seed', () => {
-  test(
+  testNeeding('chat')(
     'sends every message through the API, and leaves the counters the send path keeps',
     async () => {
       await withRollback(async (db) => {
@@ -120,7 +121,7 @@ describe('integration: the demo seed', () => {
     SEEDING_MS,
   );
 
-  test(
+  testNeeding('chat')(
     'refuses a database that already has the people, rather than duplicating them',
     async () => {
       await withRollback(async (db) => {
@@ -200,38 +201,42 @@ describe('integration: the database the seed will write to', () => {
 });
 
 describe('integration: a fresh session for a seeded person (#522 follow-up)', () => {
-  test('is a new working session, so a test that signs a person out everywhere can run again', async () => {
-    await withRollback(async (db) => {
-      const config = testConfig({
-        DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_e2e_test',
+  testNeeding('chat')(
+    'is a new working session, so a test that signs a person out everywhere can run again',
+    async () => {
+      await withRollback(async (db) => {
+        const config = testConfig({
+          DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_e2e_test',
+        });
+        const manifest = await seedDemo({ database: db, config, now: NOW });
+        const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
+        const me = async (token: string): Promise<number> =>
+          (
+            await app.handle(
+              new Request('http://localhost/api/me', {
+                headers: { cookie: `${SESSION_COOKIE}=${token}` },
+              }),
+            )
+          ).status;
+
+        // Every session erin holds ends, as signing out everywhere ends them.
+        await revokeAllSessions(db, manifest.outsiders.erin.userId);
+        expect(await me(manifest.outsiders.erin.tokens[0])).toBe(401);
+
+        const token = await freshSession(
+          db,
+          fixedClock(NOW),
+          config.DATABASE_URL,
+          'erin',
+          TEST_AUTH_SECRET,
+        );
+        expect(await me(token)).toBe(200);
       });
-      const manifest = await seedDemo({ database: db, config, now: NOW });
-      const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
-      const me = async (token: string): Promise<number> =>
-        (
-          await app.handle(
-            new Request('http://localhost/api/me', {
-              headers: { cookie: `${SESSION_COOKIE}=${token}` },
-            }),
-          )
-        ).status;
-
-      // Every session erin holds ends, as signing out everywhere ends them.
-      await revokeAllSessions(db, manifest.outsiders.erin.userId);
-      expect(await me(manifest.outsiders.erin.tokens[0])).toBe(401);
-
-      const token = await freshSession(
-        db,
-        fixedClock(NOW),
-        config.DATABASE_URL,
-        'erin',
-        TEST_AUTH_SECRET,
-      );
-      expect(await me(token)).toBe(200);
-    });
-    // It seeds the whole demo workspace through the API before it asks anything: about 4 s on a laptop that
-    // is doing nothing else, so under the five a test is given unless it says otherwise it fails on load.
-  }, 30_000);
+      // It seeds the whole demo workspace through the API before it asks anything: about 4 s on a laptop that
+      // is doing nothing else, so under the five a test is given unless it says otherwise it fails on load.
+    },
+    30_000,
+  );
 
   test('is refused outside a scratch database, and for somebody who is not there', async () => {
     await withRollback(async (db) => {

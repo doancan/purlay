@@ -1,6 +1,8 @@
 /**
  * `GET /api/messages/:messageId` (D-217) against a real database: the message for whoever may read it,
  * and the same 404 for everything else, with nothing of the message in it.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

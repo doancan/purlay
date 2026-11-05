@@ -1,6 +1,8 @@
 /**
  * Issues over HTTP, on a real database (D-254): who may make, change and delete, the list's pages, what a stranger
  * and another workspace see (nothing), and what an erased account leaves.
+ *
+ * @needs-modules issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';

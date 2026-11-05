@@ -5,6 +5,8 @@
  * Straight in, not through the send path: a test of the read position must control
  * exactly which rows exist past it, including the ones the send path would have
  * counted for itself. What these write is what a send writes, no more.
+ *
+ * @needs-modules chat
  */
 import type { Executor } from '@purlay/db';
 import { aUniqueSlug, aUserRow, type TestUser } from './users';

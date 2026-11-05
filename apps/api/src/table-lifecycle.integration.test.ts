@@ -11,6 +11,8 @@
  * allow-list fails, and so does a name in the allow-list that has since been probed or decided otherwise.
  * `anonymised` is held the same way (`KEPT_PROBES`, `UNSEEDED_KEPT`, and the cap on the latter): the erasure leaves
  * the row, which still names the tombstone. A deletion that goes further than the decision is what these catch.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import {

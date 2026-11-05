@@ -3,6 +3,8 @@
  * a reply's root, and the one `404` for a message that is gone or not the caller's to see. The
  * tenant and visibility crossings are in `cross-tenant` and `channel-visibility`, which read the
  * endpoint list from `API.md`.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';

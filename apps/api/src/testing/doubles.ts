@@ -13,7 +13,6 @@ import {
   GITHUB_URL_DEFAULT,
   type Config,
 } from '../platform/config';
-import { composition } from '../composition';
 import type { Dependencies } from '../ingress/http/app';
 import type { RateBudget } from '../realtime/rate-limiter';
 import type { Timers } from '../realtime/hub';
@@ -21,12 +20,12 @@ import { nobodyActive } from '../platform/attention';
 import { createLogger, type Logger } from '../platform/logging';
 import { deriveAuthSecret, type Auth, type AuthSettings } from '../modules/auth/better-auth';
 import type { MailMessage, Outbox } from '../platform/mail';
+import { runComposition } from './run-composition';
 import { aTestAuth } from './signed-in';
 import { aGitHubApiThatOnlyChecksTokens } from './github-stub';
 import { inProcessBackplane } from '../realtime/bus';
 import { NO_LOG } from '../platform/events';
 import type { ObjectStore } from '../platform/storage';
-import { chatWorkspaceChannels } from '../features/chat/channels/workspace-channels';
 
 /** A logger whose lines a test can read back, parsed. */
 export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown>[] } => {
@@ -257,9 +256,9 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
   // Anybody may make a workspace, so a test makes the ones it needs; who may is the creators' own
   // tests' (D-155), which read the server's setting.
   workspaceCreators: () => Promise.resolve({ kind: 'anyone' }),
-  // Chat is part of what a test runs against, as it is in the application.
-  workspaceChannels: chatWorkspaceChannels,
-  composition,
+  // What a test runs against is what a process started with the run's `MODULES` runs (unset: every module, as the
+  // application's own default), so a suite is the same proof in each cell of the matrix (`MODULES.md` §8).
+  composition: runComposition,
 });
 
 /**

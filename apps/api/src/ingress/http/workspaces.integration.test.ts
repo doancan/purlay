@@ -17,6 +17,7 @@ import { aUniqueSlug } from '../../testing/users';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { renameWorkspace } from '../../modules/workspaces/workspaces';
+import { testNeeding } from '../../testing/needs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -78,73 +79,79 @@ describe('integration: workspaces', () => {
     });
   });
 
-  test('it starts with one public channel, its creator in it, made as any channel is (D-174)', async () => {
-    await withRollback(async (db) => {
-      const alice = await signedIn(db, 'ws-first-channel');
-      const created = await aWorkspace(db, alice.cookie, 'first-channel');
+  testNeeding('chat')(
+    'it starts with one public channel, its creator in it, made as any channel is (D-174)',
+    async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'ws-first-channel');
+        const created = await aWorkspace(db, alice.cookie, 'first-channel');
 
-      const listed = await call(db, 'GET', `/api/workspaces/${created.id}/channels`, {
-        cookie: alice.cookie,
-      });
-      expect(listed.status).toBe(200);
-      const channels = (await listed.json()) as {
-        id: string;
-        name: string;
-        type: string;
-        topic: string | null;
-        state: unknown;
-      }[];
-      expect(channels).toHaveLength(1);
-      const [general] = channels;
-      // Named, not described: no topic in a language the next person may not read.
-      expect(general).toMatchObject({ name: DEFAULT_CHANNEL_NAME, type: 'public', topic: null });
-      // `state` is a member's own: the creator is in it.
-      expect(general?.state).not.toBeNull();
+        const listed = await call(db, 'GET', `/api/workspaces/${created.id}/channels`, {
+          cookie: alice.cookie,
+        });
+        expect(listed.status).toBe(200);
+        const channels = (await listed.json()) as {
+          id: string;
+          name: string;
+          type: string;
+          topic: string | null;
+          state: unknown;
+        }[];
+        expect(channels).toHaveLength(1);
+        const [general] = channels;
+        // Named, not described: no topic in a language the next person may not read.
+        expect(general).toMatchObject({ name: DEFAULT_CHANNEL_NAME, type: 'public', topic: null });
+        // `state` is a member's own: the creator is in it.
+        expect(general?.state).not.toBeNull();
 
-      // On the trail as every channel made is: by the creator, naming the channel.
-      const trail = await call(db, 'GET', `/api/workspaces/${created.id}/audit`, {
-        cookie: alice.cookie,
+        // On the trail as every channel made is: by the creator, naming the channel.
+        const trail = await call(db, 'GET', `/api/workspaces/${created.id}/audit`, {
+          cookie: alice.cookie,
+        });
+        expect(await trail.json()).toMatchObject({
+          data: [
+            {
+              action: 'channel.created',
+              actor: { id: alice.userId },
+              targetType: 'channel',
+              targetId: general?.id,
+              metadata: { type: 'public' },
+            },
+          ],
+        });
       });
-      expect(await trail.json()).toMatchObject({
-        data: [
-          {
-            action: 'channel.created',
-            actor: { id: alice.userId },
-            targetType: 'channel',
-            targetId: general?.id,
-            metadata: { type: 'public' },
-          },
-        ],
-      });
-    });
-  });
+    },
+  );
 
-  test('an invited person is offered the channel it started with, and is not put in it (D-115)', async () => {
-    await withRollback(async (db) => {
-      const alice = await signedIn(db, 'ws-inviter');
-      const bob = await signedIn(db, 'ws-invited');
-      const created = await aWorkspace(db, alice.cookie, 'invited-in');
-      const made = await call(db, 'POST', `/api/workspaces/${created.id}/invitations`, {
-        cookie: alice.cookie,
-      });
-      const { token } = (await made.json()) as { token: string };
-      const accepted = await call(db, 'POST', '/api/invitations/accept', {
-        cookie: bob.cookie,
-        body: { token },
-      });
-      expect(accepted.status).toBe(200);
+  testNeeding('chat')(
+    'an invited person is offered the channel it started with, and is not put in it (D-115)',
+    async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'ws-inviter');
+        const bob = await signedIn(db, 'ws-invited');
+        const created = await aWorkspace(db, alice.cookie, 'invited-in');
+        const made = await call(db, 'POST', `/api/workspaces/${created.id}/invitations`, {
+          cookie: alice.cookie,
+        });
+        const { token } = (await made.json()) as { token: string };
+        const accepted = await call(db, 'POST', '/api/invitations/accept', {
+          cookie: bob.cookie,
+          body: { token },
+        });
+        expect(accepted.status).toBe(200);
 
-      const listed = (await (
-        await call(db, 'GET', `/api/workspaces/${created.id}/channels`, { cookie: bob.cookie })
-      ).json()) as { name: string; state: unknown }[];
-      // Offered — it is in the list — and not joined: `state` is a member's own.
-      expect(listed.map((channel) => [channel.name, channel.state])).toEqual([
-        [DEFAULT_CHANNEL_NAME, null],
-      ]);
-    });
-  });
+        const listed = (await (
+          await call(db, 'GET', `/api/workspaces/${created.id}/channels`, { cookie: bob.cookie })
+        ).json()) as { name: string; state: unknown }[];
+        // Offered — it is in the list — and not joined: `state` is a member's own.
+        expect(listed.map((channel) => [channel.name, channel.state])).toEqual([
+          [DEFAULT_CHANNEL_NAME, null],
+        ]);
+      });
+    },
+  );
 
-  test('a refused workspace leaves no channel behind', async () => {
+  testNeeding('chat')('a refused workspace leaves no channel behind', async () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'ws-refused-first');
       const bob = await signedIn(db, 'ws-refused-second');

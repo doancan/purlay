@@ -9,6 +9,8 @@
  *
  * Every entry has a step here, or is named in `HELD_ELSEWHERE` with the test that holds its answer to the
  * schema — never silently absent: the last test fails on an entry that is neither.
+ *
+ * @needs-modules chat, issues
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';

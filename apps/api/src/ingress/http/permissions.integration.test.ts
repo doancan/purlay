@@ -2,6 +2,8 @@
  * Every role-gated action, as every role (`ARCHITECTURE.md` §7.4, #74). Each request is made in a
  * workspace of its own with an owner, an admin, a member and the person or message acted on, so no
  * case depends on another's outcome. The table is `testing/permissions.ts`; this is its proof.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
