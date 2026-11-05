@@ -27,6 +27,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { IconButton } from '../../ui/icon-button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
+import { CodeBlock } from '../content/code-block';
 import { renderContent } from '../content/render-content';
 import { previewMarkdown, previewOf, type PreviewKind } from './attachment-preview';
 import { isPlainClick, useImageViewer, type ViewedImage } from './image-viewer-door';
@@ -82,7 +83,7 @@ const ImageAttachment = ({
       aria-haspopup="dialog"
       // As wide as the picture, so the focus ring it gets back from the viewer is drawn around it.
       style={{ width: box.width }}
-      className="block rounded-xl"
+      className="group relative block cursor-zoom-in rounded-xl"
       onPointerEnter={onPreload}
       onFocus={onPreload}
       onClick={(event) => {
@@ -101,6 +102,13 @@ const ImageAttachment = ({
           setFailed(true);
         }}
       />
+      {/* What a click does, said where the pointer is; always there on a touch screen, which has no hover. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-2 right-2 flex size-6 items-center justify-center rounded-md bg-nav-surface text-nav-ink opacity-0 shadow-card transition-opacity duration-hover ease-standard group-hover:opacity-100 group-focus-visible:opacity-100 max-narrow:opacity-100"
+      >
+        <Icon name="zoom" size="sm" />
+      </span>
     </a>
   );
 };
@@ -127,11 +135,28 @@ const FilePreview = ({
     () => (text.data === undefined ? null : previewMarkdown(preview, text.data)),
     [preview, text.data],
   );
+  // A Markdown file is read, not quoted: its preview first, and its source one press away (D-259).
+  // It is the block's own box — a second scrolling region round it would trap the keyboard in two.
+  if (preview.kind === 'markdown' && drawn !== null) {
+    return (
+      <div id={id} className="flex flex-col gap-2">
+        <CodeBlock
+          code={drawn.markdown}
+          language="md"
+          preview={() => renderContent(drawn.markdown)}
+          previewFirst
+        />
+        {drawn.more !== null && (
+          <p className="text-caption text-ink-muted">{t('attachment.preview.cut')}</p>
+        )}
+      </div>
+    );
+  }
   return (
     <section
       id={id}
       aria-label={t('attachment.preview.label', { name: attachment.fileName })}
-      className="max-h-attachment-preview overflow-auto rounded-xl border-hairline border-border-subtle bg-surface-100 px-4 py-3 shadow-card scrollbar-thin"
+      className="relative max-h-attachment-preview overflow-auto rounded-xl border-hairline border-border-subtle bg-surface-100 px-4 py-3 shadow-card scrollbar-thin"
     >
       {text.isPending ? (
         <LoadingStatus label={t('attachment.preview.loading')} className="flex flex-col gap-2">

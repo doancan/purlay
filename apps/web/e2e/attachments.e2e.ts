@@ -166,3 +166,47 @@ test.describe('an attachment', () => {
     await expect(panel.getByText('alice', { exact: false }).first()).toBeVisible();
   });
 });
+
+test.describe('a Markdown file’s preview (D-259)', () => {
+  test('opens in its own box: the page keeps its place, and Source shows the words as written', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room({
+      messages: Array.from({ length: 30 }, (_, index) => ({
+        by: 'alice' as const,
+        text: `earlier message ${String(index)}`,
+      })),
+    });
+    await signIn();
+    await page.goto(made.path);
+    const composer = page.getByRole('textbox', { name: `Message ${made.name}` });
+    // A note of many links: each one has an announcement for a screen reader drawn out of the flow, and
+    // those once escaped the preview's box and made the feed thousands of pixels tall.
+    const note = `# Notes\n${Array.from({ length: 150 }, (_, index) => `- [item ${String(index)}](https://example.com/${String(index)})`).join('\n')}\n`;
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'notes.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(note),
+    });
+    await expect(page.getByRole('list', { name: 'Files' }).getByText('notes.md')).toBeVisible();
+    await composer.fill('the notes');
+    await composer.press('Enter');
+    const row = rowWith(page, 'the notes');
+    await expect(row).toBeVisible();
+
+    await row.getByRole('button', { name: 'Preview notes.md' }).click();
+    const drawn = row.getByRole('region', { name: 'Preview of the md block' });
+    await expect(drawn).toBeVisible();
+    // The control that opened it, and the box, are still on the screen: the feed did not jump away.
+    await expect(row.getByRole('button', { name: 'Source' })).toBeInViewport();
+    await expect(drawn).toBeInViewport();
+    const box = await drawn.boundingBox();
+    expect(box?.height ?? 0).toBeLessThan(500);
+
+    await row.getByRole('button', { name: 'Source' }).click();
+    await expect(row.locator('pre')).toContainText('# Notes');
+    await expect(row.locator('pre')).toContainText('- [item 0](https://example.com/0)');
+  });
+});

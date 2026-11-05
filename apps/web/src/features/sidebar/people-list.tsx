@@ -157,7 +157,7 @@ export const PeopleList = (): React.JSX.Element | null => {
             }}
           />
         ) : (
-          <ul className="flex flex-col">
+          <ul className="flex flex-col gap-1">
             {shown.map(({ entry: { user, direct } }) => {
               const label = (
                 <>

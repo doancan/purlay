@@ -28,11 +28,12 @@
  * with that place's draft and the old one's is saved as it goes.
  */
 import { Value } from '@sinclair/typebox/value';
-import { MessageContent } from '@purlay/types';
+import { ATTACHMENT_BYTES_MAX, ATTACHMENTS_PER_MESSAGE_MAX, MessageContent } from '@purlay/types';
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon, type GlyphName } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
-import { useEngine } from '../../realtime/realtime-provider';
+import { RealtimePortsContext, useEngine } from '../../realtime/realtime-provider';
+import { systemClock } from '../../system-clock';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
@@ -53,6 +54,7 @@ import {
   insideFence,
   placeBlock,
   undoPaste,
+  withoutBlock,
   rowsFor,
   trimEnd,
   typedWrap,
@@ -72,7 +74,9 @@ import { renderContent } from '../content/render-content';
 import { useCodeRepository } from '../../data/queries';
 import { useWorkspaceIfAny } from '../shell/workspace';
 import { duringComposition, useComposition } from './composition';
-import { convertPaste } from './paste';
+import { FileOfferBar } from './file-offer';
+import { convertPaste, fileOfferFor, isLargeTable, type FileOffer, type PasteKind } from './paste';
+import { pastedFiles } from './paste-shapes';
 import { composerKey, useComposerInbox } from './quote';
 import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
 import { useSlashRunner } from './slash-run';
@@ -95,6 +99,29 @@ export interface ComposerProps {
 
 /** How long after the last keystroke the draft is written: often enough to lose nothing, rarely enough to cost nothing. */
 export const DRAFT_DEBOUNCE_MS = 300;
+
+/** What the toast says of each conversion a paste can make (D-210, D-259). */
+const PASTE_SAID: Readonly<
+  Record<
+    PasteKind,
+    | 'composer.pasted'
+    | 'composer.pasted.table'
+    | 'composer.pasted.formatted'
+    | 'composer.pasted.inline'
+    | 'composer.pasted.link'
+    | 'composer.pasted.list'
+  >
+> = {
+  code: 'composer.pasted',
+  table: 'composer.pasted.table',
+  formatted: 'composer.pasted.formatted',
+  inline: 'composer.pasted.inline',
+  link: 'composer.pasted.link',
+  list: 'composer.pasted.list',
+};
+
+/** Conversions that are Undo, not Paste as text: what was pasted was code, a link — a guess about words. */
+const UNDOABLE: ReadonlySet<PasteKind> = new Set<PasteKind>(['code', 'inline', 'link']);
 
 const Inner = ({
   channelId,
@@ -144,6 +171,21 @@ const Inner = ({
   } | null>(null);
   latest.current = text;
   const pasteToast = useRef<number | null>(null);
+  // The page's clock, the one a test drives: files are named for the minute they were made (D-259).
+  const clock = useContext(RealtimePortsContext).clock ?? systemClock;
+  /** A paste too long for a message, and the words it put in the box: offered as a file until answered (D-259). */
+  const [offer, setOffer] = useState<{
+    readonly file: FileOffer;
+    /** What the paste put in the box, and where, so Send as file takes out that and not an earlier copy. */
+    readonly words: string;
+    readonly at: number;
+    readonly table: boolean;
+  } | null>(null);
+  // Words that have been edited away are not offered again if they come back (an undo, the same paste).
+  useEffect(() => {
+    if (offer !== null && !text.includes(offer.words)) setOffer(null);
+  }, [text, offer]);
+
   useEffect(
     () => (): void => {
       if (pasteToast.current !== null) dismiss(pasteToast.current);
@@ -382,6 +424,7 @@ const Inner = ({
     if (hasPartyPopper(content)) celebrate();
     uploads.clear();
     setWaiting(false);
+    setOffer(null);
     if (pasteToast.current !== null) dismiss(pasteToast.current);
     setText('');
     setError(null);
@@ -535,31 +578,88 @@ const Inner = ({
   /** Set by Mod+Shift+V, read by the paste it starts. */
   const plainNext = useRef(false);
   const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
-    // A pasted image or file is uploaded, not written into the box.
-    const files = Array.from((event.clipboardData as DataTransfer | undefined)?.files ?? []);
+    const data = event.clipboardData as DataTransfer | undefined;
+    const raw = data?.getData('text/plain') ?? '';
+    // Windows and old Macs end a line with CR LF or CR; a byte-order mark comes from a file's first line.
+    const pasted = raw.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
+    // A pasted image or file is uploaded, not written into the box — unless the clipboard's words are
+    // what was copied: a spreadsheet's range comes with a picture of itself (D-259). Some engines only
+    // list a pasted file under `items`.
+    const listed = Array.from(data?.files ?? []);
+    const carried =
+      listed.length > 0
+        ? listed
+        : Array.from(data?.items ?? []).flatMap((item) => {
+            const file = item.kind === 'file' ? item.getAsFile() : null;
+            return file === null ? [] : [file];
+          });
+    const files = pastedFiles(carried, pasted, clock.now());
     if (files.length > 0) {
       event.preventDefault();
       uploads.add(files);
       return;
     }
-    // A paste with no clipboard data (some automation, some old engines) is just a paste.
-    const data = event.clipboardData as DataTransfer | undefined;
-    const pasted = data?.getData('text/plain') ?? '';
     const target = event.currentTarget;
     const selection = { start: target.selectionStart, end: target.selectionEnd };
+    const selected = text.slice(selection.start, selection.end);
     // Mod+Shift+V asked for the words as they are (D-210), and inside code the words are what is
     // written: nothing is turned into anything (D-205).
-    const plain = plainNext.current || insideFence(text.slice(0, selection.start));
+    const inCode = insideFence(text.slice(0, selection.start));
+    const plain = plainNext.current || inCode;
     plainNext.current = false;
-    const converted = plain ? null : convertPaste(pasted, data?.getData('text/html') ?? '');
-    if (converted === null) return;
+    const converted = plain
+      ? null
+      : convertPaste(pasted, data?.getData('text/html') ?? '', selected);
+    // Too long for a message: the words are kept where they are, and a file is one answer away.
+    const fileOffer = inCode ? null : fileOfferFor(pasted, clock.now());
+    // The box takes the words as they are written here — not as the browser would insert them, which
+    // keeps a byte-order mark and may keep a CR — whenever the offer must find them again, or they differ.
+    const manual = converted === null && (fileOffer !== null || pasted !== raw);
+    if (converted === null && !manual) {
+      // The words the browser inserts. A picture the clipboard carried with them is left out; one press
+      // attaches it, since words winning was a guess about what was meant.
+      if (carried.length > 0) {
+        if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
+        pasteToast.current = toast.show({
+          message: t('composer.pasted.pictureLeft'),
+          actionLabel: t('composer.pasted.attachPicture'),
+          onAction: () => {
+            uploads.add(pastedFiles(carried, '', clock.now()));
+          },
+        });
+      }
+      return;
+    }
     event.preventDefault();
+    if (converted === null) {
+      const inserted = insertText(text, selection, pasted);
+      caret.current = inserted.selection.end;
+      change(inserted.text);
+      if (fileOffer !== null) {
+        setOffer({
+          file: fileOffer,
+          words: pasted,
+          at: selection.start,
+          table: isLargeTable(pasted),
+        });
+      }
+      return;
+    }
     const placed = converted.block
       ? placeBlock(text, selection, converted.markdown)
       : {
           text: text.slice(0, selection.start) + converted.markdown + text.slice(selection.end),
           caret: selection.start + converted.markdown.length,
+          start: selection.start,
         };
+    if (fileOffer !== null) {
+      setOffer({
+        file: fileOffer,
+        words: converted.markdown,
+        at: placed.start,
+        table: isLargeTable(pasted),
+      });
+    }
     // What was put in, with the line breaks that set it apart: Undo finds it and puts the words back.
     const block = placed.text.slice(selection.start, placed.caret);
     caret.current = placed.caret;
@@ -567,17 +667,16 @@ const Inner = ({
     if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
     // A table or formatting is a guess about what was meant: the words as they were are one step away.
     // Later edits are kept either way; a block that has itself been edited is left as it is (D-205).
+    // A link replaced the words it was pasted over: Undo gives *them* back, not the address.
     pasteToast.current = toast.show({
-      message: t(
-        converted.kind === 'code'
-          ? 'composer.pasted'
-          : converted.kind === 'table'
-            ? 'composer.pasted.table'
-            : 'composer.pasted.formatted',
-      ),
-      actionLabel: t(converted.kind === 'code' ? 'common.undo' : 'composer.pasted.asText'),
+      message: t(PASTE_SAID[converted.kind]),
+      actionLabel: t(UNDOABLE.has(converted.kind) ? 'common.undo' : 'composer.pasted.asText'),
       onAction: () => {
-        const undone = undoPaste(latest.current, block, pasted);
+        const undone = undoPaste(
+          latest.current,
+          block,
+          converted.kind === 'link' ? selected : pasted,
+        );
         if (undone === null) {
           toast.show({ message: t('composer.pasteChanged') });
           return;
@@ -903,32 +1002,33 @@ const Inner = ({
                 'numbered-list',
                 chord(labels.mod, labels.shift, '7'),
               )}
-              {tool(6, 'quote', t('composer.quote'), 'quote', chord(labels.mod, labels.shift, '9'))}
+              {tool(6, 'tasks', t('composer.tasks'), 'task-list')}
+              {tool(7, 'quote', t('composer.quote'), 'quote', chord(labels.mod, labels.shift, '9'))}
               {divider}
               {tool(
-                7,
+                8,
                 'inlineCode',
                 t('composer.inlineCode'),
                 'inline-code',
                 chord(labels.mod, 'E'),
               )}
               {tool(
-                8,
+                9,
                 'code',
                 t('composer.codeBlock'),
                 'code-block',
                 chord(labels.mod, labels.alt, labels.shift, 'C'),
               )}
-              {tool(9, 'table', t('composer.table'), 'table')}
+              {tool(10, 'table', t('composer.table'), 'table')}
             </div>
             <IconButton
               label={t('composer.preview')}
               glyph="preview"
               shortcut={chord(labels.mod, labels.shift, 'P')}
               aria-pressed={previewing}
-              tabIndex={stopAt === 10 ? 0 : -1}
+              tabIndex={stopAt === 11 ? 0 : -1}
               onFocus={() => {
-                setStopAt(10);
+                setStopAt(11);
               }}
               className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-ink"
               onClick={togglePreview}
@@ -1051,6 +1151,50 @@ const Inner = ({
             {t('composer.waiting')}
           </p>
         )}
+        {/* A live region that is there before its content, or most screen readers say nothing of it. */}
+        <div role="status" className="empty:hidden">
+          {offer !== null && (
+            <FileOfferBar
+              offer={offer.file}
+              table={offer.table}
+              onKeep={() => {
+                setOffer(null);
+                field.current?.focus();
+              }}
+              onAccept={() => {
+                const wanted = latest.current.startsWith(offer.words, offer.at)
+                  ? offer.at
+                  : latest.current.indexOf(offer.words);
+                if (wanted < 0) {
+                  setOffer(null);
+                  toast.show({ message: t('composer.offer.changed') });
+                  return;
+                }
+                // The words leave the box only when the file can take them: never to a refusal.
+                if (uploads.items.length >= ATTACHMENTS_PER_MESSAGE_MAX) {
+                  toast.show({ message: t('composer.offer.noRoom') });
+                  return;
+                }
+                if (new Blob([offer.file.text]).size > ATTACHMENT_BYTES_MAX) {
+                  toast.show({
+                    message: t('composer.offer.tooLarge', {
+                      limit: `${String(ATTACHMENT_BYTES_MAX / 1_048_576)} MB`,
+                    }),
+                  });
+                  return;
+                }
+                const rest = withoutBlock(latest.current, wanted, offer.words);
+                setOffer(null);
+                caret.current = rest.caret;
+                change(rest.text);
+                uploads.add([
+                  new File([offer.file.text], offer.file.name, { type: offer.file.type }),
+                ]);
+                field.current?.focus();
+              }}
+            />
+          )}
+        </div>
         {error !== null && (
           <p role="alert" className="flex items-center gap-2 px-1 text-label text-danger-text">
             <Icon name="failed" size="sm" />
