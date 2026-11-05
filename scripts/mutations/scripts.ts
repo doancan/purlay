@@ -315,6 +315,22 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/enforcement.test.ts'],
   },
   {
+    id: 'mutation-area-first-prefix-wins',
+    why: 'an entry for a file of a split directory is filed with the rest of the directory, and no check says it is in the wrong place',
+    file: 'scripts/mutations/areas.ts',
+    find: '(best === undefined || prefix.length > best.length)',
+    replace: 'best === undefined',
+    tests: ['scripts/mutations.test.ts'],
+  },
+  {
+    id: 'mutation-area-of-unknown-file-guessed',
+    why: 'a mutation of a file no area covers is filed somewhere anyway, so a new top-level folder grows an unrelated file instead of getting its own',
+    file: 'scripts/mutations/areas.ts',
+    find: '  if (best === undefined) {\n    throw new Error(`no area in scripts/mutations/areas.ts covers ${file}: add its prefix to one`);\n  }\n  return best.name;',
+    replace: "  return best?.name ?? 'scripts';",
+    tests: ['scripts/mutations.test.ts'],
+  },
+  {
     id: 'prune-wal-keeps-from-the-newest-base-backup',
     why: 'the archive is cut at the newest base backup and every older one in the retention window can no longer be restored to',
     file: 'scripts/prune-wal.sh',

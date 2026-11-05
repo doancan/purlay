@@ -214,11 +214,15 @@ What belongs here is the discipline around them:
 - **Verify by running it.** Never claim something passes without the output in front of you, and
   CI is the only authority on whether it does.
 - **Coverage says a line ran, not that a test would notice if it were wrong.** `bun run mutate`
-  applies the hand-written mutations in `scripts/mutations.ts` (a guard removed, a limit raised, a
+  applies the hand-written mutations in `scripts/mutations/` (a guard removed, a limit raised, a
   call moved) to a copy of the repository and reports which the named tests catch; it exits
   non-zero on a survivor or on an entry that no longer applies. Add an entry for a guard whose
   removal no existing test would fail on, and run it before touching the code it names. It needs
-  `DATABASE_URL` for the integration tests (D-47, amended).
+  `DATABASE_URL` for the integration tests (D-47, amended). A new entry goes in the area file
+  `areaOf` names for the file it mutates (`scripts/mutations/areas.ts`), at the place its id sorts,
+  never at the end of a file: that is what keeps two pull requests from editing the same lines, and
+  `scripts/mutations.test.ts` refuses an entry in the wrong file, out of order, or in a file
+  `scripts/mutations/index.ts` does not import.
 - **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
   budget regression is a defect, not a threshold to adjust.
 - **See it, and test it, the way it is deployed.** `bun run demo` builds the client, recreates a

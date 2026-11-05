@@ -7,7 +7,7 @@
  * (`reviseMessage`, `FOR UPDATE` on the message), and a message's reaction
  * kinds (`serialiseReactionsTo`, an advisory lock). Each test makes the first caller finish and
  * *wait, uncommitted* (`testing/gates.ts`), starts the second, and releases the first — so the
- * outcome is decided by the lock alone. `scripts/mutations.ts` removes each lock and requires
+ * outcome is decided by the lock alone. `scripts/mutations/` removes each lock and requires
  * these to fail.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';

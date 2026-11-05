@@ -4,7 +4,7 @@
  * Coverage says a line ran, not that anything would notice if it were wrong. A
  * mutation is a small, deliberate wrongness — a guard removed, a limit raised, a
  * call moved — and a test that does not fail on it is not testing that behaviour.
- * The list lives in `scripts/mutations.ts`; each entry names the test files that
+ * The list lives in `scripts/mutations/`; each entry names the test files that
  * must catch it.
  *
  * **Never the working tree.** The repository is copied once into a temporary
