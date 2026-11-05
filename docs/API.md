@@ -518,7 +518,7 @@ their own topic, whether or not a counter of theirs moved (D-106).
 that read `GET /api/me`, the members, the inbox or the saved list before its socket opened — or while it was down —
 holds what a change in between left behind, and no route says "what changed of mine since": the changes route
 above is one channel's messages, and none of these has a version to ask for. A client reads them again each time its socket
-opens, the first time too, and reads who is online only after it has opened (D-267).
+opens, the first time too, and reads who is online only after it has opened (D-268).
 
 **A publish is never the request's error.** The write is committed before anything is published
 (D-35), so a frame that cannot be sent is logged with what it was, the rest are still sent, and the

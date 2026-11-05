@@ -326,7 +326,7 @@ route asked with nothing, at the moment it loads a channel's history. A client w
 it does not trust, reads the history again. What the changes do not carry — the channel list, pins, memberships, the
 inbox, unread counts — is read again after every acknowledgement, as the web client's `resync` does
 (`apps/web/src/realtime/engine.ts`); what the person's own topic would have said (the person, the members, the
-inbox and the saved list) is read again at every open, the first too (D-267). **A message the retention purge deleted is not in the walk** (the job has no bus,
+inbox and the saved list) is read again at every open, the first too (D-268). **A message the retention purge deleted is not in the walk** (the job has no bus,
 D-139 §3): a client that must not show one reads the history again after a purge. (D-194)
 
 **A `SUBSCRIBE` is judged whole.** One channel the person can no longer see makes the whole frame

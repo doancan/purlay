@@ -1,5 +1,5 @@
 /**
- * What the page read before its socket opened is read again once it has (D-267): a change made between
+ * What the page read before its socket opened is read again once it has (D-268): a change made between
  * the page's reads and the socket's opening is in no frame, so nothing but that second read could show it.
  */
 import { expect, test } from './fixtures';
