@@ -8,6 +8,8 @@
  * Types only: nothing in this folder opens a connection or reads the environment, so a module can import
  * it without pulling the platform in.
  */
+import type { UserRole } from '@purlay/types';
+
 /** What one module may take of the shared database (`platform/module-budget.ts` holds it to this). */
 export interface BudgetLimits {
   /** Transactions the module may have open at once; at least one, and below the pool's size. */
@@ -25,6 +27,26 @@ export interface BudgetLimits {
  */
 type ModuleBudgetDeclaration =
   { readonly poolShare: (poolMax: number) => BudgetLimits } | { readonly none: string };
+
+/**
+ * A thing a role may do that a module owns, by name: `<module id>.<what>`, held by the role named and every role above it
+ * (`member` below `admin` below `owner`). A process that does not run the module has no such permission: nobody holds it,
+ * the owner included (`permissions.ts`).
+ */
+export interface PermissionDeclaration {
+  readonly name: string;
+  /** The lowest role that holds it. */
+  readonly minimumRole: UserRole;
+}
+
+/**
+ * Audit actions the module records (D-26), and the permission that reads them from the trail: the core's `audit.read`, or
+ * a permission the module declares. An action the module writes and does not list fails `audit-emissions.test.ts`.
+ */
+export interface AuditActionGroup {
+  readonly read: string;
+  readonly actions: readonly string[];
+}
 
 export interface ModuleManifest {
   /** Lowercase letters, digits and hyphens: the word an operator writes in `MODULES`. */
@@ -67,4 +89,8 @@ export interface ModuleManifest {
    * module's alone, as `jobs` are, and the module supplies the work for each.
    */
   readonly retention?: readonly string[];
+  /** What a role may do in the module that is not just "be a member", as names the services ask (`permissions.ts`). */
+  readonly permissions?: readonly PermissionDeclaration[];
+  /** The actions the module writes to the audit trail, with who may read them (`audit-access.ts`). */
+  readonly auditActions?: readonly AuditActionGroup[];
 }
