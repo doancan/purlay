@@ -18,7 +18,7 @@ import {
   pendingMigrations,
   readMigrationFiles,
 } from './migrator';
-import { closeIntegrationDatabase, integrationDatabase } from './testing';
+import { closeIntegrationDatabase, DROP_HOOK_MS, integrationDatabase } from './testing';
 
 /**
  * A pool whose connections see one schema and nothing else.
@@ -69,7 +69,7 @@ afterAll(async () => {
   for (const name of schemas)
     await sql`drop schema ${sql.id(name)} cascade`.execute(integrationDatabase());
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 describe('integration: a migration that leaves its transaction', () => {
   test('can create an index concurrently, which a transactional migration cannot', async () => {

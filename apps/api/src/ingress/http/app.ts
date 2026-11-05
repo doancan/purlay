@@ -481,6 +481,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    auditAccess: modules.auditAccess,
     userErased: given.userErased ?? modules.userErased,
     collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   };
@@ -542,6 +543,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     userWrites,
     metrics,
     closedFrame: modules.closedFrame,
+    frameOwner: modules.owner.ofFrame,
     closedEvent: modules.closedEvent,
   });
   metrics.registry.gauge(
@@ -558,7 +560,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     dependencies.database,
     dependencies.config.DATABASE_POOL_MAX,
   );
-  const issueDependencies = { ...dependencies, atomically: transactionsOf('issues') };
+  const issueDependencies = {
+    ...dependencies,
+    atomically: transactionsOf('issues'),
+    permissions: modules.permissions,
+  };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -788,7 +794,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
           path: where,
         });
       }
-      if (refusal.body.error.code === 'RATE_LIMITED') metrics.rateLimited.inc({ door: 'http' });
+      if (refusal.body.error.code === 'RATE_LIMITED')
+        metrics.rateLimited.inc({ door: 'http', module: moduleOfRoute(route) });
       if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
         set.headers['retry-after'] = String(error.retryAfterSeconds);
       }

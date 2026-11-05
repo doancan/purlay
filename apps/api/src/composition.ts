@@ -29,9 +29,15 @@ import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
 import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
-import { ownersOf, type Owners } from './platform/module-kit/ownership';
+import { auditAccess, type AuditAccess } from './platform/module-kit/audit-access';
+import {
+  CORE_PERMISSIONS,
+  permissionTable,
+  type PermissionTable,
+} from './platform/module-kit/permissions';
+import { CORE_OWNER, ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
-import type { ModuleManifest } from './platform/module-kit/manifest';
+import type { ModuleManifest, NotificationKindDeclaration } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
 
 /**
@@ -129,6 +135,8 @@ export interface Composition {
   readonly readAttachment: AttachmentReader;
   /** What the push sender is told by: the module's, or nothing where none runs. */
   readonly pushNotices: PushNotices;
+  /** The module whose notices that is, for the push failure counter's label; the core where none runs. */
+  readonly pushOwner: string;
   readonly workspaceCreated: WorkspaceCreated;
   readonly userErased: UserErased;
   readonly workspaceChannels: WorkspaceChannels;
@@ -136,6 +144,14 @@ export interface Composition {
   readonly exportCatalogue: ReturnType<typeof assembleCatalogue>;
   readonly personalExportCatalogue: ReturnType<typeof assemblePersonalCatalogue>;
   readonly collatedColumns: readonly CollatedColumn[];
+  /** What a role may do: the core's permissions and those of the modules this process runs, and nothing of a module that is not run. */
+  readonly permissions: PermissionTable;
+  /** Who reads which audit actions: the permissions above over the actions of every module the build carries. */
+  readonly auditAccess: AuditAccess;
+  /** The kinds of notification the modules this process runs send: a module that is off offers none. */
+  readonly notificationKinds: readonly NotificationKindDeclaration[];
+  /** The ids of the search sources of the modules this process runs: a module that is off is not queried. */
+  readonly searchSources: readonly string[];
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -181,16 +197,28 @@ export const compose = (
     const problem = jobWorkProblem(module);
     if (problem !== undefined) throw new Error(problem);
   }
+  const permissions = permissionTable([
+    ...CORE_PERMISSIONS,
+    ...modules.flatMap((module) => module.manifest.permissions ?? []),
+  ]);
+  const noticing = modules.find((module) => module.pushNotices !== undefined);
   return {
     modules,
     bundled,
+    permissions,
+    auditAccess: auditAccess(
+      permissions,
+      holding.flatMap((module) => module.manifest.auditActions ?? []),
+    ),
+    notificationKinds: modules.flatMap((module) => module.manifest.notifications ?? []),
+    searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,
     ]),
-    pushNotices:
-      modules.find((module) => module.pushNotices !== undefined)?.pushNotices ?? noPushNotices,
+    pushNotices: noticing?.pushNotices ?? noPushNotices,
+    pushOwner: noticing?.manifest.id ?? CORE_OWNER,
     workspaceCreated,
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,

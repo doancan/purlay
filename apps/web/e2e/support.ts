@@ -375,13 +375,15 @@ export const openNav = async (page: Page): Promise<Locator> => {
 };
 
 /**
- * A workspace's front door (`/w/:slug`), opened and waited past: the door only replaces itself with a
- * channel once the channels have come, and the shell is built again for that screen — so a menu opened
- * on the door's sidebar is closed by the hand-over, and a click made before it is lost. Returns once the
- * channel's feed is drawn.
+ * A workspace's front door (`/w/:slug`), opened. At a wide width the shell is the same one for the door and for the
+ * channel it hands over to, so a menu opened on its sidebar survives the hand-over and nothing is waited for. At a
+ * narrow one the sidebar is an overlay that closes on any change of route (`nav.tsx`), the door's redirect included,
+ * so what is opened before the hand-over is closed by it and a click made before it is lost: the helper returns
+ * once the channel's feed is drawn.
  */
 export const openWorkspace = async (page: Page, slug: string): Promise<void> => {
   await page.goto(`/w/${slug}`);
+  if (!isNarrow(page)) return;
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/c/[0-9a-f-]+$`));
   await expect(page.getByRole('feed', { name: /^Messages in / })).toBeVisible();
 };

@@ -39,7 +39,10 @@ let port = 0;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-  metrics = serverMetrics();
+  metrics = serverMetrics(
+    undefined,
+    composition.bundled.map((module) => module.manifest.id),
+  );
   app = createApp(
     testDependencies({
       database: db,
@@ -179,7 +182,12 @@ describe('integration: what a person does is counted, and nothing of theirs is o
 
     await until(
       'purlay_http_request_duration_seconds_count',
-      { method: 'POST', route: '/api/channels/:channelId/messages', status: '2xx', module: 'chat' },
+      {
+        method: 'POST',
+        route: '/api/channels/:channelId/messages',
+        status: '2xx',
+        module: 'chat',
+      },
       1,
     );
     const text = await scrapeText();
@@ -213,19 +221,51 @@ describe('integration: what a person does is counted, and nothing of theirs is o
   });
 });
 
+/**
+ * A socket that sends `frame` seventy times and says how many were refused for the rate: the connection's burst is sixty
+ * frames and refills ten a second, so about ten past it are refused (a refill during the run can spare one). One at a time,
+ * each answered before the next: a queue past its bound closes the socket instead.
+ */
+const refusedFor = async (user: string, frame: string): Promise<number> => {
+  const { cookie } = await aSignedInUser(db, clock, user);
+  const socket = new WebSocket(`ws://127.0.0.1:${String(port)}/ws`, {
+    headers: { cookie, origin: ORIGIN },
+  } as unknown as string[]);
+  let refusals = 0;
+  let answered = 0;
+  socket.addEventListener('message', (event) => {
+    const reply = JSON.parse(String(event.data)) as { event?: string; data?: { code?: string } };
+    // Only an answer to a frame is counted: a module that runs also tells the socket who is online.
+    if (reply.event !== 'ERROR') return;
+    answered += 1;
+    if (reply.data?.code === 'RATE_LIMITED') refusals += 1;
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.addEventListener('open', () => {
+      resolve();
+    });
+    socket.addEventListener('error', () => {
+      reject(new Error('the socket did not open'));
+    });
+  });
+  for (let sent = 0; sent < 70; sent += 1) {
+    socket.send(frame);
+    const deadline = performance.now() + 2_000;
+    while (answered <= sent) {
+      if (performance.now() > deadline) throw new Error(`frame ${String(sent)} was not answered`);
+      await Bun.sleep(1);
+    }
+  }
+  socket.close();
+  return refusals;
+};
+
 describe('integration: the socket and the rate on the page', () => {
-  test('an open socket is counted while it is open, and its frames refused for the rate are counted as they are refused', async () => {
+  test('an open socket is counted while it is open, and its frames refused for the rate are counted as they are refused, under no module when they name no operation', async () => {
     const { cookie } = await aSignedInUser(db, clock, 'socket');
     const socket = new WebSocket(`ws://127.0.0.1:${String(port)}/ws`, {
       headers: { cookie, origin: ORIGIN },
     } as unknown as string[]);
-    const refusals: unknown[] = [];
-    let answered = 0;
-    socket.addEventListener('message', (event) => {
-      const frame = JSON.parse(String(event.data)) as { event?: string; data?: { code?: string } };
-      answered += 1;
-      if (frame.event === 'ERROR' && frame.data?.code === 'RATE_LIMITED') refusals.push(frame);
-    });
     await new Promise<void>((resolve, reject) => {
       socket.addEventListener('open', () => {
         resolve();
@@ -235,32 +275,29 @@ describe('integration: the socket and the rate on the page', () => {
       });
     });
     await until('purlay_websocket_connections', {}, 1);
-
-    // The connection's burst is sixty frames and the clock stands still, so ten past it are refused.
-    // One at a time, each answered before the next: a queue past its bound closes the socket instead.
-    for (let frame = 0; frame < 70; frame += 1) {
-      socket.send('not a frame');
-      const deadline = performance.now() + 2_000;
-      while (answered <= frame) {
-        if (performance.now() > deadline)
-          throw new Error(`frame ${String(frame)} was not answered`);
-        await Bun.sleep(1);
-      }
-    }
-    await until('purlay_rate_limited_total', { door: 'socket' }, 10);
-    expect(refusals).toHaveLength(10);
-
     socket.close();
     await until('purlay_websocket_connections', {}, 0);
+
+    const refused = await refusedFor('flood', 'not a frame');
+    expect(refused).toBeGreaterThanOrEqual(8);
+    await until('purlay_rate_limited_total', { door: 'socket', module: 'none' }, refused);
   });
 
-  test('a request refused for the rate at the HTTP door is counted there', async () => {
-    const before = sampleOf(await scrape(), 'purlay_rate_limited_total', { door: 'http' }) ?? 0;
+  test('a frame refused for the rate is counted under the module that owns its operation', async () => {
+    const refusals = await refusedFor('chatty', JSON.stringify({ op: 'MESSAGE_SEND' }));
+    expect(refusals).toBeGreaterThanOrEqual(8);
+    await until('purlay_rate_limited_total', { door: 'socket', module: 'chat' }, refusals);
+    const page = await scrape();
+    // The core's own operation is the core's, and nothing the sender wrote is a label.
+    expect(sampleOf(page, 'purlay_rate_limited_total', { door: 'socket', module: 'core' })).toBe(0);
+  });
+
+  test('a request refused for the rate at the HTTP door is counted there, under the module that owns its route', async () => {
+    const labels = { door: 'http', module: 'core' };
+    const before = sampleOf(await scrape(), 'purlay_rate_limited_total', labels) ?? 0;
     expect((await call('GET', '/api/client')).status).toBe(200);
     const refused = await call('GET', '/api/client');
     expect(refused.status).toBe(429);
-    expect(sampleOf(await scrape(), 'purlay_rate_limited_total', { door: 'http' })).toBe(
-      before + 1,
-    );
+    expect(sampleOf(await scrape(), 'purlay_rate_limited_total', labels)).toBe(before + 1);
   });
 });

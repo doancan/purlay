@@ -2,6 +2,7 @@
  * What chat tells the shell (D-250, `docs/MODULES.md` §6): its routes, the places it puts on the rail and in the
  * palette, its keys and its settings pages. Data only — the screens are `chat.ts`, behind `load`.
  */
+import { CHAT_AUDIT_ACTIONS } from '@purlay/types';
 import { defineModule, shortcut, type ModuleScreens } from '../../modules/manifest';
 
 const routes = {
@@ -102,4 +103,5 @@ export const chat = defineModule({
       after: 'invitations',
     },
   ],
+  auditActions: CHAT_AUDIT_ACTIONS,
 });
