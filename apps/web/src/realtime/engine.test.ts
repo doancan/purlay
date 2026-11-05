@@ -20,7 +20,7 @@ import {
   REPLAY_RETRY_DELAYS_MS,
 } from '@purlay/types';
 import { ApiError } from '../data/errors';
-import { keys } from '../data/keys';
+import { families, keys } from '../data/keys';
 import { anApi } from '../testing/fake-api';
 import { IDS, aSession, NO_PROFILE } from '../testing/fixtures';
 import { fakeSchedule, memoryStorage, type MemoryStorage } from '../testing/fakes';
@@ -2230,4 +2230,67 @@ describe('a send whose id the server finds too old (D-33, D-8)', () => {
     expect(SENT(w, 'refused')).toHaveLength(2);
     expect(w.pending()[0]?.reason).toBe('INTERNAL');
   });
+});
+
+/**
+ * Every family of cached reads is decided: read again when the subscription is answered, when the socket
+ * returns from a gap, or both (the audit of #1043, kept as a check). A family added to `families` that is
+ * in neither fails here until somebody says where a frame that rewrites it is made good for a socket that
+ * was not yet listening — the gap that found `SAVED_UPDATED` and the open questions each missing.
+ */
+describe('every family of cached reads is read again after the gap a frame can fall into', () => {
+  type Where = 'answer' | 'reconnect' | 'both';
+  /** One real key of each family, and when it is read again; the frames that rewrite it are in `engine.ts`. */
+  const DECIDED: Readonly<
+    Record<keyof typeof families, { where: Where; key: readonly unknown[] }>
+  > = {
+    search: { where: 'answer', key: keys.search(WS, 'words', null, null) },
+    saved: { where: 'reconnect', key: keys.saved(WS) },
+    files: { where: 'answer', key: keys.files(CH) },
+    channels: { where: 'both', key: keys.channels(WS) },
+    messages: { where: 'answer', key: keys.messages(CH) },
+    thread: { where: 'both', key: keys.thread('root') },
+    unresolved: { where: 'both', key: keys.unresolved(WS) },
+    notifications: { where: 'reconnect', key: keys.notifications(WS) },
+    pins: { where: 'answer', key: keys.pins(CH) },
+    incident: { where: 'both', key: keys.incident(CH) },
+    messageVersions: { where: 'answer', key: keys.messageVersions('message') },
+    members: { where: 'reconnect', key: keys.members(WS) },
+  };
+  const names = Object.keys(DECIDED) as (keyof typeof families)[];
+
+  test('the decisions name exactly the families there are', () => {
+    expect(names.map(String).sort()).toEqual(Object.keys(families).sort());
+  });
+
+  test.each(names.filter((name) => DECIDED[name].where !== 'reconnect'))(
+    'the subscription’s answer reads %s again',
+    (name) => {
+      const w = world();
+      w.engine.watch([CH]);
+      w.engine.start();
+      w.open();
+      w.client.setQueryData(DECIDED[name].key, { pages: [], pageParams: [] });
+      expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(false);
+      answerAll(w);
+      expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(true);
+    },
+  );
+
+  test.each(names.filter((name) => DECIDED[name].where !== 'answer'))(
+    'a return from a gap reads %s again',
+    (name) => {
+      const w = world();
+      w.engine.start();
+      w.open();
+      w.client.setQueryData(DECIDED[name].key, { pages: [], pageParams: [] });
+      w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+      for (let waited = 0; w.sockets.length < 2 && waited < 10_000; waited += 100) {
+        w.timers.advance(100);
+      }
+      expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(false);
+      w.open();
+      expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(true);
+    },
+  );
 });
