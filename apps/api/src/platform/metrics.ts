@@ -213,7 +213,7 @@ const thisProcess: ProcessReadings = {
 /** The instruments the server records into, each declared once with its help. */
 export interface ServerMetrics {
   readonly registry: MetricsRegistry;
-  readonly httpDuration: Histogram<'method' | 'route' | 'status'>;
+  readonly httpDuration: Histogram<'method' | 'route' | 'status' | 'module'>;
   readonly rateLimited: Counter<'door'>;
   readonly pushFailures: Counter<'reason'>;
   readonly mailFailures: Counter;
@@ -233,8 +233,8 @@ export const serverMetrics = (readings: ProcessReadings = thisProcess): ServerMe
   );
   const httpDuration = registry.histogram(
     'purlay_http_request_duration_seconds',
-    'HTTP requests answered by this process, by method, route as registered and status class; _count is the number of requests.',
-    ['method', 'route', 'status'],
+    'HTTP requests answered by this process, by method, route as registered, status class and the module that owns the route (`core`, a module id, or `none`); _count is the number of requests.',
+    ['method', 'route', 'status', 'module'],
     HTTP_DURATION_BUCKETS,
   );
   const rateLimited = registry.counter(
