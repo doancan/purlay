@@ -187,7 +187,8 @@ const sending = async (
     attention: heard,
     notices: chatPushNotices,
     post,
-    ...(metrics === undefined ? {} : { failures: metrics.pushFailures }),
+    // The notices are chat's, so the failures of what they told are chat's.
+    ...(metrics === undefined ? {} : { failures: metrics.pushFailures, owner: 'chat' }),
   });
   let at = 0;
   return {
@@ -214,13 +215,15 @@ const sending = async (
 
 const mention = (room: Room, who: string): string => `@${room.members[who]?.username ?? ''}`;
 
-/** The push failures the registry holds, by reason (D-221). */
-const failuresOf = (metrics: ServerMetrics): Record<string, number> =>
+/** The push failures the registry holds for the notices of a module, by reason (D-221). */
+const failuresOf = (metrics: ServerMetrics, module = 'chat'): Record<string, number> =>
   Object.fromEntries(
     (
       metrics.registry.families().find((family) => family.name === 'purlay_push_failures_total')
         ?.samples ?? []
-    ).map((sample) => [sample.labels['reason'] ?? '', sample.value]),
+    )
+      .filter((sample) => sample.labels['module'] === module)
+      .map((sample) => [sample.labels['reason'] ?? '', sample.value]),
   );
 
 describe('integration: a device is told', () => {
@@ -500,7 +503,7 @@ describe('integration: what the push service answers', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       await subscribeDevice(db, room, 'bob', await aBrowser());
-      const metrics = serverMetrics();
+      const metrics = serverMetrics(undefined, ['chat']);
       const { say, settled } = await sending(
         db,
         aPushService(status).post,
@@ -517,6 +520,8 @@ describe('integration: what the push service answers', () => {
         dropped: 0,
         ...counted,
       });
+      // What chat's notices could not deliver is not the core's: nothing is counted under any other owner.
+      expect(Object.values(failuresOf(metrics, 'core')).every((count) => count === 0)).toBe(true);
     });
   });
 
@@ -648,7 +653,7 @@ describe('integration: what the push service answers', () => {
           : Promise.resolve({ kind: 'answered', status: 201 });
       };
       const recording = aRecordingLogger();
-      const metrics = serverMetrics();
+      const metrics = serverMetrics(undefined, ['chat']);
       const { say, settled } = await sending(db, post, recording, attention, metrics);
       await say(room, 'alice', `${mention(room, 'bob')} look`);
       await settled();
@@ -663,7 +668,7 @@ describe('integration: what the push service answers', () => {
 
   test('a database that fails while the devices are found is said, with the message', async () => {
     const recording = aRecordingLogger();
-    const metrics = serverMetrics();
+    const metrics = serverMetrics(undefined, ['chat']);
     const push = await createPushSender({
       database: aDatabaseThatMustNotBeTouched(new Error('the database is down')),
       clock,
@@ -673,6 +678,7 @@ describe('integration: what the push service answers', () => {
       notices: chatPushNotices,
       post: () => Promise.reject(new Error('nothing is posted')),
       failures: metrics.pushFailures,
+      owner: 'chat',
     });
     push.told('m-1', ['u-1']);
     await push.flush(1_000);
@@ -703,7 +709,7 @@ describe('integration: what the push service answers', () => {
         .execute();
       const service = aPushService();
       const recording = aRecordingLogger();
-      const metrics = serverMetrics();
+      const metrics = serverMetrics(undefined, ['chat']);
       const { say, settled } = await sending(db, service.post, recording, attention, metrics);
       await say(room, 'alice', `${mention(room, 'bob')} look`);
       await settled();
