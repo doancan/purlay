@@ -125,7 +125,7 @@ describe('the modules a server runs', () => {
   });
 });
 
-describe('the audit actions a server offers to filter by (D-264)', () => {
+describe('the audit actions a server offers to filter by (D-265)', () => {
   test('every action of the wire is the core’s or exactly one module’s, so a module that records one says so', () => {
     const owned: readonly string[] = [
       ...CORE_AUDIT_ACTIONS,

@@ -219,7 +219,7 @@ moves into that module.
 **Built (D-250, the web registry).** `apps/web/src/features/<id>/manifest.ts` is data and one loader, no component:
 the module's `id`; `load`, an `import()` of its chunk, which exports one screen for each route; its routes (path
 patterns, all inside `/w/:slug`); the places it puts on the rail and in the palette; its shortcut rows; its settings
-pages; the audit actions it records (`auditActions`, the same list the API's manifest reads, D-264); whether its chunk is
+pages; the audit actions it records (`auditActions`, the same list the API's manifest reads, D-265); whether its chunk is
 asked for in the first commit (`preload`); and what stands in for a screen while the
 chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone). The list of manifests is
 `apps/web/src/modules/registry.ts`, and nothing else names a module to the shell:

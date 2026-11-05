@@ -740,7 +740,7 @@ describe('the audit log, narrowed and downloaded', () => {
     await expectNoAxeViolations(view.getByRole('main'));
   });
 
-  test('offers the actions of the modules the server runs, and the core’s always (D-264)', async () => {
+  test('offers the actions of the modules the server runs, and the core’s always (D-265)', async () => {
     const optionsOf = async (modules: string[]): Promise<string[]> => {
       const view = await renderApp(<Outlet />, {
         path: '/w/acme/settings/audit',

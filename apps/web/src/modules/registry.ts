@@ -30,7 +30,7 @@ export type RailEntry = ModuleManifestOf['rail'][number];
 
 /**
  * The audit actions a reader of the trail may filter by: the core's and those of the modules the server runs, in the
- * order the wire lists them (D-264). A module that is not run offers none: its rows may still be on the trail, and show
+ * order the wire lists them (D-265). A module that is not run offers none: its rows may still be on the trail, and show
  * as they are, but nobody is invited to narrow to something this server cannot do now.
  */
 export const auditActionsOf = (modules: readonly string[]): readonly AuditAction[] => {

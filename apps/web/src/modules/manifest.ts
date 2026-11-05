@@ -78,7 +78,7 @@ export interface ModuleManifest {
   readonly shortcuts: readonly ModuleShortcut[];
   readonly settings: readonly ModuleSettingsPage[];
   /**
-   * The audit actions the module records (D-264), which the audit page offers to filter by only where the server runs the
+   * The audit actions the module records (D-265), which the audit page offers to filter by only where the server runs the
    * module. The API manifest lists the same ones; both read the module's list in `@purlay/types`.
    */
   readonly auditActions: readonly AuditAction[];
