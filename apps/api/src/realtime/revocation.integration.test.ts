@@ -42,8 +42,21 @@ let nodeB: HttpApplication;
 let portB = 0;
 /** A node that holds no sockets: where a service on a third process would publish. */
 let publisher: InspectableEventBus;
-/** Set by a test that wants something to happen inside the next database read of node B. */
-let duringNextRead: (() => Promise<void>) | undefined;
+/**
+ * Set by a test that wants something to happen inside the read that authorises the next
+ * subscription of node B — the one that reads `channel_members`, and no other. "The next read"
+ * would be spent by whichever read that follows the socket's identity is still in flight when it is set (its
+ * presence, its workspaces), and the removal would then land before the subscription instead of
+ * inside its authorisation.
+ */
+let duringAuthorisation: (() => Promise<void>) | undefined;
+/**
+ * Set by a test that wants the reads that follow the socket's identity (not the authorisation) to finish
+ * only once `duringAuthorisation` is armed: the order a loaded runner can produce.
+ */
+let holdAfterIdentityReads = false;
+const authorisations = new Set<unknown>();
+const afterIdentityReads = new Set<unknown>();
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
@@ -54,11 +67,24 @@ beforeAll(async () => {
   // Node B reads through a plugin that can run something inside a read, so a
   // revocation can be published at the exact point a subscription is authorised.
   const database = cloned.db.withPlugin({
-    transformQuery: (args) => args.node,
+    transformQuery: (args) => {
+      const sql = JSON.stringify(args.node);
+      if (sql.includes('"name":"channel_members"')) authorisations.add(args.queryId);
+      // What runs after the identity is known (workspaces, presence); the sessions it is
+      // resolved with must finish for it to be known at all.
+      else if (!sql.includes('"name":"sessions"')) afterIdentityReads.add(args.queryId);
+      return args.node;
+    },
     transformResult: async (args) => {
-      const run = duringNextRead;
-      duringNextRead = undefined;
-      if (run !== undefined) await run();
+      if (afterIdentityReads.delete(args.queryId)) {
+        while (holdAfterIdentityReads && duringAuthorisation === undefined) await Bun.sleep(1);
+        return args.result;
+      }
+      if (authorisations.delete(args.queryId)) {
+        const run = duringAuthorisation;
+        duringAuthorisation = undefined;
+        if (run !== undefined) await run();
+      }
       return args.result;
     },
   });
@@ -480,23 +506,35 @@ describe('integration: a membership that ends', () => {
    * went. Subscribed only after that read, the socket would find the revocation
    * already past and keep the channel for good.
    */
-  test('a removal published while a subscription is being authorised still ends it', async () => {
+  const removalDuringAuthorisation = async (): Promise<void> => {
     const room = await aRoom();
     const bob = await connect(room.bob.cookie);
-    // Its identity is resolved by a read of its own; let that finish, or the hook
-    // below would be spent on it.
+    // Its identity is resolved by a read of its own; let that finish.
     await settle(bob);
 
-    duringNextRead = async (): Promise<void> => {
+    duringAuthorisation = async (): Promise<void> => {
       await publishAccessRevoked(publisher, clock, room.bob.userId, [room.channelId]);
     };
     await subscribe(bob, room.channelId);
-    expect(duringNextRead).toBeUndefined();
+    expect(duringAuthorisation).toBeUndefined();
 
     await post(room.alice.cookie, room.channelId, 4);
     await settle(bob);
     expect(created(bob.frames)).toEqual([]);
     expect(bob.frames.some((f) => f.event === 'ACCESS_REVOKED')).toBe(true);
     await bob.close();
+  };
+
+  test('a removal published while a subscription is being authorised still ends it', async () => {
+    await removalDuringAuthorisation();
+  });
+
+  test('and so does one while a read of the socket’s own is still in flight', async () => {
+    holdAfterIdentityReads = true;
+    try {
+      await removalDuringAuthorisation();
+    } finally {
+      holdAfterIdentityReads = false;
+    }
   });
 });
