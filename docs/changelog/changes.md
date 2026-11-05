@@ -23,13 +23,13 @@ have it.
 
 ## Unreleased
 
-### Security
-
-- **Accounts** — Erasing an account now also revokes its GitHub App authorization at GitHub when the saved access token has expired, by renewing it with the saved refresh token first, so the grant no longer stays behind (D-246, D-256)
-
 ### Changed
 
 - **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)
 - **Operations** — the upgrade drops `attachments.message_id` and `attachments.channel_id`, and stops with a count, changing nothing, if a sent file's link is missing from chat's table; restore the backup and fix the data before deploying again (D-250)
+
+### Security
+
+- **Accounts** — Erasing an account now also revokes its GitHub App authorization at GitHub when the saved access token has expired, by renewing it with the saved refresh token first, so the grant no longer stays behind (D-246, D-256)
 
 ---
