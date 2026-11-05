@@ -373,14 +373,37 @@ describe('the command', () => {
     };
   };
 
-  test('says how it is used, and fails with 2, when it is given nothing or something it does not know', () => {
-    for (const argv of [[], ['minor', '--bogus']]) {
+  test('says how it is used, and fails with 2, when it is given something it does not know', () => {
+    for (const argv of [
+      ['minor', '--bogus'],
+      ['--bogus'],
+      ['patch', 'minor'],
+      ['--dry-run', '--dry-run'],
+    ]) {
       const place = checkout();
       const said = io(place);
       expect(cli(argv, said.io)).toBe(2);
       expect(said.err.join('\n')).toContain('usage: bun run release');
       expect(place.calls).toEqual([]);
     }
+  });
+
+  test('given no kind, it is a patch: every release moves the last number unless asked for more (D-263)', () => {
+    const place = checkout();
+    const said = io(place);
+    expect(cli(['--dry-run'], said.io)).toBe(0);
+    expect(said.out).toEqual(['would release v0.0.1: nothing was changed']);
+    const plain = io(checkout(PR));
+    expect(cli([], plain.io)).toBe(0);
+    expect(plain.out).toEqual([
+      'release v0.0.1 is prepared: https://github.com/acme/purlay/pull/9',
+    ]);
+  });
+
+  test('the dry run may come first or last', () => {
+    const said = io(checkout());
+    expect(cli(['--dry-run', 'minor'], said.io)).toBe(0);
+    expect(said.out).toEqual(['would release v0.1.0: nothing was changed']);
   });
 
   test('a dry run says what it would do and exits 0', () => {
@@ -412,8 +435,8 @@ describe('the command', () => {
     expect(failed.stderr).not.toBe('');
   });
 
-  test('is what `bun run release` runs: no arguments is a usage error', () => {
-    const result = Bun.spawnSync(['bun', '--no-env-file', 'scripts/release.ts'], {
+  test('is what `bun run release` runs: an unknown flag is a usage error', () => {
+    const result = Bun.spawnSync(['bun', '--no-env-file', 'scripts/release.ts', '--bogus'], {
       cwd: join(import.meta.dir, '..'),
       stdout: 'pipe',
       stderr: 'pipe',

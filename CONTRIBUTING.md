@@ -525,7 +525,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   push again only to fix what the run found — and a pull request's superseded run is cancelled
   (`concurrency` in every workflow).
 - **Releasing and deploying** are D-185, not this section: a merge to `main` deploys to the server by itself,
-  and `bun run release -- <patch|minor|major>` opens the pull request whose merge is a release; it also rewrites `apps/api/src/released-manifests.json`, the module manifests the next release is held to (`module-compat.test.ts`), and clears that file's exceptions. A deliberate break of a manifest is a dated entry under `exceptions` there, which a reviewer sees. There is no
+  and `bun run release` opens the pull request whose merge is a release — a patch (`0.3.0` → `0.3.1`) unless `minor`, `major` or an `x.y.z` is asked for (D-263); it also rewrites `apps/api/src/released-manifests.json`, the module manifests the next release is held to (`module-compat.test.ts`), and clears that file's exceptions. A deliberate break of a manifest is a dated entry under `exceptions` there, which a reviewer sees. There is no
   `develop` branch.
 - **The browser jobs run when a screen can have moved.** Eight jobs (and WebKit's, below) are most of a run; on a pull
   request they run only when it touches the client, the API, a package, the dependencies or

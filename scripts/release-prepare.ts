@@ -282,12 +282,20 @@ export interface CliIo {
 
 /** What `bun run release` does, as the exit code it ends with. */
 export const cli = (argv: readonly string[], io: CliIo): number => {
-  const [request, flag] = argv;
-  if (request === undefined || (flag !== undefined && flag !== '--dry-run')) {
-    io.err('usage: bun run release -- <patch|minor|major|x.y.z> [--dry-run]');
+  const dryRun = argv.includes('--dry-run');
+  const rest = argv.filter((arg) => arg !== '--dry-run');
+  // Every release moves the last number unless somebody asks for more (D-263): left out, it is a patch.
+  const [request = 'patch', extra] = rest;
+  if (
+    extra !== undefined ||
+    request.startsWith('-') ||
+    argv.filter((arg) => arg === '--dry-run').length > 1
+  ) {
+    io.err(
+      'usage: bun run release -- [patch|minor|major|x.y.z] [--dry-run]   (patch when left out)',
+    );
     return 2;
   }
-  const dryRun = flag === '--dry-run';
   try {
     const result = prepare({ root: io.root, request, date: io.today, exec: io.exec, dryRun });
     io.out(

@@ -21,7 +21,8 @@
 #
 # Its inputs are the variables of docker-compose.production.yml (docs/CONFIG.md), without
 # HTTP_PORT, HTTPS_PORT, PROXY_MEMORY_LIMIT and the WAL_ARCHIVE ones, and with PURLAY_HTTP_PORT
-# (required) and PURLAY_HTTP_BIND. Set them in Dockhand's environment for the stack.
+# (required), PURLAY_HTTP_BIND, and the backup's BACKUP_EVERY_MINUTES, BACKUP_KEEP and
+# BACKUP_MEMORY_LIMIT. Set them in Dockhand's environment for the stack.
 
 # Every container's log, bounded: Docker's json-file driver keeps everything unless told, and a
 # server whose disk its own logs filled stops writing the database next. Five files of 50 MB each per
@@ -235,6 +236,68 @@ services:
       retries: 30
       start_period: 10s
 
+  # Database dumps on a schedule (D-262): Dockhand's auto-update replaces the API without the backup
+  # `scripts/deploy.sh` takes before a switch, so one is never more than BACKUP_EVERY_MINUTES old. The
+  # PostgreSQL image, for its pg_dump; a dump is written aside and renamed, so a file named
+  # `purlay-*.dump` is always whole, and only the newest BACKUP_KEEP are kept. Restore with pg_restore
+  # from this container (docs/DEPLOY.md).
+  backup:
+    image: postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${BACKUP_MEMORY_LIMIT:-256m}
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PGHOST: postgres
+      PGUSER: purlay
+      PGDATABASE: purlay
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      BACKUP_EVERY_MINUTES: ${BACKUP_EVERY_MINUTES:-60}
+      BACKUP_KEEP: ${BACKUP_KEEP:-48}
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        set -eu
+        every="$${BACKUP_EVERY_MINUTES}"
+        keep="$${BACKUP_KEEP}"
+        case "$$every" in '' | *[!0-9]* | 0) echo "BACKUP_EVERY_MINUTES must be a whole number, 1 or more, not '$$every'" >&2; exit 1 ;; esac
+        case "$$keep" in '' | *[!0-9]* | 0) echo "BACKUP_KEEP must be a whole number, 1 or more, not '$$keep'" >&2; exit 1 ;; esac
+        while true; do
+          name="purlay-$$(date -u +%Y%m%dT%H%M%SZ).dump"
+          if pg_dump --format=custom --no-owner --no-acl --file="/backups/.$$name.partial" \
+            && mv "/backups/.$$name.partial" "/backups/$$name"; then
+            echo "backup: wrote $$name"
+          else
+            rm -f "/backups/.$$name.partial"
+            echo "backup: pg_dump failed; the newest whole dump is kept" >&2
+          fi
+          ls -1t /backups/purlay-*.dump 2>/dev/null | tail -n +$$((keep + 1)) | xargs -r rm -f --
+          sleep $$((every * 60))
+        done
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Unhealthy when the newest dump is older than two intervals: a backup that stopped is seen in
+    # Dockhand, not found on the day it is needed.
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'test -n "$$(find /backups -name ''purlay-*.dump'' -mmin -$$((BACKUP_EVERY_MINUTES * 2 + 5)))"',
+        ]
+      interval: 5m
+      timeout: 10s
+      retries: 1
+      start_period: 10m
+
   # Garage: S3-compatible object storage (docs/spikes/object-storage.md). Its image
   # has no shell, so the layout, bucket and key are prepared by the `storage-init`
   # service on every `up` (D-144).
@@ -299,3 +362,5 @@ configs:
 volumes:
   postgres-data:
   garage-data:
+  # The dumps the backup service writes; back this volume up off the server as well.
+  backups:
