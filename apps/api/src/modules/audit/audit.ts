@@ -20,6 +20,7 @@ import {
   type AuditQuery,
 } from '@purlay/types';
 import { AppError } from '../../platform/errors';
+import type { AuditAccess } from '../../platform/module-kit/audit-access';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
 import { currentRequest } from '../../platform/logging';
@@ -75,12 +76,12 @@ export const recordAudit = async (
 };
 
 /**
- * Who reads the trail, and so who downloads it (D-222): an owner or an admin, as managing members is
- * (§7.4). A member is refused for what they are, after their membership has made the workspace exist
+ * Who reads the trail, and so who downloads it (D-222): whoever holds `audit.read` — an owner or an admin, as
+ * managing members is (§7.4). A member is refused for what they are, after their membership has made the workspace exist
  * for them.
  */
-export const requireTrailReader = (context: WorkspaceContext): void => {
-  if (context.role === 'member') {
+export const requireTrailReader = (context: WorkspaceContext, access: AuditAccess): void => {
+  if (!access.mayRead(context.role)) {
     throw new AppError({
       code: 'FORBIDDEN',
       message: 'Only an owner or an admin reads the trail.',
@@ -144,6 +145,7 @@ export const trailPage = async (
   context: WorkspaceContext,
   filter: AuditFilter,
   page: { readonly before?: string; readonly limit: number },
+  access: AuditAccess,
 ): Promise<AuditEntryShape[]> => {
   const from = instant('from', filter.from);
   const to = instant('to', filter.to);
@@ -170,6 +172,11 @@ export const trailPage = async (
   }
   if (filter.action !== undefined) {
     statement = statement.where('audit_log.action', '=', filter.action);
+  }
+  // What this role's permissions do not read is not in a page, whichever filter asks for it.
+  const unreadable = access.unreadable(context.role);
+  if (unreadable.length > 0) {
+    statement = statement.where('audit_log.action', 'not in', [...unreadable]);
   }
   if (from !== undefined) statement = statement.where('audit_log.id', '>=', messageIdFloor(from));
   if (to !== undefined) statement = statement.where('audit_log.id', '<', messageIdFloor(to));
@@ -203,13 +210,17 @@ export const auditTrail = async (
   executor: Executor,
   context: WorkspaceContext,
   query: AuditQuery,
+  access: AuditAccess,
 ): Promise<AuditPage> => {
-  requireTrailReader(context);
+  requireTrailReader(context, access);
   const { before, limit = PAGE_LIMIT.default, ...filter } = query;
-  const rows = await trailPage(executor, context, checkedFilter(filter), {
-    ...(before === undefined ? {} : { before }),
-    limit: limit + 1,
-  });
+  const rows = await trailPage(
+    executor,
+    context,
+    checkedFilter(filter),
+    { ...(before === undefined ? {} : { before }), limit: limit + 1 },
+    access,
+  );
   const page = rows.slice(0, limit);
   return {
     data: page,

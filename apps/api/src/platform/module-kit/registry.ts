@@ -17,6 +17,7 @@ import {
 } from '@purlay/db';
 import type { CoreClaims } from './core-claims';
 import type { ModuleManifest } from './manifest';
+import { CORE_PERMISSIONS } from './permissions';
 import { templatesOverlap } from './routes';
 
 /**
@@ -143,6 +144,47 @@ const budgetProblems = (manifest: ModuleManifest): string[] => {
   return [];
 };
 
+/** The permissions the core declares, which a module's audit actions may be read by whether or not a test passes the core's claims. */
+const CORE_PERMISSION_NAMES: ReadonlySet<string> = new Set(
+  CORE_PERMISSIONS.map((declared) => declared.name),
+);
+const PERMISSION_WORD = /^[a-z][a-z0-9-]*$/;
+const AUDIT_ACTION = /^[a-z][a-z-]*\.[a-z][a-z_]*$/;
+
+/**
+ * What a module's permissions and audit actions must be: a permission is named `<id>.<what>` so that two modules and the
+ * core can never choose the same one, and the permission that reads an action is the core's or the module's own, never
+ * another module's.
+ */
+const vocabularyProblems = (manifest: ModuleManifest): string[] => {
+  const { id } = manifest;
+  const problems: string[] = [];
+  const own = new Set<string>();
+  for (const { name } of manifest.permissions ?? []) {
+    const word = name.startsWith(`${id}.`) ? name.slice(id.length + 1) : undefined;
+    if (word === undefined || !PERMISSION_WORD.test(word)) {
+      problems.push(`"${id}" declares the permission "${name}", which is not named "${id}.<what>"`);
+    }
+    if (own.has(name)) problems.push(`"${id}" declares the permission "${name}" twice`);
+    own.add(name);
+  }
+  for (const group of manifest.auditActions ?? []) {
+    if (!own.has(group.read) && !CORE_PERMISSION_NAMES.has(group.read)) {
+      problems.push(
+        `"${id}" has audit actions read by "${group.read}", which is neither the core's permission nor one of its own`,
+      );
+    }
+    for (const action of group.actions) {
+      if (!AUDIT_ACTION.test(action)) {
+        problems.push(
+          `"${id}" lists the audit action "${action}", which is not like "issue.created"`,
+        );
+      }
+    }
+  }
+  return problems;
+};
+
 const bundleProblems = (
   manifests: readonly ModuleManifest[],
   core: Partial<CoreClaims>,
@@ -163,7 +205,7 @@ const bundleProblems = (
     if (ids.has(id)) problems.push(`two modules are called "${id}"`);
     ids.add(id);
 
-    problems.push(...budgetProblems(manifest));
+    problems.push(...budgetProblems(manifest), ...vocabularyProblems(manifest));
 
     for (const capability of manifest.provides) {
       if (!CAPABILITY.test(capability)) {
@@ -219,6 +261,10 @@ const CLAIM_KINDS = [
   ['jobs', 'job'],
   ['frames', 'socket operation'],
   ['events', 'server event'],
+  ['permissions', 'permission'],
+  ['auditActions', 'audit action'],
+  ['notifications', 'notification kind'],
+  ['searchSources', 'search source'],
 ] as const;
 
 /** Two claims of one kind clash: the same name, or for a route a template with a path in common. */
@@ -226,10 +272,24 @@ const clash = (kind: keyof CoreClaims, first: string, second: string): boolean =
   kind === 'routes' ? templatesOverlap(first, second) : first === second;
 
 /** A module's retention jobs are jobs it owns: the name of one is what `bun run job` is asked for, as of any other. */
-const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly string[] =>
-  kind === 'jobs'
-    ? [...(manifest.jobs ?? []), ...(manifest.retention ?? [])]
-    : (manifest[kind] ?? []);
+const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly string[] => {
+  switch (kind) {
+    case 'jobs':
+      return [...(manifest.jobs ?? []), ...(manifest.retention ?? [])];
+    case 'permissions':
+      return (manifest.permissions ?? []).map((declared) => declared.name);
+    case 'auditActions':
+      return (manifest.auditActions ?? []).flatMap((group) => group.actions);
+    case 'notifications':
+      return (manifest.notifications ?? []).map((kind) => kind.type);
+    case 'searchSources':
+      return manifest.searchSources ?? [];
+    case 'routes':
+    case 'frames':
+    case 'events':
+      return manifest[kind] ?? [];
+  }
+};
 
 /** What two modules both claim, and what a module claims that the core already has. */
 const overlapProblems = (

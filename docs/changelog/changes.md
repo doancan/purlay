@@ -40,6 +40,7 @@ have it.
 
 ### Changed
 
+- **Audit log** — The action filter offers only the actions of the modules the server runs, so a server without issues no longer lists issue actions (D-265)
 - **Operations** — `bun run release` with no kind prepares a patch release (`0.3.0` → `0.3.1`); `minor`, `major` or an exact version are asked for by name (D-263)
 - **Operations** — `docker-compose.dockhand.yml` no longer runs Caddy: it publishes the API on `PURLAY_HTTP_PORT` for Nginx Proxy Manager to forward to, as purlay.app runs, and no longer needs `PROXY_NETWORK` (D-258)
 - **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)

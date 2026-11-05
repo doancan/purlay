@@ -24,6 +24,7 @@ import {
 import { recordAudit, type AuditEntry } from '../../modules/audit/audit';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
+import type { PermissionTable } from '../../platform/module-kit/permissions';
 import { limitOf } from '../../platform/pagination';
 import type { WorkspaceContext } from '../../platform/tenancy';
 
@@ -240,14 +241,21 @@ export const updateIssue = async (
   return toIssue(row);
 };
 
-/** Whether the caller may delete an issue: the one who made it, or the workspace's owners and admins. */
-const mayDelete = (context: WorkspaceContext, createdBy: string | null): boolean =>
-  context.role === 'owner' || context.role === 'admin' || createdBy === context.userId;
+/** The permission to delete an issue somebody else made, as the manifest declares it (`module.ts`). */
+export const ISSUES_DELETE_ANY = 'issues.delete-any';
+
+/** Whether the caller may delete an issue: the one who made it, or whoever holds the permission to delete any. */
+const mayDelete = (
+  permissions: PermissionTable,
+  context: WorkspaceContext,
+  createdBy: string | null,
+): boolean => permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId;
 
 export const deleteIssue = async (
   transaction: Transaction,
   clock: Clock,
   context: WorkspaceContext,
+  permissions: PermissionTable,
   issueId: string,
 ): Promise<void> => {
   requireIssueId(issueId);
@@ -259,7 +267,7 @@ export const deleteIssue = async (
     .forUpdate()
     .executeTakeFirst();
   if (issue === undefined) throw issueNotFound();
-  if (!mayDelete(context, issue.created_by)) {
+  if (!mayDelete(permissions, context, issue.created_by)) {
     throw new AppError({
       code: 'FORBIDDEN',
       message: 'Only the one who made an issue, or an owner or an admin, can delete it.',
