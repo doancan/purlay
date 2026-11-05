@@ -508,3 +508,15 @@ describe('what a process that does not run a module has of it (permissions and t
     expect(compose([], [guarded]).auditAccess.unreadable('owner')).toEqual(['other.done']);
   });
 });
+
+describe('what a process that does not run a module offers of it', () => {
+  test('its notification kinds and its search sources are those of the modules that run', () => {
+    expect(compositionFor(undefined).notificationKinds.map((kind) => kind.type)).toContain(
+      'mention',
+    );
+    expect(compositionFor(undefined).searchSources).toEqual(['messages']);
+    expect(compositionFor('issues').notificationKinds).toEqual([]);
+    expect(compositionFor('issues').searchSources).toEqual([]);
+    expect(compositionFor('none').searchSources).toEqual([]);
+  });
+});

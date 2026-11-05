@@ -37,7 +37,7 @@ import {
 } from './platform/module-kit/permissions';
 import { ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
-import type { ModuleManifest } from './platform/module-kit/manifest';
+import type { ModuleManifest, NotificationKindDeclaration } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
 
 /**
@@ -146,6 +146,10 @@ export interface Composition {
   readonly permissions: PermissionTable;
   /** Who reads which audit actions: the permissions above over the actions of every module the build carries. */
   readonly auditAccess: AuditAccess;
+  /** The kinds of notification the modules this process runs send: a module that is off offers none. */
+  readonly notificationKinds: readonly NotificationKindDeclaration[];
+  /** The ids of the search sources of the modules this process runs: a module that is off is not queried. */
+  readonly searchSources: readonly string[];
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -203,6 +207,8 @@ export const compose = (
       permissions,
       holding.flatMap((module) => module.manifest.auditActions ?? []),
     ),
+    notificationKinds: modules.flatMap((module) => module.manifest.notifications ?? []),
+    searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),

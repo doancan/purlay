@@ -48,6 +48,14 @@ export interface AuditActionGroup {
   readonly actions: readonly string[];
 }
 
+/** What a kind of notification the module sends does (`NotificationKind` in `@purlay/types`, which a module's list is made of). */
+export interface NotificationKindDeclaration {
+  readonly type: string;
+  readonly needsYou: boolean;
+  readonly pushed: boolean;
+  readonly mailed: boolean;
+}
+
 export interface ModuleManifest {
   /** Lowercase letters, digits and hyphens: the word an operator writes in `MODULES`. */
   readonly id: string;
@@ -93,4 +101,8 @@ export interface ModuleManifest {
   readonly permissions?: readonly PermissionDeclaration[];
   /** The actions the module writes to the audit trail, with who may read them (`audit-access.ts`). */
   readonly auditActions?: readonly AuditActionGroup[];
+  /** The kinds of notification the module sends, by `type`; a process that does not run it offers none of them. */
+  readonly notifications?: readonly NotificationKindDeclaration[];
+  /** The sources the module adds to a workspace search, by id; a process that does not run it queries none of them. */
+  readonly searchSources?: readonly string[];
 }
