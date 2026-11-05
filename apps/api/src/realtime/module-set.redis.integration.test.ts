@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { CLONE_HOOK_MS, createDatabase, DROP_HOOK_MS, sql } from '@purlay/db';
+import { CLONE_HOOK_MS, createDatabase, DROP_HOOK_MS, dropDatabases, sql } from '@purlay/db';
 import { bunRedisClient, connectRedis } from '../platform/redis';
 import { createLogger } from '../platform/logging';
 import { redisNames } from '../platform/redis-names';
@@ -106,8 +106,8 @@ afterAll(async () => {
   await Promise.all(nodes.map(async (node) => await node.process.exited));
   await redis.send('DEL', [names.moduleSet]).catch(() => undefined);
   redis.close();
-  await sql`drop database if exists ${sql.id(NAME)} with (force)`.execute(admin);
   await admin.destroy();
+  await dropDatabases([NAME]);
 }, DROP_HOOK_MS);
 
 describe('integration: a cluster whose nodes run different module sets', () => {

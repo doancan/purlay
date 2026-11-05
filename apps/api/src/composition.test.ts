@@ -196,6 +196,11 @@ describe('the application as its modules make it', () => {
       expect(compose([noticing], [noticing]).pushNotices).toBe(notices);
       expect(compose([], [noticing]).pushNotices).toBe(noPushNotices);
     });
+
+    test('are owned, for the failure counter, by the module whose they are, and by the core where none runs', () => {
+      expect(compose([noticing], [noticing]).pushOwner).toBe('noticing');
+      expect(compose([], [noticing]).pushOwner).toBe('core');
+    });
   });
 
   describe('in what order the modules take part', () => {

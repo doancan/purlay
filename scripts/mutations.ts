@@ -13695,9 +13695,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'web-chat-screen-imported-statically',
     why: 'a chat screen is imported at the top of the outlet again, so the shell carries chat whether or not the server runs it (D-250)',
     file: 'apps/web/src/app/outlet.tsx',
-    find: "import { isModuleMatch, moduleOf } from '../router/routes';",
+    find: "import { isModuleMatch, moduleOf, type Match } from '../router/routes';",
     replace:
-      "import { isModuleMatch, moduleOf } from '../router/routes';\nimport { UnreadsScreen } from '../features/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
+      "import { isModuleMatch, moduleOf, type Match } from '../router/routes';\nimport { UnreadsScreen } from '../features/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
     tests: ['apps/web/src/features/chat/chat-chunk.test.ts'],
   },
   {
@@ -13969,6 +13969,31 @@ export const MUTATIONS: readonly Mutation[] = [
     replace:
       "import { UpdateProfileRequest, type Profile } from '@purlay/types';\nimport { sweepLinkPreviews } from '../../features/chat/sweeps';\nvoid sweepLinkPreviews;",
     tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
+    id: 'realtime-file-names-a-chat-file',
+    why: 'a file of the socket layer other than the frame router imports a file of chat, so the layer that carries every module’s frames depends on one of them (D-250)',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: "import type { Clock } from '../platform/clock';",
+    replace:
+      "import type { Clock } from '../platform/clock';\nimport { sweepLinkPreviews } from '../features/chat/sweeps';\nvoid sweepLinkPreviews;",
+    tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
+    id: 'socket-rate-refusal-counted-under-none',
+    why: 'a socket frame refused for the rate is counted under no module though its operation is a module’s, so the module whose frames are flooding is not the one the page names (D-250 rule 7)',
+    file: 'apps/api/src/ingress/ws/socket.ts',
+    find: 'module: dependencies.frameOwner?.(operationOf(raw)) ?? NO_OWNER,',
+    replace: 'module: NO_OWNER,',
+    tests: ['apps/api/src/ingress/http/metrics.integration.test.ts'],
+  },
+  {
+    id: 'push-failures-counted-under-the-core',
+    why: 'a push the service did not take is counted under the core though the notice was a module’s, so the module whose notifications fail is not the one the page names (D-250 rule 7)',
+    file: 'apps/api/src/modules/push/sender.ts',
+    find: 'module: dependencies.owner ?? CORE_OWNER',
+    replace: 'module: CORE_OWNER',
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
   },
   {
     id: 'socket-presence-kept-without-chat',
@@ -15055,6 +15080,15 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "if (dash.length === afterArea.length || !dash.startsWith('—')) return plain;",
     replace: "if (!dash.startsWith('—')) return plain;",
     tests: ['packages/types/src/releases.test.ts'],
+  },
+  {
+    id: 'module-screen-has-a-shell-of-its-own',
+    why: "a module's screens are drawn in a shell of their own again, so the front door's hand-over to a channel builds the shell again and closes the menu opened on it",
+    file: 'apps/web/src/app/outlet.tsx',
+    find: 'return shelled(match.params.slug, <ModuleRoute name={match.name} params={match.params} />);',
+    replace:
+      'return bare(<div className="contents"><Shell slug={match.params.slug}><ModuleRoute name={match.name} params={match.params} /></Shell></div>);',
+    tests: ['apps/web/src/app/module-route.test.tsx'],
   },
   {
     id: 'refusal-tells-a-non-member-why-an-archived-channel-is-gone',
