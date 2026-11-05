@@ -40,14 +40,21 @@ declares:
 - `routes`: its HTTP routes as templates, **at the paths the contract already gives them** — no `/api/<id>` prefix is
   added, and the route table itself is code in `ingress/`, so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
 - `frames`: the client operations on the socket it owns; `events`: the server events its services send; `jobs`: the
-  scheduled jobs that act for its users. A process that does not run the module closes all four (§3).
+  scheduled jobs that act for its users. A process that does not run the module closes all four (§3);
+- `budget` (**required**, D-260): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or `{ none: reason }`.
+  A manifest without it does not compile, and the registry refuses one that has none at run time, a `none` with no
+  reason and a share that leaves the module no connection or the others none (§7);
+- `retention`: the scheduled jobs that keep its rows within their retention — a purge past the days kept, a sweep of a
+  cache. Unlike `jobs` they run in every process, whichever modules it runs, because the rows are there (§3).
 
 That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. What a module
-contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads:
+contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `jobWork`, the work of
+each job its manifest names under `jobs` or `retention` and of no other (a build where the names and the work differ does
+not start; `bun run job` takes the work from the composition and names no module, D-260),
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
 of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
 and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
-anything:** `notifications`, `searchSources`, retention as a declared hook, and the audit actions and permissions a module
+anything:** `notifications`, `searchSources`, and the audit actions and permissions a module
 registers — the audit actions are in `modules/audit`, and the role rules are in each service.
 
 ## 3. Boot
@@ -233,16 +240,19 @@ The session says which modules run: `GET /api/me`'s `modules`, not the public `G
 Modules share a process, an event loop and a connection pool, so they are kept apart by **budget**:
 
 - a share of the pool: a cap on the transactions a module has open at once, with a queue timeout and a
-  `statement_timeout` set inside them (`budgeted`, `platform/module-budget.ts`). **Wired for issues, and only
-  for issues** (`features/issues/budget.ts`, handed to its four routes by `createApp`): a third of
+  `statement_timeout` set inside them (`budgeted`, `platform/module-budget.ts`). **Every module declares one**
+  (`budget` in the manifest, D-260) and `createApp` applies each declaration through `transactionsOfModules`, which names
+  no module; a module's routes ask for their boundary by its id. **Issues has a share**
+  (`features/issues/budget.ts`, handed to its four routes): a third of
   `DATABASE_POOL_MAX`, never more than the pool less one and never fewer than one (a pool of one has nothing to
   leave), a queue timeout of one second and a statement limit of five. A request over the share waits its
   turn and, past the timeout, is answered `503 DATABASE_UNAVAILABLE` (`The issues module's share of the database
-  is in use. Try again.`), which a client retries. **Chat is not budgeted**: it is what the others are kept from
+  is in use. Try again.`), which a client retries. **Chat declares `none`, with its reason**: it is what the others are kept from
   slowing, and its behaviour and latency are as they were. The share caps the connections a module holds; it
-  does not cap what a module costs the event loop, which all modules share. Not built: a deadline per request, an
-  error boundary around each handler beyond the domain bus's, and the share for a module that has none yet;
-  a module added later is budgeted by wiring its routes the way issues' are;
+  does not cap what a module costs the event loop, which all modules share. Not built: a deadline per request and an
+  error boundary around each handler beyond the domain bus's. A module added later cannot leave its share out: its
+  manifest says it or says `none` and why, and its routes take `transactionsOf(<id>)` in `createApp`; what no test sees
+  is a handler that takes `database` and so never asks for it;
 - a deadline and an abort signal per `SearchSource`; one that overruns is cancelled, skipped, and the response
   says which (`skipped: [module]`, a wire shape fixed in step 4);
 - the CI latency gate refuses **starvation**, and only that (`budget:latency`): after the quiet trials it runs
@@ -286,7 +296,10 @@ until then it is a stated intent and not a guarantee.
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
-| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built and wired for issues** (a third of the pool; chat is not budgeted); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, and the mutation `issues-routes-outside-their-budget` holds the wiring | 5 |
+| A module cannot starve the others of connections | `budgeted` in `platform/module-budget.ts`: a cap on open transactions, a queue timeout and a `statement_timeout` per module — **built, applied from each manifest's `budget`** (issues a third of the pool; chat `none`); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, `module-budget.integration.test.ts` holds the boundary each declaration makes, and the mutations `issues-routes-outside-their-budget` and `module-budget-declaration-ignored` hold the wiring | 5 |
+| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred — **built** (D-260); mutations `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
+| A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
+| `cli/` and `ingress/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`; a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file` and `ingress-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
@@ -300,7 +313,7 @@ until then it is a stated intent and not a guarantee.
 | A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state by hand-written rows; and CI's `modules` job runs `bun run modules:upgrade` (`testing/module-upgrade.ts`): `packages/db` as the **last release tag** has it is extracted with `git archive`, its own migrator makes a database under each `MODULES` an operator could have kept (the cell's modules that release carried, and everything it carried), a copy of each is migrated to head under every cell of the matrix, and each must exit `0` and record the core's files and the cell's sets — an edited released migration fails it by checksum. `module-upgrade.integration.test.ts` runs the same on a release made from this tree less its newest migrations, and the mutations `upgrade-check-starts-from-an-empty-database` and `upgrade-check-migrates-the-core-alone` hold it — **built**. Not covered: a release that wrote rows (the check migrates the schema the release's migrator makes, empty, so a migration that fails only on data is `upgrade.integration.test.ts`'s and `migration-safety.test.ts`'s), and the tag's own dependencies (its migrator runs on the kysely and pg this tree installed) | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release` (`manifests:snapshot`): no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
-| Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** for issues, the one budgeted module; it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
+| Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** for issues, the one module with a share; it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/` and `ingress/http/<id>.ts`) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
@@ -342,9 +355,20 @@ commit beside this list.
 - `routes`: every path template the module owns, as the paths the contract gives (`:name` is a segment, a trailing `**`
   the rest). `route-ownership.test.ts` fails for a registered route no manifest claims or two claim.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
-  for its users. Leave out a job that only keeps rows tidy: rows outlive the module's being off. Chat's `events` are a
-  `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the module sends and does not list
-  would reach a process that does not run it.
+  for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
+  module sends and does not list would reach a process that does not run it.
+- `budget` (D-260): required. `{ poolShare: (poolMax) => limits }` (issues': `features/issues/budget.ts`) or
+  `{ none: '<reason>' }` (chat's). A manifest without it does not compile; the registry refuses it at run time, and a
+  `none` with no reason, and a share that gives the module no connection or leaves the others none. Nothing else is
+  edited to budget a module: `createApp` builds each module's boundary from its declaration (item 4 says how a route
+  takes it).
+- `retention`: the scheduled jobs that keep the module's rows within their retention, a purge or a sweep, **in the
+  manifest, not in `cli/jobs.ts`**. They run in every process (rows outlive the module's being off); a job that acts for
+  the module's users goes under `jobs` and waits for the module to run. The work is `jobWork` of the module's slot in
+  `bundledModules`, one `JobWork` per name in `jobs` and `retention` (chat's: `features/chat/jobs.ts`); a name with no
+  work, or work with no name, stops the build (`composition.test.ts`), and a name the core or another module has is
+  refused by the registry. The new job still needs its slot in `PLAN` (`modules/jobs/schedule.ts`): `core-claims.test.ts`
+  fails for a job the plan has and nothing claims, and the other way.
 
 **3. The data.**
 
@@ -398,6 +422,14 @@ commit beside this list.
   and seed it in `aTenant` (`ingress/http/cross-tenant.integration.test.ts`). Without the seed, the same-member
   two-workspace list check passes vacuously for the module's lists.
 - `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
+- **The share of the pool**: the module's routes take their transaction boundary by id, `transactionsOf('<id>')` (as the
+  issues routes take it in `createApp`), not `database`. The declaration is what the manifest says; that a handler asks
+  for it is **not** held by a test for a module whose share is not filled by one (`issues-budget.integration.test.ts` is
+  that test for issues): copy it for a module with a `poolShare`.
+- **No door names a module's files but its own routes**: `cli/` imports no file under `features/`, and a route file in
+  `ingress/` that imports the module is added to `ALLOWED` in `module-seams.test.ts` (the list only shrinks; a core route
+  file that needs the module is a port or a manifest field, not an entry); `ingress/http/app.ts` is the one file that may
+  name any.
 
 **5. The web** (the web registry, §6).
 
@@ -455,7 +487,7 @@ audit action edits.
 
 | Where | Files | Why |
 |---|---|---|
-| `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (two routes), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
+| `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (two routes, and `transactionsOf('<id>')` for a module with a share), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `cli/jobs.ts` is **not** edited, the job command takes a module's jobs from the composition; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
 | `packages/db` | `src/migrator.ts` (set registration and `PRODUCT_MODULE_REQUIRES`), `src/table-owners.ts`, `src/table-lifecycle.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, its erasure and retention decision, the generated schema |
 | `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
@@ -467,7 +499,8 @@ without an audit action. A module with UI adds its manifest, one
 counted before the web registry and the derived catalogue, and is stale.
 
 **The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
-fixture, and are edited (seven files): `testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
+fixture, and are edited (eight files): `module-seams.test.ts` (the entry for the handler `ingress/` keeps),
+`testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
 unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
 integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`
 (the `Ids` field, item 4), the seed in `cross-tenant.integration.test.ts`, and the `channel-visibility.integration` and
@@ -639,9 +672,10 @@ request with behaviour unchanged:
    core's own joins (subscriptions, sessions, users, workspaces) — the same rows in the same order, with the chat
    part in its own query. **The link-preview and delivery sweeps** (`sweep:link-previews`,
    `sweep:github-deliveries`) deleted from five of chat's tables in `modules/jobs`; they are now
-   `features/chat/sweeps.ts`, which the job runner calls as it calls the retention purge. They are not in chat's
-   manifest `jobs` on purpose: the rows are in the core's migrations, so the sweeps must keep running with chat
-   off (`module-lifecycle.integration.test.ts` runs them in each cell), which a closed job would stop. What the
+   `features/chat/sweeps.ts`. They, and the retention purge, are chat's manifest `retention` (D-260), not its `jobs`, on
+   purpose: the rows are in the core's migrations, so the sweeps must keep running with chat off
+   (`module-lifecycle.integration.test.ts` runs them in each cell), which a closed job would stop; the job runner takes
+   their work from the composition (`features/chat/jobs.ts`) and names none of it. What the
    core still names are its own tables; the one seam in it that asks `tableExists`, the workspace purge, asks it
    of the names a module contributes and writes none of its own.
 **Step 12, in the order it is built.** (a) *The composition* (**built**): `composition.ts` takes the modules a process runs

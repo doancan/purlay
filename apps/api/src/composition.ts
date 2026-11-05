@@ -13,6 +13,7 @@ import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
 import { AppError, attachmentNotFound } from './platform/errors';
 import { issuesModule } from './features/issues/module';
+import type { JobWork } from './modules/jobs/jobs';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
 import { corePersonalExport } from './modules/export/core-personal-export';
@@ -63,6 +64,12 @@ export interface BundledModule {
   readonly export?: ExportContribution;
   readonly personalExport?: PersonalContribution;
   readonly collatedColumns?: readonly CollatedColumn[];
+  /**
+   * The work of each job the manifest names under `jobs` or `retention`, and of no other: `bun run job` runs them by name,
+   * so a job in the manifest with no work, or work the manifest does not name, stops the build (`compose`). What is under
+   * `retention` runs in every process, and what is under `jobs` only where the module runs (`closedJob`).
+   */
+  readonly jobWork?: Readonly<Record<string, JobWork>>;
 }
 
 /**
@@ -83,6 +90,20 @@ const anyReader =
     throw attachmentNotFound();
   };
 
+/** What is wrong with the jobs a module names and the work it supplies for them, or `undefined` when they are the same names. */
+const jobWorkProblem = ({ manifest, jobWork = {} }: BundledModule): string | undefined => {
+  const named = [...(manifest.jobs ?? []), ...(manifest.retention ?? [])];
+  const withoutWork = named.filter((job) => !(job in jobWork));
+  const unnamed = Object.keys(jobWork).filter((job) => !named.includes(job));
+  if (withoutWork.length > 0) {
+    return `"${manifest.id}" names the jobs ${withoutWork.join(', ')} in its manifest and supplies no work for them`;
+  }
+  if (unnamed.length > 0) {
+    return `"${manifest.id}" supplies work for ${unnamed.join(', ')}, which its manifest does not name under jobs or retention`;
+  }
+  return undefined;
+};
+
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
 export const bundledModules = [
   chatModule,
@@ -97,6 +118,13 @@ export const registry = moduleRegistry(
 
 export interface Composition {
   readonly modules: readonly BundledModule[];
+  /** Every module this build carries, run or not: what a route table needs to apply each one's declared budget. */
+  readonly bundled: readonly BundledModule[];
+  /**
+   * The work of every job a carried module names, by name. Retention jobs are the module's whether it runs or not, and a
+   * job of a module that does not run is asked of `closedJob` first.
+   */
+  readonly jobWork: Readonly<Record<string, JobWork>>;
   /** The reader of `/api/attachments/:attachmentId`: the core's, widened by the modules that run. */
   readonly readAttachment: AttachmentReader;
   /** What the push sender is told by: the module's, or nothing where none runs. */
@@ -149,8 +177,14 @@ export const compose = (
       `more than one module answers for a workspace's channels: ${answering.map((module) => module.manifest.id).join(', ')}`,
     );
   }
+  for (const module of holding) {
+    const problem = jobWorkProblem(module);
+    if (problem !== undefined) throw new Error(problem);
+  }
   return {
     modules,
+    bundled,
+    jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,

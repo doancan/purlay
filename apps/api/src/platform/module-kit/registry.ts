@@ -106,6 +106,43 @@ export const moduleRegistry = (
   };
 };
 
+/** The pools a share is tried against: one of one, the smallest that has a second, and what a deployment may configure. */
+const POOLS_TRIED = [1, 2, 3, 10, 30, 100] as const;
+
+/**
+ * What a manifest's `budget` must be: said at all (a JavaScript caller or a snapshot can leave it out where the type
+ * cannot), `none` with a reason, or a share that gives the module a connection and leaves the others one in every pool
+ * a deployment may have (a pool of one has none to leave, and is the one case the second bound gives way).
+ */
+const budgetProblems = (manifest: ModuleManifest): string[] => {
+  const { id, budget } = manifest;
+  // The type forbids it; a manifest that is data, or written without the compiler's help, may not.
+  const declared = budget as ModuleManifest['budget'] | undefined;
+  if (declared === undefined) {
+    return [
+      `"${id}" does not say what it may take of the database: give it a \`budget\`, a share of the pool or \`none\` with the reason`,
+    ];
+  }
+  if ('none' in declared) {
+    return declared.none.trim() === ''
+      ? [`"${id}" declares \`budget: none\` without a reason`]
+      : [];
+  }
+  for (const pool of POOLS_TRIED) {
+    const { maxConcurrent } = declared.poolShare(pool);
+    if (
+      Number.isInteger(maxConcurrent) &&
+      maxConcurrent >= 1 &&
+      maxConcurrent <= Math.max(1, pool - 1)
+    )
+      continue;
+    return [
+      `"${id}" has a share of ${String(maxConcurrent)} connections in a pool of ${String(pool)}: it needs at least one, and the others one too (a pool of one has none to leave)`,
+    ];
+  }
+  return [];
+};
+
 const bundleProblems = (
   manifests: readonly ModuleManifest[],
   core: Partial<CoreClaims>,
@@ -125,6 +162,8 @@ const bundleProblems = (
     }
     if (ids.has(id)) problems.push(`two modules are called "${id}"`);
     ids.add(id);
+
+    problems.push(...budgetProblems(manifest));
 
     for (const capability of manifest.provides) {
       if (!CAPABILITY.test(capability)) {
@@ -186,6 +225,12 @@ const CLAIM_KINDS = [
 const clash = (kind: keyof CoreClaims, first: string, second: string): boolean =>
   kind === 'routes' ? templatesOverlap(first, second) : first === second;
 
+/** A module's retention jobs are jobs it owns: the name of one is what `bun run job` is asked for, as of any other. */
+const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly string[] =>
+  kind === 'jobs'
+    ? [...(manifest.jobs ?? []), ...(manifest.retention ?? [])]
+    : (manifest[kind] ?? []);
+
 /** What two modules both claim, and what a module claims that the core already has. */
 const overlapProblems = (
   manifests: readonly ModuleManifest[],
@@ -194,7 +239,7 @@ const overlapProblems = (
   const problems: string[] = [];
   for (const [kind, noun] of CLAIM_KINDS) {
     manifests.forEach((manifest, index) => {
-      for (const claim of manifest[kind] ?? []) {
+      for (const claim of claimsOf(manifest, kind)) {
         for (const theirs of core[kind] ?? []) {
           if (!clash(kind, claim, theirs)) continue;
           problems.push(
@@ -204,7 +249,7 @@ const overlapProblems = (
           );
         }
         for (const other of manifests.slice(index + 1)) {
-          for (const theirs of other[kind] ?? []) {
+          for (const theirs of claimsOf(other, kind)) {
             if (!clash(kind, claim, theirs)) continue;
             problems.push(
               kind === 'routes'

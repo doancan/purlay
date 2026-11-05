@@ -11,6 +11,7 @@
 import { sql, type Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
+import type { SendMail } from '../../platform/mail';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
@@ -30,7 +31,24 @@ export interface JobDependencies {
 }
 
 /** What a job did, in counts: logged with its end, never anybody's data. */
-type Outcome = Readonly<Record<string, number>>;
+export type Outcome = Readonly<Record<string, number>>;
+
+/**
+ * What `bun run job` hands the work of a module's job: the process's own connections and settings, so a module's job takes
+ * them from here and opens nothing of its own (`composition.ts`, `MODULES.md` §2).
+ */
+export interface JobContext extends JobDependencies {
+  readonly storage: ObjectStore;
+  readonly appUrl: string;
+  /**
+   * Runs `use` with the relay the server's settings name now, read for this run, so a relay changed in Administration is the
+   * one the next run sends through; `undefined` where none is set. The relay is closed when `use` is done.
+   */
+  readonly withMailer: <T>(use: (send: SendMail | undefined) => Promise<T>) => Promise<T>;
+}
+
+/** The work of one scheduled job a module supplies, named in its manifest's `jobs` or `retention`. */
+export type JobWork = (context: JobContext) => Promise<Outcome>;
 
 export const runJob = async (
   dependencies: JobDependencies,

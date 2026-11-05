@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, integrationDatabase, sql, withRollback } from '@purlay/db';
 import { AppError } from './errors';
-import { budgeted, type ModuleBudget } from './module-budget';
+import { budgeted, transactionsOfModules, type ModuleBudget } from './module-budget';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -87,5 +87,63 @@ describe('integration: a module held to its share of the database', () => {
       });
       expect(result).toBe('inner');
     });
+  });
+});
+
+describe('integration: the boundary of each module of a build', () => {
+  const manifests = [
+    { id: 'shared', budget: { poolShare: (): ModuleBudget => BUDGET } },
+    { id: 'alone', budget: { none: 'a module nothing is kept from' } },
+  ] as const;
+
+  /** How many of `calls` at once the boundary lets in: the rest are refused as the database being busy. */
+  const admitted = async (
+    atomically: ReturnType<ReturnType<typeof transactionsOfModules>>,
+    calls: number,
+  ): Promise<number> => {
+    const release: (() => void)[] = [];
+    const held = Array.from({ length: calls }, () =>
+      atomically(
+        () =>
+          new Promise<void>((resolve) => {
+            release.push(resolve);
+          }),
+      ).then(
+        () => 'done',
+        () => 'refused',
+      ),
+    );
+    await Bun.sleep(80);
+    const inside = release.length;
+    for (const resolve of release) resolve();
+    await Promise.all(held);
+    return inside;
+  };
+
+  test('is the share a module declares, and the plain boundary for one that declared none', async () => {
+    const boundary = transactionsOfModules(manifests, integrationDatabase(), 10);
+    expect(await admitted(boundary('shared'), 3)).toBe(1);
+    expect(await admitted(boundary('alone'), 3)).toBe(3);
+  });
+
+  test('is made once per module, so one share counts every request', () => {
+    const boundary = transactionsOfModules(manifests, integrationDatabase(), 10);
+    expect(boundary('shared')).toBe(boundary('shared'));
+  });
+
+  test('is worked out from the pool the process has', async () => {
+    const sized = [
+      {
+        id: 'shared',
+        budget: { poolShare: (pool: number): ModuleBudget => ({ ...BUDGET, maxConcurrent: pool }) },
+      },
+    ];
+    const boundary = transactionsOfModules(sized, integrationDatabase(), 2);
+    expect(await admitted(boundary('shared'), 3)).toBe(2);
+  });
+
+  test('refuses a module the build does not carry, as a bug of the caller', () => {
+    const boundary = transactionsOfModules(manifests, integrationDatabase(), 10);
+    expect(() => boundary('notes')).toThrow('no module "notes" is carried by this build');
   });
 });
