@@ -9122,8 +9122,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'browser-measured-inside-the-parallel-run',
     why: 'the measuring tests run inside the parallel suite again, and another worker competes for the runner while they measure (D-227)',
     file: '.github/workflows/ci.yml',
-    find: '          PURLAY_E2E_PERFORMANCE: skip\n',
-    replace: '',
+    find: '          PURLAY_E2E_PROJECT: ${{ matrix.project }}\n          PURLAY_E2E_PERFORMANCE: skip\n',
+    replace: '          PURLAY_E2E_PROJECT: ${{ matrix.project }}\n',
     tests: ['scripts/browser-measurement.test.ts'],
   },
   {
