@@ -13,7 +13,10 @@ import {
   countAnswer,
   lowestOf,
   REGRESSION_FACTOR,
+  FLOOR_SPREAD_MS,
   judge,
+  limitOf,
+  spreadOf,
   main,
   p95,
   summarizeTrials,
@@ -41,6 +44,19 @@ describe('the latency budget', () => {
     expect(lines[1]).toContain('over the budget');
   });
 
+  test('what a number may be is the most of the factor, the floor’s spread and the noise floor, and nothing past it passes', () => {
+    expect(limitOf(40)).toBe(40 * REGRESSION_FACTOR);
+    // At 16 ms the factor allows 24 and the spread of the floor allows 26: the larger is the limit.
+    expect(limitOf(16)).toBe(16 + FLOOR_SPREAD_MS);
+    expect(limitOf(4)).toBe(20);
+    expect(limitOf(25, STARVATION_FACTOR)).toBe(25 * STARVATION_FACTOR);
+    // At 40 ms, a half as much again is a regression the spread of the floor does not excuse.
+    expect(judge(run(60.1, 40), run(40, 40)).regressed).toBe(true);
+    // At 16 ms, one runner being 10 ms slower than another is the spread, and 10.1 is not.
+    expect(judge(run(16 + FLOOR_SPREAD_MS, 16), run(16, 16)).regressed).toBe(false);
+    expect(judge(run(16 + FLOOR_SPREAD_MS + 0.1, 16), run(16, 16)).regressed).toBe(true);
+  });
+
   test('a jump past the factor is a regression; at the factor, or under the noise floor, it is not', () => {
     const before = run(40, 40);
     expect(judge(run(40 * REGRESSION_FACTOR, 40), before).regressed).toBe(false);
@@ -59,7 +75,7 @@ describe('the latency budget', () => {
     );
     const worse = await main(['--baseline', file], () => Promise.resolve(run(100, 30)));
     expect(worse.code).toBe(1);
-    expect(worse.lines[0]).toContain('was 30.0 ms) — REGRESSED');
+    expect(worse.lines[0]).toContain('was 30.0 ms, limit 45.0 ms) — REGRESSED');
   });
 
   test('--keep compares with the file when there is one, says so when there is not, and keeps only a run that passed', async () => {
@@ -99,15 +115,36 @@ describe('the latency budget', () => {
 });
 
 describe('independent latency trials', () => {
-  test('uses the middle p95 per metric, never the best run or a pooled percentile', () => {
+  test('judges the lowest p95 per metric, never a pooled percentile, and keeps every trial', () => {
     const trials = [run(35, 90), run(100, 32), run(30, 34)];
     expect(summarizeTrials(trials)).toEqual({
-      ackP95Ms: 35,
-      fanOutP95Ms: 34,
+      ackP95Ms: 30,
+      fanOutP95Ms: 32,
       messages: 60,
       trials,
     });
     expect(trials.map((trial) => trial.ackP95Ms)).toEqual([35, 100, 30]);
+  });
+
+  test('says how noisy the trials were', () => {
+    expect(spreadOf([run(17, 20), run(93, 21), run(30.7, 19)])).toBe(
+      'noise across 3 trials: ACK p95 17.0 to 93.0 ms, fan-out p95 19.0 to 21.0 ms',
+    );
+  });
+
+  test('the trials of the failed jobs on record pass against the baseline they failed, and say how noisy they were', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    await Bun.write(file, JSON.stringify(run(16.4, 16.4)));
+    const trials = [run(30.7, 30.5), run(17, 17), run(93, 92)];
+    let calls = 0;
+    const result = await main(['--keep', file], () =>
+      Promise.resolve(trials[calls++] ?? run(999, 999)),
+    );
+    expect(result.code).toBe(0);
+    expect(calls).toBe(3);
+    expect(result.lines).toContain(
+      'noise across 3 trials: ACK p95 17.0 to 93.0 ms, fan-out p95 17.0 to 92.0 ms',
+    );
   });
 
   test('requires exactly three complete finite positive measurements', () => {
@@ -137,7 +174,7 @@ describe('independent latency trials', () => {
     });
     expect(calls).toEqual([60, 60, 60]);
     expect(result.code).toBe(0);
-    expect(result.lines).toContain('verdict: median of three independent p95 measurements');
+    expect(result.lines).toContain('verdict: lowest of three independent p95 measurements');
     expect(result.lines.join('\n')).toContain('trial 1/3: ACK p95 100.0 ms');
     expect(await Bun.file(file).json()).toEqual(summarizeTrials(trials));
   });
@@ -150,8 +187,8 @@ describe('independent latency trials', () => {
       const original = JSON.stringify(run(30, 30));
       await Bun.write(file, original);
       const slow = metric === 'ack' ? run(100, 30) : run(30, 100);
-      const trials = [slow, run(31, 31), slow];
-      const again = [run(31, 31), slow, slow];
+      const trials = [slow, slow, slow];
+      const again = [slow, slow, slow];
       let calls = 0;
       const result = await main(['--keep', file, '--record', record], () =>
         Promise.resolve([...trials, ...again][calls++] ?? run(999, 999)),
@@ -208,10 +245,12 @@ describe('a regression, measured again (D-227)', () => {
     expect(result.code).toBe(0);
     const said = result.lines.join('\n');
     expect(said).toContain(
-      'ACK round-trip p95: 100.0 ms of 120 ms (60 messages, was 30.0 ms) — REGRESSED',
+      'ACK round-trip p95: 100.0 ms of 120 ms (60 messages, was 30.0 ms, limit 45.0 ms) — REGRESSED',
     );
     expect(result.lines).toContain('first measurement regressed; measured again:');
-    expect(said).toContain('ACK round-trip p95: 31.0 ms of 120 ms (60 messages, was 30.0 ms)\n');
+    expect(said).toContain(
+      'ACK round-trip p95: 31.0 ms of 120 ms (60 messages, was 30.0 ms, limit 45.0 ms)\n',
+    );
     expect(await Bun.file(file).json()).toEqual(summarizeTrials([steady, steady, steady]));
     expect(await Bun.file(record).json()).toEqual(summarizeTrials([steady, steady, steady]));
   });
@@ -295,7 +334,7 @@ describe('chat’s latency with issues busy', () => {
     expect(verdict.regressed).toBe(false);
     expect(verdict.lines[0]).toBe('with issues busy, against the quiet trials of this run:');
     expect(verdict.lines[1]).toBe(
-      'ACK round-trip p95: 29.0 ms of 120 ms (60 messages, was 25.0 ms)',
+      'ACK round-trip p95: 29.0 ms of 120 ms (60 messages, was 25.0 ms, limit 200.0 ms)',
     );
     expect(verdict.lines.join('\n')).toContain('issues answered 900, refused 12');
   });
