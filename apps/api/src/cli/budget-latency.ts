@@ -13,9 +13,10 @@
  * pace inside the rate budgets, and every message is timed from the frame leaving to its `ACK` on the
  * sender's socket and to its `MESSAGE_CREATED` on the other's.
  *
- * Three independent API processes are measured sequentially, sixty messages each. The median of
- * their p95s is compared, with every trial reported and recorded: one isolated stall cannot decide
- * the gate, and a slowdown in two or three trials still fails. Never retry until a pass (D-49).
+ * Three independent API processes are measured sequentially, sixty messages each. The lowest of
+ * their p95s is compared, with every trial reported and recorded (D-267): a stall only ever adds to
+ * a trial, so the lowest is the run's own floor, and a real slowdown raises every trial and with it
+ * the floor. Never retry until a pass (D-49).
  *
  * **With issues busy** (`MODULES.md` §7): after those, the same trials run again while people read issues' list as
  * fast as the API answers, in the same process and on the same pool. Chat is not budgeted and issues is, so chat's
@@ -28,8 +29,9 @@
  *
  * **It blocks on a regression, never on the line** (D-49): a p95 on a shared machine moves by tens of
  * percent between identical runs, and a gate people learn to re-run has stopped being a gate. So with a
- * baseline it fails when a p95 is more than `REGRESSION_FACTOR` times the recorded one *and* past the
- * budget's floor of interest; without one it reports, with the budget beside each number.
+ * baseline it fails when a p95 is more than `REGRESSION_FACTOR` times the recorded one, more than
+ * `FLOOR_SPREAD_MS` above it *and* past the budget's floor of interest; without one it reports, with the
+ * budget beside each number.
  */
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -45,6 +47,13 @@ export const BUDGETS = { ackMs: 120, fanOutMs: 200 } as const;
 export const REGRESSION_FACTOR = 1.5;
 /** Below this a jump is noise: a p95 of 4 ms becoming 7 ms is not a regression anyone feels. */
 const NOISE_FLOOR_MS = 20;
+/**
+ * How far one runner's lowest trial lies from another's with identical code (D-267). Measured: the lowest ACK p95
+ * of three trials in 80 `schema` jobs on identical code ran from 9.8 to 17.0 ms, a spread of 7.2 ms, while a single
+ * trial ran from 10 to 70 ms; so a stall is not what a jump of the lowest trial has to be told from, a different
+ * machine is. A jump must clear that spread with room, or one runner being quicker than the last one is a regression.
+ */
+export const FLOOR_SPREAD_MS = 10;
 
 /**
  * Starvation, not slowness: with issues busy chat's p95 may be this many times the quiet p95 of the same run before
@@ -57,12 +66,16 @@ const NOISE_FLOOR_MS = 20;
  */
 export const STARVATION_FACTOR = 8;
 
-/** D-49's one rule for a noisy number: it regressed when it is past both the factor and the floor. */
+/** What a number may be, given the one recorded before it: the most of the factor, the spread of the floor and the noise floor. */
+export const limitOf = (before: number, factor: number = REGRESSION_FACTOR): number =>
+  Math.max(before * factor, before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS);
+
+/** D-49's one rule for a noisy number: it regressed when it is past what `limitOf` allows. */
 export const jumped = (
   value: number,
   before: number | undefined,
   factor: number = REGRESSION_FACTOR,
-): boolean => before !== undefined && value > Math.max(before * factor, NOISE_FLOOR_MS);
+): boolean => before !== undefined && value > limitOf(before, factor);
 
 /**
  * What is measured with issues busy is connections held, not requests served: the readers are closed-loop clients
@@ -102,7 +115,7 @@ interface RepeatedLatency extends Latency {
   readonly trials: readonly Latency[];
 }
 
-/** Every trial counts; the middle p95 is chosen independently for ACK and delivery. */
+/** Every trial is kept; the lowest p95 is chosen independently for ACK and delivery, and is what is judged (D-267). */
 export const summarizeTrials = (trials: readonly Latency[]): RepeatedLatency => {
   if (
     trials.length !== LATENCY_TRIALS ||
@@ -117,13 +130,14 @@ export const summarizeTrials = (trials: readonly Latency[]): RepeatedLatency => 
   ) {
     throw new Error('three complete, finite latency trials of sixty messages are required');
   }
-  const middle = (values: number[]): number => values.sort((a, b) => a - b)[1] ?? Number.NaN;
-  return {
-    ackP95Ms: middle(trials.map((trial) => trial.ackP95Ms)),
-    fanOutP95Ms: middle(trials.map((trial) => trial.fanOutP95Ms)),
-    messages: MESSAGES_PER_TRIAL,
-    trials,
-  };
+  return { ...lowestOf(trials), trials };
+};
+
+/** How far apart the trials were, which is how noisy the machine was while they ran. */
+export const spreadOf = (trials: readonly Latency[]): string => {
+  const range = (values: readonly number[]): string =>
+    `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ms`;
+  return `noise across ${String(trials.length)} trials: ACK p95 ${range(trials.map((trial) => trial.ackP95Ms))}, fan-out p95 ${range(trials.map((trial) => trial.fanOutP95Ms))}`;
 };
 
 /** The value at the 95th percentile, nearest rank. */
@@ -147,7 +161,10 @@ export const judge = (
   const lines = rows.map(([name, value, before, budget]) => {
     const worse = jumped(value, before, factor);
     if (worse) regressed = true;
-    const against = before === undefined ? '' : `, was ${before.toFixed(1)} ms`;
+    const against =
+      before === undefined
+        ? ''
+        : `, was ${before.toFixed(1)} ms, limit ${limitOf(before, factor).toFixed(1)} ms`;
     const verdict = worse ? ' — REGRESSED' : value < budget ? '' : ' — over the budget';
     return `${name} p95: ${value.toFixed(1)} ms of ${String(budget)} ms (${String(now.messages)} messages${against})${verdict}`;
   });
@@ -473,7 +490,12 @@ export const main = async (
     return {
       now,
       regressed: verdict.regressed,
-      lines: [...verdict.lines, 'verdict: median of three independent p95 measurements', ...detail],
+      lines: [
+        ...verdict.lines,
+        'verdict: lowest of three independent p95 measurements',
+        spreadOf(trials),
+        ...detail,
+      ],
     };
   };
   let { now, regressed, lines } = await measured();
@@ -495,7 +517,7 @@ export const main = async (
   return { lines: [...said, ...lines], code: regressed ? 1 : 0, quiet: now };
 };
 
-/** The lower p95 of each metric across the trials: what chat does when issues is not what slows it. */
+/** The lowest p95 of each metric across the trials: what the code does when it is not a stall that slows it. */
 export const lowestOf = (trials: readonly Latency[]): Latency => ({
   ackP95Ms: Math.min(...trials.map((trial) => trial.ackP95Ms)),
   fanOutP95Ms: Math.min(...trials.map((trial) => trial.fanOutP95Ms)),
