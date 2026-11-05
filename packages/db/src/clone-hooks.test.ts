@@ -12,15 +12,25 @@ import { DROP_HOOK_MS } from './testing';
 const ROOT = join(import.meta.dir, '../../..');
 
 /** Each hook of a kind in a file, as the text from its opening line to its closing one, at its own indent. */
-const hooksOf = (text: string, kind = 'beforeAll'): readonly string[] =>
+const hooksOf = (text: string, kind = 'beforeAll|beforeEach'): readonly string[] =>
   [
     ...text.matchAll(
-      new RegExp(`^([ \\t]*)${kind}\\(async \\(\\) => \\{\\n[\\s\\S]*?\\n\\1\\}[^\\n]*\\);$`, 'gm'),
+      new RegExp(
+        `^([ \\t]*)(?:${kind})\\(async \\(\\) => \\{\\n[\\s\\S]*?\\n\\1\\}[^\\n]*\\);$`,
+        'gm',
+      ),
     ),
   ].map((match) => match[0]);
 
-/** A drop: a clone's own, one passed around by name, or several at once. */
-const DROPS = /\.drop\(\)|await drop\(\)|dropDatabases\(/;
+/**
+ * What a hook waits on the database or a connection for: a drop (a clone's own, one passed around by name, several at
+ * once, or a schema), a pool that is let go, and a wait for sockets to be forgotten. Each is as slow as the machine is
+ * busy, so each is given the time drops wait for (`DROP_HOOK_MS`).
+ */
+const DROPS = /\.drop\(\)|await drop\(\)|dropDatabases\(|drop schema|\.destroy\(\)|\buntil\(/;
+
+/** The hooks that end a test or a file, which is where a drop or a wait for connections is. */
+const ENDING = 'afterAll|afterEach';
 
 /** Whether a hook's closing gives it at least `DROP_HOOK_MS`, by name or as a longer number. */
 const timedForDrops = (hook: string): boolean => {
@@ -64,7 +74,7 @@ describe('a hook that clones the template has the time a clone waits for', () =>
     expect(short).toEqual([]);
   });
 
-  test('every hook that drops clones has at least the time drops wait for', () => {
+  test('every hook that drops, lets a pool go or waits for connections has at least the time drops wait for', () => {
     expect(timedForDrops('afterAll(async () => {\n  await cloned.drop();\n}, DROP_HOOK_MS);')).toBe(
       true,
     );
@@ -73,8 +83,15 @@ describe('a hook that clones the template has the time a clone waits for', () =>
     );
     expect(timedForDrops('afterAll(async () => {\n  await cloned.drop();\n}, 5_000);')).toBe(false);
     expect(timedForDrops('afterAll(async () => {\n  await cloned.drop();\n});')).toBe(false);
+    for (const waits of [
+      'await sql`drop schema ${name} cascade`.execute(db);',
+      'await database.destroy();',
+      "await until('every socket to be forgotten', done);",
+    ]) {
+      expect(DROPS.test(`afterEach(async () => {\n  ${waits}\n});`)).toBe(true);
+    }
     const short = integrationFiles().filter((file) =>
-      hooksOf(readFileSync(join(ROOT, file), 'utf8'), 'afterAll').some(
+      hooksOf(readFileSync(join(ROOT, file), 'utf8'), ENDING).some(
         (hook) => DROPS.test(hook) && !timedForDrops(hook),
       ),
     );
