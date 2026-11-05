@@ -740,6 +740,35 @@ describe('the audit log, narrowed and downloaded', () => {
     await expectNoAxeViolations(view.getByRole('main'));
   });
 
+  test('offers the actions of the modules the server runs, and the core’s always (D-264)', async () => {
+    const optionsOf = async (modules: string[]): Promise<string[]> => {
+      const view = await renderApp(<Outlet />, {
+        path: '/w/acme/settings/audit',
+        api: aSignedInApi({
+          me: () => Promise.resolve({ ...aSession(), modules }),
+          audit: () => Promise.resolve(page([])),
+        }),
+      });
+      await view.findByRole('heading', { level: 1, name: 'Audit log' });
+      await settle();
+      const options = within(view.getByRole('main')).getByLabelText<HTMLSelectElement>(
+        'Action',
+      ).options;
+      const names = [...options].map((option) => option.textContent);
+      view.unmount();
+      return names;
+    };
+    const withIssues = await optionsOf(['chat', 'issues']);
+    expect(withIssues).toContain('Issue made');
+    expect(withIssues).toContain('Channel created');
+    const chatOnly = await optionsOf(['chat']);
+    expect(chatOnly).not.toContain('Issue made');
+    expect(chatOnly).toContain('Channel created');
+    const none = await optionsOf([]);
+    expect(none).not.toContain('Channel created');
+    expect(none).toContain('Member removed');
+  });
+
   test('a filter chosen is a new address, so Back undoes it; Clear filters empties it', async () => {
     const asked: unknown[] = [];
     const view = await openAt('/w/acme/settings/audit', {

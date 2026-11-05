@@ -7,6 +7,7 @@
  * **A manifest imports no component, only types.** The router reads the manifests to build its route table, so a
  * manifest that imported a component which imports the router would be a cycle that fails at start-up.
  */
+import type { AuditAction } from '@purlay/types';
 import type { GlyphName } from '../components/icon';
 import type { KeyLabels } from '../features/shortcuts/platform';
 import type { PlainKey } from '../i18n/types';
@@ -76,6 +77,11 @@ export interface ModuleManifest {
   readonly palette: readonly ModuleLink[];
   readonly shortcuts: readonly ModuleShortcut[];
   readonly settings: readonly ModuleSettingsPage[];
+  /**
+   * The audit actions the module records (D-264), which the audit page offers to filter by only where the server runs the
+   * module. The API manifest lists the same ones; both read the module's list in `@purlay/types`.
+   */
+  readonly auditActions: readonly AuditAction[];
 }
 
 /** A shortcut row, its group and label by key, and the row it sits after; the keys are a function of the platform's names. */
