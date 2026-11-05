@@ -8,12 +8,15 @@
  * seven megabytes of copying and a checkpoint to drop: eight of them were most of
  * what this file cost, and on a slow disk more than a hook's five seconds.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
   sql,
   withRollback,
+  type ClonedDatabase,
   type Executor,
 } from '@purlay/db';
 import { bundledModules, compose, type Composition } from '../../composition';
@@ -25,9 +28,17 @@ import {
 } from '../../testing/doubles';
 import { testNeeding } from '../../testing/needs';
 
+// A database of its own (D-228) for the tests that alter a table: the lock holds until the rollback, and on the
+// shared database it deadlocks (40P01) with any file beside it that touches the table.
+let own: ClonedDatabase;
+beforeAll(async () => {
+  own = await cloneIntegrationDatabase();
+}, CLONE_HOOK_MS);
+
 afterAll(async () => {
+  await own.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const ready = async (
   database: Executor,
@@ -97,7 +108,7 @@ describe('integration: readiness', () => {
     await withRollback(async (db) => {
       await sql`alter table kysely_migration drop column checksum`.execute(db);
       expect(await ready(db)).toEqual({ status: 200, body: { status: 'ready' }, reasons: [] });
-    });
+    }, own.db);
   });
 
   test('an identifier column that does not compare byte-wise is not ready', async () => {
@@ -106,7 +117,7 @@ describe('integration: readiness', () => {
       const answer = await ready(db);
       expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
       expect(String(answer.reasons[0])).toContain('users.email');
-    });
+    }, own.db);
   });
 
   test('a column chat declares byte-wise, and does not, is not ready either (D-250)', async () => {
@@ -115,7 +126,7 @@ describe('integration: readiness', () => {
       const answer = await ready(db);
       expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
       expect(String(answer.reasons[0])).toContain('channels.name');
-    });
+    }, own.db);
   });
 
   /**

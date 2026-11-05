@@ -5,7 +5,15 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, focused, test, workspaceFor } from './fixtures';
-import { navLink, onEngine, shellReady, uniqueName, WEBKIT_TAB } from './support';
+import {
+  isNarrow,
+  navLink,
+  onEngine,
+  openNav,
+  shellReady,
+  uniqueName,
+  WEBKIT_TAB,
+} from './support';
 
 const modifier = 'ControlOrMeta';
 
@@ -317,5 +325,43 @@ test.describe('focus', () => {
     });
     expect(where.connected).toBe(true);
     expect(where.inside).toBe(true);
+  });
+});
+
+test.describe('the workspace’s front door', () => {
+  test('a menu opened on its sidebar is still open when the door hands over to a channel', async ({
+    page,
+    signIn,
+    tenant,
+  }) => {
+    // At a narrow width the sidebar is an overlay that closes on any change of route (`nav.tsx`, D-98), the
+    // door's redirect included, and its menu with it: that is the overlay's rule, not the shell being built again.
+    test.skip(
+      isNarrow(page),
+      'the narrow sidebar is an overlay that closes when the route changes',
+    );
+    await signIn();
+    // The channels are held, so the door is what is on the screen when the menu is opened, and the
+    // hand-over happens after, not at a moment the test hopes for.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/workspaces/*/channels', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(`/w/${tenant.slug}`);
+    await openNav(page);
+    await page.getByRole('button', { name: 'Switch workspace' }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/w/${tenant.slug}$`));
+
+    release();
+    await expect(page).toHaveURL(new RegExp(`/w/${tenant.slug}/c/[0-9a-f-]+$`));
+    // Attached, not visible: an open menu holds the rest of the page out of the accessibility tree.
+    await expect(page.locator('main [role="feed"]')).toBeAttached();
+    await expect(menu).toBeVisible();
   });
 });
