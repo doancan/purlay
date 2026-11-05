@@ -23,6 +23,7 @@ const results = (
     },
     browser: { result: over.browser ?? 'success', outputs: {} },
     modules: { result: over.modules ?? 'success', outputs: {} },
+    'module-suites': { result: over['module-suites'] ?? 'success', outputs: {} },
   });
 
 describe('the gate', () => {
@@ -61,6 +62,16 @@ describe('the gate', () => {
     ]);
     expect(judge(results({ modules: 'skipped' }, 'false', 'true'))).toEqual([
       'modules ended skipped',
+    ]);
+  });
+
+  test('passes a change the modules jobs cannot see, whose suites per cell were skipped for it, and refuses them for one they can', () => {
+    expect(judge(results({ 'module-suites': 'skipped' }, 'true', 'false'))).toEqual([]);
+    expect(judge(results({ 'module-suites': 'skipped' }, 'true', 'true'))).toEqual([
+      'module-suites ended skipped',
+    ]);
+    expect(judge(results({ 'module-suites': 'failure' }, 'true', 'false'))).toEqual([
+      'module-suites ended failure',
     ]);
   });
 

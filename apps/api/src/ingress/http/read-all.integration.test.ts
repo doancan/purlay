@@ -2,6 +2,8 @@
  * "Mark every channel read" (D-238) through the HTTP surface against a database of its own, so that
  * requests at once really are at once: what is read, what is answered, who is refused, and that two
  * at once — and one beside a read of one channel — both finish.
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

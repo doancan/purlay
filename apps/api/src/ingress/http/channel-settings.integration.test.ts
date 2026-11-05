@@ -5,6 +5,8 @@
  * Crossing a tenant and the visibility axis is not here (`cross-tenant.integration.test.ts`,
  * `channel-visibility.integration.test.ts`), nor is the archive per role
  * (`permissions.integration.test.ts`): each is a table the build checks against `API.md`.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

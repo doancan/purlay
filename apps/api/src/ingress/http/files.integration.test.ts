@@ -2,6 +2,8 @@
  * `GET /api/channels/:channelId/files` through the HTTP surface (#485, D-129): a channel's files,
  * newest message first, of messages not deleted — never an unattached upload, never another
  * channel's — paged on the message and then the file, and refused as the channel is.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

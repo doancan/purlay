@@ -6,6 +6,8 @@
  * is for hear it, and that the people it is not for do not — what is true for one
  * person (their read position, a conversation opened with them) is published on
  * their own topic and must not be audible to the room.
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

@@ -19,6 +19,8 @@
  * cannot be added without deciding it, and the ones that name a channel cannot
  * opt out (`cross-tenant.test.ts`). The crossings are in
  * `channel-visibility.integration.test.ts`. (D-64)
+ *
+ * @needs-modules chat, issues
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -1,4 +1,7 @@
-/** The one question about a table that may be absent: whether the database has it (`MODULES.md` §5). */
+/** The one question about a table that may be absent: whether the database has it (`MODULES.md` §5).
+ *
+ * @needs-modules chat, issues
+ */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import { absentTables, tableExists } from './table-exists';

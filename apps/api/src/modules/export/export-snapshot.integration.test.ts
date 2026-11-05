@@ -4,6 +4,8 @@
  * that writes the messages' page commits a reaction from another connection before the reactions are
  * read; the export does not see it, so no reaction can name a message the export lacks, nor the
  * reverse.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

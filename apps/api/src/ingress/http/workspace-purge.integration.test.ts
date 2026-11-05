@@ -5,6 +5,8 @@
  * tombstone; more than a batch over as many transactions as it takes; a run cut off half way finished by the
  * next, and a run after that doing nothing; a file the store refuses left for `sweep:deletions`, and said.
  * And the catalogue: every table that refers to a workspace is one the erasure empties or the trail keeps.
+ *
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';

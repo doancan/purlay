@@ -7,7 +7,7 @@
 > run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them, §3),
 > and the migration sets, the composition, the cluster record and the table-ownership list exist. What is not
 > built: the typed query handle and the per-module generated `schema.ts`, workspace-level enablement, a module budget that any
-> process takes (§7), and a CI matrix that runs the whole suite per cell (§8 says what runs). §8 says what each rule
+> process takes (§7), and a CI matrix that runs every suite per cell (§8 says what runs: the suites that need no module, in every cell but the one with every module). §8 says what each rule
 > is held by, and §10 the order; a line marked **built** there is, and one not marked is intent. §9 is the
 > checklist for adding a module and §12 the glossary.
 
@@ -310,9 +310,9 @@ until then it is a stated intent and not a guarantee.
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
 | A bundle has no cycle, repeat or double capability, and no two modules (nor a module and the core, `core-claims.ts`) own the same route template (a subtree or a named segment overlapping another's counts), job, socket operation or server event | the registry, and mutations in `scripts/mutations.ts` | 1 |
 | `MODULES` is valid | `resolve`, at boot: a process that cannot parse it logs `MODULES cannot be run; exiting` with every problem and exits `1` (`registry.test.ts`, `migrate-on-start.integration.test.ts`) — **built** | 12 |
-| The matrix exists as soon as two cells differ | the cells the tests build (below) and, on a started process, CI's `modules` job (`bun run modules:smoke`): one migrated database and one API per cell, the cells made from the bundle — **built** | 9 |
-| Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, `modules:smoke` (every path every manifest claims, every method, signed out, on a real process per cell: a module left out answers byte for byte what an unknown path does, a module that runs answers something else), and `test:modules-none`, a browser spec run in the browser job — **built**; not a whole-suite matrix | 12 |
-| Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; the whole suite is **not** run per cell: no CI job does | 12 |
+| The matrix exists as soon as two cells differ | the cells the tests build (below) and, on a started process, CI's `modules` job (`bun run modules:smoke`): one migrated database and one API per cell, the cells made from the bundle — **built**; and the suites that belong to no module, once per cell (`bun run modules:suites`, below) — **built** | 9 |
+| Disabled ⇒ `404`, no distinct body | `modules-off*.integration.test.ts` (routes, socket, presence, per cell), the route-ownership test, `modules:smoke` (every path every manifest claims, every method, signed out, on a real process per cell: a module left out answers byte for byte what an unknown path does, a module that runs answers something else), and `test:modules-none`, a browser spec run in the browser job — **built**; and every suite that needs no module, run in each cell with the application that cell starts (`modules:suites`) | 12 |
+| Disabled ⇒ no tables | a test migrates the core alone, each set on the core and every set, and finds that a set adds only tables it owns (`migration-cells.integration.test.ts`) — **built**; and `modules:suites` runs the suites that need no module on a database that has only the cell's sets, so a suite that reaches for a table of a module that is off fails there | 12 |
 | Disabling leaves erasure and export whole | the export catalogue test over manifests; an erasure test with a module off; every lifecycle step in each cell of database state × process, on real migrated databases (`module-lifecycle.integration.test.ts`) — **built** | 10 |
 | A table says what becomes of its rows on an account's erasure and how long they are kept | `TABLE_LIFECYCLE` over the schema (`packages/db/src/table-lifecycle.ts`): a table without the decision does not compile, and `table-lifecycle.test.ts` holds it to `TABLE_OWNERS` and spells out the tables erasure does not reach — **built** | 10 |
 | A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state by hand-written rows; and CI's `modules` job runs `bun run modules:upgrade` (`testing/module-upgrade.ts`): `packages/db` as the **last release tag** has it is extracted with `git archive`, its own migrator makes a database under each `MODULES` an operator could have kept (the cell's modules that release carried, and everything it carried), a copy of each is migrated to head under every cell of the matrix, and each must exit `0` and record the core's files and the cell's sets — an edited released migration fails it by checksum. `module-upgrade.integration.test.ts` runs the same on a release made from this tree less its newest migrations, and the mutations `upgrade-check-starts-from-an-empty-database` and `upgrade-check-migrates-the-core-alone` hold it — **built**. Not covered: a release that wrote rows (the check migrates the schema the release's migrator makes, empty, so a migration that fails only on data is `upgrade.integration.test.ts`'s and `migration-safety.test.ts`'s), and the tag's own dependencies (its migrator runs on the kysely and pg this tree installed) | 10 |
@@ -321,6 +321,7 @@ until then it is a stated intent and not a guarantee.
 | Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** for issues, the one module with a share; it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/` and `ingress/http/<id>.ts`) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
+| A suite that is about no module passes whichever modules run; one that needs a module says so | `bun run modules:suites` (CI's `module-suites` job): for each cell but the one with every module, the integration suites that need no module the cell lacks run on a database of only the cell's sets with `MODULES` set, which the harness reads (`@purlay/db`'s `testing.ts` migrates `setsNamedBy(MODULES)`, `testDependencies` composes `compositionFor(MODULES)`). What a suite needs is what it imports of `features/<id>/` (its own helpers included) and what it declares, `// @needs-modules chat` in the file or a helper, or `testNeeding('chat')(…)` for one test (`testing/module-needs.ts`, `testing/needs.ts`); `module-suites.test.ts` holds every declared id to the build's modules and leaves at least the suites that import nothing in every cell — **built**; mutations `harness-ignores-modules-for-the-schema` and `harness-composes-every-module` | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
@@ -331,9 +332,24 @@ modules and a sample past that, so a third module adds its cells with no test ed
 `test:modules-none` in a browser, and `modules:smoke` (`testing/module-smoke.ts`), which CI runs as the `modules` job whenever the
 API, a package, the dependencies or the workflow changed: for each cell, `db:migrate` under its `MODULES`, the API started with the same
 value and no migration of its own, and the paths of the manifests asked for. It is the set of cells run, and the only combinations
-promised (D-250 rule 6). It is **not the whole suite once per cell**, and cannot be: the suite's tests build their own composition and
-read no `MODULES`, so the variable would change nothing in them and a job that set it would prove nothing; the cells are the
-process-level checks above.
+promised (D-250 rule 6).
+
+**The suites per cell.** The same matrix runs the product's tests: `bun run modules:suites` (CI's `module-suites` job, one leg per cell, a required part of `verify`) takes every cell but the one with every module — that cell is `bun run test:all`, the whole suite on the whole schema, and the
+harness unset is what it always was — and for each makes a database, migrates only the sets that cell's `MODULES` names, and runs on it,
+with `MODULES` set, the integration suites (`apps/api` and `packages/db`; unit tests read no `MODULES`, so a second run would repeat the
+first) that need no module the cell lacks. The harness reads the setting twice, as a process does: the migrations (`setsNamedBy`) and the
+composition (`compositionFor`), so an application a test builds with `testDependencies` is the one that `MODULES` starts, and a table of a
+module that is off is not there. **The rule for the subset is the suite's own need, not a list.** A suite needs the modules whose files it
+imports (the closure of its relative imports, helpers included, cut at the files that put the modules together:
+`composition.ts`, `index.ts`, `ingress/http/app.ts`, `ingress/ws/socket.ts`) and the ones it declares: `@needs-modules chat, issues` in the
+file's header or in a helper it imports (a fixture that writes chat's rows says so once, `testing/channels.ts`), or `testNeeding('chat')(…)` /
+`describeNeeding(…)` (`testing/needs.ts`) for one test or group in a file that is otherwise about no module, which is skipped in a cell
+without it under a name that says why (`… (needs chat)`). A cell leaves out the whole files whose needs it lacks and says how many of each kind
+(`27 suites need chat, which this cell does not run`). A new module adds its cells to the command and the suites that import it are its; a
+suite that reaches a module by its routes or tables, and says nothing, fails in the cells without the module, in CI. Not covered: the
+cell with every module is not run twice; a suite that needs *both* modules (the endpoint table, the export and purge catalogues, the
+cross-tenant matrix, the permission table, which each walk every module's rows) runs only in the cell with everything, so what those say
+about one module with the other off is not proven; the Redis suites run in each cell as the others do. The cost is about **nine to thirteen minutes** of one runner for all three cells on a laptop (the core alone 2–3 min, chat 5–6 min, issues 2.5–5 min, two files at a time); in CI each cell is a leg of its own job beside `schema`, so a pull request waits for the longest (chat's, about as long as `schema`) and the added runner time is the sum, about ten minutes. `module-suites.test.ts` holds the workflow's legs to the cells the build has.
 
 ## 9. Adding a module — the checklist
 
@@ -463,6 +479,7 @@ commit beside this list.
 - The **lifecycle matrix cell**: `module-lifecycle.integration.test.ts` runs erasure, purge, exports, jobs and the attachment
   reader with the module's set as a database state and the module alone as a process.
 - A **real process** per cell in `platform/migrate-on-start.integration.test.ts`: nothing to edit, its cases are made from the bundle.
+- **Its suites declare what they need** (§8, *The suites per cell*): a suite under `features/<id>/` needs the module by where it is, a suite or helper that imports its files by the import, and one that reaches the module by its routes or its tables says `// @needs-modules <id>` in its header (or `testNeeding('<id>')(…)` for one test) — or it fails in `modules:suites` in every cell without the module. A suite about the core that uses a module's fixture (`aRoom` makes a channel) needs the module; to keep a core suite in every cell, build its world from the core's tables.
 - The **smoke cell**: nothing to edit — `modules:smoke` makes its cells from the bundle and its paths from the manifest's `routes`, so a
   module with routes is asked for in every cell. A module whose manifest claims no path fails it (nothing would show it runs).
 - The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
@@ -561,7 +578,7 @@ Each step ships alone and can be reverted.
 | 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
 | 10 | Migrations split by module; `data` hooks — **built** (`tableExists`, §5); the ownership ratchet reaches zero — **built, ships in the release after the expand** (`chat/0005`); codegen and `db:check` per module are **not built** | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
-| 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; **not built:** the whole-suite matrix in CI; a share of the pool and a starvation gate are built for issues, the one budgeted module (§7) | **yes** |
+| 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; the product's module-independent suites in every cell in CI (`modules:suites`, §8); a share of the pool and a starvation gate are built for issues, the one budgeted module (§7) | **yes** |
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
@@ -696,7 +713,7 @@ users (chat's missed-mail letter) exits `0` with a line saying so and is left ou
 A scan holds every route the application registers to the core's list or a module's. (d) The web building its routes
 from the modules `GET /api/me` lists (step 11, **built**); (e) *the cluster check* (**built**): where nodes share Redis each keeps its set in one
 shared record, renewed and lapsing by itself, and a node that finds another set logs it once and again when the nodes agree;
-it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI (the cells of §8 are built; the whole suite per cell is not).
+it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI (the cells of §8 are built, and so is the run of the suites that need no module in each of them; a suite that needs two modules runs only where both do).
 
 **Step 11 in detail — chat's screens as a chunk (built; measured 2026-11-03).** The seven screens (channel, inbox,
 questions, search, saved, drafts, unreads) and what only they reach — the composer, the feed, messages and threads —

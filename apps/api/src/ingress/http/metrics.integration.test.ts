@@ -23,6 +23,7 @@ import { testConfig, testDependencies } from '../../testing/doubles';
 import { readExposition, sampleOf, type ReadPage } from '../../testing/exposition';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { testNeeding } from '../../testing/needs';
 
 const owners = composition.owner;
 const NOW = new Date('2026-10-31T12:00:00.000Z');
@@ -154,71 +155,75 @@ describe('integration: the scheduled jobs on the page', () => {
 });
 
 describe('integration: what a person does is counted, and nothing of theirs is on the page', () => {
-  test('a sign-in, a workspace, a channel and a message move the counts by route, and leave no name, address, id or word', async () => {
-    const person = await aSignedInUser(db, clock, 'şükrü');
-    const slug = aUniqueSlug('gizli-proje');
-    const workspace = await call('POST', '/api/workspaces', {
-      cookie: person.cookie,
-      body: { name: 'Gizli Proje Çalışma Alanı', slug },
-    });
-    expect(workspace.status).toBe(201);
-    const workspaceId = ((await workspace.json()) as { id: string }).id;
-    const channel = await call('POST', `/api/workspaces/${workspaceId}/channels`, {
-      cookie: person.cookie,
-      body: { name: 'maaşlar' },
-    });
-    expect(channel.status).toBe(201);
-    const channelId = ((await channel.json()) as { id: string }).id;
-    const id = messageId(NOW);
-    const content = 'Zam oranı %12 — kimseye söyleme 🙂 <script>alert(1)</script>';
-    const sent = await call('POST', `/api/channels/${channelId}/messages`, {
-      cookie: person.cookie,
-      body: { id, content },
-    });
-    expect(sent.status).toBe(201);
-    expect(
-      (await call('GET', `/api/channels/${channelId}/messages`, { cookie: person.cookie })).status,
-    ).toBe(200);
+  testNeeding('chat')(
+    'a sign-in, a workspace, a channel and a message move the counts by route, and leave no name, address, id or word',
+    async () => {
+      const person = await aSignedInUser(db, clock, 'şükrü');
+      const slug = aUniqueSlug('gizli-proje');
+      const workspace = await call('POST', '/api/workspaces', {
+        cookie: person.cookie,
+        body: { name: 'Gizli Proje Çalışma Alanı', slug },
+      });
+      expect(workspace.status).toBe(201);
+      const workspaceId = ((await workspace.json()) as { id: string }).id;
+      const channel = await call('POST', `/api/workspaces/${workspaceId}/channels`, {
+        cookie: person.cookie,
+        body: { name: 'maaşlar' },
+      });
+      expect(channel.status).toBe(201);
+      const channelId = ((await channel.json()) as { id: string }).id;
+      const id = messageId(NOW);
+      const content = 'Zam oranı %12 — kimseye söyleme 🙂 <script>alert(1)</script>';
+      const sent = await call('POST', `/api/channels/${channelId}/messages`, {
+        cookie: person.cookie,
+        body: { id, content },
+      });
+      expect(sent.status).toBe(201);
+      expect(
+        (await call('GET', `/api/channels/${channelId}/messages`, { cookie: person.cookie }))
+          .status,
+      ).toBe(200);
 
-    await until(
-      'purlay_http_request_duration_seconds_count',
-      {
-        method: 'POST',
-        route: '/api/channels/:channelId/messages',
-        status: '2xx',
-        module: 'chat',
-      },
-      1,
-    );
-    const text = await scrapeText();
-    const page = readExposition(text);
-    expect(
-      sampleOf(page, 'purlay_http_request_duration_seconds_count', {
-        method: 'POST',
-        route: '/api/workspaces',
-        status: '2xx',
-        module: 'core',
-      }),
-    ).toBe(1);
-    for (const theirs of [
-      person.userId,
-      person.username,
-      person.email,
-      person.sessionId,
-      'şükrü',
-      slug,
-      'Gizli',
-      'maaş',
-      workspaceId,
-      channelId,
-      id,
-      'Zam',
-      'kimseye',
-      '<script>',
-    ]) {
-      expect({ theirs, found: text.includes(theirs) }).toEqual({ theirs, found: false });
-    }
-  });
+      await until(
+        'purlay_http_request_duration_seconds_count',
+        {
+          method: 'POST',
+          route: '/api/channels/:channelId/messages',
+          status: '2xx',
+          module: 'chat',
+        },
+        1,
+      );
+      const text = await scrapeText();
+      const page = readExposition(text);
+      expect(
+        sampleOf(page, 'purlay_http_request_duration_seconds_count', {
+          method: 'POST',
+          route: '/api/workspaces',
+          status: '2xx',
+          module: 'core',
+        }),
+      ).toBe(1);
+      for (const theirs of [
+        person.userId,
+        person.username,
+        person.email,
+        person.sessionId,
+        'şükrü',
+        slug,
+        'Gizli',
+        'maaş',
+        workspaceId,
+        channelId,
+        id,
+        'Zam',
+        'kimseye',
+        '<script>',
+      ]) {
+        expect({ theirs, found: text.includes(theirs) }).toEqual({ theirs, found: false });
+      }
+    },
+  );
 });
 
 /**

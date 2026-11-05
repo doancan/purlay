@@ -3,6 +3,8 @@
  * contract, a link that is not a GitHub pull request or issue refused by name before anything is
  * fetched, and a stranger told the workspace does not exist. The cache and the token are the
  * module's (`unfurl.integration.test.ts`).
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
