@@ -193,6 +193,27 @@ describe('integration: an executor that leases its connections', () => {
     }
   });
 
+  test('does not hand a connection back while a cancellation for it is in flight, so it cannot land on the next statement', async () => {
+    const database = createDatabase({ connectionString: url(), poolSize: 1 });
+    try {
+      for (let round = 0; round < 6; round += 1) {
+        const controller = new AbortController();
+        const leasing = leasingExecutor(database, () =>
+          Promise.resolve({ signal: controller.signal, release: (): void => undefined }),
+        );
+        // The statement ends by itself just as the deadline passes.
+        const finishing = sql`select pg_sleep(0.03)`.execute(leasing);
+        await Bun.sleep(20);
+        controller.abort(new Error('past its deadline'));
+        await thrown(async () => await finishing);
+        // The next holder of the only connection runs a longer statement: nothing cancels it.
+        expect((await sql`select pg_sleep(0.25), 1 as ok`.execute(database)).rows).toHaveLength(1);
+      }
+    } finally {
+      await database.destroy();
+    }
+  });
+
   test('says so, and leaves the statement to its own limit, when the cancellation cannot be made', async () => {
     const pool = new pg.Pool({ connectionString: url(), max: 1 });
     const reported: Error[] = [];

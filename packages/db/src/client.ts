@@ -184,8 +184,11 @@ const connectionsOf = (pool: PoolOfExecutor, lease?: LeaseConnection): PostgresP
     if (leased !== undefined) {
       const giveBack = client.release.bind(client);
       let released = false;
+      // A connection with a cancellation in flight is not handed back until it has been delivered: it would reach the next
+      // statement that connection runs, which is some other request's.
+      let cancelling: Promise<void> | undefined;
       const cancel = (): void => {
-        if (!released) void cancelStatement(pool, client);
+        if (!released) cancelling = cancelStatement(pool, client);
       };
       leased.signal?.addEventListener('abort', cancel, { once: true });
       client.release = (error?: Error | boolean): void => {
@@ -194,7 +197,8 @@ const connectionsOf = (pool: PoolOfExecutor, lease?: LeaseConnection): PostgresP
           leased.signal?.removeEventListener('abort', cancel);
           leased.release();
         }
-        giveBack(error);
+        if (cancelling === undefined) giveBack(error);
+        else void cancelling.then(() => giveBack(error));
       };
     }
     return client;
