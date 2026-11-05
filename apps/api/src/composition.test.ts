@@ -475,3 +475,16 @@ describe('the work of the jobs a module names', () => {
     expect(alone.closedJob('mail:missed')).toBe(true);
   });
 });
+
+describe('what a process that does not run a module has of its permissions', () => {
+  const deleteAny = 'issues.delete-any';
+
+  test('the permissions of a module are held while it runs and by nobody once it does not, the owner included', () => {
+    const running = compositionFor(undefined).permissions;
+    expect(running.holds('member', deleteAny)).toBe(false);
+    expect(running.holds('admin', deleteAny)).toBe(true);
+    expect(running.holds('owner', deleteAny)).toBe(true);
+    const off = compositionFor('chat').permissions;
+    expect(off.holds('owner', deleteAny)).toBe(false);
+  });
+});

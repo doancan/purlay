@@ -15,6 +15,7 @@ import {
   CORE_JOBS,
   CORE_ROUTES,
 } from './platform/module-kit/core-claims';
+import { CORE_PERMISSIONS } from './platform/module-kit/permissions';
 import { ModuleConfigError, moduleRegistry } from './platform/module-kit/registry';
 
 const sorted = (names: Iterable<string>): string[] => [...names].sort();
@@ -36,6 +37,18 @@ describe('what the core claims', () => {
   test('every server event is the core’s or exactly one module’s', () => {
     const sent = new Set(ServerFrame.anyOf.map((frame) => frame.properties.event.const));
     expect(sorted([...CORE_EVENTS, ...owned('events')])).toEqual(sorted(sent));
+  });
+
+  test('every permission a module declares is named for it, which is what keeps two from choosing one', () => {
+    for (const { manifest } of carried) {
+      for (const { name } of manifest.permissions ?? []) {
+        expect(name.startsWith(`${manifest.id}.`)).toBe(true);
+      }
+    }
+  });
+
+  test('the core claims the permissions it declares', () => {
+    expect(CORE_CLAIMS.permissions).toEqual(CORE_PERMISSIONS.map((declared) => declared.name));
   });
 
   test('every scheduled job, and every job the command runs, is the core’s or exactly one module’s', () => {

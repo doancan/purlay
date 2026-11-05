@@ -29,6 +29,11 @@ import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import { hookList } from './platform/hooks';
 import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
+import {
+  CORE_PERMISSIONS,
+  permissionTable,
+  type PermissionTable,
+} from './platform/module-kit/permissions';
 import { ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
 import type { ModuleManifest } from './platform/module-kit/manifest';
@@ -136,6 +141,8 @@ export interface Composition {
   readonly exportCatalogue: ReturnType<typeof assembleCatalogue>;
   readonly personalExportCatalogue: ReturnType<typeof assemblePersonalCatalogue>;
   readonly collatedColumns: readonly CollatedColumn[];
+  /** What a role may do: the core's permissions and those of the modules this process runs, and nothing of a module that is not run. */
+  readonly permissions: PermissionTable;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -184,6 +191,10 @@ export const compose = (
   return {
     modules,
     bundled,
+    permissions: permissionTable([
+      ...CORE_PERMISSIONS,
+      ...modules.flatMap((module) => module.manifest.permissions ?? []),
+    ]),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),

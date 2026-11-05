@@ -12,6 +12,7 @@ import {
 import { createIssue, deleteIssue, issuePage, updateIssue } from '../../features/issues/issues';
 import { requireLiveSession } from '../../modules/auth/sessions';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
+import type { PermissionTable } from '../../platform/module-kit/permissions';
 import type { Atomically } from '../../platform/transactions';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
@@ -27,6 +28,8 @@ import { queryOf, validated } from './validate';
  */
 export interface IssueDependencies extends ChannelDependencies {
   readonly atomically: Atomically;
+  /** What a role may do in a process that runs these modules. */
+  readonly permissions: PermissionTable;
 }
 
 /** `GET /api/workspaces/:workspaceId/issues?status=&before=&limit=` — newest first. */
@@ -76,7 +79,7 @@ export const patchIssue = async (
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */
 export const removeIssue = async (
-  { auth, database, atomically, clock }: IssueDependencies,
+  { auth, database, atomically, clock, permissions }: IssueDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -85,6 +88,6 @@ export const removeIssue = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   await atomically(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    await deleteIssue(transaction, clock, context, issueId);
+    await deleteIssue(transaction, clock, context, permissions, issueId);
   });
 };

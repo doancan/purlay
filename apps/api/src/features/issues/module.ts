@@ -11,8 +11,10 @@
  */
 import { tableExists, type Transaction } from '@purlay/db';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
+import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
 import { issuesBudget } from './budget';
 import { issuesExport } from './export';
+import { ISSUES_DELETE_ANY } from './issues';
 import { issuesPersonalExport } from './personal-export';
 
 /**
@@ -41,6 +43,9 @@ export const issuesModule = {
     budget: { poolShare: issuesBudget },
     routes: ['/api/workspaces/:workspaceId/issues', '/api/workspaces/:workspaceId/issues/**'],
     jobs: [],
+    permissions: [
+      { name: ISSUES_DELETE_ANY, minimumRole: 'admin' },
+    ] satisfies readonly PermissionDeclaration[],
   },
   userErased: unassignErasedPerson,
   workspacePurge: issuesWorkspacePurge,

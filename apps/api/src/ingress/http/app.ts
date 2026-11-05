@@ -558,7 +558,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     dependencies.database,
     dependencies.config.DATABASE_POOL_MAX,
   );
-  const issueDependencies = { ...dependencies, atomically: transactionsOf('issues') };
+  const issueDependencies = {
+    ...dependencies,
+    atomically: transactionsOf('issues'),
+    permissions: modules.permissions,
+  };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
