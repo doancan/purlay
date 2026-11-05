@@ -649,7 +649,7 @@ describe('pasting', () => {
     act(() => {
       pasteOf(box(), rows);
     });
-    expect(box().value).toBe('Numbers:\n| Region | Q1 |\n| --- | --- |\n| İstanbul | 12 |');
+    expect(box().value).toBe('Numbers:\n| Region | Q1 |\n| --- | ---: |\n| İstanbul | 12 |');
     expect(view.getByText('Pasted rows became a table')).toBeDefined();
     await user.click(view.getByRole('button', { name: 'Paste as text' }));
     expect(box().value).toBe(`Numbers:${rows}`);
@@ -898,6 +898,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     'Link',
     'Bulleted list',
     'Numbered list',
+    'Task list',
     'Quote',
     'Code block',
     'Table',
@@ -1604,6 +1605,180 @@ describe('attaching files (D-109, #370)', () => {
       fireEvent.paste(box, { clipboardData: { files, getData: () => '' } });
     });
   };
+
+  /** A paste whose clipboard has files, and perhaps words, as a spreadsheet's or a screenshot's does. */
+  const pasteWith = (
+    box: HTMLTextAreaElement,
+    clipboard: { files?: File[]; items?: unknown[]; plain?: string },
+  ): void => {
+    act(() => {
+      fireEvent.paste(box, {
+        clipboardData: {
+          files: clipboard.files ?? [],
+          items: clipboard.items ?? [],
+          getData: (type: string) => (type === 'text/plain' ? (clipboard.plain ?? '') : ''),
+        },
+      });
+    });
+  };
+
+  describe('what the clipboard carries (D-259)', () => {
+    const shot = (): File => new File([new Uint8Array([1])], 'image.png', { type: 'image/png' });
+
+    test('a screenshot is uploaded, named for the moment it was pasted', async () => {
+      const uploads = held();
+      const { box } = await mount({ api: aSignedInApi(uploads.api) });
+      pasteWith(box(), { files: [shot()] });
+      expect(uploads.calls.map((call) => call.name)).toEqual([
+        expect.stringMatching(/^pasted-image-\d{8}-\d{6}\.png$/) as string,
+      ]);
+    });
+
+    test('an engine that lists a pasted file only under items is understood too', async () => {
+      const uploads = held();
+      const { box } = await mount({ api: aSignedInApi(uploads.api) });
+      pasteWith(box(), { items: [{ kind: 'file', getAsFile: shot }, { kind: 'string' }] });
+      expect(uploads.calls).toHaveLength(1);
+    });
+
+    test('words that came with a picture are pasted, and one press attaches the picture that was left out', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      pasteWith(box(), { files: [shot()], plain: 'alt text from a page' });
+      expect(uploads.calls).toEqual([]);
+      expect(view.getByText(/the picture that came with them was left out/)).toBeDefined();
+      await user.click(view.getByRole('button', { name: 'Attach picture' }));
+      expect(uploads.calls.map((call) => call.name)).toEqual([
+        expect.stringMatching(/^pasted-image-\d{8}-\d{6}\.png$/) as string,
+      ]);
+    });
+
+    test('a spreadsheet’s range comes with a picture of itself: the table is pasted, not the picture', async () => {
+      const uploads = held();
+      const { view, box } = await mount({ api: aSignedInApi(uploads.api) });
+      pasteWith(box(), { files: [shot()], plain: 'Hesap\tTutar\n102\t1.234,56' });
+      expect(uploads.calls).toEqual([]);
+      expect(view.queryByText('Uploading…')).toBeNull();
+    });
+  });
+
+  describe('what a paste over words and what a Windows clipboard carry (D-259)', () => {
+    test('Undo of a link gives back the words it was pasted over, not the address', async () => {
+      const { view, box, user } = await mount();
+      await user.type(box(), 'see offer now');
+      box().setSelectionRange(4, 9);
+      await user.paste('https://x.test/o');
+      expect(box().value).toBe('see [offer](https://x.test/o) now');
+      await user.click(view.getByRole('button', { name: 'Undo' }));
+      expect(box().value).toBe('see offer now');
+    });
+
+    test('a list copied on Windows, with CR LF line ends and a byte-order mark, is the same list', async () => {
+      const { box, user } = await mount();
+      await user.click(box());
+      await user.paste('\uFEFF• milk\r\n• bread\r\n');
+      expect(box().value).toBe('- milk\n- bread');
+    });
+  });
+
+  describe('a text too long for a message is offered as a file, never made one (D-259)', () => {
+    const longText = Array.from({ length: 600 }, (_, at) => `word ${String(at)}`).join('\n');
+
+    test('the words stay, a row asks, and Send as file takes them out and uploads them', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      await user.paste(longText);
+      expect(view.getByText(/This text is 600 lines long/)).toBeDefined();
+      expect(box().value).toContain('word 599');
+      await user.click(view.getByRole('button', { name: 'Send as file' }));
+      expect(uploads.calls.map((call) => call.name)).toEqual([
+        expect.stringMatching(/^pasted-\d{8}-\d{4}\.txt$/) as string,
+      ]);
+      expect(box().value).toBe('');
+      expect(view.queryByText(/This text is 600 lines long/)).toBeNull();
+    });
+
+    test('Keep as text closes the row and keeps the words', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      await user.paste(longText);
+      await user.click(view.getByRole('button', { name: 'Keep as text' }));
+      expect(view.queryByText(/This text is 600 lines long/)).toBeNull();
+      expect(uploads.calls).toEqual([]);
+      expect(box().value).toContain('word 599');
+    });
+
+    test('a row for words that have been edited away is gone, and nothing is uploaded', async () => {
+      const { view, box, user } = await mount();
+      await user.click(box());
+      await user.paste(longText);
+      await user.keyboard('{Control>}a{/Control}{Backspace}');
+      expect(view.queryByText(/This text is 600 lines long/)).toBeNull();
+    });
+
+    test('CR LF line ends are one line break each: the words in the box are the words offered', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      await user.paste(longText.replace(/\n/g, '\r\n'));
+      expect(box().value).not.toContain('\r');
+      await user.click(view.getByRole('button', { name: 'Send as file' }));
+      expect(box().value).toBe('');
+      expect(uploads.calls).toHaveLength(1);
+    });
+
+    test('sending the message takes the row away', async () => {
+      const { view, box, user } = await mount();
+      await user.click(box());
+      await user.paste(longText);
+      expect(view.getByText(/lines long/)).toBeDefined();
+      await user.click(view.getByRole('button', { name: 'Send' }));
+      expect(view.queryByText(/lines long/)).toBeNull();
+    });
+
+    test('inside an open fence the words are code as they are, and nothing is offered', async () => {
+      const { view, box, user } = await mount();
+      await user.type(box(), '```{Shift>}{Enter}{/Shift}');
+      await user.paste(longText);
+      expect(view.queryByText(/lines long/)).toBeNull();
+    });
+
+    test('Send as file takes only the pasted words, and the blank lines typed round them stay', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      await user.type(box(), 'before{Shift>}{Enter}{Enter}{Enter}{Enter}{/Shift}');
+      await user.paste(longText);
+      await user.click(view.getByRole('button', { name: 'Send as file' }));
+      expect(box().value).toBe('before\n\n\n\n');
+    });
+
+    test('with the most files already, the words stay and the person is told why', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      for (let at = 0; at < ATTACHMENTS_PER_MESSAGE_MAX; at++) {
+        paste(box(), [new File([new Uint8Array([at])], `f${String(at)}.txt`)]);
+      }
+      await user.paste(longText);
+      await user.click(view.getByRole('button', { name: 'Send as file' }));
+      expect(view.getByText(/already has the most files/)).toBeDefined();
+      expect(box().value).toContain('word 599');
+      expect(view.getByText(/lines long/)).toBeDefined();
+    });
+
+    test('a note of Markdown stays Markdown — no code block, no row', async () => {
+      const { view, box, user } = await mount();
+      const note = `# Weekly\n\n${'- shipped the **editor** today\n'.repeat(20)}`;
+      await user.click(box());
+      await user.paste(note);
+      expect(box().value).toBe(note);
+      expect(view.queryByText('Pasted text became a code block')).toBeNull();
+      expect(view.queryByText(/lines long/)).toBeNull();
+    });
+  });
 
   test.each([false, true])(
     'an attachment-only send is enabled and clickable (touch only: %s)',

@@ -634,6 +634,73 @@ describe('a code block', () => {
     expect(four.container.querySelector('pre')?.textContent).toBe('a\nb\nc\nd');
   });
 
+  describe('a block of Markdown has two views (D-259)', () => {
+    const note = '```md\n# Title\n\n- one **bold** item\n- [a link](https://x.test)\n```';
+
+    test('the source first, as any block; Preview draws it as a message is drawn', async () => {
+      const view = await mount(note);
+      expect(view.container.querySelector('pre')?.textContent).toContain('# Title');
+      expect(view.container.querySelector('strong')).toBeNull();
+      const source = view.getByRole('button', { name: 'Source' });
+      expect(source.getAttribute('aria-pressed')).toBe('true');
+      await person().click(view.getByRole('button', { name: 'Preview' }));
+      expect(view.getByRole('button', { name: 'Preview' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      expect(view.container.querySelector('pre')).toBeNull();
+      const region = view.getByRole('region', { name: 'Preview of the md block' });
+      expect(region.querySelector('strong')?.textContent).toBe('bold');
+      expect(region.querySelector('a')?.getAttribute('href')).toBe('https://x.test/');
+      expect(region.getAttribute('tabindex')).toBe('0');
+      // The box is the containing block of what is drawn out of the flow inside it, or those escape its clip and
+      // stretch the feed (found in a browser: 8,900 px for 120 links); layout is the browser tests', this is the cause.
+      expect(region.className).toContain('relative');
+      await person().click(view.getByRole('button', { name: 'Source' }));
+      expect(view.container.querySelector('pre')?.textContent).toContain('# Title');
+    });
+
+    test('Copy is the source in either view', async () => {
+      const copied: string[] = [];
+      const view = await mount(note, {
+        ports: plainPorts({
+          copy: (text) => {
+            copied.push(text);
+            return Promise.resolve();
+          },
+        }),
+      });
+      await person().click(view.getByRole('button', { name: 'Preview' }));
+      await person().click(view.getByRole('button', { name: 'Copy code' }));
+      expect(copied).toEqual(['# Title\n\n- one **bold** item\n- [a link](https://x.test)']);
+    });
+
+    test('markdown is also the name `markdown`, in any case', async () => {
+      const view = await mount('```Markdown\n**x**\n```');
+      expect(view.getByRole('button', { name: 'Preview' })).toBeDefined();
+    });
+
+    test('other blocks have one view, and no switch', async () => {
+      const view = await mount('```ts\nconst a = 1;\n```');
+      expect(view.queryByRole('button', { name: 'Preview' })).toBeNull();
+      expect(view.queryByRole('group', { name: 'View' })).toBeNull();
+    });
+
+    test('HTML inside it is words in the preview, never markup', async () => {
+      const view = await mount('```md\n<img src=x onerror=alert(1)><script>1</script>\n```');
+      await person().click(view.getByRole('button', { name: 'Preview' }));
+      const region = view.getByRole('region', { name: 'Preview of the md block' });
+      expect(region.querySelector('img, script')).toBeNull();
+    });
+
+    test('a long block loses its clamp control in the preview, which scrolls on its own', async () => {
+      const long = `\`\`\`md\n${Array.from({ length: 20 }, (_, at) => `- item ${String(at)}`).join('\n')}\n\`\`\``;
+      const view = await mount(long);
+      expect(view.getByRole('button', { name: /Show all/ })).toBeDefined();
+      await person().click(view.getByRole('button', { name: 'Preview' }));
+      expect(view.queryByRole('button', { name: /Show all/ })).toBeNull();
+    });
+  });
+
   test('copies exactly what was written, even when the view is clamped, and says so', async () => {
     const copied: string[] = [];
     const view = await mount(`\`\`\`ts\n${fourteen}\n\`\`\``, {

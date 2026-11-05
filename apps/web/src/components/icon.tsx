@@ -99,6 +99,8 @@ import {
   User,
   Users,
   X,
+  ZoomIn,
+  ListChecks,
 } from 'lucide-react';
 
 /**
@@ -171,6 +173,8 @@ const glyphs = {
   unpin: PinOff,
   'deep-work': BellOff,
   expand: ChevronRight,
+  zoom: ZoomIn,
+  'task-list': ListChecks,
   collapse: ChevronDown,
   'pull-request': GitPullRequest,
   merged: GitMerge,

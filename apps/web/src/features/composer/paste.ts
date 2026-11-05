@@ -11,6 +11,16 @@
  *   is coloured, and a diff is drawn as one (D-133).
  */
 import { asCodeBlock, asTableCell, isCodeBlock, isLongPaste } from './composer-text';
+import {
+  isSingleLineCode,
+  minuteStamp,
+  textFileFor,
+  type TextFile,
+  linkOverSelection,
+  listFromPlain,
+  looksLikeMarkdown,
+  shortBlockLanguage,
+} from './paste-shapes';
 
 /** At most this much HTML is read: a paste of a whole page is taken as its plain words instead. */
 const HTML_MAX = 200_000;
@@ -106,12 +116,39 @@ const rowsOf = (delimited: string): string[][] | null => {
   return null;
 };
 
+/**
+ * A number as a person writes it in a sheet: a sign or brackets, a currency sign, thousands marks and a
+ * decimal one of either kind, a percent. Only used to align a column — a cell's words are never changed.
+ */
+const NUMBER_CELL =
+  /^\(?[-+−]?\s?(?:[₺$€£]\s?)?\d[\d.,' \u00a0]*\s?(?:%|₺|TL|TRY|\$|€|£|USD|EUR)?\)?$/;
+
+/** The delimiter row: a column of numbers is aligned to the right, so its digits stand under each other. */
+const separatorOf = (rows: readonly (readonly string[])[]): string => {
+  const [header = [], ...body] = rows;
+  return `| ${header
+    .map((_, column) => {
+      const cells = body.map((row) => (row[column] ?? '').trim()).filter((cell) => cell !== '');
+      return cells.length > 0 && cells.every((cell) => NUMBER_CELL.test(cell)) ? '---:' : '---';
+    })
+    .join(' | ')} |`;
+};
+
 /** Rows as a GFM table, the first its header. */
 const tableOf = (rows: readonly (readonly string[])[]): string => {
   const line = (cells: readonly string[]): string =>
     `| ${cells.map((cell) => asCell(cell) || ' ').join(' | ')} |`;
   const [header = [], ...body] = rows;
-  return [line(header), `| ${header.map(() => '---').join(' | ')} |`, ...body.map(line)].join('\n');
+  return [line(header), separatorOf(rows), ...body.map(line)].join('\n');
+};
+
+/**
+ * Whether the paste is a table of more rows than a message carries (the limit above), which the
+ * composer offers as a file instead of leaving it unsaid (D-259).
+ */
+export const isLargeTable = (pasted: string): boolean => {
+  const rows = rowsOf(pasted);
+  return rows !== null && rows.length > TABLE_MAX_ROWS;
 };
 
 /** The paste as a GFM table, or `null` when it is not one, or is more rows than a message carries. */
@@ -132,6 +169,36 @@ export const tablePreview = (
   if (rows === null) return null;
   const shown = rows.slice(0, bodyRows + 1);
   return { markdown: tableOf(shown), more: rows.length - shown.length };
+};
+
+/**
+ * Whether the text holds a rule: a selector, then braces with a declaration (`prop: value;`) in them. Read
+ * in one pass, each brace once: the same test as one pattern backtracked cubically on a long line without
+ * braces (a pasted minified file froze the box for minutes), and a version of it that restarted at every
+ * brace was quadratic.
+ */
+const hasCssRule = (text: string): boolean => {
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf('{', from);
+    if (open < 0) return false;
+    const close = text.indexOf('}', open);
+    if (close < 0) return false;
+    // A selector is on the line the brace opens, and has a word in it.
+    const selector = text.slice(text.lastIndexOf('\n', open - 1) + 1, open);
+    const body = text.slice(open + 1, close);
+    const colon = body.indexOf(':');
+    if (
+      /[\w-]/.test(selector) &&
+      !selector.includes('}') &&
+      colon >= 0 &&
+      body.includes(';', colon)
+    ) {
+      return true;
+    }
+    // Each brace is read once, from where the last rule ended: never again from the start.
+    from = close + 1;
+  }
 };
 
 /**
@@ -179,7 +246,7 @@ export const languageOf = (code: string): string | null => {
   if (typed) return tags ? 'tsx' : 'ts';
   if (scripted && /[;{}()]/.test(text)) return tags ? 'tsx' : 'js';
   if (/^\s*<\w+[^>]*>[\s\S]*<\/\w+>\s*$/.test(text)) return 'html';
-  if (/^[^{}\n]*[.#]?[\w-]+[^{}\n]*\{[^}]*:[^}]*;[^}]*\}/m.test(text)) return 'css';
+  if (hasCssRule(text)) return 'css';
   const lines = text
     .split('\n')
     .filter((line) => line.trim() !== '' && !line.trim().startsWith('#'));
@@ -191,6 +258,17 @@ export const languageOf = (code: string): string | null => {
     return 'yaml';
   }
   return null;
+};
+
+/**
+ * The language the words are code in, or `null` when they are words. A Markdown note's bullets are
+ * what a YAML list is: with Markdown's other signs and no `key: value` line, they are the note (D-259).
+ */
+const codeLanguageOf = (text: string): string | null => {
+  const language = languageOf(text);
+  const isNote =
+    language === 'yaml' && looksLikeMarkdown(text) && !/^\s*[\w.-]+:(\s|$)/m.test(text);
+  return isNote ? null : language;
 };
 
 // ── HTML → markdown ─────────────────────────────────────────────────────────────────────────────
@@ -395,7 +473,7 @@ export const markdownFromHtml = (html: string): string | null => {
   return markdown === '' ? null : markdown;
 };
 
-type PasteKind = 'table' | 'formatted' | 'code';
+export type PasteKind = 'table' | 'formatted' | 'code' | 'inline' | 'link' | 'list';
 
 export interface ConvertedPaste {
   readonly kind: PasteKind;
@@ -413,9 +491,12 @@ const BLOCK_START = /^(#{1,3} |> |- |\d+\. |\| |```)/;
  * code; then formatted text, then a long paste as a block of code in its language, unless it already
  * is one fenced block (D-205).
  */
-export const convertPaste = (plain: string, html: string): ConvertedPaste | null => {
+export const convertPaste = (plain: string, html: string, selected = ''): ConvertedPaste | null => {
+  // A URL over selected words is the words' link, before anything reads it as a paste (D-259).
+  const link = linkOverSelection(plain, selected);
+  if (link !== null) return { kind: 'link', markdown: link, block: false };
   // Code with a comma or a semicolon on every line is still code, never a table.
-  const language = languageOf(plain);
+  const language = codeLanguageOf(plain);
   const table = language === null ? tableFromDelimited(plain) : null;
   if (table !== null) return { kind: 'table', markdown: table, block: true };
   const formatted = html === '' ? null : markdownFromHtml(html);
@@ -426,8 +507,55 @@ export const convertPaste = (plain: string, html: string): ConvertedPaste | null
       block: formatted.includes('\n') || BLOCK_START.test(formatted),
     };
   }
+  // A list copied as plain words (•, ☐, 1)) is a list (D-259).
+  const list = language === null ? listFromPlain(plain) : null;
+  if (list !== null) return { kind: 'list', markdown: list, block: true };
+  // Markdown someone wrote is Markdown — drawn as it is, not shown as the source of itself (D-259).
+  if (language === null && looksLikeMarkdown(plain)) return null;
   if (isLongPaste(plain) && !isCodeBlock(plain)) {
     return { kind: 'code', markdown: asCodeBlock(plain, language), block: true };
   }
+  const trimmed = plain.trim();
+  if (isCodeBlock(plain)) return null;
+  // A line that is code as a whole is a span in the line; a few lines of certain code are a block (D-259).
+  if (!trimmed.includes('\n')) {
+    return isSingleLineCode(trimmed)
+      ? { kind: 'inline', markdown: inlineCode(trimmed.replace(/^\$ /, '')), block: false }
+      : null;
+  }
+  const blockLanguage = shortBlockLanguage(trimmed, language);
+  if (blockLanguage !== null) {
+    return { kind: 'code', markdown: asCodeBlock(trimmed, blockLanguage || null), block: true };
+  }
   return null;
+};
+
+/** One CSV cell, RFC 4180's way: in quotes when it holds a comma, a quote or a line break. */
+const csvCell = (cell: string): string =>
+  /[",\n\r]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+
+/** A file the composer offers instead of the words: what it is, and how many lines they were. */
+export interface FileOffer extends TextFile {
+  readonly lines: number;
+}
+
+/**
+ * The file a paste could be sent as — a very long text, or a table of more rows than a message
+ * carries — or `null` when a message is right (D-259). Offered, never done: the words stay where they
+ * were pasted until the person says (the file is one step away, the words are one step back).
+ */
+export const fileOfferFor = (pasted: string, now: Date): FileOffer | null => {
+  const lines = pasted.replace(/\n+$/, '').split('\n').length;
+  // Code with a comma on every line is code, as `convertPaste` reads it, and is never re-written as a CSV.
+  if (codeLanguageOf(pasted) === null && isLargeTable(pasted)) {
+    const rows = rowsOf(pasted) ?? [];
+    return {
+      name: `pasted-${minuteStamp(now)}.csv`,
+      type: 'text/csv',
+      text: rows.map((row) => row.map(csvCell).join(',')).join('\n'),
+      lines,
+    };
+  }
+  const file = textFileFor(pasted, codeLanguageOf(pasted), now);
+  return file === null ? null : { ...file, lines };
 };

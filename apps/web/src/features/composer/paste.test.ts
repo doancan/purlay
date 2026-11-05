@@ -14,7 +14,7 @@ describe('a table from rows', () => {
     expect(tableFromDelimited('Region\tQ1\tQ2\nİstanbul\t12\t18\nAnkara\t7\t9\n')).toBe(
       [
         '| Region | Q1 | Q2 |',
-        '| --- | --- | --- |',
+        '| --- | ---: | ---: |',
         '| İstanbul | 12 | 18 |',
         '| Ankara | 7 | 9 |',
       ].join('\n'),
@@ -41,7 +41,7 @@ describe('a table from rows', () => {
 
   test('semicolons, where the comma is the decimal mark', () => {
     expect(tableFromDelimited('ürün;fiyat\nçay;12,50\n')).toBe(
-      ['| ürün | fiyat |', '| --- | --- |', '| çay | 12,50 |'].join('\n'),
+      ['| ürün | fiyat |', '| --- | ---: |', '| çay | 12,50 |'].join('\n'),
     );
   });
 

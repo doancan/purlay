@@ -248,6 +248,95 @@ test.describe('a paste', () => {
     await expect(box).toBeFocused();
   });
 
+  const syntheticOnly = (): void => {
+    test.skip(
+      ['firefox'].includes(test.info().project.name),
+      "Firefox gives a synthetic ClipboardEvent no data, so the test's paste reaches the composer empty (docs/spikes/cross-browser.md)",
+    );
+  };
+
+  test('of plain bullets becomes a list, a command becomes inline code, and each can be taken back (D-259)', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    syntheticOnly();
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await paste(box, '• milk\n• bread\n☐ call the bank');
+    await expect(box).toHaveValue('- milk\n- bread\n- [ ] call the bank');
+    await expect(page.getByText('Pasted bullets became a list')).toBeVisible();
+    await page.getByRole('button', { name: 'Paste as text' }).click();
+    await expect(box).toHaveValue('• milk\n• bread\n☐ call the bank');
+
+    await box.fill('');
+    await paste(box, 'git rebase -i HEAD~3');
+    await expect(box).toHaveValue('`git rebase -i HEAD~3`');
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(box).toHaveValue('git rebase -i HEAD~3');
+  });
+
+  test('of a spreadsheet’s range with its picture is the table; a lone screenshot is a file (D-259)', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    syntheticOnly();
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    const withPicture = async (words: string): Promise<void> => {
+      await box.evaluate((field, content) => {
+        const data = new DataTransfer();
+        if (content !== '') data.setData('text/plain', content);
+        data.items.add(
+          new File([new Uint8Array([137, 80, 78, 71])], 'image.png', { type: 'image/png' }),
+        );
+        field.dispatchEvent(
+          new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+        );
+      }, words);
+    };
+    await withPicture('Hesap\tTutar\n0102\t1.234,56');
+    await expect(box).toHaveValue('| Hesap | Tutar |\n| ---: | ---: |\n| 0102 | 1.234,56 |');
+    await expect(page.getByRole('list', { name: 'Files' })).toHaveCount(0);
+
+    await box.fill('');
+    await withPicture('');
+    await expect(
+      page.getByRole('list', { name: 'Files' }).getByText(/^pasted-image-/),
+    ).toBeVisible();
+  });
+
+  test('of a very long text stays text, and a row offers it as a file until answered (D-259)', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    syntheticOnly();
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    const long = Array.from({ length: 600 }, (_, index) => `word ${String(index)}`).join('\n');
+    await paste(box, long);
+    await expect(page.getByText(/This text is 600 lines long/)).toBeVisible();
+    await page.getByRole('button', { name: 'Keep as text' }).click();
+    await expect(page.getByText(/lines long/)).toHaveCount(0);
+    await expect(box).toHaveValue(/word 599/);
+
+    await box.fill('');
+    await paste(box, long);
+    await page.getByRole('button', { name: 'Send as file' }).click();
+    await expect(box).toHaveValue('');
+    await expect(
+      page.getByRole('list', { name: 'Files' }).getByText(/^pasted-\d{8}-\d{4}\.txt$/),
+    ).toBeVisible();
+  });
+
   test('of a few lines stays text', async ({ page, signIn, room }) => {
     const made = await room({ members: ['dogancan', 'alice'] });
     await signIn();
