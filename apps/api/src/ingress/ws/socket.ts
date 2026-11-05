@@ -63,6 +63,10 @@ export interface SocketDependencies {
   readonly closedFrame?: (op: string) => boolean;
   /** The module that owns a frame's operation (`composition.ts`): the label of a refusal for the rate; absent, `none`. */
   readonly frameOwner?: (op: string) => string;
+  /** The module an operation belongs to, as the router notes it (`realtime/router.ts`); absent, none does. */
+  readonly moduleOfFrame?: (op: string) => string | undefined;
+  /** How long a module's frame may take, in ms, or `undefined` for one with no deadline; absent, none has (D-268). */
+  readonly deadlineOf?: (module: string) => number | undefined;
   /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedEvent?: (event: string) => boolean;
   /** Defaults to `SOCKET_CONNECTION_LIMITS.perUser` and the configuration's `SOCKET_MAX_CONNECTIONS`; a test passes less. */
@@ -338,6 +342,12 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   ...(dependencies.closedFrame === undefined
                     ? {}
                     : { closedFrame: dependencies.closedFrame }),
+                  ...(dependencies.moduleOfFrame === undefined
+                    ? {}
+                    : { moduleOfFrame: dependencies.moduleOfFrame }),
+                  ...(dependencies.deadlineOf === undefined
+                    ? {}
+                    : { deadlineOf: dependencies.deadlineOf }),
                   presence,
                   attention: dependencies.attention,
                   online,

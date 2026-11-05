@@ -185,6 +185,24 @@ const vocabularyProblems = (manifest: ModuleManifest): string[] => {
   return problems;
 };
 
+/** The longest a deadline may be: past it a proxy in front of the process has given up, and a client with it. */
+const DEADLINE_MS_MAX = 120_000;
+
+/** What a manifest's `deadline` must be, when it says one: whole milliseconds a client could wait for, or `none` with a reason. */
+const deadlineProblems = ({ id, deadline }: ModuleManifest): string[] => {
+  if (deadline === undefined) return [];
+  if ('none' in deadline) {
+    return deadline.none.trim() === ''
+      ? [`"${id}" declares \`deadline: none\` without a reason`]
+      : [];
+  }
+  return Number.isInteger(deadline.ms) && deadline.ms >= 1_000 && deadline.ms <= DEADLINE_MS_MAX
+    ? []
+    : [
+        `"${id}" has a deadline of ${String(deadline.ms)} ms: it needs a whole number from 1000 to ${String(DEADLINE_MS_MAX)}`,
+      ];
+};
+
 const bundleProblems = (
   manifests: readonly ModuleManifest[],
   core: Partial<CoreClaims>,
@@ -205,7 +223,11 @@ const bundleProblems = (
     if (ids.has(id)) problems.push(`two modules are called "${id}"`);
     ids.add(id);
 
-    problems.push(...budgetProblems(manifest), ...vocabularyProblems(manifest));
+    problems.push(
+      ...budgetProblems(manifest),
+      ...vocabularyProblems(manifest),
+      ...deadlineProblems(manifest),
+    );
 
     for (const capability of manifest.provides) {
       if (!CAPABILITY.test(capability)) {

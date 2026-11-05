@@ -19,6 +19,7 @@ import { noPushNotices, type PushNotices } from './modules/push/notices';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
 import { attachmentNotFound, AppError } from './platform/errors';
 import { CORE_EVENTS, CORE_FRAMES, CORE_JOBS } from './platform/module-kit/core-claims';
+import { coreReserve } from './platform/module-budget';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
 import { moduleCells } from './testing/module-cells';
 import { concretePath } from './testing/module-smoke';
@@ -403,17 +404,32 @@ describe('what the boot starts for a module', () => {
   });
 });
 
-describe('the share of the database each module declares (D-250 rule 7)', () => {
-  test('every module of the build says it, chat that it has none and why, issues its third of the pool', () => {
-    for (const { manifest } of bundledModules) expect(manifest.budget).toBeDefined();
-    const chat = chatModule.manifest.budget;
-    expect('none' in chat && chat.none).toContain('chat');
+describe('the share of the database each module declares (D-250 rule 7, D-266)', () => {
+  test('issues has a third of the pool and chat what the modules may take together less one', () => {
     const { budget } = issuesModule.manifest;
     expect('poolShare' in budget && budget.poolShare(30)).toEqual({
       maxConcurrent: 10,
       queueTimeoutMs: 1_000,
       statementTimeoutMs: 5_000,
     });
+    const chat = chatModule.manifest.budget;
+    expect('poolShare' in chat && chat.poolShare(10)).toEqual({
+      maxConcurrent: 7,
+      queueTimeoutMs: 3_000,
+      statementTimeoutMs: 30_000,
+    });
+  });
+
+  test('no module can take every connection the modules may share, at any pool a deployment may have', () => {
+    for (const poolMax of [2, 3, 6, 10, 30, 100]) {
+      const together = Math.max(1, poolMax - coreReserve(poolMax));
+      for (const { manifest } of bundledModules) {
+        if (!('poolShare' in manifest.budget)) continue;
+        const { maxConcurrent } = manifest.budget.poolShare(poolMax);
+        // One left for the next module, in every pool that has a second connection to give.
+        expect(maxConcurrent).toBeLessThan(Math.max(2, together));
+      }
+    }
   });
 
   test('a build with a module that says nothing of it does not start', () => {

@@ -136,6 +136,62 @@ describe('integration: an executor that leases its connections', () => {
     }
   });
 
+  test('refuses a lease whose signal has aborted before it takes a connection, with the reason it aborted for', async () => {
+    const database = createDatabase({ connectionString: url(), poolSize: 1 });
+    try {
+      const reason = new Error('past its deadline');
+      let released = 0;
+      const leasing = leasingExecutor(database, () =>
+        Promise.resolve({
+          signal: AbortSignal.abort(reason),
+          release: (): void => {
+            released += 1;
+          },
+        }),
+      );
+      expect(await thrown(async () => await sql`select 1`.execute(leasing))).toBe(reason);
+      expect(released).toBe(1);
+      await sql`select 1`.execute(database);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  test('cancels the statement a connection is running when the signal aborts, and leaves the connection usable', async () => {
+    const database = createDatabase({ connectionString: url(), poolSize: 1 });
+    try {
+      const controller = new AbortController();
+      const leasing = leasingExecutor(database, () =>
+        Promise.resolve({ signal: controller.signal, release: (): void => undefined }),
+      );
+      const started = performance.now();
+      const running = thrown(async () => await sql`select pg_sleep(20)`.execute(leasing));
+      await Bun.sleep(100);
+      controller.abort(new Error('past its deadline'));
+      expect(await running).toMatchObject({ code: '57014' });
+      expect(performance.now() - started).toBeLessThan(5_000);
+      await sql`select 1`.execute(database);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  test('does not cancel what runs on the connection after the lease was given back', async () => {
+    const database = createDatabase({ connectionString: url(), poolSize: 1 });
+    try {
+      const controller = new AbortController();
+      const leasing = leasingExecutor(database, () =>
+        Promise.resolve({ signal: controller.signal, release: (): void => undefined }),
+      );
+      await sql`select 1`.execute(leasing);
+      const later = sql`select pg_sleep(0.3), 1 as ok`.execute(database);
+      controller.abort(new Error('past its deadline'));
+      expect((await later).rows).toHaveLength(1);
+    } finally {
+      await database.destroy();
+    }
+  });
+
   test('keeps the plugins a test put on the executor it was made from', async () => {
     const database = createDatabase({ connectionString: url(), poolSize: 1 });
     try {

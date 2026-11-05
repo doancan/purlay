@@ -459,3 +459,24 @@ describe('the notification kinds and search sources a module declares', () => {
     ]);
   });
 });
+
+describe('a module’s deadline (D-268)', () => {
+  test('is left out, a whole number of milliseconds a client could wait for, or `none` with a reason', () => {
+    expect(() => moduleRegistry([module('issues')])).not.toThrow();
+    expect(() => moduleRegistry([module('issues', { deadline: { ms: 8_000 } })])).not.toThrow();
+    expect(() =>
+      moduleRegistry([module('issues', { deadline: { none: 'it streams a download' } })]),
+    ).not.toThrow();
+  });
+
+  test('`none` with no reason, a deadline too short to be one and one past what a proxy would wait are refused by id', () => {
+    expect(
+      problemsOf(() => moduleRegistry([module('issues', { deadline: { none: ' ' } })])),
+    ).toEqual(['"issues" declares `deadline: none` without a reason']);
+    for (const ms of [0, 999, 120_001, 1.5, Number.NaN]) {
+      expect(problemsOf(() => moduleRegistry([module('issues', { deadline: { ms } })]))).toEqual([
+        `"issues" has a deadline of ${String(ms)} ms: it needs a whole number from 1000 to 120000`,
+      ]);
+    }
+  });
+});

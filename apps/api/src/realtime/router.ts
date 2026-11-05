@@ -47,7 +47,8 @@ import { replaySince } from '../features/chat/messages/replay';
 import type { ReplayGate } from './replay-gate';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
-import type { Logger } from '../platform/logging';
+import { noteModule, type Logger } from '../platform/logging';
+import { timedOut, withDeadline } from '../platform/request-deadline';
 import type { PresenceRegistry } from './presence';
 import type { OnlinePresence } from './online';
 import type { Attention } from '../platform/attention';
@@ -64,6 +65,14 @@ export interface RouterDependencies {
    * none is closed: the composition root passes it (`composition.ts`), a test of one operation need not.
    */
   readonly closedFrame?: (op: string) => boolean;
+  /**
+   * The module an operation belongs to, or `undefined` for one of the socket's own (`composition.ts`): a frame of a
+   * module is held to that module's share of the database as its routes are (`platform/module-budget.ts`). Absent, no
+   * frame belongs to one.
+   */
+  readonly moduleOfFrame?: (op: string) => string | undefined;
+  /** How long a module's frame may take, in ms, or `undefined` for one with no deadline; absent, none has (D-268). */
+  readonly deadlineOf?: (module: string) => number | undefined;
   readonly database: Executor;
   /** The write path's transaction boundary (D-35, `platform/transactions.ts`). */
   readonly atomically: Atomically;
@@ -148,6 +157,10 @@ const refIdOf = (raw: unknown): string | undefined =>
     ? raw.id
     : undefined;
 
+/** PostgreSQL's `query_canceled`: a statement ran past its limit (`57014`), as `refusalFor` reads it. */
+const isStatementCanceled = (error: unknown): boolean =>
+  error instanceof Error && 'code' in error && error.code === '57014';
+
 /**
  * The whole body of an `AppError`, which is written for the client — including
  * `details`, which the contract requires of a validation failure. Dropping it
@@ -161,7 +174,7 @@ const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame =
       : goneMessageReference(error) !== undefined
         ? // A reply to a root the purge took that moment: what HTTP answers too (D-139 §2).
           MESSAGE_GONE
-        : error instanceof DatabaseUnavailableError
+        : error instanceof DatabaseUnavailableError || isStatementCanceled(error)
           ? // The same body HTTP answers with (`refusalFor`), so a client handles one code (D-87).
             {
               code: 'DATABASE_UNAVAILABLE' as const,
@@ -205,6 +218,24 @@ const fieldsOf = (parsed: unknown): Record<string, string> => {
   return fields;
 };
 
+/** The frame as an object when it is JSON, and the operation it names. */
+const peek = (raw: unknown): { readonly frame: unknown; readonly op?: string } => {
+  let frame: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      frame = JSON.parse(raw);
+    } catch {
+      return { frame: raw };
+    }
+  }
+  return typeof frame === 'object' &&
+    frame !== null &&
+    'op' in frame &&
+    typeof frame.op === 'string'
+    ? { frame, op: frame.op }
+    : { frame };
+};
+
 /**
  * The `ACCESS_REVOKED` a refused subscription's person would have been sent had their socket been open: for
  * the channels they were in and are not, each with why, and for no other (D-264). A channel they never were
@@ -236,12 +267,40 @@ const missedRevocations = async (
 };
 
 /**
- * Handles one frame and returns what to send back on this connection.
+ * Handles one frame and returns what to send back on this connection, within its module's deadline: a frame that runs past
+ * it is answered `REQUEST_TIMEOUT`, and what it had asked of the database is cancelled (D-268).
  *
  * Anything published to other connections has already gone to the bus by the
  * time this returns.
  */
 export const routeFrame = async (
+  dependencies: RouterDependencies,
+  identity: SocketIdentity,
+  raw: unknown,
+): Promise<readonly ServerFrame[]> => {
+  const { frame, op } = peek(raw);
+  const owner = op === undefined ? undefined : dependencies.moduleOfFrame?.(op);
+  const ms = owner === undefined ? undefined : dependencies.deadlineOf?.(owner);
+  if (owner === undefined || ms === undefined)
+    return await serveFrame(dependencies, identity, frame);
+  return await withDeadline(
+    ms,
+    async (signal) => {
+      noteModule(owner, signal);
+      return await serveFrame(dependencies, identity, frame);
+    },
+    () => {
+      dependencies.log.warn('frame ran past its deadline', {
+        module: owner,
+        op,
+        socketId: identity.socketId,
+      });
+      return [errorFrame(timedOut(), dependencies.clock, refIdOf(frame))];
+    },
+  );
+};
+
+const serveFrame = async (
   dependencies: RouterDependencies,
   identity: SocketIdentity,
   raw: unknown,
@@ -296,6 +355,9 @@ export const routeFrame = async (
       ),
     ];
   }
+
+  const owner = dependencies.moduleOfFrame?.(parsed.op);
+  if (owner !== undefined) noteModule(owner);
 
   try {
     switch (parsed.op) {
@@ -497,6 +559,7 @@ export const routeFrame = async (
         err: error,
         op: parsed.op,
         socketId: identity.socketId,
+        ...(owner === undefined ? {} : { module: owner }),
       });
     }
     return [errorFrame(error, clock, parsed.id)];
