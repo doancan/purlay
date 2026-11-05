@@ -291,11 +291,20 @@ raise it in steps, and watch delivery latency before the next step. A node past 
 loudly; its sockets get later. A buffer that a stalled reader fills is closed at 4 MB (`RESYNC`), so many
 slow readers also cost memory.
 
-**Refused handshakes are not free.** The node checks the session before it checks the cap, so a client
-refused with `503` has still cost the session queries; during a reconnection storm against a full node,
-live users' requests slow down (about 6 times, in the run above). The order is deliberate for now: a `503` before the
-session check would tell a caller who is not signed in that the node is full. Whether to accept that, or to
-spend the cap check first, is the owner's decision (#1027).
+**Refused handshakes are not free, and the order is a decision.** The node checks the session before it
+checks the cap, so a client refused with `503` has still cost one session read; during a reconnection storm
+against a full node, live users' requests slow down (about 6 times in the run that measured it, before an
+accepted handshake stopped reading the session twice). The owner decided to keep this order: a `503` before
+the session check would tell a caller who is not signed in that the node is full (#1027). If a full node's
+refusals ever need to be cheaper, the lever is the cap itself, raised in measured steps.
+
+**The connection pool.** `DATABASE_POOL_MAX` (default 10) is the other ceiling a busy node meets. In the
+load runs a node saturated at about 340 requests a second on one core with the pool at 10 and at about 426
+with 30, while Postgres stayed far from busy: the process, not the database, was the limit, so a bigger pool
+buys a little and raising it is a decision for the number of nodes times the pool against the database's
+`max_connections`, not for speed alone. Every request reads its session from the database, a refused write
+included; that cost was measured and is accepted, not cached, because a cache would delay a revoked
+session taking effect.
 
 **Memory after a mass reconnect.** Budget the container for the storm, not the steady state. One run
 (2,000 sockets reconnecting with replay, three times in one process, macOS) took the process
