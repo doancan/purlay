@@ -14,10 +14,6 @@ const ALLOWED: Readonly<Record<string, string>> = {
   'packages/db/src/testing.ts': 'dropDatabases itself, after backendsGone',
   'packages/db/src/harness.integration.test.ts':
     'calls backendsGone before the drop, and tests that wait',
-  'packages/db/src/testing-preload.integration.test.ts':
-    'drops what a child process made; this process holds no pool on them',
-  'apps/api/src/realtime/module-set.redis.integration.test.ts':
-    'the only connections are the child nodes’, killed and awaited before the drop',
 };
 
 const filesUnder = (directory: string): string[] =>
