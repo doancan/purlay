@@ -489,6 +489,7 @@ describe('a reconnect', () => {
     w.client.setQueryData(keys.unresolved(WS), { pageParams: [], pages: [] });
     w.client.setQueryData(keys.incident(CH), { incident: null });
     w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.saved(WS), { pageParams: [], pages: [] });
     w.engine.start();
     w.open();
     const waiting = w.engine.send({ channelId: CH, content: 'a' });
@@ -516,6 +517,8 @@ describe('a reconnect', () => {
     expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
     // So did a notification: its frame went to the person's topic while nobody listened.
     expect(w.client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(true);
+    // And what the person saved or let go on another device, told on the same topic (D-128).
+    expect(w.client.getQueryState(keys.saved(WS))?.isInvalidated).toBe(true);
     expect(w.engine.store.getState().status).toBe('open');
   });
 
@@ -1801,6 +1804,43 @@ describe('what happened between a list being read and the channel being subscrib
     answerAll(w);
     expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.incident(OTHER_CH))?.isInvalidated).toBe(false);
+  });
+
+  test('the channel lists read before the subscription was answered are read again: a rename, an incident mark or a counter changed in the gap is in no frame', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    // CHANNEL_UPDATED, INCIDENT_UPDATED and CHANNEL_STATE each rewrite a row of these lists, and each went out
+    // while this socket was not yet listening to the channel (or, for the last, not yet open at all).
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    answerAll(w);
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+  });
+
+  test('the open questions and a search read before the subscription was answered are read again: a reply, a resolution or an edit in the gap is in no frame', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.unresolved(WS), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.unresolved(WS, CH), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.search(WS, 'words', null, null), { pages: [], pageParams: [] });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.unresolved(WS))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.unresolved(WS, CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.search(WS, 'words', null, null))?.isInvalidated).toBe(true);
+  });
+
+  test('an open edit history read before the subscription was answered is read again: a version its author removed in the gap is in no frame (D-135)', () => {
+    const MESSAGE = '0199155c-6200-7b7f-8c11-000000000002';
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.messageVersions(MESSAGE), []);
+    answerAll(w);
+    expect(w.client.getQueryState(keys.messageVersions(MESSAGE))?.isInvalidated).toBe(true);
   });
 
   /**

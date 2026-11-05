@@ -142,5 +142,6 @@ export const families = {
   notifications: ['notifications'] as const,
   pins: ['pins'] as const,
   incident: ['incident'] as const,
+  messageVersions: ['message-versions'] as const,
   members: ['members'] as const,
 } as const;

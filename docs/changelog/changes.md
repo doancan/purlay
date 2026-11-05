@@ -51,6 +51,7 @@ have it.
 
 ### Fixed
 
+- **Messages** — A channel renamed, marked with an incident or counted, an open question answered, or a message edited or deleted in the moment between a person's screen reading it and the connection starting to listen to its channel now shows as it is without a reload; the same goes for what a person saved on another device while the connection was down (D-123)
 - **Incidents** — A person who opens a channel just as somebody declares an incident in it now sees the banner without a reload: the channel's incident is read again when the subscription is answered, as its pins and bookmarks already were (D-137)
 - **Operations** — Opening a WebSocket now asks who is connecting once at the door instead of twice, so a node let back in by thousands of sockets at once does a quarter fewer session reads and keeps its database connections free longer; who is refused, in what order and with what answer is unchanged (D-84)
 - **Operations** — The memory gauge on the metrics page now says which figure it is: the resident set on Linux, the physical footprint on macOS, which reads well below `ps` there because it leaves out pages the process freed but the system has not yet taken back (D-221)

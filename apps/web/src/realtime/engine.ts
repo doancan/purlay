@@ -502,6 +502,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.incident });
     // So did a notification's, on the person's own topic (D-106).
     void client.invalidateQueries({ queryKey: families.notifications });
+    // And what the person saved or let go on another device (D-128), on the same topic.
+    void client.invalidateQueries({ queryKey: families.saved });
     // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
     // the person's own topic, which a socket that was down never hears (D-124).
     void client.invalidateQueries({ queryKey: keys.me });
@@ -609,6 +611,14 @@ export const createEngine = (options: EngineOptions): Engine => {
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(client, families.thread);
+          // As are the rest, which hold no channel's key but are rewritten by frames on its topic: a channel's
+          // row in every list of channels (its name and topic, its incident mark, its counters — the last
+          // from before the socket was open), the open questions and a search (a reply, a resolution, an
+          // edit), and an open edit history (D-135 §5). Each is in no frame sent before this answer.
+          readAgain(client, families.channels);
+          readAgain(client, families.unresolved);
+          readAgain(client, families.search);
+          readAgain(client, families.messageVersions);
         }
         return;
       }
