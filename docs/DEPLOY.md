@@ -149,18 +149,28 @@ To check the client address, sign in, then in the `postgres` container
 `psql -U purlay -c 'SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1'` must be your address,
 not Nginx Proxy Manager's or Cloudflare's.
 
-**Updating** is setting `PURLAY_IMAGE` to a newer digest and redeploying. Dockhand does not do what
-`scripts/deploy.sh` does: there is **no backup before the switch and no automatic way back**, and the
-database migrates as the new API starts. Back up first, from the `postgres` container's console or the
-server:
+**Updating to each release, by itself** (D-262). Every release's image is also named `:release` (and
+`:vX.Y.Z`) by the `release-image` workflow, and nothing else ever is. Set `PURLAY_IMAGE` to
+`ghcr.io/<owner>/<repo>-api:release`, redeploy, then turn on Dockhand's auto-update for the `api`, `scheduler`
+and `storage-init` containers with a short schedule (`*/15 * * * *`): Dockhand compares the digest and pulls
+only when a new release is out, so the server runs it within a quarter of an hour. A digest pinned instead
+is never updated: set a newer one by hand.
+
+Dockhand does not do what `scripts/deploy.sh` does: there is **no backup taken at the switch and no automatic
+way back**, and the database migrates as the new API starts. The stack's `backup` service is the answer: it
+dumps the database every `BACKUP_EVERY_MINUTES` (60) into the `backups` volume and keeps the newest
+`BACKUP_KEEP` (48), so a dump is at most an hour old when an update lands; it shows *unhealthy* in Dockhand if
+dumps stop. To go back after a bad release, stop `api` and `scheduler`, restore the newest dump from before it,
+and pin `PURLAY_IMAGE` to the previous release's tag:
 
 ```bash
-docker exec <stack>-postgres-1 pg_dump -U purlay -Fc purlay > purlay-$(date +%F).dump
+docker exec <stack>-backup-1 ls -1t /backups                      # newest first
+docker exec <stack>-backup-1 pg_restore --clean --if-exists --no-owner -d purlay /backups/purlay-<time>.dump
 ```
 
-Attachments live in the stack's `garage-data` volume; back it up with the server's volume backups.
-Point-in-time recovery (WAL archiving, D-202) is not offered by this file; use
-`docker-compose.production.yml` where it is wanted.
+A restore loses what was written after the dump. Attachments live in the stack's `garage-data` volume; back it
+and `backups` up off the server with the server's volume backups. Point-in-time recovery (WAL archiving,
+D-202) is not offered by this file; use `docker-compose.production.yml` where it is wanted.
 
 ## Modules (operator runbook)
 

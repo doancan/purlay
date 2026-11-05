@@ -34,6 +34,7 @@ have it.
 
 ### Added
 
+- **Operations** — A release's image is also tagged `release` and its version, so a Dockhand server can follow releases on its own; the Dockhand stack backs the database up every hour (D-262)
 - **Editor** — Markdown blocks and Markdown files have a Source and a Preview view, and a checklist button joins the formatting row (D-259)
 - **Editor** — A text of 500 lines or more, or a table of more than 200 rows, is offered as a file instead of being left too long to send (D-259)
 
