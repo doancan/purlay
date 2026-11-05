@@ -100,6 +100,8 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   // Chat.
   // `added_by` stays, naming the anonymised account: the key's SET NULL never fires on a soft deletion (D-256).
   channel_bookmarks: decided('anonymised', 'until-removed'),
+  // Deleted by the chat module's `userErased` hook: the key's CASCADE never fires on a soft deletion (D-256).
+  channel_departures: decided('deleted', 'with-parent'),
   channel_members: decided('anonymised', 'until-removed'),
   channels: decided('anonymised', { kept: 'for the life of the workspace' }),
   github_app_deliveries: decided({ nobody: 'a delivery’s id and its body’s digest' }, 'swept'),
