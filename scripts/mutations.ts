@@ -13411,8 +13411,6 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/ingress/http/app.ts',
     find: 'if (owner !== CORE_OWNER && owner !== NO_OWNER) noteModule(owner);',
     replace: 'void noteModule;',
-    find: "atomically: transactionsOf('issues'),",
-    replace: 'atomically: async (body) => await dependencies.database.transaction().execute(body),',
     tests: [
       'apps/api/src/ingress/http/issues-budget.integration.test.ts',
       'scripts/budget-latency.integration.test.ts',
