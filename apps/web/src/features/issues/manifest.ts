@@ -2,6 +2,7 @@
  * What the issues module tells the shell (D-250, D-254): one route, one place on the rail and in the palette. Data
  * only — the screen is `issues-screen.tsx`, behind `load`, and nothing else imports it.
  */
+import { ISSUES_AUDIT_ACTIONS } from '@purlay/types';
 import { defineModule, type ModuleScreens } from '../../modules/manifest';
 
 const routes = { issues: '/w/:slug/issues' } as const;
@@ -18,4 +19,5 @@ export const issues = defineModule({
   palette: [{ route: 'issues', glyph: 'issues', label: 'issues.title' }],
   shortcuts: [],
   settings: [],
+  auditActions: ISSUES_AUDIT_ACTIONS,
 });

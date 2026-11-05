@@ -4,6 +4,9 @@
  * Each list is held to the code by a test (`route-ownership.test.ts`, `core-claims.test.ts`), so a new core claim that is
  * not added here fails there rather than waiting for a module to collide with it.
  */
+import { CORE_AUDIT_ACTIONS } from '@purlay/types';
+import { CORE_PERMISSIONS } from './permissions';
+
 /**
  * The paths of the core, as `app.ts` registers them, each once, whatever the methods: `/ws` is the socket's upgrade, and a
  * trailing `*` is a catch-all (`templatesOverlap` reads it as the rest of the path).
@@ -118,7 +121,17 @@ export const CORE_EVENTS: readonly string[] = [
 
 /** What the core claims of each kind a manifest lists. */
 export type CoreClaims = Readonly<
-  Record<'routes' | 'jobs' | 'frames' | 'events', readonly string[]>
+  Record<
+    | 'routes'
+    | 'jobs'
+    | 'frames'
+    | 'events'
+    | 'permissions'
+    | 'auditActions'
+    | 'notifications'
+    | 'searchSources',
+    readonly string[]
+  >
 >;
 
 export const CORE_CLAIMS: CoreClaims = {
@@ -126,4 +139,8 @@ export const CORE_CLAIMS: CoreClaims = {
   jobs: CORE_JOBS,
   frames: CORE_FRAMES,
   events: CORE_EVENTS,
+  permissions: CORE_PERMISSIONS.map((declared) => declared.name),
+  auditActions: CORE_AUDIT_ACTIONS,
+  notifications: [],
+  searchSources: [],
 };

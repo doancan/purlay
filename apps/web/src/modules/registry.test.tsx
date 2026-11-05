@@ -14,7 +14,8 @@ import { installDom } from '../testing/dom';
 import { renderApp } from '../testing/render';
 import { ShortcutList } from '../features/shortcuts/shortcuts-dialog';
 import type { ModuleSettingsPage, ModuleShortcut } from './manifest';
-import { MODULES, running } from './registry';
+import { AUDIT_ACTIONS, CORE_AUDIT_ACTIONS } from '@purlay/types';
+import { MODULES, auditActionsOf, running } from './registry';
 
 installDom();
 
@@ -121,5 +122,35 @@ describe('the modules a server runs', () => {
       'chat',
       'issues',
     ]);
+  });
+});
+
+describe('the audit actions a server offers to filter by (D-265)', () => {
+  test('every action of the wire is the core’s or exactly one module’s, so a module that records one says so', () => {
+    const owned: readonly string[] = [
+      ...CORE_AUDIT_ACTIONS,
+      ...MODULES.flatMap((module) => module.auditActions),
+    ];
+    expect([...owned].sort()).toEqual([...AUDIT_ACTIONS].sort());
+    expect(new Set(owned).size).toBe(owned.length);
+  });
+
+  test('are the core’s and the running modules’, in the wire’s order', () => {
+    expect(auditActionsOf(allIds)).toEqual(AUDIT_ACTIONS);
+    const withoutIssues = auditActionsOf(['chat']);
+    expect(withoutIssues).toContain('channel.created');
+    expect(withoutIssues).not.toContain('issue.created');
+    const core = auditActionsOf([]);
+    expect(core).toEqual(
+      AUDIT_ACTIONS.filter((action) => CORE_AUDIT_ACTIONS.includes(action as never)),
+    );
+    expect(core).toContain('member.removed');
+    expect(core).not.toContain('channel.created');
+  });
+
+  test('each has the words the filter and the line need, in English', () => {
+    for (const action of AUDIT_ACTIONS) {
+      expect(en[`audit.kind.${action}` as keyof typeof en]).toBeDefined();
+    }
   });
 });

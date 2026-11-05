@@ -12,6 +12,7 @@ import {
 import { createIssue, deleteIssue, issuePage, updateIssue } from '../../features/issues/issues';
 import { requireLiveSession } from '../../modules/auth/sessions';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
+import type { PermissionTable } from '../../platform/module-kit/permissions';
 import { atomicallyOn } from '../../platform/transactions';
 import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
@@ -22,6 +23,10 @@ import { queryOf, validated } from './validate';
  * handed (`features/issues/budget.ts`, `platform/module-budget.ts`). Who may ask is settled first, by the core's read of
  * the membership, outside the share: a person who is not in the workspace must not be able to hold its slots.
  */
+export interface IssueDependencies extends ChannelDependencies {
+  /** What a role may do in a process that runs these modules. */
+  readonly permissions: PermissionTable;
+}
 
 /** `GET /api/workspaces/:workspaceId/issues?status=&before=&limit=` — newest first. */
 export const listIssues = async (
@@ -72,7 +77,7 @@ export const patchIssue = async (
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */
 export const removeIssue = async (
-  { auth, database, clock }: ChannelDependencies,
+  { auth, database, clock, permissions }: IssueDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -81,6 +86,6 @@ export const removeIssue = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    await deleteIssue(transaction, clock, context, issueId);
+    await deleteIssue(transaction, clock, context, permissions, issueId);
   });
 };

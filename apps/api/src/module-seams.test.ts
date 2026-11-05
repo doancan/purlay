@@ -173,7 +173,7 @@ describe('the doors name no module’s files outside its routes and the composit
 });
 
 /**
- * A module's handlers cannot take the pool without its module's share (`MODULES.md` §7, D-265). The share is a lease on
+ * A module's handlers cannot take the pool without its module's share (`MODULES.md` §7, D-266). The share is a lease on
  * every connection of the one database `createApp` hands the handlers, so what would get round it is another handle:
  * the raw one the application was given, used a second time, or a pool a module opened for itself. Neither exists today,
  * and this holds both to that. The rest, that a request of a module is noted as its own and held, is

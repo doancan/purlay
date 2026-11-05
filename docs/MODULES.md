@@ -41,12 +41,28 @@ declares:
   added, and the route table itself is code in `ingress/`, so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
 - `frames`: the client operations on the socket it owns; `events`: the server events its services send; `jobs`: the
   scheduled jobs that act for its users. A process that does not run the module closes all four (§3);
-- `budget` (**required**, D-260, D-265): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or
+- `budget` (**required**, D-260, D-266): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or
   `{ none: reason }`. A manifest without it does not compile, and the registry refuses one that has none at run time, a
   `none` with no reason and a share that leaves the module no connection or the others none (§7). A module that declares
   `none` must also be named, with its reason, in `module-budgets.test.ts`, so an exemption is a line a reviewer sees;
 - `retention`: the scheduled jobs that keep its rows within their retention — a purge past the days kept, a sweep of a
-  cache. Unlike `jobs` they run in every process, whichever modules it runs, because the rows are there (§3).
+  cache. Unlike `jobs` they run in every process, whichever modules it runs, because the rows are there (§3);
+- `permissions` (D-265): what a role may do in the module that is more than being a member, each as `{ name, minimumRole }`
+  with the name `<id>.<what>`, held by that role and those above it. The core declares its own (`CORE_PERMISSIONS`, today
+  `audit.read`); a service asks `permissions.holds(role, name)` of the table the composition makes, which has the core's
+  and the running modules' and nothing else, so a permission of a module that is off is held by nobody, the owner included;
+- `auditActions` (D-265): the actions the module writes to the trail, in groups of `{ read, actions }`, `read` being the
+  permission that reads those rows (the core's `audit.read`, or one the module declares). The wire's `AUDIT_ACTIONS` is
+  every action there is; `CORE_AUDIT_ACTIONS`, `CHAT_AUDIT_ACTIONS` and `ISSUES_AUDIT_ACTIONS` in `@purlay/types` say who
+  owns each, and a test holds the three to the wire's list, each action once;
+- `notifications` (D-265): the kinds of notification the module sends, each `{ type, needsYou, pushed, mailed }` (chat's are
+  `CHAT_NOTIFICATION_KINDS` in `@purlay/types`): whether it counts for the badge, the title and a background alert, is
+  pushed, and is mailed when it waits unread. `NotificationType`, `NEEDS_YOU` and the database's `notification_type` are held
+  to the declarations by `notification-kinds.test.ts`, and the missed-mail letter takes its kinds from `mailed`;
+- `searchSources` (D-265): the ids of the sources the module adds to a workspace search (chat's is `messages`). A process
+  that does not run the module lists none of them (`composition.searchSources`). **There is no fan-out yet:** a search
+  answers messages, one source, and a second source needs a result that names its source, which is a change of the wire
+  that has its own decision.
 
 That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. What a module
 contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `jobWork`, the work of
@@ -55,8 +71,7 @@ not start; `bun run job` takes the work from the composition and names no module
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
 of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
 and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
-anything:** `notifications`, `searchSources`, and the audit actions and permissions a module
-registers — the audit actions are in `modules/audit`, and the role rules are in each service.
+anything:** the role rules that are not yet a named permission, which are in each service (D-265 §3).
 
 ## 3. Boot
 
@@ -175,7 +190,7 @@ moves into that module.
   the attachment reader) waits for it to run. There was a `dataInCore` flag for this, and it was dropped: every bundled
   module set it, and a `false` would have made a person's erasure wait for a setting (rule 5), so it had no safe value.
   **A module's own set makes some of those tables** (chat's `message_attachments`, `scheduled_messages`,
-  `message_reminders`, `hidden_messages`, `channel_departures` and `scheduled_message_attachments`; all of issues'), and a database migrated
+  `message_reminders`, `hidden_messages` and `scheduled_message_attachments`; all of issues'), and a database migrated
   without the set — a fresh install that runs `MODULES=none` — has none of them. Where they exist the hooks reach them
   whether or not the module runs, so the right to be erased does not wait for a setting; where they do not there is
   nothing to reach. **`tableExists` (`@purlay/db`) is the one primitive for that**, asked at the moment the table is
@@ -212,7 +227,8 @@ moves into that module.
 **Built (D-250, the web registry).** `apps/web/src/features/<id>/manifest.ts` is data and one loader, no component:
 the module's `id`; `load`, an `import()` of its chunk, which exports one screen for each route; its routes (path
 patterns, all inside `/w/:slug`); the places it puts on the rail and in the palette; its shortcut rows; its settings
-pages; whether its chunk is asked for in the first commit (`preload`); and what stands in for a screen while the
+pages; the audit actions it records (`auditActions`, the same list the API's manifest reads, D-265); whether its chunk is
+asked for in the first commit (`preload`); and what stands in for a screen while the
 chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone). The list of manifests is
 `apps/web/src/modules/registry.ts`, and nothing else names a module to the shell:
 
@@ -222,7 +238,7 @@ chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone).
   screen behind `Suspense` (the stand-in the manifest names). `Outlet` draws the one `Shell` round it and round the
   core's screens of a workspace, so a change from one to the other keeps the shell standing. The core's routes are the `switch`'s cases, and one
   without a case does not compile.
-- **Rail, palette, shortcuts, settings.** Each draws, for the modules the session lists, what the manifests say. An entry
+- **Rail, palette, shortcuts, settings, audit filter.** Each draws, for the modules the session lists, what the manifests say. An entry
   that is more than a link (the inbox's dot and panel, the open-questions count) draws itself, by route, in `rail.tsx`.
   What chat's palette lists from its data (channels, people, mark all read) stays in `use-palette-items.ts`, gated on chat.
 - **The shell holds no module code.** A manifest imports types only, so the registry the shell carries holds no screen,
@@ -231,7 +247,7 @@ chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone).
   module ids from the manifests and looks for each one's screen marker (`screen-of-the-<id>-module`) in the initial
   chunks.
 
-`registry.test.tsx` holds every manifest to the router and to each other: a route the router does not know, a rail
+`registry.test.tsx` holds every manifest to the router and to each other (and the audit actions of the core and the manifests to the wire's list, each once): a route the router does not know, a rail
 entry for another module's route, a palette place that is not the module's own, a settings page or shortcut row placed
 after something that is not there, and a manifest the registry does not list.
 
@@ -242,7 +258,7 @@ The session says which modules run: `GET /api/me`'s `modules`, not the public `G
 Modules share a process, an event loop and a connection pool, so they are kept apart by **budget**:
 
 - a share of the pool: a cap on the requests a module has holding a connection at once, with a queue timeout and a
-  `statement_timeout` (`moduleConnections`, `platform/module-budget.ts`, D-265). **Every module declares one** (`budget` in
+  `statement_timeout` (`moduleConnections`, `platform/module-budget.ts`, D-266). **Every module declares one** (`budget` in
   the manifest, D-260), and it is held **at the connection, not at the transaction**: `createApp` leases the one database
   it hands every handler (`leasingExecutor` of `@purlay/db`), the router notes whose request it is (`noteModule`, from the
   manifests' `routes`), and every connection that request takes — a read as much as a write — is asked of that module's
@@ -310,8 +326,8 @@ until then it is a stated intent and not a guarantee.
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
 | A fact is not lost between commit and publish | a same-transaction row and a sweeper; a crash test | 5 |
 | A module cannot starve the others of connections | the application's one database is leased (`leasingExecutor`, `@purlay/db`) by the share of the module a request belongs to (`moduleConnections`, `platform/module-budget.ts`): a cap on the requests holding a connection, a queue timeout and a `statement_timeout` per module — **built, applied from each manifest's `budget`** (issues a third of the pool; chat `none`); `issues-budget.integration.test.ts` fills the share on a pool of its own and finds a chat write answered, `module-budget.integration.test.ts` and `leasing.integration.test.ts` hold the lease, and the mutations `module-routes-not-noted-as-their-module`, `application-database-not-leased`, `membership-read-inside-a-module-share` and `module-budget-declaration-ignored` hold the wiring | 5 |
-| A module's handler cannot take the pool without its module's share | there is no other handle: `app.ts` uses the database it was given once, to lease it, and no feature or door opens a pool (`module-seams.test.ts`); the mutation `application-hands-handlers-a-raw-database` — **built** (D-265) | 12 |
-| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts` — **built** (D-260, D-265); mutations `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
+| A module's handler cannot take the pool without its module's share | there is no other handle: `app.ts` uses the database it was given once, to lease it, and no feature or door opens a pool (`module-seams.test.ts`); the mutation `application-hands-handlers-a-raw-database` — **built** (D-266) | 12 |
+| Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts` — **built** (D-260, D-266); mutations `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
 | A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
 | `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` only `router.ts`, which still runs chat's three socket operations itself (the manifest has no field for a module's frame handler); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test; the manifest's replay hook or "refetch" | 4 |
@@ -330,6 +346,9 @@ until then it is a stated intent and not a guarantee.
 | Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** for issues, the one module with a share; it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if a chat screen is in it, or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/` and `ingress/http/<id>.ts`) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
+| Every audit action a module's code records is in its manifest, and every one its manifest lists is recorded | `audit-emissions.test.ts` reads each module's source (and the core's) as `module-emissions.test.ts` reads events', `core-claims.test.ts` holds the manifests' actions and the core's to the wire's `AUDIT_ACTIONS`, each once, the registry refuses an action two owners list and a reading permission that is another module's, and the composition's `auditAccess` judges every module the build carries — **built** (D-265); mutations `audit-trail-read-by-a-member`, `trail-shows-what-the-role-cannot-read`, `registry-accepts-an-audit-action-read-by-a-foreign-permission` and `chat-stops-declaring-its-audit-actions` | 12 |
+| Every permission a module's code asks is in its manifest, and every one its manifest lists is asked | `permission-emissions.test.ts` reads each module's source (and the core's) as `module-emissions.test.ts` reads events', the registry refuses a permission not named for its module and one declared twice, and the composition's `permissions` have a module's own only while it runs — **built** (D-265); mutations `issues-delete-ignores-its-permission`, `issues-permission-asked-is-not-the-one-declared`, `composition-holds-the-permissions-of-a-module-that-is-not-run` and `registry-accepts-a-permission-not-named-for-its-module` | 12 |
+| Every kind of notification and search source a module sends is declared, and the wire's and the database's lists are the declarations | `notification-kinds.test.ts` holds `NotificationType`, `NEEDS_YOU` and the database's enum to the manifests' kinds, each once; the registry refuses a kind or a source two modules both list; `composition.notificationKinds` and `composition.searchSources` have a module's only while it runs — **built** (D-265); mutations `chat-stops-declaring-its-notification-kinds`, `missed-mail-takes-every-pushed-kind`, `composition-queries-the-search-sources-of-modules-that-are-off` and `registry-lets-two-modules-send-one-notification-kind` | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
@@ -371,7 +390,7 @@ commit beside this list.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
   for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
   module sends and does not list would reach a process that does not run it.
-- `budget` (D-260, D-265): required. `{ poolShare: (poolMax) => limits }` (issues': `features/issues/budget.ts`) or
+- `budget` (D-260, D-266): required. `{ poolShare: (poolMax) => limits }` (issues': `features/issues/budget.ts`) or
   `{ none: '<reason>' }` (chat's), which is also a line in `module-budgets.test.ts`: an exemption is a decision a reviewer
   sees. A manifest without it does not compile; the registry refuses it at run time, and a `none` with no reason, and a
   share that gives the module no connection or leaves the others none. Nothing else is edited to budget a module:
@@ -417,10 +436,22 @@ commit beside this list.
   a table its own set makes asks `tableExists` first; the exports skip it through the contribution's `ownSet`. The
   compile-time decision in `export-catalogue.ts` is derived from the manifests (nothing to edit there): while a table is
   undecided it does not compile and names the table. A module whose data is not personal or workspace data still decides it, as `excluded`.
-- **Audit and permissions**: an audit action is a value of `AuditAction` and its target a `targetType` in
-  `modules/audit/audit.ts`, written in the same transaction by id and never by words (D-222), with the sentence the
-  settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`). A role rule is in the service and tested
-  through the route.
+- **Audit and permissions** (D-265): an audit action is a value of `AUDIT_ACTIONS` in `@purlay/types` and the name of one
+  of the module's list there (`<ID>_AUDIT_ACTIONS`), declared in the manifest's `auditActions` with the permission that
+  reads it, and its target a `targetType` in `modules/audit/audit.ts`; it is written in the same transaction by id and
+  never by words (D-222), with the sentence the settings page shows for it (`apps/web/src/features/settings/pages/audit.tsx`)
+  and the same list as the web manifest's `auditActions`, which is what the page's filter offers while the module runs.
+  A role rule that is the module's own is a permission in the manifest's `permissions`, asked of
+  `permissions.holds(context.role, NAME)` with the table the composition makes and the route hands the service
+  (`issues.delete-any`). `audit-emissions.test.ts` fails for an action the module's source records and its manifest does not
+  list and for a declared one its source no longer records; `permission-emissions.test.ts` for a permission asked at `holds`
+  that is not declared and for a declared name its source no longer writes; `core-claims.test.ts` for an action the wire
+  names that nobody owns, and the registry for a permission not named `<id>.<what>`, one two modules both declare, and a
+  reading permission that is another module's.
+- **Notifications and search** (D-265): a kind of notification a module sends is `{ type, needsYou, pushed, mailed }` in
+  its manifest's `notifications` and a value of the database's `notification_type`; a source it adds to a workspace search is
+  an id in `searchSources`. `notification-kinds.test.ts` fails for a kind the wire, `NEEDS_YOU` or the database has and no
+  manifest declares, and for one declared twice; the registry for a kind or a source two modules list.
 
 **4. The routes, in `ingress/`.**
 
@@ -438,7 +469,7 @@ commit beside this list.
   two-workspace list check passes vacuously for the module's lists.
 - `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
 - **The share of the pool**: nothing to write in a handler. The handler is given the application's one database, whose
-  every connection is leased by the module the request belongs to (D-265), so there is no boundary to ask for and no raw
+  every connection is leased by the module the request belongs to (D-266), so there is no boundary to ask for and no raw
   handle to take instead; `module-seams.test.ts` holds `app.ts` to one use of the database it was given, and the doors and
   features to no pool of their own. What is yours is a read that decides whether a request may be made at all (a
   membership, a session): the core's guards in `platform/tenancy.ts` take their connections outside every share
@@ -776,8 +807,10 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
   set is no failure and one that ran issues and was then turned off is erased, purged and exported whole: its rows stay
   while the module is off, and the right to be erased and a deleted workspace's purge do not wait for a setting
   (D-254 §4). The exports skip the table through the contribution's `ownSet`.
-- **Audit and permissions.** None: nothing it does is on the workspace's trail, and the role rule — any member makes and
-  changes, only the creator or an owner or an admin deletes — is in the service, tested through the route.
+- **Audit and permissions.** Its four actions (`issue.created`, `issue.status_changed`, `issue.assigned`, `issue.deleted`) are
+  on the workspace's trail and in the manifest's `auditActions`; the role rule — any member makes and changes, only the
+  creator or whoever holds `issues.delete-any` (an owner or an admin) deletes — is the manifest's `permissions`, tested
+  through the route.
 - **Events and notifications.** None. An issue has no frame and tells nobody; a client reads again.
 - **Web.** The screen at `/w/:slug/issues`, one `import()` from `features/issues/manifest.ts` (<!-- web-module-registry -->) into a chunk of its own; the rail
   link and the palette entry only where the session lists the module. `budget:web` holds the shell chunk to carrying none of

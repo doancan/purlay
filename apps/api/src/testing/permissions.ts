@@ -13,6 +13,11 @@ export interface PermissionCase {
   /** The documented endpoint, as `API.md` names it. */
   readonly endpoint: string;
   readonly allowed: Readonly<Record<UserRole, boolean>>;
+  /**
+   * The permission the endpoint asks by name (`platform/module-kit/permissions.ts`), when it asks one: `permissions.test.ts`
+   * holds `allowed` to who holds it, so the table and the declaration cannot say different things.
+   */
+  readonly permission?: string;
 }
 
 export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
@@ -71,10 +76,12 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
   'read the audit trail': {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },
+    permission: 'audit.read',
   },
   'download the audit trail': {
     endpoint: 'GET /api/workspaces/:workspaceId/audit/export',
     allowed: { owner: true, admin: true, member: false },
+    permission: 'audit.read',
   },
   'see whether the GitHub token is set': {
     endpoint: 'GET /api/workspaces/:workspaceId/integrations/github',

@@ -12,7 +12,10 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { createChannel } from '../../features/chat/channels/channels';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { changeRole, removeMember } from '../workspaces/members';
-import { auditTrail, recordAudit } from './audit';
+import { composition } from '../../composition';
+import { auditAccess } from '../../platform/module-kit/audit-access';
+import { CORE_PERMISSIONS, permissionTable } from '../../platform/module-kit/permissions';
+import { auditTrail as trailAs, recordAudit } from './audit';
 import { aSession } from '../../testing/signed-in';
 import { withinRequest } from '../../platform/logging';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
@@ -46,6 +49,14 @@ const trail = async (db: Executor, room: Room): Promise<TrailRow[]> =>
     .where('workspace_id', '=', room.workspaceId)
     .orderBy('id')
     .execute();
+
+const auditTrail = async (
+  ...[executor, context, query]: [
+    Executor,
+    Parameters<typeof trailAs>[1],
+    Parameters<typeof trailAs>[2],
+  ]
+): ReturnType<typeof trailAs> => await trailAs(executor, context, query, composition.auditAccess);
 
 describe('integration: the audit trail', () => {
   test('a role change: who, whom, from and to — once; the same role again records nothing', async () => {
@@ -156,6 +167,34 @@ describe('integration: reading the trail', () => {
         if (error instanceof AppError) refused = error.body.code;
       });
       expect(refused).toBe('FORBIDDEN');
+    });
+  });
+});
+
+describe('integration: the rows a role is not shown', () => {
+  /** Chat's actions are read, in this build of the trail, only by an owner: the permission is a module's own. */
+  const ownersReadChat = auditAccess(
+    permissionTable([...CORE_PERMISSIONS, { name: 'chat.audit', minimumRole: 'owner' }]),
+    [{ read: 'chat.audit', actions: ['channel.created'] }],
+  );
+
+  test('are in no page, whichever filter asks for them, for the role that cannot read them', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const alice = await requireWorkspaceMembership(db, idOf(room, 'alice'), room.workspaceId);
+      if (!isTransaction(db)) throw new Error('withRollback gives a transaction');
+      await createChannel(db, clock, alice, { name: 'hidden', type: 'public' });
+      await changeRole(db, clock, alice, idOf(room, 'bob'), 'admin');
+      const bob = await requireWorkspaceMembership(db, idOf(room, 'bob'), room.workspaceId);
+      const actions = async (
+        who: typeof alice,
+        query: Parameters<typeof trailAs>[2],
+      ): Promise<string[]> =>
+        (await trailAs(db, who, query, ownersReadChat)).data.map((entry) => entry.action);
+
+      expect((await actions(alice, {})).sort()).toEqual(['channel.created', 'member.role_changed']);
+      expect(await actions(bob, {})).toEqual(['member.role_changed']);
+      expect(await actions(bob, { action: 'channel.created' })).toEqual([]);
     });
   });
 });

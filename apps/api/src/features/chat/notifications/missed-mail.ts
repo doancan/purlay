@@ -24,6 +24,7 @@
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import {
+  CHAT_NOTIFICATION_KINDS,
   type MissedMailSetting,
   type NotificationType,
   type SetMissedMailRequest,
@@ -52,10 +53,9 @@ const MISSED_MAIL_WINDOW_MS = HOUR_MS;
 /** How long a letter's stop link opens, and its row is kept. */
 export const STOP_LINK_DAYS = 30;
 /** The reasons a letter is about: what the setting names. */
-const MISSED_MAIL_TYPES = [
-  'mention',
-  'direct_message',
-] as const satisfies readonly NotificationType[];
+const MISSED_MAIL_TYPES: readonly NotificationType[] = CHAT_NOTIFICATION_KINDS.filter(
+  (kind) => kind.mailed,
+).map((kind) => kind.type);
 /** Notifications one letter takes at most; more wait for the next. */
 const BATCH_MAX = 200;
 

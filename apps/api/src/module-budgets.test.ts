@@ -1,6 +1,6 @@
 /**
  * Every module has a share of the connection pool or a reason it has none, and that reason is a line a reviewer sees
- * (`MODULES.md` §7, D-260, D-265). A manifest that says `none` cannot be added without editing this list, which is the
+ * (`MODULES.md` §7, D-260, D-266). A manifest that says `none` cannot be added without editing this list, which is the
  * point: the choice not to budget a module is somebody's decision, written here beside the module's name.
  */
 import { describe, expect, test } from 'bun:test';

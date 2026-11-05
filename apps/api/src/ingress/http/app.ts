@@ -479,7 +479,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const dependencies = {
     ...given,
     // The one database a handler can reach, leased by the module the request belongs to: the module's share of the
-    // pool holds each of its statements, with nothing for a handler to ask for (`platform/module-budget.ts`, D-265).
+    // pool holds each of its statements, with nothing for a handler to ask for (`platform/module-budget.ts`, D-266).
     database: leasingExecutor(
       given.database,
       moduleConnections(
@@ -490,6 +490,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    auditAccess: modules.auditAccess,
     userErased: given.userErased ?? modules.userErased,
     collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   };
@@ -559,6 +560,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
+  const issueDependencies = { ...dependencies, permissions: modules.permissions };
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -1404,20 +1406,21 @@ export const createApp = (given: Dependencies): HttpApplication => {
     )
     .get(
       '/api/workspaces/:workspaceId/issues',
-      async ({ request, params }) => await listIssues(dependencies, request, params.workspaceId),
+      async ({ request, params }) =>
+        await listIssues(issueDependencies, request, params.workspaceId),
     )
     .post('/api/workspaces/:workspaceId/issues', async ({ request, params, body, set }) => {
-      const issue = await postIssue(dependencies, request, params.workspaceId, body);
+      const issue = await postIssue(issueDependencies, request, params.workspaceId, body);
       set.status = 201;
       return issue;
     })
     .patch(
       '/api/workspaces/:workspaceId/issues/:issueId',
       async ({ request, params, body }) =>
-        await patchIssue(dependencies, request, params.workspaceId, params.issueId, body),
+        await patchIssue(issueDependencies, request, params.workspaceId, params.issueId, body),
     )
     .delete('/api/workspaces/:workspaceId/issues/:issueId', async ({ request, params, set }) => {
-      await removeIssue(dependencies, request, params.workspaceId, params.issueId);
+      await removeIssue(issueDependencies, request, params.workspaceId, params.issueId);
       set.status = 204;
       return null;
     })

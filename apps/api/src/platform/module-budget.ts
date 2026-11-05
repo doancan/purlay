@@ -1,5 +1,5 @@
 /**
- * What one module may take from the shared database (`MODULES.md` §7, D-265).
+ * What one module may take from the shared database (`MODULES.md` §7, D-266).
  *
  * The share is a cap on the requests a module has holding a connection, with a queue timeout and a `statement_timeout`;
  * a request over it waits briefly and is then told the database is busy (`503 DATABASE_UNAVAILABLE`), which a client

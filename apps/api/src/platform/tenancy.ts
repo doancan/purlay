@@ -87,7 +87,7 @@ const workspaceMembership = async (
   return { workspaceId, userId, role: row.role, [tenancy]: true };
 };
 
-/** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-265). */
+/** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-266). */
 export const requireWorkspaceMembership = inTheCore(workspaceMembership);
 
 /** Not exported either: the deletion's own capability, apart from the workspace's. */

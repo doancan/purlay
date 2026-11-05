@@ -480,3 +480,48 @@ describe('the work of the jobs a module names', () => {
     expect(alone.closedJob('mail:missed')).toBe(true);
   });
 });
+
+describe('what a process that does not run a module has of it (permissions and the trail)', () => {
+  const deleteAny = 'issues.delete-any';
+
+  test('the permissions of a module are held while it runs and by nobody once it does not, the owner included', () => {
+    const running = compositionFor(undefined).permissions;
+    expect(running.holds('member', deleteAny)).toBe(false);
+    expect(running.holds('admin', deleteAny)).toBe(true);
+    expect(running.holds('owner', deleteAny)).toBe(true);
+    const off = compositionFor('chat').permissions;
+    expect(off.holds('owner', deleteAny)).toBe(false);
+    expect(off.holds('owner', 'audit.read')).toBe(true);
+  });
+
+  test('every module of the build is judged for the trail, run or not, so its rows are not lost by leaving it out', () => {
+    expect(compositionFor('none').auditAccess.unreadable('admin')).toEqual([]);
+    expect(compositionFor('none').auditAccess.mayRead('admin')).toBe(true);
+    expect(compositionFor('none').auditAccess.mayRead('member')).toBe(false);
+  });
+
+  test('a module that declares its own read permission has its rows hidden once it is not run', () => {
+    const guarded: BundledModule = {
+      manifest: {
+        ...another.manifest,
+        permissions: [{ name: 'other.audit', minimumRole: 'owner' }],
+        auditActions: [{ read: 'other.audit', actions: ['other.done'] }],
+      },
+    };
+    expect(compose([guarded], [guarded]).auditAccess.unreadable('admin')).toEqual(['other.done']);
+    expect(compose([guarded], [guarded]).auditAccess.unreadable('owner')).toEqual([]);
+    expect(compose([], [guarded]).auditAccess.unreadable('owner')).toEqual(['other.done']);
+  });
+});
+
+describe('what a process that does not run a module offers of it', () => {
+  test('its notification kinds and its search sources are those of the modules that run', () => {
+    expect(compositionFor(undefined).notificationKinds.map((kind) => kind.type)).toContain(
+      'mention',
+    );
+    expect(compositionFor(undefined).searchSources).toEqual(['messages']);
+    expect(compositionFor('issues').notificationKinds).toEqual([]);
+    expect(compositionFor('issues').searchSources).toEqual([]);
+    expect(compositionFor('none').searchSources).toEqual([]);
+  });
+});
