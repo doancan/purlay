@@ -434,6 +434,25 @@ describe('how you sign in (D-176, D-179 §5)', () => {
     view.unmount();
   });
 
+  test('the email description does not promise email sign-in for an account linked to single sign-on', async () => {
+    const { view, card } = await opened({
+      mySignIn: () =>
+        Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: true,
+          hasPassword: false,
+          github: null,
+          oidc: true,
+          google: false,
+          twoFactor: false,
+          twoFactorRequired: false,
+        }),
+    });
+    expect(card.queryByText('A sign-in link sent to this address signs you in.')).toBeNull();
+    expect(card.getByText('Your organisation’s sign-in is linked to this address.')).toBeDefined();
+    view.unmount();
+  });
+
   test('an account single sign-on is linked to says so, and that a link sent to its address no longer signs in', async () => {
     const { view, card } = await opened({
       mySignIn: () =>

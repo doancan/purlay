@@ -54,6 +54,16 @@ export const ServerPage = (): React.JSX.Element => {
         />
       ) : (
         <>
+          {settings.isError && (
+            <ErrorState
+              title={t('settings.server.loadError.title')}
+              body={t('settings.server.refreshError.body')}
+              retryLabel={t('common.retry')}
+              onRetry={() => {
+                void settings.refetch();
+              }}
+            />
+          )}
           <GitHubCard view={settings.data} />
           <GoogleCard view={settings.data} />
           <OidcCard view={settings.data} />

@@ -199,3 +199,28 @@ test.describe('an invitation', () => {
     await expect(stranger.getByText('This invitation does not open')).toBeVisible();
   });
 });
+
+test('Settings loads and revokes the oldest of more than fifty open invitation links', async ({
+  page,
+  signIn,
+  tenant,
+}) => {
+  const owner = apiAs(tenant, 'alice');
+  const slug = `paged-invites-${crypto.randomUUID().slice(0, 8)}`;
+  const workspace = await owner.post<{ id: string }>('/api/workspaces', {
+    name: 'Paged invitations',
+    slug,
+  });
+  for (let index = 0; index < 51; index += 1) {
+    await owner.post(`/api/workspaces/${workspace.id}/invitations`);
+  }
+  await signIn('alice');
+  const main = await openSettings(page, slug, 'invitations', 'Invitations');
+  await expect(main.getByRole('button', { name: 'Revoke', exact: true })).toHaveCount(50);
+  await main.getByRole('button', { name: 'Load older links' }).click();
+  await expect(main.getByRole('button', { name: 'Revoke', exact: true })).toHaveCount(51);
+  await expect(main.getByRole('button', { name: 'Load older links' })).toHaveCount(0);
+  await main.getByRole('button', { name: 'Revoke', exact: true }).last().click();
+  await expect(main.getByRole('button', { name: 'Revoke', exact: true })).toHaveCount(50);
+  await expect(page.getByText('Link revoked.', { exact: true })).toBeVisible();
+});

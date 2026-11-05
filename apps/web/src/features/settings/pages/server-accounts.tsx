@@ -39,6 +39,7 @@ export const AccountsCard = (): React.JSX.Element => {
   });
 
   const change = async (account: ServerAccount, suspend: boolean): Promise<void> => {
+    if (working !== null || accounts.isPlaceholderData) return;
     setWorking(account.id);
     setFailure(null);
     try {
@@ -47,8 +48,8 @@ export const AccountsCard = (): React.JSX.Element => {
     } catch (caught) {
       setFailure(caught);
     } finally {
-      setWorking(null);
       await queries.invalidateQueries({ queryKey: ACCOUNTS_KEY });
+      setWorking(null);
     }
   };
 
@@ -84,6 +85,7 @@ export const AccountsCard = (): React.JSX.Element => {
           <Button
             aria-describedby={described}
             busy={working === account.id}
+            disabled={working !== null || accounts.isPlaceholderData}
             onClick={() => {
               void change(account, false);
             }}
@@ -96,6 +98,7 @@ export const AccountsCard = (): React.JSX.Element => {
               {t('settings.server.accounts.ask', { name: account.displayName })}
             </span>
             <Button
+              disabled={working !== null}
               onClick={() => {
                 setAsking(null);
               }}
@@ -106,6 +109,7 @@ export const AccountsCard = (): React.JSX.Element => {
               variant="danger"
               aria-describedby={described}
               busy={working === account.id}
+              disabled={working !== null || accounts.isPlaceholderData}
               onClick={() => {
                 void change(account, true);
               }}
@@ -116,6 +120,7 @@ export const AccountsCard = (): React.JSX.Element => {
         ) : (
           <Button
             variant="dangerQuiet"
+            disabled={working !== null || accounts.isPlaceholderData}
             aria-describedby={described}
             onClick={() => {
               setFailure(null);
@@ -146,10 +151,17 @@ export const AccountsCard = (): React.JSX.Element => {
           }}
         />
         {failure !== null && <ChangeFailure failure={failure} />}
+        {accounts.isPlaceholderData && (
+          <p role="status" className="text-label text-ink-muted">
+            {t('common.loading')}
+          </p>
+        )}
       </Inset>
       {accounts.isError ? (
         <Inset>
-          <ChangeFailure failure={accounts.error} />
+          <p role="alert" className="text-label text-danger-text">
+            {t('settings.server.accounts.loadFailed')}
+          </p>
           <span>
             <Button
               onClick={() => {
