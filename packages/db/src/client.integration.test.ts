@@ -11,7 +11,7 @@ import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import { createDatabase, DatabaseUnavailableError } from './client';
 import { migrateToLatest } from './migrator';
-import { integrationDatabase, closeIntegrationDatabase } from './testing';
+import { closeIntegrationDatabase, dropDatabases, integrationDatabase } from './testing';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -56,7 +56,9 @@ describe('integration: the database client and the migrations', () => {
       expect(again.results).toEqual([]);
     } finally {
       await fresh.destroy();
-      await sql`drop database ${sql.id(name)} with (force)`.execute(shared);
+      // Not a drop by hand: the pool says it has ended before its socket has, and `with (force)` on a connection
+      // halfway through hanging up reaches the client as an unhandled "terminating connection" (57P01).
+      await dropDatabases([name]);
     }
   });
 
