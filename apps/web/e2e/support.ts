@@ -360,6 +360,18 @@ export const openNav = async (page: Page): Promise<Locator> => {
 };
 
 /**
+ * A workspace's front door (`/w/:slug`), opened and waited past: the door only replaces itself with a
+ * channel once the channels have come, and the shell is built again for that screen — so a menu opened
+ * on the door's sidebar is closed by the hand-over, and a click made before it is lost. Returns once the
+ * channel's feed is drawn.
+ */
+export const openWorkspace = async (page: Page, slug: string): Promise<void> => {
+  await page.goto(`/w/${slug}`);
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/c/[0-9a-f-]+$`));
+  await expect(page.getByRole('feed', { name: /^Messages in / })).toBeVisible();
+};
+
+/**
  * A page of Settings (D-146), opened at its address, once its chunk has loaded and drawn the page's
  * title; returns the main column the page is in.
  */

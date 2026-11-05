@@ -5,12 +5,14 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { isNarrow } from './support';
 
 const banner = (page: Page): Locator => page.getByRole('region', { name: 'Incident in progress' });
 
 const panelOf = async (page: Page): Promise<Locator> => {
-  const control = page.getByRole('button', { name: 'Incident', exact: true });
-  if (await control.isVisible()) await control.click();
+  // By the window's width, as the product draws it: asking whether the button is drawn yet answers
+  // "not yet" on a page that is still loading, and sends a wide window to a menu it does not have.
+  if (!isNarrow(page)) await page.getByRole('button', { name: 'Incident', exact: true }).click();
   else {
     await page.getByRole('button', { name: 'Channel menu' }).click();
     await page.getByRole('menuitem', { name: 'Incident' }).click();
