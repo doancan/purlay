@@ -114,18 +114,34 @@ describe('the registry', () => {
 });
 
 describe("the server's instruments", () => {
-  test('say the process and every counter from the start, each counter at zero', () => {
-    const page = readExposition(renderMetrics(serverMetrics(fixedProcess)));
+  test('say the process and every counter from the start, each counter at zero, one series for each owner the build has', () => {
+    const modules = bundledModules.map((module) => module.manifest.id);
+    const page = readExposition(renderMetrics(serverMetrics(fixedProcess, modules)));
     expect(sampleOf(page, 'purlay_process_uptime_seconds')).toBe(12.5);
     expect(sampleOf(page, 'purlay_process_resident_memory_bytes')).toBe(64 * 1024 * 1024);
+    const owners = ['core', ...modules];
     for (const door of ['http', 'socket']) {
-      expect(sampleOf(page, 'purlay_rate_limited_total', { door })).toBe(0);
+      for (const module of [...owners, 'none']) {
+        expect(sampleOf(page, 'purlay_rate_limited_total', { door, module })).toBe(0);
+      }
     }
     for (const reason of ['refused', 'not_taken', 'error', 'dropped']) {
-      expect(sampleOf(page, 'purlay_push_failures_total', { reason })).toBe(0);
+      for (const module of owners) {
+        expect(sampleOf(page, 'purlay_push_failures_total', { reason, module })).toBe(0);
+      }
     }
-    expect(sampleOf(page, 'purlay_mail_failures_total')).toBe(0);
+    for (const module of owners) {
+      expect(sampleOf(page, 'purlay_mail_failures_total', { module })).toBe(0);
+    }
     expect(page.types.get('purlay_http_request_duration_seconds')).toBe('histogram');
+  });
+
+  test('count no series for an owner it was not told of until a failure names it, and never one that is not an owner by name', () => {
+    const page = readExposition(renderMetrics(serverMetrics(fixedProcess)));
+    const modules = page.samples
+      .filter((sample) => sample.name.startsWith('purlay_') && sample.name.endsWith('_total'))
+      .flatMap((sample) => sample.labels['module'] ?? []);
+    expect(new Set(modules)).toEqual(new Set(['core', 'none']));
   });
 
   test('say which memory figure the resident gauge is, since ps reads higher on macOS (#1028)', () => {
