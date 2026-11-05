@@ -58,6 +58,10 @@
       // uses; it is the one thing the preload needs and the package is a direct
       // devDependency for no other reason (#138).
       "ignoreDependencies": ["@radix-ui/react-use-layout-effect"],
+      // A program the machine has, not a package: `playwright.config.ts` runs `openssl` once to make the
+      // certificate WebKit's origin is served with (a `Secure` cookie does not reach http://localhost there).
+      // CI's runner and a developer's both have it; the file says so where it is used.
+      "ignoreBinaries": ["openssl"],
     },
   },
 }
