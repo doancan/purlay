@@ -1,6 +1,8 @@
 /**
  * The attack, end to end: a NUL in a name was a 500 INTERNAL and an error report.
  * It is the caller's mistake, so it is a 400 that names the field and echoes nothing.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';

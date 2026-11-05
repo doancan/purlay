@@ -6,6 +6,8 @@
  * its own, takes the message over a real socket, drains and closes its pool; a
  * second application starts with a new pool on the same database. The message
  * must be in history, and in the replay a reconnecting client asks for.
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

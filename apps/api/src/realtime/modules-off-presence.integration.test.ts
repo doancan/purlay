@@ -21,6 +21,7 @@ import { aManualTimers, testConfig, testDependencies } from '../testing/doubles'
 import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 import { inProcessBackplane } from './bus';
+import { testNeeding } from '../testing/needs';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -179,19 +180,22 @@ describe('integration: the socket of a process that does not run chat, and who i
     await watching.close();
   });
 
-  test('a process that runs chat counts and tells as before: the control', async () => {
-    const { alice, bob } = await aRoom();
-    const chatting = node('chat');
-    const watching = await connect(chatting, bob.cookie);
-    const arriving = await connect(chatting, alice.cookie);
-    await watching.until((f) => presenceOf(f, alice.userId).includes(true), 'alice online');
-    expect(chatting.app.held()).toMatchObject({ connections: 2, online: 2 });
-    await arriving.close();
-    await watching.until(() => chatting.app.held().leaving === 1, 'alice inside her grace');
-    chatting.timers.runAll();
-    await watching.until((f) => presenceOf(f, alice.userId).includes(false), 'alice offline');
-    await watching.close();
-  });
+  testNeeding('chat')(
+    'a process that runs chat counts and tells as before: the control',
+    async () => {
+      const { alice, bob } = await aRoom();
+      const chatting = node('chat');
+      const watching = await connect(chatting, bob.cookie);
+      const arriving = await connect(chatting, alice.cookie);
+      await watching.until((f) => presenceOf(f, alice.userId).includes(true), 'alice online');
+      expect(chatting.app.held()).toMatchObject({ connections: 2, online: 2 });
+      await arriving.close();
+      await watching.until(() => chatting.app.held().leaving === 1, 'alice inside her grace');
+      chatting.timers.runAll();
+      await watching.until((f) => presenceOf(f, alice.userId).includes(false), 'alice offline');
+      await watching.close();
+    },
+  );
 
   test('still carries the core’s own frames: a workspace change and the end of a session', async () => {
     const { alice, bob } = await aRoom();
@@ -211,29 +215,32 @@ describe('integration: the socket of a process that does not run chat, and who i
     await watching.close();
   });
 
-  test('hears none of the news a node that runs chat publishes to a person it holds', async () => {
-    const { alice, bob } = await aRoom();
-    const cluster = inProcessBackplane();
-    const chatting = node('chat', cluster);
-    const alone = node('none', cluster);
-    const watching = await connect(alone, bob.cookie);
-    const arriving = await connect(chatting, alice.cookie);
-    await chatting.app.settled();
-    await quiet(alone);
-    expect(watching.frames.filter((frame) => frame.event === 'PRESENCE')).toEqual([]);
-    // The control: the same publication reaches Bob where chat is run.
-    const bobWithChat = await connect(chatting, bob.cookie);
-    // The client sees the socket open before the node has resolved who it is and listened on Bob's own topic: a
-    // change published before that is not heard. A connection is counted when it opens, so `connections` says
-    // nothing about that; a person is online only after the node has listened. Wait until it holds both.
-    await bobWithChat.until(() => chatting.app.held().online === 2, 'both people online');
-    await arriving.close();
-    // The close is handled after the client has seen it end: wait until the node holds her in her grace, or the
-    // timers are run before there is one.
-    await bobWithChat.until(() => chatting.app.held().leaving === 1, 'alice inside her grace');
-    chatting.timers.runAll();
-    await bobWithChat.until((f) => presenceOf(f, alice.userId).includes(false), 'alice offline');
-    await bobWithChat.close();
-    await watching.close();
-  });
+  testNeeding('chat')(
+    'hears none of the news a node that runs chat publishes to a person it holds',
+    async () => {
+      const { alice, bob } = await aRoom();
+      const cluster = inProcessBackplane();
+      const chatting = node('chat', cluster);
+      const alone = node('none', cluster);
+      const watching = await connect(alone, bob.cookie);
+      const arriving = await connect(chatting, alice.cookie);
+      await chatting.app.settled();
+      await quiet(alone);
+      expect(watching.frames.filter((frame) => frame.event === 'PRESENCE')).toEqual([]);
+      // The control: the same publication reaches Bob where chat is run.
+      const bobWithChat = await connect(chatting, bob.cookie);
+      // The client sees the socket open before the node has resolved who it is and listened on Bob's own topic: a
+      // change published before that is not heard. A connection is counted when it opens, so `connections` says
+      // nothing about that; a person is online only after the node has listened. Wait until it holds both.
+      await bobWithChat.until(() => chatting.app.held().online === 2, 'both people online');
+      await arriving.close();
+      // The close is handled after the client has seen it end: wait until the node holds her in her grace, or the
+      // timers are run before there is one.
+      await bobWithChat.until(() => chatting.app.held().leaving === 1, 'alice inside her grace');
+      chatting.timers.runAll();
+      await bobWithChat.until((f) => presenceOf(f, alice.userId).includes(false), 'alice offline');
+      await bobWithChat.close();
+      await watching.close();
+    },
+  );
 });

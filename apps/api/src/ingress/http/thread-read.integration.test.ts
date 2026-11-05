@@ -3,6 +3,8 @@
  * `PUT /api/messages/:messageId/thread/read` is how a thread is read — through real requests. Its
  * cross-tenant and visibility crossings are in `cross-tenant.integration.test.ts` and
  * `channel-visibility.integration.test.ts`, from the table the build checks against `API.md`.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

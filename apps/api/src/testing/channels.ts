@@ -3,6 +3,8 @@
  *
  * The database only: no session, no HTTP. `testing/signed-in.ts` is for the tests
  * that go through a request.
+ *
+ * @needs-modules chat
  */
 import type { Executor } from '@purlay/db';
 import { DEFAULT_CHANNEL_NAME } from '@purlay/types';

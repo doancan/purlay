@@ -27,6 +27,7 @@ import {
   returnFromGitHub,
   startGitHubSignIn,
 } from '../../testing/github-sign-in';
+import { testNeeding } from '../../testing/needs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -81,93 +82,107 @@ describe('integration: the per-user write limit', () => {
   });
 
   /** The send path that used to be unthrottled while the socket's was not (#235). */
-  test('the HTTP send path is held to the budget, and reads are not counted', async () => {
-    await withRollback(async (db) => {
-      const app = createApp(
-        testDependencies({
-          database: db,
-          clock,
-          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
-        }),
-      );
-      const user = await aSignedInUser(db, clock, 'rl-send');
-      const slug = aUniqueSlug('rl-send');
-      const workspace = (await (
-        await post(app, user.cookie, '/api/workspaces', { name: slug, slug })
-      ).json()) as { id: string };
-      const channel = (await (
-        await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
-          name: 'ops',
-        })
-      ).json()) as { id: string };
+  testNeeding('chat')(
+    'the HTTP send path is held to the budget, and reads are not counted',
+    async () => {
+      await withRollback(async (db) => {
+        const app = createApp(
+          testDependencies({
+            database: db,
+            clock,
+            rateBudgets: {
+              auth: AUTH_BUDGET,
+              writes: WRITE_BUDGET,
+              costlyReads: COSTLY_READ_BUDGET,
+            },
+          }),
+        );
+        const user = await aSignedInUser(db, clock, 'rl-send');
+        const slug = aUniqueSlug('rl-send');
+        const workspace = (await (
+          await post(app, user.cookie, '/api/workspaces', { name: slug, slug })
+        ).json()) as { id: string };
+        const channel = (await (
+          await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
+            name: 'ops',
+          })
+        ).json()) as { id: string };
 
-      // Two writes spent; the rest of the burst goes to messages.
-      const statuses: number[] = [];
-      for (let i = 0; i < WRITE_BUDGET.burst; i += 1) {
-        const response = await post(app, user.cookie, `/api/channels/${channel.id}/messages`, {
-          id: messageId(NOW),
-          content: `message ${String(i)}`,
-        });
-        statuses.push(response.status);
-      }
-      expect(statuses.filter((status) => status === 201)).toHaveLength(WRITE_BUDGET.burst - 2);
-      expect(statuses.filter((status) => status === 429)).toHaveLength(2);
+        // Two writes spent; the rest of the burst goes to messages.
+        const statuses: number[] = [];
+        for (let i = 0; i < WRITE_BUDGET.burst; i += 1) {
+          const response = await post(app, user.cookie, `/api/channels/${channel.id}/messages`, {
+            id: messageId(NOW),
+            content: `message ${String(i)}`,
+          });
+          statuses.push(response.status);
+        }
+        expect(statuses.filter((status) => status === 201)).toHaveLength(WRITE_BUDGET.burst - 2);
+        expect(statuses.filter((status) => status === 429)).toHaveLength(2);
 
-      // A read is not a write: still served while writes are refused.
-      const history = await app.handle(
-        new Request(`${ORIGIN}/api/channels/${channel.id}/messages`, {
-          headers: { cookie: user.cookie },
-        }),
-      );
-      expect(history.status).toBe(200);
-    });
-  });
+        // A read is not a write: still served while writes are refused.
+        const history = await app.handle(
+          new Request(`${ORIGIN}/api/channels/${channel.id}/messages`, {
+            headers: { cookie: user.cookie },
+          }),
+        );
+        expect(history.status).toBe(200);
+      });
+    },
+  );
 
   /**
    * Drawing a channel asks for its cards and pictures — a request per link. They were charged to the
    * bucket a person sends with, so a page with twenty-odd GitHub links spent it, and the person's next
    * message was refused (found in the browser suite as a 429 on the unfurl).
    */
-  test('cards and pictures have a budget of their own: drawing a channel cannot spend what sending needs', async () => {
-    await withRollback(async (db) => {
-      const app = createApp(
-        testDependencies({
-          database: db,
-          clock,
-          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
-        }),
-      );
-      const user = await aSignedInUser(db, clock, 'rl-read');
-      const slug = aUniqueSlug('rl-read');
-      const workspace = (await (
-        await post(app, user.cookie, '/api/workspaces', { name: slug, slug })
-      ).json()) as { id: string };
-      const channel = (await (
-        await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
-          name: 'ops',
-        })
-      ).json()) as { id: string };
-
-      const unfurl = async (n: number): Promise<number> =>
-        (
-          await post(app, user.cookie, '/api/integrations/github/unfurl', {
-            workspaceId: workspace.id,
-            url: `https://github.com/acme/api/pull/${String(n + 1)}`,
+  testNeeding('chat')(
+    'cards and pictures have a budget of their own: drawing a channel cannot spend what sending needs',
+    async () => {
+      await withRollback(async (db) => {
+        const app = createApp(
+          testDependencies({
+            database: db,
+            clock,
+            rateBudgets: {
+              auth: AUTH_BUDGET,
+              writes: WRITE_BUDGET,
+              costlyReads: COSTLY_READ_BUDGET,
+            },
+          }),
+        );
+        const user = await aSignedInUser(db, clock, 'rl-read');
+        const slug = aUniqueSlug('rl-read');
+        const workspace = (await (
+          await post(app, user.cookie, '/api/workspaces', { name: slug, slug })
+        ).json()) as { id: string };
+        const channel = (await (
+          await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
+            name: 'ops',
           })
-        ).status;
-      const statuses: number[] = [];
-      for (let n = 0; n < COSTLY_READ_BUDGET.burst; n += 1) statuses.push(await unfurl(n));
-      expect(statuses.every((status) => status === 200)).toBe(true);
-      expect(await unfurl(COSTLY_READ_BUDGET.burst)).toBe(429);
+        ).json()) as { id: string };
 
-      // Every card asked for, and the writing budget is whole: a message still goes.
-      const sent = await post(app, user.cookie, `/api/channels/${channel.id}/messages`, {
-        id: messageId(NOW),
-        content: 'still able to say something',
+        const unfurl = async (n: number): Promise<number> =>
+          (
+            await post(app, user.cookie, '/api/integrations/github/unfurl', {
+              workspaceId: workspace.id,
+              url: `https://github.com/acme/api/pull/${String(n + 1)}`,
+            })
+          ).status;
+        const statuses: number[] = [];
+        for (let n = 0; n < COSTLY_READ_BUDGET.burst; n += 1) statuses.push(await unfurl(n));
+        expect(statuses.every((status) => status === 200)).toBe(true);
+        expect(await unfurl(COSTLY_READ_BUDGET.burst)).toBe(429);
+
+        // Every card asked for, and the writing budget is whole: a message still goes.
+        const sent = await post(app, user.cookie, `/api/channels/${channel.id}/messages`, {
+          id: messageId(NOW),
+          content: 'still able to say something',
+        });
+        expect(sent.status).toBe(201);
       });
-      expect(sent.status).toBe(201);
-    });
-  });
+    },
+  );
 
   test('a caller with no session is not given a bucket, and is answered 401 as before', async () => {
     await withRollback(async (db) => {

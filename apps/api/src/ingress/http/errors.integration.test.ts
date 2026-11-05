@@ -2,6 +2,8 @@
  * The foreign keys that point at a message, as the database has them, are exactly the ones a refusal
  * names as the message not found (D-139 §2): a key added later is a `500` until it is listed, and this
  * says so before anybody meets it.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback } from '@purlay/db';

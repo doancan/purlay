@@ -8,6 +8,8 @@
  * person's own numbers travel on their own topic and nobody else's.
  *
  * The database is a clone of its own and writes commit (D-46).
+ *
+ * @needs-modules chat
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

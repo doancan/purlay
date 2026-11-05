@@ -2,6 +2,8 @@
  * `PUT /api/channels/:channelId/notification-level` through the HTTP surface (D-107): the body read
  * against the contract, the member's own row, and the refusals. What each level does to a message is
  * the module's (`notification-level.integration.test.ts`); the crossings are the tenancy suites'.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
