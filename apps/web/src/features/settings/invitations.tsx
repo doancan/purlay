@@ -7,9 +7,14 @@
  * copied — and the list names who made each link and until when, never the link itself. Revoking is
  * immediate on the server; the list is read again after it.
  */
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
+} from '@tanstack/react-query';
 import type { CreateInvitationRequest, InvitationMailResult, InvitationPage } from '@purlay/types';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
@@ -20,10 +25,11 @@ import { useContentPorts } from '../content/content-ports';
 import { useWorkspace } from '../shell/workspace';
 
 export interface Invitations {
-  readonly list: UseQueryResult<InvitationPage>;
+  readonly list: UseInfiniteQueryResult<InfiniteData<InvitationPage>>;
   /** The link just made, whole; null until one is made here. */
   readonly link: string | null;
   readonly making: boolean;
+  readonly revoking: ReadonlySet<string>;
   readonly problem: string | null;
   /**
    * What became of each address sent with the link, in the server's words; null when none were. The
@@ -48,14 +54,26 @@ export const useInvitations = (enabled: boolean): Invitations => {
   const { show } = useToast();
   const { copy } = useContentPorts();
   const { workspace } = useWorkspace();
-  const [link, setLink] = useState<string | null>(null);
+  // Keep the id with the one-time secret so revoking this invitation also removes its copy field.
+  const [made, setMade] = useState<{
+    readonly workspaceId: string;
+    readonly id: string;
+    readonly link: string;
+    readonly mail: readonly InvitationMailResult[] | null;
+  } | null>(null);
   const [making, setMaking] = useState(false);
+  const generation = useRef(0);
+  const makingNow = useRef(false);
+  const revokingNow = useRef(new Set<string>());
+  const [revoking, setRevoking] = useState<ReadonlySet<string>>(new Set());
   const [problem, setProblem] = useState<string | null>(null);
-  const [mail, setMail] = useState<readonly InvitationMailResult[] | null>(null);
 
-  const list = useQuery({
+  const list = useInfiniteQuery({
     queryKey: keys.invitations(workspace.id),
-    queryFn: async ({ signal }) => await api.invitations(workspace.id, undefined, signal),
+    queryFn: async ({ pageParam, signal }) =>
+      await api.invitations(workspace.id, pageParam, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
   });
   const reread = async (): Promise<void> => {
@@ -65,30 +83,67 @@ export const useInvitations = (enabled: boolean): Invitations => {
   const make = async (
     request?: CreateInvitationRequest,
   ): Promise<readonly InvitationMailResult[] | undefined> => {
+    if (makingNow.current) return undefined;
+    makingNow.current = true;
+    const started = generation.current;
     setMaking(true);
     setProblem(null);
+    setMade((current) => (current === null ? null : { ...current, mail: null }));
     try {
       const made = await api.createInvitation(workspace.id, request);
-      setLink(`${window.location.origin}/invite#${made.token}`);
-      setMail(made.mail ?? null);
+      // Closing the dialog forgets the token even if its request has not answered yet.
+      if (generation.current === started) {
+        setMade({
+          workspaceId: workspace.id,
+          id: made.invitation.id,
+          link: `${window.location.origin}/invite#${made.token}`,
+          mail: made.mail ?? null,
+        });
+      }
       await reread();
       return made.mail;
     } catch (failure) {
-      setProblem(
-        `${t(request?.emails === undefined ? 'invite.admin.makeFailed' : 'invite.mail.failed')} ${describe(failure)}`,
-      );
+      if (generation.current === started) {
+        setProblem(
+          `${t(request?.emails === undefined ? 'invite.admin.makeFailed' : 'invite.mail.failed')} ${describe(failure)}`,
+        );
+      }
       return undefined;
     } finally {
+      makingNow.current = false;
       setMaking(false);
     }
   };
 
   const revoke = async (invitationId: string): Promise<void> => {
+    if (revokingNow.current.has(invitationId)) return;
+    revokingNow.current.add(invitationId);
+    setRevoking(new Set(revokingNow.current));
     try {
       await api.revokeInvitation(workspace.id, invitationId);
+      setMade((current) => (current?.id === invitationId ? null : current));
+      // A successful write is kept even if the following read fails. Do not offer the dead link again.
+      await client.cancelQueries({ queryKey: keys.invitations(workspace.id) });
+      client.setQueryData<InfiniteData<InvitationPage>>(
+        keys.invitations(workspace.id),
+        (current) =>
+          current === undefined
+            ? undefined
+            : {
+                ...current,
+                pages: current.pages.map((page) => ({
+                  ...page,
+                  data: page.data.filter((invitation) => invitation.id !== invitationId),
+                })),
+              },
+      );
+      show({ message: t('invite.admin.revoked') });
       await reread();
     } catch (failure) {
       show({ message: `${t('invite.admin.revokeFailed')} ${describe(failure)}` });
+    } finally {
+      revokingNow.current.delete(invitationId);
+      setRevoking(new Set(revokingNow.current));
     }
   };
 
@@ -104,12 +159,24 @@ export const useInvitations = (enabled: boolean): Invitations => {
   };
 
   const forget = (): void => {
-    setLink(null);
+    generation.current += 1;
+    setMade(null);
     setProblem(null);
-    setMail(null);
   };
 
-  return { list, link, making, problem, mail, make, revoke, copyLink, forget };
+  const current = made?.workspaceId === workspace.id ? made : null;
+  return {
+    list,
+    link: current?.link ?? null,
+    making,
+    revoking,
+    problem,
+    mail: current?.mail ?? null,
+    make,
+    revoke,
+    copyLink,
+    forget,
+  };
 };
 
 /** The link just made, whole and selectable, with Copy beside it. */
@@ -127,7 +194,7 @@ export const MadeLink = ({
         readOnly
         value={link}
         aria-label={t('invite.admin.link')}
-        className="h-control min-w-0 flex-1 rounded-md border-hairline border-border-subtle bg-surface-000 px-3 font-mono text-caption text-ink max-narrow:h-touch"
+        className="h-control min-w-0 flex-1 rounded-md border-hairline border-border-subtle bg-surface-000 px-3 font-mono text-caption text-ink max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
         onFocus={(event) => {
           event.target.select();
         }}

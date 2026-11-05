@@ -351,6 +351,18 @@ export const tr = {
   'invite.admin.title': '{workspace} çalışma alanına davet et',
   'invite.admin.description':
     'Bir bağlantı, oturum açmış herkesin yedi gün boyunca üye olarak katılmasını sağlar. Ekibinin zaten konuştuğu yerde paylaş.',
+  'invite.admin.revoked': 'Bağlantı iptal edildi.',
+  'invite.admin.makeAnother': 'Yeni bağlantı oluştur',
+  'invite.admin.previousOpen':
+    'Önceki bağlantılar, süresi dolana veya iptal edene kadar açık kalır.',
+  'invite.mail.checking': 'E-posta kullanılabilirliği kontrol ediliyor…',
+  'invite.mail.checkFailed': 'E-posta kullanılabilirliği kontrol edilemedi.',
+  'invite.mail.off':
+    'Bu sunucuda e-postayla davet gönderilemiyor. Bunun yerine bağlantı paylaşabilirsin.',
+  'settings.invitations.older': 'Eski bağlantıları yükle',
+  'settings.invitations.olderFailed': 'Eski bağlantılar yüklenemedi.',
+  'settings.invitations.refreshFailed':
+    'Açık bağlantılar yenilenemedi. Son yüklenen liste gösteriliyor.',
   'invite.admin.make': 'Bağlantı oluştur',
   'invite.admin.makeFailed': 'Bağlantı oluşturulamadı.',
   'invite.admin.link': 'Davet bağlantısı',
@@ -409,6 +421,7 @@ export const tr = {
   'audit.description':
     'Kim, hangi yönetim işini yaptı; en yenisi önce. Kimsenin yazdıkları burada görünmez.',
   'audit.empty': 'Henüz yönetimsel bir şey olmadı.',
+  'audit.refreshFailed': 'Denetim kaydı yenilenemedi.',
   'audit.olderFailed': 'Daha eski kayıtlar yüklenmedi.',
   'audit.older': 'Daha eskileri yükle',
   'audit.someone': 'Biri',
@@ -1841,6 +1854,10 @@ export const tr = {
   'settings.notifications.what.reply':
     'Başlattığın ya da yanıtladığın bir thread’de biri yanıt verdiğinde',
   'settings.notifications.what.channel': 'Her mesaj seçtiğin bir kanala biri yazdığında',
+  'quietHours.loadFailed': 'Sessiz saatler yüklenemedi.',
+  'quietHours.timeRequired': 'Başlangıç ve bitiş saatlerini gir.',
+  'settings.account.emailOidc': 'Bu adres kurumunun tek oturum açma hesabına bağlı.',
+  'settings.account.emailUnavailable': 'Bu hesaba e-posta bağlantısıyla giriş yapılamıyor.',
   'quietHours.title': 'Sessiz saatler',
   'quietHours.description':
     'Her hafta seni hiçbir şeyin bölmediği saatler: gelenler saklanır ve sayılır, ama saatler bitene kadar hiçbir şey açılmaz ya da çalmaz — kendiliğinden Deep Work.',
@@ -2049,7 +2066,7 @@ export const tr = {
   'settings.invitations.title': 'Davetler',
   'settings.invitations.description':
     'Birinin katılmasını sağlayan bağlantılar. Bir bağlantı, elinde olan ve oturum açmış herkese yedi gün boyunca üye olarak açıktır.',
-  'settings.invitations.new': 'Yeni bağlantı',
+  'settings.invitations.new': 'Kişi davet et',
   'settings.invitations.newHint':
     'Yalnızca bir kez gösterilir: şimdi kopyala ve kimi davet ediyorsan ona ilet.',
   'settings.invitations.failed': 'Açık bağlantılar yüklenemedi.',
@@ -2528,6 +2545,8 @@ export const tr = {
     'Bu sunucunun insanları nasıl içeri aldığı. Bu sayfayı yalnızca sen, sunucunun yöneticisi, görürsün.',
   'settings.server.loadError.title': 'Sunucu ayarları okunamadı',
   'settings.server.loadError.body': 'Hiçbir şey değişmedi. Yeniden dene.',
+  'settings.server.refreshError.body':
+    'Bilinen son ayarlar gösteriliyor. Sunucudaki güncel değerleri kontrol etmek için yeniden dene.',
   'settings.server.reentry': 'Bu gizli değer şu anki anahtarla açılamadı — yeniden gir.',
   'settings.server.setupUnfinished':
     'Bu sunucunun kurulumu henüz bitmedi. Önce onu bitir; o zamana kadar bu ayarları kurulum adımları değiştirir.',
@@ -2663,6 +2682,8 @@ export const tr = {
   'settings.server.policy.open.body': 'Bu sunucuya ulaşabilen herkes hesap açabilir.',
   'settings.server.policy.saved': 'Kaydedildi. Bu bir sonraki kayıttan itibaren geçerli.',
   'settings.server.accounts.title': 'Hesaplar',
+  'settings.server.accounts.loadFailed':
+    'Hesaplar okunamadı. Güncel listeyi almak için yeniden dene.',
   'settings.server.accounts.description':
     'Ayrılan birinin hesabını askıya al: her yerden çıkış yapılır ve giriş yapamaz; mesajları ve adı kalır. Askıyı kaldırınca eskisi gibi geri döner.',
   'settings.server.accounts.find': 'Ad, kullanıcı adı veya adresle bul',

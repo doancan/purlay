@@ -46,6 +46,7 @@ export const GeneralPage = (): React.JSX.Element => {
 
   const submit = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
+    if (state === 'busy' || !changed) return;
     const wanted = name.trim();
     if (wanted === '') {
       setProblem(t('workspace.settings.empty'));
@@ -91,6 +92,7 @@ export const GeneralPage = (): React.JSX.Element => {
           }
         >
           <SettingsTextRow
+            readOnly={state === 'busy'}
             label={t('workspace.create.name')}
             hint={t('settings.general.nameHint')}
             value={name}

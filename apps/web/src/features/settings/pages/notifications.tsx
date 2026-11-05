@@ -15,6 +15,7 @@
  *   channel's bell: painted at once, put back and said when refused.
  */
 import type { Channel, NotificationLevel } from '@purlay/types';
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon, type GlyphName } from '../../../components/icon';
 import { useApi } from '../../../data/api-provider';
@@ -182,14 +183,21 @@ const ChannelLevels = (): React.JSX.Element => {
   const describe = useDescribeFailure();
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
+  const [changing, setChanging] = useState<ReadonlySet<string>>(new Set());
 
   const choose = (channel: Channel, current: NotificationLevel, level: NotificationLevel): void => {
-    if (level === current) return;
+    if (level === current || changing.has(channel.id)) return;
+    setChanging((now) => new Set([...now, channel.id]));
     channelLevelChanged(client, channel.id, level);
-    api.setNotificationLevel(channel.id, level).catch((failure: unknown) => {
-      channelLevelChanged(client, channel.id, current);
-      show({ message: `${t('level.failed')} ${describe(failure)}` });
-    });
+    api
+      .setNotificationLevel(channel.id, level)
+      .catch((failure: unknown) => {
+        channelLevelChanged(client, channel.id, current);
+        show({ message: `${t('level.failed')} ${describe(failure)}` });
+      })
+      .finally(() => {
+        setChanging((now) => new Set([...now].filter((id) => id !== channel.id)));
+      });
   };
 
   const joined = (channels.data ?? [])
@@ -230,6 +238,8 @@ const ChannelLevels = (): React.JSX.Element => {
             <SettingsRow key={channel.id} label={`# ${name}`} fill>
               <Select
                 aria-label={t('settings.notifications.levelOf', { channel: name })}
+                disabled={changing.has(channel.id)}
+                aria-busy={changing.has(channel.id) || undefined}
                 value={current}
                 className="w-full"
                 onChange={(event) => {

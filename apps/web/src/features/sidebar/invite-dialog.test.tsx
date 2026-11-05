@@ -221,12 +221,14 @@ const typeInto = async (
 };
 
 describe('invite people by email', () => {
-  test('without mail the dialog is the link alone: no address field, no mention of email', async () => {
+  test('without mail the dialog explains why and offers a link without an address field', async () => {
     const view = await openMenu({});
     const dialog = await invite(view);
     expect(view.queryByRole('textbox', { name: 'Email addresses' })).toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Make a link' })).toBeDefined();
-    expect(dialog.textContent).not.toMatch(/email/i);
+    expect(dialog.textContent).toContain(
+      'Email invitations are unavailable on this server. Share a link instead.',
+    );
     expect(dialog.textContent).toContain('A link lets anyone signed in join as a member');
   });
 
@@ -427,5 +429,24 @@ describe('invite people by email', () => {
     await settle();
     expect(requests).toEqual([undefined]);
     expect(within(dialog).queryByRole('status')).toBeNull();
+  });
+});
+
+describe('invitation request lifetime', () => {
+  test('closing while a link is being made forgets its late answer, including its token', async () => {
+    let finish: ((created: CreatedInvitation) => void) | undefined;
+    const pending = new Promise<CreatedInvitation>((resolve) => {
+      finish = resolve;
+    });
+    const view = await openMenu({ createInvitation: () => pending });
+    const dialog = await invite(view);
+    await person().click(within(dialog).getByRole('button', { name: 'Make a link' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Close' }));
+    finish?.({ invitation: anInvitation('late'), token: TOKEN });
+    await settle();
+    await person().click(view.getByRole('button', { name: /Switch workspace/ }));
+    const reopened = await invite(view);
+    expect(within(reopened).queryByRole('textbox', { name: 'Invitation link' })).toBeNull();
+    expect(within(reopened).getByRole('button', { name: 'Make a link' })).toBeDefined();
   });
 });

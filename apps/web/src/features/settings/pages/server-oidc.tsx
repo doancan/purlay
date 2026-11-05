@@ -48,6 +48,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
   const filled = issuer.trim() !== '' && clientId.trim() !== '' && clientSecret.trim() !== '';
 
   const save = async (): Promise<void> => {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     setOutcome(null);
@@ -63,7 +64,14 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
         setClientSecret('');
         setOpen(false);
         setOutcome({ ok: true, words: t('settings.server.oidc.saved') });
-        await refresh();
+        await refresh({
+          oidc: {
+            issuer: issuer.trim(),
+            clientId: clientId.trim(),
+            clientSecret: { set: true },
+            name: name.trim() === '' ? null : name.trim(),
+          },
+        });
       }
     } catch (caught) {
       setFailure(caught);
@@ -123,6 +131,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
               }}
             >
               <TextField
+                readOnly={busy}
                 label={t('settings.server.oidc.issuerLabel')}
                 hint={t('settings.server.oidc.issuerHint')}
                 value={issuer}
@@ -138,6 +147,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                 }}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.oidc.clientIdLabel')}
                 value={clientId}
                 autoComplete="off"
@@ -151,6 +161,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                 }}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.oidc.clientSecretLabel')}
                 type="password"
                 value={clientSecret}
@@ -166,6 +177,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                 }}
               />
               <TextField
+                readOnly={busy}
                 label={t('settings.server.oidc.nameLabel')}
                 hint={t('settings.server.oidc.nameHint')}
                 value={name}
@@ -180,7 +192,7 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
               </p>
               {failed !== null && <ProbeFailure result={failed} channel="oidc" />}
               {failure !== null && <ChangeFailure failure={failure} />}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button type="submit" variant="primary" busy={busy} disabled={!filled || busy}>
                   {failed === null ? t('settings.server.oidc.save') : t('setup.tryAgain')}
                 </Button>
@@ -190,6 +202,10 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
                     disabled={busy}
                     onClick={() => {
                       setOpen(false);
+                      setIssuer(oidc?.issuer ?? '');
+                      setClientId(oidc?.clientId ?? '');
+                      setClientSecret('');
+                      setName(oidc?.name ?? '');
                       setResult(null);
                       setFailure(null);
                     }}
@@ -216,7 +232,14 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
         <Inset className="flex-row flex-wrap items-center gap-2">
           <Button
             variant={oidc === null ? 'primary' : 'secondary'}
+            disabled={busy}
             onClick={() => {
+              setIssuer(oidc?.issuer ?? '');
+              setClientId(oidc?.clientId ?? '');
+              setClientSecret('');
+              setName(oidc?.name ?? '');
+              setResult(null);
+              setFailure(null);
               setOpen(true);
               setOutcome(null);
             }}
@@ -243,6 +266,8 @@ export const OidcCard = ({ view }: { readonly view: ServerSettingsAnswer }): Rea
         title={t('settings.server.oidc.disconnectTitle')}
         body={t('settings.server.oidc.disconnectBody')}
         done={() => {
+          setOpen(false);
+          setClientSecret('');
           setOutcome({ ok: true, words: t('settings.server.oidc.disconnected') });
         }}
       />

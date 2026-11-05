@@ -97,6 +97,33 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   await page.goto('/w/acme-engineering/settings/server');
   await expect(page.getByRole('heading', { level: 1, name: 'Server' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Server' })).toHaveAttribute('aria-current', 'page');
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const main = page.getByRole('main');
+    await expect
+      .poll(
+        async () => await main.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      )
+      .toBe(true);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    const controls = main.locator(
+      'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),select,textarea',
+    );
+    expect(
+      await controls.evaluateAll(
+        (elements) =>
+          elements.filter(
+            (element) =>
+              element.getBoundingClientRect().width > 0 &&
+              Number.parseFloat(getComputedStyle(element).fontSize) < 16,
+          ).length,
+      ),
+    ).toBe(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
   const githubCard = page.getByRole('region', { name: 'Sign in with GitHub' });
   await expect(githubCard.getByText(`Client ID ${github.clientId}`)).toBeVisible();
   await expect(githubCard.getByText(`${origin}/auth/callback/github`)).toBeVisible();
@@ -138,6 +165,83 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   await expect(dialog.getByRole('button', { name: 'Disconnect anyway' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(githubCard.getByText(`Client ID ${github.clientId}`)).toBeVisible();
+
+  // Dismissed credentials are forgotten, including the App's multiline private key.
+  await page.setViewportSize({ width: 320, height: 900 });
+  for (const [title, action, secrets] of [
+    ['Sign in with GitHub', 'Replace credentials', ['Client secret']],
+    ['Sign in with Google', 'Connect Google', ['Client secret']],
+    ['Single sign-on', 'Connect single sign-on', ['Client secret']],
+    ['E-mail', 'Connect a mail server', ['Mail server']],
+    [
+      'GitHub App for issues',
+      'Connect the GitHub App',
+      ['Client secret', 'Private key', 'Webhook secret'],
+    ],
+  ] as const) {
+    const section = page.getByRole('region', { name: title, exact: true });
+    await section.getByRole('button', { name: action }).click();
+    for (const label of secrets)
+      await section.getByLabel(label, { exact: true }).fill('discard-this-secret');
+    expect(await section.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+    await section.getByRole('button', { name: 'Cancel' }).click();
+    await section.getByRole('button', { name: action }).click();
+    for (const label of secrets)
+      await expect(section.getByLabel(label, { exact: true })).toHaveValue('');
+    await section.getByRole('button', { name: 'Cancel' }).click();
+  }
+
+  // The actual relay is tried before it is saved. A subsequent read may fail without undoing that save.
+  const emailCard = page.getByRole('region', { name: 'E-mail', exact: true });
+  await emailCard.getByRole('button', { name: 'Connect a mail server' }).click();
+  await emailCard.getByLabel('Mail server', { exact: true }).fill('smtp://127.0.0.1:1');
+  await emailCard.getByLabel('Sender', { exact: true }).fill('no-reply@example.test');
+  await emailCard.getByLabel('Allow an unencrypted connection').check();
+  await emailCard.getByRole('button', { name: 'Send a test message and save' }).click();
+  await expect(
+    emailCard.getByText('Nothing answered at that address, or not in time.'),
+  ).toBeVisible();
+  await emailCard
+    .getByLabel('Mail server', { exact: true })
+    .fill(`smtp://127.0.0.1:${String(manifest.relay.port)}`);
+  let failSettingsRead = true;
+  await page.route('**/api/server/settings', async (route) => {
+    if (failSettingsRead)
+      await route.fulfill({
+        status: 503,
+        json: { error: { code: 'INTERNAL', message: 'offline' } },
+      });
+    else await route.continue();
+  });
+  await emailCard.getByRole('button', { name: 'Send a test message and save' }).click();
+  await expect(
+    emailCard.getByText('The test message was sent, and the mail server is saved.'),
+  ).toBeVisible();
+  await expect(emailCard.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(page.getByText('Could not read the server settings')).toBeVisible();
+  expect(await (await context.request.get('/api/auth/methods')).json()).toMatchObject({
+    email: true,
+  });
+  await emailCard.screenshot({ path: test.info().outputPath('server-email-mobile.png') });
+
+  failSettingsRead = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByText('Could not read the server settings')).toHaveCount(0);
+  failSettingsRead = true;
+  await emailCard.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(emailCard.getByText('Not connected', { exact: true })).toBeVisible();
+  await expect(page.getByText('Could not read the server settings')).toBeVisible();
+  expect(await (await context.request.get('/api/auth/methods')).json()).toMatchObject({
+    email: false,
+  });
+  failSettingsRead = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByText('Could not read the server settings')).toHaveCount(0);
+  await page.unroute('**/api/server/settings');
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // Accounts (D-233): the administrator is listed, said to administer the server, with no button —
   // nobody suspends the administration; a search that matches nobody says so.

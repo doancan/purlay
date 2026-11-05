@@ -74,11 +74,17 @@ const SignInCard = (): React.JSX.Element => {
           <SettingsRow
             label={t('settings.account.email')}
             description={
-              signIn.data.emailLinks
-                ? t('settings.account.emailLinks')
-                : signIn.data.github === null && signIn.data.google
-                  ? t('settings.account.emailGoogle')
-                  : t('settings.account.emailGitHub')
+              signIn.data.oidc
+                ? t('settings.account.emailOidc')
+                : signIn.data.emailLinks
+                  ? t('settings.account.emailLinks')
+                  : signIn.data.github === null && signIn.data.google
+                    ? t('settings.account.emailGoogle')
+                    : t(
+                        signIn.data.github !== null
+                          ? 'settings.account.emailGitHub'
+                          : 'settings.account.emailUnavailable',
+                      )
             }
           >
             <span className="min-w-0 truncate text-label text-ink">{signIn.data.email}</span>

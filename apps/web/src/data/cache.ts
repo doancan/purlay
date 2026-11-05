@@ -28,11 +28,20 @@ import type {
   MessageRevision,
   NotificationLevel,
   MeResponse,
+  QuietHoursSetting,
 } from '@purlay/types';
 import { families, keys } from './keys';
 import type { FeedPages } from './queries';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
+
+/** Quiet hours follow the profile's clock, including a profile read after another device changed it. */
+export const profileTimeZoneChanged = (client: QueryClient, timeZone: string | null): void => {
+  client.setQueryData<QuietHoursSetting>(keys.quietHours, (held) =>
+    held === undefined ? undefined : { ...held, timeZone },
+  );
+  void client.invalidateQueries({ queryKey: keys.quietHours });
+};
 
 const byIdDescending = (a: Message, b: Message): number => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 const byIdAscending = (a: Message, b: Message): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
