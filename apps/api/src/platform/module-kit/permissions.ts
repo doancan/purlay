@@ -8,7 +8,7 @@
 import type { UserRole } from '@purlay/types';
 import type { PermissionDeclaration } from './manifest';
 
-/** What the core's own services ask, by name. None yet: the core's role rules move here as their services are next changed (D-264). */
+/** What the core's own services ask, by name. None yet: the core's role rules move here as their services are next changed (D-265). */
 export const CORE_PERMISSIONS: readonly PermissionDeclaration[] = [];
 
 const RANK: Readonly<Record<UserRole, number>> = { member: 0, admin: 1, owner: 2 };

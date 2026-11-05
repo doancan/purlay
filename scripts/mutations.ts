@@ -15115,7 +15115,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'issues-delete-ignores-its-permission',
-    why: 'an issue can be deleted only by its creator whatever the manifest says an admin may do, so the declared permission is not what decides (D-264)',
+    why: 'an issue can be deleted only by its creator whatever the manifest says an admin may do, so the declared permission is not what decides (D-265)',
     file: 'apps/api/src/features/issues/issues.ts',
     find: '): boolean => permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId;',
     replace: '): boolean => createdBy === context.userId;',
@@ -15123,7 +15123,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'composition-holds-the-permissions-of-a-module-that-is-not-run',
-    why: 'a module that is off still has its permissions held, so a service asking one is answered yes for a module nobody runs (D-264)',
+    why: 'a module that is off still has its permissions held, so a service asking one is answered yes for a module nobody runs (D-265)',
     file: 'apps/api/src/composition.ts',
     find: '...modules.flatMap((module) => module.manifest.permissions ?? []),',
     replace: '...holding.flatMap((module) => module.manifest.permissions ?? []),',
@@ -15131,7 +15131,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'registry-accepts-a-permission-not-named-for-its-module',
-    why: 'a module may declare a permission under the core’s or another module’s name, so two can hold the same one with different rules (D-264)',
+    why: 'a module may declare a permission under the core’s or another module’s name, so two can hold the same one with different rules (D-265)',
     file: 'apps/api/src/platform/module-kit/registry.ts',
     find: '    if (word === undefined || !PERMISSION_WORD.test(word)) {',
     replace: '    if (false as boolean) {',
@@ -15139,7 +15139,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'issues-permission-asked-is-not-the-one-declared',
-    why: 'the issue delete asks a permission its manifest does not declare, so nobody holds it and the rule the manifest states is not the one in force (D-264)',
+    why: 'the issue delete asks a permission its manifest does not declare, so nobody holds it and the rule the manifest states is not the one in force (D-265)',
     file: 'apps/api/src/features/issues/issues.ts',
     find: '): boolean => permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId;',
     replace:

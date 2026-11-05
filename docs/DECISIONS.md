@@ -12749,3 +12749,37 @@ to know. *Telling any member of the workspace* — D-34.
 
 **Cost of reversing.** One function and its call in `router.ts`, the two writes in `settings.ts`, and a migration that
 drops a table nothing else reads.
+
+### D-265. A module's permissions (and then its audit actions, notifications and search sources) are manifest fields, so the core reads one registry and a missing entry fails a test — builds on D-26, D-222, D-250, D-260
+
+**Context.** Two modules run, and what each adds to the places the core leaves open was still written by hand in the core:
+the audit actions were one list in `@purlay/types`, a type in `modules/audit/audit.ts` and an exhaustive `switch` in the
+settings page, and the role rules ("an owner or an admin may…") were conditions inside each service. A third module had
+to be added to all of them by someone who remembered; the compiler caught a missing sentence, and nothing caught an
+action a module wrote that its manifest did not own, or a permission a service asked that nobody had declared. A module
+that is off could not be told apart from one that is on in any of them. This is done in steps, each a pull request that
+reads what it adds; this section lists what is built.
+
+**Decision.**
+1. **`permissions` is a manifest field** (`MODULES.md` §2). A module lists the permissions it owns, each `<id>.<what>`
+   with the lowest role that holds it (`member` below `admin` below `owner`). The core declares its own in
+   `CORE_PERMISSIONS` — none yet, since moving a role rule in the core changes the signature of a service its tests call,
+   so each moves when its service is next changed. The registry refuses a permission not named for its module, one
+   declared twice and one the core already has.
+2. **The core reads one table.** `compose` builds `permissions` from the core's and the modules the process runs: a module
+   that is off has none, so nobody holds one of its permissions, the owner included, where a rule left in the service
+   would still answer. A service asks `permissions.holds(role, name)`; the route hands it the table. `issues.delete-any`
+   is the first, the rule the issue delete had ("its creator, or an owner or an admin").
+3. **The guard reads the source both ways** (`permission-emissions.test.ts`, which takes the scan of
+   `module-emissions.test.ts` through `testing/module-sources.ts`): a permission a module's code asks by name at `holds`
+   that nobody declared fails, and so does a declared name its source no longer writes. A permission held in a constant is
+   not seen by the scan: the constant is the one the manifest declares.
+
+**Rejected.** *A permission model of grants, rows per role*: three roles and a handful of rules do not need one, and a
+table in the database would make who may do what a thing an operator can get wrong; the minimum role is the rule that has
+been in force. *The permission table in `WorkspaceContext`*: every membership read in the code would carry a table to
+answer what two services ask.
+
+**Cost of reversing.** One manifest field and the code that reads it, one small file in `module-kit`. Nothing is stored
+and the wire is as it was.
+
