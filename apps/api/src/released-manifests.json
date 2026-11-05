@@ -42,6 +42,18 @@
         "TYPING",
         "UNSUBSCRIBE"
       ]
+    },
+    {
+      "id": "issues",
+      "requires": [],
+      "optional": [],
+      "provides": [],
+      "routes": [
+        "/api/workspaces/:workspaceId/issues",
+        "/api/workspaces/:workspaceId/issues/**"
+      ],
+      "jobs": [],
+      "frames": []
     }
   ],
   "exceptions": []
