@@ -120,7 +120,9 @@ test.describe('the seeded workspace, as the viewer sees it', () => {
     const outcome = await page.evaluate(
       async () =>
         await new Promise<string>((resolve) => {
-          const socket = new WebSocket(`ws://${location.host}/ws`);
+          const socket = new WebSocket(
+            `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
+          );
           socket.addEventListener('open', () => {
             socket.close();
             resolve('open');

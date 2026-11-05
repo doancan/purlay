@@ -119,6 +119,18 @@ const engines = [
   });
 const servers = [...chosen.map((definition) => definition.name), ...engines];
 
+/**
+ * WebKit is served over https, with a certificate made for the run. The session cookie is `Secure` and
+ * `__Host-`, and WebKit on Linux does not send one to `http://localhost` (macOS WebKit, Chromium and
+ * Firefox do): signed in by that cookie, every page came up signed out. The tests trust the certificate
+ * through `ignoreHTTPSErrors`, for this origin only.
+ */
+const overTls = (name: string): boolean => name === 'webkit';
+const schemeOf = (name: string): string => (overTls(name) ? 'https' : 'http');
+// The test process's own requests (`support.ts` makes rooms through the real API) go to that same
+// origin, and Node does not trust a certificate made for one run. Only the harness on localhost is asked.
+if (servers.some(overTls)) process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+
 const engineProject = (engine: keyof typeof ENGINES, index: number): Project => ({
   name: engine,
   ignoreSnapshots: true,
@@ -126,7 +138,8 @@ const engineProject = (engine: keyof typeof ENGINES, index: number): Project => 
     ...devices[ENGINES[engine]],
     colorScheme: 'light',
     viewport: { width: 1440, height: 900 },
-    baseURL: `http://localhost:${String(portOf(index))}`,
+    baseURL: `${schemeOf(engine)}://localhost:${String(portOf(index))}`,
+    ignoreHTTPSErrors: overTls(engine),
   },
 });
 
@@ -170,10 +183,11 @@ export default defineConfig({
   ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
   webServer: servers.map((name, index) => ({
-    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
+    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}${overTls(name) ? '--tls ' : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
-    url: `http://localhost:${String(portOf(index))}/health`,
+    url: `${schemeOf(name)}://localhost:${String(portOf(index))}/health`,
+    ignoreHTTPSErrors: overTls(name),
     // Building, migrating and seeding two hundred messages through the real API.
     timeout: 240_000,
     reuseExistingServer: !ci,

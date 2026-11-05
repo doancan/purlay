@@ -112,3 +112,12 @@ is coloured, and the test asserts that much on WebKit. Not fixed here; worth a l
 what Safari readers see. Separately, `invitations.e2e.ts:64` and `:103` fail intermittently when many workers run
 at once (7 of 20 on WebKit, 5 of 20 on Chromium at five workers; 0 of 10 on one worker): the click on "Invite
 people…" closes the menu and the dialog never shows. It is load-dependent and not WebKit's.
+
+### Why WebKit is served over https
+
+The first CI run on Linux failed nearly every test at the first wait for the app's frame: the page came up signed
+out. The session cookie is `Secure` and `__Host-`, and WebKit on Linux does not send one to `http://localhost`
+(macOS WebKit, Chromium and Firefox do). So the harness serves the WebKit project over https with a certificate it
+makes for the run (`bun run demo -- --tls`, `openssl`), and the project trusts it (`ignoreHTTPSErrors`; the test
+process sets `NODE_TLS_REJECT_UNAUTHORIZED=0` for its own requests to that origin). The API behind the front stays on
+http. The product is unchanged.

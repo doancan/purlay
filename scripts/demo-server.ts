@@ -19,6 +19,12 @@ export interface FrontOptions {
   /** Session tokens by persona name, for `/__demo/login`. */
   readonly sessions: Readonly<Record<string, string>>;
   readonly port: number;
+  /**
+   * Serve over TLS with this certificate. Only a harness uses it: WebKit on Linux does not send a `Secure`
+   * cookie to `http://localhost` (macOS WebKit, Chromium and Firefox do), so the session cookie the
+   * browser tests carry would never reach the API there; over `https` it does.
+   */
+  readonly tls?: { readonly cert: string; readonly key: string };
 }
 
 const COOKIE = '__Host-purlay_session';
@@ -105,6 +111,7 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
     // interface, which on a café network is everybody; loopback is the whole audience (H-API 9).
     hostname: '127.0.0.1',
     port: options.port,
+    ...(options.tls === undefined ? {} : { tls: options.tls }),
     fetch: async (request, server) => {
       const url = new URL(request.url);
       switch (routeOf(url.pathname)) {
