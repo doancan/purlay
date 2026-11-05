@@ -6,8 +6,7 @@
 > without either: `MODULES` is read at boot, a module's routes, frames, events and jobs are closed when it is not
 > run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them, §3),
 > and the migration sets, the composition, the cluster record and the table-ownership list exist. What is not
-> built: the typed query handle and the per-module generated `schema.ts`, the `contract` step of the attachment link
-> (it lives in chat's own set, `chat/0005`, draft PR #961), workspace-level enablement, a module budget that any
+> built: the typed query handle and the per-module generated `schema.ts`, workspace-level enablement, a module budget that any
 > process takes (§7), and a CI matrix that runs the whole suite per cell (§8 says what runs). §8 says what each rule
 > is held by, and §10 the order; a line marked **built** there is, and one not marked is intent. §9 is the
 > checklist for adding a module and §12 the glossary.
@@ -187,8 +186,8 @@ moves into that module.
   additive. Anything that reads the migration table for the core's schema stamp (the export's) filters to the
   core's rows.
 - **Every table has one owner**, core or a module, in a list a test holds to the database; a foreign key across
-  owners fails it, and the list of those that exist today (reactions, mentions, attachments and read state
-  point at `messages` and `channels`) may only shrink. A core migration never names a module's table.
+  owners fails it, and the list of those that exist is empty (**built**, `chat/0005`: the last, from `attachments`
+  to `messages`, went with the link's columns). A core migration never names a module's table.
   An owner is `core` or the id of a registered migration set (`TableOwner` is derived from `PRODUCT_MIGRATION_SETS`, and the list
   covers every table of the generated schema or does not compile); `module-sets.test.ts` holds the sets to the bundled modules and
   to `migrations/<id>/`, so a directory with no registered set, or a set with no module, fails a test.
@@ -514,7 +513,7 @@ Each step ships alone and can be reverted.
 | 5b | *Superseded by 13.* It planned a thin slice that opened an issue from a message and linked back; D-254 §1 decided that issues has no link and no frame, so that slice was not built | — |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
-| 10 | Migrations split by module; `data` hooks — **built** (`tableExists`, §5); the ownership ratchet is not at zero (it holds the crossings that are left, until the attachment link's contract step, `chat/0005`, draft PR #961, merges); codegen and `db:check` per module are **not built** | no |
+| 10 | Migrations split by module; `data` hooks — **built** (`tableExists`, §5); the ownership ratchet reaches zero — **built, ships in the release after the expand** (`chat/0005`); codegen and `db:check` per module are **not built** | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; **not built:** the whole-suite matrix in CI; a share of the pool and a starvation gate are built for issues, the one budgeted module (§7) | **yes** |
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
@@ -557,15 +556,21 @@ unchanged and proved so:
    `attachments`, and the core's table holds a stored object, its uploader and its workspace and nothing of a
    message. An upload nobody links is what the orphan sweep already removes after a day. It is a migration that
    moves data and every reader of those two columns changes with it, so it is done with step 10, on a copy with
-   the dumps compared, and the ratchet keeps the crossing in view until then. **In three releases, two built:**
+   the dumps compared, and the ratchet kept the crossing in view until then. **In three releases, all built:**
    *expand* (**built**: `claimed_at`, `message_attachments` backfilled, and a send writing the old columns and the
    link together); *the readers move* (**built**: the core says unsent and sent with `claimed_at`, chat finds a file's
    message and channel through `message_attachments`, the workspace export's and the person's export's bounds read
    through the link, and `dropFiles` is the core's `dropFilesById` and chat's `dropMessageFiles`; a test,
    `attachment-readers.test.ts`, fails if production code reads `attachments.message_id` or `channel_id` again,
-   with an allow-list of the one place that still writes them); *contract* (**pending**: it lives in chat's own set, `chat/0005`, draft PR #961, not in the core's migrations; the columns, their keys and
-   indexes go, the dual write and the allow-list with them, and the exports stop writing the two columns — which
-   changes the frozen shape of an export, so it is its own change).
+   with an allow-list of the one place that still writes them); *contract* (**built, ships in the release after the expand** — `v0.3.0` contains `0079`, so it is the next
+   release's: `chat/0005` drops the columns, their keys and indexes, the dual write and the allow-list go,
+   and the exports stop writing the two columns on `attachments` and write `message_attachments` instead, which
+   changes the shape of an export. It is a file of **chat's set**, not the core's: the sets run core first, so a core
+   file dropping the columns would run before `chat/0001`'s backfill reads them, on every new install and for a server
+   that was off chat for a release; in chat's set it follows the backfill always, and a server without chat keeps the
+   columns, inert. It refuses, with nothing changed, a database whose link table does not carry every sent file —
+   one that skipped the expand release — and its rollback is the backup restore, D-86. The ownership list's
+   exceptions are now none.)
 
 The three behaviours that could change without a test failing: the default channel at workspace creation (an
 integration test through the route and through `createWorkspace`, and one with the hook failing that finds no
@@ -610,7 +615,8 @@ request with behaviour unchanged:
    two tests, to `features/chat/channels/guard.ts`, the `ChannelContext` brand still in that one file;
    `attachmentNotFound`, a plain error, moved to `platform/errors.ts`, where the attachment code reaches it. Nothing
    in the core imports the guard now (one workspace test still does, which the lint allows);
-7. the message link of an attachment becomes chat's (step 8 above), with step 10;
+7. the message link of an attachment becomes chat's (step 8 above), with step 10 (**built, ships in the release after
+   the expand**);
 8. a test then forbids a chat table's name in `modules/` and `platform/` (**built**): `core-tables.test.ts` reads
    the tables from `TABLE_OWNERS` (every table whose owner is not the core, so a module added later is covered) and
    fails for a file of the core that names one where a query puts it — a builder method's table, SQL's `from`,
@@ -630,7 +636,6 @@ request with behaviour unchanged:
    off (`module-lifecycle.integration.test.ts` runs them in each cell), which a closed job would stop. What the
    core still names are its own tables; the one seam in it that asks `tableExists`, the workspace purge, asks it
    of the names a module contributes and writes none of its own.
-
 **Step 12, in the order it is built.** (a) *The composition* (**built**): `composition.ts` takes the modules a process runs
 and makes from them what the core leaves open — the workspace's first hook, the account's erasure hook, who answers
 for the channels, the purge's steps and tables, the two catalogues, the columns readiness checks; a module is its manifest

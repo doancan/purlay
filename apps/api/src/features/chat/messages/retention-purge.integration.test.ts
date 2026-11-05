@@ -204,8 +204,6 @@ describe('integration: the retention purge', () => {
           .values({
             id,
             workspace_id: room.workspaceId,
-            channel_id: room.channelId,
-            message_id: message,
             uploader_id: member(room, 'ada').userId,
             storage_key: key,
             file_name: 'a.bin',
@@ -405,8 +403,6 @@ describe('integration: the retention purge', () => {
         .values({
           id,
           workspace_id: room.workspaceId,
-          channel_id: room.channelId,
-          message_id: old,
           uploader_id: member(room, 'ada').userId,
           storage_key: `w/${room.workspaceId}/${id}`,
           file_name: 'a.bin',
@@ -619,8 +615,6 @@ describe('integration: a channel that keeps its history longer (D-225)', () => {
         .values({
           id,
           workspace_id: room.workspaceId,
-          channel_id: room.channelId,
-          message_id: old,
           uploader_id: member(room, 'ada').userId,
           storage_key: key,
           file_name: 'a.bin',

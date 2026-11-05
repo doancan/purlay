@@ -434,8 +434,6 @@ describe('integration: an owner’s export', () => {
       .values({
         id: fileId,
         workspace_id: room.workspaceId,
-        channel_id: room.channelId,
-        message_id: sent,
         uploader_id: ada.userId,
         storage_key: storageKey,
         file_name: 'plan.pdf',

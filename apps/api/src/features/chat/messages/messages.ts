@@ -189,9 +189,8 @@ const currentSummary = async (
  * one refusal that tells nothing apart, and the transaction writes nothing (D-109 §6, §7). The rows
  * are locked as they are linked, so two sends racing for one upload cannot both have it.
  *
- * Written twice while the link moves into chat's own table (`MODULES.md` §10, step 8): the columns of
- * `attachments` the release before this one reads, and `message_attachments`, with the claim the core
- * reads. The columns go in the release after, once nothing reads them.
+ * The core's table says only that the upload is claimed (`claimed_at`); which message and channel it was sent
+ * with is chat's own `message_attachments` (`MODULES.md` §10, step 8).
  */
 const linkAttachments = async (
   executor: Executor,
@@ -203,8 +202,8 @@ const linkAttachments = async (
   if (ids.length === 0) return 0n;
   const linked = await executor
     .updateTable('attachments')
-    // Its channel with it: a channel's files are found by it (D-129). Claimed, for the core to know it is sent.
-    .set({ message_id: messageId, channel_id: context.channelId, claimed_at: at })
+    // Claimed, for the core to know it is sent; the channel's files are found through the link (D-129).
+    .set({ claimed_at: at })
     .where('id', 'in', ids)
     .where('workspace_id', '=', context.workspaceId)
     .where('uploader_id', '=', context.userId)

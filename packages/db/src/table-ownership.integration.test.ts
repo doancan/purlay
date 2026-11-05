@@ -4,13 +4,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import { closeIntegrationDatabase, integrationDatabase } from './testing';
-import { CROSS_OWNER_FOREIGN_KEYS, TABLE_OWNERS, type TableOwner } from './table-owners';
-
-/**
- * How many crossings the list may hold. It may only shrink: a new key between owners is a design decision, so raising
- * this number is a decision to record, never a way to make the test pass.
- */
-const MAX_CROSS_OWNER_FOREIGN_KEYS = 1;
+import { TABLE_OWNERS, type TableOwner } from './table-owners';
 
 /** The list, asked about the tables the database names: strings, not the schema's own. */
 const owners: Readonly<Record<string, TableOwner>> = TABLE_OWNERS;
@@ -29,7 +23,7 @@ describe('integration: who owns each table', () => {
     expect(Object.keys(TABLE_OWNERS).sort()).toEqual(rows.map((row) => row.name));
   });
 
-  test('a foreign key goes from a module to the core or within its owner, and the exceptions only shrink', async () => {
+  test('a foreign key goes from a module to the core or within its owner, with no exception', async () => {
     const { rows } = await sql<{ child: string; parent: string }>`
       select c.conrelid::regclass::text as child, c.confrelid::regclass::text as parent
       from pg_constraint c
@@ -44,13 +38,6 @@ describe('integration: who owns each table', () => {
         return from !== to && to !== 'core';
       })
       .map(({ child, parent }) => `${child} -> ${parent}`);
-    expect([...new Set(crossing)].sort()).toEqual([...CROSS_OWNER_FOREIGN_KEYS].sort());
-  });
-
-  test('the list of exceptions is not longer than it was, so it only shrinks', () => {
-    expect(
-      CROSS_OWNER_FOREIGN_KEYS.length,
-      'A new foreign key across owners is a design decision: record it in docs/DECISIONS.md (D-250, MODULES.md §5) and only then raise MAX_CROSS_OWNER_FOREIGN_KEYS.',
-    ).toBeLessThanOrEqual(MAX_CROSS_OWNER_FOREIGN_KEYS);
+    expect([...new Set(crossing)].sort()).toEqual([]);
   });
 });

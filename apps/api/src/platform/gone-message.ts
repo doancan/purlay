@@ -17,8 +17,6 @@ const FOREIGN_KEY = '23503';
  * `ingress/http/errors.integration.test.ts`: a key added later is a `500` until it is listed here.
  */
 export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
-  'attachments_message_channel_fkey',
-  'attachments_message_workspace_fkey',
   'channel_members_last_read_channel_fkey',
   'github_links_root_id_fkey',
   'github_operations_root_id_fkey',

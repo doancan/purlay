@@ -105,8 +105,6 @@ describe('integration: what is found', () => {
         .values({
           id: attachmentId,
           workspace_id: room.workspaceId,
-          channel_id: room.channelId,
-          message_id: file.message.id,
           uploader_id: alice.userId,
           storage_key: `w/${room.workspaceId}/${attachmentId}`,
           file_name: 'a.txt',

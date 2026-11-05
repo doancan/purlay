@@ -115,11 +115,10 @@ const fill = async (
     { id: fileId, name: 'plan.pdf', bytes: new Uint8Array(10).fill(7) },
   );
   const { storage_key: storageKey } = await db
-    .updateTable('attachments')
-    .set({ message_id: id, channel_id: room.channelId })
+    .selectFrom('attachments')
+    .select('storage_key')
     .where('id', '=', fileId)
     .where('workspace_id', '=', room.workspaceId)
-    .returning('storage_key')
     .executeTakeFirstOrThrow();
   const incident = messageId(next());
   await db
@@ -741,7 +740,8 @@ describe('integration: the shape of an export', () => {
 
 /**
  * As written when this test was made, by the catalogue before it moved between modules. A change that is meant
- * says so by changing this, in the same pull request, with the reason. (`audit_log` has one row more in the
+ * says so by changing this, in the same pull request, with the reason. (`message_attachments.ndjson` is chat's
+ * link of a file to its message and channel, which `attachments.ndjson` carried as two columns until chat/0005.) (`audit_log` has one row more in the
  * second export: the first records that it was made.)
  */
 const FROZEN_SHAPES: Record<string, unknown> = {
@@ -761,6 +761,7 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       'issues.ndjson',
       'manifest.json',
       'mentions.ndjson',
+      'message_attachments.ndjson',
       'message_versions.ndjson',
       'messages.ndjson',
       'pinned_messages.ndjson',
@@ -871,6 +872,10 @@ const FROZEN_SHAPES: Record<string, unknown> = {
           'workspace_id',
         ],
       },
+      message_attachments: {
+        rows: 1,
+        columns: ['attachment_id', 'channel_id', 'message_id', 'workspace_id'],
+      },
       message_versions: {
         rows: 1,
         columns: ['channel_id', 'content', 'id', 'message_id', 'replaced_at', 'workspace_id'],
@@ -886,13 +891,11 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       attachments: {
         rows: 1,
         columns: [
-          'channel_id',
           'created_at',
           'file_name',
           'height',
           'id',
           'kind',
-          'message_id',
           'mime_type',
           'size_bytes',
           'uploader_id',
@@ -1008,6 +1011,7 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       'issues.ndjson',
       'manifest.json',
       'mentions.ndjson',
+      'message_attachments.ndjson',
       'message_versions.ndjson',
       'messages.ndjson',
       'pinned_messages.ndjson',
@@ -1118,6 +1122,10 @@ const FROZEN_SHAPES: Record<string, unknown> = {
           'workspace_id',
         ],
       },
+      message_attachments: {
+        rows: 1,
+        columns: ['attachment_id', 'channel_id', 'message_id', 'workspace_id'],
+      },
       message_versions: {
         rows: 1,
         columns: ['channel_id', 'content', 'id', 'message_id', 'replaced_at', 'workspace_id'],
@@ -1133,13 +1141,11 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       attachments: {
         rows: 1,
         columns: [
-          'channel_id',
           'created_at',
           'file_name',
           'height',
           'id',
           'kind',
-          'message_id',
           'mime_type',
           'size_bytes',
           'uploader_id',

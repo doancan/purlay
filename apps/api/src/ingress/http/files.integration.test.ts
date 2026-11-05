@@ -350,7 +350,7 @@ describe('integration: a channel’s files are refused as the channel is', () =>
   });
 });
 
-describe('integration: an attachment’s channel is its message’s (0027)', () => {
+describe('integration: a linked file’s channel is its message’s (chat/0001)', () => {
   test('linked without a channel, or in another channel than its message, is refused', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
@@ -359,18 +359,21 @@ describe('integration: an attachment’s channel is its message’s (0027)', () 
       const refused = async (channelId: string | null): Promise<string> =>
         await attempt(db, () =>
           db
-            .updateTable('attachments')
-            .set({ channel_id: channelId })
-            .where('id', '=', file)
+            .updateTable('message_attachments')
+            // Not typed for a null: the schema says it cannot be, which is what is asked of the database.
+            .set({ channel_id: channelId! })
+            .where('attachment_id', '=', file)
             .execute(),
         );
 
-      expect(await refused(null)).toContain('attachments_channel_iff_message');
-      expect(await refused(world.privateChannel)).toContain('attachments_message_channel_fkey');
+      expect(await refused(null)).toContain('channel_id');
+      expect(await refused(world.privateChannel)).toContain(
+        'message_attachments_message_channel_fkey',
+      );
       const row = await db
-        .selectFrom('attachments')
+        .selectFrom('message_attachments')
         .select('channel_id')
-        .where('id', '=', file)
+        .where('attachment_id', '=', file)
         .executeTakeFirstOrThrow();
       expect(row.channel_id).toBe(world.publicChannel);
     });
@@ -378,7 +381,7 @@ describe('integration: an attachment’s channel is its message’s (0027)', () 
 });
 
 describe('integration: a sent file is linked in chat’s table and claimed (0079, chat/0001)', () => {
-  test('a message sent with files writes the claim, the link and the columns the release before reads', async () => {
+  test('a message sent with files writes the claim and the link', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       const unsent = await upload(world, 'unsent.txt');
@@ -400,7 +403,7 @@ describe('integration: a sent file is linked in chat’s table and claimed (0079
       );
       const rows = await db
         .selectFrom('attachments')
-        .select(['id', 'message_id', 'channel_id', 'claimed_at'])
+        .select(['id', 'claimed_at'])
         .where('id', 'in', [...files, unsent])
         .orderBy('id')
         .execute();
@@ -409,11 +412,6 @@ describe('integration: a sent file is linked in chat’s table and claimed (0079
         expect({ id: row.id, claimed: row.claimed_at !== null }).toEqual({
           id: row.id,
           claimed: sent,
-        });
-        // The columns are still written, because the release before this one reads them.
-        expect({ id: row.id, message: row.message_id }).toEqual({
-          id: row.id,
-          message: sent ? message : null,
         });
       }
       // The unsent upload has no link, and a second message cannot claim a file already sent.

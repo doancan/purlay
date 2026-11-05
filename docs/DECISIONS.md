@@ -12394,9 +12394,9 @@ changes carries a note that points here.
    to remove the status signal is to answer `401` before `404` for every `/api/*` path without a session. The macOS
    client reading `modules` is issue #958.
 6. **The contract migration of the attachment link is chat's.** The three-release move of `attachments.message_id` and
-   `channel_id` (`MODULES.md` §10, step 8) ends with a step in **chat's own set**, `chat/0005` (draft PR #961, not
-   merged), not in the core's migrations: a core migration never names a module's table (D-250 rule 5), and the
-   columns are the link's. Until it merges the dual write and its allow-list stay.
+   `channel_id` (`MODULES.md` §10, step 8) ends with a step in **chat's own set**, `chat/0005` (the release
+   after `v0.3.0`, which contains the expand), not in the core's migrations: a core migration never names a module's
+   table (D-250 rule 5), and the columns are the link's. It removes the dual write and its allow-list.
 7. **Manifests do not shrink silently.** `module-compat.test.ts` holds the manifests to the last release's, kept in
    `released-manifests.json`: no new requirement, no capability, route, job, frame or id gone, unless a dated entry
    under `exceptions` in that file says so, where a reviewer sees it. `bun run release` rewrites the snapshot and

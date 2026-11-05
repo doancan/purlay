@@ -68,7 +68,7 @@ code as a known gap any longer. What an append-only trail keeps of a person's ow
 | `channel_members` | Who is in which channel, their read position, unread counts, notification level, star | Membership and what to show as unread (D-13) | While they are a member |
 | `messages` | What was written, who wrote it, question ownership, selected answer and decision note with its last writer (D-204) | The conversation | Retention; tombstoned by a delete or by content erasure (D-9, D-139 §7) |
 | `message_versions` | What a message said before each edit | Edit history (D-135) | With its message's words: a delete, content erasure or retention removes them; its author may remove one |
-| `attachments` | Each file's name, kind, size, and who uploaded it; the bytes in the object store | Files in the conversation (D-109) | With its message; an unsent upload after `ORPHAN_AGE_MS` (`sweep:orphans`); its bytes leave the store after the row (D-141) |
+| `attachments` | Each file's name, kind, size, and who uploaded it; the bytes in the object store | Files in the conversation (D-109) | With its message (chat's commands that delete messages drop their files first); an unsent upload after `ORPHAN_AGE_MS` (`sweep:orphans`); its bytes leave the store after the row (D-141) |
 | `message_attachments` | Which message a file was sent with, and in which channel: ids only | Files in the conversation (D-109, D-250) | With its message or its file, whichever goes first (both keys cascade) |
 | `mentions` | Who was mentioned in which message | Notifications and the inbox (D-12) | With its message |
 | `reactions` | Who reacted to what, with which emoji | Reactions | With its message |

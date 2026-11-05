@@ -99,8 +99,6 @@ describe('integration: the purge against what happens at the same moment', () =>
         .values({
           id,
           workspace_id: room.workspaceId,
-          channel_id: room.channelId,
-          message_id: message,
           uploader_id: member(room, 'ada').userId,
           storage_key: key,
           file_name: 'a.bin',
