@@ -9,6 +9,7 @@ import {
   RELEASE_CATEGORIES,
   RELEASE_TAG,
   REPOSITORY_URL,
+  readItem,
   readReleaseNotes,
   releasePage,
 } from './index';
@@ -137,6 +138,44 @@ describe('reading a release’s notes', () => {
         body: 'a — dash inside is kept',
       },
     ]);
+  });
+
+  describe('telling a bullet’s area from its words (D-260)', () => {
+    test.each([
+      ['**Messages** — it works', 'Messages', 'it works'],
+      ['**Sign-in**   —   spaced out', 'Sign-in', 'spaced out'],
+      ['**A** — **bold** words — and a dash', 'A', '**bold** words — and a dash'],
+      ['**A** —\tafter a tab', 'A', 'after a tab'],
+    ])('%s has the area %s', (markdown, area, body) => {
+      expect(readItem(markdown)).toEqual({ markdown, area, body });
+    });
+
+    test.each([
+      ['no bold at all', 'plain words'],
+      ['a bold word but no dash', '**Messages** it works'],
+      ['a dash with no space before it', '**Messages**— it works'],
+      ['a dash with no space after it', '**Messages** —it works'],
+      ['nothing after the dash', '**Messages** — '],
+      ['a star inside the bold', '**Mess*ages** — it works'],
+      ['an empty bold', '**** — it works'],
+      ['bold that is never closed', '**Messages — it works'],
+    ])('%s is its words alone', (_name, markdown) => {
+      expect(readItem(markdown)).toEqual({ markdown, area: null, body: markdown });
+    });
+
+    test('is linear in the text: a long run of spaces, of stars or of dashes is read in a blink', () => {
+      const size = 200_000;
+      const shapes = [
+        `**a**${' '.repeat(size)}x`,
+        `**a** —${' '.repeat(size)}`,
+        `**${'*'.repeat(size)}`,
+        `**a** ${'— '.repeat(size / 2)}`,
+      ];
+      const started = performance.now();
+      for (const shape of shapes) readItem(shape);
+      // A pattern that backtracks takes seconds at this size; this is a few milliseconds.
+      expect(performance.now() - started).toBeLessThan(1_000);
+    });
   });
 
   test('is null without the heading, and leaves out what is not a category or a bullet', () => {

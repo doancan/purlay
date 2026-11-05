@@ -14972,8 +14972,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'release-area-is-not-read',
     why: "a bullet's area is not told from its words, so the window draws every area as part of the sentence",
     file: 'packages/types/src/releases.ts',
-    find: 'const AREA = /^\\*\\*([^*]+)\\*\\*\\s+—\\s+([\\s\\S]+)$/;',
-    replace: 'const AREA = /^(?!)$/;',
+    find: "if (!markdown.startsWith('**')) return plain;",
+    replace: 'if (markdown !== undefined) return plain;',
     tests: ['packages/types/src/releases.test.ts'],
   },
   {
@@ -15016,5 +15016,13 @@ export const MUTATIONS: readonly Mutation[] = [
     replace:
       'className="scrollbar-thin flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto"',
     tests: ['apps/web/src/features/about/release-notes-once.test.tsx'],
+  },
+  {
+    id: 'release-area-needs-spaces-round-its-dash',
+    why: 'a bold word with a dash glued to it (**A**— x) is taken for an area, and ordinary prose is cut apart',
+    file: 'packages/types/src/releases.ts',
+    find: "if (dash.length === afterArea.length || !dash.startsWith('—')) return plain;",
+    replace: "if (!dash.startsWith('—')) return plain;",
+    tests: ['packages/types/src/releases.test.ts'],
   },
 ];

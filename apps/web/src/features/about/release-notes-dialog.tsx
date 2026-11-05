@@ -11,7 +11,7 @@
  * Escape and a click on the scrim closing it. A new version opens it with a show of fireworks over it; where it is
  * opened and when is the caller's business.
  */
-import type { ReleaseNotes, ReleaseNotesGroup } from '@purlay/types';
+import { releasePage, type ReleaseNotes, type ReleaseNotesGroup } from '@purlay/types';
 import { useEffect } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button, buttonStyle } from '../../ui/button';
@@ -31,8 +31,6 @@ const DOT: Readonly<Record<ReleaseNotesGroup['category'], string>> = {
   Fixed: 'bg-warning',
   Security: 'bg-danger',
 };
-
-const RELEASES = 'https://github.com/doancan/purlay/releases/tag';
 
 export const ReleaseNotesDialog = ({
   notes,
@@ -62,7 +60,7 @@ export const ReleaseNotesDialog = ({
       footer={
         <>
           <a
-            href={`${RELEASES}/v${notes.version}`}
+            href={releasePage(`v${notes.version}`)}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(buttonStyle('ghost'), 'mr-auto')}
