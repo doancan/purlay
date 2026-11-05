@@ -1,6 +1,6 @@
 /**
- * `bun run release -- <patch|minor|major|x.y.z> [--dry-run]`: opens the pull request that releases a
- * version (D-185). What it does, and its tests, are `scripts/release-prepare.ts`; this only starts it.
+ * `bun run release -- [patch|minor|major|x.y.z] [--dry-run]`: opens the pull request that releases a
+ * version (D-185); left out, it is a patch (D-263). What it does, and its tests, are `scripts/release-prepare.ts`; this only starts it.
  */
 import { join } from 'node:path';
 import { cli, spawnIn } from './release-prepare';
