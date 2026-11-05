@@ -14581,4 +14581,12 @@ export const MUTATIONS: readonly Mutation[] = [
       'apps/api/src/platform/module-budget.test.ts',
     ],
   },
+  {
+    id: 'subscription-answer-leaves-the-incident-unread',
+    why: "an incident declared between a channel's incident being read and the socket's subscription being answered is in no frame and no replay: the banner never reaches that reader until a reload",
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '            readAgain(client, keys.incident(channelId));\n',
+    replace: '',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
 ];
