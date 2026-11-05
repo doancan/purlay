@@ -12,7 +12,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { DEFAULT_CHANNEL_NAME } from '@purlay/types';
 import { expect, test } from './fixtures';
-import { openNav } from './support';
+import { isNarrow, openNav } from './support';
 
 const composer = (page: Page): Locator =>
   page.getByRole('textbox', { name: `Message ${DEFAULT_CHANNEL_NAME}` });
@@ -65,7 +65,7 @@ test.describe('the first run', () => {
     await expect(dialog).toHaveCount(0);
     // On a narrow window the navigation it was opened from is still over the channel: closed too.
     const navigation = first.getByRole('dialog', { name: 'Workspace' });
-    if (await navigation.isVisible()) await first.keyboard.press('Escape');
+    if (isNarrow(first)) await first.keyboard.press('Escape');
     await expect(navigation).toHaveCount(0);
     // Still where the words will arrive.
     await expect(first).toHaveURL(new RegExp(`${general}$`));

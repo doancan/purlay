@@ -611,7 +611,7 @@ test.describe('without a connection', () => {
     const retry = row.getByRole('button', { name: 'Retry' });
     await expect
       .poll(async () => {
-        if (await retry.isVisible()) await retry.click({ timeout: 1_000 }).catch(() => undefined);
+        await retry.click({ timeout: 1_000 }).catch(() => undefined);
         return await row.getByText('Failed to send').count();
       })
       .toBe(0);

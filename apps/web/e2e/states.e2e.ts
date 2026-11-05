@@ -9,6 +9,7 @@
  */
 import type { Locator, Page, Route } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { openNavigation } from './support';
 
 const channelPath = (slug: string, id: string): string => `/w/${slug}/c/${id}`;
 
@@ -190,9 +191,7 @@ test.describe('the channel list', () => {
     });
     await page.goto(`/w/${world.workspace.slug}`);
     // On a narrow window the sidebar is behind its toggle.
-    const toggle = page.getByRole('button', { name: 'Open navigation' });
-    await expect(toggle.or(page.getByRole('complementary', { name: 'Workspace' }))).toBeVisible();
-    if (await toggle.isVisible()) await toggle.click();
+    await openNavigation(page);
     const sidebar = page
       .getByRole('complementary', { name: 'Workspace' })
       .or(page.getByRole('dialog', { name: 'Workspace' }));
@@ -207,7 +206,7 @@ test.describe('the channel list', () => {
     // The list arrives, so the front door sends the person to a channel — which, on a narrow window,
     // closes the overlay: they went somewhere. The list is there when they look again.
     await expect(page).toHaveURL(/\/c\//);
-    if (await toggle.isVisible()) await toggle.click();
+    await openNavigation(page);
     await expect(sidebar.getByRole('link', { name: /deploys/ })).toBeVisible();
   });
 });

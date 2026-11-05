@@ -349,11 +349,19 @@ export const shellReady = async (page: Page): Promise<void> => {
 /** The workspace sidebar, wherever this width keeps it: in place, or inside the overlay's dialog. */
 const sidebarOf = (page: Page): Locator => page.getByRole('complementary', { name: 'Workspace' });
 
-/** Opens the sidebar if it is behind its toggle, and returns it. Safe to call when it is open. */
+/**
+ * Opens what holds the navigation where this width keeps it behind a toggle: the "Open navigation" button,
+ * waited for and pressed. At a wide width it is in place and nothing is done. Chosen by the width, never by
+ * looking at whether the toggle happens to be drawn yet: a probe answers for the instant it is asked.
+ */
+export const openNavigation = async (page: Page): Promise<void> => {
+  if (!isNarrow(page)) return;
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+};
+
+/** Opens the sidebar if this width keeps it behind its toggle, and returns it. Called with it closed. */
 export const openNav = async (page: Page): Promise<Locator> => {
-  const toggle = page.getByRole('button', { name: 'Open navigation' });
-  await expect(toggle.or(page.getByRole('complementary', { name: 'Workspace' }))).toBeVisible();
-  if (await toggle.isVisible()) await toggle.click();
+  await openNavigation(page);
   const sidebar = sidebarOf(page);
   await expect(sidebar).toBeVisible();
   return sidebar;
@@ -396,9 +404,11 @@ export const trailLine = async (trail: Locator, line: RegExp): Promise<Locator> 
   const found = trail.getByText(line);
   const older = trail.getByRole('button', { name: 'Load older' });
   await expect(trail.getByRole('list', { name: 'Audit log' })).toBeVisible();
-  while ((await found.count()) === 0 && (await older.isVisible())) {
+  // The list and its footer are drawn together, so what is counted here is settled. An older page is
+  // asked for and waited for: the button says it is busy until the page is in the list.
+  while ((await found.count()) === 0 && (await older.count()) > 0) {
     await older.click();
-    await expect(older.or(found).first()).toBeVisible();
+    await expect(older).not.toHaveAttribute('aria-busy', 'true');
   }
   return found;
 };
