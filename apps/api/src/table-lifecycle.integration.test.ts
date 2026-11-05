@@ -322,6 +322,12 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  channel_departures: ofAda('channel_departures', async (db, world) => {
+    await db
+      .insertInto('channel_departures')
+      .values({ channel_id: world.channelId, user_id: world.adaId, reason: 'left' })
+      .execute();
+  }),
   hidden_messages: ofAda('hidden_messages', async (db, world) => {
     await db
       .insertInto('hidden_messages')
