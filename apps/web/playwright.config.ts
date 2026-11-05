@@ -12,6 +12,10 @@
  * below — because a screen that only works in one theme is the failure D-53 names, and a
  * narrow window is a thing `UX.md` §2 promises not to break.
  */
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/test';
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number];
@@ -123,13 +127,34 @@ const servers = [...chosen.map((definition) => definition.name), ...engines];
  * WebKit is served over https, with a certificate made for the run. The session cookie is `Secure` and
  * `__Host-`, and WebKit on Linux does not send one to `http://localhost` (macOS WebKit, Chromium and
  * Firefox do): signed in by that cookie, every page came up signed out. The tests trust the certificate
- * through `ignoreHTTPSErrors`, for this origin only.
+ * through `ignoreHTTPSErrors` for this origin only.
  */
 const overTls = (name: string): boolean => name === 'webkit';
 const schemeOf = (name: string): string => (overTls(name) ? 'https' : 'http');
-// The test process's own requests (`support.ts` makes rooms through the real API) go to that same
-// origin, and Node does not trust a certificate made for one run. Only the harness on localhost is asked.
-if (servers.some(overTls)) process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+/**
+ * The certificate WebKit's origin is served with, made once for the machine and trusted by name: the
+ * test process's own requests (`support.ts` makes rooms through the real API) reach that origin too, and
+ * Node is told to trust this one certificate (`NODE_EXTRA_CA_CERTS`, read by the workers as they start),
+ * never to skip validation. The main process makes it before any worker exists; a worker finds it there.
+ */
+const TLS_DIR = join(tmpdir(), 'purlay-e2e-tls');
+const TLS_CERT = join(TLS_DIR, 'localhost.crt');
+const TLS_KEY = join(TLS_DIR, 'localhost.key');
+// Made into the temporary directory, which the machine clears; long enough that it never expires under a run.
+const TLS_VALID_DAYS = 3650;
+if (servers.some(overTls)) {
+  if (!existsSync(TLS_CERT) || !existsSync(TLS_KEY)) {
+    mkdirSync(TLS_DIR, { recursive: true });
+    execFileSync(
+      'openssl',
+      ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', String(TLS_VALID_DAYS)]
+        .concat(['-keyout', TLS_KEY, '-out', TLS_CERT, '-subj', '/CN=localhost'])
+        .concat(['-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1']),
+      { stdio: 'ignore' },
+    );
+  }
+  process.env['NODE_EXTRA_CA_CERTS'] = TLS_CERT;
+}
 
 const engineProject = (engine: keyof typeof ENGINES, index: number): Project => ({
   name: engine,
@@ -183,7 +208,7 @@ export default defineConfig({
   ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
   webServer: servers.map((name, index) => ({
-    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}${overTls(name) ? '--tls ' : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
+    command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}${overTls(name) ? `--tls-cert ${TLS_CERT} --tls-key ${TLS_KEY} ` : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
     url: `${schemeOf(name)}://localhost:${String(portOf(index))}/health`,

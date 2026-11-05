@@ -117,7 +117,8 @@ people…" closes the menu and the dialog never shows. It is load-dependent and 
 
 The first CI run on Linux failed nearly every test at the first wait for the app's frame: the page came up signed
 out. The session cookie is `Secure` and `__Host-`, and WebKit on Linux does not send one to `http://localhost`
-(macOS WebKit, Chromium and Firefox do). So the harness serves the WebKit project over https with a certificate it
-makes for the run (`bun run demo -- --tls`, `openssl`), and the project trusts it (`ignoreHTTPSErrors`; the test
-process sets `NODE_TLS_REJECT_UNAUTHORIZED=0` for its own requests to that origin). The API behind the front stays on
-http. The product is unchanged.
+(macOS WebKit, Chromium and Firefox do). So the harness serves the WebKit project over https with a certificate
+`openssl` makes once into the temporary directory (`bun run demo -- --tls-cert … --tls-key …`). The browser project
+trusts it with `ignoreHTTPSErrors`, and the test process's own requests trust that one certificate through
+`NODE_EXTRA_CA_CERTS`; certificate validation is never turned off. The API behind the front stays on http. The product
+is unchanged.

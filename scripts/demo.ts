@@ -6,7 +6,7 @@
  *   bun run demo -- --no-build         serve the build that is already in apps/web/dist
  *   bun run demo -- --port 4200 --db purlay_demo_two --manifest /tmp/world.json
  *   bun run demo -- --modules none     serve the core alone (D-250): the seed is still made with every module
- *   bun run demo -- --tls              serve https with a certificate of the run's own (the browser tests' WebKit)
+ *   bun run demo -- --tls-cert c.pem --tls-key k.pem   serve https with that certificate (the browser tests' WebKit)
  *
  * **It can only ever touch a database it created.** The name must start with
  * `purlay_demo` or `purlay_e2e`, and it is dropped and recreated on every start — so
@@ -59,9 +59,16 @@ const demoUrl = ((): string => {
   url.pathname = `/${databaseName}`;
   return url.toString();
 })();
-// `--tls`: the same origin over https with a certificate made for this run, for an engine that will not carry
-// a `Secure` cookie over http (WebKit on Linux). The API behind it stays on http; only the browser's side is https.
-const tls = has('--tls');
+// `--tls-cert <file> --tls-key <file>`: the same origin over https, for an engine that will not carry a `Secure`
+// cookie over http (WebKit on Linux). The API behind it stays on http; only the browser's side is https. The
+// caller made the certificate, so the caller can also trust it.
+const certPath = flag('--tls-cert');
+const keyPath = flag('--tls-key');
+if ((certPath === undefined) !== (keyPath === undefined)) {
+  process.stderr.write('--tls-cert and --tls-key go together\n');
+  process.exit(1);
+}
+const tls = certPath !== undefined;
 const origin = `${tls ? 'https' : 'http'}://localhost:${String(port)}`;
 
 const say = (line: string): void => {
@@ -198,30 +205,7 @@ if (!(await ready())) {
 
 // ── 5. One origin ────────────────────────────────────────────────────────────
 const certificate = ((): { cert: string; key: string } | undefined => {
-  if (!tls) return undefined;
-  const keyPath = join(directory, 'tls.key');
-  const certPath = join(directory, 'tls.crt');
-  const made = Bun.spawnSync([
-    'openssl',
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-days',
-    '1',
-    '-keyout',
-    keyPath,
-    '-out',
-    certPath,
-    '-subj',
-    '/CN=localhost',
-    '-addext',
-    'subjectAltName=DNS:localhost,IP:127.0.0.1',
-  ]);
-  if (made.exitCode !== 0) {
-    throw new Error(`openssl could not make a certificate: ${made.stderr.toString()}`);
-  }
+  if (certPath === undefined || keyPath === undefined) return undefined;
   return { cert: readFileSync(certPath, 'utf8'), key: readFileSync(keyPath, 'utf8') };
 })();
 const front = startFront({
