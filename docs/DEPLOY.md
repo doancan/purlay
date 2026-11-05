@@ -312,10 +312,43 @@ from about 380 MB to 1.2 GB on the first storm and added only 20-50 MB on each o
 JavaScript heap came back to 36 MB each time, objects returned to baseline, and nothing leaked; the
 allocator keeps the pages it had committed, so the figure from `ps` stays near its peak until the process
 restarts. Replay is what costs: each reconnecting socket replays up to 1,000 frames or 1 MiB at once, about
-0.4 MB of memory per socket. So leave headroom of roughly that much per socket you expect to reconnect
-together, do not alarm on a high figure that stays flat after a storm, and let routine restarts or deploys
-reset it. Nothing yet limits how many sockets replay at the same moment; that is a design decision for the
-owner (#1029). This was not measured on Linux (glibc or musl), which may release memory differently.
+0.4 MB of memory per socket. A reconnect that read all of them at the same moment is what took the process to its peak.
+
+**A node now replays only so many sockets at once.** `SOCKET_REPLAY_CONCURRENCY` (default 50) is how many
+subscriptions of one node may be reading and building a replay at the same moment. The rest wait in the order
+they asked, and the client sees only a later answer; one that has waited 15 seconds is told the service is busy
+(`DATABASE_UNAVAILABLE`) and sends again after a growing wait, as it does for any busy server. A first
+subscription (no cursor, nothing to replay) and a lone reconnect never wait. The same storm, 2,000 sockets
+reconnecting with replay at once against a node that also carries 20 messages a second (one run each unless two
+are shown, macOS, PostgreSQL, the clients and the node on one machine, a fresh process for each row):
+
+| `SOCKET_REPLAY_CONCURRENCY` | Peak `ps` RSS (MB) | Peak resident metric on `/metrics` (MB) | Peak JS heap (MB) | Every socket subscribed again (s) | Subscriptions refused and sent again |
+| --- | --- | --- | --- | --- | --- |
+| no limit (100000) | 1262, 1539 | 660, 861 | 424, 454 | 35, 28 | 0 |
+| 200 | 893 | 522 | 357 | 31 | 0 |
+| 100 | 840, 941 | 518, 644 | 359, 335 | 31, 31 | 282, 281 |
+| **50 (default)** | 927, 731 | 576, 478 | 386, 268 | 37, 38 | 522, 528 |
+| 25 | 925, 764 | 544, 480 | 277, 258 | 59, 45 | 1399, 805 |
+| 10 | 721 | 500 | 307 | 84 | 2080 |
+
+Before the storm the process held 270-390 MB (`ps`) and a 38-45 MB heap, and the heap returned to that after every
+run. What the numbers say, and do not:
+
+- The default takes the peak down by about 40% by `ps` and by about 35% by the process's own resident metric
+  (the `ps` figure includes pages the allocator freed and the system has not reclaimed, so it stays at its peak
+  until the process restarts), at the price of about 6 seconds on a 30-second recovery. Below 50 the
+  recovery gets slower faster than the node gets lighter (25 took half as long again; 10 two and a half times
+  as long); above it the saving fades (100 and 200 peaked 5% to 10% higher). **Take it as a measurement of one laptop, not as a
+  promise:** the runs of one value differ by up to 20% from each other, and the clients shared the machine.
+- **It does not remove the peak, only the part the replay added.** The first seconds of the storm, when two
+  thousand handshakes arrive together, put the heap at 250-300 MB by themselves in every run with a limit of 10 to 50, before any replay is read. Lowering
+  the limit further cannot go below that. A node that must stay under a hard container limit needs headroom for
+  it, and fewer sockets per node (`SOCKET_MAX_CONNECTIONS`).
+- A limit too low for the storm shows as `replay refused: too many sockets replaying at once` lines in the log:
+  nothing is lost, each client sends again, but the recovery is longer. Raise it, in steps, if you see many.
+- Leave headroom above the steady state, do not alarm on a high figure that stays flat after a storm, and let
+  routine restarts or deploys reset it. This was not measured on Linux (glibc or musl), which may release memory
+  differently.
 
 ## References
 
