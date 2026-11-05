@@ -15057,4 +15057,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "if (!dash.startsWith('—')) return plain;",
     tests: ['packages/types/src/releases.test.ts'],
   },
+  {
+    id: 'e2e-probe-guard-ignores-isvisible',
+    why: 'a browser test that chooses its path by `isVisible()` is no longer refused, so a branch that depends on the instant it is asked comes back',
+    file: 'scripts/e2e-probes.ts',
+    find: 'isVisible|isHidden',
+    replace: 'isHidden',
+    tests: ['scripts/e2e-probes.test.ts'],
+  },
 ];
