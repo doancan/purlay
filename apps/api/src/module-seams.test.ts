@@ -1,5 +1,5 @@
 /**
- * The doors name a module only where its routes are (D-250, `MODULES.md` §8): `cli/` and `ingress/` reach a module's work
+ * The doors name a module only where its routes are (D-250, `MODULES.md` §8): `cli/`, `ingress/` and `realtime/` reach a module's work
  * through the composition (`composition.ts`, whose `jobWork` is what `bun run job` runs) and name none of its files, but the
  * one file that registers the modules' routes, `ingress/http/app.ts`, and the route handlers a module keeps in `ingress/`
  * (`MODULES.md` §9 item 4). `eslint.config.mjs` keeps the core (`modules/`, `platform/`) from importing a feature at all; this
@@ -74,6 +74,10 @@ const ALLOWED: Readonly<
     features: ['chat'],
     why: 'the release route takes the type of chat’s release check',
   },
+  [join('realtime', 'router.ts')]: {
+    features: ['chat'],
+    why: 'the frame router still runs chat’s three operations itself (subscribe and replay, message.send, typing) and the manifest has no field for a module’s frame handler yet; `closedFrame` already answers them as an unknown operation where chat is off',
+  },
   [join('ingress', 'ws', 'socket.ts')]: {
     features: ['chat'],
     why: 'the socket announces presence through chat’s presence service',
@@ -83,6 +87,9 @@ const ALLOWED: Readonly<
     why: '`bun run erase:content` empties chat’s messages; a command of a module has no manifest field yet',
   },
 };
+
+/** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
+const DOORS = ['cli', 'ingress', 'realtime'] as const;
 
 const withoutComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -99,19 +106,18 @@ const featuresImportedBy = (source: string): string[] => {
 };
 
 const doorSources = (): string[] =>
-  ['cli', 'ingress']
-    .flatMap((directory) =>
-      readdirSync(join(SOURCE_ROOT, directory), { recursive: true, encoding: 'utf8' })
-        .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
-        .map((file) => join(directory, file)),
-    )
-    .sort();
+  DOORS.flatMap((directory) =>
+    readdirSync(join(SOURCE_ROOT, directory), { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => join(directory, file)),
+  ).sort();
 
 const featuresOf = (file: string): string[] =>
   featuresImportedBy(readFileSync(join(SOURCE_ROOT, file), 'utf8'));
 
 describe('the doors name no module’s files outside its routes and the composition root', () => {
   test('the features are the folders of features/, and the files the doors’', () => {
+    expect(doorSources()).toContain(join('realtime', 'router.ts'));
     expect(existsSync(FEATURES)).toBe(true);
     expect(readdirSync(FEATURES)).toContain('chat');
     expect(doorSources()).toContain(join('cli', 'jobs.ts'));
