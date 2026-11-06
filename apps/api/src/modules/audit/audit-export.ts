@@ -30,19 +30,10 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import type { AuditAccess } from '../../platform/module-kit/audit-access';
 import { checkedFilter, recordAudit, requireTrailReader, trailPage } from './audit';
+import { csvCell } from './csv';
 
 /** Rows a query of the download reads: a page of memory, and a few hundred round trips for 100 000. */
 export const AUDIT_EXPORT_PAGE = 500;
-
-/** What a spreadsheet would read as the start of a formula (OWASP, "CSV Injection"). */
-const FORMULA_START = /^[=+\-@\t\r]/;
-
-/** One CSV cell: defused, then quoted if it must be. Null is an empty cell. */
-const csvCell = (value: string | null): string => {
-  if (value === null) return '';
-  const defused = FORMULA_START.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(defused) ? `"${defused.replaceAll('"', '""')}"` : defused;
-};
 
 /** An entry as the file says it: who acted by id and by name, since the file is read on its own. */
 const exportLineOf = (entry: AuditEntry): AuditExportLine => ({

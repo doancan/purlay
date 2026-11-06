@@ -2033,7 +2033,7 @@ action names both (`server.github_connected`, `server.github_disconnected`, `ser
 `account.export_downloaded` (a person's export of their own data, the person as actor and `target_user_id`, D-241), `server.admin_password_reset`, written by
 `bun run admin:reset-password` with the account itself as the actor and no session, and `server.workspace_purged`
 (with `target_workspace_id`, written by `purge:workspaces` with no actor once a deleted workspace's content is gone,
-D-242) — and never the value, a secret least of all. Written in the transaction that saves the setting
+D-242), and `server.audit_export_requested` (a metadata download request, D-278) — and never the value, a secret least of all. Written in the transaction that saves the setting
 (`modules/audit/server-audit.ts`), so a change that did not commit leaves no row and one that did
 cannot lack it. Append-only is held as `audit_log`'s is — by the sweep in
 `modules/audit/append-only.test.ts`, which covers both tables; neither has a trigger.
