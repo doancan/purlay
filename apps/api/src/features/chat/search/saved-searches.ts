@@ -1,5 +1,6 @@
 import { Value } from '@sinclair/typebox/value';
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import {
   SAVED_SEARCH_LIMIT,
   SearchCriteria,
@@ -36,7 +37,7 @@ const asSearch = (row: {
 };
 
 export const listSearches = async (
-  db: Executor,
+  db: ChatDb,
   context: WorkspaceContext,
   page: PageQuery,
 ): Promise<SavedSearchPage> => {
@@ -56,7 +57,7 @@ export const listSearches = async (
 
 /** Called inside the HTTP transaction. The membership lock serializes saves at the personal cap. */
 export const saveSearch = async (
-  db: Executor,
+  db: ChatDb,
   clock: Clock,
   context: WorkspaceContext,
   id: string,
@@ -131,7 +132,7 @@ export const saveSearch = async (
 };
 
 export const removeSearch = async (
-  db: Executor,
+  db: ChatDb,
   context: WorkspaceContext,
   id: string,
 ): Promise<void> => {

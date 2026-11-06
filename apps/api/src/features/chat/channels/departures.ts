@@ -10,13 +10,14 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type RevokedReason } from '@purlay/types';
-import { sql, type Database, type Executor, type SelectQueryBuilder } from '@purlay/db';
+import { sql, type SelectQueryBuilder } from '@purlay/db';
+import type { ChatDb, ChatSchema } from '../schema';
 
 export type Departure = Extract<RevokedReason, 'left' | 'removed'>;
 
 /** Remembers how the person went, in the transaction that took the membership; the next departure replaces it. */
 export const recordDeparture = async (
-  executor: Executor,
+  executor: ChatDb,
   channelId: string,
   userId: string,
   reason: Departure,
@@ -35,12 +36,12 @@ export const recordDeparture = async (
 
 /** The channels and the workspace membership that make a person's past in a channel theirs to be told. */
 type StillInWorkspace = SelectQueryBuilder<
-  Database,
+  ChatSchema,
   'channels' | 'workspaces' | 'workspace_members',
   object
 >;
 
-const inWorkspaceOf = (executor: Executor, userId: string): StillInWorkspace =>
+const inWorkspaceOf = (executor: ChatDb, userId: string): StillInWorkspace =>
   executor
     .selectFrom('channels')
     .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
@@ -57,7 +58,7 @@ const inWorkspaceOf = (executor: Executor, userId: string): StillInWorkspace =>
  * single query, so the two cannot be told apart by what comes back or how long it takes.
  */
 export const departuresFrom = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   channelIds: readonly string[],
 ): Promise<ReadonlyMap<string, RevokedReason>> => {

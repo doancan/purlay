@@ -3,7 +3,7 @@
  * is reached no other way; a public one can also be joined by the person themselves
  * (`joinChannel`). A direct message is between the two people it was opened for.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { requireChannelMember, type ChannelContext } from './guard';
@@ -17,7 +17,7 @@ import { channelFor } from './channels';
  * Another workspace's member, a stranger and an erased account are the same answer.
  */
 const requireWorkspacePerson = async (
-  executor: Executor,
+  executor: ChatDb,
   context: Pick<WorkspaceContext, 'workspaceId'>,
   userId: string,
 ): Promise<void> => {
@@ -39,7 +39,7 @@ const requireWorkspacePerson = async (
  * query for the whole set. One missing is the same answer as one alone (D-127).
  */
 export const requireWorkspacePeople = async (
-  executor: Executor,
+  executor: ChatDb,
   context: Pick<WorkspaceContext, 'workspaceId'>,
   userIds: readonly string[],
 ): Promise<void> => {
@@ -70,7 +70,7 @@ export interface Added {
  * is the same answer, and is not told again.
  */
 export const addMember = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   context: ChannelContext,
   userId: string,

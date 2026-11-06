@@ -17,7 +17,8 @@
  * has not opened keeps waiting — and keeps counting as unread — however far the feed is read.
  */
 import { notHiddenBy } from '../messages/hidden';
-import { sql, type RawBuilder, type Transaction } from '@purlay/db';
+import { sql, type RawBuilder } from '@purlay/db';
+import type { ChatTx } from '../schema';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
@@ -96,7 +97,7 @@ export interface ReadOutcome {
  * `MESSAGE_NOT_FOUND` whichever it was (I-3, D-34).
  */
 export const markRead = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   messageId: string,
@@ -208,7 +209,7 @@ export interface ChannelReadOutcome extends ReadOutcome {
  * what it painted.
  */
 export const markAllRead = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: WorkspaceContext,
 ): Promise<readonly ChannelReadOutcome[]> => {
@@ -275,7 +276,7 @@ const BEFORE_EVERYTHING = '00000000-0000-0000-0000-000000000000';
  * touched: what the inbox has read stays read there (D-106), so the badge counts what still waits.
  */
 export const markUnread = async (
-  executor: Transaction,
+  executor: ChatTx,
   context: ChannelContext,
   messageId: string,
 ): Promise<ReadOutcome> => {

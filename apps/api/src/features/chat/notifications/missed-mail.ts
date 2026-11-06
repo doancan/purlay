@@ -22,7 +22,8 @@
  * - **The link that stops it** opens without a session: a random token, whose digest alone is kept with the
  *   letter (`platform/tokens.ts`), good for `STOP_LINK_DAYS`. The job forgets letters past that.
  */
-import { sql, type Executor, type Transaction } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import {
   CHAT_NOTIFICATION_KINDS,
   type MissedMailSetting,
@@ -68,7 +69,7 @@ const refusedOn = (): AppError =>
 
 /** Whether the person can be mailed at all: the server has a relay, and their address was proven. */
 const availableTo = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   mailOn: boolean,
 ): Promise<{ readonly available: boolean; readonly on: boolean }> => {
@@ -81,7 +82,7 @@ const availableTo = async (
 };
 
 export const readMissedMail = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   mailOn: boolean,
 ): Promise<MissedMailSetting> => await availableTo(executor, userId, mailOn);
@@ -91,7 +92,7 @@ export const readMissedMail = async (
  * instant it was first turned on. On is refused where it could not be honoured.
  */
 export const setMissedMail = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   userId: string,
   input: SetMissedMailRequest,
@@ -118,7 +119,7 @@ const linkRefused = (): AppError =>
  * else. Again is the same answer; a link nobody made, or one past `STOP_LINK_DAYS`, is one refusal.
  */
 export const stopMissedMail = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   input: StopMissedMailRequest,
 ): Promise<void> => {
@@ -137,7 +138,7 @@ export const stopMissedMail = async (
 };
 
 export interface MissedMailDependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly log: Logger;
   /** The relay; absent where the server has none, and then nothing is mailed. */
@@ -154,7 +155,7 @@ interface Taken {
 
 /** The person's context in a workspace, or null where they are no longer in it. */
 const memberOf = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   userId: string,
   workspaceId: string,
 ): Promise<WorkspaceContext | null> => {
@@ -168,7 +169,7 @@ const memberOf = async (
 
 /** What each workspace of these rows is for the person now: held, gone, or the channels they can see. */
 const standing = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   userId: string,
   workspaceIds: readonly string[],
   now: Date,
@@ -189,7 +190,7 @@ const standing = async (
 
 /** The messages a letter quotes, with where they are: one statement for the whole letter. */
 const messagesOf = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   messageIds: readonly string[],
 ): Promise<
   readonly {
@@ -270,7 +271,7 @@ const shape = (rows: Awaited<ReturnType<typeof messagesOf>>): MissedWorkspace[] 
  * is nothing to send now.
  */
 const takeLetter = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   now: Date,
   userId: string,
   appUrl: string,
@@ -377,7 +378,7 @@ const takeLetter = async (
 };
 
 /** A letter the relay did not take: its rows wait for the next run, and its hour is not spent. */
-const giveBack = async (transaction: Transaction, taken: Taken): Promise<void> => {
+const giveBack = async (transaction: ChatTx, taken: Taken): Promise<void> => {
   await transaction
     .updateTable('notifications')
     .set({ mailed_at: null })

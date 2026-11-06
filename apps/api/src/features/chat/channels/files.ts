@@ -10,7 +10,8 @@
  *   so the cursor is a file's id and the next page starts after it within its message.
  */
 import { notHiddenBy } from '../messages/hidden';
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { FilePage, FileQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { ChannelContext } from './guard';
@@ -21,7 +22,7 @@ const at = (value: Date | string): string => new Date(value).toISOString();
 
 /** The message the cursor's file is in, within this channel; a file elsewhere is no cursor here. */
 const cursorOf = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   before: string,
 ): Promise<string> => {
@@ -42,7 +43,7 @@ const cursorOf = async (
 };
 
 export const channelFiles = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   query: FileQuery,
 ): Promise<FilePage> => {

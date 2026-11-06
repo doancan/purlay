@@ -13,18 +13,6 @@ import { shown, sourcesOf } from './testing/module-sources';
 import { wholeDatabaseImports } from './testing/module-tables';
 
 const NOT_YET_BEHIND_THE_HANDLE: readonly string[] = [
-  'features/chat/channels/channels.ts',
-  'features/chat/channels/departures.ts',
-  'features/chat/channels/direct-messages.ts',
-  'features/chat/channels/files.ts',
-  'features/chat/channels/guard.ts',
-  'features/chat/channels/members.ts',
-  'features/chat/channels/notification-level.ts',
-  'features/chat/channels/read-state.ts',
-  'features/chat/channels/retention.ts',
-  'features/chat/channels/settings.ts',
-  'features/chat/channels/star.ts',
-  'features/chat/channels/workspace-channels.ts',
   'features/chat/export.ts',
   'features/chat/incidents/incidents.ts',
   'features/chat/incidents/responders.ts',
@@ -38,16 +26,11 @@ const NOT_YET_BEHIND_THE_HANDLE: readonly string[] = [
   'features/chat/integrations/incoming-webhooks.ts',
   'features/chat/integrations/unfurl.ts',
   'features/chat/integrations/webhook.ts',
-  'features/chat/notifications/missed-mail.ts',
-  'features/chat/notifications/notifications.ts',
   'features/chat/personal-export.ts',
   'features/chat/reminders/delivery.ts',
   'features/chat/reminders/reminders.ts',
-  'features/chat/saved/saved.ts',
   'features/chat/scheduled/delivery.ts',
   'features/chat/scheduled/scheduled.ts',
-  'features/chat/search/saved-searches.ts',
-  'features/chat/search/search.ts',
   'features/chat/sweeps.ts',
 ];
 

@@ -13084,7 +13084,7 @@ services take `Executor` by the hundred and a brand all of them had to be change
    (`module-tables.test.ts`, with `CORE_WRITES`: chat's four, each with why) and the lint (`NO_WHOLE_DATABASE` for a feature not
    in `NOT_YET_BEHIND_THEIR_HANDLE`, which is `chat` and only shrinks, and `NO_RUNTIME_TABLE_NAMES` for every feature, both
    shown by `verify:enforcement`); mutations `module-tables-scan-ignores-sql-templates`, `module-tables-scan-allows-every-owner`
-   and `module-tables-core-writes-not-held-to-list`. Chat's functions come after, in steps (`messages/`, `pins/`, `reactions/`, `bookmarks/` and `presence/` first, with `module-handle-migration.test.ts` listing the files still on the whole database, which only shrinks, and the mutation `chat-migration-list-not-held`), and the last takes chat out of the
+   and `module-tables-core-writes-not-held-to-list`. Chat's functions come after, in steps (`messages/`, `pins/`, `reactions/`, `bookmarks/` and `presence/` first, then `channels/`, `notifications/`, `search/` and `saved/`, with `module-handle-migration.test.ts` listing the files still on the whole database, which only shrinks, and the mutation `chat-migration-list-not-held`), and the last takes chat out of the
    lint's list.
 
 **Rejected.** *A generated `schema.ts` per module*: a second generated copy of what `TABLE_OWNERS` already says, with a

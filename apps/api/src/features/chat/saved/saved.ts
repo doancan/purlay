@@ -12,13 +12,8 @@
  *   so a second Save never undoes "completed".
  */
 import { notHiddenBy } from '../messages/hidden';
-import {
-  sql,
-  type Database,
-  type Executor,
-  type SelectQueryBuilder,
-  type Transaction,
-} from '@purlay/db';
+import { sql, type SelectQueryBuilder } from '@purlay/db';
+import type { ChatDb, ChatTx, ChatSchema } from '../schema';
 import {
   messageId as newId,
   SAVED_MAX,
@@ -38,10 +33,10 @@ const at = (value: Date | string): string => new Date(value).toISOString();
 
 /** The saves a person is shown in a workspace: in a channel they can see, of a message not deleted. */
 const shown = (
-  executor: Executor,
+  executor: ChatDb,
   context: Pick<WorkspaceContext, 'userId' | 'workspaceId'>,
   visible: readonly string[],
-): SelectQueryBuilder<Database, 'saved_messages' | 'messages', object> =>
+): SelectQueryBuilder<ChatSchema, 'saved_messages' | 'messages', object> =>
   executor
     .selectFrom('saved_messages')
     .innerJoin('messages', 'messages.id', 'saved_messages.message_id')
@@ -53,7 +48,7 @@ const shown = (
 
 /** Saves the message, or moves its save to `input.state`. Answers the workspace it is in. */
 export const saveMessage = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   userId: string,
   messageId: string,
@@ -113,7 +108,7 @@ export const saveMessage = async (
 
 /** Forgets the save, if there is one; a deleted message's save can still be let go. */
 export const unsaveMessage = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   messageId: string,
 ): Promise<string> => {
@@ -128,7 +123,7 @@ export const unsaveMessage = async (
 
 /** One state's saves, newest saved first; keyset on the save's own id, which time orders. */
 export const savedPage = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
   query: SavedQuery,
 ): Promise<SavedPage> => {
@@ -163,10 +158,7 @@ export const savedPage = async (
 };
 
 /** Which messages the person has saved here, to mark them where they are read. */
-export const savedIds = async (
-  executor: Executor,
-  context: WorkspaceContext,
-): Promise<SavedIds> => {
+export const savedIds = async (executor: ChatDb, context: WorkspaceContext): Promise<SavedIds> => {
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return [];
   return await shown(executor, context, visible)

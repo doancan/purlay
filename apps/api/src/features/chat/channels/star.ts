@@ -10,13 +10,13 @@
  * tabs starring at once write once and tell once. Starring what is starred, or letting go of what
  * is not, changes nothing and says so, so nobody is told.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { Clock } from '../../../platform/clock';
 import { channelNotFound, type ChannelContext } from './guard';
 
 /** Whether the star changed: false when it was already as asked. */
 export const setStarred = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   context: ChannelContext,
   starred: boolean,
