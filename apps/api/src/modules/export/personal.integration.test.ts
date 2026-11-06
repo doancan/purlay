@@ -599,6 +599,8 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     users: {
       rows: 1,
       columns: [
+        'admission_requires_verified_email',
+        'admission_state',
         'avatar_url',
         'away_chosen',
         'created_at',

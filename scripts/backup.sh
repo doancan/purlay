@@ -104,4 +104,8 @@ chmod -R u+rwX,go-rwx "$DIR"
 write_checksums "$DIR"
 echo "checksums: $(wc -l <"$DIR/SHA256SUMS" | tr -d ' ') files"
 FINISHED=1
+# A reporting failure keeps the completed backup and still fails loudly.
+report_scope=database
+[ ! -f "$DIR/bucket/manifest.json" ] || report_scope=database-and-attachments
+write_backup_evidence "$DIR/database.dump" "$report_scope"
 echo "$DIR"

@@ -13326,3 +13326,21 @@ uses. *A topic-authorisation hook per prefix now*: see above. *The router asking
 already the manifest's `frames`, checked against the core's claims by the registry.
 
 **Cost of reversing.** Move the handlers back into the router's switch and delete the field; no stored data and no wire change.
+
+### D-277. Server administration is global metadata authority, independent of a workspace — builds on D-179, D-233, D-250
+
+**Context.** The server page configures sign-in and mail but gives operators no inventory or operational view. Its workspace route also prevents an administrator without membership from reaching administration. Server metadata authority must not imply access to private conversations.
+
+**Decision.**
+
+1. A standalone `/server` console uses the existing session and server-administrator guard, never a fabricated workspace context. The legacy workspace entry leads to this console. Core administration remains present when optional modules are disabled.
+2. Additive `/api/server` APIs return bounded keyset inventories of users, workspace metadata and the server audit trail. Workspaces include owner previews, counts, retention policy and storage including pending uploads. Exact byte totals cross as decimal strings. They expose neither message content nor credentials, raw operational errors or session tokens. Every route guards before parsing; failures remain no-store.
+3. Administrator changes serialize on one transaction advisory lock before any account lock, then recheck the actor. At least one active administrator remains. Grants require an active account and verified email. Session revocations and quota changes commit with server audit entries; session-ended publications follow the commit. Quota changes reuse the operator service, preserve content and may set a limit below current usage.
+4. Overview readiness comes from the actual readiness service. Configured storage/push/shared-state are described as configuration, not proven health. Job status uses the deployed composition's catalogue and the CLI's staleness rule. Unreported backups and unverified restoration must stay explicit; no invented success state or browser restore.
+5. Existing provider configuration remains the supported live-settings seam. Infrastructure credentials and the deployment URL stay operator-managed. New admission policies must be enforced at the identity/session boundary, default off for old deployments, and cannot be merely UI switches.
+
+**Reversal.** Remove the additive routes and console. Existing accounts, quotas, settings and append-only audit records remain valid; there is no content migration.
+
+**Admission and identity (D-277 continued).** Policy applies at new-account creation, not to old accounts: every existing row defaults to approved. Exact, normalized domains have no wildcard/subdomain inheritance; invitation passports do not bypass policy. A domain-restricted new account needs verified email. The auth library writes approval fields from policy, never client input. Pending/denied sessions are identity-only: only their own admission status and sign-out are reachable; common HTTP/session and realtime write guards refuse application access. Approval does not grant workspace membership or bypass MFA. Denial revokes sessions and is audited; turning approval off does not admit the waiting list. Partial preference patches serialize with role/provider changes and preserve concurrent changes to other fields. Public instance info is limited to name, support and joining requirements. Infrastructure URL remains operator-managed.
+
+**Operational evidence (D-277 continued).** Backup status is a bounded, validated file source mounted read-only, produced after the actual operator backup/restore scripts succeed. Dockhand publishes database-only evidence into a separate metadata volume, not the archives. Artifact SHA-256 and scope bind a restore check to the backup it checked; checksum/SQL/table-count verification is distinguished from application-level recovery. No source, no receipt, invalid evidence, stale evidence and no restore check remain explicit states. Database content is not changed to report backup completion, so a receipt cannot invalidate source-versus-restored database comparison.

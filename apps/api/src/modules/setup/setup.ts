@@ -184,6 +184,7 @@ export const requireServerAdmin = async (
           .select('id')
           .where('id', '=', owner.userId)
           .where('is_server_admin', '=', true)
+          .where('suspended_at', 'is', null)
           .where('deleted_at', 'is', null)
           .executeTakeFirst();
   if (owner === undefined || admin === undefined) {

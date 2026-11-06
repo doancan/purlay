@@ -119,6 +119,9 @@ const NATIVE_TOKEN_ROUTE = '/api/native/token';
  * a stranger cannot spend the guard's work and an administrator's stolen session cannot probe fast.
  * Provisional (O-4).
  */
+const SERVER_METADATA_BUDGET: RateBudget = { perSecond: 2, burst: 60 };
+
+/** Existing provider probes and configuration writes retain their slower budget. */
 export const SERVER_ADMIN_BUDGET: RateBudget = { perSecond: 1 / 15, burst: 60 };
 
 /** Whether a path is Administration → Server's. */
@@ -183,6 +186,7 @@ export interface HttpBudgets {
   readonly setupSecrets?: RateBudget;
   readonly passports?: RateBudget;
   readonly serverAdmin?: RateBudget;
+  readonly serverMetadata?: RateBudget;
   readonly nativeTokens?: RateBudget;
 }
 
@@ -234,6 +238,8 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
   const nativeTokens = limiterFor('native-tokens', nativeTokenBudget);
   const serverAdminBudget = budgets.serverAdmin ?? SERVER_ADMIN_BUDGET;
   const serverAdmin = limiterFor('server-admin', serverAdminBudget);
+  const serverMetadataBudget = budgets.serverMetadata ?? SERVER_METADATA_BUDGET;
+  const serverMetadata = limiterFor('server-metadata', serverMetadataBudget);
   const byClass = {
     auth: [auth, budgets.auth],
     setup: [limiterFor('setup', setupBudget), setupBudget],
@@ -256,6 +262,16 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
     // Before the session is looked at: the guard's work is not a stranger's to spend.
     if (isServerAdminPath(pathname)) {
       const address = clientAddress(peer, request.headers, trustProxy);
+      if (
+        method === 'GET' &&
+        /^\/api\/server\/(?:overview|operations|audit|workspaces|preferences|backups|mail-test|users(?:\/[^/]+)?)$/.test(
+          pathname,
+        )
+      ) {
+        return (await serverMetadata.consume(limitKeyFor(address)))
+          ? undefined
+          : retryAfterSeconds(serverMetadataBudget);
+      }
       return (await serverAdmin.consume(limitKeyFor(address)))
         ? undefined
         : retryAfterSeconds(serverAdminBudget);

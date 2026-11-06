@@ -1,3 +1,4 @@
+import type { ServerMailTest } from '@purlay/types';
 /**
  * Administration → Server over HTTP (D-179 §4.8, `API.md` §2 `/api/server/*`): the operator's settings
  * changed in the browser after the setup — as functions that take a request and say what the response
@@ -14,7 +15,9 @@
  * - **Nothing secret comes back or goes to the log.** The secret is `clientSecret`, the relay's address
  *   `smtpUrl`: names the logger never writes. The view carries `{ set }` and a relay's host.
  */
+import { SettingsChangeFailed } from '../../modules/setup/runtime';
 import {
+  ServerEmptyRequest,
   ServerCreatorsRequest,
   ServerDisconnectRequest,
   OIDC_NAME_MAX,
@@ -40,6 +43,7 @@ import {
   disconnect,
   disconnectGitHubIssuesApp,
   serverSettingsOf,
+  testSavedRelay,
   ServerChangeRefused,
   type ServerAdminDependencies,
 } from '../../modules/setup/server-admin';
@@ -82,6 +86,13 @@ const asAdmin = async <T>(
     try {
       return await work(admin, module);
     } catch (error) {
+      if (
+        error instanceof SettingsChangeFailed &&
+        error.stage === 'save' &&
+        error.cause instanceof AppError &&
+        error.cause.body.code === 'ROUTE_NOT_FOUND'
+      )
+        throw error.cause;
       if (error instanceof ServerChangeRefused) {
         throw new AppError({
           code: 'SERVER_CHANGE_REFUSED',
@@ -317,3 +328,17 @@ export const changeWorkspaceCreators = async (
     await changeCreators(module, admin, workspaceCreators);
   });
 };
+
+export const trySavedServerRelay = async (
+  dependencies: ServerDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ServerMailTest> =>
+  await asAdmin(dependencies, request, async (admin, module) => {
+    validated(ServerEmptyRequest, body);
+    return await testSavedRelay(
+      { ...module, appUrl: dependencies.config.APP_URL },
+      admin,
+      swapping(dependencies).current,
+    );
+  });

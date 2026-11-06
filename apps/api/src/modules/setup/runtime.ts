@@ -303,6 +303,8 @@ export class SettingsChangeFailed extends Error {
 
 /** What a change of the settings needs besides the holder. */
 export interface SettingsChange {
+  /** Server administration revalidates authority under its lock, before the settings row (D-277). */
+  readonly beforeSave?: (transaction: Transaction) => Promise<void>;
   readonly holder: RuntimeHolder;
   readonly cipher: CredentialCipher;
   readonly clock: Clock;
@@ -370,6 +372,7 @@ export const applySettings = async (
     const reached = { commit: false };
     try {
       candidate = await executor.transaction().execute(async (transaction) => {
+        await change.beforeSave?.(transaction);
         await at('save', async () => {
           await saveSettings(transaction, cipher, clock, patch);
           await alongside?.(transaction);

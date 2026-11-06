@@ -64,3 +64,37 @@ else
 fi
 
 die() { echo "$*" >&2; exit 1; }
+
+# Operational evidence only: no archive path, recipient, credentials or content. The API mounts this
+# directory read-only. Empty means the operator has not connected reporting (D-277).
+write_backup_evidence() ( # <dump> <scope: database|database-and-attachments>
+  [ -n "${BACKUP_STATUS_DIRECTORY:-}" ] || exit 0
+  local ttl digest bytes receipt_tmp
+  ttl="${BACKUP_REPORT_MAX_AGE_SECONDS:-172800}"
+  case "$ttl" in '' | *[!0-9]*) die "BACKUP_REPORT_MAX_AGE_SECONDS must be a whole number" ;; esac
+  [ "${#ttl}" -le 8 ] && [ "$ttl" -ge 60 ] && [ "$ttl" -le 31536000 ] || die "backup report maximum age must be between 60 and 31536000 seconds"
+  case "$2" in database | database-and-attachments) ;; *) die "unknown backup report scope" ;; esac
+  digest="$(sha256_check "$1" | cut -c 1-64)"
+  bytes="$(wc -c <"$1" | tr -d ' ')"
+  mkdir -p -m 755 "$BACKUP_STATUS_DIRECTORY"
+  receipt_tmp="$BACKUP_STATUS_DIRECTORY/.backup.$$.tmp"
+  trap 'rm -f "$receipt_tmp"' EXIT
+  printf '{"version":1,"source":"backup-script","completedAt":"%s","scope":"%s","databaseSha256":"%s","databaseBytes":"%s","maxAgeSeconds":%s}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$digest" "$bytes" "$ttl" >"$receipt_tmp"
+  chmod 644 "$receipt_tmp"
+  mv "$receipt_tmp" "$BACKUP_STATUS_DIRECTORY/backup.json"
+)
+
+write_restore_evidence() ( # <dump> <scope: database|database-and-attachments>
+  [ -n "${BACKUP_STATUS_DIRECTORY:-}" ] || exit 0
+  local digest receipt_tmp
+  case "$2" in database | database-and-attachments) ;; *) die "unknown restore report scope" ;; esac
+  digest="$(sha256_check "$1" | cut -c 1-64)"
+  mkdir -p -m 755 "$BACKUP_STATUS_DIRECTORY"
+  receipt_tmp="$BACKUP_STATUS_DIRECTORY/.restore.$$.tmp"
+  trap 'rm -f "$receipt_tmp"' EXIT
+  printf '{"version":1,"source":"restore-script","checkedAt":"%s","scope":"%s","databaseSha256":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$digest" >"$receipt_tmp"
+  chmod 644 "$receipt_tmp"
+  mv "$receipt_tmp" "$BACKUP_STATUS_DIRECTORY/restore.json"
+)

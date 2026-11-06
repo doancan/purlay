@@ -225,6 +225,14 @@ A page open during the roll that meets the `404 ROUTE_NOT_FOUND` of a node witho
 That line needs `REDIS_URL`; without Redis there is one node. **Finish the roll**: a set that stays mixed is a service that
 answers differently by node. A migration that a new module brings applies when the first node of the new set starts.
 
+**Backup evidence in server administration (D-277).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
+
+The production Compose stack passes this optional variable but does not mount a host directory by default. Add the metadata-only read-only API volume through a Compose override and set the container path in `production.env`; setting a path alone does not provide evidence.
+
+For `scripts/backup.sh` and `scripts/restore.sh`, export `BACKUP_STATUS_DIRECTORY` to a metadata-only host directory before running the script. Mount that directory read-only into the API and set the API's variable to its container path. Files are atomically renamed and readable by the API; no archive or credential is published. `BACKUP_REPORT_MAX_AGE_SECONDS` sets the script receipt's expected maximum age (60–31536000, default 172800). It describes the operator's schedule and does not install one. A reporting failure fails the script but keeps a completed backup.
+
+A backup receipt identifies the actual dump by SHA-256 and size and says whether a bucket snapshot is included. A restore receipt is written only after checksum verification, SQL restoration with `--exit-on-error`, the table-count check and any requested bucket import complete. The console matches both the artifact and scope: a database-only restore does not verify a backup's attachment snapshot. This evidence does not replace application-level smoke tests, off-site recovery rehearsals or `scripts/compare-databases.sh`. Missing, malformed, oversized and future-dated receipts never become a success indicator. No web restore operation is provided.
+
 **Backup, restore and D-86.** A backup (`scripts/backup.sh`) holds every table of every set, whether the module runs or
 not, and the migration table with each applied file as `<module>/<file>`. There is no down migration (D-86): going back is
 restoring the backup taken before the upgrade, as in [ARCHITECTURE.md](ARCHITECTURE.md#11-deployment) under "Upgrading and

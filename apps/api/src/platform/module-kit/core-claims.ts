@@ -38,6 +38,21 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/push/subscriptions',
   '/api/push/subscriptions/remove',
   '/api/releases/latest',
+  '/api/admission',
+  '/api/instance',
+  '/api/server/preferences',
+  '/api/server/users/:userId/admission',
+  '/api/server/backups',
+  '/api/server/mail-test',
+  '/api/server/overview',
+  '/api/server/operations',
+  '/api/server/users',
+  '/api/server/users/:userId',
+  '/api/server/users/:userId/admin',
+  '/api/server/users/:userId/revoke-sessions',
+  '/api/server/workspaces',
+  '/api/server/workspaces/:workspaceId/quota',
+  '/api/server/audit',
   '/api/server/accounts',
   '/api/server/accounts/:userId/suspension',
   '/api/server/creators',
@@ -95,7 +110,7 @@ export const CORE_ROUTES: readonly string[] = [
  * The scheduled jobs (`bun run job <name>`) that keep the core's rows tidy and run whichever modules do. A module's own
  * purge or sweep is its `retention` in the manifest, not listed here.
  */
-export const CORE_JOBS: readonly string[] = [
+export const CORE_JOBS = [
   'sweep:orphans',
   'sweep:sessions',
   'reconcile:storage',
@@ -103,7 +118,8 @@ export const CORE_JOBS: readonly string[] = [
   'sweep:exports',
   'purge:workspaces',
   'sweep:deletions',
-];
+] as const;
+export type CoreJobName = (typeof CORE_JOBS)[number];
 
 /** The operations of a client frame the core answers. */
 export const CORE_FRAMES: readonly string[] = ['PING', 'ACTIVE'];

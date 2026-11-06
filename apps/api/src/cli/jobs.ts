@@ -20,6 +20,7 @@
  * It reads the deployment's own configuration, as the API does, so it runs in the same image with
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
+import type { CoreJobName } from '../platform/module-kit/core-claims';
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { compositionFor } from '../composition';
@@ -106,7 +107,7 @@ type Work = JobWorkOn;
  * The core's own jobs. A module's are not listed here: its manifest names them under `jobs` and `retention`, and the
  * work comes with it through the composition (`features/<id>/jobs.ts`, `MODULES.md` §2), so this file names no module.
  */
-const coreJobs: Readonly<Record<string, Work>> = {
+const coreJobs: Readonly<Record<CoreJobName, Work>> = {
   'sweep:orphans': async () =>
     await sweepOrphans({ database, clock, log, storage: storeFor(config) }),
   'sweep:sessions': async () => {

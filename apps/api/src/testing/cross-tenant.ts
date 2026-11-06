@@ -868,6 +868,10 @@ export const WORKSPACE_WIDE_READS: readonly string[] = [
 
 /** Endpoints with no tenant to cross, each with the reason. */
 export const UNSCOPED: Readonly<Record<string, string>> = {
+  'GET /api/instance':
+    'public instance name, support contact and joining requirements; the same for every caller, no workspace or provider configuration (D-277)',
+  'GET /api/admission':
+    'only the caller’s own admission state, including a restricted session; accepts no user or workspace identifier (D-277)',
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'GET /api/client':
     'nobody is signed in yet: what this server is and the oldest client it serves, the same for every caller (D-190)',

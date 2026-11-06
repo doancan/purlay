@@ -228,6 +228,7 @@ const FAILURE_FOR_LIBRARY_CODE: Readonly<
   account_not_linked: { failure: 'email-taken', level: 'info' },
   // A new account on a server whose sign-up is invite-only (D-179 §5).
   signup_disabled: { failure: 'signup-closed', level: 'info' },
+  email_domain_not_allowed: { failure: 'email-domain-not-allowed', level: 'info' },
   unable_to_link_account: { failure: 'failed', level: 'error' },
   unable_to_create_user: { failure: 'failed', level: 'error' },
   unable_to_create_session: { failure: 'failed', level: 'error' },
@@ -531,7 +532,9 @@ export const signOut = async (
   dependencies: SignOutDependencies,
   request: Request,
 ): Promise<AuthResponse> => {
-  const session = await sessionFromHeaders(dependencies.auth, request.headers);
+  const session = await sessionFromHeaders(dependencies.auth, request.headers, {
+    allowPending: true,
+  });
   await signOutOf(dependencies, session?.sessionId);
   return { setCookie: [clearedSessionCookie()] };
 };

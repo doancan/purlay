@@ -12,6 +12,8 @@ const OWNERS: Readonly<Record<RouteName, string | null>> = {
   setup: null,
   setupVerify: null,
   home: null,
+  serverHome: null,
+  serverSection: null,
   workspace: null,
   channel: 'chat',
   questions: 'chat',

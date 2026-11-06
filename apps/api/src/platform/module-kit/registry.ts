@@ -28,6 +28,7 @@ import { templatesOverlap } from './routes';
  */
 export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
   'admin',
+  'admission',
   'api',
   'assets',
   'attachments',
@@ -39,6 +40,7 @@ export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
   'images',
   'integrations',
   'invitations',
+  'instance',
   'me',
   'messages',
   'metrics',

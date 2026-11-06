@@ -36,22 +36,32 @@ const Group = ({
       <ul className="flex flex-col gap-1">
         {sections.map((section) => {
           const here = section.id === current;
-          return (
-            <li key={section.id}>
-              <Link
-                to="settings"
-                params={{ slug: workspace.slug, section: section.id }}
-                {...(here ? { 'aria-current': 'page' as const } : {})}
-                className={cn(
-                  rowClasses,
-                  here
-                    ? 'bg-nav-selected font-semibold text-nav-ink [&>svg]:text-nav-ink'
-                    : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
-                )}
-              >
+          const props = {
+            ...(here ? { 'aria-current': 'page' as const } : {}),
+            className: cn(
+              rowClasses,
+              here
+                ? 'bg-nav-selected font-semibold text-nav-ink [&>svg]:text-nav-ink'
+                : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
+            ),
+            children: (
+              <>
                 <Icon name={section.glyph} />
                 <span className="min-w-0 flex-1 truncate">{t(`settings.${section.id}.nav`)}</span>
-              </Link>
+              </>
+            ),
+          };
+          return (
+            <li key={section.id}>
+              {section.id === 'server' ? (
+                <Link to="serverHome" {...props} />
+              ) : (
+                <Link
+                  to="settings"
+                  params={{ slug: workspace.slug, section: section.id }}
+                  {...props}
+                />
+              )}
             </li>
           );
         })}

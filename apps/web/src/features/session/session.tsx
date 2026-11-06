@@ -13,6 +13,7 @@
  * off (D-239) — draws nothing of the application either, only the screen that turns it on: every other route
  * would answer `403 TWO_FACTOR_REQUIRED`. Turned on, the identity is read again and the gate lets the rest in.
  */
+import { AdmissionScreen, useOwnAdmission } from './admission';
 import { createContext, useContext, useEffect } from 'react';
 import { AppSkeleton } from '../../app/skeleton';
 import { isApiError } from '../../data/errors';
@@ -56,15 +57,68 @@ export const SessionGate = ({
   // A session the page held, now refused, ended — and the sign-in screen says so (#693). A first
   // visit with none did not end anything, and is the plain screen.
   const ended = signedOut && me.data !== undefined;
+  const admission = useOwnAdmission(signedOut);
+  const state = admission.data?.state;
+  const restricted = state === 'pending' || state === 'denied' || state === 'verify-email';
 
   useEffect(() => {
-    if (!signedOut || deciding) return;
+    if (
+      !signedOut ||
+      deciding ||
+      admission.isPending ||
+      admission.isError ||
+      restricted ||
+      state === 'approved'
+    )
+      return;
     if (front && open) navigate(href('setup'), { replace: true });
     else navigate(ended ? `${href('signIn')}?reason=ended` : href('signIn'), { replace: true });
-  }, [signedOut, ended, navigate, deciding, front, open]);
+  }, [
+    signedOut,
+    ended,
+    navigate,
+    deciding,
+    front,
+    open,
+    admission.isPending,
+    admission.isError,
+    restricted,
+    state,
+  ]);
+  useEffect(() => {
+    if (signedOut && state === 'approved') void me.refetch();
+  }, [signedOut, state, me.refetch]);
 
   if (me.isPending) return <AppSkeleton />;
-  if (signedOut) return null;
+  if (signedOut) {
+    if (admission.isPending) return <AppSkeleton />;
+    if (restricted)
+      return (
+        <AdmissionScreen
+          state={state}
+          refreshing={me.isFetching || admission.isFetching}
+          refresh={() => {
+            void me.refetch().then(async () => {
+              await admission.refetch();
+            });
+          }}
+        />
+      );
+    if (admission.isError || state === 'approved')
+      return (
+        <ErrorState
+          title={t('state.session.error.title')}
+          body={t('state.session.error.body')}
+          retryLabel={t('common.retry')}
+          onRetry={() => {
+            void me.refetch().then(async () => {
+              await admission.refetch();
+            });
+          }}
+        />
+      );
+    return null;
+  }
   // A read that fails while the page already holds the person — a reconnect reads them again — keeps
   // the page: a passing 5xx is not a reason to tear down the shell and every composer. A 401 is the
   // end of the session, and goes to sign-in above whatever is held.
