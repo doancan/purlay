@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql, type Kysely, type QueryExecutorProvider } from 'kysely';
 import pg from 'pg';
-import type { Executor } from './client';
+import type { DatabasePool } from './client';
 import { ModulesSettingError, parseModulesSetting, unmetRequirements } from './modules-setting';
 import { DEADLOCK_RETRY, retryOnDeadlock, type Retry, type RetryPolicy } from './retry';
 import { executableText, splitStatements } from './statements';
@@ -408,7 +408,7 @@ export interface MigrateOptions {
 
 /** Idempotent: applying an already-applied migration is a no-op. */
 export const migrateToLatest = async (
-  db: Executor,
+  db: DatabasePool,
   directory = MIGRATIONS_DIRECTORY,
   options: MigrateOptions = {},
 ): Promise<MigrationResultSet> => {

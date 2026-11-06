@@ -257,7 +257,9 @@ export const leasableStandIn = (standIn: Executor, failure: Error): Executor => 
  * An executor on the pool of `database`, every connection of which is first asked of `lease` (`apps/api`'s module
  * budgets). A transaction is returned as it is: it holds its connection already, and a test's joins the test's.
  */
-export const leasingExecutor = (database: Executor, lease: LeaseConnection): Executor => {
+export function leasingExecutor(database: DatabasePool, lease: LeaseConnection): DatabasePool;
+export function leasingExecutor(database: Executor, lease: LeaseConnection): Executor;
+export function leasingExecutor(database: Executor, lease: LeaseConnection): Executor {
   if (isTransaction(database)) return database;
   const known = poolsOfExecutors.get(database);
   if (known === undefined) {
@@ -267,7 +269,7 @@ export const leasingExecutor = (database: Executor, lease: LeaseConnection): Exe
     dialect: new PostgresDialect({ pool: connectionsOf(known, lease) }),
   });
   return known.plugins.reduce((plugged, plugin) => plugged.withPlugin(plugin), leasing);
-};
+}
 
 /** What a connection for migrating needs from the process; the limits are not its to choose. */
 export type MigrationConnection = Pick<
