@@ -114,8 +114,16 @@ export const API_ROOT: readonly Mutation[] = [
     id: 'composition-accepts-a-frame-handler-the-manifest-does-not-name',
     why: 'a module serves an operation its manifest does not list, so a process that does not run it cannot close it, and the operation is in nobody’s claims (D-276)',
     file: 'apps/api/src/composition.ts',
-    find: '  return unowned.length === 0\n',
+    find: '  return unnamed.length === 0\n',
     replace: '  return true\n',
+    tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
+  },
+  {
+    id: 'composition-accepts-a-frame-with-no-handler',
+    why: 'a module lists an operation and serves none, so the router answers its own module’s frame as one nobody has while the manifest says it is the module’s (D-276)',
+    file: 'apps/api/src/composition.ts',
+    find: '  if (unserved.length > 0) {\n',
+    replace: '  if (false as boolean) {\n',
     tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
   },
   {

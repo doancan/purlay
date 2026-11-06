@@ -74,10 +74,6 @@ const ALLOWED: Readonly<
     features: ['chat'],
     why: 'the release route takes the type of chat’s release check',
   },
-  [join('realtime', 'router.ts')]: {
-    features: ['chat'],
-    why: 'the frame router still runs chat’s three operations itself (subscribe and replay, message.send, typing) and the manifest has no field for a module’s frame handler yet; `closedFrame` already answers them as an unknown operation where chat is off',
-  },
   [join('ingress', 'ws', 'socket.ts')]: {
     features: ['chat'],
     why: 'the socket announces presence through chat’s presence service',
