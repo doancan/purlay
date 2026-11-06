@@ -6,12 +6,12 @@
  * position's rule (D-99 §4), for the same reason. From the next message on: what was already told
  * stays told, and a badge is lowered by reading, not by muting.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { NotificationLevel } from '@purlay/types';
 import { channelNotFound, type ChannelContext } from './guard';
 
 export const setNotificationLevel = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   level: NotificationLevel,
 ): Promise<void> => {

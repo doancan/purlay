@@ -12,7 +12,7 @@
  * last two members of a private channel leaving at once, take turns rather than both deciding on
  * what the other is about to change.
  */
-import type { Executor, Transaction } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import { Value } from '@sinclair/typebox/value';
 import {
   ARCHIVED_CHANNELS_MAX,
@@ -38,7 +38,7 @@ import { recordDeparture } from './departures';
 
 /** The channel row, locked for the change about to be made; a direct message is not one to change. */
 const lockNamed = async (
-  executor: Transaction,
+  executor: ChatTx,
   context: ChannelContext,
 ): Promise<{
   readonly name: string;
@@ -95,7 +95,7 @@ export interface Updated {
  * posting rule too, whoever asks: the outcome asked for is already true.
  */
 export const updateChannel = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   input: UpdateChannelRequest,
@@ -195,7 +195,7 @@ export const updateChannel = async (
  * Archived already is the guard's `404`, as for anything gone.
  */
 export const archiveChannel = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
 ): Promise<void> => {
@@ -232,7 +232,7 @@ export const archiveChannel = async (
  * memberships, and a private channel stays unseen by those outside it, archived or not (D-104).
  */
 export const archivedChannels = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
 ): Promise<ArchivedChannel[]> => {
   onlyAdmins(context.role, 'Only an owner or an admin sees archived channels.');
@@ -286,7 +286,7 @@ export interface RestoredChannel {
  * live) is the stranger's `404`, and so is one archived again after a restore raced it.
  */
 export const restoreChannel = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   userId: string,
   channelId: string,
@@ -360,10 +360,7 @@ export const restoreChannel = async (
  * somebody in first, or an admin archives it (D-123). A public channel is anybody's to join, and
  * may be left empty.
  */
-export const leaveChannel = async (
-  executor: Transaction,
-  context: ChannelContext,
-): Promise<boolean> => {
+export const leaveChannel = async (executor: ChatTx, context: ChannelContext): Promise<boolean> => {
   // The membership before the channel row (#669): a send holds the memberships it counts and then
   // takes the channel row, so a leave that took them the other way round deadlocked beside it.
   await executor
@@ -422,7 +419,7 @@ export type Removal = 'left' | 'removed' | null;
  * person's membership, then the channel row (#669).
  */
 export const removeChannelMember = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   userId: string,
@@ -506,7 +503,7 @@ const personNotFound = (): AppError =>
 
 /** Whether a caller of this role may take a person of that role out of this channel (D-172). */
 const mayRemove = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   caller: UserRole,
   target: UserRole,
@@ -526,7 +523,7 @@ const mayRemove = async (
  * seen only by them (D-34). Not paged — at most the workspace's own members, whose list is not.
  */
 export const channelMembers = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<readonly ChannelMember[]> => {
   const rows = await executor

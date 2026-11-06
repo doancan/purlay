@@ -18,7 +18,8 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type ChannelType } from '@purlay/types';
-import { sql, type Database, type Executor, type SelectQueryBuilder } from '@purlay/db';
+import { sql, type SelectQueryBuilder } from '@purlay/db';
+import type { ChatDb, ChatSchema } from '../schema';
 import { isUnsentUploadOf, type ReadableAttachment } from '../../../modules/attachments/readable';
 import { AppError, attachmentNotFound } from '../../../platform/errors';
 import type { WorkspaceContext } from '../../../platform/tenancy';
@@ -67,12 +68,12 @@ interface Scope {
  */
 /** The channels and the joins that decide who may see them; each caller adds what it selects. */
 type VisibilityQuery = SelectQueryBuilder<
-  Database,
+  ChatSchema,
   'channels' | 'workspaces' | 'workspace_members' | 'channel_members',
   object
 >;
 
-const visibleChannels = (executor: Executor, userId: string): VisibilityQuery =>
+const visibleChannels = (executor: ChatDb, userId: string): VisibilityQuery =>
   executor
     .selectFrom('channels')
     .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
@@ -93,7 +94,7 @@ const visibleChannels = (executor: Executor, userId: string): VisibilityQuery =>
     );
 
 const visible = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   scope: Scope,
 ): Promise<readonly VisibleChannel[]> => {
@@ -123,7 +124,7 @@ const mint = (userId: string, channel: VisibleChannel): ChannelContext => ({
  * tell a caller which of the others exist.
  */
 const allOrNothing = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   channelIds: readonly string[],
   workspaceId?: string,
@@ -147,7 +148,7 @@ const allOrNothing = async (
 
 /** Whether the caller is in the channel, not only able to see it (D-104). */
 export const isChannelMember = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<boolean> =>
   (await executor
@@ -169,7 +170,7 @@ export const isChannelMember = async (
  * checked (D-156 §5).
  */
 export const requireChannelMember = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   refusal: string,
 ): Promise<void> => {
@@ -184,7 +185,7 @@ export const requireChannelMember = async (
  * same query rather than a second guard whose refusal has to be translated.
  */
 export const requireChannelById = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   channelId: string,
 ): Promise<ChannelContext> => {
@@ -195,7 +196,7 @@ export const requireChannelById = async (
 
 /** Several channels at once, all or nothing, in one query — what a subscription needs. */
 export const requireChannelsById = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   channelIds: readonly string[],
 ): Promise<readonly ChannelContext[]> => await allOrNothing(executor, userId, channelIds);
@@ -206,7 +207,7 @@ export const requireChannelsById = async (
  * An archived channel, whose memberships are kept (D-123), mints nothing, as it is seen by nobody.
  */
 export const visibleChannelsIn = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
 ): Promise<readonly ChannelContext[]> =>
   (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map((channel) =>
@@ -221,7 +222,7 @@ export const visibleChannelsIn = async (
  * a few channels instead of the whole tenant (D-34).
  */
 export const visibleChannelIds = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
 ): Promise<readonly string[]> =>
   (await visibleChannelsIn(executor, context)).map((channel) => channel.channelId);
@@ -253,7 +254,7 @@ export interface VisibleMessage {
  * which is what `deleted: 'include'` is for.
  */
 export const requireMessageById = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   messageId: string,
   options: {
@@ -296,7 +297,7 @@ export const requireMessageById = async (
  * the message is deleted: the tombstone hides what was shown with the words.
  */
 export const requireAttachmentById = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   attachmentId: string,
 ): Promise<ReadableAttachment> => {

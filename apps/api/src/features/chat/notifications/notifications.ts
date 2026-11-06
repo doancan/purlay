@@ -16,7 +16,8 @@
  * replies, by the same path, since that is all reading a thread changes.
  */
 import { notHiddenBy } from '../messages/hidden';
-import { sql, type Executor, type RawBuilder, type Transaction } from '@purlay/db';
+import { sql, type RawBuilder } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import type {
   ChannelState,
   NotificationPage,
@@ -63,7 +64,7 @@ const quoted = (content: string): string | null => {
  * page for a cursor that names nothing would look exactly like the end of the inbox.
  */
 const cursorOf = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   workspaceId: string,
   id: string,
@@ -92,7 +93,7 @@ const cursorOf = async (
  * time (UUIDv7); then by the notification's own id, so the order is total and a cursor exact.
  */
 export const inboxOf = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
   visible: readonly string[],
   query: NotificationQuery,
@@ -185,7 +186,7 @@ export const inboxOf = async (
  * not read and not reported: the answer is the same whether they exist or not.
  */
 export const readNotifications = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   userId: string,
   input: ReadNotificationsRequest,
@@ -222,7 +223,7 @@ export const readNotifications = async (
  * does not (`API.md` §5). Nothing else is stored: the bound is only a bound.
  */
 export const readThreadNotifications = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   userId: string,
   rootId: string,
@@ -247,7 +248,7 @@ export const readThreadNotifications = async (
 
 /** Marks these of the caller's notifications read and counts each channel touched again. */
 const readAndCount = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   userId: string,
   targets: readonly { readonly id: string; readonly channel_id: string }[],

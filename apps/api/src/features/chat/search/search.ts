@@ -19,11 +19,10 @@ import { notHiddenBy } from '../messages/hidden';
 import {
   sql,
   type AliasableExpression,
-  type Database,
-  type Executor,
   type Expression,
   type SelectQueryBuilder,
 } from '@purlay/db';
+import type { ChatDb, ChatSchema } from '../schema';
 import {
   SEARCH_QUERY_MIN,
   type MessagePage,
@@ -66,8 +65,8 @@ export const validateSearch = (query: SearchCriteria): void => {
 
 /** `messages` and the message each one replies to, which has no columns where it replies to none. */
 type MessagesWithParent = SelectQueryBuilder<
-  Database & {
-    parent: { [Column in keyof Database['messages']]: Database['messages'][Column] | null };
+  ChatSchema & {
+    parent: { [Column in keyof ChatSchema['messages']]: ChatSchema['messages'][Column] | null };
   },
   'messages' | 'parent',
   object
@@ -108,7 +107,7 @@ const inAcceptedAnswer = (pattern: string): Expression<boolean> =>
  * index, whichever the planner finds the smaller.
  */
 export const searchIn = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
   visible: readonly string[],
   query: SearchQuery,

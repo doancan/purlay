@@ -11,7 +11,7 @@
  * it was and what it became; the same setting again writes nothing. A direct message has none: it is the
  * stranger's `404`, as every channel setting answers one (D-123).
  */
-import type { Transaction, Executor } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import type { ChannelRetention, ChannelRetentionFloor } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { channelNotFound, type ChannelContext } from './guard';
@@ -43,13 +43,13 @@ const floorOf = (row: {
 const said = (floor: ChannelRetentionFloor): string =>
   floor === null ? 'workspace' : String(floor);
 
-const requireOwner = async (executor: Executor, context: ChannelContext): Promise<void> => {
+const requireOwner = async (executor: ChatDb, context: ChannelContext): Promise<void> => {
   const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
   if (role !== 'owner') throw ownersOnly();
 };
 
 const workspaceDaysOf = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   lock: boolean,
 ): Promise<number | null> => {
@@ -64,7 +64,7 @@ const workspaceDaysOf = async (
 };
 
 export const readChannelRetention = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<ChannelRetention> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
@@ -85,7 +85,7 @@ export const readChannelRetention = async (
  * at once each record what the other left); the role is read again under them, as a rename does (#527).
  */
 export const setChannelRetention = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   keepsAtLeast: ChannelRetentionFloor,

@@ -16,7 +16,8 @@
  */
 import { erasedPerson } from '@purlay/types';
 import { recordAudit } from '../../../modules/audit/audit';
-import { sql, type Executor, type Transaction } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import type { Channel } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
@@ -144,7 +145,7 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
  * to self the pair is the same id twice, so the caller is their own peer (D-6, I-5).
  */
 const readChannels = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   only: { readonly ids?: readonly string[]; readonly id?: string },
 ): Promise<readonly ChannelRow[]> => {
@@ -236,7 +237,7 @@ const readChannels = async (
 
 /** One channel as one person sees it — what a create, a join and a direct message answer with. */
 export const channelFor = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   channelId: string,
 ): Promise<Channel> => {
@@ -262,7 +263,7 @@ export interface NewChannel {
  * for.
  */
 export const createChannel = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: WorkspaceContext,
   input: NewChannel,
@@ -318,7 +319,7 @@ export const createChannel = async (
  * the fact, which is the shape D-34 requires of every workspace-wide read.
  */
 export const channelsVisibleIn = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
 ): Promise<readonly Channel[]> => {
   const visible = await visibleChannelIds(executor, context);
@@ -330,7 +331,7 @@ export const channelsVisibleIn = async (
 };
 
 /** The channel the context was minted for. There is no other one it could return. */
-export const channelIn = async (executor: Executor, context: ChannelContext): Promise<Channel> =>
+export const channelIn = async (executor: ChatDb, context: ChannelContext): Promise<Channel> =>
   await channelFor(executor, context.userId, context.channelId);
 
 /**
@@ -342,7 +343,7 @@ export const channelIn = async (executor: Executor, context: ChannelContext): Pr
  */
 /** Joins a public channel; answers whether this call is what joined it — a second is a no-op. */
 export const joinChannel = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   context: ChannelContext,
 ): Promise<boolean> => {

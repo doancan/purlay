@@ -3,13 +3,14 @@
  * leaves which, and how long they are kept. The queries are the ones the workspace code ran itself before it
  * stopped naming chat's tables.
  */
-import { tableExists, type Executor } from '@purlay/db';
+import { tableExists } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { visibleChannelIds } from './guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import type { WorkspaceChannels } from '../../../modules/workspaces/channels-port';
 
 const leaveAll = async (
-  executor: Executor,
+  executor: ChatDb,
   workspaceId: string,
   userId: string,
 ): Promise<readonly string[]> => {
@@ -39,11 +40,7 @@ const leaveAll = async (
 export const chatWorkspaceChannels: WorkspaceChannels = {
   leaveAll,
 
-  keptLonger: async (
-    executor: Executor,
-    context: WorkspaceContext,
-    retentionDays: number | null,
-  ) => {
+  keptLonger: async (executor: ChatDb, context: WorkspaceContext, retentionDays: number | null) => {
     if (retentionDays === null) return 0;
     const row = await executor
       .selectFrom('channels')
@@ -56,7 +53,7 @@ export const chatWorkspaceChannels: WorkspaceChannels = {
     return Number(row.count);
   },
 
-  idsIn: async (executor: Executor, workspaceId: string) =>
+  idsIn: async (executor: ChatDb, workspaceId: string) =>
     (
       await executor
         .selectFrom('channels')

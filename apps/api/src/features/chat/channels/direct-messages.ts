@@ -14,7 +14,7 @@
  * never change: there is no adding to a conversation and no leaving one — more people is another
  * conversation (D-127).
  */
-import type { Transaction } from '@purlay/db';
+import type { ChatTx } from '../schema';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
@@ -47,7 +47,7 @@ export const directMessageKey = (a: string, b: string): string => conversationKe
  * everybody but the caller — or the caller alone, for a note to self.
  */
 export const openConversation = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: WorkspaceContext,
   others: readonly string[],
@@ -139,7 +139,7 @@ export interface OpenedDirectMessage {
 
 /** The conversation of two — `POST …/dms`, as it was before groups. */
 export const openDirectMessage = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: WorkspaceContext,
   peerId: string,
