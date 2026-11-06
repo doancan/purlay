@@ -99,6 +99,135 @@ export const CORE_COLUMNS_A_SET_CHANGES: readonly string[] = [
   'attachments.channel_id',
 ];
 
+/** A column of a core table that exists for one module (`MODULES.md` §5, D-275). */
+export interface CoreColumnForAModule {
+  /** The module the column is for: its own files may name it, and the core's only where `coreFiles` says. */
+  readonly module: Exclude<TableOwner, 'core'>;
+  readonly why: string;
+  /**
+   * The core's files that may name the column, as paths from `apps/api/src`: the route that sets it, the erasure that
+   * clears it, the export that lists it. A file outside this list that names it fails `core-columns.test.ts`.
+   */
+  readonly coreFiles: readonly string[];
+}
+
+/**
+ * The columns of core tables that only one module uses, as `table.column`: kept where they are, because moving them is a
+ * migration with a risk and nobody feels the pain (D-275). **This list may only shrink**: a module adds no column to a
+ * core table (the cells test and `core-columns.test.ts` refuse it), `core-columns.test.ts` fixes its length, and a column
+ * that moves to a table of its module's own is deleted from here in the change that moves it. D-275 says when one must.
+ */
+export const CORE_COLUMNS_FOR_A_MODULE: Readonly<Record<string, CoreColumnForAModule>> = {
+  'server_settings.github_app_client_id': {
+    module: 'chat',
+    why: 'the id of the GitHub App chat’s integration signs in as; the Administration page that keeps it is the core’s',
+    coreFiles: ['modules/setup/settings.ts'],
+  },
+  'server_settings.github_app_client_secret_encrypted': {
+    module: 'chat',
+    why: 'the GitHub App’s client secret, sealed; read by chat’s integration, kept by the core’s Administration page',
+    coreFiles: ['modules/setup/settings.ts'],
+  },
+  'server_settings.github_app_id': {
+    module: 'chat',
+    why: 'the number of the GitHub App chat’s integration is installed as',
+    coreFiles: ['modules/setup/settings.ts'],
+  },
+  'server_settings.github_app_private_key_encrypted': {
+    module: 'chat',
+    why: 'the GitHub App’s private key, sealed, with which chat’s integration asks for installation tokens',
+    coreFiles: ['modules/setup/settings.ts'],
+  },
+  'server_settings.github_app_slug': {
+    module: 'chat',
+    why: 'the GitHub App’s address on GitHub, which chat’s integration links people to',
+    coreFiles: ['modules/setup/settings.ts'],
+  },
+  'server_settings.github_app_webhook_secret_encrypted': {
+    module: 'chat',
+    why: 'the secret GitHub signs chat’s webhook deliveries with, sealed',
+    coreFiles: ['modules/setup/settings.ts'],
+  },
+  'users.away_chosen': {
+    module: 'chat',
+    why: 'whether the person chose to show as away, which chat’s presence shows to the others',
+    coreFiles: [
+      'modules/users/away.ts',
+      'modules/workspaces/workspaces.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'users.missed_mail_since': {
+    module: 'chat',
+    why: 'the instant from which chat’s missed-mail job counts what waited unread for the person, and the one write chat makes to a core row',
+    coreFiles: [
+      'modules/users/erasure.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'users.quiet_days': {
+    module: 'chat',
+    why: 'the days of the week of the person’s quiet hours, which hold back chat’s push and mail',
+    coreFiles: [
+      'modules/users/quiet-hours.ts',
+      'modules/workspaces/deep-work.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'users.quiet_from': {
+    module: 'chat',
+    why: 'the hour the person’s quiet hours begin, which hold back chat’s push and mail',
+    coreFiles: [
+      'modules/users/quiet-hours.ts',
+      'modules/workspaces/deep-work.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'users.quiet_to': {
+    module: 'chat',
+    why: 'the hour the person’s quiet hours end, which hold back chat’s push and mail',
+    coreFiles: [
+      'modules/users/quiet-hours.ts',
+      'modules/workspaces/deep-work.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'workspace_members.deep_work_until': {
+    module: 'chat',
+    why: 'when the person’s Deep Work ends, which chat’s notifications and reminders wait for',
+    coreFiles: [
+      'modules/workspaces/deep-work.ts',
+      'modules/workspaces/workspaces.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'workspace_members.is_deep_work_active': {
+    module: 'chat',
+    why: 'whether the person is in Deep Work, which holds back chat’s notifications',
+    coreFiles: [
+      'modules/workspaces/deep-work.ts',
+      'modules/workspaces/workspaces.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+  'workspaces.retention_days': {
+    module: 'chat',
+    why: 'how many days of messages chat’s purge keeps, set from the core’s workspace settings',
+    coreFiles: [
+      'modules/workspaces/retention.ts',
+      'modules/export/core-export.ts',
+      'modules/export/core-personal-export.ts',
+    ],
+  },
+};
+
 /**
  * The enum types of the core that a module's set may alter, as `set:type`: `ALTER TYPE ... ADD VALUE` changes
  * what the core's columns accept without changing a column, so `CORE_COLUMNS_A_SET_CHANGES` does not see it. The
