@@ -324,6 +324,20 @@ const VIOLATIONS: readonly Violation[] = [
       "import { systemClock } from '../../api/src/platform/clock';\n\nexport const use = (): unknown => systemClock;\n",
   },
   {
+    rule: 'a web module: the core imports no module but through the registry (D-277)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/web/src/features/shell/__enforcement__.ts',
+    source:
+      "import { screens } from '../chat/chat';\n\nexport const use = (): unknown => screens;\n",
+  },
+  {
+    rule: 'a web module: a module imports no other module (D-277)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/web/src/features/chat/__enforcement__.ts',
+    source:
+      "import { IssuesScreen } from '../issues/issues-screen';\n\nexport const use = (): unknown => IssuesScreen;\n",
+  },
+  {
     rule: 'the markdown reading runs in the browser: no Node module (D-101)',
     ruleId: 'no-restricted-imports',
     path: 'packages/markdown/src/__enforcement__.ts',
