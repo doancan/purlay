@@ -6,7 +6,7 @@
  * sidebar that ordered them differently from the key that steps through them would
  * make "next unread" mean something nobody can see.
  */
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import type { Channel } from '@purlay/types';
 import { joinedChannels, starredChannels } from '../sidebar/ordering';
 

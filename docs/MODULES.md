@@ -831,8 +831,8 @@ so a lazy boundary cannot take it out without restructuring them. A second lazy 
 was built and measured: the shell went from 242.62 to 237.80 KB gzipped (2%), narrow cold load unchanged
 (63.4 vs 62.4 ms mean of three medians of five, local), wide about 4 ms slower on average, inside the 60–78 ms
 spread but pointing the wrong way in five of six runs. Not worth a second layout-fallback surface, so it was
-reverted; the helpers that merely live in chat folders (`messages/author`, `palette/channels`, `composer/outbox`,
-`channel/feed-ports`) save no bytes when moved and stay. The shape check therefore names the screens and the
+reverted; the helpers that merely live in chat folders (`palette/channels`, `composer/outbox`,
+`channel/feed-ports`) save no bytes when moved and stay (`messages/author` moved to `lib/author`, which is not chat's). The shape check therefore names the screens and the
 heavy modules, not every chat-named file; a module with a larger share of its code in the shell would earn the
 second chunk.
 

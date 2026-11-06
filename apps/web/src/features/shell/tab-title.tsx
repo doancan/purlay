@@ -9,7 +9,7 @@
  * entry the badges read, so the two cannot disagree; and in Deep Work, where the badges are not
  * drawn, the title does not count either.
  */
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import { useEffect } from 'react';
 import type { Channel } from '@purlay/types';
 import { useChannels } from '../../data/queries';

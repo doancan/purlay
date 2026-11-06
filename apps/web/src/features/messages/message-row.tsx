@@ -37,7 +37,7 @@ import { MessageCards } from '../content/message-cards';
 import { GitHubEventCard } from '../content/github-event';
 import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
-import { authorOf, isMine } from './author';
+import { authorOf, isMine } from '../../lib/author';
 import { EditedMark } from './edit-history';
 import { ReactionBar } from './reactions';
 import { MessageEditor, useEditing } from './editing';

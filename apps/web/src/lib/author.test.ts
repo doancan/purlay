@@ -3,7 +3,7 @@
  * own, and stands alone in a run of messages.
  */
 import { describe, expect, test } from 'bun:test';
-import { ALICE, ME } from '../../testing/fixtures';
+import { ALICE, ME } from '../testing/fixtures';
 import { erasedPerson } from '@purlay/types';
 import { authorOf, isMine, nameOf, sameAuthor } from './author';
 
