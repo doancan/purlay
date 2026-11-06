@@ -426,16 +426,21 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   same scenario cost 18 to 23 times on a laptop (727–774 ms against 33–39 ms). That a CI runner without the
   budget is at least as bad is expected, not measured. **So a busy issues module still costs chat up to about
   three times its p95 on a two-core shared host — database backends and CPU contention, which the share of the
-  pool does not remove — and that is not starvation and is not refused.** **Built for chat with issues busy**, one
-  direction: both modules have a share, but the harness measures chat's sends under issues' load and not issues' list under chat's.
-  The other direction (D-250 rule 6 asks for both) is **not built**: `measureLatency` (`cli/budget-latency.ts`) starts one API on a
-  clone, makes a sender, a listener, a channel and two sockets and times `MESSAGE_SEND` acknowledgements, so the reverse is a second
-  mode that times `GET /api/workspaces/:id/issues` instead, with readers that hold chat's share (more of them than its connections)
-  while a chat table is locked in turns, its own quiet trials, a starvation factor measured for that direction on the CI runner, and
-  the gate's outputs (`--write`, the JSON, the report). That is more than a small change to the harness, so it waits; CPU and event-loop time
-  are shared by every module in a process, so a module that serves a great many requests, or heavy ones, can
-  still slow chat's sends on a shared process, budget or no budget (an unpaced reader of issues' list, three
-  hundred requests a second, tripled chat's p95 on a laptop);
+  pool does not remove — and that is not starvation and is not refused.** **The other direction is built, in the same
+  harness** (D-250 rule 6 asks for both): `HOT_PATHS` in `cli/budget-latency.ts` says, for each bundled module, how its
+  hot path is timed and how the module is made busy, or why it has none. Chat's is the send above; **issues' is the list of a
+  workspace's issues through its route** (`GET /api/workspaces/:id/issues`, fifty issues, sixty reads a trial), timed while twelve
+  people send messages one at a time with a pause between, more than chat's share of connections, while `messages` is locked in
+  turns, so that chat holds all of its share throughout. It is judged as the quiet trials are (D-267): the lowest of three
+  independent processes' p95 against the number recorded for it in the baseline file (`loaded`, `issues/list`), failing past
+  the factor of 1.5, 10 ms and 20 ms, measured again once (D-227); a baseline from before it existed is not compared and the
+  run records one. Measured locally, with chat's budget as it is, the list answered in **4 to 12 ms** (p95, nobody
+  refused; 9 to 22 ms with the machine at twice its cores in load); with chat's share made all but the whole pool it took **753 to 781 ms**, which the gate fails. A module added
+  without a line in the table fails `budget-latency.test.ts`, and one with no hot path is a line there with its reason
+  (empty today), as for `module-budgets.test.ts`; the gate takes about fifteen seconds more (68 s before, 77 to 80 s after, on a laptop). **Not measured:** the CPU and the
+  event loop. They are shared by every module in a process, so a module that serves a great many requests, or heavy ones, can
+  still slow chat's sends and issues' list, budget or no budget (an unpaced reader of issues' list, three hundred requests a
+  second, tripled chat's p95 on a laptop): the share is of the pool, and the gate catches what the pool's connections cost;
 - metrics and logs name the module. **Built**: the HTTP request histogram and the scheduled-job series carry `module`
   (`core`, a module id, or `none` for a route no one owns), read from the core's claims and the manifests' `routes` and
   `jobs` (`platform/module-kit/ownership.ts`), the request line and `request failed` carry it for a module's route, a
@@ -488,7 +493,7 @@ until then it is a stated intent and not a guarantee.
 | A core migration keeps module schemas valid | `migration-cells.integration.test.ts` migrates each set on the core at head and `upgrade.integration.test.ts` migrates from the previous state by hand-written rows; and CI's `modules` job runs `bun run modules:upgrade` (`testing/module-upgrade.ts`): `packages/db` as the **last release tag** has it is extracted with `git archive`, its own migrator makes a database under each `MODULES` an operator could have kept (the cell's modules that release carried, and everything it carried), a copy of each is migrated to head under every cell of the matrix, and each must exit `0` and record the core's files and the cell's sets — an edited released migration fails it by checksum. `module-upgrade.integration.test.ts` runs the same on a release made from this tree less its newest migrations, and the mutations `upgrade-check-starts-from-an-empty-database` and `upgrade-check-migrates-the-core-alone` hold it — **built**. Not covered: a release that wrote rows (the check migrates the schema the release's migrator makes, empty, so a migration that fails only on data is `upgrade.integration.test.ts`'s and `migration-safety.test.ts`'s), and the tag's own dependencies (its migrator runs on the kysely and pg this tree installed) | 10 |
 | One module set in a cluster; a rolling deploy still passes | each node's set in the shared Redis record (`realtime/module-set.ts`), a log line when nodes differ and nothing else, a two-process test with different sets; no bus channel per set, which would stop a sign-out reaching the other set's sockets — **built** | 12 |
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release` (`manifests:snapshot`): no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
-| Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** in one direction (chat's sends while issues is busy; both modules have a share, D-269, and issues' list while chat is saturated is not measured); it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
+| Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** in both directions (chat's sends while issues is busy, and issues' list while chat is saturated, which is judged on its own recorded number, D-267; CPU and event-loop share are not measured); it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if any file of a module's folder is in it (derived from the folder: less what the core may import and what that imports statically, `screenSources`; D-277), or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
 | A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/`, its `http/` included, and the files of `ingress/` that import it) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
 | A suite that is about no module passes whichever modules run; one that needs a module says so | `bun run modules:suites` (CI's `module-suites` job): for each cell but the one with every module, the integration suites that need no module the cell lacks run on a database of only the cell's sets with `MODULES` set, which the harness reads (`@purlay/db`'s `testing.ts` migrates `setsNamedBy(MODULES)`, `testDependencies` composes `compositionFor(MODULES)`). What a suite needs is what it imports of `features/<id>/` (its own helpers included) and what it declares, `// @needs-modules chat` in the file or a helper, or `testNeeding('chat')(…)` for one test (`testing/module-needs.ts`, `testing/needs.ts`); `module-suites.test.ts` holds every declared id to the build's modules and leaves at least the suites that import nothing in every cell — **built**; mutations `harness-ignores-modules-for-the-schema` and `harness-composes-every-module` | 12 |
@@ -666,6 +671,12 @@ commit beside this list.
   a module with a `poolShare` and no test at that path (or the one path its table of exceptions gives, which only shrinks) and
   for a test whose header does not name the module; it does not run the test or read what it asserts, so that the share is
   filled and the others answered is held by review.
+- **Its hot path in `budget:latency`**: a line of `HOT_PATHS` in `cli/budget-latency.ts` (D-250 rule 6): how to time the
+  module's hot path through its real route or frame, and how to make the module busy up to its share (copy `issues`: people
+  asking, the table its statements use locked in turns), or `{ none: '<reason>' }`, which is also a line in
+  `WITHOUT_A_HOT_PATH` of `budget-latency.test.ts`. **`budget-latency.test.ts` fails for a bundled module with no line**, for a
+  `none` that is not listed, and for one listed that has a path. The gate then times the module's path while every other
+  module with a line is busy, against the number recorded for it in the baseline file.
 - **No door names a module's files**: `cli/` imports no file under `features/` but `erase-content.ts`'s one (the single allow-listed entry, which a module's own command would join only with a manifest field to go through), and no file of `ingress/` imports a module's
   folder but the ones listed in `ALLOWED` in `module-seams.test.ts` (the list only shrinks and its cap with it; a new module's
   handlers are in its own folder (`features/<id>/http/`, which the fence lets import the framework and what `ModuleRouteDependencies` names, widened in a line a reviewer reads) and are not an entry, and a core route file that needs the module is a port or a manifest
@@ -1042,7 +1053,7 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 - **Smoke test and matrix cell.** `module-lifecycle.integration.test.ts` for every lifecycle step in each state of the database (core alone, chat's set, issues' set, every set) against each process,
   `modules-off.integration.test.ts` for the routes per cell, and a real process per `MODULES` in
   `migrate-on-start.integration.test.ts`.
-- **Latency.** No hot path: it is not on the chat's send path, and a list of the workspace's issues is one indexed read.
+- **Latency.** Its hot path is the list of a workspace's issues, an indexed read, and `budget:latency` times it through its route while chat is saturated (§7), against its own recorded number.
 - **What a user sees for each partner that is absent.** There are no partners.
 - **Removal threshold.** Decided by the owner at each release, against the measured use. A measurable rule is needed
   before a package is sold (§10, *Before a package is sold*); there is none yet. Its table stays until an operator drops
