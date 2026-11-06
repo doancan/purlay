@@ -13,7 +13,7 @@ import {
   publishAfterCommit,
   publishMessageVersionsUpdated,
 } from '../../../platform/events';
-import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 import { queryOf, validated } from '../../../ingress/http/validate';
 

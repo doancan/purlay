@@ -12,15 +12,15 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { MESSAGE_CONTENT_MAX, MESSAGE_ID_SKEW, Message, messageId } from '@purlay/types';
-import { createApp } from './app';
-import { aRecordingLogger, testDependencies } from '../../testing/doubles';
-import { fixedClock } from '../../platform/clock';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { atomicallyOn } from '../../platform/transactions';
-import { aMemoryStore } from '../../testing/storage';
-import { storeUpload } from '../../modules/attachments/uploads';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
+import { createApp } from '../../../ingress/http/app';
+import { aRecordingLogger, testDependencies } from '../../../testing/doubles';
+import { fixedClock } from '../../../platform/clock';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
+import { aMemoryStore } from '../../../testing/storage';
+import { storeUpload } from '../../../modules/attachments/uploads';
+import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

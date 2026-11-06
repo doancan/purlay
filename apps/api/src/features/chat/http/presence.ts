@@ -7,7 +7,7 @@ import type { ModuleRouteDependencies } from '../../../ingress/http/module-route
 import type { PresenceSnapshot } from '@purlay/types';
 import { workspacePresence, type OnlineReader } from '../presence/presence';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
-import type { ChannelDependencies } from '../../../ingress/http/channels';
+import type { ChannelDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 
 const readPresence = async (

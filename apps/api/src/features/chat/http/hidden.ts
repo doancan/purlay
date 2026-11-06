@@ -14,7 +14,7 @@ import {
   userTopic,
 } from '../../../platform/events';
 import { atomicallyOn } from '../../../platform/transactions';
-import type { ChannelWriteDependencies } from '../../../ingress/http/channels';
+import type { ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 
 export const hideMyMessage = async (

@@ -6,7 +6,9 @@
 import { Elysia, type AnyElysia } from 'elysia';
 import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import { bookmarkRoutes } from './bookmarks';
+import { channelRoutes } from './channels';
 import { hiddenRoutes } from './hidden';
+import { messageRoutes } from './messages';
 import { pinRoutes } from './pins';
 import { reactionRoutes } from './reactions';
 import { savedRoutes } from './saved';
@@ -22,6 +24,8 @@ import { versionRoutes } from './versions';
 export const chatRoutes = (context: ModuleRouteDependencies): AnyElysia =>
   new Elysia()
     .use(bookmarkRoutes(context))
+    .use(channelRoutes(context))
+    .use(messageRoutes(context))
     .use(hiddenRoutes(context))
     .use(pinRoutes(context))
     .use(reactionRoutes(context))

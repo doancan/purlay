@@ -9,7 +9,7 @@ import { requireLiveSession } from '../../../modules/auth/sessions';
 import { cancelScheduledMessage, scheduleMessage, scheduledMessages } from '../scheduled/scheduled';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';
-import type { ChannelDependencies } from '../../../ingress/http/channels';
+import type { ChannelDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
 
