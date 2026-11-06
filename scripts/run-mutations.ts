@@ -41,4 +41,9 @@ if (chosen.length === 0) {
 }
 const verdicts = runMutations({ root: join(import.meta.dir, '..'), mutations: chosen });
 console.log(report(verdicts));
-process.exit(acceptable(verdicts) ? 0 : 1);
+// A changed entry must demonstrate a failing test; legacy declared equivalents remain valid in the full list.
+const passed =
+  changedSince === undefined
+    ? acceptable(verdicts)
+    : verdicts.every((verdict) => verdict.outcome === 'caught');
+process.exit(passed ? 0 : 1);

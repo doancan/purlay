@@ -363,6 +363,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/mutations.test.ts'],
   },
   {
+    id: 'mutation-command-changed-allows-declared-equivalence',
+    why: 'a new or edited mutation can survive and pass CI by declaring equivalence instead of demonstrating a failing test',
+    file: 'scripts/run-mutations.ts',
+    find: "verdicts.every((verdict) => verdict.outcome === 'caught')",
+    replace: 'acceptable(verdicts)',
+    tests: ['scripts/run-mutations.test.ts'],
+  },
+  {
     id: 'prune-wal-keeps-from-the-newest-base-backup',
     why: 'the archive is cut at the newest base backup and every older one in the retention window can no longer be restored to',
     file: 'scripts/prune-wal.sh',

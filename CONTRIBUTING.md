@@ -230,7 +230,8 @@ What belongs here is the discipline around them:
   `mutations.yml`, sharded by area file (`bun run mutate --shard=2/12`), which is not a required check: a survivor or a
   stale entry turns the run red and opens one tracking issue. In between, a test weakened by a change that
   touches no entry is seen at the next weekly run. `bun run mutate --changed=origin/main` runs the pull request's job
-  locally.
+  locally. Declared equivalents already in the list remain accepted by a full or weekly run, with their recorded
+  reason; a new or edited equivalent cannot satisfy the changed-entry job.
 - **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
   budget regression is a defect, not a threshold to adjust.
 - **See it, and test it, the way it is deployed.** `bun run demo` builds the client, recreates a

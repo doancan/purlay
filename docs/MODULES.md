@@ -463,6 +463,8 @@ an entry that no test fails on cannot merge. Every other entry is applied by the
 (`mutations.yml`, not a required check), which turns red and opens one tracking issue on a survivor or a stale entry. Between
 the two, a test weakened by a pull request that touches no entry is seen at the next weekly run, not on the pull
 request; `mutations.test.ts` on every `verify` only proves each entry still applies once and names tests that exist.
+The full or weekly run retains an existing declared equivalent with its recorded reason; the changed-entry job
+requires every selected entry to be caught, even if it declares equivalence.
 
 | Rule | Held by | Built in |
 |---|---|---|
