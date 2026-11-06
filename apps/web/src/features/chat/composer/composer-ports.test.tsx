@@ -70,7 +70,7 @@ describe('a device that is only touch', () => {
   });
 
   test('is the line the stylesheet hides a key at: one query, so a hint never names a key Enter is not', () => {
-    const stylesheet = readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+    const stylesheet = readFileSync(new URL('../../../index.css', import.meta.url), 'utf8');
     expect(stylesheet).toContain(`@custom-variant touch-only (@media ${TOUCH_ONLY_QUERY});`);
   });
 });

@@ -621,7 +621,7 @@ commit beside this list.
 - **Gating by `useRuns`** (or `WhenRun`) stays for what a manifest does not describe: a sidebar section, a request that
   would otherwise be answered with `404`.
 - Still per module: the icon (`components/icon.tsx`), the client (`data/api.ts`, `data/keys.ts`), the failure words for
-  its error codes (`data/failure.ts`, and the exhaustive switch in `composer/uploads.tsx`), and the English and Turkish
+  its error codes (`data/failure.ts`, and the exhaustive switch in `features/chat/composer/uploads.tsx`), and the English and Turkish
   catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
 - **`budget:web` shape check**: it reads the module ids from `features/*/manifest.ts` and looks for each one's marker,
   `screen-of-the-<id>-module`, in the initial chunks; the screen's file holds the marker. A bound for the chunk is added

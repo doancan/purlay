@@ -20,7 +20,7 @@ import type * as DoorModule from './row-menu';
 
 installDom();
 
-const DEFERRED = '../../app/deferred';
+const DEFERRED = '../../../app/deferred';
 const UNAVAILABLE = 'The menu did not open. Check your connection and try again.';
 
 const real = { ...(await import('../../../app/deferred')) };

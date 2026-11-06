@@ -22,7 +22,7 @@ import type * as DoorModule from './image-viewer-door';
 
 installDom();
 
-const DEFERRED = '../../app/deferred';
+const DEFERRED = '../../../app/deferred';
 const UNAVAILABLE = 'The image viewer did not open. Check your connection and try again.';
 
 // Its exports, held apart from the module: a mock replaces what the module's own record holds.

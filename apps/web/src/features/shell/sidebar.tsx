@@ -5,7 +5,7 @@
  * Flat, `w-sidebar` wide, in the navigation tone it shares with the rail, and divided from the
  * conversation by one hairline. Sections scroll together when there are more channels than the
  * window is tall; the header and footer do not. Each section owns its own loading, failure and
- * empty state (`features/sidebar/*`), so a channel list that cannot load does not take the people
+ * empty state (`features/chat/sidebar/*`), so a channel list that cannot load does not take the people
  * or the header with it. Inside the narrow window's overlay it is the panel beside the rail, so
  * it drops the hairline: the dialog is the edge there.
  */

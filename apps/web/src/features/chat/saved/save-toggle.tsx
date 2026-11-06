@@ -2,7 +2,7 @@
  * Save, beside React on a message (#484, D-128) and again in its More menu (D-150): a message kept to
  * come back to, on any message one can read.
  *
- * **Two layers, never mixed** (D-18), as Pin holds them (`features/pins/use-pin.ts`). What the server
+ * **Two layers, never mixed** (D-18), as Pin holds them (`features/chat/pins/use-pin.ts`). What the server
  * says is the workspace's list of saves (`GET …/saved/ids`), read once and kept by the cache; another
  * tab's change arrives as `SAVED_UPDATED`, which reads it again. It is never written to from here.
  * What the person has asked and the server has not yet answered is an *intent*, held beside it for
