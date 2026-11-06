@@ -10,8 +10,9 @@
  * first. Tests are not held to this: they build a room in a module and read its rows.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { describe, expect, test } from 'bun:test';
+import { featuresImportedBy } from './testing/module-sources';
 
 const SOURCE_ROOT = import.meta.dir;
 const FEATURES = join(SOURCE_ROOT, 'features');
@@ -84,22 +85,19 @@ const ALLOWED: Readonly<
   },
 };
 
+/**
+ * The sizes `ALLOWED` may have: all of it, and the part in `cli/`, where a command of a module has no manifest field to
+ * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
+ * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
+ */
+const MAX_ALLOWED = 27;
+const MAX_ALLOWED_IN_CLI = 1;
+
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
 const DOORS = ['cli', 'ingress', 'realtime'] as const;
 
 const withoutComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-
-/** The ids of the features a source imports a path through: `from '…/features/chat/…'`, `import('…')`, `export … from`. */
-const featuresImportedBy = (source: string): string[] => {
-  const code = withoutComments(source);
-  const ids = [
-    ...code.matchAll(
-      /(?:\bfrom\s*|\bimport\s*\(?\s*)['"][^'"]*\bfeatures\/([a-z0-9-]+)(?:\/[^'"]*)?['"]/g,
-    ),
-  ].map((found) => found[1] ?? '');
-  return [...new Set(ids)].sort();
-};
 
 const doorSources = (): string[] =>
   DOORS.flatMap((directory) =>
@@ -161,6 +159,14 @@ describe('the doors name no module’s files outside its routes and the composit
             .map((id) => `${file} no longer imports features/${id}`),
     );
     expect(stale).toEqual([]);
+  });
+
+  test('the lists are no longer than their caps, so an entry is added only with the cap raised', () => {
+    const files = Object.keys(ALLOWED);
+    expect(files.length).toBeLessThanOrEqual(MAX_ALLOWED);
+    expect(files.filter((file) => file.startsWith(`cli${sep}`)).length).toBeLessThanOrEqual(
+      MAX_ALLOWED_IN_CLI,
+    );
   });
 
   test('the command that runs the scheduled jobs names no module’s file', () => {

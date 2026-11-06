@@ -196,6 +196,14 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/incidents/incidents.integration.test.ts'],
   },
   {
+    id: 'job-deadline-exemption-not-listed',
+    why: 'chat’s jobs are left without a deadline and no test lists the exemption, so a runaway purge holds the scheduler (D-274)',
+    file: 'apps/api/src/features/chat/module.ts',
+    find: "    jobs: ['mail:missed'],\n",
+    replace: "    jobs: ['mail:missed'],\n    jobDeadline: { none: 'a job nothing stops' },\n",
+    tests: ['apps/api/src/module-deadlines.test.ts'],
+  },
+  {
     id: 'link-preview-kept-at-its-expiry',
     why: 'a preview at the instant it expires is kept another day, and the cache answers stale',
     file: 'apps/api/src/features/chat/sweeps.ts',

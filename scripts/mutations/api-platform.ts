@@ -173,6 +173,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     ],
   },
   {
+    id: 'core-column-named-by-a-file-of-the-core',
+    why: 'a file of the core reads a column that is chat’s, and the next one needs chat’s words to work (D-275)',
+    file: 'apps/api/src/platform/clock.ts',
+    find: 'export const DAY_MS = 24 * HOUR_MS;',
+    replace: "export const DAY_MS = 24 * HOUR_MS;\nexport const QUIET = 'quiet_from';",
+    tests: ['apps/api/src/core-columns.test.ts'],
+  },
+  {
     id: 'credential-nonce-reused',
     why: 'every credential is sealed under one nonce, and two of them together give away both',
     file: 'apps/api/src/platform/crypto.ts',
@@ -336,6 +344,22 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: '  if (row === undefined || Number(row.last_request) <= at) return { count: 0, closes: undefined };\n',
     replace: '  if (row === undefined) return { count: 0, closes: undefined };\n',
     tests: [INVITE_MAIL_TESTS],
+  },
+  {
+    id: 'job-deadline-longer-than-an-hour-accepted',
+    why: 'a module declares a job deadline of a day, which is no limit on a scheduler that runs the jobs one after another (D-274)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: '    jobDeadline.ms <= JOB_DEADLINE_MS_MAX',
+    replace: '    jobDeadline.ms <= JOB_DEADLINE_MS_MAX * 100',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
+    id: 'job-deadline-none-without-a-reason-accepted',
+    why: 'a module exempts its jobs from the deadline and says nothing of why, which a reviewer cannot weigh (D-274)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: "    return jobDeadline.none.trim() === ''",
+    replace: '    return false',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
   },
   {
     id: 'lease-takes-a-connection-past-the-deadline',

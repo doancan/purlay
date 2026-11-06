@@ -26,7 +26,7 @@ import { Kbd } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useThreads } from './thread-context';
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 
 /** The id of the panel, which the line it opens from controls. */
 export const THREAD_PANEL_ID = 'thread-panel';

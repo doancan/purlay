@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useApi } from '../../../data/api-provider';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
-import { AddressChips, sendable } from '../../sidebar/address-chips';
+import { AddressChips, sendable } from '../../../ui/address-chips';
 import { isSetupFailure } from '../client';
 import { useSetup } from '../context';
 import { Actions, CopyField, FailureNote, Note, StepHeader } from '../parts';

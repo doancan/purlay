@@ -3,7 +3,7 @@
  * and handle, their title, their status line, and the time it is where they are, with the zone.
  * Read from the workspace's members, which carry every profile and are read again when one changes.
  */
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import type { User } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Avatar } from '../../ui/avatar';

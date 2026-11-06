@@ -5,7 +5,7 @@
  * resolution is said on its own, even inside a thread, because each one is about the person.
  */
 import type { Notification } from '@purlay/types';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 
 export interface InboxRow {
   /** The newest member's id: stable while older ones join it from the next page. */

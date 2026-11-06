@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
+import type { ModuleId } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { installDom } from '../../testing/dom';
@@ -22,7 +23,7 @@ const settle = async (): Promise<void> => {
 };
 
 /** What the core's own frame asks for, and the names of everything it asked: a request a query swallows is still seen. */
-const coreOnlyApi = (modules: readonly string[]): { api: Api; asked: string[] } => {
+const coreOnlyApi = (modules: readonly ModuleId[]): { api: Api; asked: string[] } => {
   const base = anApi({
     me: () => Promise.resolve({ ...aSession(), modules: [...modules] }),
     members: () => Promise.resolve(someMembers()),

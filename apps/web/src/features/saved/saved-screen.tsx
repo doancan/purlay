@@ -39,7 +39,7 @@ import {
   listRowClasses,
 } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { useMessageText } from '../content/github-event';
 
 const STATES = ['in_progress', 'archived', 'completed'] as const satisfies readonly SavedState[];

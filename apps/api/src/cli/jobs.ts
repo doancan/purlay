@@ -27,12 +27,12 @@ import { purgeWorkspaces } from '../modules/workspaces/deletion-purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
   reconcileStorage,
-  runJob,
   sweepEmailSignIns,
   sweepOrphans,
   type JobContext,
 } from '../modules/jobs/jobs';
 import { jobReport, neverSucceeded } from '../modules/jobs/report';
+import { scheduledJobRunner, type JobWorkOn } from '../modules/jobs/module-shares';
 import { readSettingsToBoot } from '../modules/setup/settings';
 import { credentialCipher } from '../platform/crypto';
 import { smtpMailer } from '../platform/mail';
@@ -44,7 +44,7 @@ import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
 import { sendAuditLinesTo } from '../modules/audit/lines';
 import { errorTrackingFor } from '../platform/error-tracking';
-import { storeFor } from '../platform/storage';
+import { storeFor, type ObjectStore } from '../platform/storage';
 
 /** Sessions one statement of the sweep removes. */
 const SESSION_BATCH = 1_000;
@@ -83,20 +83,24 @@ const withMailer: JobContext['withMailer'] = async (use) => {
   }
 };
 
-/** What a module's job is given: this process's connections and settings, nothing the module opens itself. */
-const context: JobContext = {
-  database,
+/**
+ * What a module's job is given: this process's settings and the connections `on` names — its module's share of the pool,
+ * as the runner hands it — and nothing the module opens itself.
+ */
+const contextOn = (on: JobContext['database']): JobContext => ({
+  database: on,
   clock,
   log,
   // Built when a job asks, as each job did: the store is not needed to sweep sessions.
-  get storage() {
+  get storage(): ObjectStore {
     return storeFor(config);
   },
   appUrl: config.APP_URL,
   withMailer,
-};
+});
 
-type Work = () => Promise<Readonly<Record<string, number>>>;
+/** The work of a job, given the database it is to work on: the core's own ignore it and use the pool as it is. */
+type Work = JobWorkOn;
 
 /**
  * The core's own jobs. A module's are not listed here: its manifest names them under `jobs` and `retention`, and the
@@ -133,7 +137,7 @@ const coreJobs: Readonly<Record<string, Work>> = {
 const moduleJobs: Readonly<Record<string, Work>> = Object.fromEntries(
   Object.entries(composition.jobWork).map(([job, work]): [string, Work] => [
     job,
-    (): ReturnType<Work> => work(context),
+    (on): ReturnType<Work> => work(contextOn(on)),
   ]),
 );
 const jobs: Readonly<Record<string, Work>> = { ...coreJobs, ...moduleJobs };
@@ -144,16 +148,18 @@ const records = async (): Promise<Parameters<typeof jobReport>[1]> =>
     .select(['job_name', 'last_success_at', 'consecutive_failures', 'last_error'])
     .execute();
 
-/** Runs one job; true when it succeeded. Its failure is recorded and logged by the runner. */
-const runOne = async (job: string, work: Work): Promise<boolean> =>
-  await runJob(
-    { database, clock, log: log.child({ module: composition.owner.ofJob(job) }) },
-    job,
-    work,
-  ).then(
-    () => true,
-    () => false,
-  );
+/**
+ * Runs one job; true when it succeeded. A module's job runs in its module's share of the pool against its manifest's
+ * deadline, and its failure — a throw, a refusal, the deadline — is recorded and logged with the module (D-274).
+ */
+const runOne = scheduledJobRunner({
+  database,
+  clock,
+  log,
+  manifests: composition.bundled.map((module) => module.manifest),
+  poolMax: config.DATABASE_POOL_MAX,
+  ownerOf: composition.owner.ofJob,
+});
 
 const name = process.argv[2] ?? '';
 // A job of a module this process does not run is not overdue and has nothing to do (`MODULES.md` §3).

@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent, type RenderResult } from '@testing-library/react';
 import { useState } from 'react';
-import type { Channel } from '@purlay/types';
+import type { Channel, ModuleId } from '@purlay/types';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -259,7 +259,7 @@ describe('on a server that runs no chat', () => {
 
 describe('issues, a module of its own', () => {
   test('is offered where the server runs it, beside chat or alone, and takes the person to the screen', async () => {
-    for (const modules of [['chat', 'issues'], ['issues']]) {
+    for (const modules of [['chat', 'issues'], ['issues']] satisfies ModuleId[][]) {
       const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules }) });
       const { options, view } = await mount(where, '/w/acme');
       const row = view
@@ -274,7 +274,7 @@ describe('issues, a module of its own', () => {
     for (const modules of [
       ['chat', 'issues'],
       ['issues', 'chat'],
-    ]) {
+    ] satisfies ModuleId[][]) {
       const where = apiWith({ me: () => Promise.resolve({ ...aSession(), modules }) });
       const { options } = await mount(where, '/w/acme');
       const views = options().filter((text) =>

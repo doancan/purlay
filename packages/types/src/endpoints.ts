@@ -87,6 +87,7 @@ import {
   UploadQuery,
   WorkspaceMemberList,
 } from './api';
+import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';
 import { Attachment, Channel, Message, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
 
@@ -715,6 +716,38 @@ export const ENDPOINTS = [
     auth: 'session',
     body: UnfurlRequest,
     responses: { 200: UnfurlResponse },
+  }),
+  // ── Issues, the module of D-254 (D-273): a server that does not run it answers each as a path nobody has
+  read({
+    id: 'listIssues',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/issues',
+    auth: 'session',
+    query: IssueQuery,
+    responses: { 200: IssuePage },
+  }),
+  read({
+    id: 'createIssue',
+    method: 'POST',
+    path: '/api/workspaces/:workspaceId/issues',
+    auth: 'session',
+    body: CreateIssueRequest,
+    responses: { 201: Issue },
+  }),
+  read({
+    id: 'updateIssue',
+    method: 'PATCH',
+    path: '/api/workspaces/:workspaceId/issues/:issueId',
+    auth: 'session',
+    body: UpdateIssueRequest,
+    responses: { 200: Issue },
+  }),
+  read({
+    id: 'deleteIssue',
+    method: 'DELETE',
+    path: '/api/workspaces/:workspaceId/issues/:issueId',
+    auth: 'session',
+    responses: { 204: null },
   }),
 ] as const satisfies readonly EndpointSpec[];
 
