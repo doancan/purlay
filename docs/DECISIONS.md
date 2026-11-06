@@ -13100,6 +13100,145 @@ the core's tables*: the five writes are listed and held to a list instead, and e
 2.18 M to 2.33 M on 6. All of it is the global `Executor` union; issues is five files. **Cost of reversing:** delete the
 `schema.ts` files and `module-db.ts`, put `Executor` back to `Kysely<DB>` and `createDatabase` to return it. Nothing is stored.
 
+### D-272. What `MODULES.md` described and nothing built is design intent, labelled so, and built with the first module that needs it — amends `MODULES.md` §3, §4, §7, §8, §10 and §12; builds on D-250, D-254
+
+**Context.** An audit of `MODULES.md` against `main` found sentences that read as built or enforced and are not: a domain
+event that the manifest calls a hint or a fact, with a fact also written as a row in the same transaction and drained by a
+sweeper; the ports `NotificationSink`, `SearchSource`, `SystemMessagePort` and `AttachmentOwner`; a `register` call a module
+makes at boot and `capabilities.has`; `Topic` taking module prefixes from a registry and `ServerFrame` split per module; a
+deadline per search source. The domain bus itself exists and is tested, and nothing publishes or subscribes on it. Two modules
+exist, and neither has a fact to lose, a notification to send through a port, a capability to ask for, nor a frame of its
+own: the issues module was decided to have none of these (D-254 §1). The text was written as the plan of D-250, before
+the modules showed what they needed, and a plan read as a description sends the next author looking for a guard that is not
+there.
+
+**Decision.**
+
+1. **These are not built, on purpose.** Each is built in the change that adds the first module that needs it, with its
+   consumer, its test and its mutation, and not before (YAGNI): an outbox and a sweeper with no fact to carry is a table and a
+   loop nobody can show is right; a port with one caller and one implementation is a layer.
+2. **`MODULES.md` says so where it says anything about them.** §4 has one heading, *Not built (design intent, built with the
+   first module that needs it)*, that lists them; §3, §7, §8, §10 and §12 point at it, and a line of §8 for one is marked
+   **not built** and is not a guarantee. A statement about any of them elsewhere in the file that reads as built is a bug of
+   the document, as a contradiction of `DECISIONS.md` is (`CONTRIBUTING.md`, the conflict rule).
+3. **What is built stays said as built, and as far as it goes.** The domain bus is built and has no consumer. The wire
+   unions are held by tests where they exist (`NotificationType` and the database's enum to the manifests, every frame and
+   event name to one owner) and not opened.
+
+**Rejected.** *Building them now so that the text is true*: each is a decision about a consumer that does not exist, and the
+first real one would likely change it. *Deleting the text*: it records what D-250 intended and what a third module
+will want to start from. *A flag or a stub that makes the sentence true*: a guard that guards nothing.
+
+**Cost.** None at run time. A reader meets a labelled list in place of a promise. **Cost of reversing:** build one and move
+its entry from that list to the rows of §8 in the same change.
+
+---
+
+### D-273. The contract bundle says which module owns each endpoint, event and operation, and lists the modules — builds on D-190, D-192, D-250, D-255; answers D-250 open question (b) for the bundle
+
+**Context.** `contract:bundle` (D-192) carried nothing of the module structure: no list of modules, no owner on an endpoint, an
+event or an operation, and `MeResponse.modules` was a free `string[]`. The macOS application (#958) has to draw only the modules
+a server runs, ask nothing of one that is off and ignore one it does not know; from the bundle alone it could do none of that
+without a hand copy of which route, frame and event is chat's, which is the second home D-192 exists to prevent.
+
+**Decided.**
+
+1. **`contract.json` gains four things, all derived.** `modules` (each module the build carries: `id`, `requires`, `optional`, the
+   `routes` templates, the client `frames`, the server `events` and the `notificationTypes` it owns, every list sorted);
+   `module` on each entry of `endpoints`; `eventOwners` and `frameOwners` (every server event and every client operation of the
+   contract, by name, with its owner). An owner is `core` or a module id. They are read from each manifest and from the core's
+   claims (`CORE_CLAIMS`, `ownersOf`), the same maps the server closes a module's routes, frames and events by
+   (`apps/api/src/contract/module-structure.ts`), with no list of the bundle's: an endpoint, an event or an operation that
+   neither the core nor a manifest claims fails the bundle's build, and so does a module called `core`.
+2. **`MeResponse.modules` is `ModuleId[]`**, `ModuleId` being the union of the ids the build carries, written once in
+   `@purlay/types` (`modules.ts`) because that package cannot read the registry. Two things hold it to the registry: a test
+   fails when a manifest id is missing from it (or it names one the build lacks), and `assembleBundle` throws on the same
+   difference, so a release cannot be made with a stale type. The server stops at boot on a running module whose id is not a
+   `ModuleId`. The values on the wire are the strings they were: a client built from an earlier bundle reads them as strings.
+3. **Not a bump.** `CONTRACT_VERSION` stays (D-190: responses may gain fields, a union may gain a member the client treats as
+   unknown) and so does `CONTRACT_BUNDLE_FORMAT` (a key was added to `contract.json`; a generator that ignores keys it does not
+   know reads the old layout's every field unchanged). `contract:bundle` before and after differs in `contract.json` by those
+   keys and by the `ModuleId` reference under `MeResponse.modules`, and in `docs/` by this text.
+4. **A module that is off is absent from `MeResponse.modules`**, and that list is the only way to know. Its routes answer the
+   plain `404 ROUTE_NOT_FOUND` of any unknown path and its socket operations the `VALIDATION_FAILED` for `op` (D-255 §2). No
+   public capability says it before sign-in: D-255 §5 rejected naming modules in the public handshake, and the three
+   `capabilities` flags that already follow chat stay as they are. `API.md` §2 tells a client author this, and to ignore an id
+   it does not know.
+5. **Wire names stay.** Namespacing frame types (`chat.message.created`, D-250 open question (b)) is not done: the owner maps
+   give a client the grouping without renaming anything, so there is nothing installed clients would have to alias. Whether the
+   native client drops an unknown frame rather than disconnecting is still not checked in this repository; #958 asks for it.
+
+**Rejected.** *Namespaced frame and event names*: a break for installed clients, to give what a map gives. *A split of
+`ServerFrame` into a core part and one per module*: one union in the contract with an owner map says the same, and a generator
+need not learn a second shape. *Listing modules in `GET /api/client`*: D-255 §5. *A hand-written list of owners in the bundle*:
+it would go stale without a sound. *A closed `ModuleId` that a client fails on*: the contract's convention (`bundle` README) is
+that a union may gain a member and a client ignores it, and `API.md` says so for this one.
+
+**Accepted.** `ModuleId` is spelled by hand beside the registry and held to it by a test and by the bundle's build, as
+`PRODUCT_MODULE_REQUIRES` is held to the manifests. `Topic` is a string template and not a schema, so it is not in the bundle:
+a client takes a topic from the server, never builds one. The issues module's four routes were not in `ENDPOINTS`; they are now
+(`listIssues`, `createIssue`, `updateIssue`, `deleteIssue`), owned by `issues`, so a client sees them as the module's and
+draws or asks for none of them where it is off.
+
+**Reverses if** the application is built in this repository (D-192's reversal): the owner maps are then read from the code.
+Cost of reversing otherwise: remove the keys and the `ModuleId` reference; nothing is stored.
+
+### D-274. A module's scheduled job runs in its module's share of the pool, against a deadline of its manifest, with an error boundary of its own — builds on D-30, D-266, D-269, D-270; amends D-250 rule 7
+
+**Context.** D-250 rule 7 gave a module's handlers and jobs an error boundary, and D-266 to D-270 built the share, the
+deadline and the boundary for requests and frames only. `cli/jobs.ts` opened a pool of two and handed every job, a module's
+included, the raw database: no share held its statements, nothing but the pool's thirty-second statement limit bounded its
+time, and a throw was caught only because the runner happened to. The scheduler runs the jobs one after another, each as a
+process of its own, so a job that hung on a lock held every job behind it for as long as the lock lasted; `jobs:status`
+would call them overdue and nothing would say why.
+
+**Decision.**
+
+1. **A module's job is noted as its module's run**, as a request is: `scheduledJobRunner` (`modules/jobs/module-shares.ts`)
+   makes the process's one database leased (`leasingExecutor`, `moduleConnections` from every bundled manifest, at
+   `DATABASE_POOL_MAX`) and runs the work inside a request scope that names the module and carries an abort signal. The work is
+   handed the leased database, as its only handle (`JobWorkOn`); the context a module's job is given is built on it
+   (`contextOn`, `cli/jobs.ts`). Each connection it takes is asked of the module's share and held to its statement limit.
+   The core's jobs are given the pool as it is, and the share of a module that declared `none` is none.
+2. **A deadline per module's jobs, in the manifest.** `jobDeadline` is optional: `{ ms }` (1000 to 3 600 000: a job under a
+   second is no job, and one over an hour is past the closest two slots of the plan) or `{ none: reason }`, which
+   `module-deadlines.test.ts` lists as it lists a request's exemption (empty). A module that says nothing has ten minutes
+   (`DEFAULT_JOB_DEADLINE_MS`): past what the nightly purge of the largest instance measured here needs (3 000 workspaces in
+   about four seconds) with a wide margin, and well under a night. The deadline is a number of the manifest and not an
+   environment variable, for D-270's reason.
+3. **Past the deadline the work stops and the run is a failure.** The signal aborts, the lease asks the database to cancel the
+   statement running (`pg_cancel_backend` from a connection of its own, D-270) and refuses the next, the runner stops
+   waiting for work that waits on something that is not the database, and throws `JobDeadlineError`, which is recorded as any
+   failure is: `job_runs.last_error`, `consecutive_failures + 1` (and so `purlay_job_consecutive_failures{job,module}`), a log
+   line at `error` with the module.
+4. **A failure of one run is that run's alone.** The runner answers `false` for a throw, a refusal of the share
+   (`DATABASE_UNAVAILABLE`) and the deadline alike; the command exits non-zero for the scheduler, `jobs:first` goes on to the
+   next job, and the connection and the slot are given back whatever the work did (the lease's own guarantee, D-270). The
+   record of a run — the start, the end, the failure — is written on the pool as it is, outside the module's share and its
+   signal, so a job cut off at its deadline can still be told as failed and a full share cannot stop its own failure being
+   recorded.
+5. **What is not bounded.** The core's own jobs: they stay on the core's connection and have no deadline, like the core's
+   routes (D-270 §5), so a core job that hangs on the object store still holds the scheduler until the store gives up; the
+   scheduler's own bound on a child process is the follow-up, and is not part of this change. A job's share is of one process:
+   each job runs with a pool of two, so what the share adds there is the module's statement limit, the deadline and the
+   boundary, not a count of connections — the pool's two were already all one job could take of the server's.
+
+**Measured.** `purge:retention` (chat's, one statement group per workspace) over 3 000 workspaces with a retention, the
+command run before and after on the same database, eight alternating runs each: durations 3 084 to 5 199 ms before (median
+3 940) and 3 165 to 6 845 ms after (median 3 824), the spread being that of a shared machine; the fastest runs, which carry the
+least noise, differ by 81 ms in 3 100. With an empty database the four jobs that were run (`sweep:sessions`, `purge:retention`,
+`mail:missed`, `sweep:link-previews`, twelve runs each) took 201 to 243 ms before and 201 to 241 ms after, which is the
+process starting.
+
+**Rejected.** *A timer in the scheduler that kills a job's process*: it cancels nothing the database is running and leaves
+a lock held until the server notices the dead connection; the deadline in the job is the same mechanism as a request's.
+*Running the record of a run through the share too*: a job that filled its share could not record that it failed.
+*A deadline for the core's jobs from a constant*: none of them is measured, and the module's is the manifest's by D-270 §1.
+*An environment variable per module*: D-270 §1.
+
+**Cost of reversing.** `jobDeadline` in the manifest and the registry, `scheduledJobRunner`, and `cli/jobs.ts` back to
+`runJob` with the raw database. Nothing is stored.
+
 ### D-275. A column of a core table that exists for one module is acceptable only if it is listed, and a new one is a table of the module's own — builds on D-250, D-271
 
 **Context.** A table has one owner (D-250), and a column does not. The core's `users`, `workspace_members`, `workspaces` and

@@ -34,6 +34,7 @@ import {
   REGISTERED_FORMATS,
   CLOSE_CODES,
   MESSAGE_ID_SKEW,
+  MODULE_IDS,
   isMessageIdShape,
   isPlausibleMessageId,
   messageId,
@@ -49,7 +50,9 @@ import {
   serialiseReading,
 } from '@purlay/markdown';
 import { EXEMPT, PAIRS } from '@purlay/tokens/pairs';
+import { bundledModules, type BundledModule } from '../composition';
 import { SERVER_VERSION } from '../platform/server-version';
+import { moduleStructure, type ModuleJson } from './module-structure';
 
 /**
  * The keywords of JSON Schema a schema in the contract may use — the vocabulary the client generator is taught.
@@ -195,6 +198,8 @@ interface EndpointJson {
   readonly id: string;
   readonly method: string;
   readonly path: string;
+  /** The owner of the route: `core`, or the id of a module in `Contract.modules` (D-273). */
+  readonly module: string;
   readonly auth: 'session' | 'none';
   readonly query?: Json;
   readonly body?: Json;
@@ -206,14 +211,21 @@ export interface Contract {
   readonly contractVersion: number;
   readonly schemas: Readonly<Record<string, Json>>;
   readonly endpoints: readonly EndpointJson[];
+  /** Every module this build carries, with what it owns on the wire (D-273). */
+  readonly modules: readonly ModuleJson[];
+  /** Each server event by name with its owner, `core` or a module id. */
+  readonly eventOwners: Readonly<Record<string, string>>;
+  /** Each client operation by name with its owner, `core` or a module id. */
+  readonly frameOwners: Readonly<Record<string, string>>;
   readonly constants: Readonly<Record<string, Json>>;
   readonly errorStatus: Readonly<Record<string, number>>;
   readonly closeCodes: Readonly<Record<string, number>>;
   readonly formats: readonly string[];
 }
 
-export const buildContract = (): Contract => {
+export const buildContract = (carried: readonly BundledModule[] = bundledModules): Contract => {
   const { byName, nameOf } = namedSchemas();
+  const structure = moduleStructure(carried.map((module) => module.manifest));
 
   const schemas: Record<string, Json> = {};
   for (const [name, schema] of byName) {
@@ -235,6 +247,7 @@ export const buildContract = (): Contract => {
       id: entry.id,
       method: entry.method,
       path: entry.path,
+      module: structure.ownerOfEndpoint(entry),
       auth: entry.auth,
       ...(entry.query === undefined ? {} : { query: asJson(entry.query) }),
       ...(entry.body === undefined
@@ -258,6 +271,9 @@ export const buildContract = (): Contract => {
     contractVersion: CONTRACT_VERSION,
     schemas,
     endpoints,
+    modules: structure.modules,
+    eventOwners: structure.eventOwners,
+    frameOwners: structure.frameOwners,
     constants,
     errorStatus: { ...ERROR_STATUS },
     closeCodes: { ...CLOSE_CODES },
@@ -300,6 +316,24 @@ export const vocabularyProblems = (contract: Contract): string[] => {
     }
   }
   return [...new Set(problems)];
+};
+
+/**
+ * Where the contract's `ModuleId` is not the modules the build carries, one sentence each. The type is written once in
+ * `@purlay/types`, which cannot read the registry, so a module added to the registry and not to the type is found here,
+ * where a release is made, and not by a client that cannot decode its id.
+ */
+export const moduleIdProblems = (contract: Contract): string[] => {
+  const known = new Set<string>(MODULE_IDS);
+  const carried = new Set(contract.modules.map((module) => module.id));
+  return [
+    ...[...carried]
+      .filter((id) => !known.has(id))
+      .map((id) => `the module ${id} is carried by the build and is not a ModuleId`),
+    ...[...known]
+      .filter((id) => !carried.has(id))
+      .map((id) => `ModuleId names ${id}, which the build does not carry`),
+  ];
 };
 
 // ── Fixtures
@@ -440,8 +474,10 @@ bundle by the digest of \`MANIFEST.json\` and refuses a file whose digest is not
 
 - \`contract.json\` — \`schemas\` (JSON Schema, by name; a nested named schema is \`{ "$ref": "<name>" }\`, and a
   keyword outside the supported vocabulary is a build failure of the server), \`endpoints\` (id, method, path
-  template, who may call, the query and body schemas and the successful responses; a failure is always the one
-  error envelope), \`constants\`, \`errorStatus\` (every error \`code\` and the HTTP status it is answered with),
+  template, the owning \`module\`, who may call, the query and body schemas and the successful responses; a failure is
+  always the one error envelope), \`modules\` (each module the server carries: what it requires and what it owns, and an
+  owner is \`core\` or one of these ids), \`eventOwners\` and \`frameOwners\` (each socket event and client operation
+  with its owner; \`API.md\` §2 says how a client reads them and what a module that is off answers), \`constants\`, \`errorStatus\` (every error \`code\` and the HTTP status it is answered with),
   \`closeCodes\` (the socket's application close codes) and \`formats\` (the string formats a schema names).
 - \`fixtures/message-ids.json\` — ids a client must be able to make and recognise, and the plausibility window.
 - \`fixtures/markdown-corpus.json\` — inputs and the narrowed tree the server's engine reads from each. A client
@@ -469,6 +505,8 @@ export const assembleBundle = (
       `the contract uses keywords the generator is not taught: ${outside.join(', ')}`,
     );
   }
+  const unknownModules = moduleIdProblems(contract);
+  if (unknownModules.length > 0) throw new Error(unknownModules.join('; '));
   const files = new Map<string, string>();
   files.set('README.md', README);
   files.set('contract.json', json(contract));

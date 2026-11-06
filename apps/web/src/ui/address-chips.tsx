@@ -9,9 +9,9 @@
  */
 import { normalisedMailbox } from '@purlay/types';
 import { useId, useState } from 'react';
-import { Icon } from '../../components/icon';
-import { cn } from '../../ui/cn';
-import { VisuallyHidden } from '../../ui/visually-hidden';
+import { Icon } from '../components/icon';
+import { cn } from './cn';
+import { VisuallyHidden } from './visually-hidden';
 
 /** The addresses among `typed` that can be sent to, as they would be stored. */
 export const sendable = (typed: readonly string[]): string[] =>

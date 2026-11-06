@@ -46,10 +46,10 @@ import { NavToggle } from '../shell/nav';
 import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
 import { Select } from '../../ui/select';
 import { useWorkspace } from '../shell/workspace';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { useMessageText } from '../content/github-event';
 import { useSession } from '../session/session';
-import { AuthorPicker } from './author-picker';
+import { AuthorPicker } from '../../ui/author-picker';
 import { markedExcerpt, marksIn } from './excerpt';
 
 /** Where a found message is read: its own address, which opens the feed — or its thread — at it (D-149). */

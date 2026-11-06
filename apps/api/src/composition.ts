@@ -9,6 +9,7 @@
  * tables, the exports hold the core's.
  */
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
+import { isModuleId, type ModuleId } from '@purlay/types';
 import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
 import { AppError, attachmentNotFound } from './platform/errors';
@@ -312,3 +313,15 @@ export const moduleReport = (
     .filter((module) => !running.modules.includes(module))
     .map((module) => module.manifest.id),
 });
+
+/**
+ * The words an operator writes in `MODULES` for the modules this process runs, as `GET /api/me` tells them (D-273). One the
+ * contract's `ModuleId` lacks stops the build here, where a client would otherwise be told an id it cannot decode.
+ */
+export const runningModuleIds = (running: Composition): ModuleId[] =>
+  running.modules.map(({ manifest }) => {
+    if (!isModuleId(manifest.id)) {
+      throw new Error(`the module ${manifest.id} is not a ModuleId of @purlay/types`);
+    }
+    return manifest.id;
+  });

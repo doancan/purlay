@@ -7,7 +7,7 @@ import { waitFor } from '@testing-library/react';
 import { describe, expect, test } from 'bun:test';
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
-import type { MeResponse } from '@purlay/types';
+import type { MeResponse, ModuleId } from '@purlay/types';
 import type { Api } from '../data/api';
 import { installDom } from '../testing/dom';
 import { IDS, aSession, aSignedInApi } from '../testing/fixtures';
@@ -20,7 +20,7 @@ const closed = (): ApiError => new ApiError(404, 'ROUTE_NOT_FOUND', 'no such rou
 
 /** A `me` that counts its reads and lists what `modulesOf` says for the nth. */
 const countingMe = (
-  modulesOf: (read: number) => string[],
+  modulesOf: (read: number) => ModuleId[],
 ): { readonly me: Api['me']; readonly reads: () => number } => {
   let reads = 0;
   return {

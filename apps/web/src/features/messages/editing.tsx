@@ -26,7 +26,7 @@ import {
 import { ComposerPortsContext, isTouchOnly } from '../composer/composer-ports';
 import { duringComposition, useComposition } from '../composer/composition';
 import { isMacPlatform, keyLabels } from '../shortcuts/platform';
-import { isMine } from './author';
+import { isMine } from '../../lib/author';
 
 interface Editing {
   readonly editingId: string | null;

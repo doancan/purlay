@@ -283,7 +283,7 @@ import {
 } from './incoming-webhooks';
 import { deletePin, listPins, putPin } from './pins';
 import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
-import type { Composition } from '../../composition';
+import { runningModuleIds, type Composition } from '../../composition';
 import {
   listIncidentUpdates,
   patchIncident,
@@ -544,7 +544,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   // The reason a node is not ready is written once per check, not once per probe that hears it.
   let saidNotReady: Readiness | null = null;
   /** The words an operator writes in `MODULES` for the modules this process runs. */
-  const moduleIds = modules.modules.map((module) => module.manifest.id);
+  const moduleIds = runningModuleIds(modules);
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
