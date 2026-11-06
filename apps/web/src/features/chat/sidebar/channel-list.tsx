@@ -19,7 +19,7 @@ import { Button } from '../../../ui/button';
 import { IconButton } from '../../../ui/icon-button';
 import { useWorkspace } from '../../shell/workspace';
 import { ChannelRow } from './channel-row';
-import { joinableChannels, joinedChannels, starredChannels } from './ordering';
+import { joinableChannels, joinedChannels, starredChannels } from '../../../lib/channel-lists';
 import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
 import { SectionHeading } from './section-heading';

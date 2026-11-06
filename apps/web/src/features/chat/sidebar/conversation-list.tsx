@@ -13,7 +13,7 @@ import { GroupFace } from '../../../ui/group-face';
 import { nameOf } from '../../../lib/author';
 import { useWorkspace } from '../../shell/workspace';
 import { ChannelRow } from './channel-row';
-import { groups } from './ordering';
+import { groups } from '../../../lib/channel-lists';
 import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
 import { SectionHeading } from './section-heading';

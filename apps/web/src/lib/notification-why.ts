@@ -3,9 +3,9 @@
  * notice an open tab in the background shows (D-148), so the two cannot say a thing two ways.
  */
 import type { Channel, Notification } from '@purlay/types';
-import type { Translate } from '../../../i18n/types';
-import { href, threadHref } from '../../../router/routes';
-import { authorOf } from '../../../lib/author';
+import type { Translate } from '../i18n/types';
+import { href, threadHref } from '../router/routes';
+import { authorOf } from './author';
 
 /**
  * Why the person was told, in words: who did it, except for a resolution of their own question.
