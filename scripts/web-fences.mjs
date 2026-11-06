@@ -44,28 +44,12 @@ export const CORE_IMPORTS_OF_MODULES = [
     reason:
       'an overlay the shell opens on a key or a click, re-exported from the one lazy chunk the doors ask for (`deferred.ts`): it is in a chunk of its own, never in the shell. Ends with a manifest slot that lists a module\u2019s overlays.',
   })),
-  {
-    from: 'features/alerts/tell.ts',
-    to: 'features/chat/inbox/why.ts',
-    reason:
-      'the sentence a background alert says about why somebody is told, a function of the notification the inbox also explains',
-  },
   ...['features/palette/match.ts', 'features/settings/pages/members.tsx'].map((from) => ({
     from,
     to: 'features/chat/composer/mention-suggest.ts',
     reason:
       'asks for `fold`, which compares names without case and marks and is chat\u2019s by ownership: moving it to `lib/` left the lazy side importing only that and moved 1.9 KB of mention list into chat\u2019s chunk, over its bound (D-277)',
   })),
-  {
-    from: 'features/invitations/welcome-screen.tsx',
-    to: 'features/chat/sidebar/ordering.ts',
-    reason: 'the welcome screen lists the channels in the order the sidebar does',
-  },
-  {
-    from: 'features/palette/channels.ts',
-    to: 'features/chat/sidebar/ordering.ts',
-    reason: 'the palette lists the channels in the order the sidebar does',
-  },
   {
     from: 'features/palette/command-palette.tsx',
     to: 'features/chat/search/use-operators.ts',
@@ -99,11 +83,6 @@ export const CORE_IMPORTS_OF_MODULES = [
     reason:
       'the sidebar\u2019s chat lists are drawn in the first frame, inside `WhenRun module="chat"`; a lazy chunk for them was built and measured and saved 2% of the shell for a layout fallback (`MODULES.md` \u00a711, 2026-11-03)',
   })),
-  {
-    from: 'features/shell/workspace-home.tsx',
-    to: 'features/chat/questions/last-channel.ts',
-    reason: 'the front door of a workspace opens the channel the person was last in',
-  },
 ];
 
 /**

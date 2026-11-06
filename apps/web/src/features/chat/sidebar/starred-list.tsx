@@ -10,7 +10,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { useRoute } from '../../../router/router-provider';
 import { useWorkspace } from '../../shell/workspace';
 import { ChannelRow } from './channel-row';
-import { starredChannels } from './ordering';
+import { starredChannels } from '../../../lib/channel-lists';
 import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
 import { SectionHeading } from './section-heading';
