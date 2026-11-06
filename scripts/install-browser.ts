@@ -4,6 +4,7 @@
  * `scripts/install-browser-attempts.ts`; this only starts the process.
  */
 import {
+  AFTER_STALL_COMMANDS,
   APT_TIMEOUTS,
   APT_TIMEOUTS_FILE,
   browserOf,
@@ -43,5 +44,14 @@ process.exit(
       return code === 0 ? 'done' : 'failed';
     },
     console.error,
+    undefined,
+    undefined,
+    async () => {
+      if (process.env['CI'] !== 'true') return;
+      for (const command of AFTER_STALL_COMMANDS) {
+        // A command that finds nothing to stop exits non-zero; that is the usual case, not a failure.
+        await Bun.spawn([...command], { stdout: 'inherit', stderr: 'inherit' }).exited;
+      }
+    },
   ),
 );
