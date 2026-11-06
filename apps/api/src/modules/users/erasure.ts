@@ -105,7 +105,7 @@ export const eraseAccount = async (
   // Read first, locking nothing: the checks refuse before anything is held.
   const person = await executor
     .selectFrom('users')
-    .select(['id', 'username', 'email'])
+    .select(['id', 'username', 'email', 'email_verified'])
     .where('id', '=', caller.userId)
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
@@ -230,6 +230,16 @@ export const eraseAccount = async (
       .execute();
   }
 
+  // Before the address is tombstoned: received invitations are personal data, including unclaimed ones.
+  await executor
+    .deleteFrom('workspace_invitation_recipients')
+    .where((eb) =>
+      eb.or([
+        ...(person.email_verified ? [eb('email', '=', person.email.trim().toLowerCase())] : []),
+        eb('applicant_user_id', '=', person.id),
+      ]),
+    )
+    .execute();
   const placeholder = await availableUsername(
     executor,
     `${ERASED_USERNAME_PREFIX}${person.id.replace(/-/g, '').slice(0, 8)}`,

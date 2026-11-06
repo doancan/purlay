@@ -266,6 +266,11 @@ export interface CommentOnlyEdit {
 }
 
 export const COMMENT_ONLY_EDITS: Readonly<Record<string, CommentOnlyEdit>> = {
+  // The safety annotation was made explicit after local validation applied 0087. Its SQL is unchanged.
+  '0087_invitation_recipient_foreign_keys': {
+    previous: '0f8e3a54bbd59ded1dec5c118268842f9e5f9eebe2b2ab4f70be7d917c70aff9',
+    code: '7ec71d7392a470a6fd7e1a5adaebba704d5d4665e726bb1b40c8abae54998be7',
+  },
   // The header said the lock was held "for an instant"; it is held for as long as it takes to
   // get it, which under load includes a deadlock the migrator now retries (D-86).
   '0010_tenant_integrity': {

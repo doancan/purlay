@@ -693,6 +693,29 @@ export interface WorkspaceExports {
   workspace_id: string;
 }
 
+export interface WorkspaceInvitationMailAttempts {
+  created_at: Timestamp;
+  failure: string | null;
+  finished_at: Timestamp | null;
+  id: string;
+  invitation_id: string;
+  recipient_id: string;
+  result: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceInvitationRecipients {
+  applicant_user_id: string | null;
+  created_at: Timestamp;
+  created_by: string | null;
+  email: string;
+  id: string;
+  joined_at: Timestamp | null;
+  locale: string;
+  requested_at: Timestamp | null;
+  workspace_id: string;
+}
+
 export interface WorkspaceInvitations {
   created_at: Timestamp;
   created_by: string | null;
@@ -784,6 +807,8 @@ export interface DB {
   users: Users;
   verifications: Verifications;
   workspace_exports: WorkspaceExports;
+  workspace_invitation_mail_attempts: WorkspaceInvitationMailAttempts;
+  workspace_invitation_recipients: WorkspaceInvitationRecipients;
   workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;
   workspaces: Workspaces;

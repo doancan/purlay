@@ -1,3 +1,5 @@
+import { makeAndMailInvitation } from '../../modules/workspaces/invitation-mail';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 /**
  * `purge:workspaces` against the real database (D-242): nothing before the grace period is over, to the
  * millisecond; after it, everything that names the workspace gone — its files from the store too — and the
@@ -168,7 +170,15 @@ const aLivedInWorkspace = async (
     title: 'Fix the runbook',
     assigneeId: member.userId,
   });
-  await call('POST', `/api/workspaces/${workspaceId}/invitations`, owner);
+  await atomicallyOn(db)(async (tx) => {
+    await makeAndMailInvitation(
+      tx,
+      clock,
+      await requireWorkspaceMembership(tx, owner.userId, workspaceId),
+      { emails: ['outside@example.test'] },
+      { on: true, appUrl: 'https://purlay.test' },
+    );
+  });
   await call('PUT', `/api/workspaces/${workspaceId}/integrations/github`, owner, {
     token: 'ghp_deletion',
   });
@@ -332,6 +342,8 @@ describe('integration: the workspace purge', () => {
           'thread_follows',
           'workspace_exports',
           'workspace_invitations',
+          'workspace_invitation_recipients',
+          'workspace_invitation_mail_attempts',
           'workspace_members',
         ].sort(),
       );

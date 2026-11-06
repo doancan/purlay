@@ -1,3 +1,5 @@
+import { makeAndMailInvitation } from '../workspaces/invitation-mail';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 /**
  * A person's export of their own data against the real database (D-241). pat is in two workspaces, wrote
  * in both, wrote in a private channel and then left it, deleted one message, reacted, saved, followed,
@@ -23,7 +25,6 @@ import {
 import { PersonalExportManifest, messageId } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { fixedClock } from '../../platform/clock';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
@@ -264,6 +265,25 @@ const aPersonWithAFootprint = async (db: Transaction): Promise<Fixture> => {
       .where('user_id', '=', pat.userId)
       .executeTakeFirstOrThrow()
   ).token_hash;
+  const address = (
+    await db
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', pat.userId)
+      .executeTakeFirstOrThrow()
+  ).email;
+  await db
+    .updateTable('users')
+    .set({ email_verified: true })
+    .where('id', '=', pat.userId)
+    .execute();
+  await makeAndMailInvitation(
+    db,
+    clock,
+    await requireWorkspaceMembership(db, pat.userId, a.workspaceId),
+    { emails: [address, 'unrelated@example.test'] },
+    { on: true, appUrl: 'https://purlay.test' },
+  );
   return {
     store,
     a,
@@ -287,6 +307,31 @@ const aPersonWithAFootprint = async (db: Transaction): Promise<Fixture> => {
 };
 
 describe('integration: exporting a person’s own data', () => {
+  test('an unverified address cannot export someone else’s received invitation evidence', async () => {
+    await withRollback(async (db) => {
+      const { store, pat } = await aPersonWithAFootprint(db);
+      await db
+        .updateTable('users')
+        .set({ email_verified: false })
+        .where('id', '=', pat.userId)
+        .execute();
+      const target = join(await mkdtemp(join(tmpdir(), 'purlay-unverified-receipts-')), 'out');
+      await exportPerson(
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+          personalCatalogue: personalExportCatalogue,
+        },
+        { id: pat.userId, username: pat.username },
+        target,
+      );
+      expect(await lines(target, 'workspace_invitation_recipients')).toEqual([]);
+      expect(await lines(target, 'workspace_invitation_mail_attempts')).toEqual([]);
+    });
+  });
+
   test('holds exactly their rows, the places they name, and nothing of anybody else’s', async () => {
     await withRollback(async (db) => {
       const {
@@ -565,6 +610,8 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'users',
     'workspaces',
     'workspace_members',
+    'workspace_invitation_recipients',
+    'workspace_invitation_mail_attempts',
     'channels',
     'channel_members',
     'messages',
@@ -592,10 +639,37 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'saved_searches.ndjson',
     'thread_follows.ndjson',
     'users.ndjson',
+    'workspace_invitation_mail_attempts.ndjson',
+    'workspace_invitation_recipients.ndjson',
     'workspace_members.ndjson',
     'workspaces.ndjson',
   ],
   tables: {
+    workspace_invitation_recipients: {
+      rows: 1,
+      columns: [
+        'applicant_user_id',
+        'created_at',
+        'email',
+        'id',
+        'joined_at',
+        'locale',
+        'requested_at',
+        'workspace_id',
+      ],
+    },
+    workspace_invitation_mail_attempts: {
+      rows: 1,
+      columns: [
+        'created_at',
+        'failure',
+        'finished_at',
+        'id',
+        'recipient_id',
+        'result',
+        'workspace_id',
+      ],
+    },
     users: {
       rows: 1,
       columns: [

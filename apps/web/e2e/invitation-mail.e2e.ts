@@ -19,6 +19,7 @@ test.afterAll(() => {
 test('an owner emails invitations from Settings and a newcomer joins through the letter', async ({
   browser,
 }, info) => {
+  test.setTimeout(120_000);
   if (fresh === null) throw new Error('the invitation test server did not start');
   const { origin, code, github, relay, mailbox } = fresh.manifest;
   const owner = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
@@ -58,6 +59,7 @@ test('an owner emails invitations from Settings and a newcomer joins through the
     await send('/setup/workspace', { name: 'Invite Team', slug: 'invite-team' });
     await send('/setup/invite');
     await send('/setup/finish');
+    await send('/api/server/preferences', { requireAccountApproval: true });
 
     const page = await owner.newPage();
     await page.goto('/w/invite-team/settings/invitations');
@@ -88,8 +90,40 @@ test('an owner emails invitations from Settings and a newcomer joins through the
     for (const letter of letters) {
       expect(letter.text).toContain('Ada Yılmaz');
       expect(letter.text).toContain('Invite Team');
-      expect(linkIn(letter, /\/invite#[0-9a-f]{64}/)).toBe(`/invite#${token ?? ''}`);
+      expect(linkIn(letter, /\/invite#[0-9a-f]{64}/)).not.toBe(`/invite#${token ?? ''}`);
     }
+
+    const emailed = main.getByRole('list', { name: 'Email invitations' });
+    const bobRow = emailed.getByRole('listitem').filter({ hasText: 'bob@example.test' });
+    await expect(bobRow.getByRole('status')).toHaveText('Accepted by mail server');
+    await bobRow.getByRole('button', { name: 'Resend', exact: true }).click();
+    const replacement = await letterWith(mailbox, /You have been invited to Purlay/, 2);
+    const oldBob = letters.find((letter) => letter.to.includes('bob@example.test'));
+    if (oldBob === undefined) throw new Error('Bob’s letter missing');
+    const oldBobToken = linkIn(oldBob, /\/invite#[0-9a-f]{64}/).split('#')[1];
+    const replacementToken = linkIn(replacement, /\/invite#[0-9a-f]{64}/).split('#')[1];
+    expect(replacementToken).not.toBe(oldBobToken);
+    expect(
+      (
+        await owner.request.post('/api/invitations/preview', {
+          data: { token: oldBobToken },
+          headers: { origin },
+        })
+      ).status(),
+    ).toBe(404);
+    expect(
+      (
+        await owner.request.post('/api/invitations/preview', {
+          data: { token: replacementToken },
+          headers: { origin },
+        })
+      ).status(),
+    ).toBe(200);
+    await bobRow.getByRole('button', { name: 'Send history', exact: true }).click();
+    await expect(bobRow.getByText('Link revoked', { exact: true })).toBeVisible();
+    await bobRow.getByRole('button', { name: 'Send history', exact: true }).click();
+    await bobRow.getByRole('button', { name: 'Revoke', exact: true }).click();
+    await expect(bobRow.getByRole('status')).toHaveText('Link revoked');
 
     // The form and its feedback reflow on a phone and at the 320 CSS px accessibility boundary.
     for (const width of [1440, 390, 320]) {
@@ -116,19 +150,36 @@ test('an owner emails invitations from Settings and a newcomer joins through the
       }
       const audit = await new AxeBuilder({ page }).include('main').analyze();
       expect(audit.violations).toEqual([]);
-      const screenshot = info.outputPath(`invitations-${String(width)}.png`);
-      await page.screenshot({ path: screenshot, fullPage: true });
-      await info.attach(`invitations-${String(width)}`, {
-        path: screenshot,
-        contentType: 'image/png',
-      });
+      for (const theme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        const auditTheme = await new AxeBuilder({ page }).include('main').analyze();
+        expect(auditTheme.violations).toEqual([]);
+        const screenshot = info.outputPath(`invitations-${theme}-${String(width)}.png`);
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await info.attach(`invitations-${theme}-${String(width)}`, {
+          path: screenshot,
+          contentType: 'image/png',
+        });
+        await emailed.getByRole('listitem').first().scrollIntoViewIfNeeded();
+        const recipientsShot = info.outputPath(
+          `invitation-recipients-${theme}-${String(width)}.png`,
+        );
+        await page.screenshot({ path: recipientsShot });
+        await info.attach(`invitation-recipients-${theme}-${String(width)}`, {
+          path: recipientsShot,
+          contentType: 'image/png',
+        });
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
     }
 
     const newcomer = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
     await skipReleaseNotes(newcomer);
     try {
       const invited = await newcomer.newPage();
-      await invited.goto(link);
+      const annLetter = letters.find((letter) => letter.to.includes('ann@example.test'));
+      if (annLetter === undefined) throw new Error('Ann’s letter missing');
+      await invited.goto(linkIn(annLetter, /\/invite#[0-9a-f]{64}/));
       await expect(invited.getByRole('heading', { name: 'You have been invited' })).toBeVisible();
       expect(invited.url()).not.toContain(token ?? 'missing token');
       await invited.getByRole('textbox', { name: 'Email address' }).fill('ann@example.test');
@@ -139,9 +190,34 @@ test('an owner emails invitations from Settings and a newcomer joins through the
       );
       await invited.goto(signIn);
       await invited.getByRole('button', { name: 'Sign in', exact: true }).click();
-      await expect(invited.getByRole('heading', { name: 'Join Invite Team' })).toBeVisible();
+      await expect(
+        invited.getByRole('heading', { name: 'Your account is awaiting approval' }),
+      ).toBeVisible();
+      const recipients = page.getByRole('list', { name: 'Email invitations' });
+      const annRow = recipients.getByRole('listitem').filter({ hasText: 'ann@example.test' });
+      await expect(annRow.getByRole('status')).toHaveText('Awaiting account approval');
+      const approval = await owner.newPage();
+      await approval.goto('/server/users');
+      await approval.getByRole('combobox', { name: 'Status', exact: true }).selectOption('pending');
+      await approval.getByRole('button', { name: 'Search', exact: true }).click();
+      await approval.getByRole('button', { name: 'Approve account' }).click();
+      await approval.getByRole('dialog').getByRole('button', { name: 'Confirm change' }).click();
+      await expect(approval.getByText('Change saved')).toBeVisible();
+      await approval.close();
+      // The pending page continues to the same invitation without Refresh or a reload.
+      await expect(invited.getByRole('heading', { name: 'Join Invite Team' })).toBeVisible({
+        timeout: 15_000,
+      });
       await invited.getByRole('button', { name: 'Join', exact: true }).click();
       await expect(invited).toHaveURL(/\/w\/invite-team\/welcome$/);
+      await page.reload();
+      await expect(
+        page
+          .getByRole('list', { name: 'Email invitations' })
+          .getByRole('listitem')
+          .filter({ hasText: 'ann@example.test' })
+          .getByRole('status'),
+      ).toHaveText('Invitation accepted');
       const me = await newcomer.request.get('/api/me');
       expect(await me.json()).toMatchObject({
         user: { email: 'ann@example.test' },
@@ -153,9 +229,13 @@ test('an owner emails invitations from Settings and a newcomer joins through the
 
     // The same page can issue a separate link, and revoking it removes the one-time copy field.
     await page.setViewportSize({ width: 1440, height: 900 });
-    await main.getByRole('button', { name: 'Make another link' }).click();
+    await main.getByRole('button', { name: 'Make a link', exact: true }).click();
     await expect(main.getByRole('textbox', { name: 'Invitation link' })).not.toHaveValue(link);
-    await main.getByRole('button', { name: 'Revoke', exact: true }).first().click();
+    await main
+      .getByRole('region', { name: 'Links still open' })
+      .getByRole('button', { name: 'Revoke', exact: true })
+      .first()
+      .click();
     await expect(main.getByRole('textbox', { name: 'Invitation link' })).toHaveCount(0);
     await expect(main.getByRole('button', { name: 'Make a link' })).toBeVisible();
   } finally {
