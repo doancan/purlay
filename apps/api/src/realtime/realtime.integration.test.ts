@@ -26,6 +26,7 @@ import { createLogger } from '../platform/logging';
 import { REPLAY_BYTES_MAX, replayPerChannel } from '../features/chat/messages/replay';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
+import { chatFrameHandlers } from '../features/chat/frames';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
 import { aTestAuth, aSignedInUser, type SignedInUser } from '../testing/signed-in';
@@ -157,6 +158,7 @@ describe('integration: the frame router', () => {
         bus,
         limiter,
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+        frameHandlers: chatFrameHandlers,
         presence: inMemoryPresenceRegistry(clock),
         attention,
         online: {

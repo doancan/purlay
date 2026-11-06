@@ -36,7 +36,8 @@ import { metered } from '../../realtime/frame-meter';
 import { inMemoryPresenceRegistry } from '../../realtime/presence';
 import type { SharedState } from '../../realtime/shared';
 import { createReplayGate } from '../../realtime/replay-gate';
-import { routeFrame } from '../../realtime/router';
+import { routeFrame, type RouterFrameContext } from '../../realtime/router';
+import type { FrameHandlers } from '../../platform/frame-handlers';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
 import { refusalFor } from '../http/errors';
@@ -61,6 +62,8 @@ export interface SocketDependencies {
   readonly userWrites: RateLimiter;
   /** The operations of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedFrame?: (op: string) => boolean;
+  /** What serves the operations of the modules this process runs (`composition.ts`, D-276). */
+  readonly frameHandlers?: FrameHandlers<RouterFrameContext>;
   /** The module that owns a frame's operation (`composition.ts`): the label of a refusal for the rate; absent, `none`. */
   readonly frameOwner?: (op: string) => string;
   /** The module an operation belongs to, as the router notes it (`realtime/router.ts`); absent, none does. */
@@ -339,6 +342,9 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   bus,
                   limiter,
                   userWrites: dependencies.userWrites,
+                  ...(dependencies.frameHandlers === undefined
+                    ? {}
+                    : { frameHandlers: dependencies.frameHandlers }),
                   ...(dependencies.closedFrame === undefined
                     ? {}
                     : { closedFrame: dependencies.closedFrame }),

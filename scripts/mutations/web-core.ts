@@ -57,7 +57,7 @@ export const WEB_CORE: readonly Mutation[] = [
     file: 'apps/web/src/data/cache.ts',
     find: 'const leaves = deletedRoot && (held.thread?.replyCount ?? 0) === 0;',
     replace: 'const leaves = false;',
-    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+    tests: ['apps/web/src/features/chat/channel/message-feed.test.tsx'],
   },
   {
     id: 'drafts-route-is-no-module-screen',
@@ -73,7 +73,7 @@ export const WEB_CORE: readonly Mutation[] = [
     file: 'apps/web/src/ui/menu.tsx',
     find: "grid && event.key === 'ArrowDown'\n              ? GRID_COLUMNS",
     replace: "grid && event.key === 'ArrowDown'\n              ? 1",
-    tests: ['apps/web/src/features/composer/composer.test.tsx'],
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
   },
   {
     id: 'feed-read-in-flight-never-read-again',
@@ -135,8 +135,8 @@ export const WEB_CORE: readonly Mutation[] = [
     replace:
       '        },\n        signal,\n      ),\n    initialPageParam: undefined as string | undefined,\n    getNextPageParam: (last) => last.nextCursor ?? undefined,\n    ...KEEP_MESSAGES,',
     tests: [
-      'apps/web/src/features/channel/channel-screen.test.tsx',
-      'apps/web/src/features/questions/questions-screen.test.tsx',
+      'apps/web/src/features/chat/channel/channel-screen.test.tsx',
+      'apps/web/src/features/chat/questions/questions-screen.test.tsx',
     ],
   },
   {
@@ -169,7 +169,7 @@ export const WEB_CORE: readonly Mutation[] = [
     file: 'apps/web/src/data/queries.ts',
     find: '      words.length >= SEARCH_QUERY_MIN ||\n',
     replace: '      true ||\n',
-    tests: ['apps/web/src/features/search/search-screen.test.tsx'],
+    tests: ['apps/web/src/features/chat/search/search-screen.test.tsx'],
   },
   {
     id: 'sidebar-switch-closes-menu',
@@ -178,7 +178,7 @@ export const WEB_CORE: readonly Mutation[] = [
     find: '    onSelect={(event) => {\n      event.preventDefault();\n    }}\n    className={cn(itemClasses, toneClasses.default)}\n  >\n    <span className="flex-1">{children}</span>',
     replace:
       '    className={cn(itemClasses, toneClasses.default)}\n  >\n    <span className="flex-1">{children}</span>',
-    tests: ['apps/web/src/features/sidebar/sidebar-preferences.test.tsx'],
+    tests: ['apps/web/src/features/chat/sidebar/sidebar-preferences.test.tsx'],
   },
   {
     id: 'theme-init-forgets-midnight',
@@ -218,7 +218,7 @@ export const WEB_CORE: readonly Mutation[] = [
     file: 'apps/web/src/app/outlet.tsx',
     find: "import { isModuleMatch, moduleOf, type Match } from '../router/routes';",
     replace:
-      "import { isModuleMatch, moduleOf, type Match } from '../router/routes';\nimport { UnreadsScreen } from '../features/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
+      "import { isModuleMatch, moduleOf, type Match } from '../router/routes';\nimport { UnreadsScreen } from '../features/chat/unreads/unreads-screen';\nexport const kept = UnreadsScreen;",
     tests: ['apps/web/src/features/chat/chat-chunk.test.ts'],
   },
   {

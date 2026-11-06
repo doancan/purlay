@@ -13238,3 +13238,91 @@ a lock held until the server notices the dead connection; the deadline in the jo
 
 **Cost of reversing.** `jobDeadline` in the manifest and the registry, `scheduledJobRunner`, and `cli/jobs.ts` back to
 `runJob` with the raw database. Nothing is stored.
+
+### D-275. A column of a core table that exists for one module is acceptable only if it is listed, and a new one is a table of the module's own — builds on D-250, D-271
+
+**Context.** A table has one owner (D-250), and a column does not. The core's `users`, `workspace_members`, `workspaces` and
+`server_settings` carry columns that only chat uses, made before there were modules: `users.quiet_days`, `quiet_from`,
+`quiet_to`, `away_chosen` and `missed_mail_since`; `workspace_members.deep_work_until` and `is_deep_work_active`;
+`workspaces.retention_days`; and the six `server_settings.github_app_*` credentials of chat's GitHub App, fourteen in all. They
+were found by reading every column of the core's tables against who names it (each in `apps/api/src`, outside tests): the
+core names them only in the routes that set them (`modules/users`, `modules/workspaces`, `modules/setup`), the erasure that
+clears one and the two exports that list them; chat's files read and, once, write one. Not on the list, though they look like
+it: `workspaces.storage_quota_bytes` and `storage_used_bytes` are the attachments' own, which are the core's (chat's write is
+in `CORE_WRITES`, `module-tables.test.ts`, as a seam for `platform/quota`), and `attachments.claimed_at` is the core's claim on
+an upload; `users.title`, `time_zone`, `status_text` and `locale` are the person's profile, read by the core's mail and every
+module. Nothing stopped the next such column: a module's migration set adding one to `users` fails the cells test, but a core
+migration that did it for a module was one a reviewer had to notice.
+
+**Decision.**
+
+1. **The columns are not moved now.** A move is a migration (expand, backfill, switch readers, drop) on tables every request
+   reads, and nobody has felt the cost of leaving them: no lock, no erasure the core cannot make, no second module wanting
+   one. Recorded as the decision, with the conditions below, so that it is revisited by a cause and not by taste.
+2. **They are listed, capped and held** (`CORE_COLUMNS_FOR_A_MODULE`, `@purlay/db`; `core-columns.test.ts`). Each entry is a
+   column of a core table, for a module of the build, with why, and with the core's files that may name it. The test fails
+   when the list is longer or shorter than its cap (**it only shrinks**, and raising it is a decision a reviewer sees), when a
+   file of the core outside an entry's files names a listed column, when a file of another module does, when an entry's file no
+   longer names its column, and when a migration set of a module adds a column to a core table (a text scan; the cells test,
+   `migration-cells.integration.test.ts`, holds the same on the database and stays).
+3. **A new column of a core table for one module is never added.** The module makes a table of its own, keyed by the core's row,
+   with its foreign key running to the core (D-250). A column a module has no table for is the sign that the module needs one.
+4. **A listed column must move to a table of its module's own** when any of these is true: a second module wants it (it is then
+   not one module's: it goes to the core behind a port, or to the module that owns its meaning); a core file outside its entry
+   needs it; the module's set must change its type or constraint (a set may not change a core column, so the move is the only
+   way); or the person who feels it says so, with the cost: a lock held on a hot table, a backfill, an erasure or an export
+   the core cannot do without naming the module's words. It moves by expand and contract across releases, and
+   its entry is deleted from the list in the change that drops the column.
+
+**Rejected.** *Moving them now*: a migration with a risk, for no pain anyone reported. *A list in the test file*: the list belongs
+beside `CORE_COLUMNS_A_SET_CHANGES` and `TABLE_OWNERS`, which say who owns what, and a mutation can change it there.
+*A list of columns without the files*: it would let any core file start naming one, which is how a core column becomes a
+module's dependency. *Typing the core's columns by module in the generated schema*: a second copy of what the list says, with a
+generator to keep it true.
+
+**Cost of reversing.** One list, one test and one section of `MODULES.md`. Nothing is stored.
+
+### D-276. A module's frame handlers are a field of its slot, and the router dispatches by ownership — builds on D-250, D-255, D-266, D-270; amends `MODULES.md` §3 and §9
+
+**Context.** The manifest said which client operations a module owns (`frames`) and the composition closed them where the
+module is not run, but nothing said how a module *serves* one: `realtime/router.ts` ran chat's `SUBSCRIBE` with its replay,
+`UNSUBSCRIBE`, `MESSAGE_SEND` and `TYPING` itself, imported chat's guard, send path and replay to do it, and was an allowed
+chat importer in `module-seams.test.ts` because the manifest had no field for a handler. A second module's frame could not be
+added without editing the core's router, and the checklist did not say so.
+
+**Decision.**
+
+1. **`frameHandlers` is a field of the module's slot in `bundledModules`**, beside `jobWork`, not of the manifest: the manifest
+   is types and strings that `module-kit` carries without the platform, and a handler is code that takes the platform's
+   context. One handler per operation of `frames`, typed by the contract's frame for that operation
+   (`platform/frame-handlers.ts`: `FrameHandlers`). A handler for an operation the manifest does not name stops the build, as
+   work for a job it does not name does. A module that is not run supplies none (`compose`), and its operations stay answered
+   as ones nobody has (`closedFrame`).
+2. **The router does what is the same for every operation, before the handler and around it**: the connection's frame budget
+   first (malformed frames included), the contract's parse, the closed answer, then the handler inside the module's deadline
+   and share (D-270, D-266), with what it throws answered as the router always answered it (`AppError` as it is, a purged
+   message as `MESSAGE_NOT_FOUND`, a busy pool as `DATABASE_UNAVAILABLE`, anything else `INTERNAL` with the cause logged
+   once) and the frame's `refId`. `PING` and `ACTIVE` are the router's own. The router names no module and no operation of
+   one: an operation that is neither its own nor served is answered as one nobody has.
+3. **The context is the connection's, and a module names the part it uses.** `FrameContext` carries who is speaking, the
+   application's database (whose every connection is the module's share, D-266), the transaction boundary, the bus, the clock,
+   the log, the user's write budget, and `reply` and `fail`, which stamp a frame as the router does. What the socket carries
+   beyond that (push, who is typing) reaches a module by an interface of its own that extends `FrameContext`, so a module
+   takes no more than it declares and the platform names nothing of a module.
+4. **No wire change.** The operations moved with the same acknowledgements, errors, refIds and order: the suites of the router
+   are unchanged but for the line that gives the router chat's handlers, and the load harness (`budget:latency`) is the same
+   before and after (numbers in the pull requests).
+
+**Built in steps.** The field, the dispatch and `MESSAGE_SEND` and `TYPING` first; then `SUBSCRIBE`, `UNSUBSCRIBE`, the replay of
+channel messages and the answer to a refused subscription, after which `realtime/router.ts` leaves `ALLOWED` in
+`module-seams.test.ts`. Authorising a topic stays chat's, with the operation: `SUBSCRIBE` names channels in the contract, and
+a topic prefix with an `authorise` hook would be a seam with one user (and `Topic` does not yet open to a module's own, §4).
+What is not done: a module's own operation names (`ClientFrame` is a closed union in `@purlay/types`, so a third module still
+adds its operation to the contract; the wire-unions step of `MODULES.md` §10 opens it).
+
+**Rejected.** *Handlers in the manifest*: it makes `module-kit` import the platform's context. *A generic services bag in the
+context* (push, typing, whatever a module needs): a module could take anything, and the platform would carry what one module
+uses. *A topic-authorisation hook per prefix now*: see above. *The router asking each module to claim a frame*: ownership is
+already the manifest's `frames`, checked against the core's claims by the registry.
+
+**Cost of reversing.** Move the handlers back into the router's switch and delete the field; no stored data and no wire change.

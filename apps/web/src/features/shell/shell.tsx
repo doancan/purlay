@@ -32,8 +32,8 @@ import { AttentionReporter } from './attention';
 import { PresenceReader } from './presence-reader';
 import { TabTitle } from './tab-title';
 import { WorkspaceScopeProvider } from './workspace';
-import { SaveIntentsProvider } from '../saved/save-toggle';
-import { OutboxProvider } from '../composer/uploads';
+import { SaveIntentsProvider } from '../chat/saved/save-toggle';
+import { OutboxProvider } from '../chat/composer/uploads';
 
 export const Shell = ({
   slug,

@@ -5,23 +5,23 @@
  * Flat, `w-sidebar` wide, in the navigation tone it shares with the rail, and divided from the
  * conversation by one hairline. Sections scroll together when there are more channels than the
  * window is tall; the header and footer do not. Each section owns its own loading, failure and
- * empty state (`features/sidebar/*`), so a channel list that cannot load does not take the people
+ * empty state (`features/chat/sidebar/*`), so a channel list that cannot load does not take the people
  * or the header with it. Inside the narrow window's overlay it is the panel beside the rail, so
  * it drops the hairline: the dialog is the edge there.
  */
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
-import { ChannelList } from '../sidebar/channel-list';
-import { StarredList } from '../sidebar/starred-list';
-import { UnreadsRow } from '../unreads/unreads-row';
-import { ConversationList } from '../sidebar/conversation-list';
-import { JumpField } from '../sidebar/jump-field';
-import { PeopleList } from '../sidebar/people-list';
-import { SidebarOptions } from '../sidebar/sidebar-options';
-import { SidebarPreferencesProvider } from '../sidebar/preferences-context';
+import { ChannelList } from '../chat/sidebar/channel-list';
+import { StarredList } from '../chat/sidebar/starred-list';
+import { UnreadsRow } from '../chat/unreads/unreads-row';
+import { ConversationList } from '../chat/sidebar/conversation-list';
+import { JumpField } from '../chat/sidebar/jump-field';
+import { PeopleList } from '../chat/sidebar/people-list';
+import { SidebarOptions } from '../chat/sidebar/sidebar-options';
+import { SidebarPreferencesProvider } from '../chat/sidebar/preferences-context';
 import { useSession } from '../session/session';
 import { useWorkspace } from './workspace';
-import { WorkspaceMenu } from '../sidebar/workspace-menu';
+import { WorkspaceMenu } from '../chat/sidebar/workspace-menu';
 import { useRoute } from '../../router/router-provider';
 import { LazySettingsNav } from '../settings/load';
 import { AccountMenu } from './account-menu';

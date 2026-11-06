@@ -119,6 +119,18 @@ route nobody owns, or one claimed by two, fails it. The effect is that a request
 same as what an unknown path says (its status, for a caller with no session, is not: see below). A closed job exits `0` (`closedJob`), a closed frame is answered as an
 operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).
 
+**A frame of a module that runs is served by the module** (D-276). The manifest's `frames` say which client operations
+are the module's, and its slot of `BundledModule` supplies `frameHandlers`, one handler for each: `(context, frame)`,
+where the frame is the contract's, already parsed, and the context is the connection's (`platform/frame-handlers.ts`:
+who is speaking, the application's database whose connections are the module's share, the transaction boundary, the bus,
+the clock, the user's write budget, and `reply` and `fail`, which stamp a frame as the router does). The router does what is
+the same for every operation, in this order: counts the frame against the connection's budget, parses it, answers an
+operation of a module this process does not run as one nobody has, and runs the handler inside its module's deadline and
+share (D-270, D-266), answering what it throws with the frame's `refId`. A handler returns the frames for this connection
+and publishes the rest to the bus; it never touches the socket. `PING` and `ACTIVE` are the router's own. A handler for an
+operation the manifest does not name stops the build (`compose`). A module reaches what its handler needs beyond the
+context by declaring a context of its own that extends it (chat's: `ChatFrameContext`), so it takes no more than it names.
+
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
 and the same route of a module that does not answers `404 ROUTE_NOT_FOUND`, while an unknown path is always `404`
@@ -256,6 +268,29 @@ moves into that module.
   `migration-cells.integration.test.ts`. **Built so far:** every cell migrates and adds only its own
   tables, and leaves every column of a core table, and every value of a core enum type, as it was except what
   `CORE_COLUMNS_A_SET_CHANGES` and `CORE_ENUMS_A_SET_CHANGES` declare, the latter as `set:type` so that only the named set may alter the named type (`migration-cells.integration.test.ts`); a generated `schema.ts` per module is not built, and D-271 declines it: what a module sees is derived.
+
+### Columns of core tables that exist for a module
+
+A table has one owner, and a column does not: chat's quiet hours, away, Deep Work, missed-mail marker and retention days, and
+the credentials of its GitHub App, are columns of `users`, `workspace_members`, `workspaces` and `server_settings`, which are
+the core's, because they were made before there were modules (D-275). They are **not moved**: a move is a migration on the
+tables every request reads, and nobody has felt the cost of leaving them. They are **listed, capped and held**:
+
+- `CORE_COLUMNS_FOR_A_MODULE` (`packages/db/src/table-owners.ts`) names each as `table.column` with the module and why, and
+  the core's files that may name it (the route that sets it, the erasure that clears it, the export that lists it). Fourteen
+  today. `core-columns.test.ts` fails when the list is not as long as its cap, when a file of the core names a listed column
+  outside its entry, when another module names it, when an entry's file no longer names it, and when a module's migration
+  adds a column to a core table (`migration-cells.integration.test.ts` holds the same against the database). **The list only
+  shrinks**; raising the cap is a decision.
+- **A new column of a core table for one module is not added.** The module makes a table of its own keyed by the core's row
+  (`user_id`, `workspace_id`), its foreign key running module to core.
+- **A listed column must move to such a table** when a second module wants it (it is then not one module's: it goes to the core
+  with a port, or to a table of the module that owns the meaning), when a core file outside its entry needs it, when the
+  module's set must change its type or constraint (a set may not change a core column), or when its owner feels the cost: a
+  lock held on a hot table, a backfill, or a contribution the core cannot make without naming the module's words. It moves by
+  expand and contract across releases, and the entry goes in the change that drops the column.
+- `workspaces.storage_*` and `attachments.claimed_at` are not on the list: they are the attachments' own, the core's, which
+  chat writes through its seams (`CORE_WRITES` in `module-tables.test.ts`).
 
 ## 6. Web
 
@@ -410,7 +445,7 @@ until then it is a stated intent and not a guarantee.
 | A module's request or frame that runs past its deadline is answered and its database work cancelled; a throw in one handler is that request's | `deadline` in the manifest (`request-deadline.ts`): the framework's `wrap` around a module's request, `routeFrame` around its frames, the lease's signal cancelling the statement — **built** (D-270); `deadline.integration.test.ts` (a request waiting on a lock, over `handle` and a started server, the statement gone from `pg_stat_activity`; a handler that throws, the share of one connection still whole), `router.test.ts`, `leasing.integration.test.ts`, `module-deadlines.test.ts`, `registry.test.ts`; mutations `module-requests-have-no-deadline`, `deadline-signal-not-on-the-request`, `deadline-does-not-cancel-the-statement`, `lease-takes-a-connection-past-the-deadline`, `frame-deadline-ignored`, `registry-accepts-any-deadline` and `registry-accepts-a-deadline-none-without-a-reason` | 12 |
 | Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts`, and `composition.test.ts` holds that no share takes every connection the modules may share — **built** (D-260, D-266, D-269); mutations `chat-declares-no-budget`, `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
 | A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
-| `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` only `router.ts`, which still runs chat's three socket operations itself (the manifest has no field for a module's frame handler); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
+| `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` none (chat's socket operations are `frameHandlers` of its slot, D-276); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test (D-82) — **built** for the first half; the manifest's replay hook is **not built** (design intent, D-272) | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
@@ -485,7 +520,15 @@ commit beside this list.
 - `routes`: every path template the module owns, as the paths the contract gives (`:name` is a segment, a trailing `**`
   the rest). `route-ownership.test.ts` fails for a registered route no manifest claims or two claim.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
-  for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
+  for its users. **Each operation in `frames` is served by a handler in `frameHandlers` of the module's slot** (chat's:
+  `features/chat/frames.ts`), typed by the contract's frame for that operation, and the router dispatches by ownership: a
+  module's frame is added by its handler and never by an edit of `realtime/router.ts`; a name with no handler, or a handler
+  for a name not listed, stops the build (`composition.test.ts`, `frame-handlers.test.ts`). An operation is a name of `ClientFrame` in
+  `@purlay/types`, which does not yet open to a module's own (§4, wire unions); until it does, a new operation is added to
+  the contract and claimed here by one module. The context a handler is given is a
+  `FrameContext` (`platform/frame-handlers.ts`): declare the parts you use in an interface that extends it. A test in
+  `realtime/` with the module's handler and a fake `bundledModules` slot, as `frame-handlers.test.ts`, shows dispatch, the
+  closed answer, the budget and the deadline. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
   module sends and does not list would reach a process that does not run it.
 - Its id in `ModuleId` (`packages/types/src/modules.ts`): the contract bundle lists the module from its manifest, and
   `contract/bundle.test.ts` and `bun run contract:bundle` fail until the type names it (D-273).
@@ -598,7 +641,7 @@ commit beside this list.
 - **Gating by `useRuns`** (or `WhenRun`) stays for what a manifest does not describe: a sidebar section, a request that
   would otherwise be answered with `404`.
 - Still per module: the icon (`components/icon.tsx`), the client (`data/api.ts`, `data/keys.ts`), the failure words for
-  its error codes (`data/failure.ts`, and the exhaustive switch in `composer/uploads.tsx`), and the English and Turkish
+  its error codes (`data/failure.ts`, and the exhaustive switch in `features/chat/composer/uploads.tsx`), and the English and Turkish
   catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
 - **`budget:web` shape check**: it reads the module ids from `features/*/manifest.ts` and looks for each one's marker,
   `screen-of-the-<id>-module`, in the initial chunks; the screen's file holds the marker. A bound for the chunk is added

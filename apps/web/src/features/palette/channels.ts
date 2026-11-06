@@ -8,7 +8,7 @@
  */
 import { nameOf } from '../../lib/author';
 import type { Channel } from '@purlay/types';
-import { joinedChannels, starredChannels } from '../sidebar/ordering';
+import { joinedChannels, starredChannels } from '../chat/sidebar/ordering';
 
 /** Only channels the person has joined: one they can merely see has nothing to read. */
 const joined = (channels: readonly Channel[]): Channel[] =>
