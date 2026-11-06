@@ -7,8 +7,9 @@
  * through the membership guard and then the visibility guard; a channel named on
  * its own derives the workspace from the resource and does both (D-34).
  */
-import type { Auth } from '../../modules/auth/better-auth';
-import type { Executor } from '@purlay/db';
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { Auth } from '../../../modules/auth/better-auth';
 import {
   AddChannelMemberRequest,
   CreateChannelRequest,
@@ -26,8 +27,8 @@ import {
   type ReadAllChannelsResponse,
   type ReadChannelResponse,
 } from '@purlay/types';
-import type { Clock } from '../../platform/clock';
-import { requireChannelById } from '../../features/chat/channels/guard';
+import type { Clock } from '../../../platform/clock';
+import { requireChannelById } from '../channels/guard';
 import {
   NO_LOG,
   publication,
@@ -39,21 +40,16 @@ import {
   publishChannelState,
   publishChannelUpdated,
   type EventBus,
-} from '../../platform/events';
-import type { Logger } from '../../platform/logging';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { atomicallyOn } from '../../platform/transactions';
-import {
-  channelIn,
-  channelsVisibleIn,
-  createChannel,
-  joinChannel,
-} from '../../features/chat/channels/channels';
-import { openConversation, openDirectMessage } from '../../features/chat/channels/direct-messages';
-import { addMember } from '../../features/chat/channels/members';
-import { markAllRead, markRead, markUnread } from '../../features/chat/channels/read-state';
-import { setNotificationLevel } from '../../features/chat/channels/notification-level';
-import { readChannelRetention, setChannelRetention } from '../../features/chat/channels/retention';
+} from '../../../platform/events';
+import type { Logger } from '../../../platform/logging';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
+import { channelIn, channelsVisibleIn, createChannel, joinChannel } from '../channels/channels';
+import { openConversation, openDirectMessage } from '../channels/direct-messages';
+import { addMember } from '../channels/members';
+import { markAllRead, markRead, markUnread } from '../channels/read-state';
+import { setNotificationLevel } from '../channels/notification-level';
+import { readChannelRetention, setChannelRetention } from '../channels/retention';
 import {
   archiveChannel,
   archivedChannels,
@@ -62,14 +58,14 @@ import {
   removeChannelMember,
   restoreChannel,
   updateChannel,
-} from '../../features/chat/channels/settings';
-import { requireSession } from './session';
-import { validated } from './validate';
+} from '../channels/settings';
+import { requireSession } from '../../../ingress/http/session';
+import { validated } from '../../../ingress/http/validate';
 
 export interface ChannelDependencies {
   /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
   readonly auth: Auth;
-  readonly database: Executor;
+  readonly database: ModuleRouteDependencies['database'];
   readonly clock: Clock;
 }
 
@@ -80,7 +76,7 @@ export interface ChannelWriteDependencies extends ChannelDependencies {
   readonly log?: Logger;
 }
 
-export const listChannels = async (
+const listChannels = async (
   dependencies: ChannelDependencies,
   request: Request,
   workspaceId: string,
@@ -114,7 +110,7 @@ export const createWorkspaceChannel = async (
   return made;
 };
 
-export const readChannel = async (
+const readChannel = async (
   dependencies: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -185,7 +181,7 @@ export const readUpTo = async (
  * `PUT /api/channels/:channelId/unread` — "mark unread from here" (D-212). The caller's devices are
  * told, from the row as it is, whether or not it moved, as a read tells them.
  */
-export const unreadFrom = async (
+const unreadFrom = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -214,7 +210,7 @@ export const unreadFrom = async (
  * their own topic, as a read of one channel tells them — whether or not it moved, so a repeat repairs a
  * device that missed the first.
  */
-export const readAllChannels = async (
+const readAllChannels = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   workspaceId: string,
@@ -324,7 +320,7 @@ export const addChannelMember = async (
  * `PUT /api/channels/:channelId/notification-level` — what the caller is told about here (D-107).
  * Their own membership only; a channel they are not in is the stranger's `404`.
  */
-export const setLevel = async (
+const setLevel = async (
   dependencies: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -342,7 +338,7 @@ export const setLevel = async (
  * room hears the new name and topic after the commit, at the row's version; asking for what is
  * already there is answered and tells nobody.
  */
-export const changeChannel = async (
+const changeChannel = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -371,7 +367,7 @@ export const changeChannel = async (
  * `DELETE /api/channels/:channelId` — an owner or an admin archives it (D-123). Everyone watching
  * it stops receiving it, on the channel's topic, and is told it was archived.
  */
-export const archive = async (
+const archive = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -391,7 +387,7 @@ export const archive = async (
  * `GET /api/workspaces/:workspaceId/archived-channels` — the archived channels this owner or admin may
  * bring back, the most recently archived first (D-232).
  */
-export const listArchived = async (
+const listArchived = async (
   dependencies: ChannelDependencies,
   request: Request,
   workspaceId: string,
@@ -406,7 +402,7 @@ export const listArchived = async (
  * `POST /api/channels/:channelId/restore` — an owner or an admin brings an archived channel back
  * (D-232). Each of its members reads their channels again, so it returns to their sidebars at once.
  */
-export const restore = async (
+const restore = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -429,7 +425,7 @@ export const restore = async (
  * `POST /api/channels/:channelId/leave` — out of the channel (D-123). The caller's own sockets stop
  * receiving it and are told they left; not being in it is the same `204`, and tells nobody.
  */
-export const leave = async (
+const leave = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -456,7 +452,7 @@ export const leave = async (
  * the caller leaving it by naming themself. The person's own sockets stop receiving it and are told
  * why; not being in it is the same `204`, and tells nobody.
  */
-export const removeFromChannel = async (
+const removeFromChannel = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -480,7 +476,7 @@ export const removeFromChannel = async (
 };
 
 /** `GET /api/channels/:channelId/members` — who is in it, for anybody who can see it (D-123). */
-export const listChannelMembers = async (
+const listChannelMembers = async (
   dependencies: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -495,7 +491,7 @@ export const listChannelMembers = async (
  * `GET /api/channels/:channelId/retention` — how long the channel keeps its history beside its
  * workspace's window, and what is kept: an owner's (D-225).
  */
-export const readChannelRetentionSetting = async (
+const readChannelRetentionSetting = async (
   dependencies: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -511,7 +507,7 @@ export const readChannelRetentionSetting = async (
  * the workspace does, or follow it again (D-225). Nothing is told to any socket: only an owner reads it,
  * as the workspace's window (D-139 §4).
  */
-export const updateChannelRetentionSetting = async (
+const updateChannelRetentionSetting = async (
   dependencies: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -525,3 +521,112 @@ export const updateChannelRetentionSetting = async (
     async (transaction) => await setChannelRetention(transaction, clock, context, keepsAtLeast),
   );
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const channelRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/workspaces/:workspaceId/channels',
+      async ({ request, params }) => await listChannels(context, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/archived-channels',
+      async ({ request, params }) => await listArchived(context, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/read',
+      async ({ request, params }) => await readAllChannels(context, request, params.workspaceId),
+    )
+    .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
+      set.status = 201;
+      return await createWorkspaceChannel(context, request, params.workspaceId, body);
+    })
+    .post('/api/workspaces/:workspaceId/conversations', async ({ request, params, body, set }) => {
+      const { channel, created } = await openConversationWith(
+        context,
+        request,
+        params.workspaceId,
+        body,
+      );
+      // As `/dms`: 201 when this call made it, 200 when these people already had it (I-5).
+      set.status = created ? 201 : 200;
+      return channel;
+    })
+    .post('/api/workspaces/:workspaceId/dms', async ({ request, params, body, set }) => {
+      const { channel, created } = await openDirectMessageWith(
+        context,
+        request,
+        params.workspaceId,
+        body,
+      );
+      // 201 when this call made it, 200 when it was already there: the same pair
+      // is the same channel, and a retry is not a second one (I-5).
+      set.status = created ? 201 : 200;
+      return channel;
+    })
+    .get(
+      '/api/channels/:channelId',
+      async ({ request, params }) => await readChannel(context, request, params.channelId),
+    )
+    .patch(
+      '/api/channels/:channelId',
+      async ({ request, params, body }) =>
+        await changeChannel(context, request, params.channelId, body),
+    )
+    .get(
+      '/api/channels/:channelId/retention',
+      async ({ request, params }) =>
+        await readChannelRetentionSetting(context, request, params.channelId),
+    )
+    .put(
+      '/api/channels/:channelId/retention',
+      async ({ request, params, body }) =>
+        await updateChannelRetentionSetting(context, request, params.channelId, body),
+    )
+    .delete('/api/channels/:channelId', async ({ request, params, set }) => {
+      await archive(context, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/channels/:channelId/restore', async ({ request, params, set }) => {
+      await restore(context, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/channels/:channelId/leave', async ({ request, params, set }) => {
+      await leave(context, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .delete('/api/channels/:channelId/members/:userId', async ({ request, params, set }) => {
+      await removeFromChannel(context, request, params.channelId, params.userId);
+      set.status = 204;
+      return null;
+    })
+    .get(
+      '/api/channels/:channelId/members',
+      async ({ request, params }) => await listChannelMembers(context, request, params.channelId),
+    )
+    .put(
+      '/api/channels/:channelId/read',
+      async ({ request, params, body }) => await readUpTo(context, request, params.channelId, body),
+    )
+    .put(
+      '/api/channels/:channelId/unread',
+      async ({ request, params, body }) =>
+        await unreadFrom(context, request, params.channelId, body),
+    )
+    .put('/api/channels/:channelId/notification-level', async ({ request, params, body, set }) => {
+      await setLevel(context, request, params.channelId, body);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/channels/:channelId/members', async ({ request, params, body, set }) => {
+      await addChannelMember(context, request, params.channelId, body);
+      set.status = 204;
+      return null;
+    })
+    .post(
+      '/api/channels/:channelId/join',
+      async ({ request, params }) => await joinPublicChannel(context, request, params.channelId),
+    );

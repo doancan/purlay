@@ -8,7 +8,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { Value } from '@sinclair/typebox/value';
 import { Channel, CONVERSATION_PEOPLE_MAX, messageId, erasedPerson } from '@purlay/types';
 import { createApp } from './app';
-import { openConversationWith } from './channels';
+import { openConversationWith } from '../../features/chat/http/channels';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';

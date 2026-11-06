@@ -7,13 +7,13 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { createApp } from './app';
-import { testDependencies } from '../../testing/doubles';
-import { fixedClock } from '../../platform/clock';
-import { aTestAuth, aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
+import { createApp } from '../../../ingress/http/app';
+import { testDependencies } from '../../../testing/doubles';
+import { fixedClock } from '../../../platform/clock';
+import { aTestAuth, aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
 import type { ServerFrame } from '@purlay/types';
-import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
+import { NO_LOG, userTopic, type EventBus } from '../../../platform/events';
 import { addChannelMember, createWorkspaceChannel, joinPublicChannel } from './channels';
 
 afterAll(async () => {

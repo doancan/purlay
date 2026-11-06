@@ -14,7 +14,7 @@ import {
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';
 import { saveMessage, savedIds, savedPage, unsaveMessage } from '../saved/saved';
-import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 import { queryOf, validated } from '../../../ingress/http/validate';
 

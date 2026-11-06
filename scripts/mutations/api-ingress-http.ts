@@ -97,14 +97,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
-    id: 'channel-removal-tells-the-remover',
-    why: 'the person taken out keeps receiving the channel on their open sockets: the frame goes to whoever removed them (D-85, D-172)',
-    file: 'apps/api/src/ingress/http/channels.ts',
-    find: '          publishAccessRevoked(bus, clock, memberId, [channelId], removal),\n',
-    replace: '          publishAccessRevoked(bus, clock, userId, [channelId], removal),\n',
-    tests: ['apps/api/src/ingress/http/channel-removal.integration.test.ts'],
-  },
-  {
     id: 'client-contract-floor-inclusive',
     why: 'a client at the minimum contract is refused: the emergency brake stops the very release it was raised to allow',
     file: 'apps/api/src/ingress/http/client-policy.ts',
@@ -361,15 +353,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/github-token.integration.test.ts'],
   },
   {
-    id: 'history-query-ignores-the-unknown',
-    why: 'a misspelt or repeated cursor is read as the first page: a client that mistypes `beforeId` pages the same newest rows for ever and is never told',
-    file: 'apps/api/src/ingress/http/messages.ts',
-    find: "  const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));\n  return await messageHistory(",
-    replace:
-      '  const query = validated(PageQuery, Object.fromEntries(new URL(request.url).searchParams));\n  return await messageHistory(',
-    tests: ['apps/api/src/ingress/http/messages.integration.test.ts'],
-  },
-  {
     id: 'inbox-query-key-repeated',
     why: 'the guard checks the first workspaceId and the schema the last, so the two disagree about which workspace is asked for',
     file: 'apps/api/src/ingress/http/validate.ts',
@@ -424,7 +407,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     file: 'apps/api/src/ingress/http/validate.ts',
     find: 'if (value !== null && /^-?\\d+$/.test(value)) query[key] = Number(value);',
     replace: 'if (value !== null) query[key] = Number(value);',
-    tests: ['apps/api/src/ingress/http/messages.integration.test.ts'],
+    tests: ['apps/api/src/features/chat/http/messages.integration.test.ts'],
   },
   {
     id: 'me-names-every-module-whatever-runs',
@@ -486,28 +469,12 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     ],
   },
   {
-    id: 'open-questions-not-narrowed-on-the-server',
-    why: 'one channel’s open questions are the workspace’s visible ones, so a channel’s header and narrowed view count what is not theirs',
-    file: 'apps/api/src/ingress/http/messages.ts',
-    find: 'one === undefined ? visible : [one]',
-    replace: 'visible',
-    tests: ['apps/api/src/ingress/http/threads.integration.test.ts'],
-  },
-  {
     id: 'passport-cookie-outlives-its-hour',
     why: "the invite cookie is kept by the browser far past the passport's hour",
     file: 'apps/api/src/ingress/http/invitations.ts',
     find: 'inviteCookie(cookie, PASSPORT_TTL_MS / 1000)',
     replace: 'inviteCookie(cookie, PASSPORT_TTL_MS)',
     tests: ['apps/api/src/ingress/http/invitation-passport.integration.test.ts'],
-  },
-  {
-    id: 'read-all-tells-no-device',
-    why: "the person's other devices keep their badges after every channel is marked read (D-238)",
-    file: 'apps/api/src/ingress/http/channels.ts',
-    find: '    outcomes.map((outcome) =>\n      publication(',
-    replace: '    outcomes.filter(() => false).map((outcome) =>\n      publication(',
-    tests: ['apps/api/src/realtime/channel-state.integration.test.ts'],
   },
   {
     id: 'readiness-forgets-the-modules-collated-columns',
@@ -556,14 +523,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: "    [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],\n",
     replace: '',
     tests: ['apps/api/src/realtime/revocation.integration.test.ts'],
-  },
-  {
-    id: 'search-words-not-trimmed',
-    why: 'two spaces and a letter are measured as three characters, a search the trigram index cannot serve',
-    file: 'apps/api/src/ingress/http/messages.ts',
-    find: "  if (typeof query['q'] === 'string') query['q'] = query['q'].trim();\n",
-    replace: '',
-    tests: ['apps/api/src/ingress/http/search.integration.test.ts'],
   },
   {
     id: 'server-creators-logins-unchecked',
