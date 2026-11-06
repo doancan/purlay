@@ -13081,11 +13081,11 @@ services take `Executor` by the hundred and a brand all of them had to be change
    alone and `bun run mutate` runs tests alone: each case a module may not do is paired with the same statement over a table it
    holds, which must compile; mutations `module-schema-ignores-ownership`, `module-schema-forgets-core-reads`,
    `module-handle-is-not-a-union` and `executor-is-not-a-union`. **Built:** the types, issues behind them, the text scan
-   (`module-tables.test.ts`, with `CORE_WRITES`: chat's four, each with why) and the lint (`NO_WHOLE_DATABASE` for a feature not
-   in `NOT_YET_BEHIND_THEIR_HANDLE`, which is `chat` and only shrinks, and `NO_RUNTIME_TABLE_NAMES` for every feature, both
-   shown by `verify:enforcement`); mutations `module-tables-scan-ignores-sql-templates`, `module-tables-scan-allows-every-owner`
-   and `module-tables-core-writes-not-held-to-list`. Chat's functions come after, in steps (`messages/`, `pins/`, `reactions/`, `bookmarks/` and `presence/` first, then `channels/`, `notifications/`, `search/` and `saved/`, then the rest, which empties the list, with `module-handle-migration.test.ts` listing the files still on the whole database, which only shrinks, and the mutation `chat-migration-list-not-held`), and the last takes chat out of the
-   lint's list.
+   (`module-tables.test.ts`, with `CORE_WRITES`: chat's four, each with why) and the lint (`NO_WHOLE_DATABASE` for every feature,
+   and `NO_RUNTIME_TABLE_NAMES`, both shown by `verify:enforcement`); mutations `module-tables-scan-ignores-sql-templates`,
+   `module-tables-scan-allows-every-owner` and `module-tables-core-writes-not-held-to-list`. Chat's functions moved behind its
+   handle in four steps, held meanwhile by a per-file list that only shrank; its last step emptied the list, deleted it, and put
+   chat under the lint with every other feature. A folder under `features/` with no `schema.ts` fails `module-tables.test.ts`.
 
 **Rejected.** *A generated `schema.ts` per module*: a second generated copy of what `TABLE_OWNERS` already says, with a
 generator to keep it true. *A runtime proxy that throws on a table that is not the module's*: a cost on every query, found

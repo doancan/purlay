@@ -51,8 +51,8 @@ const NO_RUNTIME_TABLE_NAMES = [
   },
 ];
 
-// A feature behind its typed handle (`features/<id>/schema.ts`, D-271) takes `<Id>Db` and `<Id>Tx`, not the whole
-// database's executor, or the handle holds nothing. The builder's types (`SelectQueryBuilder`, `Selectable`) stay.
+// A feature takes its typed handle (`features/<id>/schema.ts`, D-271), `<Id>Db` and `<Id>Tx`, not the whole
+// database's executor, or the handle holds nothing; every feature is held to it, chat since its last step. The builder's types (`SelectQueryBuilder`, `Selectable`) stay.
 // Tests may: they build a room in a module and hand a service what the application would.
 const NO_WHOLE_DATABASE = {
   name: '@purlay/db',
@@ -60,10 +60,6 @@ const NO_WHOLE_DATABASE = {
   message:
     "Take the module's handle from ./schema (`<Id>Db`, `<Id>Tx`): the whole database's executor lets a query name another module's table. (D-271, MODULES.md §4)",
 };
-
-// The features whose functions still take the whole database's executor, being moved behind their handle in steps.
-// **This list only shrinks**: a feature leaves it when no file of it names `Executor`, `Transaction`, `Database` or `DB`.
-const NOT_YET_BEHIND_THEIR_HANDLE = ['chat'];
 
 const NO_CREATE_DATABASE = {
   name: '@purlay/db',
@@ -676,12 +672,8 @@ export default defineConfig([
     NO_TRANSPORT_TYPES,
     (id) =>
       id === 'chat'
-        ? [NO_CREATE_DATABASE]
-        : [
-            NO_CREATE_DATABASE,
-            ...NO_RAW_SQL,
-            ...(NOT_YET_BEHIND_THEIR_HANDLE.includes(id) ? [] : [NO_WHOLE_DATABASE]),
-          ],
+        ? [NO_CREATE_DATABASE, NO_WHOLE_DATABASE]
+        : [NO_CREATE_DATABASE, ...NO_RAW_SQL, NO_WHOLE_DATABASE],
     (id) => (id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL]),
   ),
   // Repeats the clock and brand selectors, since a `no-restricted-syntax` replaces the one before it; tests are left to
