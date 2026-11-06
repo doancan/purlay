@@ -6,8 +6,8 @@
  * `core-claims.test.ts` holds the lists to the schema: a name in `ClientFrame` or `ServerFrame` is the core's or exactly one
  * module's. That cannot see a module whose code names an event or an operation the *other* owner lists, which is the
  * mistake of a module that sends an event it forgot to claim while the schema still has an owner for it. This reads each
- * module's own source — its folder under `features/` and its route file `ingress/http/<id>.ts` — and holds every event or
- * operation it names to the module's list or the core's.
+ * module's own source — its folder under `features/` and the files of `ingress/` and `realtime/` that import it, its route
+ * handlers (`testing/module-sources.ts`) — and holds every event or operation it names to the module's list or the core's.
  *
  * It is a scan for the name as a string literal, so it sees a module that writes the name and not one that builds it. The
  * events chat's services publish through the core's builders in `platform/events.ts` are named there, in the core's file,
@@ -36,6 +36,16 @@ describe('what a module’s code names on the socket', () => {
     ]);
     expect(namedIn('{ event: "TYPING" }', names)).toEqual(['TYPING']);
     expect(namedIn('const TYPING_TTL_MS = 6_000; // MESSAGE_CREATED', names)).toEqual([]);
+  });
+
+  test('a module’s sources are its folder and the files of the doors that import it, never the composition root', () => {
+    const chat = sourcesOf('chat').map(shown);
+    expect(chat).toContain('features/chat/module.ts');
+    expect(chat).toContain('ingress/http/messages.ts');
+    expect(sourcesOf('issues').map(shown)).toContain('ingress/http/issues.ts');
+    for (const module of carried) {
+      expect(sourcesOf(module.manifest.id).map(shown)).not.toContain('ingress/http/app.ts');
+    }
   });
 
   test.each(carried.map((module) => [module.manifest.id, module] as const))(
