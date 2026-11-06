@@ -37,7 +37,11 @@ export const WORKSPACE_PURGE_BATCH = 500;
  * left by an order nobody foresaw. `workspace-purge.integration.test.ts` holds both lists, with the steps and
  * the trail kept, to every table the catalogue says refers to a workspace.
  */
-export const CORE_REMAINING_TABLES = ['workspace_invitations'] as const;
+export const CORE_REMAINING_TABLES = [
+  'workspace_invitation_mail_attempts',
+  'workspace_invitation_recipients',
+  'workspace_invitations',
+] as const;
 
 /** A table with a `workspace_id` to empty it by. */
 type WorkspaceTable = {

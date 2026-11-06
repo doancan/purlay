@@ -1059,9 +1059,9 @@ export const INVITATION_EMAILS_PER_INVITER_PER_DAY = 50;
 export const INVITATION_EMAILS_PER_WORKSPACE_PER_DAY = 200;
 
 /**
- * `POST …/invitations` — a new link, and optionally the addresses to send it to, in the language the
- * letter is written in (the interface's, D-41). No role and no address is bound to the link: it is the
- * same bearer link whoever holds it (D-115, D-179 §5). The body may be empty, as it was.
+ * `POST …/invitations` — a copy link, and optionally separate bearer links sent to each address
+ * (D-279), in the interface's language (D-41). No role or address is bound to any link. The body may
+ * be empty, as it was.
  */
 export const CreateInvitationRequest = FromClient({
   emails: Type.Optional(
@@ -1074,7 +1074,8 @@ export type CreateInvitationRequest = Static<typeof CreateInvitationRequest>;
 /**
  * What became of one address. `queued` is all the server can honestly say: the letter is handed to the
  * mail server *after* the answer, so neither delivery nor even the hand-over has happened yet — a
- * failure then is logged, not told. The others are refusals made before anything was queued.
+ * failure then appears as a safe category in private recipient history (D-279). The others are
+ * refusals made before anything was queued.
  */
 export const InvitationMailOutcome = Type.Union([
   Type.Literal('queued'),
@@ -1106,6 +1107,50 @@ export type CreatedInvitation = Static<typeof CreatedInvitation>;
 /** `GET …/invitations` — the links that still let people in, newest first. */
 export const InvitationPage = Page(Invitation);
 export type InvitationPage = Static<typeof InvitationPage>;
+
+/** Persistent evidence of one mail hand-over; acceptance is not inbox delivery. */
+export const InvitationDelivery = Type.Object({
+  id: Uuid,
+  createdAt: Timestamp,
+  expiresAt: Timestamp,
+  revokedAt: Type.Union([Timestamp, Type.Null()]),
+  result: Type.Union([
+    Type.Literal('queued'),
+    Type.Literal('accepted'),
+    Type.Literal('failed'),
+    Type.Literal('unknown'),
+  ]),
+  finishedAt: Type.Union([Timestamp, Type.Null()]),
+  failure: Type.Union([
+    Type.Literal('connection'),
+    Type.Literal('authentication'),
+    Type.Literal('recipient'),
+    Type.Literal('message'),
+    Type.Literal('tls'),
+    Type.Literal('unknown'),
+    Type.Null(),
+  ]),
+});
+export type InvitationDelivery = Static<typeof InvitationDelivery>;
+export const InvitationRecipient = Type.Object({
+  id: Uuid,
+  address: Type.String(),
+  createdAt: Timestamp,
+  requestedAt: Type.Union([Timestamp, Type.Null()]),
+  joinedAt: Type.Union([Timestamp, Type.Null()]),
+  admission: Type.Union([
+    Type.Literal('pending'),
+    Type.Literal('approved'),
+    Type.Literal('denied'),
+    Type.Null(),
+  ]),
+  latest: InvitationDelivery,
+});
+export type InvitationRecipient = Static<typeof InvitationRecipient>;
+export const InvitationRecipientPage = Page(InvitationRecipient);
+export type InvitationRecipientPage = Static<typeof InvitationRecipientPage>;
+export const InvitationDeliveryPage = Page(InvitationDelivery);
+export type InvitationDeliveryPage = Static<typeof InvitationDeliveryPage>;
 
 /** `POST /api/invitations/preview` and `…/accept` — the link's token, in the body. */
 export const InvitationTokenRequest = FromClient({ token: InvitationToken });

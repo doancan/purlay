@@ -7,6 +7,9 @@
  */
 import {
   CreateInvitationRequest,
+  type InvitationRecipientPage,
+  type InvitationDeliveryPage,
+  Uuid,
   OlderPageQuery,
   InvitationPassportRequest,
   InvitationTokenRequest,
@@ -15,7 +18,12 @@ import {
   type InvitationPreview,
   type Membership,
 } from '@purlay/types';
-import { makeAndMailInvitation } from '../../modules/workspaces/invitation-mail';
+import {
+  makeAndMailInvitation,
+  resendInvitationRecipient,
+  revokeInvitationRecipient,
+  type InvitationLetter,
+} from '../../modules/workspaces/invitation-mail';
 import {
   acceptInvitation,
   listInvitations,
@@ -27,10 +35,15 @@ import {
   PASSPORT_TTL_MS,
   PassportRefused,
 } from '../../modules/workspaces/invitation-passport';
+import {
+  finishInvitationAttempt,
+  listInvitationRecipients,
+  listInvitationDeliveries,
+} from '../../modules/workspaces/invitation-delivery';
 import { AppError } from '../../platform/errors';
 import { inviteCookie } from '../../platform/cookies';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
-import type { MailMessage, Outbox } from '../../platform/mail';
+import type { Outbox } from '../../platform/mail';
 import { atomicallyOn } from '../../platform/transactions';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
@@ -76,7 +89,7 @@ export const makeInvitation = async (
   );
   if (outbox !== undefined && letters.length > 0) {
     later(() => {
-      post(outbox, letters);
+      post({ database, clock, outbox }, letters);
       return Promise.resolve();
     });
   }
@@ -84,8 +97,18 @@ export const makeInvitation = async (
 };
 
 /** Each letter to the outbox, which returns at once: a failure there is the outbox's to log. */
-const post = (outbox: Outbox, letters: readonly MailMessage[]): void => {
-  for (const letter of letters) outbox.post(letter, 'invitation');
+const post = (
+  {
+    database,
+    clock,
+    outbox,
+  }: Pick<InvitationMailDependencies, 'database' | 'clock'> & { readonly outbox: Outbox },
+  letters: readonly InvitationLetter[],
+): void => {
+  for (const { attemptId, ...letter } of letters)
+    outbox.post(letter, 'invitation', async (receipt) => {
+      await finishInvitationAttempt(database, clock, attemptId, receipt);
+    });
 };
 
 /** `GET /api/workspaces/:workspaceId/invitations` — the links that still open, newest first. */
@@ -183,4 +206,69 @@ export const openPassport = async (
       { retryAfterSeconds: PASSPORT_TTL_MS / 1000 },
     );
   }
+};
+
+export const readInvitationRecipients = async (
+  deps: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<InvitationRecipientPage> => {
+  const { userId } = await requireSession(deps.auth, request);
+  const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
+  return await listInvitationRecipients(
+    deps.database,
+    deps.clock,
+    context,
+    validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] })),
+  );
+};
+export const readInvitationDeliveries = async (
+  deps: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+  recipientId: string,
+): Promise<InvitationDeliveryPage> => {
+  const { userId } = await requireSession(deps.auth, request);
+  const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
+  return await listInvitationDeliveries(
+    deps.database,
+    deps.clock,
+    context,
+    validated(Uuid, recipientId),
+    validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] })),
+  );
+};
+export const resendRecipient = async (
+  deps: InvitationMailDependencies,
+  request: Request,
+  workspaceId: string,
+  recipientId: string,
+): Promise<void> => {
+  const { userId } = await requireSession(deps.auth, request);
+  const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
+  const letter = await atomicallyOn(deps.database)(
+    async (tx) =>
+      await resendInvitationRecipient(tx, deps.clock, context, validated(Uuid, recipientId), {
+        on: deps.outbox !== undefined,
+        appUrl: deps.appUrl,
+      }),
+  );
+  const outbox = deps.outbox;
+  if (outbox !== undefined)
+    deps.later(() => {
+      post({ database: deps.database, clock: deps.clock, outbox }, [letter]);
+      return Promise.resolve();
+    });
+};
+export const dropRecipient = async (
+  deps: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+  recipientId: string,
+): Promise<void> => {
+  const { userId } = await requireSession(deps.auth, request);
+  const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
+  await atomicallyOn(deps.database)(async (tx) => {
+    await revokeInvitationRecipient(tx, deps.clock, context, validated(Uuid, recipientId));
+  });
 };

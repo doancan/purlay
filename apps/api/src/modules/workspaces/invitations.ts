@@ -40,9 +40,11 @@ import {
 } from '@purlay/types';
 import { DAY_MS, type Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
-import { workspaceNotFound, type WorkspaceContext } from '../../platform/tenancy';
+import type { WorkspaceContext } from '../../platform/tenancy';
+import { requireInvitationManager, requireInvitationManagerNow } from './invitation-manager';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 import { recordAudit } from '../audit/audit';
+import { recordInvitationApplicant } from './invitation-delivery';
 import { membershipsOf } from './workspaces';
 
 export const notFound = (): AppError =>
@@ -66,35 +68,6 @@ export const linkOpens = (
     eb('workspace_invitations.expires_at', '>', now),
     eb('workspaces.deleted_at', 'is', null),
   ]);
-
-const forbidden = (): AppError =>
-  new AppError({ code: 'FORBIDDEN', message: 'Only an owner or an admin manages invitations.' });
-
-/** Managing links is an owner's and an admin's, after membership has made the workspace exist. */
-const refuseMembers = (context: WorkspaceContext): void => {
-  if (context.role === 'member') throw forbidden();
-};
-
-/**
- * The same, for a write: the caller's role as it is now, read `FOR SHARE` in the writing
- * transaction — a demotion committed after the request began is seen, and one still to commit
- * waits for this (#51 reads roles under a lock for the same reason).
- */
-const refuseMembersNow = async (
-  transaction: Transaction,
-  context: WorkspaceContext,
-): Promise<void> => {
-  const row = await transaction
-    .selectFrom('workspace_members')
-    .select('role')
-    .where('workspace_id', '=', context.workspaceId)
-    .where('user_id', '=', context.userId)
-    .forShare()
-    .executeTakeFirst();
-  // Gone from the workspace since the guard let them in: outside it, as anybody outside is (D-21).
-  if (row === undefined) throw workspaceNotFound();
-  if (row.role === 'member') throw forbidden();
-};
 
 interface InvitationRow {
   readonly id: string;
@@ -147,6 +120,16 @@ const openInvitations = async (
   if ('id' in only) {
     statement = statement.where('workspace_invitations.id', '=', only.id);
   } else {
+    statement = statement.where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('workspace_invitation_mail_attempts')
+            .select('id')
+            .whereRef('invitation_id', '=', 'workspace_invitations.id'),
+        ),
+      ),
+    );
     if (only.before !== undefined) {
       statement = statement.where('workspace_invitations.id', '<', only.before);
     }
@@ -161,7 +144,7 @@ export const createInvitation = async (
   clock: Clock,
   context: WorkspaceContext,
 ): Promise<CreatedInvitation> => {
-  await refuseMembersNow(transaction, context);
+  await requireInvitationManagerNow(transaction, context);
   const now = clock.now();
   const token = randomToken();
   const id = messageId(now);
@@ -196,7 +179,7 @@ export const listInvitations = async (
   context: WorkspaceContext,
   query: OlderPageQuery,
 ): Promise<InvitationPage> => {
-  refuseMembers(context);
+  requireInvitationManager(context);
   const limit = query.limit ?? PAGE_LIMIT.default;
   const rows = await openInvitations(executor, context, clock.now(), {
     before: query.before,
@@ -219,7 +202,7 @@ export const revokeInvitation = async (
   context: WorkspaceContext,
   invitationId: string,
 ): Promise<void> => {
-  await refuseMembersNow(transaction, context);
+  await requireInvitationManagerNow(transaction, context);
   // Not an id at all is the same as no such link — never a database error.
   if (!Value.Check(Uuid, invitationId)) throw notFound();
   const revoked = await transaction
@@ -358,6 +341,7 @@ export const acceptInvitation = async (
       metadata: { via: 'invitation', invitationId },
     });
   }
+  await recordInvitationApplicant(transaction, clock, userId, invitationId, true);
   const [membership] = await membershipsOf(transaction, clock, userId, workspace.id);
   // Inserted or already there, in this transaction: a membership that is not found is a bug.
   if (membership === undefined) throw new Error('a membership just made is missing');

@@ -64,6 +64,8 @@ import {
   type DeclareIncidentRequest,
   type SavePostmortemRequest,
   InvitationPage,
+  InvitationRecipientPage,
+  InvitationDeliveryPage,
   InvitationPreview,
   RetentionSetting,
   ChannelRetention,
@@ -163,6 +165,19 @@ export interface Api {
     before?: string,
     signal?: AbortSignal,
   ) => Promise<InvitationPage>;
+  readonly invitationRecipients: (
+    workspaceId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<InvitationRecipientPage>;
+  readonly invitationDeliveries: (
+    workspaceId: string,
+    recipientId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<InvitationDeliveryPage>;
+  readonly resendInvitationRecipient: (workspaceId: string, recipientId: string) => Promise<void>;
+  readonly revokeInvitationRecipient: (workspaceId: string, recipientId: string) => Promise<void>;
   readonly revokeInvitation: (workspaceId: string, invitationId: string) => Promise<void>;
   /** An owner's or an admin's: whether the workspace has a GitHub token, never the token (D-23). */
   readonly githubIntegration: (
@@ -575,6 +590,30 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/invitations`,
         InvitationPage,
         options(before === undefined ? {} : { query: { before } }, signal),
+      ),
+    invitationRecipients: (workspaceId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/invitation-recipients`,
+        InvitationRecipientPage,
+        options(before === undefined ? {} : { query: { before } }, signal),
+      ),
+    invitationDeliveries: (workspaceId, recipientId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/invitation-recipients/${at(recipientId)}/attempts`,
+        InvitationDeliveryPage,
+        options(before === undefined ? {} : { query: { before } }, signal),
+      ),
+    resendInvitationRecipient: (workspaceId, recipientId) =>
+      http.send(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/invitation-recipients/${at(recipientId)}/resend`,
+      ),
+    revokeInvitationRecipient: (workspaceId, recipientId) =>
+      http.send(
+        'DELETE',
+        `/api/workspaces/${at(workspaceId)}/invitation-recipients/${at(recipientId)}`,
       ),
     unfurl: (workspaceId, url, signal) =>
       http.request(

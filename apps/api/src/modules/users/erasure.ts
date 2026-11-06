@@ -230,6 +230,16 @@ export const eraseAccount = async (
       .execute();
   }
 
+  // Before the address is tombstoned: received invitations are personal data, including unclaimed ones.
+  await executor
+    .deleteFrom('workspace_invitation_recipients')
+    .where((eb) =>
+      eb.or([
+        eb('email', '=', person.email.trim().toLowerCase()),
+        eb('applicant_user_id', '=', person.id),
+      ]),
+    )
+    .execute();
   const placeholder = await availableUsername(
     executor,
     `${ERASED_USERNAME_PREFIX}${person.id.replace(/-/g, '').slice(0, 8)}`,

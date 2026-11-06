@@ -537,6 +537,25 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('private invitation recipients and attempts use bounded cursors; resend and revoke never put an address or token in a path', async () => {
+    const read = harness({ data: [], nextCursor: null });
+    await read.api.invitationRecipients(ID);
+    await read.api.invitationRecipients(ID, ID);
+    await read.api.invitationDeliveries(ID, ID);
+    await read.api.invitationDeliveries(ID, ID, ID);
+    const write = harness(null);
+    await write.api.resendInvitationRecipient(ID, ID);
+    await write.api.revokeInvitationRecipient(ID, ID);
+    expect([...read.calls, ...write.calls].map(({ method, url }) => [method, url])).toEqual([
+      ['GET', `/api/workspaces/${ID}/invitation-recipients`],
+      ['GET', `/api/workspaces/${ID}/invitation-recipients?before=${ID}`],
+      ['GET', `/api/workspaces/${ID}/invitation-recipients/${ID}/attempts`],
+      ['GET', `/api/workspaces/${ID}/invitation-recipients/${ID}/attempts?before=${ID}`],
+      ['POST', `/api/workspaces/${ID}/invitation-recipients/${ID}/resend`],
+      ['DELETE', `/api/workspaces/${ID}/invitation-recipients/${ID}`],
+    ]);
+  });
+
   test('the audit trail is read newest first, older pages by the cursor, narrowed by its filter (D-26, D-222)', async () => {
     const entry = {
       id: ID,

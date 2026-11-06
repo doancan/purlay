@@ -145,9 +145,16 @@ export const checkRelay = async (mailer: Mailer, log: Logger): Promise<void> => 
   }
 };
 
+/** A relay's acknowledgement, not evidence of inbox delivery. */
+export type MailReceipt =
+  { readonly accepted: true } | { readonly accepted: false; readonly code: string };
 export interface Outbox {
   /** Starts sending, and returns: the answer to whoever asked does not wait for the relay. */
-  readonly post: (message: MailMessage, purpose: string) => void;
+  readonly post: (
+    message: MailMessage,
+    purpose: string,
+    settled?: (receipt: MailReceipt) => Promise<void>,
+  ) => void;
   /**
    * Resolves when every send started so far has finished, or the bound has passed — and then says
    * `left`, with how many are still on their way.
@@ -212,10 +219,11 @@ export const mailInFlight = (log: Logger, failures?: Counter<'module'>): MailInF
 export const outbox = (send: SendMail, log: Logger, shared?: MailInFlight): Outbox => {
   const running = new Set<Promise<void>>();
   return {
-    post: (message, purpose): void => {
+    post: (message, purpose, settled): void => {
       const sending: Promise<void> = send(message)
         .then(() => {
           log.info('mail sent', { purpose });
+          return { accepted: true } as const;
         })
         // Not the caller's to know: they were answered already, the same whatever happened. Said
         // here, by what it was for — never to whom, never what it said.
@@ -228,6 +236,14 @@ export const outbox = (send: SendMail, log: Logger, shared?: MailInFlight): Outb
             purpose,
             reason: codeOf(error),
           });
+          return { accepted: false, code: codeOf(error) } as const;
+        })
+        .then(async (receipt): Promise<void> => {
+          if (settled !== undefined) await settled(receipt);
+        })
+        .catch(() => {
+          // Mail has already finished; failure to keep its receipt must not relabel the send.
+          log.error('mail receipt could not be recorded', { purpose });
         })
         .finally(() => {
           running.delete(sending);

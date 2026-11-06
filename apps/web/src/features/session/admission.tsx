@@ -16,6 +16,9 @@ export const useOwnAdmission = (enabled: boolean): ReturnType<typeof useQuery<Ow
     queryFn: async ({ signal }) => await api.ownAdmission(signal),
     enabled,
     retry: false,
+    // Query pauses its interval while hidden/offline and cancels it with the observer.
+    // Poll only the restricted status; private reads resume once the existing gate sees approval.
+    refetchInterval: (query) => (query.state.data?.state === 'pending' ? 5_000 : false),
   });
 };
 export const InstanceIdentity = (): React.JSX.Element | null => {

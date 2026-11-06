@@ -79,6 +79,41 @@ const head = [
     },
     (userId) => ({ where: sql`user_id = ${userId}`, order: 'id' }),
   ),
+  personalTableExport(
+    'workspace_invitation_recipients',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      email: 'export',
+      locale: 'export',
+      created_by: 'omit',
+      created_at: 'export',
+      applicant_user_id: 'export',
+      requested_at: 'export',
+      joined_at: 'export',
+    },
+    (userId) => ({
+      where: sql`applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId})`,
+      order: 'id',
+    }),
+  ),
+  personalTableExport(
+    'workspace_invitation_mail_attempts',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      recipient_id: 'export',
+      invitation_id: 'omit',
+      created_at: 'export',
+      result: 'export',
+      finished_at: 'export',
+      failure: 'export',
+    },
+    (userId) => ({
+      where: sql`recipient_id in (select id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId}))`,
+      order: 'id',
+    }),
+  ),
 ] as const;
 
 /** The tables the core writes into a person's export. */
@@ -91,6 +126,7 @@ export const corePersonalExport: CorePersonalContribution = {
   tables: [],
   workspaces: (userId) => [
     sql`select workspace_id from workspace_members where user_id = ${userId}`,
+    sql`select workspace_id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId})`,
   ],
 };
 

@@ -222,7 +222,10 @@ export const readOwnAdmission = async (
   deps: AccountDependencies,
   request: Request,
 ): Promise<OwnAdmission> => {
-  const owner = await sessionFromHeaders(deps.auth, request.headers, { allowPending: true });
+  const owner = await sessionFromHeaders(deps.auth, request.headers, {
+    allowPending: true,
+    recordActivity: false,
+  });
   if (owner === undefined) return { state: null };
   const row = await deps.database
     .selectFrom('users')

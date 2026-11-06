@@ -93,6 +93,11 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   workspace_exports: decided('anonymised', {
     kept: 'the row is the record that an export was made; its archive is swept',
   }),
+  // Received evidence is deleted on erasure; creator references name the anonymised account.
+  workspace_invitation_recipients: decided('anonymised', {
+    kept: 'for the life of the workspace, unless the recipient erases their account',
+  }),
+  workspace_invitation_mail_attempts: decided('deleted', 'with-parent'),
   workspace_invitations: decided('anonymised', {
     kept: 'the record of what was offered, for the life of the workspace',
   }),

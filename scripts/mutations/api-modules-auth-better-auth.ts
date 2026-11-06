@@ -664,8 +664,8 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'passport-hook-skipped',
     why: 'an invite-only server makes the account of anybody who signs in: the passport is never asked',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: "            if (settings.signUp === 'invite-only') {\n              await admittedByPassport(deps, user.email, context);\n            }\n",
-    replace: '',
+    find: "            const invitationId = await admittedByPassport(\n              deps,\n              user.email,\n              context,\n              settings.signUp === 'invite-only',\n            );\n",
+    replace: '            const invitationId = undefined;\n',
     tests: ['apps/api/src/ingress/http/invitation-passport.integration.test.ts'],
   },
   {
@@ -696,8 +696,8 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'passport-unknown-path-admitted',
     why: 'any request-bound account creation that is not a passport path is let through on an invite-only server: a later plugin or provider silently opens a closed server',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: '  if (!byEmail && !byGitHub) throw signupClosed();\n',
-    replace: '  if (!byEmail && !byGitHub) return;\n',
+    find: '  if (!byEmail && !byGitHub) {\n    if (required) throw signupClosed();\n    return undefined;\n  }\n',
+    replace: '  if (!byEmail && !byGitHub) return undefined;\n',
     tests: ['apps/api/src/modules/auth/admitted-by-passport.integration.test.ts'],
   },
   {
@@ -897,9 +897,9 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'sign-in-link-spend-outside-one-transaction',
     why: 'a link’s spend is several transactions, so a refusal at its end undoes none of what came first',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: '            const { headers: answered } = await runWithTransaction(\n              adapter,\n              async () =>\n                await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true }),\n            );\n',
+    find: '              const { headers: answered } = await runWithTransaction(\n                adapter,\n                async () =>\n                  await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true }),\n              );\n',
     replace:
-      '            void adapter;\n            const { headers: answered } = await api.magicLinkVerify({\n              query: { token },\n              headers,\n              returnHeaders: true,\n            });\n',
+      '              void adapter;\n              const { headers: answered } = await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true });\n',
     tests: ['apps/api/src/ingress/http/magic-link-guard.integration.test.ts'],
   },
   {

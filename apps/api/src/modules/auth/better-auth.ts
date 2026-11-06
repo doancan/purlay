@@ -1,3 +1,4 @@
+import { recordInvitationApplicant } from '../workspaces/invitation-delivery';
 /**
  * The Better Auth instance (D-179), behind a factory that takes everything as an argument: it never
  * reads the environment, so a test builds one with a secret of its own and the composition root
@@ -256,6 +257,7 @@ export const deriveAuthSecret = (encryptionKey: string): string =>
  */
 interface SignInRound {
   admissionRefused?: boolean;
+  invitationId?: string | undefined;
   profile: GitHubProfile | undefined;
   /** The single sign-on account a verified token vouched for, as the library keeps it (D-200). */
   oidcAccountId?: string | undefined;
@@ -801,7 +803,8 @@ export const admittedByPassport = async (
   deps: Pick<AuthDependencies, 'database' | 'clock'>,
   email: string,
   context: HookContext | null | undefined,
-): Promise<void> => {
+  required = true,
+): Promise<string | undefined> => {
   const path = context?.path;
   const byEmail = path === LINK_SPEND_PATH;
   const byGitHub = path?.startsWith('/callback/') === true;
@@ -809,7 +812,10 @@ export const admittedByPassport = async (
   // Every request-bound creation that is not one of the two passport paths — a later plugin, provider,
   // idToken path or admin route — is refused, as the provider's own switch refused by default.
   if (context === null || context === undefined) return;
-  if (!byEmail && !byGitHub) throw signupClosed();
+  if (!byEmail && !byGitHub) {
+    if (required) throw signupClosed();
+    return undefined;
+  }
   const headers = context.headers ?? context.request?.headers;
   const presented = byEmail
     ? { email }
@@ -823,8 +829,16 @@ export const admittedByPassport = async (
   const executor = held ?? deps.database;
   const id = await passportAllows(executor, deps.clock, presented);
   if (id === undefined || !(await consumePassport(executor, id, deps.clock))) {
-    throw signupClosed();
+    if (required) throw signupClosed();
+    return undefined;
   }
+  return (
+    await executor
+      .selectFrom('invitation_passports')
+      .select('invitation_id')
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow()
+  ).invitation_id;
 };
 
 /**
@@ -1817,9 +1831,14 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 message: 'This email domain cannot create an account on this server.',
               });
             }
-            if (settings.signUp === 'invite-only') {
-              await admittedByPassport(deps, user.email, context);
-            }
+            const invitationId = await admittedByPassport(
+              deps,
+              user.email,
+              context,
+              settings.signUp === 'invite-only',
+            );
+            const invitationRound = signInRounds.getStore();
+            if (invitationRound !== undefined) invitationRound.invitationId = invitationId;
             const supplied: unknown = (user as Readonly<Record<string, unknown>>)['username'];
             // Whatever asked for a name — GitHub's login, a client's body, nothing at all — it is
             // shaped and then the first one free is taken: nobody chooses another person's (R23).
@@ -1855,7 +1874,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       },
       session: {
         create: {
-          before: async (session) => {
+          before: async (session, context) => {
             // A soft-deleted account starts no session, by any sign-in of the library: refused here,
             // where every one of them creates its row (D-139 §5). The seam refuses one that slipped
             // past — a sign-in that committed after an erasure's last delete.
@@ -1884,6 +1903,36 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 code: 'FAILED_TO_CREATE_SESSION',
               });
             }
+            // Receipt evidence is observed only on the explicit invitation sign-in paths. Existing
+            // accounts still need no passport to sign in; observing it never grants a membership.
+            const executor = heldTransaction() ?? deps.database;
+            let invitationId = signInRounds.getStore()?.invitationId;
+            if (
+              invitationId === undefined &&
+              (context?.path === LINK_SPEND_PATH || context?.path.startsWith('/callback/') === true)
+            ) {
+              const user = await executor
+                .selectFrom('users')
+                .select('email')
+                .where('id', '=', session.userId)
+                .executeTakeFirstOrThrow();
+              const headers = context.headers ?? context.request?.headers;
+              const passportId = await passportAllows(
+                executor,
+                deps.clock,
+                context.path === LINK_SPEND_PATH
+                  ? { email: user.email }
+                  : { cookie: readCookie(headers?.get('cookie') ?? null, INVITE_COOKIE) },
+              );
+              if (passportId !== undefined)
+                invitationId = (
+                  await executor
+                    .selectFrom('invitation_passports')
+                    .select('invitation_id')
+                    .where('id', '=', passportId)
+                    .executeTakeFirstOrThrow()
+                ).invitation_id;
+            }
             // A GitHub sign-in: the columns that are ours, written before its session exists.
             const profile = signInRounds.getStore()?.profile;
             if (profile !== undefined) {
@@ -1900,6 +1949,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 });
               }
             }
+            if (invitationId !== undefined)
+              await recordInvitationApplicant(executor, deps.clock, session.userId, invitationId);
             return {
               data: {
                 ...session,
@@ -2029,33 +2080,34 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           headers: new Headers(),
         });
       },
-      spend: async (token, headers): Promise<readonly string[] | undefined> => {
-        const { adapter } = await instance.$context;
-        // Twice at most: a spend that lost a unique index to another made at once — the same new
-        // address by its other link, or another new address wanting the same name — was undone
-        // whole, its link left as it was, and the second try finds the account or the next name.
-        for (let tried = 0; ; tried += 1) {
-          try {
-            const { headers: answered } = await runWithTransaction(
-              adapter,
-              async () =>
-                await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true }),
-            );
-            return answered.getSetCookie();
-          } catch (error) {
-            if (tried === 0 && uniqueViolation(error)) continue;
-            // The guard above: something past every check of Purlay's reached it, and is said.
-            if (isAPIError(error) && error.body?.code === 'UNPROVEN_ACCOUNT') {
-              log.error('a sign-in link reached an account whose address was never proven');
-              return undefined;
+      spend: async (token, headers): Promise<readonly string[] | undefined> =>
+        await signInRounds.run({ profile: undefined, made: false }, async () => {
+          const { adapter } = await instance.$context;
+          // Twice at most: a spend that lost a unique index to another made at once — the same new
+          // address by its other link, or another new address wanting the same name — was undone
+          // whole, its link left as it was, and the second try finds the account or the next name.
+          for (let tried = 0; ; tried += 1) {
+            try {
+              const { headers: answered } = await runWithTransaction(
+                adapter,
+                async () =>
+                  await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true }),
+              );
+              return answered.getSetCookie();
+            } catch (error) {
+              if (tried === 0 && uniqueViolation(error)) continue;
+              // The guard above: something past every check of Purlay's reached it, and is said.
+              if (isAPIError(error) && error.body?.code === 'UNPROVEN_ACCOUNT') {
+                log.error('a sign-in link reached an account whose address was never proven');
+                return undefined;
+              }
+              // A link the library will not spend — unknown, spent, expired, or an account it may not
+              // make — is answered by a redirect carrying its reason, which nobody is sent to.
+              if (isAPIError(error) && error.status === 'FOUND') return undefined;
+              throw error;
             }
-            // A link the library will not spend — unknown, spent, expired, or an account it may not
-            // make — is answered by a redirect carrying its reason, which nobody is sent to.
-            if (isAPIError(error) && error.status === 'FOUND') return undefined;
-            throw error;
           }
-        }
-      },
+        }),
     };
   })();
 
