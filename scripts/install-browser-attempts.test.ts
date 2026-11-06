@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   AFTER_STALL_COMMANDS,
+  APT_MIRRORS,
+  APT_MIRRORS_FILE,
   APT_TIMEOUTS,
   APT_TIMEOUTS_FILE,
   browserOf,
@@ -111,5 +113,15 @@ describe('installing a browser, with a stall cut and tried again', () => {
       'sudo pkill -KILL -x apt',
       'sudo dpkg --configure -a',
     ]);
+  });
+
+  test('the archive host is tried before the cloud mirror, which stays as the second', () => {
+    const lines = APT_MIRRORS.trim().split('\n');
+    expect(lines).toEqual([
+      'http://archive.ubuntu.com/ubuntu/\tpriority:1',
+      'http://azure.archive.ubuntu.com/ubuntu/\tpriority:2',
+    ]);
+    expect(APT_MIRRORS.endsWith('\n')).toBe(true);
+    expect(APT_MIRRORS_FILE).toBe('/etc/apt/apt-mirrors.txt');
   });
 });
