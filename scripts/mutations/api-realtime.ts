@@ -31,6 +31,14 @@ export const API_REALTIME: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/realtime.integration.test.ts'],
   },
   {
+    id: 'door-names-a-chat-table',
+    why: 'a file of the socket layer writes the name of a table chat owns where a query puts one, so a door reaches a module’s rows with no port and no manifest between them (D-250)',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: "import type { Clock } from '../platform/clock';",
+    replace: "import type { Clock } from '../platform/clock';\nvoid 'delete from link_previews';",
+    tests: ['apps/api/src/core-tables.test.ts'],
+  },
+  {
     id: 'drain-forgets-a-socket-still-opening',
     why: 'a drain returns while a socket that has just opened is still reading its session, and the pool closes under the read',
     file: 'apps/api/src/realtime/hub.ts',

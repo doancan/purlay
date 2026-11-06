@@ -21,43 +21,46 @@
  * server that does not run it never asks for it (D-250). Each is cheap to break and invisible until the
  * number moves.
  *
- * **The shell holds no chat screen** (D-250, `docs/MODULES.md` §6): chat's screens are a chunk of their own,
- * `assets/chat-*.js`, which the shell asks for with `import()` and which is not initial. The check reads the
- * source maps of the initial chunks, so it needs `bun run build:web:mapped`, and fails — rather
- * than passing unproven — when there is none. Two bounds go with it, set from the measured build
- * (2026-11-03: shell 242.04 KB gzipped, chat 45.65 KB) with a margin for a feature or two: the shell's at
- * 250 KB, 3% above what was measured, so the 400 KB backstop above is no longer what catches a screen that
- * crept back; chat's at 50 KB, 10% above. They move up in a commit that says why, as the backstop does.
+ * **The shell holds no module's screen** (D-250, `docs/MODULES.md` §6): a module's screens are a chunk of their own,
+ * which the shell asks for with `import()` and which is not initial — chat's `assets/chat-*.js`, issues'
+ * `assets/issues-screen-*.js`. The modules and their entries are read from the manifests (`load: () => import('./x')`),
+ * so a module added later is held without a line here, and one with no bound in `MODULE_BYTES` fails. The check reads
+ * the source maps of the initial chunks, so it needs `bun run build:web:mapped`, and fails — rather than passing
+ * unproven — when there is none. A bound goes with each chunk, and one with the shell's, set from the measured build
+ * with a margin for a feature or two: the shell's 250 KB (2026-11-03: 242.04 KB gzipped, 3% above) so the 400 KB
+ * backstop above is no longer what catches a screen that crept back; chat's 50 KB (45.65 KB, 10% above); issues' 3 KB
+ * (2026-11-06: 2.70 KB, 11% above). They move up in a commit that says why, as the backstop does.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 export const BUDGET_BYTES = 400 * 1024;
 /** The shell's own bound: the initial JavaScript with chat's screens in their own chunk. */
 export const SHELL_BYTES = 250 * 1024;
-/** Chat's chunk, gzipped: the screens, the composer, the feed and the threads. */
-export const CHAT_BYTES = 50 * 1024;
+/**
+ * Each module's chunk, gzipped, by the id of its manifest: chat's is the screens, the composer, the feed and the threads.
+ * A module without a bound fails the check, so a bound is chosen when a module is added, with a margin of about a tenth.
+ */
+export const MODULE_BYTES: Readonly<Record<string, number>> = {
+  chat: 50 * 1024,
+  issues: 3 * 1024,
+};
 
 /**
- * Chat's entry modules and the heavy ones under them. A source map of an initial chunk that lists any of these
- * means a static import has put chat back into the shell. What is not listed (the sidebar's links, the read
- * caches and the panels the frame hosts) is shared with the shell and stays in it.
+ * The heavy files only a module's screens reach, which the screens' own files do not name: a source map of an initial
+ * chunk that lists one means a static import has put the module back into the shell. What is not listed (the sidebar's
+ * links, the read caches and the panels the frame hosts) is shared with the shell and stays in it. A file named here that
+ * is gone fails the check, so a move cannot leave it holding nothing.
  */
-const CHAT_ONLY_SOURCES = [
-  'features/channel/channel-screen.tsx',
-  'features/inbox/inbox-screen.tsx',
-  'features/questions/questions-screen.tsx',
-  'features/search/search-screen.tsx',
-  'features/saved/saved-screen.tsx',
-  'features/drafts/drafts-screen.tsx',
-  'features/unreads/unreads-screen.tsx',
-  'features/composer/composer.tsx',
-  'features/channel/message-feed.tsx',
-  'features/messages/message-row.tsx',
-  'features/threads/thread.tsx',
-];
-const CHAT_CHUNK = /^chat-[\w-]+\.js$/;
+export const HEAVY_SOURCES: Readonly<Record<string, readonly string[]>> = {
+  chat: [
+    'features/composer/composer.tsx',
+    'features/channel/message-feed.tsx',
+    'features/messages/message-row.tsx',
+    'features/threads/thread.tsx',
+  ],
+};
 
 export interface Chunk {
   readonly file: string;
@@ -148,21 +151,66 @@ const MODULE_CHUNK = /^assets\/[^/]+\.js$/;
  * What a module's lazy screen carries that nothing else does, by the id in the module's manifest (`MODULES.md` §6,
  * D-254): found in an initial chunk, the module is no longer a chunk of its own. The word is not in the manifest, which
  * the shell does carry: it is in the screen's file, as `ISSUES_SCREEN` is, and a module with a manifest is
- * looked for without a line here. (Chat's screens are looked for by their sources, `CHAT_ONLY_SOURCES`.)
+ * looked for without a line here. (A module's screens are also looked for by their sources, `screenSources`.)
  */
 const screenMarker = (moduleId: string): string => `screen-of-the-${moduleId}-module`;
 
 const FEATURES = join(import.meta.dirname, '..', 'apps', 'web', 'src', 'features');
 
-/** The ids of the modules whose manifests are in the client: every `features/<folder>/manifest.ts` and the `id` it declares. */
-export const moduleIds = (features = FEATURES): string[] =>
+/** A module of the client: the id its manifest declares, and the file its `load` imports, as a path under `features/`. */
+export interface WebModule {
+  readonly id: string;
+  readonly folder: string;
+  /** Without the extension, as the manifest writes it: `import('./chat')` is `chat/chat`; none when `load` is not that. */
+  readonly entry: string | undefined;
+}
+
+/** Every `features/<folder>/manifest.ts` and what it declares: the `id`, and the `import('./x')` of `load`. */
+export const webModules = (features = FEATURES): WebModule[] =>
   readdirSync(features).flatMap((folder) => {
     const manifest = join(features, folder, 'manifest.ts');
     if (!existsSync(manifest)) return [];
-    const id = /^\s*id: '([\w-]+)',$/m.exec(readFileSync(manifest, 'utf8'))?.[1];
+    const text = readFileSync(manifest, 'utf8');
+    const id = /^\s*id: '([\w-]+)',$/m.exec(text)?.[1];
     if (id === undefined) throw new Error(`${manifest} declares no \`id: '…'\` line`);
-    return [id];
+    const loaded = /\bload:\s*\(\)\s*=>\s*import\('\.\/([\w-]+)'\)/.exec(text)?.[1];
+    return [{ id, folder, entry: loaded === undefined ? undefined : `${folder}/${loaded}` }];
   });
+
+/** The ids of the modules whose manifests are in the client. */
+export const moduleIds = (features = FEATURES): string[] =>
+  webModules(features).map((module) => module.id);
+
+const EXTENSIONS = ['.tsx', '.ts'];
+
+/** The file `specifier` names, relative to `from`, as a path under `features/` with its extension; none when it is no file. */
+const featureFile = (features: string, from: string, specifier: string): string | undefined => {
+  const base = join(features, dirname(from), specifier);
+  const found = EXTENSIONS.map((extension) => `${base}${extension}`).find((file) =>
+    existsSync(file),
+  );
+  return found === undefined ? undefined : relative(features, found);
+};
+
+/**
+ * The files of a module that only it draws and that no initial chunk may hold, as paths under `src/`: the entry its
+ * manifest loads, the screens that entry imports (`*-screen`, chat's `chat.ts` is nothing but their list), and the module's
+ * heavy files (`HEAVY_SOURCES`). Read from the manifests and the entries, so a module added later is held with them.
+ */
+export const screenSources = (module: WebModule, features = FEATURES): string[] => {
+  if (module.entry === undefined) return [];
+  const entry = featureFile(features, '.', module.entry);
+  if (entry === undefined) return [];
+  const imported = [
+    ...readFileSync(join(features, entry), 'utf8').matchAll(
+      /^import\s+(?!type\b)[^;]*?from\s+'(\.{1,2}\/[\w/-]+-screen)';$/gm,
+    ),
+  ].flatMap((found) => featureFile(features, entry, found[1] ?? '') ?? []);
+  return [
+    ...[entry, ...imported].map((file) => `features/${file}`),
+    ...(HEAVY_SOURCES[module.id] ?? []),
+  ];
+};
 /** The push worker, an entry of its own that must stay one file (D-126). */
 const WORKER = 'push-worker.js';
 
@@ -211,20 +259,47 @@ export const shapeProblems = (dist: string, report: Report): string[] => {
   return problems;
 };
 
-/** What is wrong with where chat's code is, one sentence each: its chunk, its bounds, and the shell's sources. */
-export const chatProblems = (dist: string, report: Report): string[] => {
+/**
+ * What is wrong with where each module's code is, and with the shell's size, one sentence each: a module's chunk and its
+ * bound, and its sources in the shell.
+ */
+export const moduleProblems = (dist: string, report: Report, features = FEATURES): string[] => {
   const problems: string[] = [];
   const assets = join(dist, 'assets');
-  const [chunk] = existsSync(assets) ? readdirSync(assets).filter((f) => CHAT_CHUNK.test(f)) : [];
-  if (chunk === undefined) {
-    problems.push(
-      "chat's screens have no chunk of their own (assets/chat-*.js); they are imported statically again, or the entry features/chat/chat.ts is gone (D-250)",
-    );
-  } else {
-    const gzip = gzipSync(readFileSync(join(assets, chunk))).length;
-    if (gzip > CHAT_BYTES) {
+  const files = existsSync(assets) ? readdirSync(assets) : [];
+  const modules = webModules(features);
+  for (const module of modules) {
+    const bound = MODULE_BYTES[module.id];
+    if (bound === undefined) {
       problems.push(
-        `assets/${chunk} is ${kb(gzip)} gzipped, over chat's ${kb(CHAT_BYTES)} bound; raise it in a commit that says what chat gained`,
+        `the ${module.id} module has no bound for its chunk; add it to MODULE_BYTES, about a tenth above what the build measures`,
+      );
+    }
+    if (module.entry === undefined) {
+      problems.push(
+        `the ${module.id} module's manifest does not load its screens with \`load: () => import('./…')\`, so its chunk cannot be found`,
+      );
+      continue;
+    }
+    const base = module.entry.split('/')[1] ?? '';
+    const chunk = files.find((file) => new RegExp(`^${base}-[\\w-]+\\.js$`).test(file));
+    if (chunk === undefined) {
+      problems.push(
+        `the ${module.id} module's screens have no chunk of their own (assets/${base}-*.js); they are imported statically again, or the entry features/${module.entry} is gone (D-250)`,
+      );
+      continue;
+    }
+    const gzip = gzipSync(readFileSync(join(assets, chunk))).length;
+    if (bound !== undefined && gzip > bound) {
+      problems.push(
+        `assets/${chunk} is ${kb(gzip)} gzipped, over the ${module.id} module's ${kb(bound)} bound; raise it in a commit that says what ${module.id} gained`,
+      );
+    }
+  }
+  for (const heavy of Object.values(HEAVY_SOURCES).flat()) {
+    if (!existsSync(join(features, heavy.replace(/^features\//, '')))) {
+      problems.push(
+        `${heavy} is named in HEAVY_SOURCES and is not a file; a move left the check holding nothing`,
       );
     }
   }
@@ -238,18 +313,21 @@ export const chatProblems = (dist: string, report: Report): string[] => {
     if (sources === undefined) {
       if (file.startsWith('assets/index-')) {
         problems.push(
-          `${file} has no source map, so the shell cannot be shown free of chat's screens; build it with "bun run build:web:mapped"`,
+          `${file} has no source map, so the shell cannot be shown free of the modules' screens; build it with "bun run build:web:mapped"`,
         );
       }
       continue;
     }
-    const found = CHAT_ONLY_SOURCES.filter((only) =>
-      sources.some(({ source }) => source.includes(`/src/${only}`)),
-    );
-    if (found.length > 0) {
-      problems.push(
-        `${file} contains chat's screens (${found.join(', ')}); they load from features/chat/chat.ts on demand and nothing in the shell may import them (D-250)`,
+    for (const module of modules) {
+      const own = screenSources(module, features);
+      const found = own.filter((only) =>
+        sources.some(({ source }) => source.includes(`/src/${only}`)),
       );
+      if (found.length > 0) {
+        problems.push(
+          `${file} contains the ${module.id} module's screens (${found.join(', ')}); they load from ${own[0] ?? module.folder} on demand and nothing in the shell may import them (D-250)`,
+        );
+      }
     }
   }
   return problems;
@@ -293,7 +371,7 @@ export const main = (
   dist: string,
 ): { readonly out: string; readonly err: string; readonly code: number } => {
   const report = measure(dist);
-  const problems = [...shapeProblems(dist, report), ...chatProblems(dist, report)];
+  const problems = [...shapeProblems(dist, report), ...moduleProblems(dist, report)];
   const over = overBudget(report);
   if (over !== null) problems.unshift(over);
   return {
