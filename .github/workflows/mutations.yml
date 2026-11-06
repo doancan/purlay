@@ -1,0 +1,115 @@
+# The whole mutation list, weekly (`CONTRIBUTING.md` §5).
+#
+# Every pull request proves the mutations it adds or changes (`ci.yml`'s `mutations-changed`); nothing else
+# applies the rest. The code a mutation names moves on, and an entry can stop being caught without any test
+# failing (a test weakened, a guard rewritten to an equivalent) or stop applying at all. `docs/MODULES.md` §8
+# cites about twenty of them as what holds a rule, so once a week every entry is applied again.
+#
+# The list is divided by area file over the parallel jobs of the matrix (`bun run mutate --shard=<index>/<count>`), each
+# a copy of the repository and its own database. It is not a required check and does not run on pull requests.
+# On a survivor, a stale entry or a shard that failed to run, the run turns red and one tracking issue is
+# opened (or its body replaced, when it is open already); a clean run closes it.
+name: mutations
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Sunday morning UTC, when nothing else is queued.
+    - cron: '17 3 * * 0'
+
+# A run in progress finishes; a manual run does not cancel the scheduled one.
+concurrency:
+  group: mutations
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    env:
+      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - name: start the database and redis
+        run: bun run db:up:tests
+
+      - name: this shard's mutations
+        run: |
+          set -o pipefail
+          bun run mutate --shard=${{ matrix.index }}/${{ strategy.job-total }} 2>&1 | tee report.txt
+
+      - name: keep the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutations-report-${{ matrix.index }}
+          path: report.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Says so where somebody will see it: a red run, and one issue that lists what was not caught.
+  report:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RESULT: ${{ needs.shard.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      TITLE: 'Weekly mutation run: a mutation survived, is stale or did not run'
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mutations-report-*
+          path: reports
+        continue-on-error: true
+
+      - name: open, update or close the tracking issue
+        run: |
+          number=$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open --label testing \
+            --search "\"$TITLE\" in:title" --json number,title \
+            --jq "[.[] | select(.title == env.TITLE)][0].number // empty")
+
+          if [ "$RESULT" = success ]; then
+            echo "every mutation was caught"
+            [ -z "$number" ] || gh issue close "$number" --repo "${GITHUB_REPOSITORY}" \
+              --comment "Every mutation was caught in $RUN_URL."
+            exit 0
+          fi
+
+          # Entries that are neither caught nor declared equivalent, and the shards that produced no report at all.
+          {
+            echo "The weekly run of every mutation ($RUN_URL) did not end clean. Fix the entry or the test that stopped catching it; \`bun run mutate <id>\` reproduces one."
+            echo
+            echo '```'
+            cat reports/*/report.txt 2>/dev/null | grep -E '^(survived|stale) ' || echo '(no survivor or stale entry in a report: a shard failed before it could report; see the run)'
+            echo '```'
+          } > body.md
+
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "${GITHUB_REPOSITORY}" --body-file body.md
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" --title "$TITLE" --label testing --label infra --body-file body.md
+          fi
+          echo "the run is red: $RESULT" >&2
+          exit 1
