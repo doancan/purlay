@@ -65,6 +65,7 @@ import {
   type SavePostmortemRequest,
   InvitationPage,
   InvitationRecipientPage,
+  type InvitationRecipientQuery,
   InvitationDeliveryPage,
   InvitationPreview,
   RetentionSetting,
@@ -167,7 +168,7 @@ export interface Api {
   ) => Promise<InvitationPage>;
   readonly invitationRecipients: (
     workspaceId: string,
-    before?: string,
+    query?: InvitationRecipientQuery,
     signal?: AbortSignal,
   ) => Promise<InvitationRecipientPage>;
   readonly invitationDeliveries: (
@@ -591,12 +592,12 @@ export const createApi = (http: Http): Api => {
         InvitationPage,
         options(before === undefined ? {} : { query: { before } }, signal),
       ),
-    invitationRecipients: (workspaceId, before, signal) =>
+    invitationRecipients: (workspaceId, query = {}, signal) =>
       http.request(
         'GET',
         `/api/workspaces/${at(workspaceId)}/invitation-recipients`,
         InvitationRecipientPage,
-        options(before === undefined ? {} : { query: { before } }, signal),
+        options({ query }, signal),
       ),
     invitationDeliveries: (workspaceId, recipientId, before, signal) =>
       http.request(

@@ -356,6 +356,11 @@ export const tr = {
   'invite.admin.previousOpen':
     'Önceki bağlantılar, süresi dolana veya iptal edene kadar açık kalır.',
   'invite.delivery.title': 'E-posta davetleri',
+  'invite.delivery.search': 'E-posta adreslerinde ara',
+  'invite.delivery.status': 'Davet durumu',
+  'invite.delivery.find': 'Alıcıları ara',
+  'invite.delivery.clear': 'Filtreleri temizle',
+  'invite.delivery.noMatches': 'Bu filtrelerle eşleşen davet yok.',
   'invite.delivery.note':
     'Her alıcının ayrı bağlantısı vardır. Yeniden gönderme önceki bağlantısını değiştirir. Posta sunucusunun kabulü, gelen kutusuna teslim edildiğini doğrulamaz.',
   'invite.delivery.queued': 'Gönderiliyor',

@@ -1132,8 +1132,30 @@ export const InvitationDelivery = Type.Object({
   ]),
 });
 export type InvitationDelivery = Static<typeof InvitationDelivery>;
+/** One lifecycle state, in precedence order: joining, attested admission, link validity, mail evidence. */
+export const InvitationRecipientStatus = Type.Union([
+  Type.Literal('joined'),
+  Type.Literal('pending'),
+  Type.Literal('approved'),
+  Type.Literal('denied'),
+  Type.Literal('revoked'),
+  Type.Literal('expired'),
+  Type.Literal('queued'),
+  Type.Literal('accepted'),
+  Type.Literal('failed'),
+  Type.Literal('unknown'),
+]);
+export type InvitationRecipientStatus = Static<typeof InvitationRecipientStatus>;
+export const INVITATION_RECIPIENT_SEARCH_MAX = 254;
+export const InvitationRecipientQuery = FromClient({
+  ...OlderPageQuery.properties,
+  q: Type.Optional(Type.String({ maxLength: INVITATION_RECIPIENT_SEARCH_MAX })),
+  status: Type.Optional(InvitationRecipientStatus),
+});
+export type InvitationRecipientQuery = Static<typeof InvitationRecipientQuery>;
 export const InvitationRecipient = Type.Object({
   id: Uuid,
+  status: InvitationRecipientStatus,
   address: Type.String(),
   createdAt: Timestamp,
   requestedAt: Type.Union([Timestamp, Type.Null()]),

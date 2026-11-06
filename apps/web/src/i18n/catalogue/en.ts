@@ -360,6 +360,11 @@ export const en = {
   'invite.admin.makeAnother': 'Make another link',
   'invite.admin.previousOpen': 'Previous links stay open until they expire or you revoke them.',
   'invite.delivery.title': 'Email invitations',
+  'invite.delivery.search': 'Search email addresses',
+  'invite.delivery.status': 'Invitation status',
+  'invite.delivery.find': 'Search recipients',
+  'invite.delivery.clear': 'Clear filters',
+  'invite.delivery.noMatches': 'No invitations match these filters.',
   'invite.delivery.note':
     'Each recipient has a separate link. Resending replaces their previous link. Relay acceptance does not confirm inbox delivery.',
   'invite.delivery.queued': 'Sending',
