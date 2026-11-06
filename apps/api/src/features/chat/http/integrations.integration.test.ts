@@ -10,12 +10,12 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { UnfurlResponse } from '@purlay/types';
-import { createApp } from './app';
-import { fixedClock } from '../../platform/clock';
-import type { GitHubApi } from '../../features/chat/integrations/unfurl';
-import { NOW, testDependencies } from '../../testing/doubles';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
+import { createApp } from '../../../ingress/http/app';
+import { fixedClock } from '../../../platform/clock';
+import type { GitHubApi } from '../integrations/unfurl';
+import { NOW, testDependencies } from '../../../testing/doubles';
+import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

@@ -86,15 +86,7 @@ import {
 } from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
-import {
-  GITHUB_CALL_BUDGET,
-  httpLimits,
-  INCOMING_WEBHOOK_BUDGET,
-  WEBHOOK_BUDGET,
-  WEBHOOK_FEED_BUDGET,
-  WRITE_BUDGET,
-  type HttpBudgets,
-} from './rate-limit';
+import { httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
 import type { Timers } from '../../realtime/hub';
 import { inProcessLimiters } from '../../realtime/rate-limiter';
 import type { SharedState } from '../../realtime/shared';
@@ -123,9 +115,7 @@ import {
   createMyWorkspace,
   listMyWorkspaces,
   setMyDeepWork,
-  changeGitHubToken,
   listWorkspaceMembers,
-  readGitHubIntegration,
   readAuditTrail,
   exportAuditTrail,
   removeWorkspaceMember,
@@ -171,23 +161,6 @@ import {
   trySavedServerRelay,
 } from './server';
 import {
-  linkGitHubWork,
-  makeGitHubIssue,
-  readGitHubRepositories,
-  STATUS_OF_OUTCOME,
-  type GitHubIssueRouteDependencies,
-} from './github-issues';
-import {
-  beginAuthorization,
-  beginInstallation,
-  endAuthorization,
-  endInstallation,
-  githubAppCallback,
-  readGitHubAppStatus,
-  receiveAppWebhook,
-  type GitHubAppRouteDependencies,
-} from './github-app';
-import {
   githubAppApi,
   githubAppCaller,
   platformAppFetch,
@@ -216,11 +189,7 @@ import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
-import {
-  githubApi,
-  inProcessPauses,
-  type GitHubApi,
-} from '../../features/chat/integrations/unfurl';
+import type { GitHubApi } from '../../features/chat/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
 import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
@@ -238,7 +207,6 @@ import {
   readInvitations,
   type InvitationMailDependencies,
 } from './invitations';
-import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
@@ -247,15 +215,7 @@ import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-dead
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
-import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
-import { receiveWebhook } from './webhooks';
-import { connectFeed, disconnectFeed, listFeeds, regenerateFeedSecret } from './feeds';
-import {
-  listIncomingWebhooks,
-  makeIncomingWebhook,
-  postIncomingWebhook,
-  revokeIncomingWebhook,
-} from './incoming-webhooks';
+import { readMyMissedMail, setMyMissedMail } from './missed-mail';
 import { runningModuleIds, type Composition } from '../../composition';
 
 export interface Dependencies {
@@ -533,21 +493,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
-  // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
-  // manifest, as the rest of the surface is (D-255 §2).
-  const moduleRoutes = modules.bundled.flatMap((module) =>
-    module.routes === undefined
-      ? []
-      : [
-          module.routes({
-            ...dependencies,
-            permissions: modules.permissions,
-            bus: sockets.bus,
-            atomically: sockets.atomically,
-            online: sockets.online,
-          }),
-        ],
-  );
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -555,20 +500,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     moduleOf: modules.owner.ofJob,
     log,
   });
-  // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
-  const githubCalls = limiterFor('github-calls', GITHUB_CALL_BUDGET);
-  // Workspaces GitHub told to wait, and GitHub's API at the address the sign-in uses (D-23, amended).
-  const githubPauses = inProcessPauses();
-  const github =
-    dependencies.githubApi ??
-    githubApi(dependencies.config.GITHUB_API_URL, () => dependencies.clock.now().getTime());
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
   // Uploads being read on this node, against `UPLOADS_AT_ONCE`.
   const uploading = { count: 0 };
-  // GitHub's deliveries: every address before the signature, each feed after it (D-134 §4).
-  const knocks = limiterFor('webhook-knocks', WEBHOOK_BUDGET);
   // Sign-in by link: the library's, decided by Purlay's rules (`modules/auth/magic-link.ts`). Read
   // per request, so building the application asks nothing of the library.
   // What a request for a link comes to is decided after its answer (D-138 §1, §6).
@@ -587,16 +523,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
     outbox: dependencies.auth.signInLinks?.outbox,
     later: afterInvitationAnswers.run,
   });
-  const feedPosts = limiterFor('webhook-feeds', WEBHOOK_FEED_BUDGET);
-  // Each incoming webhook's posts, once its secret held; before it, the address's knocks (D-245).
-  const hookPosts = limiterFor('incoming-webhooks', INCOMING_WEBHOOK_BUDGET);
   // Who may make a workspace: the setting as it is now, each time it is asked (D-155, D-179 §6).
   const creating = {
     ...dependencies,
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
     modules: moduleIds,
   };
-  const delivering = { count: 0 };
   // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
   const githubUrls = {
     web: dependencies.config.GITHUB_URL,
@@ -616,25 +548,32 @@ export const createApp = (given: Dependencies): HttpApplication => {
     clock: dependencies.clock,
     log,
   });
-  const githubIssues = (): GitHubIssueRouteDependencies => ({
-    ...githubApp(),
-    bus: sockets.bus,
-  });
-  const githubApp = (): GitHubAppRouteDependencies => ({
-    auth: dependencies.auth,
-    database: dependencies.database,
-    clock: dependencies.clock,
-    log,
-    cipher,
-    app:
-      dependencies.githubApp === undefined
-        ? dependencies.settingsChange?.holder.current()?.settings.githubApp
-        : dependencies.githubApp(),
-    api: appApi,
-    urls: githubUrls,
-    appUrl: dependencies.config.APP_URL,
-  });
+  // The GitHub App's settings as this request reads them: the holder's, or a test's (D-246).
+  const githubAppSettings = (): GitHubAppSettings | undefined =>
+    dependencies.githubApp === undefined
+      ? dependencies.settingsChange?.holder.current()?.settings.githubApp
+      : dependencies.githubApp();
 
+  // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
+  // manifest, as the rest of the surface is (D-255 §2).
+  const moduleRoutes = modules.bundled.flatMap((module) =>
+    module.routes === undefined
+      ? []
+      : [
+          module.routes({
+            ...dependencies,
+            permissions: modules.permissions,
+            bus: sockets.bus,
+            atomically: sockets.atomically,
+            online: sockets.online,
+            cipher,
+            limiterFor,
+            githubAppSettings,
+            githubAppApi: appApi,
+            githubUrls,
+          }),
+        ],
+  );
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
   // the handler with it set (`docs/spikes/elysia.md`). Over the cap, the server
@@ -1160,7 +1099,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
             erasureServices: () => ({
               log,
               cipher,
-              githubApp: { app: githubApp().app, api: appApi },
+              githubApp: { app: githubAppSettings(), api: appApi },
             }),
           },
           request,
@@ -1216,11 +1155,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, body }) => await setMyMissedMail(dependencies, request, body),
     )
     // Public: a letter's link, opened in whichever browser, signed in or not (D-240).
-    .post('/api/missed-mail/stop', async ({ body, set }) => {
-      await stopMissedMailByLink(dependencies, body);
-      set.status = 204;
-      return null;
-    })
     // Away by choice (D-257): stored, then told again through the presence this node keeps.
     .put(
       '/api/me/away',
@@ -1260,99 +1194,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
-    )
-    .post(
-      '/api/integrations/github/unfurl',
-      async ({ request, body }) =>
-        await unfurlLink(
-          {
-            ...dependencies,
-            cipher,
-            githubApi: github,
-            githubCalls,
-            githubPauses,
-          },
-          request,
-          body,
-        ),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/github-app',
-      async ({ request, params }) =>
-        await readGitHubAppStatus(githubApp(), request, params.workspaceId),
-    )
-    .post(
-      '/api/workspaces/:workspaceId/github-app/installation',
-      async ({ request, params }) =>
-        await beginInstallation(githubApp(), request, params.workspaceId),
-    )
-    .delete(
-      '/api/workspaces/:workspaceId/github-app/installation',
-      async ({ request, params, set }) => {
-        await endInstallation(githubApp(), request, params.workspaceId);
-        set.status = 204;
-        return null;
-      },
-    )
-    .post(
-      '/api/github-app/authorization',
-      async ({ request, body }) => await beginAuthorization(githubApp(), request, body),
-    )
-    .delete('/api/github-app/authorization', async ({ request, set }) => {
-      await endAuthorization(githubApp(), request);
-      set.status = 204;
-      return null;
-    })
-    .get('/api/github-app/callback', async ({ request, set }) => {
-      set.status = 302;
-      set.headers.location = await githubAppCallback(githubApp(), request);
-      set.headers['cache-control'] = 'no-store';
-      return '';
-    })
-    .get(
-      '/api/workspaces/:workspaceId/github-repositories',
-      async ({ request, params }) =>
-        await readGitHubRepositories(githubIssues(), request, params.workspaceId),
-    )
-    .post('/api/messages/:messageId/github-link', async ({ request, params, body, set }) => {
-      const { link, created } = await linkGitHubWork(
-        githubIssues(),
-        request,
-        params.messageId,
-        body,
-      );
-      set.status = created ? 201 : 200;
-      return link;
-    })
-    .post('/api/messages/:messageId/github-issue', async ({ request, params, body, set }) => {
-      const outcome = await makeGitHubIssue(githubIssues(), request, params.messageId, body);
-      set.status = STATUS_OF_OUTCOME[outcome.status];
-      return outcome;
-    })
-    .get(
-      '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params }) =>
-        await readGitHubIntegration(dependencies, request, params.workspaceId),
-    )
-    .put(
-      '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params, body }) =>
-        await changeGitHubToken(
-          { ...dependencies, cipher, githubApi: github },
-          request,
-          params.workspaceId,
-          body,
-        ),
-    )
-    .delete(
-      '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params }) =>
-        await changeGitHubToken(
-          { ...dependencies, cipher, githubApi: github },
-          request,
-          params.workspaceId,
-          undefined,
-        ),
     )
     .get(
       '/api/workspaces/:workspaceId/invitation-recipients',
@@ -1492,79 +1333,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
     .use(moduleRoutes)
-    .get(
-      '/api/channels/:channelId/github-feeds',
-      async ({ request, params }) => await listFeeds(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/github-feeds', async ({ request, params, body, set }) => {
-      const created = await connectFeed(
-        { ...dependencies, cipher },
-        request,
-        params.channelId,
-        body,
-      );
-      set.status = 201;
-      return created;
-    })
-    .post(
-      '/api/channels/:channelId/github-feeds/:feedId/secret',
-      async ({ request, params }) =>
-        await regenerateFeedSecret(
-          { ...dependencies, cipher },
-          request,
-          params.channelId,
-          params.feedId,
-        ),
-    )
-    .delete('/api/channels/:channelId/github-feeds/:feedId', async ({ request, params, set }) => {
-      await disconnectFeed(dependencies, request, params.channelId, params.feedId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/channels/:channelId/incoming-webhooks',
-      async ({ request, params }) =>
-        await listIncomingWebhooks(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/incoming-webhooks', async ({ request, params, body, set }) => {
-      const created = await makeIncomingWebhook(dependencies, request, params.channelId, body);
-      set.status = 201;
-      return created;
-    })
-    .delete(
-      '/api/channels/:channelId/incoming-webhooks/:webhookId',
-      async ({ request, params, set }) => {
-        await revokeIncomingWebhook(dependencies, request, params.channelId, params.webhookId);
-        set.status = 204;
-        return null;
-      },
-    )
-    .post(
-      '/api/webhooks/incoming/:webhookId/:secret',
-      async ({ request, params, body, set, server }) => {
-        const answer = await postIncomingWebhook(
-          {
-            database: dependencies.database,
-            clock: dependencies.clock,
-            bus: sockets.bus,
-            log: dependencies.log,
-            mayPost: async (webhookId) => await hookPosts.consume(webhookId),
-            mayKnock: async (address) => await knocks.consume(address),
-          },
-          params,
-          body,
-          limitKeyFor(
-            clientAddress(
-              peerOf(server, request),
-              request.headers,
-              dependencies.config.TRUST_PROXY,
-            ),
-          ),
-        );
-        set.status = 201;
-        return answer;
-      },
-    )
 
     .post(
       '/api/workspaces/:workspaceId/uploads',
@@ -1578,66 +1346,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
         return attachment;
       },
       // The body is the file, read by the handler after the session and the membership (D-109 §3).
-      { parse: 'none' },
-    )
-    .post(
-      '/api/webhooks/github-app',
-      async ({ request, server }) => {
-        const outcome = await receiveAppWebhook(
-          {
-            ...githubIssues(),
-            mayKnock: async (address) => await knocks.consume(address),
-            inFlight: delivering,
-            deadline: async (ms) => {
-              await Bun.sleep(ms);
-            },
-          },
-          request,
-          limitKeyFor(
-            clientAddress(
-              peerOf(server, request),
-              request.headers,
-              dependencies.config.TRUST_PROXY,
-            ),
-          ),
-        );
-        return { outcome };
-      },
-      // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
-      { parse: 'none' },
-    )
-    .post(
-      '/api/webhooks/github/:feedId',
-      async ({ request, params, set, server }) => {
-        const outcome = await receiveWebhook(
-          {
-            database: dependencies.database,
-            clock: dependencies.clock,
-            cipher,
-            bus: sockets.bus,
-            log: dependencies.log,
-            mayDeliver: async (feedId) => await feedPosts.consume(feedId),
-            mayKnock: async (address) => await knocks.consume(address),
-            inFlight: delivering,
-            deadline: async (ms) => {
-              await Bun.sleep(ms);
-            },
-          },
-          request,
-          params.feedId,
-          limitKeyFor(
-            clientAddress(
-              peerOf(server, request),
-              request.headers,
-              dependencies.config.TRUST_PROXY,
-            ),
-          ),
-        );
-        // What GitHub shows beside the delivery: posted, or why not, all of them received.
-        set.status = outcome === 'posted' ? 201 : 200;
-        return { outcome };
-      },
-      // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
       { parse: 'none' },
     )
     .get('/api/images', async ({ request, set }) => {

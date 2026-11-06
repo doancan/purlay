@@ -3,6 +3,11 @@
  * admin's in a channel they can see; and the post a tool makes to a hook's address, with no session.
  * Validate, call one service, answer.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { GitHubWiring } from './wiring';
+import { limitKeyFor } from '../../../platform/client-key';
+import { clientAddress, peerOf } from '../../../ingress/http/client-address';
 import {
   CreateIncomingWebhookRequest,
   IncomingWebhookPost,
@@ -10,22 +15,22 @@ import {
   type IncomingWebhookAnswer,
   type IncomingWebhookList,
 } from '@purlay/types';
-import { requireChannelById } from '../../features/chat/channels/guard';
-import { AppError } from '../../platform/errors';
-import { atomicallyOn } from '../../platform/transactions';
+import { requireChannelById } from '../channels/guard';
+import { AppError } from '../../../platform/errors';
+import { atomicallyOn } from '../../../platform/transactions';
 import {
   channelWebhooks,
   createWebhook,
   receivePost,
   revokeWebhook,
   type IncomingPostDependencies,
-} from '../../features/chat/integrations/incoming-webhooks';
-import type { ChannelDependencies } from '../../features/chat/http/channels';
-import { requireSession } from './session';
-import { validated } from './validate';
+} from '../integrations/incoming-webhooks';
+import type { ChannelDependencies } from './channels';
+import { requireSession } from '../../../ingress/http/session';
+import { validated } from '../../../ingress/http/validate';
 
 /** `GET /api/channels/:channelId/incoming-webhooks` */
-export const listIncomingWebhooks = async (
+const listIncomingWebhooks = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -36,7 +41,7 @@ export const listIncomingWebhooks = async (
 };
 
 /** `POST /api/channels/:channelId/incoming-webhooks` — the hook, and its address with its secret, once. */
-export const makeIncomingWebhook = async (
+const makeIncomingWebhook = async (
   { auth, database, clock }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -51,7 +56,7 @@ export const makeIncomingWebhook = async (
 };
 
 /** `DELETE /api/channels/:channelId/incoming-webhooks/:webhookId` */
-export const revokeIncomingWebhook = async (
+const revokeIncomingWebhook = async (
   { auth, database, clock }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -87,3 +92,49 @@ export const postIncomingWebhook = async (
   const messageId = await receivePost(dependencies, { ...params, text });
   return { messageId };
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const incomingWebhookRoutes = (
+  context: ModuleRouteDependencies,
+  wiring: GitHubWiring,
+): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/channels/:channelId/incoming-webhooks',
+      async ({ request, params }) => await listIncomingWebhooks(context, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/incoming-webhooks', async ({ request, params, body, set }) => {
+      const created = await makeIncomingWebhook(context, request, params.channelId, body);
+      set.status = 201;
+      return created;
+    })
+    .delete(
+      '/api/channels/:channelId/incoming-webhooks/:webhookId',
+      async ({ request, params, set }) => {
+        await revokeIncomingWebhook(context, request, params.channelId, params.webhookId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/webhooks/incoming/:webhookId/:secret',
+      async ({ request, params, body, set, server }) => {
+        const answer = await postIncomingWebhook(
+          {
+            database: context.database,
+            clock: context.clock,
+            bus: context.bus,
+            log: context.log,
+            mayPost: async (webhookId) => await wiring.hookPosts.consume(webhookId),
+            mayKnock: async (address) => await wiring.knocks.consume(address),
+          },
+          params,
+          body,
+          limitKeyFor(
+            clientAddress(peerOf(server, request), request.headers, context.config.TRUST_PROXY),
+          ),
+        );
+        set.status = 201;
+        return answer;
+      },
+    );

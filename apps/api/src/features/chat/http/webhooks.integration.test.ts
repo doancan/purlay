@@ -10,14 +10,14 @@ import { createHmac } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Transaction } from '@purlay/db';
 import { CreatedGitHubFeed, WebhookAnswer } from '@purlay/types';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { fixedClock } from '../../platform/clock';
-import { aSession } from '../../testing/signed-in';
-import { aRoom } from '../../testing/rooms';
-import { testConfig, testDependencies } from '../../testing/doubles';
-import { credentialCipher } from '../../platform/crypto';
-import { createApp } from './app';
-import { WEBHOOK_BODY_MAX_BYTES } from './edge';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { fixedClock } from '../../../platform/clock';
+import { aSession } from '../../../testing/signed-in';
+import { aRoom } from '../../../testing/rooms';
+import { testConfig, testDependencies } from '../../../testing/doubles';
+import { credentialCipher } from '../../../platform/crypto';
+import { createApp } from '../../../ingress/http/app';
+import { WEBHOOK_BODY_MAX_BYTES } from '../../../ingress/http/edge';
 import { DELIVERIES_AT_ONCE, receiveWebhook } from './webhooks';
 
 afterAll(async () => {

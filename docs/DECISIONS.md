@@ -13474,10 +13474,19 @@ folder, and a third module would have added its handlers to the core's door.
    path its manifest does not own, and when the plugin and its folder's text disagree. `module-seams.test.ts`'s `ALLOWED`
    shrinks by each handler file that moves, and its cap with it.
 
-**Built in steps.** The seam, the fence, the guard and issues' four routes first; then chat's handlers in batches, each a
-`git mv` and a rewrite of imports proved by script, after which `HTTP_IN_INGRESS` is empty and `ALLOWED` is what is left of
-the core's doors: the workspace routes that read chat's GitHub client and unfurl check, the release route, the socket's
-presence and `erase-content`. What is not done: a module's own error codes and wire types still go through `@purlay/types`.
+**Built.** The seam, the fence, the guard and issues' four routes first (#1159); then chat's handlers in batches, each a `git mv`
+and a rewrite of imports proved by a script that compares every moved file with its base once each import specifier is replaced
+by the file it resolves to (#1164 and the ones after it), until `app.ts` registered none of a module's paths. Chat's 97 routes are
+in `features/chat/http/`, one file per resource, joined in `routes.ts`; what its GitHub-facing resources share is made once in
+`wiring.ts` from the context, which gained the named fields they need (the application's configuration, the cipher, the limiter
+factory, the App's settings, API and addresses, the node's presence record). `module-seams.test.ts`'s `ALLOWED` went from 27 to 4,
+the real remainder of the core's doors: `missed-mail.ts` (`GET` and `PUT /api/me/missed-mail` are the core's routes, in
+`CORE_ROUTES`, over chat's service; handing them to chat would close them in a process without chat, a change of the wire that
+has its own decision), `releases.ts`, the socket's presence and `erase-content`. The ownership test's `HTTP_IN_INGRESS` list,
+which held chat while it moved, is gone: a module that has routes supplies a plugin, with no exception. The workspace's GitHub
+token (`/api/workspaces/:workspaceId/integrations/github`) was chat's by its manifest and served by a core file that imported chat;
+its handlers moved into chat's folder and `workspaces.ts` left `ALLOWED`. What is not done: a module's own error codes and wire
+types still go through `@purlay/types`.
 
 **Rejected.** *Each module's plugin hand-registered in `app.ts`* (`.use(issuesRoutes(...))`, `.use(chatRoutes(...))`): the
 application would name every module and a third would edit the core's door. *Handlers in the manifest*: it makes `module-kit`

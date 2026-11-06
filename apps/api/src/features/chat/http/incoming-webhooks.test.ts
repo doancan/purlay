@@ -4,7 +4,7 @@
  * is looked up. What needs a hook to be there is `incoming-webhooks.integration.test.ts`.
  */
 import { describe, expect, test } from 'bun:test';
-import { aRecordingLogger, testDependencies } from '../../testing/doubles';
+import { aRecordingLogger, testDependencies } from '../../../testing/doubles';
 import { postIncomingWebhook } from './incoming-webhooks';
 
 const SECRET = 'c'.repeat(64);
