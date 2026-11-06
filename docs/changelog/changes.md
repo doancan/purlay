@@ -34,7 +34,7 @@ have it.
 
 ### Added
 
-- **Invitations** — Track each email recipient and mail-server response after reopening Settings, inspect send history, resend a separate link or revoke it. Approved accounts continue to their invitation automatically; mail-server acceptance is distinguished from inbox delivery (D-279).
+- **Invitations** — Track each email recipient and mail-server response after reopening Settings, inspect send history that updates as sends finish, resend a separate link or revoke it. Approved accounts continue to their invitation automatically; mail-server acceptance is distinguished from inbox delivery (D-279).
 
 - **Server administration** — Administrators can open a console without a workspace, browse paginated accounts, workspaces and server audit entries, manage quotas and administrator access, end account sessions, review maintenance jobs, test saved mail configuration, configure server identity and account admission, and review backup evidence (D-278).
 
