@@ -3,6 +3,8 @@
  * (`MODULES.md` §7, D-260, D-266). A manifest that says `none` cannot be added without editing this list, which is the
  * point: the choice not to budget a module is somebody's decision, written here beside the module's name.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { bundledModules } from './composition';
 
@@ -30,6 +32,57 @@ describe('the modules that have no share of the pool', () => {
         expect(queueTimeoutMs).toBeGreaterThan(0);
         expect(statementTimeoutMs).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+/** Where a module's pool-share integration test is, unless it is in `POOL_SHARE_TESTS_ELSEWHERE`. */
+const poolShareTestOf = (id: string): string => `features/${id}/http/budget.integration.test.ts`;
+
+/**
+ * Pool-share tests that are not in their module's folder, with where they are: chat's handlers were in `ingress/` when
+ * its test was written and it has not moved. A module added later puts its test at `poolShareTestOf`; an entry here whose
+ * module has its test there fails, so the list only shrinks.
+ */
+const POOL_SHARE_TESTS_ELSEWHERE: Readonly<Record<string, string>> = {
+  chat: 'ingress/http/chat-budget.integration.test.ts',
+};
+
+describe('every module with a share of the pool has a test that fills it', () => {
+  const sharing = bundledModules
+    .map(({ manifest }) => manifest)
+    .filter((manifest) => 'poolShare' in manifest.budget)
+    .map(({ id }) => id);
+
+  const testOf = (id: string): string => POOL_SHARE_TESTS_ELSEWHERE[id] ?? poolShareTestOf(id);
+
+  test('the test is where the convention or the table says, and says it needs the module', () => {
+    for (const id of sharing) {
+      const path = join(import.meta.dir, testOf(id));
+      const exists = existsSync(path);
+      const needs =
+        exists && new RegExp(`@needs-modules[^\\n]*\\b${id}\\b`).test(readFileSync(path, 'utf8'));
+      expect({ id, path: testOf(id), exists, needs }).toEqual({
+        id,
+        path: testOf(id),
+        exists: true,
+        needs: true,
+      });
+    }
+  });
+
+  test('the table names only modules that have a share and whose test is not in its folder', () => {
+    for (const [id, path] of Object.entries(POOL_SHARE_TESTS_ELSEWHERE)) {
+      expect({ id, shares: sharing.includes(id) }).toEqual({ id, shares: true });
+      expect({
+        id,
+        path,
+        inItsFolder: existsSync(join(import.meta.dir, poolShareTestOf(id))),
+      }).toEqual({
+        id,
+        path,
+        inItsFolder: false,
+      });
     }
   });
 });

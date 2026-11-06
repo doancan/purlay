@@ -16,8 +16,10 @@
 ## 1. What a module is
 
 A unit of product — chat, issues, notes, mail — that registers with the core and can be turned off. The
-**core** (identity, workspaces and tenancy, permissions, audit, the domain event bus, notifications,
-attachments, the search, the erasure and export catalogues, the registry) knows no module by name.
+**core** (identity, workspaces and tenancy, permissions, audit, the domain event bus, attachments, the erasure and
+export catalogues, the registry) knows no module by name. Notifications and the search are not the core's: the
+`notifications` table and the search of messages are chat's, and the core only holds the kinds and sources a manifest
+declares (§2, `notifications` and `searchSources`).
 One process and one PostgreSQL stay (D-7): a module is a folder, a set of migrations and a web feature, not
 a service. Modules are first-party code in this repository; the manifest is not a trust boundary, and
 loading a module from elsewhere is not supported (D-250 rule 2).
@@ -213,8 +215,8 @@ holds the builder API only: it does not tell a read of a core table from a write
 across modules goes through a port. The seams that are not ports yet are listed, each with why, and may only shrink: chat's
 four writes of a core table (`CORE_WRITES` in `module-tables.test.ts`: a sent file is claimed by its message, a scheduled
 message claims its upload, a message adds to the workspace's storage counter, missed mail moves the person's
-`missed_mail_since`), and the three files of `cli/` that seed or measure a demo and name chat's channels (`demo-seed.ts`,
-`demo-script.ts`, `budget-latency.ts`). Raw `sql` is the way round a typed handle, so a lint rule bans it in `features/`
+`missed_mail_since`), and the files of `cli/` that seed or measure a demo and name chat's tables, the allow-list of `core-tables.test.ts` (§8:
+`cli/demo-seed.ts` and `cli/budget-latency.ts`). Raw `sql` is the way round a typed handle, so a lint rule bans it in `features/`
 (chat is exempt for now: its templates are almost all expression fragments, `count(*)::int`, `state_version + 1`, and a
 scan of the text for a table another module owns is what polices them, D-271); a table is named only in the manifest's
 `data` hooks, which receive an executor of the module's own. This is what makes "no foreign key between modules" mean more
@@ -469,7 +471,7 @@ until then it is a stated intent and not a guarantee.
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher, `domain-bus.test.ts` — **built**, with no module publishing on it yet | 5 |
 | A fact is not lost between commit and publish | **not built** (design intent, §4, D-272): a same-transaction row and a sweeper, and a crash test, when the first module has a fact | — |
-| A module cannot starve the others of connections | the application's one database is leased (`leasingExecutor`, `@purlay/db`) by the share of the module a request belongs to (`moduleConnections`, `platform/module-budget.ts`): a cap on the requests holding a connection, a queue timeout and a `statement_timeout` per module, the modules together held to the pool less the core's reserve — **built, applied from each manifest's `budget`** (issues a third of the pool, chat seven of ten); `issues-budget.integration.test.ts` and `chat-budget.integration.test.ts` fill a share on a pool of their own and find the other module and the core answered, `module-budget.integration.test.ts` and `leasing.integration.test.ts` hold the lease, and the mutations `module-routes-not-noted-as-their-module`, `frames-not-noted-as-their-module`, `application-database-not-leased`, `module-share-ignores-core-reserve`, `membership-read-inside-a-module-share` and `module-budget-declaration-ignored` hold the wiring | 5 |
+| A module cannot starve the others of connections | the application's one database is leased (`leasingExecutor`, `@purlay/db`) by the share of the module a request belongs to (`moduleConnections`, `platform/module-budget.ts`): a cap on the requests holding a connection, a queue timeout and a `statement_timeout` per module, the modules together held to the pool less the core's reserve — **built, applied from each manifest's `budget`** (issues a third of the pool, chat seven of ten); `features/issues/http/budget.integration.test.ts` and `ingress/http/chat-budget.integration.test.ts` (§9 item 4) fill a share on a pool of their own and find the other module and the core answered, `module-budget.integration.test.ts` and `leasing.integration.test.ts` hold the lease, and the mutations `module-routes-not-noted-as-their-module`, `frames-not-noted-as-their-module`, `application-database-not-leased`, `module-share-ignores-core-reserve`, `membership-read-inside-a-module-share` and `module-budget-declaration-ignored` hold the wiring | 5 |
 | A module's handler cannot take the pool without its module's share | there is no other handle: `app.ts` uses the database it was given once, to lease it, and no feature or door opens a pool (`module-seams.test.ts`); the mutation `application-hands-handlers-a-raw-database` — **built** (D-266) | 12 |
 | A module's request or frame that runs past its deadline is answered and its database work cancelled; a throw in one handler is that request's | `deadline` in the manifest (`request-deadline.ts`): the framework's `wrap` around a module's request, `routeFrame` around its frames, the lease's signal cancelling the statement — **built** (D-270); `deadline.integration.test.ts` (a request waiting on a lock, over `handle` and a started server, the statement gone from `pg_stat_activity`; a handler that throws, the share of one connection still whole), `router.test.ts`, `leasing.integration.test.ts`, `module-deadlines.test.ts`, `registry.test.ts`; mutations `module-requests-have-no-deadline`, `deadline-signal-not-on-the-request`, `deadline-does-not-cancel-the-statement`, `lease-takes-a-connection-past-the-deadline`, `frame-deadline-ignored`, `registry-accepts-any-deadline` and `registry-accepts-a-deadline-none-without-a-reason` | 12 |
 | Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts`, and `composition.test.ts` holds that no share takes every connection the modules may share — **built** (D-260, D-266, D-269); mutations `chat-declares-no-budget`, `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
@@ -535,9 +537,10 @@ commit beside this list.
 - Take the next D-number in `DECISIONS.md` (`### D-N.`; the document check refuses a gap, a repeat and a decision
   nothing else cites) and write the decision: what the module is, what it is **not** (D-254 §1 lists what issues left
   out, each a decision of its own), the table, who may do what, what happens to its data when it is off, and the cost
-  of reversing it. A module is admitted only with this, a row and a section under §11 (chat, the first, has a row only) and a removal rule (D-250 rule 6).
-- Add its row and its section to §11 below. `module-listing.test.ts` fails for a bundled module without a row, or a row
-  for one that is not bundled.
+  of reversing it. A module is admitted only with this, a row and a section under §11 and a removal rule (D-250 rule 6), which the section states as a threshold or as `none, because …`.
+- Add its row and its section to §11 below, the section with a `**Removal threshold.**` line. `module-listing.test.ts` fails
+  for a bundled module without a row or a section, a row or section for one that is not bundled, and a section with no
+  threshold line.
 
 **2. The manifest** (`features/<id>/module.ts`, the object in `bundledModules` in `composition.ts`).
 
@@ -631,7 +634,7 @@ commit beside this list.
   an id in `searchSources`. `notification-kinds.test.ts` fails for a kind the wire, `NEEDS_YOU` or the database has and no
   manifest declares, and for one declared twice; the registry for a kind or a source two modules list.
 
-**4. The routes, in `ingress/`.**
+**4. The routes and the share of the pool.**
 
 - **Route handlers and their registration in the module's folder** (D-280): `apps/api/src/features/<id>/http/handlers.ts` (or
   one file per resource) and `routes.ts`, whose function takes `ModuleRouteDependencies` and returns an Elysia plugin
@@ -657,10 +660,14 @@ commit beside this list.
   handle to take instead; `module-seams.test.ts` holds `app.ts` to one use of the database it was given, and the doors and
   features to no pool of their own. What is yours is a read that decides whether a request may be made at all (a
   membership, a session): the core's guards in `platform/tenancy.ts` take their connections outside every share
-  (`inTheCore`), so a person with no part in the module holds none of its slots. Copy `chat-budget.integration.test.ts` for
-  a module with a `poolShare`, named `<id>-budget.integration.test.ts`: a lock on a table its routes read, the share
-  filled, the next request refused as busy and another module's answered meanwhile. **No test fails if it is missing:** it
-  is a convention, held by review; what fails without it is only that the share was never exercised on a pool.
+  (`inTheCore`), so a person with no part in the module holds none of its slots. A module with a `poolShare` has an
+  integration test of it, `features/<id>/http/budget.integration.test.ts`, copied from issues' (the first such test,
+  `features/issues/http/budget.integration.test.ts`): a lock on a table its routes read, the share filled, the next request
+  refused as busy and another module's answered meanwhile, with `@needs-modules` naming the module. Chat's is the one
+  exception, `ingress/http/chat-budget.integration.test.ts`, left where its handlers were. `module-budgets.test.ts` fails for
+  a module with a `poolShare` and no test at that path (or the one path its table of exceptions gives, which only shrinks) and
+  for a test whose header does not name the module; it does not run the test or read what it asserts, so that the share is
+  filled and the others answered is held by review.
 - **No door names a module's files**: `cli/` imports no file under `features/` but `erase-content.ts`'s one (the single allow-listed entry, which a module's own command would join only with a manifest field to go through), and no file of `ingress/` imports a module's
   folder but the ones listed in `ALLOWED` in `module-seams.test.ts` (the list only shrinks and its cap with it; a new module's
   handlers are in its own folder and are not an entry, and a core route file that needs the module is a port or a manifest
@@ -708,6 +715,10 @@ commit beside this list.
 - The **no-module browser spec**: `apps/web/e2e/modules-none.e2e.ts` (run as `bun run test:modules-none`) holds the module
   out of the frame when the server runs none, and asks for none of the paths in the manifests' `routes`. The words it
   looks for in the rail and the sidebar (`Inbox`, `Issues`) are the module's labels and are edited with a module that has UI.
+  **Nothing holds them, and they are not derived from the manifests on purpose:** a manifest holds i18n keys, which the page
+  resolves from a catalogue the Playwright project does not load, and the spec's words are not the manifests' labels (the
+  front door's `Channels` and the palette's `Unreads` are matched by patterns of their own), so a derived list would need a
+  table of exceptions, a second list. A label left out leaves the spec passing, so a module with UI adds its words by hand.
 - A **module-listing** row (§11, above) and `composition.test.ts` for what the module contributes.
 - **Mutations**: for each rule above the tests are the only guard of, a mutation in `scripts/mutations/` that breaks the
   rule and names the test that must fail (read `issues-*` there). A mutation goes in the file
@@ -720,7 +731,11 @@ commit beside this list.
   `module-compat.test.ts` holds the module to it: no new requirement, no capability, route, job or frame gone, no id changed.
   A break is a dated entry under `exceptions` in that file, where a reviewer sees it; the release clears them. Until a
   release carries the module the snapshot does not name it.
-- `docs/changelog/changes.md` gets an entry under **Added**; the decision count in `README.md` follows.
+- `docs/changelog/changes.md` gets an entry under **Added** when the module is something a person can use (a module with
+  no user-visible effect has none: `CONTRIBUTING.md` §6.6 says what is notable), and the decision count in `README.md`
+  follows the new D-number. **Nothing holds either, and neither is worth a guard:** what is user-visible is a judgement a
+  test would have to make for the author, and the README's count changes with every decision, not with modules, so a
+  test of it would fail unrelated changes. A reviewer reads both.
 
 **8. The documents.** `MODULES.md` (§11 row and section, §8 if a rule is now held), `DECISIONS.md`, `SCHEMA.md` (the
 migration and the table), `DATA.md` (what personal data it holds and how it is erased and exported), `API.md`
@@ -729,24 +744,26 @@ migration and the table), `DATA.md` (what personal data it holds and how it is e
 the ones they hold.
 
 **What a new module edits outside its own folder, measured by a throwaway third module (`notes`) built from this
-list.** Source files, not tests and not documents; the first four rows are what a module without UI and without an
+list.** Source files, not tests and not documents; the rows before the audit action's are what a module without UI and without an
 audit action edits.
 
 | Where | Files | Why |
 |---|---|---|
 | `apps/api/src` | `composition.ts` (one `bundledModules` line) | the module's row and its routes (`ingress/http/app.ts` is **not** edited: it uses each bundled module's `routes`, D-280); `cli/jobs.ts` is **not** edited, the job command takes a module's jobs from the composition; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
+| `apps/api/src` | `modules/jobs/schedule.ts` (a job of the module gets its slot in `PLAN`) | only for a module with `jobs` or `retention`: `core-claims.test.ts` fails for a job the plan has and nothing claims, and the other way |
+| `apps/api/src` | `index.ts` (the process's own loops and workers) | _filled in with the change that moves chat's timed delivery loop into its module_ |
+| `packages/types/src` | `modules.ts` (the id in `ModuleId`) | the contract bundle lists the module from its manifest, and `contract/bundle.test.ts` fails until the type names it (D-273) |
+| `.github/workflows` | `ci.yml` (the module's cell in the `module-suites` matrix, item 6) | the cells are listed by hand there; `module-suites.test.ts` fails for a cell with no leg |
 | `packages/db` | `src/migrator.ts` (set registration and `PRODUCT_MODULE_REQUIRES`), `src/table-owners.ts`, `src/table-lifecycle.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, its erasure and retention decision, the generated schema |
 | `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
 | an audit action | `modules/audit/audit.ts` (target type), `packages/types/src/api.ts` (action), web `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | the exhaustive switch and the catalogues refuse an action with no sentence, so an audit action forces three web files even for a module with no web part |
 
-That is 11 shared files besides the module's own two (its `http/` folder and the types file), and 6 of them
-without an audit action. A module with UI adds its manifest, one
-`registry.ts` line and the per-module web files listed in item 5. The old figure of 27 files was the issues commit
-counted before the web registry and the derived catalogue, and is stale.
+A module with UI adds its manifest, one `registry.ts` line and the per-module web files listed in item 5. No count of
+these files is stated: the table is the list, and a number beside it was stale each time a row was added.
 
 **The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
-fixture, and are edited (seven files; `module-seams.test.ts` is not one, the handlers being in the module's folder):
+fixture, and are edited (`module-seams.test.ts` is not one, the handlers being in the module's folder):
 `testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
 unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
 integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`
@@ -910,7 +927,7 @@ request with behaviour unchanged:
    the tables from `TABLE_OWNERS` (every table whose owner is not the core, so a module added later is covered) and
    fails for a file of the core that names one where a query puts it — a builder method's table, SQL's `from`,
    `join`, `into` or `update`, `table.column`, `Database['table']`, `tableExists` — with comments stripped; the
-   core's tests are left out, as the lint leaves them. Its allow-list is empty and may only shrink. It is a test
+   core's tests are left out, as the lint leaves them. Its allow-list may only shrink (§8 names the files on it today, and `stated-numbers.test.ts` holds the list and its cap to that sentence). It is a test
    and not a lint rule because the lint configuration is plain JavaScript and the list of owners is TypeScript; a
    test reads both, and the mutation `core-sweep-names-a-chat-table` shows it catches a chat table written back
    into the core. Two places still named chat's tables when it was written, and were inverted with it. **The push
@@ -982,14 +999,25 @@ wire names, which installed clients read.
 
 ## 11. The modules this build carries
 
-One row for each manifest in `bundledModules` (`composition.ts`): a module added there without its row, or a row for
-one that is not there, fails `module-listing.test.ts`. `—` is none. Only the row is held by a test. A section under the
-row is written for each module added after chat (§9 item 1); chat, the first, has none: §1 to §10 and D-250 describe it.
+One row and one section for each manifest in `bundledModules` (`composition.ts`): a module added there without its row,
+or a row for one that is not there, fails `module-listing.test.ts`, and so does a module with no section or a section with
+no `**Removal threshold.**` line (a threshold, or `none, because …`; D-250 rule 6). `—` is none. What the sections say
+beyond the threshold is held by review.
 
 | Module | Requires | Optional | Provides |
 |---|---|---|---|
 | `chat` | — | — | — |
 | `issues` | — | — | — |
+
+### `chat`
+
+The first module (D-250): what the product was before it was a set of modules, carved out of the core in the steps of §10.
+§1 to §10 and D-250 describe it, so this section says only what a section must. **Requires** nothing, **optional**
+nothing, **provides** nothing, as its row says.
+
+- **Removal threshold.** None, because chat is the product the other modules sit beside and an operator's choice to run a
+  server without it is `MODULES`, not a removal from the build. A measurable rule is needed before a package is sold
+  (§10, *Before a package is sold*); there is none yet. Its tables stay until an operator drops them (D-250 rule 5).
 
 ### `issues`
 

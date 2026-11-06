@@ -107,6 +107,22 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/environment.test.ts'],
   },
   {
+    id: 'module-section-loses-its-removal-threshold',
+    why: 'a module’s section in §11 says nothing of when it would be removed, so D-250 rule 6 is a sentence the module was admitted without',
+    file: 'docs/MODULES.md',
+    find: '- **Removal threshold.** None, because chat is the product',
+    replace: '- **Removal.** None, because chat is the product',
+    tests: ['apps/api/src/module-listing.test.ts'],
+  },
+  {
+    id: 'modules-document-names-a-demo-file-the-allow-list-lacks',
+    why: 'MODULES.md says the core may still name a chat table in a file the allow-list of `core-tables.test.ts` does not hold, so the document and the test give two lists',
+    file: 'docs/MODULES.md',
+    find: '`cli/demo-seed.ts` and `cli/budget-latency.ts`).',
+    replace: '`cli/demo-seed.ts`, `cli/demo-script.ts` and `cli/budget-latency.ts`).',
+    tests: ['apps/api/src/stated-numbers.test.ts'],
+  },
+  {
     id: 'verify-gate-step-may-fail',
     why: 'the gate refuses and the job still succeeds, so the required check is green over a red verdict',
     file: '.github/workflows/ci.yml',

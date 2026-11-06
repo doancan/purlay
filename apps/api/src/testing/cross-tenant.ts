@@ -880,7 +880,8 @@ export const rowsIn = (body: unknown): number | undefined => {
 /**
  * The lists the seed (`aTenant`) leaves legitimately empty, each with why. The one-member-two-workspaces
  * case proves a list shows nothing of the other workspace only when it shows something of its own, so a
- * list of a new module must have a row seeded for it; this may only shrink.
+ * list of a new module must have a row seeded for it. This may only shrink, and `MAX_EMPTY_FOR_THE_SEED` in
+ * `cross-tenant.test.ts` holds its size.
  */
 export const EMPTY_FOR_THE_SEED: Readonly<Record<string, string>> = {
   'GET /api/workspaces/:workspaceId/presence':
