@@ -1,4 +1,9 @@
-import type { AuditFilter, QuestionFilters, SearchFilters } from '@purlay/types';
+import type {
+  AuditFilter,
+  QuestionFilters,
+  SearchFilters,
+  InvitationRecipientQuery,
+} from '@purlay/types';
 /**
  * The names of the cache's entries, spelled once.
  *
@@ -91,7 +96,10 @@ export const keys = {
       : (['search', workspaceId, words, channelId, authorId, filters] as const),
   savedSearches: (workspaceId: string) => ['saved-searches', workspaceId] as const,
   invitation: (token: string) => ['invitation', token] as const,
-  invitationRecipients: (workspaceId: string) => ['invitation-recipients', workspaceId] as const,
+  invitationRecipients: (workspaceId: string, filter?: InvitationRecipientQuery) =>
+    filter === undefined
+      ? (['invitation-recipients', workspaceId] as const)
+      : (['invitation-recipients', workspaceId, filter] as const),
   invitationDeliveries: (workspaceId: string, recipientId: string) =>
     ['invitation-deliveries', workspaceId, recipientId] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
