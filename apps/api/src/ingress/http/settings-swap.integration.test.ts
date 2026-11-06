@@ -666,9 +666,10 @@ describe('integration: a socket across a change of the settings', () => {
       readonly release: Deferred;
     }
     let armed: Hold | undefined;
-    // A lookup of this instance is held before it is even recorded, until the test lets it go: the
-    // order the sockets' own awaits interleave in is then the test's, not the machine's load.
-    let late: { readonly label: string; readonly release: Deferred } | undefined;
+    // The touch of a stale session by this instance is held, after its read of the context is
+    // recorded and before the session is written, until the test lets it go: the order the sockets'
+    // own awaits interleave in is then the test's, not the machine's load.
+    let touching: { readonly label: string; readonly release: Deferred } | undefined;
     const arm = (): Hold => {
       armed = { entered: deferred(), release: deferred() };
       return armed;
@@ -678,7 +679,6 @@ describe('integration: a socket across a change of the settings', () => {
       (built: RuntimeServices): RuntimeServices => {
         const real = built.auth.api.getSession;
         const getSession = (async (...args: Parameters<typeof real>) => {
-          if (late?.label === label) await late.release.promise;
           events.push(`lookup ${label}`);
           const hold = armed;
           if (hold !== undefined) {
@@ -692,7 +692,10 @@ describe('integration: a socket across a change of the settings', () => {
         Object.defineProperty(auth, '$context', {
           get: () => {
             events.push(`context ${label}`);
-            return built.auth.$context;
+            const hold = touching?.label === label ? touching.release.promise : undefined;
+            return hold === undefined
+              ? built.auth.$context
+              : hold.then(async () => await built.auth.$context);
           },
         });
         return { ...built, auth };
@@ -751,10 +754,11 @@ describe('integration: a socket across a change of the settings', () => {
       await opening.entered.promise;
       await stale();
       await swapTo('C');
-      // The first socket's second read, the one that confirms its session once the topic is heard on,
-      // comes after the touch's database write: here it arrives after the second socket's.
-      late = { label: 'B', release: deferred() };
-      const confirming = late.release;
+      // The first socket's touch of the session is written, and its second read, the one that
+      // confirms the session once the topic is heard on, is made, only after the second socket's
+      // reads: the order a loaded machine gives now and then.
+      touching = { label: 'B', release: deferred() };
+      const touched = touching.release;
       opening.release.resolve();
       await firstOpened;
       await until(() => events.includes('context B'));
@@ -764,17 +768,22 @@ describe('integration: a socket across a change of the settings', () => {
       sockets.push(second);
       await opened(second);
       await until(() => events.filter((event) => event === 'lookup C').length >= 2);
-      confirming.resolve();
+      touched.resolve();
       await until(() => events.filter((event) => event === 'lookup B').length >= 2);
 
       // Each instance's own reads, whatever order the two sockets' reads came in: the first socket
       // was admitted wholly by A and opened wholly by B (its two reads, the first of which touches the
-      // stale session); the second only ever by C.
+      // stale session); the second only ever by C, and by no other.
       const readsOf = (label: string): string[] =>
         events.filter((event) => event.endsWith(` ${label}`));
       expect(readsOf('A')).toEqual(['lookup A', 'context A']);
       expect(readsOf('B')).toEqual(['lookup B', 'context B', 'lookup B']);
-      expect(new Set(readsOf('C'))).toEqual(new Set(['lookup C']));
+      // C's admission reads the session first; whether the stale session is touched by C, or already
+      // was by B, depends on how far B's write got, so only C's own reads in a legal order are asserted.
+      expect(readsOf('C')[0]).toBe('lookup C');
+      expect(readsOf('C').filter((read) => read !== 'lookup C' && read !== 'context C')).toEqual(
+        [],
+      );
     } finally {
       for (const socket of sockets) socket.close();
       await server.app.stop(true);
