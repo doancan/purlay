@@ -59,6 +59,7 @@ describe('installing a browser, with a stall cut and tried again', () => {
   test('a try installs with the playwright the lockfile pins, from the web workspace', () => {
     expect(installCommand('webkit')).toEqual([
       'bun',
+      '--no-env-file',
       'run',
       '--cwd',
       'apps/web',

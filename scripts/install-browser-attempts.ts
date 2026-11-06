@@ -30,6 +30,7 @@ export const installWithRetries = async (
 /** The command a try runs: the playwright the lockfile pins, from the web workspace (#1099). */
 export const installCommand = (browser: string): string[] => [
   'bun',
+  '--no-env-file',
   'run',
   '--cwd',
   'apps/web',
