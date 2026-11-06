@@ -316,6 +316,7 @@ test('administration is independent, responsive, keyboard accessible and backed 
       const text = await readFile(output, 'utf8');
       expect(text).toContain('server.account_approved');
       expect(text).toContain('Operator');
+      expect(text.trim().split('\n')).toHaveLength(format === 'csv' ? 3 : 2);
       expect(text).not.toContain('server.smtp_connected');
       expect(text).not.toContain('smtp://');
     }
@@ -330,7 +331,7 @@ test('administration is independent, responsive, keyboard accessible and backed 
     await page.reload();
     await expect(
       page.getByRole('listitem').getByText('Hesap onaylandı', { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(2);
     await expect(page.getByRole('link', { name: 'CSV indir', exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   }
