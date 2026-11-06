@@ -6,6 +6,7 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import { fileURLToPath } from 'node:url';
 import tseslint from 'typescript-eslint';
 import { featureFences, featureIds } from './scripts/feature-fences.mjs';
+import { CORE_IMPORTS_OF_MODULES, webFences, webModuleIds } from './scripts/web-fences.mjs';
 
 // The layering rule two configurations below both need. ESLint replaces a rule
 // wholesale rather than merging it, so the block for `modules/` has to restate
@@ -16,6 +17,23 @@ const NO_TRANSPORT_TYPES = {
   message:
     'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
 };
+
+// What every file of the web client may not import, named once: ESLint replaces a rule rather than merging it, so the
+// module fences below restate it. (D-277)
+const WEB_RESTRICTED_IMPORTS = [
+  {
+    group: ['@purlay/db', '**/apps/api/**'],
+    message:
+      'apps/web imports only from packages/*. The database never reaches the browser. (ARCHITECTURE.md §4)',
+  },
+  // A relative path climbs out of apps/web without ever spelling
+  // `apps/api`, so the pattern above let it through — measured (#130).
+  {
+    regex: String.raw`^(\.\./)+(apps/)?api(/|$)`,
+    message:
+      'apps/web imports only from packages/*, by name — never by climbing into apps/api. (ARCHITECTURE.md §4)',
+  },
+];
 
 // A module is a folder under `apps/api/src/features/` (D-250, `MODULES.md` §1), found here rather than
 // listed, so adding one cannot forget to be fenced. Each is held apart from the others below, and
@@ -545,25 +563,7 @@ export default defineConfig([
   {
     files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@purlay/db', '**/apps/api/**'],
-              message:
-                'apps/web imports only from packages/*. The database never reaches the browser. (ARCHITECTURE.md §4)',
-            },
-            // A relative path climbs out of apps/web without ever spelling
-            // `apps/api`, so the pattern above let it through — measured (#130).
-            {
-              regex: String.raw`^(\.\./)+(apps/)?api(/|$)`,
-              message:
-                'apps/web imports only from packages/*, by name — never by climbing into apps/api. (ARCHITECTURE.md §4)',
-            },
-          ],
-        },
-      ],
+      'no-restricted-imports': ['error', { patterns: WEB_RESTRICTED_IMPORTS }],
       // Bun's types are available repository-wide because Bun is the test runner
       // everywhere. Its runtime is not available in a browser, so reaching for it
       // here compiles and then fails at the worst possible moment.
@@ -573,6 +573,15 @@ export default defineConfig([
       ],
     },
   },
+
+  // The web's modules (D-277, `MODULES.md` §6): a module imports no other, and the core imports none but through the
+  // registry, apart from the files listed with their reasons, a list that only shrinks.
+  ...webFences(
+    'apps/web/src',
+    webModuleIds('apps/web/src/features'),
+    WEB_RESTRICTED_IMPORTS,
+    CORE_IMPORTS_OF_MODULES.map(({ from }) => from),
+  ),
 
   // The markdown reading runs on both sides: the server parses at write time and the browser
   // renders the same tree (D-101). One import of a server-only module and the client build
@@ -611,7 +620,7 @@ export default defineConfig([
   // and neither does a rule asking for return-type annotations in a JavaScript
   // file, which has no syntax to write one in.
   {
-    files: ['eslint.config.mjs', 'scripts/feature-fences.mjs'],
+    files: ['eslint.config.mjs', 'scripts/feature-fences.mjs', 'scripts/web-fences.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
   },
