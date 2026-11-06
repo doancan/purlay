@@ -86,6 +86,26 @@ const rowOf = async (
     .executeTakeFirst();
 
 describe('integration: the policy, read where every session is read', () => {
+  test('passive admission checks never renew an idle session', async () => {
+    await withRollback(async (db) => {
+      const session = await aLiveSession(db, 'passive-admission');
+      await db
+        .updateTable('users')
+        .set({ admission_state: 'pending' })
+        .where('id', '=', session.userId)
+        .execute();
+      const used = ago(HOUR);
+      await travel(db, session.sessionId, { lastUsedAt: used });
+      const auth = aTestAuth(db, { sessionLifetime: IDLE });
+      const passive = { allowPending: true, recordActivity: false };
+      expect(await sessionFromHeaders(auth, withCookie(session.token), passive)).toBeDefined();
+      expect((await rowOf(db, session.sessionId))?.last_used_at).toEqual(used);
+      await travel(db, session.sessionId, { lastUsedAt: ago(9 * HOUR) });
+      expect(await sessionFromHeaders(auth, withCookie(session.token), passive)).toBeUndefined();
+      expect(await rowOf(db, session.sessionId)).toBeUndefined();
+    });
+  });
+
   test('off: a session signed in and last used weeks ago resolves as before, untouched by the policy', async () => {
     await withRollback(async (db) => {
       for (const auth of [aTestAuth(db), aTestAuth(db, { sessionLifetime: NO_SESSION_LIFETIME })]) {

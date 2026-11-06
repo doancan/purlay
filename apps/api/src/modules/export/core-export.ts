@@ -141,6 +141,8 @@ export const coreExport: CoreExportContribution = {
 
 /** The tables of the core that are not in an export, and why. Every other table says it in its own module's. */
 export type CoreExcluded =
+  | 'workspace_invitation_recipients'
+  | 'workspace_invitation_mail_attempts'
   | 'accounts'
   | 'verifications'
   | 'two_factors'
@@ -160,6 +162,9 @@ export type CoreExcluded =
   | 'setup_state';
 
 export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
+  workspace_invitation_recipients:
+    'private recipient addresses, available only to workspace managers',
+  workspace_invitation_mail_attempts: 'private invitation delivery history',
   accounts: 'a provider’s account and a credential’s password hash: the person’s own (D-179)',
   verifications: 'short-lived sign-in tokens, credentials of the person’s own (D-179)',
   two_factors:

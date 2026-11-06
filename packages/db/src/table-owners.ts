@@ -36,6 +36,8 @@ export const TABLE_OWNERS = {
   verifications: 'core',
   workspace_exports: 'core',
   workspace_invitations: 'core',
+  workspace_invitation_recipients: 'core',
+  workspace_invitation_mail_attempts: 'core',
   workspace_members: 'core',
   workspaces: 'core',
 

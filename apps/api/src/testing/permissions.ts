@@ -131,6 +131,22 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/channels/:channelId/incoming-webhooks/:webhookId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'list invitation recipients': {
+    endpoint: 'GET /api/workspaces/:workspaceId/invitation-recipients',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'list invitation delivery history': {
+    endpoint: 'GET /api/workspaces/:workspaceId/invitation-recipients/:recipientId/attempts',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'resend an invitation recipient': {
+    endpoint: 'POST /api/workspaces/:workspaceId/invitation-recipients/:recipientId/resend',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'revoke an invitation recipient': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/invitation-recipients/:recipientId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'make an invitation link': {
     endpoint: 'POST /api/workspaces/:workspaceId/invitations',
     allowed: { owner: true, admin: true, member: false },

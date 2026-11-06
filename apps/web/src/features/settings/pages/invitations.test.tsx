@@ -67,6 +67,7 @@ const render = async (
       path,
       locale,
       api: aSignedInApi({
+        invitationRecipients: () => Promise.resolve({ data: [], nextCursor: null }),
         me: () =>
           Promise.resolve({
             ...session,

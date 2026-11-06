@@ -504,6 +504,46 @@ CREATE INDEX idx_workspace_invitations_created_by ON workspace_invitations (crea
     WHERE created_by IS NOT NULL;
 ```
 
+#### Recipient and mail-attempt evidence (D-279)
+
+Private to workspace managers, without bearer tokens, message bodies or raw SMTP errors. Recipient ids and attempt ids are application UUIDv7s. Each attempt points at its own bearer invitation; the latest attempt is found by `(workspace_id, recipient_id, id DESC)`. Recipient and history endpoints are separate keyset pages. The composite foreign key prevents an attempt from crossing its recipient's workspace. Received records leave on account erasure; creator references on other recipients name the anonymised account. Both tables are removed in the workspace purge and only received evidence goes into a personal export.
+
+```sql
+-- Recipient evidence is private to workspace managers. Bearer tokens and message bodies never live here.
+CREATE TABLE workspace_invitation_recipients (
+  id uuid PRIMARY KEY,
+  workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  locale text NOT NULL CHECK (locale IN ('en', 'tr')),
+  created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL,
+  applicant_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  requested_at timestamptz,
+  joined_at timestamptz,
+  UNIQUE (id, workspace_id)
+);
+CREATE INDEX idx_invitation_recipients_workspace ON workspace_invitation_recipients (workspace_id, id DESC);
+CREATE INDEX idx_invitation_recipients_email ON workspace_invitation_recipients (email);
+CREATE INDEX idx_invitation_recipients_applicant ON workspace_invitation_recipients (applicant_user_id) WHERE applicant_user_id IS NOT NULL;
+CREATE TABLE workspace_invitation_mail_attempts (
+  id uuid PRIMARY KEY,
+  workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  recipient_id uuid NOT NULL,
+  invitation_id uuid NOT NULL UNIQUE REFERENCES workspace_invitations(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL,
+  result text NOT NULL CHECK (result IN ('queued', 'accepted', 'failed')),
+  finished_at timestamptz,
+  failure text CHECK (failure IN ('connection', 'authentication', 'recipient', 'message', 'tls', 'unknown')),
+  FOREIGN KEY (recipient_id, workspace_id) REFERENCES workspace_invitation_recipients(id, workspace_id) ON DELETE CASCADE,
+  CHECK ((result = 'queued' AND finished_at IS NULL AND failure IS NULL)
+      OR (result = 'accepted' AND finished_at IS NOT NULL AND failure IS NULL)
+      OR (result = 'failed' AND finished_at IS NOT NULL AND failure IS NOT NULL))
+);
+CREATE INDEX idx_invitation_attempts_recipient ON workspace_invitation_mail_attempts (workspace_id, recipient_id, id DESC);
+CREATE INDEX idx_invitation_recipients_creator ON workspace_invitation_recipients (created_by) WHERE created_by IS NOT NULL;
+CREATE INDEX idx_invitation_attempts_recipient_parent ON workspace_invitation_mail_attempts (recipient_id);
+```
+
 ---
 
 ## 5. Channels
@@ -2743,6 +2783,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0083_server_audit_filters.sql  server audit action/target/workspace/date indexes (D-278)
 0084_server_admission_identity.sql  server identity and new-account admission policy (D-278)
 0085_administration_counts.sql  covering account-status and export-status indexes for the admin overview (D-278)
+0086_invitation_recipients.sql  workspace_invitation_recipients, workspace_invitation_mail_attempts: private recipient and safe SMTP receipt evidence (D-279)
+0087_invitation_recipient_foreign_keys.sql  usable child indexes for recipient attribution and cascading deletion (D-279)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

@@ -467,6 +467,7 @@ describe('integration: channel visibility', () => {
               // The outsider, who is in the visible channel: the control for a responder.
               memberId: world.ids.userId,
               invitationId: NEVER_EXISTED,
+              recipientId: NEVER_EXISTED,
               feedId: world.feed,
               versionId: NEVER_EXISTED,
               incidentId: world.incident,
@@ -513,6 +514,7 @@ describe('integration: channel visibility', () => {
               unsentAttachmentId: NEVER_EXISTED,
               memberId: NEVER_EXISTED,
               invitationId: NEVER_EXISTED,
+              recipientId: NEVER_EXISTED,
               feedId: NEVER_EXISTED,
               // The outsider's own visible message's: the control of removing a version.
               versionId: world.version,
@@ -580,6 +582,7 @@ describe('integration: channel visibility', () => {
                 unsentAttachmentId: NEVER_EXISTED,
                 memberId: NEVER_EXISTED,
                 invitationId: NEVER_EXISTED,
+                recipientId: NEVER_EXISTED,
                 feedId: NEVER_EXISTED,
                 versionId: NEVER_EXISTED,
                 incidentId: NEVER_EXISTED,

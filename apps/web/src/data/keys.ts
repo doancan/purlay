@@ -91,6 +91,9 @@ export const keys = {
       : (['search', workspaceId, words, channelId, authorId, filters] as const),
   savedSearches: (workspaceId: string) => ['saved-searches', workspaceId] as const,
   invitation: (token: string) => ['invitation', token] as const,
+  invitationRecipients: (workspaceId: string) => ['invitation-recipients', workspaceId] as const,
+  invitationDeliveries: (workspaceId: string, recipientId: string) =>
+    ['invitation-deliveries', workspaceId, recipientId] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   archivedChannels: (workspaceId: string) => ['archived-channels', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,

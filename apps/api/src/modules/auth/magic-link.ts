@@ -288,9 +288,10 @@ export const consumeSignInLink = async (
   dependencies: Pick<SignInLinkDependencies, 'database' | 'clock' | 'links'>,
   token: string,
   headers: Headers,
+  invitation?: string,
 ): Promise<{ readonly setCookie: readonly string[] }> => {
   await previewSignInLink(dependencies, token);
-  const setCookie = await dependencies.links?.spend(token, headers);
+  const setCookie = await dependencies.links?.spend(token, headers, invitation);
   if (setCookie === undefined) throw linkNotFound();
   return { setCookie };
 };

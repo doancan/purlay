@@ -11,7 +11,7 @@ import { messageId, type UserRole } from '@purlay/types';
 import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
-import { NOW, testDependencies } from '../../testing/doubles';
+import { NOW, testDependencies, aRecordingOutbox } from '../../testing/doubles';
 import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { PERMISSIONS } from '../../testing/permissions';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
@@ -42,7 +42,12 @@ const call = async (
   body?: unknown,
 ): Promise<Response> =>
   await createApp(
-    testDependencies({ database: world.db, clock, githubApp: () => GITHUB_APP_STUB }),
+    testDependencies({
+      database: world.db,
+      clock,
+      mail: aRecordingOutbox(),
+      githubApp: () => GITHUB_APP_STUB,
+    }),
   ).handle(
     new Request(`https://purlay.test${path}`, {
       method,
@@ -96,8 +101,53 @@ const aWorld = async (db: Executor): Promise<World> => {
   return { ...world, channelId, messageId: id };
 };
 
+/** The owner's mailed invitation; delivery is complete so this test judges permission to retry it. */
+const aRecipient = async (world: World): Promise<string> => {
+  await call(
+    world,
+    'POST',
+    `/api/workspaces/${world.workspaceId}/invitations`,
+    world.people.owner,
+    { emails: ['permission@example.test'] },
+  );
+  const row = await world.db
+    .selectFrom('workspace_invitation_recipients')
+    .select('id')
+    .where('workspace_id', '=', world.workspaceId)
+    .executeTakeFirstOrThrow();
+  await world.db
+    .updateTable('workspace_invitation_mail_attempts')
+    .set({ result: 'accepted', finished_at: NOW })
+    .where('recipient_id', '=', row.id)
+    .execute();
+  return row.id;
+};
+
 /** Each case's request, made as one role. */
 const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promise<Response>>> = {
+  'list invitation recipients': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/invitation-recipients`, as),
+  'list invitation delivery history': async (world, as) =>
+    await call(
+      world,
+      'GET',
+      `/api/workspaces/${world.workspaceId}/invitation-recipients/${await aRecipient(world)}/attempts`,
+      as,
+    ),
+  'resend an invitation recipient': async (world, as) =>
+    await call(
+      world,
+      'POST',
+      `/api/workspaces/${world.workspaceId}/invitation-recipients/${await aRecipient(world)}/resend`,
+      as,
+    ),
+  'revoke an invitation recipient': async (world, as) =>
+    await call(
+      world,
+      'DELETE',
+      `/api/workspaces/${world.workspaceId}/invitation-recipients/${await aRecipient(world)}`,
+      as,
+    ),
   'make a member an admin': async (world, as) =>
     await call(
       world,
@@ -404,6 +454,9 @@ describe('integration: every administrative write is on the trail, once', () => 
 
   /** Rows the set-up of a case writes before its action (a link made, a token set), not its own. */
   const SET_UP_ROWS: Readonly<Record<string, number>> = {
+    'list invitation delivery history': 2,
+    'resend an invitation recipient': 2,
+    'revoke an invitation recipient': 2,
     'revoke an invitation link': 1,
     'remove the GitHub token': 1,
     'disconnect a repository from a channel': 1,
@@ -432,7 +485,9 @@ describe('integration: every administrative write is on the trail, once', () => 
         expect(response.ok).toBe(true);
         // What an action does on the way (making a link to revoke it) is counted by the action's own case.
         const setUp = SET_UP_ROWS[name] ?? 0;
-        expect((await rows(db, world.workspaceId)) - before - setUp).toBe(reads ? 0 : 1);
+        // A resend records both the old link’s revocation and the replacement’s creation.
+        const expected = name === 'resend an invitation recipient' ? 2 : reads ? 0 : 1;
+        expect((await rows(db, world.workspaceId)) - before - setUp).toBe(expected);
       });
     });
   }

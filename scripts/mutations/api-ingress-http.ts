@@ -406,8 +406,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'invite-mail-letters-posted-inside-the-answer',
     why: 'the letters are handed to the mail server before the answer is made: a throw there is a 500 and the link is lost',
     file: 'apps/api/src/ingress/http/invitations.ts',
-    find: '    later(() => {\n      post(outbox, letters);\n      return Promise.resolve();\n    });\n',
-    replace: '    post(outbox, letters);\n',
+    find: '    later(() => {\n      post({ database, clock, outbox }, letters);\n      return Promise.resolve();\n    });\n',
+    replace: '    post({ database, clock, outbox }, letters);\n',
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {

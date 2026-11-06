@@ -268,6 +268,10 @@ import type { PushSender } from '../../modules/push/sender';
 import { serveExternalImage } from './images';
 import {
   dropInvitation,
+  readInvitationRecipients,
+  readInvitationDeliveries,
+  resendRecipient,
+  dropRecipient,
   joinByInvitation,
   lookAtInvitation,
   makeInvitation,
@@ -1404,6 +1408,35 @@ export const createApp = (given: Dependencies): HttpApplication => {
         );
         set.status = 204;
         return null;
+      },
+    )
+    .get(
+      '/api/workspaces/:workspaceId/invitation-recipients',
+      async ({ request, params }) =>
+        await readInvitationRecipients(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/invitation-recipients/:recipientId/attempts',
+      async ({ request, params }) =>
+        await readInvitationDeliveries(
+          dependencies,
+          request,
+          params.workspaceId,
+          params.recipientId,
+        ),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/invitation-recipients/:recipientId/resend',
+      async ({ request, params, set }) => {
+        await resendRecipient(invitationMail(), request, params.workspaceId, params.recipientId);
+        set.status = 204;
+      },
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/invitation-recipients/:recipientId',
+      async ({ request, params, set }) => {
+        await dropRecipient(dependencies, request, params.workspaceId, params.recipientId);
+        set.status = 204;
       },
     )
     .post('/api/workspaces/:workspaceId/invitations', async ({ request, params, body, set }) => {

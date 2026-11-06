@@ -150,7 +150,7 @@ const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<voi
 export const sessionFromHeaders = async (
   auth: Auth,
   headers: Headers,
-  options: { readonly allowPending?: boolean } = {},
+  options: { readonly allowPending?: boolean; readonly recordActivity?: boolean } = {},
 ): Promise<SessionOwner | undefined> => {
   // Nothing to look up: an anonymous request costs the database nothing.
   if (readCookie(headers.get('cookie'), SESSION_COOKIE) === undefined) return undefined;
@@ -166,7 +166,9 @@ export const sessionFromHeaders = async (
     if (markOf(found.user, 'suspendedAt') !== null) return undefined;
     if (options.allowPending !== true && admissionStateOf(found.user) !== 'approved')
       return undefined;
-    await touch(auth, found.session.id, new Date(found.session.updatedAt));
+    // A background admission check is not evidence that the person is using the page.
+    if (options.recordActivity !== false)
+      await touch(auth, found.session.id, new Date(found.session.updatedAt));
     return {
       sessionId: found.session.id,
       userId: found.user.id,

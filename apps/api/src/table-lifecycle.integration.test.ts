@@ -38,6 +38,7 @@ import { addressCounterKey } from './modules/auth/magic-link';
 import { sweepEmailSignIns } from './modules/jobs/jobs';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
+import { makeAndMailInvitation } from './modules/workspaces/invitation-mail';
 import { createInvitation } from './modules/workspaces/invitations';
 import { DAY_MS, fixedClock, HOUR_MS } from './platform/clock';
 import { NO_LOG, type EventBus } from './platform/events';
@@ -204,6 +205,33 @@ const inWorkspace = (world: World): { workspace_id: string; channel_id: string }
 
 /** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
+  workspace_invitation_mail_attempts: {
+    seed: async (db, world) => {
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', world.adaId)
+        .execute();
+      await makeAndMailInvitation(
+        db,
+        clock,
+        await requireWorkspaceMembership(db, world.bobId, world.workspaceId),
+        { emails: [world.adaEmail] },
+        { on: true, appUrl: 'https://purlay.test' },
+      );
+    },
+    rows: async (db, world) =>
+      Number(
+        (
+          await db
+            .selectFrom('workspace_invitation_mail_attempts as a')
+            .innerJoin('workspace_invitation_recipients as r', 'r.id', 'a.recipient_id')
+            .select((eb) => eb.fn.countAll().as('count'))
+            .where('r.email', '=', world.adaEmail)
+            .executeTakeFirstOrThrow()
+        ).count,
+      ),
+  },
   accounts: ofAda('accounts', async (db, world) => {
     await db
       .insertInto('accounts')
@@ -438,6 +466,24 @@ const UNSEEDED_ERASURE: Readonly<Record<Table, string>> = {};
  * that names them, which the soft deletion keeps pointing at the same (anonymised) account.
  */
 const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
+  workspace_invitation_recipients: by(
+    'workspace_invitation_recipients',
+    'created_by',
+    adas,
+    async (db, world) => {
+      await db
+        .insertInto('workspace_invitation_recipients')
+        .values({
+          id: anId(),
+          workspace_id: world.workspaceId,
+          email: 'external@example.test',
+          locale: 'en',
+          created_at: NOW,
+          created_by: world.adaId,
+        })
+        .execute();
+    },
+  ),
   users: by('users', 'id', adas, async () => {
     // Ada is the row.
   }),
