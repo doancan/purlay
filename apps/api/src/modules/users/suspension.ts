@@ -14,6 +14,7 @@
  *   `server.account_restored`). Suspending one already suspended, or lifting one that is not, changes
  *   and records nothing.
  */
+import { lockServerAdministrator } from '../administration/changes';
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { SERVER_ACCOUNTS_MAX, Uuid, type ServerAccount } from '@purlay/types';
@@ -88,6 +89,15 @@ export const suspendAccount = async (
   admin: ServerAdminSession,
   userId: string,
 ): Promise<readonly string[]> => {
+  if (!Value.Check(Uuid, userId)) throw accountNotFound();
+  await lockServerAdministrator(executor, admin);
+  await executor
+    .selectFrom('sessions')
+    .select('id')
+    .where('user_id', '=', userId)
+    .orderBy('id')
+    .forUpdate()
+    .execute();
   const account = await lockAccount(executor, userId);
   if (userId === admin.userId || account.isServerAdmin) {
     throw new AppError({
@@ -117,6 +127,7 @@ export const restoreAccount = async (
   admin: ServerAdminSession,
   userId: string,
 ): Promise<void> => {
+  await lockServerAdministrator(executor, admin);
   const account = await lockAccount(executor, userId);
   if (!account.suspended) return;
   await executor

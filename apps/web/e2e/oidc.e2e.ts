@@ -63,7 +63,7 @@ test('the administrator connects the provider, and a newcomer signs in through i
   await send('/setup/finish');
 
   const page = await context.newPage();
-  await page.goto('/w/acme-engineering/settings/server');
+  await page.goto('/server/security');
   const card = page.getByRole('region', { name: 'Single sign-on' });
   await expect(card.getByText('Not connected')).toBeVisible();
   await expect(card.getByText(`${origin}/auth/callback/oidc`)).toBeVisible();

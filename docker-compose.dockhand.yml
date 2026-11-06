@@ -55,6 +55,8 @@ x-environment: &environment
   LOG_LEVEL: ${LOG_LEVEL:-info}
   # Which modules this stack runs; blank is every one. The API, the jobs and the commands read the same (D-250).
   MODULES: ${MODULES:-}
+  # Kept with production for the scheduler; the API uses its built-in read-only receipt volume below.
+  BACKUP_STATUS_DIRECTORY: ${BACKUP_STATUS_DIRECTORY:-}
   DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   # Sockets this node holds open before it answers 503; size by measured fan-out (docs/DEPLOY.md).
@@ -137,6 +139,7 @@ services:
     environment:
       <<: *environment
       PORT: '3001'
+      BACKUP_STATUS_DIRECTORY: /var/lib/purlay-backup-status
       # The proxy is the only thing in front of it.
       TRUST_PROXY: 'true'
       # One node, or several: one takes the lock and migrates, the rest wait (D-93).
@@ -144,6 +147,8 @@ services:
       # The bearer token a scraper reads /metrics with (D-221); empty is off. Here no Caddy refuses
       # /metrics from outside, so set it only once Nginx Proxy Manager refuses that path itself.
       METRICS_TOKEN: ${METRICS_TOKEN:-}
+    volumes:
+      - backup-status:/var/lib/purlay-backup-status:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -271,7 +276,14 @@ services:
         while true; do
           name="purlay-$$(date -u +%Y%m%dT%H%M%SZ).dump"
           if pg_dump --format=custom --no-owner --no-acl --file="/backups/.$$name.partial" \
+            && pg_restore --list "/backups/.$$name.partial" >/dev/null \
             && mv "/backups/.$$name.partial" "/backups/$$name"; then
+            digest="$$(sha256sum "/backups/$$name" | cut -c 1-64)"
+            bytes="$$(wc -c <"/backups/$$name" | tr -d ' ')"
+            printf '{"version":1,"source":"dockhand","completedAt":"%s","scope":"database","databaseSha256":"%s","databaseBytes":"%s","maxAgeSeconds":%s}\n' \
+              "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$digest" "$$bytes" "$$((every * 120 + 300))" >/status/.backup.tmp
+            chmod 644 /status/.backup.tmp
+            mv /status/.backup.tmp /status/backup.json
             echo "backup: wrote $$name"
           else
             rm -f "/backups/.$$name.partial"
@@ -282,6 +294,7 @@ services:
         done
     volumes:
       - backups:/backups
+      - backup-status:/status
     depends_on:
       postgres:
         condition: service_healthy
@@ -364,3 +377,5 @@ volumes:
   garage-data:
   # The dumps the backup service writes; back this volume up off the server as well.
   backups:
+  # Operational metadata only; the API never mounts the archives.
+  backup-status:

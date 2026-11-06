@@ -5,6 +5,7 @@
  * invitation the screen says so and points to sign-in; it never asks the server to refuse a form it
  * should not have shown.
  */
+import { InstanceIdentity } from '../session/admission';
 import { useAuthMethods, useMe } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
@@ -47,6 +48,7 @@ export const SignUpScreen = (): React.JSX.Element => {
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
         <LogoMark />
+        <InstanceIdentity />
         {methods.isError ? (
           <>
             <h1 className="text-display">{t('signUp.title')}</h1>

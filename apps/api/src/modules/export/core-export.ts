@@ -43,6 +43,8 @@ const head = [
       deleted_at: 'export',
       // The controller's data about their own people — not about those who left (D-140).
       email: 'operator',
+      admission_state: 'omit',
+      admission_requires_verified_email: 'omit',
       title: 'members',
       time_zone: 'members',
       status_text: 'members',
@@ -149,6 +151,7 @@ export type CoreExcluded =
   | 'workspace_exports'
   | 'personal_exports'
   | 'object_deletions'
+  | 'server_operational_status'
   | 'server_settings'
   | 'server_audit_log'
   | 'admin_email_verification'
@@ -171,6 +174,7 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
     'a person’s export of their own data: theirs, never a workspace’s (D-241), and its archive is the export',
   object_deletions:
     'storage keys waiting to be deleted: the store’s housekeeping, and keys never leave',
+  server_operational_status: 'the operator’s bounded checks, not personal or workspace data',
   server_settings:
     'the operator’s settings for the whole server, not a workspace’s; the GitHub secret and the relay’s address are credentials, which never leave (D-179)',
   server_audit_log:

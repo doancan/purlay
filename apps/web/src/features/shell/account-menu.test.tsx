@@ -359,3 +359,11 @@ describe('signing out', () => {
     view.unmount();
   });
 });
+
+test('server administrators have a console entry in their account menu', async () => {
+  const view = await open({ me: () => Promise.resolve({ ...aSession(), isServerAdmin: true }) });
+  await menu(view);
+  await person().click(view.getByRole('menuitem', { name: 'Server administration' }));
+  expect(here(view)).toBe('/server');
+  view.unmount();
+});

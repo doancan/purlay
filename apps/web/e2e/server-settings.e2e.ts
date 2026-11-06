@@ -63,6 +63,7 @@ test.afterAll(() => {
 test('the administrator replaces GitHub, changes the sign-up policy, and is asked before the last way in goes', async ({
   browser,
 }) => {
+  test.setTimeout(120_000);
   if (manifest === null) throw new Error('the server did not start');
   const { origin, code, github } = manifest;
   const context = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
@@ -95,8 +96,12 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
 
   const page = await context.newPage();
   await page.goto('/w/acme-engineering/settings/server');
-  await expect(page.getByRole('heading', { level: 1, name: 'Server' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Server' })).toHaveAttribute('aria-current', 'page');
+  await expect(page).toHaveURL(`${origin}/server`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Overview', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     const main = page.getByRole('main');
@@ -124,6 +129,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   }
   await page.setViewportSize({ width: 1440, height: 900 });
 
+  await page.goto('/server/security');
   const githubCard = page.getByRole('region', { name: 'Sign in with GitHub' });
   await expect(githubCard.getByText(`Client ID ${github.clientId}`)).toBeVisible();
   await expect(githubCard.getByText(`${origin}/auth/callback/github`)).toBeVisible();
@@ -179,8 +185,16 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
       ['Client secret', 'Private key', 'Webhook secret'],
     ],
   ] as const) {
+    await page.goto(
+      title === 'E-mail'
+        ? '/server/email'
+        : title === 'GitHub App for issues'
+          ? '/server/integrations'
+          : '/server/security',
+    );
     const section = page.getByRole('region', { name: title, exact: true });
     await section.getByRole('button', { name: action }).click();
+    if (title === 'E-mail') await section.getByRole('button', { name: 'Use an SMTP URL' }).click();
     for (const label of secrets)
       await section.getByLabel(label, { exact: true }).fill('discard-this-secret');
     expect(await section.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
@@ -188,14 +202,17 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
     );
     await section.getByRole('button', { name: 'Cancel' }).click();
     await section.getByRole('button', { name: action }).click();
+    if (title === 'E-mail') await section.getByRole('button', { name: 'Use an SMTP URL' }).click();
     for (const label of secrets)
       await expect(section.getByLabel(label, { exact: true })).toHaveValue('');
     await section.getByRole('button', { name: 'Cancel' }).click();
   }
 
   // The actual relay is tried before it is saved. A subsequent read may fail without undoing that save.
+  await page.goto('/server/email');
   const emailCard = page.getByRole('region', { name: 'E-mail', exact: true });
   await emailCard.getByRole('button', { name: 'Connect a mail server' }).click();
+  await emailCard.getByRole('button', { name: 'Use an SMTP URL' }).click();
   await emailCard.getByLabel('Mail server', { exact: true }).fill('smtp://127.0.0.1:1');
   await emailCard.getByLabel('Sender', { exact: true }).fill('no-reply@example.test');
   await emailCard.getByLabel('Allow an unencrypted connection').check();
@@ -243,14 +260,15 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
   await page.unroute('**/api/server/settings');
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  // Accounts (D-233): the administrator is listed, said to administer the server, with no button —
-  // nobody suspends the administration; a search that matches nobody says so.
-  const accounts = page.getByRole('region', { name: 'Accounts' });
+  // The global census keeps administrator controls explicit and does not offer suspending an admin.
+  await page.goto('/server/users');
+  const accounts = page.getByRole('region', { name: 'Users and administrators' });
   const adminRow = accounts.getByRole('listitem').filter({ hasText: 'Administers this server' });
   await expect(adminRow).toHaveCount(1);
-  await expect(adminRow.getByRole('button')).toHaveCount(0);
-  await accounts.getByLabel('Find by name, username or address').fill('nobody-by-this-name');
-  await expect(accounts.getByText('No account matches.')).toBeVisible();
+  await expect(adminRow.getByRole('button', { name: 'Suspend', exact: true })).toHaveCount(0);
+  await page.getByLabel('Search by name, username or email').fill('nobody-by-this-name');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(accounts.getByText('No matching records')).toBeVisible();
 
   // Anybody else is told the route does not exist.
   const stranger = await browser.newContext({ baseURL: origin });

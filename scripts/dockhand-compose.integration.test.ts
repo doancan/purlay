@@ -117,6 +117,7 @@ describe('integration: the Dockhand compose file', () => {
     expect(backup?.['security_opt']).toEqual(['no-new-privileges:true']);
     expect(backup?.volumes?.map((volume) => [volume.type, volume.source, volume.target])).toEqual([
       ['volume', 'backups', '/backups'],
+      ['volume', 'backup-status', '/status'],
     ]);
     expect(backup?.environment).toMatchObject({
       PGHOST: 'postgres',
@@ -136,10 +137,23 @@ describe('integration: the Dockhand compose file', () => {
     );
   });
 
-  test('the API is production’s exactly, but for its one published port', () => {
-    expect(without(dockhand.services['api'], 'networks', 'ports')).toEqual(
-      without(production.services['api'], 'networks', 'ports'),
+  test('the API matches production apart from its published port and read-only backup evidence', () => {
+    expect(
+      without(dockhand.services['api'], 'networks', 'ports', 'volumes', 'environment'),
+    ).toEqual(without(production.services['api'], 'networks', 'ports', 'volumes', 'environment'));
+    expect(without(dockhand.services['api']?.environment, 'BACKUP_STATUS_DIRECTORY')).toEqual(
+      without(production.services['api']?.environment, 'BACKUP_STATUS_DIRECTORY'),
     );
+    expect(dockhand.services['api']?.environment?.['BACKUP_STATUS_DIRECTORY']).toBe(
+      '/var/lib/purlay-backup-status',
+    );
+    expect(dockhand.services['api']?.volumes).toEqual([
+      expect.objectContaining({
+        source: 'backup-status',
+        target: '/var/lib/purlay-backup-status',
+        read_only: true,
+      }),
+    ]);
     // Nginx Proxy Manager is the one proxy TRUST_PROXY means (D-81), as Caddy was.
     expect(dockhand.services['api']?.environment?.['TRUST_PROXY']).toBe('true');
   });

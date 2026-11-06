@@ -76,7 +76,7 @@ test('the administrator requires two-step verification, is held back until it is
 
   // Required: the administrator's own account has a password and no second step, so it is held back at once.
   const page = await context.newPage();
-  await page.goto('/w/acme-engineering/settings/server');
+  await page.goto('/server/security');
   const policy = page.getByRole('region', { name: 'How people sign in' });
   await policy.getByRole('radio', { name: /Required/ }).check();
   const heading = page.getByRole('heading', { level: 1, name: 'Turn on two-step verification' });
@@ -117,7 +117,7 @@ test('the administrator requires two-step verification, is held back until it is
   expect((await page.request.get('/api/workspaces')).status()).toBe(200);
 
   // Passwords off, while GitHub serves.
-  await page.goto('/w/acme-engineering/settings/server');
+  await page.goto('/server/security');
   await policy.getByRole('radio', { name: /^Off/ }).check();
   await expect(policy.getByText('Saved. It applies from the next request.')).toBeVisible();
   const methods = (await (await page.request.get('/api/auth/methods')).json()) as {

@@ -159,7 +159,7 @@ export const CreateWorkspace = ({
 
 export const Home = (): React.JSX.Element | null => {
   const { t } = useI18n();
-  const { memberships, mayCreateWorkspace } = useSession();
+  const { memberships, mayCreateWorkspace, isServerAdmin } = useSession();
   const { navigate } = useRoute();
   const first = memberships[0]?.workspace.slug;
   // Back from signing in with an invitation in hand: that is where the person was going (D-115).
@@ -185,6 +185,15 @@ export const Home = (): React.JSX.Element | null => {
       <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
         <LogoMark />
         {/* An owner whose last workspace is being deleted can still keep it from here (D-242). */}
+        {isServerAdmin && (
+          <Button
+            onClick={() => {
+              navigate(href('serverHome'));
+            }}
+          >
+            {t('admin.title')}
+          </Button>
+        )}
         <ScheduledDeletions />
         {mayCreateWorkspace ? (
           <>

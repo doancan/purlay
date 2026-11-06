@@ -28,6 +28,7 @@ export const TABLE_OWNERS = {
   rate_limits: 'core',
   server_audit_log: 'core',
   server_settings: 'core',
+  server_operational_status: 'core',
   sessions: 'core',
   setup_state: 'core',
   two_factors: 'core',

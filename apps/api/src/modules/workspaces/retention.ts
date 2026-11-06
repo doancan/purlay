@@ -1,3 +1,4 @@
+import type { ServerAdminSession } from '../setup/setup';
 /**
  * How long a workspace keeps its history (D-27 §1, D-139 §4): an owner's to read and to set, whole days
  * from 30, or forever. Forever is the default and the tenet (D-2); shortening it is what this product
@@ -80,4 +81,19 @@ export const setRetention = async (
     metadata: { from: said(before.retention_days), to: said(retentionDays) },
   });
   return await answer();
+};
+
+/** Metadata only: server administrators see owners' policies without gaining access to their history. */
+export const serverRetention = async (
+  executor: Executor,
+  _admin: ServerAdminSession,
+  workspaceIds: readonly string[],
+): Promise<ReadonlyMap<string, number | null>> => {
+  if (workspaceIds.length === 0) return new Map();
+  const rows = await executor
+    .selectFrom('workspaces')
+    .select(['id', 'retention_days'])
+    .where('id', 'in', workspaceIds)
+    .execute();
+  return new Map(rows.map((row) => [row.id, row.retention_days]));
 };

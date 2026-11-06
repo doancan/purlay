@@ -156,4 +156,9 @@ if [ "$BUCKET_STEP" = 1 ]; then
 else
   echo "bucket: nothing to restore"
 fi
+# Reached only after checksum verification, pg_restore with --exit-on-error, table-count check
+# and (when requested) the bucket import. This is scoped archive evidence, not an application smoke test.
+report_scope=database
+[ "$BUCKET_STEP" != 1 ] || report_scope=database-and-attachments
+write_restore_evidence "$BACKUP/database.dump" "$report_scope"
 echo "restore finished: $TARGET_DB"

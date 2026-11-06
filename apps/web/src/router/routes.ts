@@ -35,6 +35,8 @@ export const CORE_ROUTES = {
   setup: '/setup',
   setupVerify: '/setup/verify',
   home: '/',
+  serverHome: '/server',
+  serverSection: '/server/:section',
   workspace: '/w/:slug',
   welcome: '/w/:slug/welcome',
   // Settings are a page with a navigation of its own (D-146); the bare address opens Profile.

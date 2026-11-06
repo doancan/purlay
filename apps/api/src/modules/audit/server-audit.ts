@@ -13,40 +13,8 @@ import { messageId } from '@purlay/types';
 import { writeAuditLine } from './lines';
 
 /** The changes recorded, each a stable machine-readable name. */
-export type ServerAuditAction =
-  | 'server.github_connected'
-  | 'server.github_disconnected'
-  | 'server.oidc_connected'
-  | 'server.oidc_disconnected'
-  /** Sign in with Google (D-251). */
-  | 'server.google_connected'
-  | 'server.google_disconnected'
-  /** The GitHub App issues are written through (D-246). */
-  | 'server.github_app_connected'
-  | 'server.github_app_disconnected'
-  | 'server.smtp_connected'
-  | 'server.smtp_disconnected'
-  | 'server.sign_up_changed'
-  /** The sign-in policy (D-239): two-step verification required of a password, or not; passwords on or off. */
-  | 'server.two_factor_requirement_changed'
-  | 'server.password_sign_in_changed'
-  /** How long a session lives (D-244): signed out after so long unused, and after so long at all. */
-  | 'server.session_idle_timeout_changed'
-  | 'server.session_max_age_changed'
-  | 'server.workspace_creators_changed'
-  /** The break-glass command set the administrator's password; the actor is the account itself. */
-  | 'server.admin_password_reset'
-  /** An account suspended, and lifted (D-233): whose, in `target_user_id`. */
-  | 'server.account_suspended'
-  | 'server.account_restored'
-  /**
-   * A person asked for an export of their own data, and downloaded it (D-241): the actor and the account
-   * are the person. The operator answers access requests (D-28), so the record is on their trail.
-   */
-  | 'account.export_requested'
-  | 'account.export_downloaded'
-  /** A workspace's content erased, its deletion's grace period over (D-242): which, in `target_workspace_id`. */
-  | 'server.workspace_purged';
+export type { ServerAuditAction } from '@purlay/types';
+import type { ServerAuditAction } from '@purlay/types';
 
 export const recordServerAudit = async (
   executor: Executor,

@@ -488,6 +488,12 @@ describe('integration: erasing an account', () => {
         .set({ is_server_admin: true, email_verified: true })
         .where('id', '=', ada.userId)
         .execute();
+      // Another administrator remains; erasing the last is refused (D-278).
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', member(room, 'bob').userId)
+        .execute();
       await erase(db, await signedIn(db, room, 'ada'), ada.username);
       const tombstone = await db
         .selectFrom('users')
@@ -819,6 +825,45 @@ describe('integration: erasing an account', () => {
           async () => await erase(db, await signedIn(db, room, 'ada'), ada.username),
         ),
       ).toBe('LAST_OWNER');
+    });
+  });
+});
+
+describe('integration: keeping a server administrator during erasure', () => {
+  test('the last active server administrator hands over administration before erasing their account', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', ada.userId)
+        .execute();
+      const caller = await signedIn(db, room, 'ada');
+      const refusal: unknown = await erase(db, caller, ada.username).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(refusal).toMatchObject({ body: { code: 'FORBIDDEN' } });
+      const kept = await db
+        .selectFrom('users')
+        .select(['deleted_at', 'is_server_admin'])
+        .where('id', '=', ada.userId)
+        .executeTakeFirstOrThrow();
+      expect(kept.deleted_at).toBeNull();
+      expect(kept.is_server_admin).toBe(true);
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', member(room, 'bob').userId)
+        .execute();
+      await erase(db, caller, ada.username);
+      const erased = await db
+        .selectFrom('users')
+        .select('deleted_at')
+        .where('id', '=', ada.userId)
+        .executeTakeFirstOrThrow();
+      expect(erased.deleted_at).not.toBeNull();
     });
   });
 });
