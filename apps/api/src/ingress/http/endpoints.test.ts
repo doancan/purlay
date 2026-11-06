@@ -12,8 +12,10 @@ import { readFileSync } from 'node:fs';
 import { Kind, type TSchema } from '@sinclair/typebox';
 import * as types from '@purlay/types';
 import { ENDPOINTS, type EndpointSpec } from '@purlay/types';
+import { routeSource } from '../../testing/route-sources';
 
-const appSource = readFileSync('apps/api/src/ingress/http/app.ts', 'utf8');
+/** The application's, and each module's own folder's (D-280). */
+const appSource = routeSource();
 
 /** `METHOD /path` for every route the application registers, as a link of its chain. */
 const served = new Set(

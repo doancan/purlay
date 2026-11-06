@@ -399,7 +399,7 @@ export const API_PLATFORM: readonly Mutation[] = [
     file: 'apps/api/src/platform/tenancy.ts',
     find: 'export const requireWorkspaceMembership = inTheCore(workspaceMembership);',
     replace: 'export const requireWorkspaceMembership = workspaceMembership;',
-    tests: ['apps/api/src/ingress/http/issues-budget.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/budget.integration.test.ts'],
   },
   {
     id: 'metrics-token-not-secret',

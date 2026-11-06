@@ -15,12 +15,12 @@ import {
   IssuePage,
   type UserRole,
 } from '@purlay/types';
-import { composition } from '../../composition';
-import { fixedClock } from '../../platform/clock';
-import { NOW, testDependencies } from '../../testing/doubles';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
-import { createApp } from './app';
+import { composition } from '../../../composition';
+import { fixedClock } from '../../../platform/clock';
+import { NOW, testDependencies } from '../../../testing/doubles';
+import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
+import { createApp } from '../../../ingress/http/app';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
