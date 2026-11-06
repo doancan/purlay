@@ -213,6 +213,15 @@ export const API_INGRESS_HTTP_SETUP: readonly Mutation[] = [
     tests: [SETUP_HTTP_TESTS],
   },
   {
+    id: 'setup-refusal-slower-for-a-presented-cookie',
+    why: 'a caller who sends a setup cookie is refused more slowly than one who sends none, so the time of the refusal tells whether a cookie was a claim: a timing oracle on /setup/state',
+    file: 'apps/api/src/ingress/http/setup.ts',
+    find: '    if (error instanceof SetupRefused) throw unavailable();\n',
+    replace:
+      '    if (error instanceof SetupRefused) {\n      if (token !== undefined) await Bun.sleep(3);\n      throw unavailable();\n    }\n',
+    tests: ['apps/api/src/ingress/http/setup.integration.test.ts'],
+  },
+  {
     id: 'setup-smtp-body-before-the-guard',
     why: 'the mail step weighs its body before the claim',
     file: SETUP_HTTP,
