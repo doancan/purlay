@@ -28,6 +28,18 @@ export const neverSucceeded = (
     (name) => records.find((candidate) => candidate.job_name === name)?.last_success_at == null,
   );
 
+/** Same status for the CLI and the administration console; raw failure text stays in operator logs. */
+export const jobStatus = (
+  record: Pick<JobRecord, 'last_success_at' | 'consecutive_failures'> | undefined,
+  now: Date,
+): 'never' | 'ok' | 'overdue' => {
+  if (record?.last_success_at == null) return 'never';
+  return now.getTime() - record.last_success_at.getTime() > STALE_AFTER_MS ||
+    record.consecutive_failures > 0
+    ? 'overdue'
+    : 'ok';
+};
+
 export const jobReport = (
   known: readonly string[],
   records: readonly JobRecord[],
@@ -38,13 +50,12 @@ export const jobReport = (
   const lines = known.map((name) => {
     const record = records.find((candidate) => candidate.job_name === name);
     const label = name.padEnd(width);
-    if (record?.last_success_at == null) {
+    if (jobStatus(record, now) === 'never' || record?.last_success_at == null) {
       healthy = false;
       return `never    ${label}  has never succeeded: is the scheduler installed?`;
     }
     const success = `last success ${record.last_success_at.toISOString()}`;
-    const late = now.getTime() - record.last_success_at.getTime() > STALE_AFTER_MS;
-    if (!late && record.consecutive_failures === 0) return `ok       ${label}  ${success}`;
+    if (jobStatus(record, now) === 'ok') return `ok       ${label}  ${success}`;
     healthy = false;
     const failures = record.consecutive_failures;
     const since =

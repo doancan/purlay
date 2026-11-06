@@ -19,6 +19,7 @@
  * The executor is an argument, so this runs inside a rolled-back transaction in a test and never
  * opens a connection of its own (D-46).
  */
+import { admissionStateOf } from '../administration/admission';
 import { makeSignature } from 'better-auth/crypto';
 import { isAPIError } from 'better-auth/api';
 import { sessionTokenDigest, type Executor } from '@purlay/db';
@@ -149,6 +150,7 @@ const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<voi
 export const sessionFromHeaders = async (
   auth: Auth,
   headers: Headers,
+  options: { readonly allowPending?: boolean } = {},
 ): Promise<SessionOwner | undefined> => {
   // Nothing to look up: an anonymous request costs the database nothing.
   if (readCookie(headers.get('cookie'), SESSION_COOKIE) === undefined) return undefined;
@@ -162,6 +164,8 @@ export const sessionFromHeaders = async (
     // Nor a suspended one (D-233): its sessions were deleted when it was suspended, and this refuses one
     // that a sign-in committed in the same instant.
     if (markOf(found.user, 'suspendedAt') !== null) return undefined;
+    if (options.allowPending !== true && admissionStateOf(found.user) !== 'approved')
+      return undefined;
     await touch(auth, found.session.id, new Date(found.session.updatedAt));
     return {
       sessionId: found.session.id,
@@ -233,10 +237,18 @@ export const requireLiveSession = async (
 ): Promise<void> => {
   const live = await transaction
     .selectFrom('sessions')
-    .select('id')
-    .where('id', '=', sessionId)
-    .where('expires_at', '>', clock.now())
-    .forShare()
+    .innerJoin('users', 'users.id', 'sessions.user_id')
+    .select('sessions.id')
+    .where('sessions.id', '=', sessionId)
+    .where('sessions.expires_at', '>', clock.now())
+    .where('users.admission_state', '=', 'approved')
+    .where((eb) =>
+      eb.or([
+        eb('users.admission_requires_verified_email', '=', false),
+        eb('users.email_verified', '=', true),
+      ]),
+    )
+    .forShare(['sessions'])
     .executeTakeFirst();
   if (live === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });

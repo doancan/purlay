@@ -16,6 +16,7 @@
  * which is how the browser tests photograph it from a production-shaped build.
  * It is a prop so a test can mount it without a build flag.
  */
+import { LegacyServerRedirect } from '../features/administration/legacy';
 import { lazy, Suspense, useEffect, type ComponentType } from 'react';
 import { InviteScreen } from '../features/invitations/invite-screen';
 import { MailStopScreen } from '../features/missed-mail/stop-screen';
@@ -34,7 +35,7 @@ import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { ModuleRoute, warmModule } from './module-route';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazyNativeSignInScreen } from '../features/native/load';
-import { LazySettingsScreen } from '../features/settings/load';
+import { LazyAdministration, LazySettingsScreen } from '../features/settings/load';
 import { LazySetupScreen, LazyVerifyScreen } from '../features/setup/load';
 import { FIRST_SECTION } from '../features/settings/sections';
 
@@ -115,6 +116,18 @@ const draw = (match: Match, gallery: ComponentType | null): Drawn => {
           <Home />
         </SessionGate>,
       );
+    case 'serverHome':
+      return bare(
+        <SessionGate>
+          <LazyAdministration section="overview" />
+        </SessionGate>,
+      );
+    case 'serverSection':
+      return bare(
+        <SessionGate>
+          <LazyAdministration section={match.params.section} />
+        </SessionGate>,
+      );
     case 'invite':
       return bare(<InviteScreen />);
     case 'mailStop':
@@ -126,6 +139,12 @@ const draw = (match: Match, gallery: ComponentType | null): Drawn => {
     case 'settingsHome':
       return shelled(match.params.slug, <LazySettingsScreen section={FIRST_SECTION} />);
     case 'settings':
+      if (match.params.section === 'server')
+        return bare(
+          <SessionGate>
+            <LegacyServerRedirect />
+          </SessionGate>,
+        );
       return shelled(match.params.slug, <LazySettingsScreen section={match.params.section} />);
     case 'gallery': {
       const Gallery = gallery;

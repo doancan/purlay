@@ -5,6 +5,7 @@
  * says so when it is the last way in. A secret is never shown; a secret the key could not open says so
  * on its card.
  */
+import { SmtpFields } from '../smtp-fields';
 import { EMAIL_MAX, GITHUB_CLIENT_ID_MAX, GITHUB_CLIENT_SECRET_MAX } from '@purlay/types';
 import type { ProbeResult, ServerSettingsAnswer } from '@purlay/types';
 import { useState } from 'react';
@@ -12,7 +13,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
 import { REASONS } from '../../setup/errors';
-import { CopyField, MailServerField, Note, ProbeFailure } from '../../setup/parts';
+import { CopyField, Note, ProbeFailure } from '../../setup/parts';
 import { SaveOutcome, SettingsCard, SettingsRow } from '../page';
 import { useServerClient } from '../server-context';
 import { ChangeFailure, DisconnectDialog, Inset, Reveal, useRefresh } from '../server-parts';
@@ -331,7 +332,7 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
                 if (filled) void save();
               }}
             >
-              <MailServerField
+              <SmtpFields
                 readOnly={busy}
                 value={smtpUrl}
                 invalid={field === 'smtpUrl'}

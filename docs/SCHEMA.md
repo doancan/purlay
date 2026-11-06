@@ -84,6 +84,8 @@ Global account. Not workspace-scoped: one identity spans workspaces. (D-3)
 
 ```sql
 CREATE TABLE users (
+    admission_state text NOT NULL DEFAULT 'approved',
+    admission_requires_verified_email boolean NOT NULL DEFAULT false,
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Nullable for two reasons: Phase 2 magic-link accounts have no GitHub identity (D-11),
@@ -184,11 +186,14 @@ CREATE TABLE users (
         (title IS NULL OR btrim(title) <> '')
         AND (time_zone IS NULL OR btrim(time_zone) <> '')
         AND (status_text IS NULL OR btrim(status_text) <> '')
-    )
+    ),
+    CONSTRAINT users_admission_state_known CHECK (admission_state IN ('approved', 'pending', 'denied'))
 );
 
 -- A sign-in takes its login from any other account holding it, found by the login as compared. (D-169)
 CREATE INDEX idx_users_github_login ON users (lower(github_login)) WHERE github_login IS NOT NULL;
+CREATE INDEX idx_users_admission_id ON users (admission_state, id DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_users_administration_status ON users (deleted_at) INCLUDE (is_server_admin, suspended_at);
 ```
 
 ### 3.2. `sessions`
@@ -2023,6 +2028,10 @@ CREATE INDEX idx_server_audit_log_target ON server_audit_log (target_user_id)
 
 CREATE INDEX idx_server_audit_log_workspace ON server_audit_log (target_workspace_id)
     WHERE target_workspace_id IS NOT NULL;
+CREATE INDEX idx_server_audit_action_id ON server_audit_log (action, id DESC);
+CREATE INDEX idx_server_audit_target_id ON server_audit_log (target_user_id, id DESC) WHERE target_user_id IS NOT NULL;
+CREATE INDEX idx_server_audit_workspace_id ON server_audit_log (target_workspace_id, id DESC) WHERE target_workspace_id IS NOT NULL;
+CREATE INDEX idx_server_audit_created ON server_audit_log (created_at, id DESC);
 ```
 
 ### 9.2. `job_runs`
@@ -2103,6 +2112,7 @@ CREATE UNIQUE INDEX idx_workspace_exports_one_pending
 CREATE INDEX idx_workspace_exports_workspace ON workspace_exports (workspace_id, id DESC);
 CREATE INDEX idx_workspace_exports_requested_by
     ON workspace_exports (requested_by) WHERE requested_by IS NOT NULL;
+CREATE INDEX idx_workspace_exports_status ON workspace_exports (status);
 ```
 
 ### 9.3a. `personal_exports`
@@ -2217,6 +2227,10 @@ Instance-wide, like `job_runs`: an operator's table, holding nothing of anybody.
 
 ```sql
 CREATE TABLE server_settings (
+    allowed_email_domains text[] NOT NULL DEFAULT '{}',
+    require_account_approval boolean NOT NULL DEFAULT false,
+    display_name text CHECK (char_length(display_name) BETWEEN 1 AND 100),
+    support_url text CHECK (char_length(support_url) BETWEEN 1 AND 2048),
     id                        BOOLEAN PRIMARY KEY DEFAULT TRUE,
     sign_up                   TEXT NOT NULL DEFAULT 'invite-only',
     github_client_id          TEXT,
@@ -2287,6 +2301,26 @@ CREATE TABLE server_settings (
     CONSTRAINT server_settings_github_app_shape
         CHECK (github_app_id > 0 AND github_app_slug ~ '^[a-z0-9][a-z0-9-]{0,63}$' AND github_app_client_id <> '')
 );
+```
+
+The additive admission and identity columns (D-278) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
+
+### 9.5a. `server_operational_status`
+
+One core row holding the latest saved-relay test (D-278): test time, relay acceptance, safe reason and public host. No credential, recipient, actor or raw SMTP error. Not exported. The test records its audit actor separately. A late completion cannot replace a newer timestamp.
+
+```sql
+-- D-278: bounded operational evidence, with no credentials, recipient or raw failure text.
+CREATE TABLE server_operational_status (
+    id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
+    smtp_tested_at timestamptz,
+    smtp_accepted boolean,
+    smtp_reason text,
+    smtp_host text,
+    CHECK ((smtp_tested_at IS NULL AND smtp_accepted IS NULL AND smtp_reason IS NULL AND smtp_host IS NULL)
+        OR (smtp_tested_at IS NOT NULL AND smtp_accepted IS NOT NULL AND smtp_host IS NOT NULL))
+);
+INSERT INTO server_operational_status (id) VALUES (true);
 ```
 
 ### 9.6. `setup_state`
@@ -2705,6 +2739,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
 0080_away_chosen.sql          users.away_chosen: a person's choice to appear away  (D-257)
 0081_message_search_branches.sql idx_messages_search_noted + idx_messages_search_answered: search asks the note and the answer apart from the words  (D-105, #1019)
+0082_server_operations.sql  server_operational_status: bounded operational evidence for the administrator (D-278)
+0083_server_audit_filters.sql  server audit action/target/workspace/date indexes (D-278)
+0084_server_admission_identity.sql  server identity and new-account admission policy (D-278)
+0085_administration_counts.sql  covering account-status and export-status indexes for the admin overview (D-278)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

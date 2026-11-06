@@ -1,3 +1,4 @@
+import type { ServerMailTest } from '@purlay/types';
 /**
  * Administration → Server (D-179 §4.8): the operator's settings changed in the browser after the setup,
  * by the server's administrator alone — every function here takes the `ServerAdminSession` that
@@ -37,6 +38,9 @@ import {
   type ServerCreatorsRequest,
   type ServerPolicyRequest,
 } from '@purlay/types';
+import { AppError } from '../../platform/errors';
+import { atomicallyOn } from '../../platform/transactions';
+import { lockServerAdministrator } from '../administration/changes';
 import type { Clock } from '../../platform/clock';
 import { smtpTransport, type MailMessage, type SmtpTransportFactory } from '../../platform/mail';
 import { composeLetter } from '../../platform/letter';
@@ -95,7 +99,7 @@ export const connectGitHubIssuesApp = async (
   await applySettings(
     dependencies.database,
     { githubApp: candidate },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.github_app_connected'),
   );
   return itself;
@@ -114,7 +118,7 @@ export const disconnectGitHubIssuesApp = async (
   await applySettings(
     dependencies.database,
     { githubApp: null },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.github_app_disconnected'),
   );
 };
@@ -162,6 +166,13 @@ export interface ServerAdminDependencies {
 const afterTheSetup = async (database: Executor): Promise<void> => {
   if ((await setupStatus(database)) === 'open') throw new ServerChangeRefused('setup-unfinished');
 };
+
+const authorizedChange = (change: SettingsChange, admin: ServerAdminSession): SettingsChange => ({
+  ...change,
+  beforeSave: async (transaction): Promise<void> => {
+    await lockServerAdministrator(transaction, admin);
+  },
+});
 
 const audited =
   (
@@ -233,7 +244,7 @@ export const connectGitHub = async (
   await applySettings(
     dependencies.database,
     { github: candidate },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.github_connected'),
   );
   return result;
@@ -260,7 +271,7 @@ export const connectOidc = async (
   await applySettings(
     dependencies.database,
     { oidc: candidate },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.oidc_connected'),
   );
   return result;
@@ -285,7 +296,7 @@ export const connectGoogle = async (
   await applySettings(
     dependencies.database,
     { google: candidate },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.google_connected'),
   );
   return result;
@@ -312,7 +323,7 @@ export const connectRelay = async (
   await applySettings(
     dependencies.database,
     { smtp: candidate },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.smtp_connected'),
   );
   return result;
@@ -379,7 +390,7 @@ export const disconnect = async (
         oidc: { oidc: null },
         google: { google: null },
       }[channel],
-      dependencies.change,
+      authorizedChange(dependencies.change, admin),
       async (transaction) => {
         // What this transaction saved, under the swap's lock: the other way is still there, or not.
         const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
@@ -441,13 +452,18 @@ export const changePolicy = async (
   await afterTheSetup(dependencies.database);
   const record = audited(dependencies, admin, policyChanged(change));
   try {
-    await applySettings(dependencies.database, change, dependencies.change, async (transaction) => {
-      if ('passwordSignIn' in change && !change.passwordSignIn) {
-        const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
-        if (!hasProvider(settings)) throw new ServerChangeRefused('no-provider');
-      }
-      await record(transaction);
-    });
+    await applySettings(
+      dependencies.database,
+      change,
+      authorizedChange(dependencies.change, admin),
+      async (transaction) => {
+        if ('passwordSignIn' in change && !change.passwordSignIn) {
+          const { settings } = await readSettingsToBoot(transaction, dependencies.change.cipher);
+          if (!hasProvider(settings)) throw new ServerChangeRefused('no-provider');
+        }
+        await record(transaction);
+      },
+    );
   } catch (error) {
     throw refusalOf(error);
   }
@@ -468,7 +484,68 @@ export const changeCreators = async (
           ? { kind: 'listed', logins: new Set(creators.logins) }
           : { kind: creators.kind },
     },
-    dependencies.change,
+    authorizedChange(dependencies.change, admin),
     audited(dependencies, admin, 'server.workspace_creators_changed'),
   );
+};
+
+/** A saved relay tried without returning, logging, or asking the browser to re-enter its credentials. */
+export const testSavedRelay = async (
+  dependencies: ServerAdminDependencies & {
+    readonly appUrl: string;
+    readonly transportFactory?: SmtpTransportFactory;
+  },
+  admin: ServerAdminSession,
+  current: RuntimeServices,
+): Promise<ServerMailTest> => {
+  await afterTheSetup(dependencies.database);
+  const relay = current.settings.smtp;
+  if (relay === undefined)
+    throw new AppError({ code: 'FORBIDDEN', message: 'Configure a mail relay first.' });
+  const person = await dependencies.database
+    .selectFrom('users')
+    .select('email_verified')
+    .where('id', '=', admin.userId)
+    .executeTakeFirstOrThrow();
+  if (!person.email_verified)
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Verify your own email address before sending a test.',
+    });
+  const { email, locale } = await addressOf(dependencies.database, admin);
+  const result = await probeSmtp(admin, relay, testLetter(email, dependencies.appUrl, locale), {
+    transportFactory: dependencies.transportFactory ?? smtpTransport,
+    timeoutMs: SMTP_PROBE_TIMEOUT_MS,
+  });
+  const report = {
+    testedAt: dependencies.clock.now().toISOString(),
+    accepted: result.ok,
+    host: new URL(relay.smtpUrl).host,
+    reason: result.ok ? null : result.reason,
+  };
+  await atomicallyOn(dependencies.database)(async (transaction) => {
+    await lockServerAdministrator(transaction, admin);
+    // A slower old request must not overwrite the receipt from a test completed later.
+    await transaction
+      .updateTable('server_operational_status')
+      .set({
+        smtp_tested_at: new Date(report.testedAt),
+        smtp_accepted: report.accepted,
+        smtp_host: report.host,
+        smtp_reason: report.reason,
+      })
+      .where('id', '=', true)
+      .where((eb) =>
+        eb.or([
+          eb('smtp_tested_at', 'is', null),
+          eb('smtp_tested_at', '<=', new Date(report.testedAt)),
+        ]),
+      )
+      .execute();
+    await recordServerAudit(transaction, dependencies.clock, {
+      actorUserId: admin.userId,
+      action: 'server.smtp_tested',
+    });
+  });
+  return report;
 };
