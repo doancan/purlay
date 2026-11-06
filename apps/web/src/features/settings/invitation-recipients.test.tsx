@@ -371,7 +371,10 @@ describe('private invitation history', () => {
     });
     await person().click(history);
 
-    value = row({ latest: { ...row().latest, revokedAt: '2026-09-02T12:00:00.000Z' } });
+    value = row({
+      status: 'revoked',
+      latest: { ...row().latest, revokedAt: '2026-09-02T12:00:00.000Z' },
+    });
     await act(async () => {
       await view.world.client.invalidateQueries({
         queryKey: keys.invitationRecipients(IDS.workspace),
@@ -385,12 +388,15 @@ describe('private invitation history', () => {
     expect(reads).toBe(1);
     await person().click(history);
     await waitFor(() => {
-      expect(view.getAllByText('Link revoked')).toHaveLength(3);
+      expect(
+        within(view.getByRole('list', { name: 'Email invitations' })).getAllByText('Link revoked'),
+      ).toHaveLength(3);
     });
     expect(reads).toBe(2);
 
     failed = true;
     value = row({
+      status: 'failed',
       latest: { ...row().latest, id: ID + 'b', result: 'failed', failure: 'recipient' },
     });
     await act(async () => {
@@ -399,12 +405,16 @@ describe('private invitation history', () => {
       });
     });
     expect(await view.findByText('Could not refresh invitation history.')).toBeDefined();
-    expect(view.getByText('Link revoked')).toBeDefined();
+    expect(
+      within(view.getByRole('list', { name: 'Email invitations' })).getByText('Link revoked'),
+    ).toBeDefined();
     failed = false;
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await waitFor(() => {
       expect(view.queryByText('Could not refresh invitation history.')).toBeNull();
-      expect(view.queryByText('Link revoked')).toBeNull();
+      expect(
+        within(view.getByRole('list', { name: 'Email invitations' })).queryByText('Link revoked'),
+      ).toBeNull();
       expect(view.getAllByText('The mail server refused the recipient.')).toHaveLength(2);
     });
     view.unmount();

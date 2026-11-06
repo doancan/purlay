@@ -166,7 +166,11 @@ test('an owner emails invitations from Settings and a newcomer joins through the
         .filter({ hasText: 'bob@example.test' })
         .getByRole('button', { name: 'Revoke', exact: true })
         .click();
-      await expect(otherTab.getByText('Link revoked', { exact: true })).toHaveCount(2);
+      await expect(
+        otherTab
+          .getByRole('list', { name: 'Email invitations' })
+          .getByText('Link revoked', { exact: true }),
+      ).toHaveCount(2);
     } finally {
       await otherTab.close();
     }
