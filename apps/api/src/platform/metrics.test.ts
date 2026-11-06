@@ -6,7 +6,7 @@ import {
   renderMetrics,
   serverMetrics,
 } from './metrics';
-import { bundledModules } from '../composition';
+import { bundledModules, type BundledModule } from '../composition';
 import { readExposition, sampleOf } from '../testing/exposition';
 
 const fixedProcess = {
@@ -134,6 +134,31 @@ describe("the server's instruments", () => {
       expect(sampleOf(page, 'purlay_mail_failures_total', { module })).toBe(0);
     }
     expect(page.types.get('purlay_http_request_duration_seconds')).toBe('histogram');
+  });
+
+  test('count a module’s workers by the module and the worker, each at zero from the start and no other series', () => {
+    const carried: readonly BundledModule[] = bundledModules;
+    const workers = carried.flatMap((module) =>
+      (module.workers ?? []).map(({ name }) => ({ module: module.manifest.id, name })),
+    );
+    expect(workers.length).toBeGreaterThan(0);
+    const metrics = serverMetrics(fixedProcess, [], workers);
+    const page = readExposition(renderMetrics(metrics));
+    expect(page.types.get('purlay_worker_failures_total')).toBe('counter');
+    for (const { module, name } of workers) {
+      expect(sampleOf(page, 'purlay_worker_failures_total', { module, worker: name })).toBe(0);
+    }
+    const series = page.samples.filter((sample) => sample.name === 'purlay_worker_failures_total');
+    expect(series).toHaveLength(workers.length);
+    const [first] = workers;
+    if (first === undefined) throw new Error('no worker');
+    metrics.workerFailures.inc({ module: first.module, worker: first.name });
+    expect(
+      sampleOf(readExposition(renderMetrics(metrics)), 'purlay_worker_failures_total', {
+        module: first.module,
+        worker: first.name,
+      }),
+    ).toBe(1);
   });
 
   test('count no series for an owner it was not told of until a failure names it, and never one that is not an owner by name', () => {

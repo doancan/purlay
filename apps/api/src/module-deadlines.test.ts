@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { bundledModules } from './composition';
 import type { ModuleManifest } from './platform/module-kit/manifest';
 import { DEFAULT_JOB_DEADLINE_MS } from './modules/jobs/module-shares';
+import { DEFAULT_WORKER_DEADLINE_MS } from './modules/workers/module-workers';
 import { DEFAULT_DEADLINE_MS } from './platform/request-deadline';
 
 const manifests: readonly ModuleManifest[] = bundledModules.map(({ manifest }) => manifest);
@@ -19,6 +20,12 @@ const WITHOUT_A_DEADLINE: Readonly<Record<string, string>> = {};
  * jobs is bounded.
  */
 const WITHOUT_A_JOB_DEADLINE: Readonly<Record<string, string>> = {};
+
+/**
+ * The modules that declare `workerDeadline: { none }`, with what they say; empty while every iteration of a module's
+ * background loops is bounded.
+ */
+const WITHOUT_A_WORKER_DEADLINE: Readonly<Record<string, string>> = {};
 
 describe('the modules whose requests have no deadline', () => {
   test('are exactly the ones listed here, each with the reason its manifest gives', () => {
@@ -62,6 +69,30 @@ describe('the modules whose scheduled jobs have no deadline', () => {
       const ms = jobDeadline?.ms ?? DEFAULT_JOB_DEADLINE_MS;
       expect(Number.isInteger(ms)).toBe(true);
       expect(ms).toBeLessThanOrEqual(DEFAULT_JOB_DEADLINE_MS);
+    }
+  });
+});
+
+describe('the modules whose background loops have no deadline', () => {
+  test('are exactly the ones listed here, each with the reason its manifest gives', () => {
+    const declared = Object.fromEntries(
+      manifests.flatMap((manifest) =>
+        manifest.workerDeadline !== undefined && 'none' in manifest.workerDeadline
+          ? [[manifest.id, manifest.workerDeadline.none]]
+          : [],
+      ),
+    );
+    expect(declared).toEqual(WITHOUT_A_WORKER_DEADLINE);
+    for (const reason of Object.values(WITHOUT_A_WORKER_DEADLINE))
+      expect(reason.trim()).not.toBe('');
+  });
+
+  test('every other module’s iterations are cut off after a whole number of milliseconds no longer than the default', () => {
+    for (const { workerDeadline } of manifests) {
+      if (workerDeadline !== undefined && 'none' in workerDeadline) continue;
+      const ms = workerDeadline?.ms ?? DEFAULT_WORKER_DEADLINE_MS;
+      expect(Number.isInteger(ms)).toBe(true);
+      expect(ms).toBeLessThanOrEqual(DEFAULT_WORKER_DEADLINE_MS);
     }
   });
 });

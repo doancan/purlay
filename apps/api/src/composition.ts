@@ -15,6 +15,12 @@ import { requireOwnUpload, type AttachmentReader } from './modules/attachments/r
 import { AppError, attachmentNotFound } from './platform/errors';
 import { issuesModule } from './features/issues/module';
 import type { JobWork } from './modules/jobs/jobs';
+import {
+  workerDeadlinesOf,
+  workerProblem,
+  type ModuleWorker,
+  type RunningWorker,
+} from './modules/workers/module-workers';
 import { assembleCatalogue, type ExportContribution } from './modules/export/catalogue';
 import { coreExport } from './modules/export/core-export';
 import { corePersonalExport } from './modules/export/core-personal-export';
@@ -81,6 +87,11 @@ export interface BundledModule {
    * `retention` runs in every process, and what is under `jobs` only where the module runs (`closedJob`).
    */
   readonly jobWork?: Readonly<Record<string, JobWork>>;
+  /**
+   * The background loops the module runs inside the API process, each a name, an interval and the work (`MODULES.md` §9): started
+   * only where the module runs, and each iteration held to the module's share of the pool and its `workerDeadline`.
+   */
+  readonly workers?: readonly ModuleWorker[];
   /**
    * What serves each client operation the manifest names under `frames`, and no other: the router dispatches an operation to
    * the module that owns it and asks nobody else. An operation named with no handler, or a handler for one not named, stops
@@ -165,6 +176,8 @@ export interface Composition {
    * job of a module that does not run is asked of `closedJob` first.
    */
   readonly jobWork: Readonly<Record<string, JobWork>>;
+  /** The workers of the modules this process runs, and of no module that is off: what `startWorkers` starts. */
+  readonly workers: readonly RunningWorker[];
   /** The reader of `/api/attachments/:attachmentId`: the core's, widened by the modules that run. */
   readonly readAttachment: AttachmentReader;
   /** What the push sender is told by: the module's, or nothing where none runs. */
@@ -230,13 +243,17 @@ export const compose = (
     );
   }
   for (const module of holding) {
-    const problem = jobWorkProblem(module) ?? frameHandlerProblem(module);
+    const problem =
+      jobWorkProblem(module) ??
+      frameHandlerProblem(module) ??
+      workerProblem(module.manifest.id, module.workers ?? []);
     if (problem !== undefined) throw new Error(problem);
   }
   const permissions = permissionTable([
     ...CORE_PERMISSIONS,
     ...modules.flatMap((module) => module.manifest.permissions ?? []),
   ]);
+  const deadlineOf = workerDeadlinesOf(holding.map((module) => module.manifest));
   const noticing = modules.find((module) => module.pushNotices !== undefined);
   return {
     modules,
@@ -249,6 +266,13 @@ export const compose = (
     notificationKinds: modules.flatMap((module) => module.manifest.notifications ?? []),
     searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
+    workers: modules.flatMap((module) =>
+      (module.workers ?? []).map((worker) => ({
+        ...worker,
+        module: module.manifest.id,
+        deadlineMs: deadlineOf(module.manifest.id),
+      })),
+    ),
     readAttachment: anyReader([
       ...modules.flatMap((module) => module.readAttachment ?? []),
       requireOwnUpload,
@@ -330,14 +354,6 @@ export const compositionFor = (setting: string | undefined): Composition =>
 
 /** What a process runs when nothing says otherwise: every module this build carries. */
 export const composition: Composition = compositionFor(undefined);
-
-/**
- * Starts what belongs to a module, in a process that runs it and in no other: the boot's own work for a module (the
- * timers of chat's scheduled messages and reminders) must not run where the module is off, whose tables may not be there.
- */
-export const startWhereRunning = (running: Composition, id: string, start: () => void): void => {
-  if (running.modules.some((module) => module.manifest.id === id)) start();
-};
 
 /**
  * What the boot says about modules: the ones this process runs and the ones the build carries but it does not,

@@ -16,10 +16,12 @@ import {
   createDatabase,
   sql,
   type ClonedDatabase,
+  type LeaseConnection,
 } from '@purlay/db';
 import { composition } from '../../composition';
 import { chatBudget } from '../../features/chat/budget';
 import { fixedClock } from '../../platform/clock';
+import { moduleConnections } from '../../platform/module-budget';
 import { NOW, testConfig, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -146,6 +148,38 @@ describe('integration: chat over its share of the pool', () => {
       const answers = await Promise.all(reads);
       expect(answers.filter((answer) => answer.status === 200)).toHaveLength(share);
       expect((await call('GET', `/api/channels/${channelId}/pins`)).status).toBe(200);
+    },
+    TEST_MS,
+  );
+
+  test(
+    'the shares a process hands the application are the ones its requests take, so a module’s workers can hold the same slots',
+    async () => {
+      const shares = moduleConnections(
+        composition.bundled.map((module) => module.manifest),
+        POOL,
+      );
+      let asked = 0;
+      const counting: LeaseConnection = async () => {
+        asked += 1;
+        return await shares();
+      };
+      const shared = createApp(
+        testDependencies({
+          database: pool,
+          clock,
+          composition,
+          config: testConfig({ DATABASE_POOL_MAX: POOL }),
+          moduleShares: counting,
+        }),
+      );
+      const response = await shared.handle(
+        new Request(`${ORIGIN}/api/channels/${channelId}/pins`, {
+          headers: { cookie: person.cookie },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(asked).toBeGreaterThan(0);
     },
     TEST_MS,
   );

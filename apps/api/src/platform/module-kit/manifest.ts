@@ -83,6 +83,12 @@ export interface ModuleManifest {
    */
   readonly jobDeadline?: ModuleDeadlineDeclaration;
   /**
+   * How long one iteration of one of the module's workers (the background loops it declares on its slot) may take before it
+   * is cancelled and counted as a failure (`MODULES.md` §7, §9): a number of milliseconds, or `none` with the reason, which
+   * a test lists. Left out, `DEFAULT_WORKER_DEADLINE_MS` (`modules/workers/module-workers.ts`).
+   */
+  readonly workerDeadline?: ModuleDeadlineDeclaration;
+  /**
    * The HTTP routes the module owns, as path templates: `:name` is one segment and a trailing `**` is the rest.
    * A module that is not run has no route, so a request for one is the `404` of any unknown path
    * (`MODULES.md` §3). No method: a path is a module's whole.

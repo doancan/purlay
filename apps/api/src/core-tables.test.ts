@@ -24,7 +24,7 @@ const CORE_DIRECTORIES = ['modules', 'platform', 'cli', 'ingress', 'realtime'] a
  */
 const ALLOWED: Readonly<Record<string, string>> = {
   'cli/budget-latency.ts':
-    'the latency gate locks `issues` and measures chat’s send path, through the demo world it seeds',
+    'the latency gate locks `issues` and `messages` in turns and measures chat’s send path and issues’ list, through the demo world it seeds',
   'cli/demo-seed.ts': 'the demo world is made of chat’s channels and issues’ rows',
 };
 
