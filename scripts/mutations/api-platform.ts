@@ -173,6 +173,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     ],
   },
   {
+    id: 'core-column-named-by-a-file-of-the-core',
+    why: 'a file of the core reads a column that is chat’s, and the next one needs chat’s words to work (D-275)',
+    file: 'apps/api/src/platform/clock.ts',
+    find: 'export const DAY_MS = 24 * HOUR_MS;',
+    replace: "export const DAY_MS = 24 * HOUR_MS;\nexport const QUIET = 'quiet_from';",
+    tests: ['apps/api/src/core-columns.test.ts'],
+  },
+  {
     id: 'credential-nonce-reused',
     why: 'every credential is sealed under one nonce, and two of them together give away both',
     file: 'apps/api/src/platform/crypto.ts',
