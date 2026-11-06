@@ -45,7 +45,7 @@ import { SlideTrack } from '../../ui/slide-track';
 import { useWorkspace } from '../shell/workspace';
 import { lastChannel } from './last-channel';
 import { useOpenCount } from './use-open-count';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { useMessageText } from '../content/github-event';
 
 interface Group {
