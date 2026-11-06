@@ -8,7 +8,7 @@ import {
   withRollback,
   type Transaction,
 } from '@purlay/db';
-import { type InvitationDelivery, messageId } from '@purlay/types';
+import { type InvitationDelivery, type InvitationRecipientStatus, messageId } from '@purlay/types';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aUserRow } from '../../testing/users';
 import { aMovableClock } from '../../testing/doubles';
@@ -82,6 +82,120 @@ const refusal = async (work: Promise<unknown>): Promise<unknown> => {
 };
 
 describe('integration: persistent invitation recipients', () => {
+  test('every lifecycle filter uses the returned status, including exact time boundaries and admission precedence', async () => {
+    await withRollback(async (db) => {
+      const w = await setup(db);
+      const check = async (status: InvitationRecipientStatus, id = w.annId): Promise<void> => {
+        const filtered = await listInvitationRecipients(db, w.clock, w.context, { status });
+        expect(filtered.data.every((r) => r.status === status)).toBe(true);
+        expect(filtered.data.some((r) => r.id === id)).toBe(true);
+      };
+      await check('queued');
+      w.clock.advance(120_000);
+      await check('unknown');
+      await finishInvitationAttempt(db, w.clock, w.ann.attemptId, { accepted: true });
+      await check('accepted');
+      await finishInvitationAttempt(db, w.clock, w.bob.attemptId, {
+        accepted: false,
+        code: 'EENVELOPE',
+      });
+      await check('failed', w.bobId);
+      const attempt = await db
+        .selectFrom('workspace_invitation_mail_attempts')
+        .select('invitation_id')
+        .where('id', '=', w.ann.attemptId)
+        .executeTakeFirstOrThrow();
+      await db
+        .updateTable('workspace_invitations')
+        .set({ revoked_at: w.clock.now(), expires_at: w.clock.now() })
+        .where('id', '=', attempt.invitation_id)
+        .execute();
+      await check('revoked');
+      await db
+        .updateTable('workspace_invitations')
+        .set({ revoked_at: null })
+        .where('id', '=', attempt.invitation_id)
+        .execute();
+      await check('expired');
+      await db
+        .updateTable('workspace_invitations')
+        .set({ expires_at: new Date(w.clock.now().getTime() + 60_000) })
+        .where('id', '=', attempt.invitation_id)
+        .execute();
+      const applicant = await aUserRow(db, 'filter-applicant');
+      await db
+        .updateTable('users')
+        .set({ email: 'ann@example.test', email_verified: true, admission_state: 'pending' })
+        .where('id', '=', applicant.userId)
+        .execute();
+      await recordInvitationApplicant(db, w.clock, applicant.userId, attempt.invitation_id);
+      await check('pending');
+      for (const admission_state of ['approved', 'denied'] as const) {
+        await db
+          .updateTable('users')
+          .set({ admission_state })
+          .where('id', '=', applicant.userId)
+          .execute();
+        await check(admission_state);
+      }
+      await db
+        .updateTable('workspace_invitation_recipients')
+        .set({ joined_at: w.clock.now() })
+        .where('id', '=', w.annId)
+        .execute();
+      await check('joined');
+      await db
+        .updateTable('users')
+        .set({ deleted_at: w.clock.now() })
+        .where('id', '=', applicant.userId)
+        .execute();
+      await check('joined');
+      await db
+        .updateTable('workspace_invitation_recipients')
+        .set({ joined_at: null })
+        .where('id', '=', w.annId)
+        .execute();
+      await check('accepted');
+    });
+  });
+  test('search and status filter before pagination and treat address wildcards literally', async () => {
+    await withRollback(async (db) => {
+      const w = await setup(db);
+      await finishInvitationAttempt(db, w.clock, w.ann.attemptId, {
+        accepted: false,
+        code: 'EENVELOPE',
+      });
+      await finishInvitationAttempt(db, w.clock, w.bob.attemptId, { accepted: true });
+      const matches = await listInvitationRecipients(db, w.clock, w.context, {
+        q: ' ANN@EXAMPLE ',
+        status: 'failed',
+        limit: 1,
+      });
+      expect(matches.data.map((r) => r.id)).toEqual([w.annId]);
+      expect(matches.data[0]?.status).toBe('failed');
+      expect(matches.nextCursor).toBeNull();
+      expect(
+        (await listInvitationRecipients(db, w.clock, w.context, { q: 'ann', status: 'accepted' }))
+          .data,
+      ).toEqual([]);
+      for (const q of ['%', '_', '\\']) {
+        expect((await listInvitationRecipients(db, w.clock, w.context, { q })).data).toEqual([]);
+      }
+      const first = await listInvitationRecipients(db, w.clock, w.context, {
+        q: 'example.test',
+        limit: 1,
+      });
+      expect(first.nextCursor).not.toBeNull();
+      const next = await listInvitationRecipients(db, w.clock, w.context, {
+        q: 'example.test',
+        limit: 1,
+        before: first.nextCursor ?? '',
+      });
+      expect(new Set([...first.data, ...next.data].map((r) => r.id)).size).toBe(2);
+      expect(next.nextCursor).toBeNull();
+    });
+  });
+
   test('copy link is separate; receipts survive reads and contain no secret or SMTP prose', async () => {
     await withRollback(async (db) => {
       const w = await setup(db);
