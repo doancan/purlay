@@ -13,7 +13,7 @@
 import type { FailureCode } from '../../data/failure';
 import type { Message, User } from '@purlay/types';
 import type { PendingMessage } from '../../realtime/engine';
-import { isMine, sameAuthor } from '../messages/author';
+import { isMine, sameAuthor } from '../../lib/author';
 
 /** Same author within this long of the row above: the name is not repeated (`UX.md` §3). */
 export const GROUP_WINDOW_MS = 5 * 60_000;

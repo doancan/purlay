@@ -27,7 +27,7 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
-import { GroupFace } from '../conversations/group-face';
+import { GroupFace } from '../../ui/group-face';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { Kbd, keyHintsClasses } from '../../ui/kbd';

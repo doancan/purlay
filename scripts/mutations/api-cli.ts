@@ -151,12 +151,12 @@ export const API_CLI: readonly Mutation[] = [
     tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
-    id: 'job-run-log-forgets-the-module',
-    why: 'a scheduled job runs and fails under no module, so a log of it cannot say whose it is (D-250 rule 7)',
+    id: 'job-command-runs-a-modules-job-on-the-pool',
+    why: 'the command hands a module’s job the pool as it is, whatever share its runner leased, so no share holds its statements (D-274)',
     file: 'apps/api/src/cli/jobs.ts',
-    find: '    { database, clock, log: log.child({ module: composition.owner.ofJob(job) }) },',
-    replace: '    { database, clock, log },',
-    tests: ['apps/api/src/cli/jobs.integration.test.ts'],
+    find: '    (on): ReturnType<Work> => work(contextOn(on)),',
+    replace: '    (): ReturnType<Work> => work(contextOn(database)),',
+    tests: ['apps/api/src/cli/jobs-wiring.test.ts'],
   },
   {
     id: 'latency-first-regression-alone-fails',

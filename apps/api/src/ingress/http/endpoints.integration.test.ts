@@ -89,6 +89,7 @@ interface Context {
   throwawayAttachmentId: string;
   nativeCode: string;
   bookmarkId: string;
+  issueId: string;
 }
 
 const ids = new Set<string>();
@@ -147,6 +148,30 @@ const STEPS: readonly Step[] = [
     id: 'setDeepWork',
     spec: (c) => ({ params: { workspaceId: c.workspaceId }, json: { active: false } }),
     status: 200,
+  },
+
+  // ── Issues, a module of its own (D-254, D-273)
+  {
+    id: 'createIssue',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId }, json: { title: 'A first issue' } }),
+    status: 201,
+    then: (c, body): void => {
+      c.issueId = String(asRecord(body)['id']);
+    },
+  },
+  { id: 'listIssues', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
+  {
+    id: 'updateIssue',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, issueId: c.issueId },
+      json: { status: 'done' },
+    }),
+    status: 200,
+  },
+  {
+    id: 'deleteIssue',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId, issueId: c.issueId } }),
+    status: 204,
   },
 
   // ── Channels
@@ -558,6 +583,7 @@ const world = async (): Promise<Context> => {
     throwawayAttachmentId: '',
     nativeCode: '',
     bookmarkId: '',
+    issueId: '',
   };
 };
 

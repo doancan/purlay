@@ -439,6 +439,46 @@ const ownTables = (id: string, coreTables: readonly string[]): string[] =>
     .filter(([table, owner]) => owner === id && !coreTables.includes(table))
     .map(([table]) => table);
 
+/**
+ * The tables of a module that `seed` leaves empty even where the module's set is applied, each with why. A module's data
+ * the lifecycle steps do not meet is a step proven on nothing, so a table joins this only with `MAX_UNSEEDED` raised in
+ * the same change, by a person who says in one line why a row cannot be seeded cheaply. **It may only shrink.**
+ */
+const NO_PROBE_YET = 'the seed writes no row of it, so no lifecycle step is proven on it here';
+const UNSEEDED: Readonly<Record<string, string>> = Object.fromEntries(
+  [
+    'channel_bookmarks',
+    'channel_departures',
+    'github_app_deliveries',
+    'github_app_handshakes',
+    'github_app_installations',
+    'github_deliveries',
+    'github_integrations',
+    'github_links',
+    'github_operations',
+    'github_repo_feeds',
+    'github_user_authorizations',
+    'incident_responders',
+    'incident_updates',
+    'incidents',
+    'incoming_webhooks',
+    'link_previews',
+    'mentions',
+    'message_versions',
+    'scheduled_message_attachments',
+    'pinned_messages',
+    'reactions',
+  ].map((table) => [table, NO_PROBE_YET]),
+);
+/** The size of the list above today: it falls as a table is seeded, and rises only in a change that says why. */
+const MAX_UNSEEDED = 21;
+
+/** Every table `TABLE_OWNERS` gives the module, those the legacy core migrations made as well as its own set's. */
+const tablesOwnedBy = (id: string): string[] =>
+  Object.entries(TABLE_OWNERS)
+    .filter(([, owner]) => owner === id)
+    .map(([table]) => table);
+
 const countWhere = async (
   database: Executor,
   table: string,
@@ -842,6 +882,35 @@ describe('integration: the data lifecycle in every cell of the module matrix', (
           });
         });
       }
+
+      // Last of the state's tests, so what it seeds is nothing another one counts.
+      test('a module whose set is applied has a row in every table it owns after a seed, or says why not', async () => {
+        await seed(database, state);
+        const empty: string[] = [];
+        for (const { manifest } of bundledModules) {
+          if (!hasSet(state, manifest.id)) continue;
+          for (const table of tablesOwnedBy(manifest.id)) {
+            const { rows } = await sql<{ present: boolean }>`
+              select exists (select 1 from ${sql.id(table)}) as present
+            `.execute(database);
+            if (rows[0]?.present !== true && !(table in UNSEEDED))
+              empty.push(`${manifest.id}: ${table}`);
+          }
+        }
+        expect(empty).toEqual([]);
+      });
+
+      test('the tables left unseeded are still empty and no more than the cap, so the list only shrinks', async () => {
+        expect(Object.keys(UNSEEDED).length).toBeLessThanOrEqual(MAX_UNSEEDED);
+        for (const table of Object.keys(UNSEEDED)) {
+          const owner = TABLE_OWNERS[table as keyof typeof TABLE_OWNERS];
+          if (!hasSet(state, owner)) continue;
+          const { rows } = await sql<{ present: boolean }>`
+            select exists (select 1 from ${sql.id(table)}) as present
+          `.execute(database);
+          expect(rows[0]?.present, `${table} is seeded: remove it from UNSEEDED`).toBe(false);
+        }
+      });
     });
   }
 

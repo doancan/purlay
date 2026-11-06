@@ -35,7 +35,7 @@ import { DateField } from '../../../ui/date-field';
 import { href } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { auditActionsOf } from '../../../modules/registry';
-import { AuthorPicker } from '../../search/author-picker';
+import { AuthorPicker } from '../../../ui/author-picker';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { SettingsCard, SettingsPage } from '../page';

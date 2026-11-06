@@ -9,10 +9,10 @@
  */
 import { useId } from 'react';
 import type { WorkspaceMember } from '@purlay/types';
-import { Icon } from '../../components/icon';
-import { useI18n } from '../../i18n/i18n-provider';
-import { Avatar } from '../../ui/avatar';
-import { Menu, MenuRadioGroup, MenuRadioItem } from '../../ui/menu';
+import { Icon } from '../components/icon';
+import { useI18n } from '../i18n/i18n-provider';
+import { Avatar } from './avatar';
+import { Menu, MenuRadioGroup, MenuRadioItem } from './menu';
 
 /** The person themself first, then everybody by name in the reader's language. */
 const authorChoices = (

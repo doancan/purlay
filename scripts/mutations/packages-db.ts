@@ -91,6 +91,32 @@ export const PACKAGES_DB: readonly Mutation[] = [
     tests: ['packages/db/src/harness.integration.test.ts'],
   },
   {
+    id: 'core-columns-list-grows',
+    why: 'a column is added to the list of core columns that exist for a module and the cap is not raised by anyone (D-275)',
+    file: 'packages/db/src/table-owners.ts',
+    find: "  'workspaces.retention_days': {",
+    replace:
+      "  'workspaces.purged_at': {\n    module: 'chat',\n    why: 'a new one',\n    coreFiles: [],\n  },\n  'workspaces.retention_days': {",
+    tests: ['apps/api/src/core-columns.test.ts'],
+  },
+  {
+    id: 'core-columns-module-migration-adds-one',
+    why: 'a module’s migration adds a column to a core table instead of making a table of its own (D-275)',
+    file: 'packages/db/migrations/chat/0006_channel_departures.sql',
+    find: 'CREATE INDEX idx_channel_departures_user ON channel_departures(user_id);',
+    replace:
+      'CREATE INDEX idx_channel_departures_user ON channel_departures(user_id);\nALTER TABLE users ADD COLUMN departures_seen_at TIMESTAMPTZ;',
+    tests: ['apps/api/src/core-columns.test.ts'],
+  },
+  {
+    id: 'core-columns-stale-file-kept',
+    why: 'an entry keeps a file that no longer names its column, so the allow-list grows stale and stops meaning anything (D-275)',
+    file: 'packages/db/src/table-owners.ts',
+    find: "      'modules/workspaces/retention.ts',\n",
+    replace: "      'modules/workspaces/retention.ts',\n      'modules/users/profile.ts',\n",
+    tests: ['apps/api/src/core-columns.test.ts'],
+  },
+  {
     id: 'deadline-does-not-cancel-the-statement',
     why: 'a connection whose request ran past its deadline is left running the statement it was asked, holding its slot and its lock wait (D-270)',
     file: 'packages/db/src/client.ts',
