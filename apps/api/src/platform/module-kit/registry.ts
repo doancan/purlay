@@ -203,6 +203,26 @@ const deadlineProblems = ({ id, deadline }: ModuleManifest): string[] => {
       ];
 };
 
+/** The longest a job's deadline may be: a day's jobs are an hour apart at the closest, and the scheduler runs them one after another. */
+const JOB_DEADLINE_MS_MAX = 3_600_000;
+
+/** What a manifest's `jobDeadline` must be, when it says one: whole milliseconds from a second to an hour, or `none` with a reason. */
+const jobDeadlineProblems = ({ id, jobDeadline }: ModuleManifest): string[] => {
+  if (jobDeadline === undefined) return [];
+  if ('none' in jobDeadline) {
+    return jobDeadline.none.trim() === ''
+      ? [`"${id}" declares \`jobDeadline: none\` without a reason`]
+      : [];
+  }
+  return Number.isInteger(jobDeadline.ms) &&
+    jobDeadline.ms >= 1_000 &&
+    jobDeadline.ms <= JOB_DEADLINE_MS_MAX
+    ? []
+    : [
+        `"${id}" has a job deadline of ${String(jobDeadline.ms)} ms: it needs a whole number from 1000 to ${String(JOB_DEADLINE_MS_MAX)}`,
+      ];
+};
+
 const bundleProblems = (
   manifests: readonly ModuleManifest[],
   core: Partial<CoreClaims>,
@@ -227,6 +247,7 @@ const bundleProblems = (
       ...budgetProblems(manifest),
       ...vocabularyProblems(manifest),
       ...deadlineProblems(manifest),
+      ...jobDeadlineProblems(manifest),
     );
 
     for (const capability of manifest.provides) {

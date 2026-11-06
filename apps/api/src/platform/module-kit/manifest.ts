@@ -77,6 +77,12 @@ export interface ModuleManifest {
   /** How long a request or frame of the module may take; left out, `DEFAULT_DEADLINE_MS` (`platform/request-deadline.ts`). */
   readonly deadline?: ModuleDeadlineDeclaration;
   /**
+   * How long one run of one of the module's scheduled jobs (`jobs` and `retention`) may take before it is cancelled and
+   * recorded as a failed run (`MODULES.md` §7, D-274): a number of milliseconds, or `none` with the reason, which a test
+   * lists. Left out, `DEFAULT_JOB_DEADLINE_MS` (`modules/jobs/module-shares.ts`).
+   */
+  readonly jobDeadline?: ModuleDeadlineDeclaration;
+  /**
    * The HTTP routes the module owns, as path templates: `:name` is one segment and a trailing `**` is the rest.
    * A module that is not run has no route, so a request for one is the `404` of any unknown path
    * (`MODULES.md` §3). No method: a path is a module's whole.

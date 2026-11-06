@@ -480,3 +480,28 @@ describe('a module’s deadline (D-270)', () => {
     }
   });
 });
+
+describe('a module’s job deadline (D-274)', () => {
+  test('is left out, a whole number of milliseconds from a second to an hour, or `none` with a reason', () => {
+    expect(() => moduleRegistry([module('issues')])).not.toThrow();
+    expect(() =>
+      moduleRegistry([module('issues', { jobDeadline: { ms: 3_600_000 } })]),
+    ).not.toThrow();
+    expect(() =>
+      moduleRegistry([module('issues', { jobDeadline: { none: 'it waits on a person' } })]),
+    ).not.toThrow();
+  });
+
+  test('`none` with no reason, one too short and one past an hour are refused by id', () => {
+    expect(
+      problemsOf(() => moduleRegistry([module('issues', { jobDeadline: { none: ' ' } })])),
+    ).toEqual(['"issues" declares `jobDeadline: none` without a reason']);
+    for (const ms of [0, 999, 3_600_001, 1.5, Number.NaN]) {
+      expect(problemsOf(() => moduleRegistry([module('issues', { jobDeadline: { ms } })]))).toEqual(
+        [
+          `"issues" has a job deadline of ${String(ms)} ms: it needs a whole number from 1000 to 3600000`,
+        ],
+      );
+    }
+  });
+});
