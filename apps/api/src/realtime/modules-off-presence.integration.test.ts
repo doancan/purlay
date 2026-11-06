@@ -188,6 +188,9 @@ describe('integration: the socket of a process that does not run chat, and who i
       const watching = await connect(chatting, bob.cookie);
       const arriving = await connect(chatting, alice.cookie);
       await watching.until((f) => presenceOf(f, alice.userId).includes(true), 'alice online');
+      // Alice's arrival is heard on Bob's topic once he is listening, which is before the second read of his own session
+      // that counts him online: his arrival is a condition of its own, and a loaded run can have it come after hers.
+      await watching.until(() => chatting.app.held().online === 2, 'bob and alice online');
       expect(chatting.app.held()).toMatchObject({ connections: 2, online: 2 });
       await arriving.close();
       await watching.until(() => chatting.app.held().leaving === 1, 'alice inside her grace');
