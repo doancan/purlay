@@ -37,7 +37,7 @@ import { Composer } from '../composer/composer';
 import { href, messageInSearch, threadInSearch } from '../../../router/routes';
 import { Icon } from '../../../components/icon';
 import { useRoute } from '../../../router/router-provider';
-import { rememberChannel } from '../questions/last-channel';
+import { rememberChannel } from '../../../data/last-channel';
 import { ScreenBar } from '../../shell/screen-bar';
 import { useWorkspace } from '../../shell/workspace';
 import { useWorkspaceRole } from '../../settings/role';

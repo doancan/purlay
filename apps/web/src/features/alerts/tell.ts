@@ -12,7 +12,7 @@ import type { Api } from '../../data/api';
 import { keys } from '../../data/keys';
 import type { Translate } from '../../i18n/types';
 import { href } from '../../router/routes';
-import { targetOf, whyOf } from '../chat/inbox/why';
+import { targetOf, whyOf } from '../../lib/notification-why';
 import type { Notifier } from '../push/notifier';
 import { placeOf } from '../shell/tab-title';
 import { newestFor, summaryTag, tagOf, type Plan } from './decide';

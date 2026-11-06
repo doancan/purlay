@@ -39,7 +39,7 @@ import {
 import { groupInbox, type InboxRow } from './group';
 import { InboxRowItem } from './inbox-row';
 import { useInboxReads } from './read';
-import { targetOf } from './why';
+import { targetOf } from '../../../lib/notification-why';
 
 /** Whether two instants fall on the same day where the person is. */
 const sameDay = (a: Date, b: Date): boolean =>

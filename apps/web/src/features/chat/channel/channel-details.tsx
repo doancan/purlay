@@ -41,7 +41,7 @@ import { useToast } from '../../../ui/toast';
 import { useSession } from '../../session/session';
 import { useWorkspaceRole } from '../../settings/role';
 import { useWorkspace } from '../../shell/workspace';
-import { forgetChannel } from '../questions/last-channel';
+import { forgetChannel } from '../../../data/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
 import { IncomingWebhooks } from './incoming-webhooks';

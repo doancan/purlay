@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readDraft, writeDraft } from '../features/chat/composer/drafts';
-import { lastChannel, rememberChannel } from '../features/chat/questions/last-channel';
+import { lastChannel, rememberChannel } from './last-channel';
 import { loadStored, pendingKey, saveStored } from '../realtime/pending-store';
 import { installDom } from '../testing/dom';
 import { memoryStorage } from '../testing/fakes';
