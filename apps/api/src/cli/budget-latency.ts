@@ -431,9 +431,13 @@ const lockInTurns = async (
   table: 'issues' | 'messages',
   stopped: () => boolean,
 ): Promise<void> => {
+  const lock = {
+    issues: sql`lock table issues in access exclusive mode`,
+    messages: sql`lock table messages in access exclusive mode`,
+  }[table];
   while (!stopped()) {
     await clone.db.transaction().execute(async (transaction) => {
-      await sql`lock table ${sql.table(table)} in access exclusive mode`.execute(transaction);
+      await lock.execute(transaction);
       await Bun.sleep(LOCKED_MS);
     });
     await Bun.sleep(UNLOCKED_MS);
