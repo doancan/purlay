@@ -5,13 +5,18 @@
  * few at a time, each within a deadline — so a stranger can neither spend every feed's deliveries nor
  * hold the reads open. The feed's own bucket is charged once its signature holds, in the service.
  */
-import { AppError } from '../../platform/errors';
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { GitHubWiring } from './wiring';
+import { limitKeyFor } from '../../../platform/client-key';
+import { clientAddress, peerOf } from '../../../ingress/http/client-address';
+import { AppError } from '../../../platform/errors';
 import {
   receiveDelivery,
   requireFeed,
   type Outcome,
   type WebhookDependencies,
-} from '../../features/chat/integrations/webhook';
+} from '../integrations/webhook';
 
 /** Deliveries read at once on this node: each is up to a mebibyte held while it is checked. */
 export const DELIVERIES_AT_ONCE = 8;
@@ -76,3 +81,36 @@ export const receiveWebhook = async (
     inFlight.count -= 1;
   }
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const webhookRoutes = (context: ModuleRouteDependencies, wiring: GitHubWiring): AnyElysia =>
+  new Elysia().post(
+    '/api/webhooks/github/:feedId',
+    async ({ request, params, set, server }) => {
+      const outcome = await receiveWebhook(
+        {
+          database: context.database,
+          clock: context.clock,
+          cipher: context.cipher,
+          bus: context.bus,
+          log: context.log,
+          mayDeliver: async (feedId) => await wiring.feedPosts.consume(feedId),
+          mayKnock: async (address) => await wiring.knocks.consume(address),
+          inFlight: wiring.delivering,
+          deadline: async (ms) => {
+            await Bun.sleep(ms);
+          },
+        },
+        request,
+        params.feedId,
+        limitKeyFor(
+          clientAddress(peerOf(server, request), request.headers, context.config.TRUST_PROXY),
+        ),
+      );
+      // What GitHub shows beside the delivery: posted, or why not, all of them received.
+      set.status = outcome === 'posted' ? 201 : 200;
+      return { outcome };
+    },
+    // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
+    { parse: 'none' },
+  );

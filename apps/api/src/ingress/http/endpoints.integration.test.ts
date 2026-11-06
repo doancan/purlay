@@ -63,7 +63,7 @@ const HELD_ELSEWHERE: Readonly<
 > = {
   unfurlGitHubLink: {
     why: 'needs a GitHub to answer; the stub and its cases live with the integration',
-    file: 'apps/api/src/ingress/http/integrations.integration.test.ts',
+    file: 'apps/api/src/features/chat/http/integrations.integration.test.ts',
     schema: 'UnfurlResponse',
   },
   fetchExternalImage: {

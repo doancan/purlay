@@ -5,7 +5,7 @@ const GITHUB_APP = 'apps/api/src/features/chat/integrations/github-app.ts';
 
 const GITHUB_APP_WEBHOOK = 'apps/api/src/features/chat/integrations/github-app-webhook.ts';
 
-const GITHUB_APP_TESTS = 'apps/api/src/ingress/http/github-app.integration.test.ts';
+const GITHUB_APP_TESTS = 'apps/api/src/features/chat/http/github-app.integration.test.ts';
 
 const GITHUB_ISSUES = 'apps/api/src/features/chat/integrations/github-issues.ts';
 
@@ -13,7 +13,7 @@ const GITHUB_WORK_EVENTS = 'apps/api/src/features/chat/integrations/github-work-
 
 const GITHUB_WORK_TESTS = 'apps/api/src/ingress/http/github-work.integration.test.ts';
 
-const GITHUB_ISSUES_TESTS = 'apps/api/src/ingress/http/github-issues.integration.test.ts';
+const GITHUB_ISSUES_TESTS = 'apps/api/src/features/chat/http/github-issues.integration.test.ts';
 
 const HOOKS = 'apps/api/src/features/chat/integrations/incoming-webhooks.ts';
 
