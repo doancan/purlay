@@ -1,4 +1,5 @@
 import { signInWithOidc } from '../../testing/oidc-sign-in';
+import * as administrationInventory from '../../modules/administration/inventory';
 import { signInWithGoogle } from '../../testing/google-sign-in';
 import { startGitHubSignIn, returnFromGitHub } from '../../testing/github-sign-in';
 import type {
@@ -32,6 +33,7 @@ import {
 } from '@purlay/db';
 import {
   messageId,
+  SERVER_AUDIT_EXPORT_COLUMNS,
   GITHUB_APP_CALLBACK,
   GITHUB_APP_WEBHOOK,
   GOOGLE_CALLBACK,
@@ -1694,6 +1696,193 @@ describe('integration: Administration → Server — Google (D-251)', () => {
 });
 
 describe('integration — server administration inventory', () => {
+  test('a database failure truncates the audit download instead of calling a partial file complete', async () => {
+    const server = await aServer();
+    await server.db
+      .insertInto('server_audit_log')
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          id: messageId(new Date(Date.UTC(2026, 10, 1, 0, 0, 0, index))),
+          action: 'server.smtp_tested',
+          actor_user_id: server.admin.userId,
+        })),
+      )
+      .execute();
+    const response = await call(
+      server,
+      'GET',
+      '/api/server/audit/export?format=ndjson&action=server.smtp_tested',
+      { cookie: server.admin.cookie },
+    );
+    if (response.body === null) throw new Error('download missing');
+    const reader = response.body.getReader();
+    expect((await reader.read()).done).toBe(false);
+    await server.db.schema.dropTable('server_audit_log').execute();
+    const failure = await reader.read().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).not.toBeNull();
+  });
+  test('server audit downloads walk every page without read-ahead and cancellation stops reads', async () => {
+    const server = await aServer();
+    await server.db
+      .insertInto('server_audit_log')
+      .values(
+        Array.from({ length: 205 }, (_, index) => ({
+          id: messageId(new Date(Date.UTC(2026, 10, 1, 0, 0, 0, index))),
+          action: 'server.smtp_tested',
+          actor_user_id: server.admin.userId,
+        })),
+      )
+      .execute();
+    const reads = spyOn(administrationInventory, 'listServerAudit');
+    const count = (): number => reads.mock.calls.length;
+    try {
+      const path = '/api/server/audit/export?format=ndjson&action=server.smtp_tested';
+      const answer = await call(server, 'GET', path, { cookie: server.admin.cookie });
+      expect(count()).toBe(1);
+      if (answer.body === null) throw new Error('download missing');
+      const reader = answer.body.getReader();
+      const decode = (value: unknown): string => {
+        if (!(value instanceof Uint8Array)) throw new Error('Expected download bytes');
+        return new TextDecoder().decode(value);
+      };
+      const first = await reader.read();
+      expect(decode(first.value).trim().split('\n')).toHaveLength(100);
+      expect(count()).toBe(1);
+      let text = decode(first.value);
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        text += decode(chunk.value);
+      }
+      const lines = text.trim().split('\n');
+      expect(lines).toHaveLength(205);
+      expect(new Set(lines).size).toBe(205);
+      expect(count()).toBe(3);
+      const cancelled = await call(server, 'GET', path, { cookie: server.admin.cookie });
+      expect(count()).toBe(4);
+      await cancelled.body?.cancel();
+      expect(count()).toBe(4);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  test('an aborted download closes, and losing administrator authority stops the next chunk', async () => {
+    const server = await aServer();
+    await server.db
+      .insertInto('server_audit_log')
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          id: messageId(new Date(Date.UTC(2026, 10, 1, 0, 0, 0, index))),
+          action: 'server.smtp_tested',
+          actor_user_id: server.admin.userId,
+        })),
+      )
+      .execute();
+    const path = '/api/server/audit/export?format=ndjson&action=server.smtp_tested';
+    const abort = new AbortController();
+    const aborted = await server.app.handle(
+      new Request(`${ORIGIN}${path}`, {
+        signal: abort.signal,
+        headers: { cookie: server.admin.cookie },
+      }),
+    );
+    if (aborted.body === null) throw new Error('download missing');
+    const abortReader = aborted.body.getReader();
+    expect((await abortReader.read()).done).toBe(false);
+    abort.abort();
+    expect((await abortReader.read()).done).toBe(true);
+    const answer = await call(server, 'GET', path, { cookie: server.admin.cookie });
+    if (answer.body === null) throw new Error('download missing');
+    const reader = answer.body.getReader();
+    expect((await reader.read()).done).toBe(false);
+    await server.db
+      .updateTable('users')
+      .set({ is_server_admin: false })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const failure = await reader.read().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toMatchObject({ body: { code: 'ROUTE_NOT_FOUND' } });
+  });
+
+  test('the server audit download applies filters, defuses CSV and records only an export request', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    await server.db
+      .updateTable('users')
+      .set({ display_name: '=SUM(1,2)' })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const changed = await call(server, 'POST', '/api/server/policy', {
+      cookie,
+      body: { signUp: 'open' },
+    });
+    expect(changed.status).toBe(204);
+    const filter = `action=server.sign_up_changed&actorUserId=${server.admin.userId}`;
+    const answer = await call(server, 'GET', `/api/server/audit/export?format=ndjson&${filter}`, {
+      cookie,
+    });
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toContain('application/x-ndjson');
+    expect(answer.headers.get('cache-control')).toContain('no-store');
+    expect(answer.headers.get('content-disposition')).toMatch(
+      /^attachment; filename="server-audit-.*\.ndjson"$/,
+    );
+    const lines = (await answer.text())
+      .trim()
+      .split('\n')
+      .map(
+        (line) => JSON.parse(line) as { action: string; actorUserId: string; actorName: string },
+      );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      action: 'server.sign_up_changed',
+      actorUserId: server.admin.userId,
+      actorName: '=SUM(1,2)',
+    });
+    expect(Object.keys(lines[0] ?? {}).sort()).toEqual([...SERVER_AUDIT_EXPORT_COLUMNS].sort());
+    const csv = await call(server, 'GET', `/api/server/audit/export?format=csv&${filter}`, {
+      cookie,
+    });
+    expect(await csv.text()).toContain('"\'=SUM(1,2)"');
+    const logged = await server.db
+      .selectFrom('server_audit_log')
+      .selectAll()
+      .where('action', '=', 'server.audit_export_requested')
+      .execute();
+    expect(logged).toHaveLength(2);
+    expect(logged.every((row) => row.actor_user_id === server.admin.userId)).toBe(true);
+    const emptyCsv = await call(
+      server,
+      'GET',
+      '/api/server/audit/export?format=csv&action=server.account_denied',
+      { cookie },
+    );
+    expect((await emptyCsv.text()).trim()).toBe(SERVER_AUDIT_EXPORT_COLUMNS.join(','));
+    const emptyJson = await call(
+      server,
+      'GET',
+      '/api/server/audit/export?format=ndjson&action=server.account_denied',
+      { cookie },
+    );
+    expect(await emptyJson.text()).toBe('');
+    for (const query of [
+      'format=json',
+      'format=csv&limit=1',
+      'format=csv&from=2090-01-01T00:00:00Z&to=2020-01-01T00:00:00Z',
+    ]) {
+      expect(
+        (await call(server, 'GET', `/api/server/audit/export?${query}`, { cookie })).status,
+      ).toBe(400);
+    }
+  });
+
   test('metadata routes are absent before input is parsed for strangers, members and workspace owners', async () => {
     const server = await aServer();
     for (const cookie of [undefined, server.member.cookie, server.owner.cookie]) {
@@ -1702,6 +1891,7 @@ describe('integration — server administration inventory', () => {
         '/api/server/users?limit=invalid',
         '/api/server/workspaces?offset=1',
         '/api/server/audit?from=bad',
+        '/api/server/audit/export?format=invalid',
         '/api/server/operations',
         `/api/server/users/${server.admin.userId}?after=bad`,
       ]) {
