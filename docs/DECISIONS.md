@@ -13176,8 +13176,9 @@ that a union may gain a member and a client ignores it, and `API.md` says so for
 
 **Accepted.** `ModuleId` is spelled by hand beside the registry and held to it by a test and by the bundle's build, as
 `PRODUCT_MODULE_REQUIRES` is held to the manifests. `Topic` is a string template and not a schema, so it is not in the bundle:
-a client takes a topic from the server, never builds one. The issues module's routes are not in `ENDPOINTS`, so the bundle
-lists issues as a module and gives it no endpoint; adding them is a change of its own.
+a client takes a topic from the server, never builds one. The issues module's four routes were not in `ENDPOINTS`; they are now
+(`listIssues`, `createIssue`, `updateIssue`, `deleteIssue`), owned by `issues`, so a client sees them as the module's and
+draws or asks for none of them where it is off.
 
 **Reverses if** the application is built in this repository (D-192's reversal): the owner maps are then read from the code.
 Cost of reversing otherwise: remove the keys and the `ModuleId` reference; nothing is stored.

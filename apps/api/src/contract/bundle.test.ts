@@ -429,6 +429,8 @@ describe('the modules in the contract (D-273)', () => {
       contract.endpoints.find((endpoint) => endpoint.id === id)?.module;
     expect(owner('getMe')).toBe('core');
     expect(owner('listNotifications')).toBe('chat');
+    expect(owner('listIssues')).toBe('issues');
+    expect(owner('deleteIssue')).toBe('issues');
     expect(contract.endpoints.some((endpoint) => endpoint.module === 'chat')).toBe(true);
   });
 
