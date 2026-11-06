@@ -70,7 +70,7 @@ describe('integration: unfurling over HTTP', () => {
             token: 'ghp_http',
           })
         ).status,
-      ).toBe(204);
+      ).toBe(200);
 
       const url = 'https://github.com/acme/api/pull/9';
       const answered = await call(db, 'POST', '/api/integrations/github/unfurl', owner, {

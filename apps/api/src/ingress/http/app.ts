@@ -1336,29 +1336,23 @@ export const createApp = (given: Dependencies): HttpApplication => {
     )
     .put(
       '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params, body, set }) => {
+      async ({ request, params, body }) =>
         await changeGitHubToken(
           { ...dependencies, cipher, githubApi: github },
           request,
           params.workspaceId,
           body,
-        );
-        set.status = 204;
-        return null;
-      },
+        ),
     )
     .delete(
       '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params, set }) => {
+      async ({ request, params }) =>
         await changeGitHubToken(
           { ...dependencies, cipher, githubApi: github },
           request,
           params.workspaceId,
           undefined,
-        );
-        set.status = 204;
-        return null;
-      },
+        ),
     )
     .get(
       '/api/workspaces/:workspaceId/invitation-recipients',
