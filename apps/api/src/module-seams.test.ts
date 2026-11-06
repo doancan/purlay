@@ -26,17 +26,10 @@ const CHAT_HANDLERS = [
   'feeds',
   'github-app',
   'github-issues',
-  'incidents',
   'incoming-webhooks',
   'integrations',
-  'knowledge',
   'messages',
   'missed-mail',
-  'notifications',
-  'presence',
-  'reminders',
-  'scheduled',
-  'star',
   'webhooks',
 ].map((name) => join('ingress', 'http', `${name}.ts`));
 
@@ -80,7 +73,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 20;
+const MAX_ALLOWED = 13;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */

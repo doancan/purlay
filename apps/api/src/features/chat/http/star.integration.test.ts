@@ -7,13 +7,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import type { Channel, ServerFrame } from '@purlay/types';
-import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
-import { aTestAuth, aSession } from '../../testing/signed-in';
-import { testDependencies } from '../../testing/doubles';
-import { aRoom } from '../../testing/rooms';
-import { createApp } from './app';
+import { fixedClock } from '../../../platform/clock';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { NO_LOG, userTopic, type EventBus } from '../../../platform/events';
+import { aTestAuth, aSession } from '../../../testing/signed-in';
+import { testDependencies } from '../../../testing/doubles';
+import { aRoom } from '../../../testing/rooms';
+import { createApp } from '../../../ingress/http/app';
 import { starChannel } from './star';
 
 afterAll(async () => {
