@@ -712,7 +712,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     replace: '  if (input.content === null) {\n',
     tests: [
       'apps/api/src/features/chat/messages/send-attachments.integration.test.ts',
-      'apps/api/src/ingress/http/messages.integration.test.ts',
+      'apps/api/src/features/chat/http/messages.integration.test.ts',
     ],
   },
   {

@@ -14,7 +14,7 @@ import {
 } from '../../../platform/events';
 import { atomicallyOn } from '../../../platform/transactions';
 import { channelPins, pinMessage, unpinMessage, type PinChange } from '../pins/pins';
-import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 
 const told = async (

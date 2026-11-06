@@ -21,7 +21,7 @@ export const API_MODULES_AUDIT: readonly Mutation[] = [
   {
     id: 'audit-export-runs-a-formula',
     why: 'a display name that starts with = runs as a formula in the spreadsheet the trail is opened in (D-222)',
-    file: 'apps/api/src/modules/audit/audit-export.ts',
+    file: 'apps/api/src/modules/audit/csv.ts',
     find: "  const defused = FORMULA_START.test(value) ? `'${value}` : value;\n",
     replace: '  const defused = value;\n',
     tests: ['apps/api/src/modules/audit/audit-export.integration.test.ts'],

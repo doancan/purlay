@@ -7,7 +7,16 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  type Executor,
+  type ClonedDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+} from '@purlay/db';
 import { GitHubIntegration } from '@purlay/types';
 import { githubApi } from '../../features/chat/integrations/unfurl';
 import { aMovableClock, testDependencies } from '../../testing/doubles';
@@ -18,13 +27,16 @@ import { SESSION_COOKIE } from '../../platform/cookies';
 import { createApp } from './app';
 
 let stub: GitHubApiStub;
-beforeAll(() => {
+let concurrent: ClonedDatabase;
+beforeAll(async () => {
   stub = aGitHubApiStub();
-});
+  concurrent = await cloneIntegrationDatabase();
+}, CLONE_HOOK_MS);
 afterAll(async () => {
   await stub.stop();
+  await concurrent.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const clock = aMovableClock();
 
@@ -71,6 +83,169 @@ const read = async (world: World): Promise<GitHubIntegration> => {
 };
 
 describe('integration: saving the workspace’s GitHub token', () => {
+  test.each(['PUT', 'DELETE'])(
+    'a failed audit insert rolls back the %s credential change',
+    async (method) => {
+      const world = await aWorld(concurrent.db);
+      stub.accept('ghp_before_rollback', 'repo');
+      stub.accept('github_pat_after_rollback');
+      expect(
+        (await world.as('alice')('PUT', integration(world), { token: 'ghp_before_rollback' }))
+          .status,
+      ).toBe(200);
+      const before = await read(world);
+      const row = await concurrent.db
+        .selectFrom('github_integrations')
+        .selectAll()
+        .where('workspace_id', '=', world.workspaceId)
+        .executeTakeFirstOrThrow();
+      await sql`create function refuse_github_audit() returns trigger language plpgsql as $$ begin raise exception 'audit refused by the test'; end $$`.execute(
+        concurrent.db,
+      );
+      await sql`create trigger refuse_github_audit before insert on audit_log for each row execute function refuse_github_audit()`.execute(
+        concurrent.db,
+      );
+      try {
+        const response = await world.as('alice')(
+          method,
+          integration(world),
+          method === 'PUT' ? { token: 'github_pat_after_rollback' } : undefined,
+        );
+        expect(response.status).toBe(500);
+        expect(await response.json()).toMatchObject({ error: { code: 'INTERNAL' } });
+        expect(await read(world)).toEqual(before);
+        expect(
+          await concurrent.db
+            .selectFrom('github_integrations')
+            .selectAll()
+            .where('workspace_id', '=', world.workspaceId)
+            .executeTakeFirstOrThrow(),
+        ).toEqual(row);
+      } finally {
+        await sql`drop trigger refuse_github_audit on audit_log`.execute(concurrent.db);
+        await sql`drop function refuse_github_audit()`.execute(concurrent.db);
+      }
+    },
+  );
+  test('parallel first saves each return their own committed status and keep one integration', async () => {
+    const world = await aWorld(concurrent.db);
+    stub.accept('ghp_parallel', 'repo');
+    stub.accept('github_pat_parallel');
+    const responses = await Promise.all(
+      ['ghp_parallel', 'github_pat_parallel'].map(
+        async (token) => await world.as('alice')('PUT', integration(world), { token }),
+      ),
+    );
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(await responses[0]!.json()).toMatchObject({ configured: true, broadScopes: true });
+    expect(await responses[1]!.json()).toMatchObject({ configured: true, broadScopes: false });
+    expect(
+      await concurrent.db
+        .selectFrom('github_integrations')
+        .select('id')
+        .where('workspace_id', '=', world.workspaceId)
+        .execute(),
+    ).toHaveLength(1);
+    expect(
+      await concurrent.db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('workspace_id', '=', world.workspaceId)
+        .where('action', '=', 'integration.token_set')
+        .execute(),
+    ).toHaveLength(2);
+  });
+  test('accepted writes return their exact public connection receipt without credentials', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      stub.accept('ghp_receipt', 'repo');
+      const saved = await world.as('alice')('PUT', integration(world), { token: 'ghp_receipt' });
+      expect(saved.status).toBe(200);
+      const receipt: unknown = await saved.json();
+      expect(receipt).toEqual(await read(world));
+      expect(receipt).toMatchObject({ configured: true, broadScopes: true, invalidSince: null });
+      expect(JSON.stringify(receipt)).not.toContain('ghp_receipt');
+      expect(Object.keys(Value.Check(GitHubIntegration, receipt) ? receipt : {})).toEqual([
+        'configured',
+        'updatedAt',
+        'invalidSince',
+        'broadScopes',
+      ]);
+      const removed = await world.as('alice')('DELETE', integration(world));
+      expect(removed.status).toBe(200);
+      expect(await removed.json()).toEqual({
+        configured: false,
+        updatedAt: null,
+        invalidSince: null,
+        broadScopes: false,
+      });
+    });
+  });
+  test.each(['demotion', 'removal', 'workspace deletion'] as const)(
+    'losing workspace authority through %s while GitHub checks a token prevents storing it',
+    async (reason) => {
+      await withRollback(async (db) => {
+        const api = githubApi(stub.url);
+        let revoke: () => Promise<void> = () => Promise.resolve();
+        const world = await aWorld(db, {
+          ...api,
+          check: async (token) => {
+            const proof = await api.check(token);
+            await revoke();
+            return proof;
+          },
+        });
+        const actor = await db
+          .selectFrom('workspace_members')
+          .select('user_id')
+          .where('workspace_id', '=', world.workspaceId)
+          .where('role', '=', 'owner')
+          .executeTakeFirstOrThrow();
+        await db
+          .updateTable('workspace_members')
+          .set({ role: 'owner' })
+          .where('workspace_id', '=', world.workspaceId)
+          .where('user_id', '!=', actor.user_id)
+          .execute();
+        revoke = async (): Promise<void> => {
+          if (reason === 'demotion')
+            await db
+              .updateTable('workspace_members')
+              .set({ role: 'member' })
+              .where('workspace_id', '=', world.workspaceId)
+              .where('user_id', '=', actor.user_id)
+              .execute();
+          else if (reason === 'removal')
+            await db
+              .deleteFrom('workspace_members')
+              .where('workspace_id', '=', world.workspaceId)
+              .where('user_id', '=', actor.user_id)
+              .execute();
+          else
+            await db
+              .updateTable('workspaces')
+              .set({ deleted_at: clock.now() })
+              .where('id', '=', world.workspaceId)
+              .execute();
+        };
+        stub.accept('ghp_no_longer_authorized');
+        expect(
+          (
+            await world.as('alice')('PUT', integration(world), {
+              token: 'ghp_no_longer_authorized',
+            })
+          ).status,
+        ).toBe(reason === 'demotion' ? 403 : 404);
+        expect(
+          await db
+            .selectFrom('github_integrations')
+            .select('id')
+            .where('workspace_id', '=', world.workspaceId)
+            .execute(),
+        ).toEqual([]);
+      });
+    },
+  );
   test('a token GitHub accepts is saved; a fine-grained one carries no scopes, so no warning', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
@@ -78,7 +253,7 @@ describe('integration: saving the workspace’s GitHub token', () => {
       const saved = await world.as('alice')('PUT', integration(world), {
         token: 'github_pat_fine',
       });
-      expect(saved.status).toBe(204);
+      expect(saved.status).toBe(200);
       expect(await read(world)).toMatchObject({
         configured: true,
         invalidSince: null,
@@ -95,12 +270,12 @@ describe('integration: saving the workspace’s GitHub token', () => {
       stub.accept('ghp_classic', 'repo, read:org');
       expect(
         (await world.as('alice')('PUT', integration(world), { token: 'ghp_classic' })).status,
-      ).toBe(204);
+      ).toBe(200);
       expect(await read(world)).toMatchObject({ configured: true, broadScopes: true });
       stub.accept('github_pat_narrow');
       expect(
         (await world.as('alice')('PUT', integration(world), { token: 'github_pat_narrow' })).status,
-      ).toBe(204);
+      ).toBe(200);
       expect(await read(world)).toMatchObject({ configured: true, broadScopes: false });
       // Removed, nothing is left to warn of.
       await world.as('alice')('DELETE', integration(world));

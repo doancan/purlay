@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Value } from '@sinclair/typebox/value';
-import { ServerAuditAction, ServerAuditQuery } from '@purlay/types';
+import { ServerAuditAction, ServerAuditQuery, type AuditExportFormat } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
 import { Select } from '../../ui/select';
@@ -9,15 +9,21 @@ import { TextField } from '../../ui/text-field';
 import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
 import { Empty, Pagination, QueryState, usePages } from './parts';
+import { AuditPersonPicker } from './audit-person-picker';
 
 export const Audit = (): React.JSX.Element => {
   const { t } = useI18n();
   const [action, setAction] = useState('');
   const [actor, setActor] = useState('');
+  const [actorName, setActorName] = useState<string | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [filter, setFilter] = useState<ServerAuditQuery>({});
   const [invalid, setInvalid] = useState(false);
+  const actionName = (name: string): string => {
+    const known = ServerAuditAction.anyOf.find((item) => item.const === name);
+    return known === undefined ? name : t(`admin.audit.action.${known.const}`);
+  };
   const submit = (): void => {
     const start = from === '' ? undefined : new Date(from);
     const end = to === '' ? undefined : new Date(to);
@@ -53,7 +59,7 @@ export const Audit = (): React.JSX.Element => {
           submit();
         }}
       >
-        <label className="flex min-w-0 flex-col gap-1 text-label text-ink">
+        <label className="flex min-w-0 flex-col gap-1 text-label text-ink max-narrow:w-full">
           {t('admin.action')}
           <Select
             value={action}
@@ -64,17 +70,17 @@ export const Audit = (): React.JSX.Element => {
             <option value="">{t('admin.all')}</option>
             {ServerAuditAction.anyOf.map((item) => (
               <option key={item.const} value={item.const}>
-                {item.const}
+                {actionName(item.const)}
               </option>
             ))}
           </Select>
         </label>
-        <div className="min-w-0 flex-1">
-          <TextField
-            label={t('admin.actor')}
-            value={actor}
-            onChange={(event) => {
-              setActor(event.target.value);
+        <div className="min-w-0 flex-1 max-narrow:w-full max-narrow:flex-auto">
+          <AuditPersonPicker
+            name={actorName}
+            onChange={(user) => {
+              setActor(user?.id ?? '');
+              setActorName(user?.displayName ?? null);
             }}
           />
         </div>
@@ -101,14 +107,36 @@ export const Audit = (): React.JSX.Element => {
           {t('admin.dateError')}
         </p>
       )}
-      <AuditList key={JSON.stringify(filter)} filter={filter} />
+      <AuditList
+        key={JSON.stringify(filter)}
+        filter={filter}
+        actionName={actionName}
+        chooseActor={(id, name) => {
+          setActor(id);
+          setActorName(name);
+        }}
+      />
     </>
   );
 };
-const AuditList = ({ filter }: { readonly filter: ServerAuditQuery }): React.JSX.Element => {
+const AuditList = ({
+  filter,
+  actionName,
+  chooseActor,
+}: {
+  readonly filter: ServerAuditQuery;
+  readonly actionName: (action: string) => string;
+  readonly chooseActor: (id: string, name: string) => void;
+}): React.JSX.Element => {
   const client = useAdministrationClient();
   const { t, format } = useI18n();
   const pages = usePages();
+  const download = (format: AuditExportFormat): string => {
+    const params = new URLSearchParams({ format });
+    for (const [key, value] of Object.entries(filter))
+      if (key !== 'after' && key !== 'limit') params.set(key, String(value));
+    return `/api/server/audit/export?${params.toString()}`;
+  };
   const query = useQuery({
     queryKey: ['server', 'audit', filter, pages.after],
     queryFn: async ({ signal }) =>
@@ -123,6 +151,15 @@ const AuditList = ({ filter }: { readonly filter: ServerAuditQuery }): React.JSX
       {(data) => (
         <>
           <SettingsCard title={t('admin.audit')}>
+            <div className="flex flex-wrap items-center gap-3 px-6 py-4 max-narrow:px-4">
+              <span className="text-body text-ink-muted">{t('admin.audit.download')}</span>
+              <a className="text-label text-accent-text underline" href={download('csv')}>
+                {t('admin.audit.csv')}
+              </a>
+              <a className="text-label text-accent-text underline" href={download('ndjson')}>
+                {t('admin.audit.ndjson')}
+              </a>
+            </div>
             {data.data.length === 0 ? (
               <Empty />
             ) : (
@@ -132,21 +169,35 @@ const AuditList = ({ filter }: { readonly filter: ServerAuditQuery }): React.JSX
                     key={entry.id}
                     className="flex flex-col gap-1 not-last:border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
                   >
-                    <p className="font-mono text-label text-ink break-all">{entry.action}</p>
-                    <p className="text-body text-ink break-words">
-                      {entry.actorName ?? t('admin.system')}
-                    </p>
+                    <p className="text-label text-ink break-words">{actionName(entry.action)}</p>
+                    {entry.actorUserId === null ? (
+                      <p className="text-body text-ink-muted">
+                        {entry.actorName ?? t('admin.system')}
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        className="w-fit max-w-full cursor-pointer py-1 text-left text-body text-accent-text break-words underline"
+                        onClick={() => {
+                          if (entry.actorUserId !== null)
+                            chooseActor(entry.actorUserId, entry.actorName ?? t('admin.system'));
+                        }}
+                      >
+                        {entry.actorName ?? t('admin.system')}
+                      </button>
+                    )}
                     <time className="text-caption text-ink-muted" dateTime={entry.createdAt}>
                       {format.absolute(entry.createdAt)}
                     </time>
-                    <p className="font-mono text-caption text-ink-muted break-all">
-                      {entry.actorUserId}
-                    </p>
-                    {(entry.targetUserId ?? entry.targetWorkspaceId) !== null && (
-                      <p className="text-caption text-ink-muted break-all">
-                        {t('admin.target')}: {entry.targetUserId ?? entry.targetWorkspaceId}
-                      </p>
-                    )}
+                    <details className="text-caption text-ink-muted">
+                      <summary className="cursor-pointer">{t('admin.audit.details')}</summary>
+                      <p className="font-mono break-all">{entry.actorUserId}</p>
+                      {(entry.targetUserId ?? entry.targetWorkspaceId) !== null && (
+                        <p className="text-caption text-ink-muted break-all">
+                          {t('admin.target')}: {entry.targetUserId ?? entry.targetWorkspaceId}
+                        </p>
+                      )}
+                    </details>
                   </li>
                 ))}
               </ol>

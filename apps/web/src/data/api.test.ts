@@ -540,7 +540,12 @@ describe('the endpoints', () => {
   test('private invitation recipients and attempts use bounded cursors; resend and revoke never put an address or token in a path', async () => {
     const read = harness({ data: [], nextCursor: null });
     await read.api.invitationRecipients(ID);
-    await read.api.invitationRecipients(ID, ID);
+    await read.api.invitationRecipients(ID, { before: ID });
+    await read.api.invitationRecipients(ID, {
+      q: 'ann+test@example.test',
+      status: 'failed',
+      before: ID,
+    });
     await read.api.invitationDeliveries(ID, ID);
     await read.api.invitationDeliveries(ID, ID, ID);
     const write = harness(null);
@@ -549,6 +554,10 @@ describe('the endpoints', () => {
     expect([...read.calls, ...write.calls].map(({ method, url }) => [method, url])).toEqual([
       ['GET', `/api/workspaces/${ID}/invitation-recipients`],
       ['GET', `/api/workspaces/${ID}/invitation-recipients?before=${ID}`],
+      [
+        'GET',
+        `/api/workspaces/${ID}/invitation-recipients?q=ann%2Btest%40example.test&status=failed&before=${ID}`,
+      ],
       ['GET', `/api/workspaces/${ID}/invitation-recipients/${ID}/attempts`],
       ['GET', `/api/workspaces/${ID}/invitation-recipients/${ID}/attempts?before=${ID}`],
       ['POST', `/api/workspaces/${ID}/invitation-recipients/${ID}/resend`],
@@ -601,10 +610,16 @@ describe('the endpoints', () => {
     const status = { configured: true, updatedAt: WHEN, invalidSince: null, broadScopes: false };
     const read = harness(status);
     expect(await read.api.githubIntegration(ID)).toEqual(status);
-    const saved = harness(null);
-    await saved.api.setGitHubToken(ID, 'github_pat_x');
-    const removed = harness(null);
-    await removed.api.removeGitHubToken(ID);
+    const saved = harness(status);
+    expect(await saved.api.setGitHubToken(ID, 'github_pat_x')).toEqual(status);
+    const disconnected = {
+      configured: false,
+      updatedAt: null,
+      invalidSince: null,
+      broadScopes: false,
+    };
+    const removed = harness(disconnected);
+    expect(await removed.api.removeGitHubToken(ID)).toEqual(disconnected);
     expect([...read.calls, ...saved.calls, ...removed.calls]).toEqual([
       { method: 'GET', url: `/api/workspaces/${ID}/integrations/github`, body: undefined },
       {

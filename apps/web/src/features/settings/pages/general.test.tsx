@@ -81,6 +81,26 @@ const main = (view: View): Scope => within(view.getByRole('main'));
 const field = (view: View): HTMLInputElement => main(view).getByLabelText<HTMLInputElement>('Name');
 
 describe('general', () => {
+  test('a workspace without chat never requests or renders archived channels', async () => {
+    let reads = 0;
+    const session = aSession();
+    const view = await openPage({
+      me: () =>
+        Promise.resolve({
+          ...session,
+          modules: [],
+          memberships: session.memberships.map((m) => ({ ...m, role: 'owner' as const })),
+        }),
+      archivedChannels: () => {
+        reads++;
+        return Promise.reject(new ApiError(404, 'ROUTE_NOT_FOUND', 'chat is disabled'));
+      },
+    });
+    expect(main(view).queryByRole('region', { name: 'Archived channels' })).toBeNull();
+    expect(reads).toBe(0);
+    expect(field(view).value).toBe(WORKSPACE.name);
+    view.unmount();
+  });
   test('is an owner’s and an admin’s; a member is not offered it, and its address is not found', async () => {
     const member = await render('/w/acme/settings/general', {}, 'member');
     expect(await member.findByText('Nothing here')).toBeDefined();

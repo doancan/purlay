@@ -200,7 +200,7 @@ export type ChannelIncident = Static<typeof ChannelIncident>;
 /**
  * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
  * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
- * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
+ * exactly what `github_repo_feeds_repository_shape` holds (bound by `features/chat/http/feeds.integration.test.ts`).
  */
 export const GITHUB_REPOSITORY_PATTERN =
   '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';

@@ -54,6 +54,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/server/workspaces',
   '/api/server/workspaces/:workspaceId/quota',
   '/api/server/audit',
+  '/api/server/audit/export',
   '/api/server/accounts',
   '/api/server/accounts/:userId/suspension',
   '/api/server/creators',

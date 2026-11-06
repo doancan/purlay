@@ -160,6 +160,20 @@ describe('integration: inviting by e-mail over HTTP', () => {
     const recipient = ((await page.json()) as InvitationRecipientPage).data[0];
     if (recipient === undefined) throw new Error('recipient missing');
     expect(recipient.latest.result).toBe('accepted');
+    expect(recipient.status).toBe('accepted');
+    const filtered = await call(
+      app,
+      'GET',
+      `${root}?q=RECEIPT%40EXAMPLE&status=accepted&limit=1`,
+      owner,
+    );
+    expect(filtered.status).toBe(200);
+    expect(((await filtered.json()) as InvitationRecipientPage).data.map((r) => r.id)).toEqual([
+      recipient.id,
+    ]);
+    for (const query of ['status=delivered', `q=${'a'.repeat(255)}`, 'offset=1', 'limit=0']) {
+      expect((await call(app, 'GET', `${root}?${query}`, owner)).status).toBe(400);
+    }
     const attempt = await call(app, 'GET', `${root}/${recipient.id}/attempts?limit=1`, owner);
     expect(attempt.status).toBe(200);
     expect(((await attempt.json()) as InvitationDeliveryPage).data).toHaveLength(1);

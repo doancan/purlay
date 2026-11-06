@@ -7,23 +7,20 @@
  * one owner: the core's list below or a manifest's templates. A new route fails here until it is put in one.
  *
  * A module's HTTP is part of the module: its slot supplies `routes`, every path it registers is its manifest's and none of
- * them is also registered in `app.ts`; a module whose handlers are still partly in `ingress/http/` is listed in
- * `HTTP_IN_INGRESS`, which only shrinks, and is on it only while `app.ts` still registers one of its paths.
+ * them is also registered in `app.ts`. A route of the core that a module's code serves stays in `app.ts` and is the core's
+ * (`CORE_ROUTES`), as `GET` and `PUT /api/me/missed-mail` are.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { bundledModules, type BundledModule } from '../../composition';
+import { fixedClock } from '../../platform/clock';
+import { inProcessLimiters } from '../../realtime/rate-limiter';
+import { NOW } from '../../testing/doubles';
 import { httpFolderFiles } from '../../testing/route-sources';
 import type { ModuleRouteDependencies } from './module-routes';
 import { CORE_ROUTES } from '../../platform/module-kit/core-claims';
 import { ownsPath } from '../../platform/module-kit/routes';
-
-/**
- * The modules whose handlers are still partly in `ingress/http/`, where `app.ts` registers some of their routes. **Only
- * shrinks**: a module listed that has none left there fails, and so does an unlisted one that has any.
- */
-const HTTP_IN_INGRESS: readonly string[] = ['chat'];
 
 const pathsIn = (text: string): string[] =>
   [...text.matchAll(/\.(?:get|post|put|patch|delete|ws)\(\s*'(\/[^']*)'/g)].map((m) => m[1] ?? '');
@@ -44,8 +41,12 @@ const registered = (): string[] =>
     ]),
   ].sort();
 
-/** The dependencies of a plugin that is made and never asked: a factory only registers, and reads none of it until a request. */
-const unread = {} as ModuleRouteDependencies;
+/** The dependencies of a plugin that is made and never asked: a factory only registers, and reads from them only what it builds at once (the limiters and the address of GitHub's API). */
+const unread = {
+  config: { GITHUB_API_URL: 'https://api.github.test' },
+  clock: fixedClock(NOW),
+  limiterFor: inProcessLimiters(fixedClock(NOW)),
+} as unknown as ModuleRouteDependencies;
 
 /** What a plugin registers, read from the plugin and not the text: handlers are not run, so the context is not read. */
 const pluginPaths = (module: BundledModule): string[] =>
@@ -88,19 +89,14 @@ describe('who owns each route', () => {
     }
   });
 
-  test('a module’s routes come from its folder: its slot supplies them, and app.ts registers none of its paths but while it is listed', () => {
+  test('a module’s routes come from its folder: its slot supplies them, and app.ts registers none of its paths', () => {
     const fromApp = registeredByApp();
     for (const module of carried) {
       const id = module.manifest.id;
       const owns = ownsPath(module.manifest.routes ?? []);
       const inApp = fromApp.filter(owns);
       expect({ id, supplies: module.routes !== undefined }).toEqual({ id, supplies: true });
-      // A module whose handlers are still partly in `ingress/` is listed, and is listed only while some are.
-      if (HTTP_IN_INGRESS.includes(id)) {
-        expect({ id, stillInApp: inApp.length > 0 }).toEqual({ id, stillInApp: true });
-      } else {
-        expect({ id, inApp }).toEqual({ id, inApp: [] });
-      }
+      expect({ id, inApp }).toEqual({ id, inApp: [] });
       // What the plugin registers is what its folder spells, all of it the module's, and none of it twice.
       const registers = pluginPaths(module);
       expect({ id, outside: registers.filter((path) => !owns(path)) }).toEqual({ id, outside: [] });
@@ -110,10 +106,5 @@ describe('who owns each route', () => {
       });
       expect([...new Set(registers)].sort()).toEqual([...new Set(registeredByFolder(id))].sort());
     }
-  });
-
-  test('the list of modules whose handlers are in ingress names only modules the build carries', () => {
-    const ids = carried.map((module) => module.manifest.id);
-    expect(HTTP_IN_INGRESS.filter((id) => !ids.includes(id))).toEqual([]);
   });
 });

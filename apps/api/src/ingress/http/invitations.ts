@@ -8,6 +8,7 @@
 import {
   CreateInvitationRequest,
   type InvitationRecipientPage,
+  InvitationRecipientQuery,
   type InvitationDeliveryPage,
   Uuid,
   OlderPageQuery,
@@ -219,7 +220,7 @@ export const readInvitationRecipients = async (
     deps.database,
     deps.clock,
     context,
-    validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] })),
+    validated(InvitationRecipientQuery, queryOf(new URL(request.url), { numbers: ['limit'] })),
   );
 };
 export const readInvitationDeliveries = async (

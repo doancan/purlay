@@ -46,6 +46,13 @@ export class ApiError extends Error {
 /** Narrowing for a caught value: a `catch` clause is `unknown`. */
 export const isApiError = (value: unknown): value is ApiError => value instanceof ApiError;
 
+/** These failures do not establish whether a mutation committed; a fresh read must reconcile it. */
+export const isUnconfirmedMutation = (failure: unknown): boolean =>
+  !isApiError(failure) ||
+  ['NETWORK', 'MALFORMED', 'INTERNAL', 'DATABASE_UNAVAILABLE', 'REQUEST_TIMEOUT'].includes(
+    failure.code,
+  );
+
 /** True for a failure the person can do nothing about and a retry may fix. */
 export const isTransient = (error: unknown): boolean =>
   isApiError(error) &&
