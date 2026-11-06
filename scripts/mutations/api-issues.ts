@@ -19,6 +19,14 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['packages/db/src/query-columns.integration.test.ts'],
   },
   {
+    id: 'core-column-named-by-another-module',
+    why: 'issues reads a column that exists for chat, so it is no longer one module’s and nobody has said where it lives (D-275)',
+    file: 'apps/api/src/features/issues/module.ts',
+    find: '    deadline: { ms: 8_000 },\n',
+    replace: '    deadline: { ms: 8_000 },\n    quiet_from: 1,\n',
+    tests: ['apps/api/src/core-columns.test.ts'],
+  },
+  {
     id: 'issues-admin-cannot-delete-others',
     why: 'an admin cannot delete an issue somebody else made (D-254)',
     file: 'apps/api/src/features/issues/issues.ts',

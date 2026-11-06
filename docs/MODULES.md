@@ -257,6 +257,29 @@ moves into that module.
   tables, and leaves every column of a core table, and every value of a core enum type, as it was except what
   `CORE_COLUMNS_A_SET_CHANGES` and `CORE_ENUMS_A_SET_CHANGES` declare, the latter as `set:type` so that only the named set may alter the named type (`migration-cells.integration.test.ts`); a generated `schema.ts` per module is not built, and D-271 declines it: what a module sees is derived.
 
+### Columns of core tables that exist for a module
+
+A table has one owner, and a column does not: chat's quiet hours, away, Deep Work, missed-mail marker and retention days, and
+the credentials of its GitHub App, are columns of `users`, `workspace_members`, `workspaces` and `server_settings`, which are
+the core's, because they were made before there were modules (D-275). They are **not moved**: a move is a migration on the
+tables every request reads, and nobody has felt the cost of leaving them. They are **listed, capped and held**:
+
+- `CORE_COLUMNS_FOR_A_MODULE` (`packages/db/src/table-owners.ts`) names each as `table.column` with the module and why, and
+  the core's files that may name it (the route that sets it, the erasure that clears it, the export that lists it). Fourteen
+  today. `core-columns.test.ts` fails when the list is not as long as its cap, when a file of the core names a listed column
+  outside its entry, when another module names it, when an entry's file no longer names it, and when a module's migration
+  adds a column to a core table (`migration-cells.integration.test.ts` holds the same against the database). **The list only
+  shrinks**; raising the cap is a decision.
+- **A new column of a core table for one module is not added.** The module makes a table of its own keyed by the core's row
+  (`user_id`, `workspace_id`), its foreign key running module to core.
+- **A listed column must move to such a table** when a second module wants it (it is then not one module's: it goes to the core
+  with a port, or to a table of the module that owns the meaning), when a core file outside its entry needs it, when the
+  module's set must change its type or constraint (a set may not change a core column), or when its owner feels the cost: a
+  lock held on a hot table, a backfill, or a contribution the core cannot make without naming the module's words. It moves by
+  expand and contract across releases, and the entry goes in the change that drops the column.
+- `workspaces.storage_*` and `attachments.claimed_at` are not on the list: they are the attachments' own, the core's, which
+  chat writes through its seams (`CORE_WRITES` in `module-tables.test.ts`).
+
 ## 6. Web
 
 <!-- web-module-registry: this section and the three lines marked the same way below are the web registry's. -->
