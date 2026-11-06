@@ -19,6 +19,7 @@ import { inProcessEventBus } from './bus';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { routeFrame } from './router';
+import { chatFrameHandlers } from '../features/chat/frames';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
@@ -69,6 +70,7 @@ const aNode = (
           sessionLifetime: () => NO_SESSION_LIFETIME,
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+          frameHandlers: chatFrameHandlers,
           log: createLogger({ level: 'silent' }),
           socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
           atomically: atomicallyOn(db),

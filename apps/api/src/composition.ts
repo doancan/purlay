@@ -28,6 +28,7 @@ import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspace
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import type { FrameHandlers } from './platform/frame-handlers';
+import type { RouterFrameContext } from './realtime/router';
 import { hookList } from './platform/hooks';
 import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
@@ -79,11 +80,11 @@ export interface BundledModule {
    */
   readonly jobWork?: Readonly<Record<string, JobWork>>;
   /**
-   * What serves each client operation the manifest names under `frames`: the router asks the module that owns an operation
-   * and nobody else. A handler for an operation the manifest does not name stops the build (`compose`); an operation of the
-   * manifest with none is the router's own until it moves (D-276).
+   * What serves each client operation the manifest names under `frames`: the router dispatches an operation to the module
+   * that owns it and asks nobody else. A handler for an operation the manifest does not name stops the build (`compose`); an
+   * operation of the manifest with none is still the router's own, until it moves.
    */
-  readonly frameHandlers?: FrameHandlers;
+  readonly frameHandlers?: FrameHandlers<RouterFrameContext>;
 }
 
 /**
@@ -180,7 +181,7 @@ export interface Composition {
   /** Whether a job belongs to a module this build carries and this process does not run. */
   readonly closedJob: (name: string) => boolean;
   /** The handlers of the operations of the modules this process runs: a module that is not run serves none. */
-  readonly frameHandlers: FrameHandlers;
+  readonly frameHandlers: FrameHandlers<RouterFrameContext>;
   /** Whether a client frame's operation belongs to a module this build carries and this process does not run. */
   readonly closedFrame: (op: string) => boolean;
   /** Whether a server event belongs to a module this build carries and this process does not run. */
@@ -273,7 +274,7 @@ export const compose = (
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.jobs ?? []).includes(name),
       ),
-    frameHandlers: modules.reduce<FrameHandlers>(
+    frameHandlers: modules.reduce<FrameHandlers<RouterFrameContext>>(
       (handlers, module) => ({ ...handlers, ...module.frameHandlers }),
       {},
     ),

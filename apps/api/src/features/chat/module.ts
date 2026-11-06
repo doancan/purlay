@@ -7,6 +7,7 @@
  */
 import { CHAT_AUDIT_ACTIONS, CHAT_NOTIFICATION_KINDS, type ServerEvent } from '@purlay/types';
 import { chatBudget } from './budget';
+import { chatFrameHandlers } from './frames';
 import { chatExport } from './export';
 import { chatPersonalExport } from './personal-export';
 import { startWithTheDefaultChannel } from './channels/workspace-hooks';
@@ -104,4 +105,6 @@ export const chatModule = {
   collatedColumns: CHAT_COLLATED_COLUMNS,
   // The work of `jobs` and `retention` above.
   jobWork: chatJobWork,
+  // What the router asks of chat for the operations of `frames` above that it has moved here (`MODULES.md` §9).
+  frameHandlers: chatFrameHandlers,
 };

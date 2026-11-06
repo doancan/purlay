@@ -426,21 +426,13 @@ export const API_REALTIME: readonly Mutation[] = [
     id: 'socket-frame-of-a-closed-module-taken',
     why: 'a socket of a process that does not run chat still writes, watches and types in channels: the module is off and its door is open (D-250)',
     file: 'apps/api/src/realtime/router.ts',
-    find: 'if (dependencies.closedFrame?.(parsed.op) === true) {',
-    replace: 'if (false as boolean) {',
+    find: 'if (dependencies.closedFrame?.(parsed.op) === true) return [nobodysOperation()];',
+    replace: '',
     tests: [
       'apps/api/src/realtime/frame-handlers.test.ts',
       'apps/api/src/realtime/router.test.ts',
       'apps/api/src/realtime/modules-off-socket.integration.test.ts',
     ],
-  },
-  {
-    id: 'socket-send-drops-attachments',
-    why: 'a message sent over the socket arrives without what it carried',
-    file: 'apps/api/src/realtime/router.ts',
-    find: '            attachmentIds: parsed.payload.attachmentIds,\n',
-    replace: '',
-    tests: ['apps/api/src/realtime/sockets.integration.test.ts'],
   },
   {
     id: 'sweep-ignores-lifetime',
@@ -466,39 +458,5 @@ export const API_REALTIME: readonly Mutation[] = [
     find: '      if (current !== undefined && now - current.announcedAt < ttlMs / 2) return false;\n',
     replace: '',
     tests: ['apps/api/src/realtime/presence.test.ts'],
-  },
-  {
-    id: 'typing-heard-from-a-non-member',
-    why: 'somebody who can see a public channel but is not in it is announced as typing there, though they cannot send (D-156, D-171)',
-    file: 'apps/api/src/realtime/router.ts',
-    find: '        if (!(await isChannelMember(database, context))) return [];\n',
-    replace: '',
-    tests: ['apps/api/src/realtime/typing.integration.test.ts'],
-  },
-  {
-    id: 'typing-into-a-channel-unseen',
-    why: 'anybody signed in can announce typing into any channel id, private ones included, and the room hears it',
-    file: 'apps/api/src/realtime/router.ts',
-    find: '        const context = await requireChannelById(\n          database,\n          identity.userId,\n          parsed.payload.channelId,\n        );\n        // Seeing a public channel is not being in it: what a non-member types could not be sent\n        // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement\n        // is not a request, and it takes no place in memory either.\n        if (!(await isChannelMember(database, context))) return [];\n        if (\n          await dependencies.presence.startTyping(',
-    replace:
-      '        const context = { channelId: parsed.payload.channelId };\n        if (\n          await dependencies.presence.startTyping(',
-    tests: ['apps/api/src/realtime/typing.integration.test.ts'],
-  },
-  {
-    id: 'typing-outlives-the-message',
-    why: 'after a message is sent, the next keystroke is not announced for half a window, while every listener has already cleared the person',
-    file: 'apps/api/src/realtime/router.ts',
-    find: '        dependencies.presence.stopTyping(context.channelId, identity.userId);\n',
-    replace: '',
-    tests: ['apps/api/src/realtime/typing.integration.test.ts'],
-  },
-  {
-    id: 'typing-remembered-before-it-is-allowed',
-    why: 'any channel id, seen or not, takes a place in the typing registry before it is refused',
-    file: 'apps/api/src/realtime/router.ts',
-    find: "      case 'TYPING': {\n",
-    replace:
-      "      case 'TYPING': {\n        dependencies.presence.startTyping(parsed.payload.channelId, identity.userId, TYPING_TTL_MS);\n",
-    tests: ['apps/api/src/realtime/typing.integration.test.ts'],
   },
 ];

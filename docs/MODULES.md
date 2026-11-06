@@ -522,8 +522,8 @@ commit beside this list.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
   for its users. **An operation in `frames` is served by a handler in `frameHandlers` of the module's slot**, typed by the
   contract's frame for that operation, and the router dispatches by ownership: a module's frame is added by its handler and
-  not by an edit of `realtime/router.ts`. (Chat's four operations are still the router's own, moving behind the field in
-  steps, D-276: an operation with no handler is served as it was.) An operation is a name of `ClientFrame` in
+  not by an edit of `realtime/router.ts`. (Chat's `MESSAGE_SEND` and `TYPING` are served this way; `SUBSCRIBE` and `UNSUBSCRIBE` are
+  still the router's own and move in the last step, D-276: an operation with no handler is served as it was.) An operation is a name of `ClientFrame` in
   `@purlay/types`, which does not yet open to a module's own (§4, wire unions); until it does, a new operation is added to
   the contract and claimed here by one module. The context a handler is given is a
   `FrameContext` (`platform/frame-handlers.ts`): declare the parts you use in an interface that extends it. A test in

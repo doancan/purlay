@@ -22,6 +22,7 @@ import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { createReplayGate, type ReplayGate } from './replay-gate';
 import { routeFrame } from './router';
+import { chatFrameHandlers } from '../features/chat/frames';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
@@ -78,6 +79,7 @@ const routerOver = (
   bus,
   limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
   userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+  frameHandlers: chatFrameHandlers,
   presence: inMemoryPresenceRegistry(clock),
   attention: nobodyActive,
   online: { active: () => undefined },
