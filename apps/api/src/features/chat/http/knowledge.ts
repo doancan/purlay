@@ -13,7 +13,7 @@ import { requireLiveSession } from '../../../modules/auth/sessions';
 import { setKnowledge } from '../messages/knowledge';
 import { listSearches, saveSearch, removeSearch } from '../search/saved-searches';
 import type { ResolveDependencies } from '../messages/threads';
-import type { HistoryDependencies } from '../../../ingress/http/messages';
+import type { HistoryDependencies } from './messages';
 import { requireSession } from '../../../ingress/http/session';
 import { queryOf, validated } from '../../../ingress/http/validate';
 

@@ -20,7 +20,7 @@ import {
   removeBookmark,
   type BookmarkChange,
 } from '../bookmarks/bookmarks';
-import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
 

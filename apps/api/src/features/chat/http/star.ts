@@ -13,7 +13,7 @@ import {
   publishChannelsUpdated,
 } from '../../../platform/events';
 import { setStarred } from '../channels/star';
-import type { ChannelWriteDependencies } from '../../../ingress/http/channels';
+import type { ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
 
 export const starChannel = async (
