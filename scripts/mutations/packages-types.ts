@@ -103,7 +103,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     file: 'packages/types/src/issues.ts',
     find: "const Body = Type.String({ maxLength: ISSUE_BODY_MAX, format: 'plain-text' });",
     replace: 'const Body = Type.String({ maxLength: ISSUE_BODY_MAX });',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-title-takes-a-newline',
@@ -112,7 +112,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     find: "const Title = Type.String({ minLength: 1, maxLength: ISSUE_TITLE_MAX, format: 'name' });",
     replace:
       "const Title = Type.String({ minLength: 1, maxLength: ISSUE_TITLE_MAX, format: 'plain-text' });",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-title-takes-a-nul',
@@ -120,7 +120,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     file: 'packages/types/src/issues.ts',
     find: "const Title = Type.String({ minLength: 1, maxLength: ISSUE_TITLE_MAX, format: 'name' });",
     replace: 'const Title = Type.String({ minLength: 1, maxLength: ISSUE_TITLE_MAX });',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'me-modules-is-a-free-string',

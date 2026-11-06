@@ -38,7 +38,8 @@ declares:
 - `id`, and `requires` (it will not start without them) and `optional` (used when present);
 - `provides`: the capabilities it offers;
 - `routes`: its HTTP routes as templates, **at the paths the contract already gives them** — no `/api/<id>` prefix is
-  added, and the route table itself is code in `ingress/`, so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
+  added, and the routes themselves are a plugin in the module's own folder, `features/<id>/http/` (a slot of the module, §3,
+  D-280), so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
 - `frames`: the client operations on the socket it owns; `events`: the server events its services send; `jobs`: the
   scheduled jobs that act for its users. A process that does not run the module closes all four (§3);
 - `budget` (**required**, D-260, D-266): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or
@@ -110,11 +111,21 @@ anything:** the role rules that are not yet a named permission, which are in eac
 
 A failure in 4 or 5 is fatal at boot. A failure at runtime stays inside the module's error boundary and does
 not take the core down (§7). **A disabled module's routes are registered all the same and gated by path.** The
-application is one typed Elysia chain, and a route table added to or left out per process would break the type the
-web client reads; so every route of the build is registered, and `closed()` (`composition.ts`, built from the
+application has one route table in every process, so a route table added to or left out per process would be a second thing
+to test in every cell; so every route of the build is registered, and `closed()` (`composition.ts`, built from the
 `routes` of the manifests of the modules not run) is asked before the rate limit and the session. The route-ownership
 test (`ingress/http/route-ownership.test.ts`) holds the manifests' lists and the routes the application registers together, so a
-route nobody owns, or one claimed by two, fails it. The effect is that a request for a closed path gets the plain
+route nobody owns, or one claimed by two, fails it.
+
+**A module's HTTP is its folder** (D-280). `features/<id>/http/` holds the module's handlers and `routes.ts`, one function from
+`ModuleRouteDependencies` (`ingress/http/module-routes.ts`) to an Elysia plugin at the paths of its manifest's `routes`, and the
+slot of the module in `bundledModules` carries it as `routes`, beside `jobWork` and `frameHandlers`. `createApp` makes the plugin
+of every **bundled** module and uses them in one `.use(moduleRoutes)`; it registers none of a module's paths and names no module,
+so a module is added by its slot and not by an edit of the core's door, and the table is the same whether or not a module runs.
+The application's hooks (the deadline's `wrap`, the edge, the closed-path check, the rate limit, the error handler) apply to a
+plugin's routes as to the chain's. The aggregate type of the table is read by nobody: `createApp` returns `HttpApplication`, and
+the web's types are the contract's (D-280 §4). **Where a module has not moved yet** (chat, while its handlers are in
+`ingress/http/`), it is named in `HTTP_IN_INGRESS` in the ownership test, a list that only shrinks. The effect is that a request for a closed path gets the plain
 `404` of any unknown route, with the generic body and no code that says *disabled*, so what a closed route says is the
 same as what an unknown path says (its status, for a caller with no session, is not: see below). A closed job exits `0` (`closedJob`), a closed frame is answered as an
 operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).
@@ -457,7 +468,7 @@ until then it is a stated intent and not a guarantee.
 | A module's request or frame that runs past its deadline is answered and its database work cancelled; a throw in one handler is that request's | `deadline` in the manifest (`request-deadline.ts`): the framework's `wrap` around a module's request, `routeFrame` around its frames, the lease's signal cancelling the statement — **built** (D-270); `deadline.integration.test.ts` (a request waiting on a lock, over `handle` and a started server, the statement gone from `pg_stat_activity`; a handler that throws, the share of one connection still whole), `router.test.ts`, `leasing.integration.test.ts`, `module-deadlines.test.ts`, `registry.test.ts`; mutations `module-requests-have-no-deadline`, `deadline-signal-not-on-the-request`, `deadline-does-not-cancel-the-statement`, `lease-takes-a-connection-past-the-deadline`, `frame-deadline-ignored`, `registry-accepts-any-deadline` and `registry-accepts-a-deadline-none-without-a-reason` | 12 |
 | Every module says what it may take of the pool, or says `none` and why | `budget` is a required field of `ModuleManifest`: a manifest without it does not compile (`@ts-expect-error` in `registry.test.ts` and `composition.test.ts`), and the registry refuses at run time a missing one, a `none` with no reason and a share that gives the module no connection or leaves the others none, in a pool of one to a hundred; a `none` is a line of `module-budgets.test.ts`, and `composition.test.ts` holds that no share takes every connection the modules may share — **built** (D-260, D-266, D-269); mutations `chat-declares-no-budget`, `issues-declares-no-budget-unlisted`, `registry-accepts-a-module-without-a-budget`, `registry-accepts-a-budget-none-without-a-reason` and `registry-accepts-a-share-of-the-whole-pool` | 12 |
 | A module's purge and sweeps are run by the core's job command without the command naming it | `retention` and `jobs` in the manifest, `jobWork` in `BundledModule`: `compose` stops a build whose named jobs and supplied work differ either way, the registry counts a retention job among the jobs two modules may not both own, and `core-claims.test.ts` holds the command's own list to the core's — **built** (D-260); retention runs in every process and `jobs` only where the module runs (`composition.test.ts`, `cli/jobs.integration.test.ts`); mutations `composition-accepts-a-job-with-no-work`, `composition-accepts-work-no-manifest-names`, `composition-retention-work-only-of-running-modules`, `composition-retention-closed-with-its-module`, `registry-retention-jobs-not-claimed`, `job-command-drops-the-modules-work` | 12 |
-| `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` none (chat's socket operations are `frameHandlers` of its slot, D-276); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it: chat's handlers are in `ingress/` | 12 |
+| `cli/`, `ingress/` and `realtime/` name a module's files only in its route handlers and the composition root | `module-seams.test.ts`: `cli/` imports no feature but `erase-content.ts`'s one, `ingress/` only the files listed for the feature they serve and `ingress/http/app.ts`, `realtime/` none (chat's socket operations are `frameHandlers` of its slot, D-276); a list that only shrinks, as `core-tables.test.ts`'s is — **built** (D-260); mutations `job-command-names-a-chat-file`, `ingress-file-names-a-chat-file` and `realtime-file-names-a-chat-file`. The lint cannot say it while chat's handlers are in `ingress/`; a module whose HTTP is in its folder (issues today, D-280) is in no list, and `route-ownership.test.ts` fails for a module that has routes and supplies no plugin unless it is in `HTTP_IN_INGRESS`, for a path of a module that supplies one registered in `app.ts`, and for a path its plugin registers that its manifest does not own (mutations `issues-routes-slot-dropped`, `issues-route-outside-its-manifest`, `application-leaves-out-the-modules-routes`); the lint holds the folder: `features/<id>/http/` may import the framework and the door's helpers and not the socket door, `ingress/http/app` or the composition (`feature-fences.mjs`, mutation `module-http-folder-keeps-the-transport-fence`) | 12 |
 | A client survives a frame it does not know; a module catches up after reconnect | a client test (D-82) — **built** for the first half; the manifest's replay hook is **not built** (design intent, D-272) | 4 |
 | The core's own list names no module (channel visibility, erasure, export entries are chat's) | a test of `platform/` against the manifests | 9 |
 | Module id is not a core path segment | the registry, when the build's modules are checked, and a test holding the list to `API.md` | 1 |
@@ -473,7 +484,7 @@ until then it is a stated intent and not a guarantee.
 | Optional never becomes required silently | `module-compat.test.ts` holds the manifests to the last release's, kept in `released-manifests.json` and rewritten by `bun run release` (`manifests:snapshot`): no new requirement, no capability, route or job gone, no id changed, unless a dated exception in that file says so — **built** | 12 |
 | Chat is not starved by a module | `budget:latency` runs the send path again with issues' readers holding their share of connections (the table locked, paced readers) and fails if chat's p95 is more than eight times the same run's quiet p95 — **built** in one direction (chat's sends while issues is busy; both modules have a share, D-269, and issues' list while chat is saturated is not measured); it refuses starvation, not slowness: 2–4 times with the budget on a 2-core CI runner, 18–23 times without it on a laptop; a busy module's database and CPU use can still cost chat up to about three times its p95 on a shared host | 12 |
 | Shell chunk holds no module code | `budget:web` reads the shell chunk's source map and fails if any file of a module's folder is in it (derived from the folder: less what the core may import and what that imports statically, `screenSources`; D-277), or its chunk is gone, or either is over its bound; the mutation `web-chat-screen-imported-statically` and `chat-chunk.test.ts` hold the import side — **built** for chat, and for issues, whose screen is a chunk of its own and whose marker the check looks for in the initial chunks | 11 |
-| A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/` and `ingress/http/<id>.ts`) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
+| A module's code names no event or socket operation its manifest does not list | `module-emissions.test.ts` reads each bundled module's own source (its folder under `features/`, its `http/` included, and the files of `ingress/` that import it) for every `ServerFrame` event and `ClientFrame` operation written as a string literal and holds it to the module's `events` and `frames` or the core's (`core-claims.ts`); with `core-claims.test.ts`, which holds the lists to the schema (a name in the schema is the core's or exactly one module's), and the mutation `chat-sends-an-event-its-manifest-does-not-list` — **built**, as far as a scan for a literal sees: a name built at run time is not seen, and the events chat's services publish through the core's builders in `platform/events.ts` are named in the core's file, so only the schema test holds those | 12 |
 | A suite that is about no module passes whichever modules run; one that needs a module says so | `bun run modules:suites` (CI's `module-suites` job): for each cell but the one with every module, the integration suites that need no module the cell lacks run on a database of only the cell's sets with `MODULES` set, which the harness reads (`@purlay/db`'s `testing.ts` migrates `setsNamedBy(MODULES)`, `testDependencies` composes `compositionFor(MODULES)`). What a suite needs is what it imports of `features/<id>/` (its own helpers included) and what it declares, `// @needs-modules chat` in the file or a helper, or `testNeeding('chat')(…)` for one test (`testing/module-needs.ts`, `testing/needs.ts`); `module-suites.test.ts` holds every declared id to the build's modules and leaves at least the suites that import nothing in every cell — **built**; mutations `harness-ignores-modules-for-the-schema` and `harness-composes-every-module` | 12 |
 | Every audit action a module's code records is in its manifest, and every one its manifest lists is recorded | `audit-emissions.test.ts` reads each module's source (and the core's) as `module-emissions.test.ts` reads events', `core-claims.test.ts` holds the manifests' actions and the core's to the wire's `AUDIT_ACTIONS`, each once, the registry refuses an action two owners list and a reading permission that is another module's, and the composition's `auditAccess` judges every module the build carries — **built** (D-265); mutations `audit-trail-read-by-a-member`, `trail-shows-what-the-role-cannot-read`, `registry-accepts-an-audit-action-read-by-a-foreign-permission` and `chat-stops-declaring-its-audit-actions` | 12 |
 | Every permission a module's code asks is in its manifest, and every one its manifest lists is asked | `permission-emissions.test.ts` reads each module's source (and the core's) as `module-emissions.test.ts` reads events', the registry refuses a permission not named for its module and one declared twice, and the composition's `permissions` have a module's own only while it runs — **built** (D-265); mutations `issues-delete-ignores-its-permission`, `issues-permission-asked-is-not-the-one-declared`, `composition-holds-the-permissions-of-a-module-that-is-not-run` and `registry-accepts-a-permission-not-named-for-its-module` | 12 |
@@ -615,8 +626,14 @@ commit beside this list.
 
 **4. The routes, in `ingress/`.**
 
-- Route handlers in `apps/api/src/ingress/http/<id>.ts` and their registration in `ingress/http/app.ts`; the
-  module's services do not import HTTP types. A service that writes atomically takes `atomicallyOn(database)`
+- **Route handlers and their registration in the module's folder** (D-280): `apps/api/src/features/<id>/http/handlers.ts` (or
+  one file per resource) and `routes.ts`, whose function takes `ModuleRouteDependencies` and returns an Elysia plugin
+  (`features/issues/http/routes.ts` is the model), supplied as `routes` in the module's slot in `bundledModules`. Nothing is
+  edited in `ingress/http/app.ts`: it uses every bundled module's plugin. The folder may import Elysia and the door's helpers
+  (`ingress/http/session`, `validate`), the lint says no more of it; a module's tests of its routes live there and drive
+  `createApp`. `route-ownership.test.ts` fails if the module has `routes` in its manifest and no plugin in its slot, if a path
+  the plugin registers is not the manifest's, and if `app.ts` registers one of the module's paths. The module's services do
+  not import HTTP types. A service that writes atomically takes `atomicallyOn(database)`
   (`platform/transactions.ts`): a raw `database.transaction()` compiles and runs, and answers 500 in the cross-tenant
   harness, which holds a transaction already. The wire types go in `packages/types/src/<id>.ts`, exported from `index.ts`,
   with new error codes in `errors.ts` and the endpoint in `api.ts` and `API.md`.
@@ -636,10 +653,10 @@ commit beside this list.
   (`inTheCore`), so a person with no part in the module holds none of its slots. Copy `chat-budget.integration.test.ts` for
   a module with a `poolShare`: a lock on a table its routes read, the share filled, the next request refused as busy
   and another module's answered meanwhile.
-- **No door names a module's files but its own routes**: `cli/` imports no file under `features/` but `erase-content.ts`'s one (the single allow-listed entry, which a module's own command would join only with a manifest field to go through), and a route file in
-  `ingress/` that imports the module is added to `ALLOWED` in `module-seams.test.ts` (the list only shrinks; a core route
-  file that needs the module is a port or a manifest field, not an entry); `ingress/http/app.ts` is the one file that may
-  name any.
+- **No door names a module's files**: `cli/` imports no file under `features/` but `erase-content.ts`'s one (the single allow-listed entry, which a module's own command would join only with a manifest field to go through), and no file of `ingress/` imports a module's
+  folder but the ones listed in `ALLOWED` in `module-seams.test.ts` (the list only shrinks and its cap with it; a new module's
+  handlers are in its own folder and are not an entry, and a core route file that needs the module is a port or a manifest
+  field, not an entry); `ingress/http/app.ts` is the one file that may name any.
 
 **5. The web** (the web registry, §6).
 
@@ -701,19 +718,19 @@ audit action edits.
 
 | Where | Files | Why |
 |---|---|---|
-| `apps/api/src` | `composition.ts` (one `bundledModules` line), `ingress/http/app.ts` (its routes), `ingress/http/<id>.ts` (its own) | the module's row and its routes; `cli/jobs.ts` is **not** edited, the job command takes a module's jobs from the composition; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
+| `apps/api/src` | `composition.ts` (one `bundledModules` line) | the module's row and its routes (`ingress/http/app.ts` is **not** edited: it uses each bundled module's `routes`, D-280); `cli/jobs.ts` is **not** edited, the job command takes a module's jobs from the composition; `export-catalogue.ts` is **not** edited, it is derived from the manifests |
 | `packages/db` | `src/migrator.ts` (set registration and `PRODUCT_MODULE_REQUIRES`), `src/table-owners.ts`, `src/table-lifecycle.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, its erasure and retention decision, the generated schema |
 | `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
 | an audit action | `modules/audit/audit.ts` (target type), `packages/types/src/api.ts` (action), web `features/settings/pages/audit.tsx`, `i18n/catalogue/en.ts`, `i18n/catalogue/tr.ts` | the exhaustive switch and the catalogues refuse an action with no sentence, so an audit action forces three web files even for a module with no web part |
 
-That is 12 shared files besides the module's own two (the `ingress/http` handler and the types file), and 7 of them
+That is 11 shared files besides the module's own two (its `http/` folder and the types file), and 6 of them
 without an audit action. A module with UI adds its manifest, one
 `registry.ts` line and the per-module web files listed in item 5. The old figure of 27 files was the issues commit
 counted before the web registry and the derived catalogue, and is stale.
 
 **The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
-fixture, and are edited (eight files): `module-seams.test.ts` (the entry for the handler `ingress/` keeps),
+fixture, and are edited (seven files; `module-seams.test.ts` is not one, the handlers being in the module's folder):
 `testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
 unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
 integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`

@@ -80,4 +80,35 @@ describe('the fence of a feature', () => {
     expect(optionsOf(fences[3]).paths).toEqual([database]);
     expect(optionsOf(fences[3]).patterns).toEqual(optionsOf(fences[2]).patterns);
   });
+
+  test('may give a feature’s http folder the transport types the rest of it is kept from, in blocks after the feature’s', () => {
+    const realtime = { group: ['**/realtime/**'], message: 'r' };
+    const fences = featureFences(
+      'd',
+      ['chat', 'notes'],
+      transport,
+      () => [database],
+      () => [database],
+      realtime,
+    );
+    expect(fences.map((fence) => fence.files)).toEqual([
+      ['d/chat/**/*.ts'],
+      ['d/chat/**/*.test.ts'],
+      ['d/chat/http/**/*.ts'],
+      ['d/chat/http/**/*.test.ts'],
+      ['d/notes/**/*.ts'],
+      ['d/notes/**/*.test.ts'],
+      ['d/notes/http/**/*.ts'],
+      ['d/notes/http/**/*.test.ts'],
+    ]);
+    expect(optionsOf(fences[0]).patterns[0]).toEqual(transport);
+    expect(optionsOf(fences[2]).patterns[0]).toEqual(realtime);
+    // Still kept from every other feature, and from its tables.
+    expect(optionsOf(fences[2]).patterns[1]?.message).toContain('notes');
+    expect(optionsOf(fences[2]).paths).toEqual([database]);
+    // Its tests stand the application up, and are kept from no transport, only from the others' features.
+    expect(optionsOf(fences[3]).paths).toEqual([]);
+    expect(optionsOf(fences[3]).patterns).toHaveLength(1);
+    expect(optionsOf(fences[3]).patterns[0]?.message).toContain('notes');
+  });
 });
