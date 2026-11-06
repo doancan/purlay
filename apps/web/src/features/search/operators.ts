@@ -23,7 +23,7 @@ import {
   type Channel,
   type WorkspaceMember,
 } from '@purlay/types';
-import { fold } from '../composer/mention-suggest';
+import { fold } from '../../lib/fold';
 
 const OPERATOR_KEYS = ['in', 'from', 'has', 'is', 'repo', 'before', 'after', 'on'] as const;
 type OperatorKey = (typeof OPERATOR_KEYS)[number];

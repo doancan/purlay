@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import type { User } from '@purlay/types';
 import {
   SUGGESTIONS_MAX,
-  fold,
   insertMention,
   mentionQuery,
   offerable,
@@ -67,13 +66,6 @@ describe('mentionQuery', () => {
   test('is nothing for a run longer than any handle', () => {
     expect(at(`@${'a'.repeat(65)}`)).toBeNull();
     expect(at(`@${'a'.repeat(64)}`)).not.toBeNull();
-  });
-});
-
-describe('fold', () => {
-  test('drops case and the Turkish marks, and makes ı an i', () => {
-    expect(fold('ĞğIıİiŞşÇçÖöÜü')).toBe('ggiiiissccoouu');
-    expect(fold('Doğancan')).toBe('dogancan');
   });
 });
 

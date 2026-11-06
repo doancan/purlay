@@ -15,6 +15,7 @@
  */
 import { BROADCAST_NAMES } from '@purlay/markdown';
 import type { User } from '@purlay/types';
+import { fold } from '../../lib/fold';
 import { insideFence } from './composer-text';
 
 /** The most people the list shows: past this a person types another letter, they do not scroll. */
@@ -60,10 +61,6 @@ export const mentionQuery = (text: string, caret: number): MentionQuery | null =
   if (insideFence(text.slice(0, at))) return null;
   return { start: at, query };
 };
-
-/** For comparison only: no case, no marks, and the dotless `ı` as `i`. */
-export const fold = (text: string): string =>
-  text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/ı/gu, 'i');
 
 /** Where a word starts in a name: its first letter, or one after a space or a separator. */
 const startsAWord = (name: string, query: string): boolean =>
