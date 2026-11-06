@@ -2,6 +2,7 @@ import { Value } from '@sinclair/typebox/value';
 import type { Static, TSchema } from '@sinclair/typebox';
 import {
   ServerBackupStatus,
+  ServerBatchApprovalResponse,
   ServerPreferences,
   type ServerPreferencesRequest,
   ServerMailStatus,
@@ -31,6 +32,10 @@ export const createAdministrationClient = (
   preferences: (signal?: AbortSignal) => Promise<ServerPreferences>;
   savePreferences: (input: ServerPreferencesRequest) => Promise<void>;
   admission: (id: string, decision: 'approved' | 'denied') => Promise<void>;
+  approveAccounts: (
+    userIds: readonly string[],
+    signal?: AbortSignal,
+  ) => Promise<ServerBatchApprovalResponse>;
   mailStatus: (signal?: AbortSignal) => Promise<ServerMailStatus>;
   testMail: () => Promise<ServerMailTest>;
   overview: (signal?: AbortSignal) => Promise<ServerOverview>;
@@ -64,6 +69,11 @@ export const createAdministrationClient = (
     },
     admission: async (id, decision): Promise<void> => {
       await write(`/api/server/users/${encodeURIComponent(id)}/admission`, { decision });
+    },
+    approveAccounts: async (userIds, signal): Promise<ServerBatchApprovalResponse> => {
+      const { status, json } = await call('POST', '/api/server/users/approve', { userIds }, signal);
+      if (!Value.Check(ServerBatchApprovalResponse, json)) throw malformed(status);
+      return json;
     },
     mailStatus: async (signal) => await read('/api/server/mail-test', ServerMailStatus, signal),
     testMail: async (): Promise<ServerMailTest> => {
