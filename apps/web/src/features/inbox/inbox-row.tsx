@@ -15,7 +15,7 @@ import { listButtonClasses, listRowClasses } from '../../ui/list-column';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useChannelTitle } from '../channel/channel-header';
 import { useMessageText } from '../content/github-event';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { repliersOf, type InboxRow } from './group';
 import { whyOf } from './why';
 

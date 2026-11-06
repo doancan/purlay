@@ -13,10 +13,10 @@
  * Decorative, as an avatar is: the name beside it says who is there.
  */
 import type { User } from '@purlay/types';
-import { useI18n } from '../../i18n/i18n-provider';
-import { Avatar } from '../../ui/avatar';
-import { cn } from '../../ui/cn';
-import { nameOf } from '../messages/author';
+import { useI18n } from '../i18n/i18n-provider';
+import { Avatar } from './avatar';
+import { cn } from './cn';
+import { nameOf } from '../lib/author';
 
 /** What the face is drawn on: the sidebar's row, the row you are in, a page, a selected option. */
 export type FaceSurface = 'nav' | 'current' | 'surface' | 'selected';

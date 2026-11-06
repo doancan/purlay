@@ -8,7 +8,7 @@
  * this channel's share of the number the sidebar shows, counted from the same cache entry
  * (`use-open-count.ts`), so the two cannot disagree.
  */
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import { lazy, Suspense, useState } from 'react';
 import { useDeferred } from '../../app/deferred-door';
 import type { Channel } from '@purlay/types';
@@ -17,7 +17,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { narrowedTo } from '../../router/routes';
 import { Avatar } from '../../ui/avatar';
-import { GroupFace } from '../conversations/group-face';
+import { GroupFace } from '../../ui/group-face';
 import { cn } from '../../ui/cn';
 import { useOpenCount } from '../questions/use-open-count';
 import { NavToggle } from '../shell/nav';

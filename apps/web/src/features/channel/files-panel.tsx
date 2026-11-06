@@ -20,7 +20,7 @@ import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import { isPlainClick, useImageViewer, type ViewedImage } from '../messages/image-viewer-door';
 import { useThreads } from '../threads/thread-context';
 import { useFeedPorts } from './feed-ports';

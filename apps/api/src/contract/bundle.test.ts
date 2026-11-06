@@ -12,11 +12,16 @@ import { describe, expect, test } from 'bun:test';
 import {
   CONTRACT_BUNDLE_FORMAT,
   CONTRACT_VERSION,
+  ClientFrame,
   ENDPOINTS,
   ERROR_STATUS,
+  MODULE_IDS,
+  ServerFrame,
   type EndpointSpec,
 } from '@purlay/types';
 import { CORPUS } from '@purlay/markdown';
+import { bundledModules, type BundledModule } from '../composition';
+import { CORE_OWNER } from '../platform/module-kit/ownership';
 import { SERVER_VERSION } from '../platform/server-version';
 import {
   CONSTANTS,
@@ -25,6 +30,7 @@ import {
   buildContract,
   buildMarkdownCorpus,
   buildMessageIdVectors,
+  moduleIdProblems,
   vocabularyProblems,
 } from './bundle';
 
@@ -151,9 +157,32 @@ describe('the contract', () => {
       ...contract,
       schemas: {},
       endpoints: [
-        { id: 'q', method: 'GET', path: '/q', auth: 'none', query: odd, responses: {} },
-        { id: 'b', method: 'POST', path: '/b', auth: 'none', body: odd, responses: {} },
-        { id: 'r', method: 'GET', path: '/r', auth: 'none', responses: { '200': odd } },
+        {
+          id: 'q',
+          method: 'GET',
+          path: '/q',
+          module: 'core',
+          auth: 'none',
+          query: odd,
+          responses: {},
+        },
+        {
+          id: 'b',
+          method: 'POST',
+          path: '/b',
+          module: 'core',
+          auth: 'none',
+          body: odd,
+          responses: {},
+        },
+        {
+          id: 'r',
+          method: 'GET',
+          path: '/r',
+          module: 'core',
+          auth: 'none',
+          responses: { '200': odd },
+        },
       ],
     });
     expect(problems.sort()).toEqual(['b: allOf', 'q: allOf', 'r: allOf']);
@@ -369,5 +398,145 @@ describe('the assembled bundle', () => {
     expect(readme).toContain('contract.json');
     expect(readme).toContain('sha256');
     expect(readme).toContain('$ref');
+  });
+});
+
+describe('the modules in the contract (D-273)', () => {
+  const manifests = bundledModules.map((module) => module.manifest);
+  const byId = new Map(contract.modules.map((module) => [module.id, module]));
+
+  test('list every module the build carries, with what each needs and owns, from the manifests', () => {
+    expect(contract.modules.map((module) => module.id)).toEqual(
+      manifests.map((manifest) => manifest.id).sort(),
+    );
+    const chat = byId.get('chat');
+    expect(chat?.routes).toContain('/api/channels/**');
+    expect(chat?.frames).toContain('MESSAGE_SEND');
+    expect(chat?.events).toContain('MESSAGE_CREATED');
+    expect(chat?.notificationTypes).toContain('mention');
+    expect(byId.get('issues')?.routes).toContain('/api/workspaces/:workspaceId/issues/**');
+    for (const manifest of manifests) {
+      expect(byId.get(manifest.id)?.requires).toEqual([...manifest.requires].sort());
+      expect(byId.get(manifest.id)?.optional).toEqual([...manifest.optional].sort());
+    }
+  });
+
+  test('say which module owns each endpoint: the core, or a module the contract lists', () => {
+    for (const endpoint of contract.endpoints) {
+      expect(endpoint.module === CORE_OWNER || byId.has(endpoint.module)).toBe(true);
+    }
+    const owner = (id: string): string | undefined =>
+      contract.endpoints.find((endpoint) => endpoint.id === id)?.module;
+    expect(owner('getMe')).toBe('core');
+    expect(owner('listNotifications')).toBe('chat');
+    expect(owner('listIssues')).toBe('issues');
+    expect(owner('deleteIssue')).toBe('issues');
+    expect(contract.endpoints.some((endpoint) => endpoint.module === 'chat')).toBe(true);
+  });
+
+  test('say which module owns each server event and each client operation, and every one is owned', () => {
+    // An event may be several frames' (an `ACK` of each kind): it is one name, with one owner.
+    const events = new Set(
+      ServerFrame.anyOf.map((frame) => frame.properties.event.const as string),
+    );
+    const operations = new Set(
+      ClientFrame.anyOf.map((frame) => frame.properties.op.const as string),
+    );
+    expect(Object.keys(contract.eventOwners).sort()).toEqual([...events].sort());
+    expect(Object.keys(contract.frameOwners).sort()).toEqual([...operations].sort());
+    expect(contract.eventOwners['MESSAGE_CREATED']).toBe('chat');
+    expect(contract.eventOwners['SESSION_ENDED']).toBe('core');
+    expect(contract.frameOwners['MESSAGE_SEND']).toBe('chat');
+    expect(contract.frameOwners['PING']).toBe('core');
+    // What a module lists is what the owner maps give it, in both directions.
+    for (const module of contract.modules) {
+      const owned = (map: Readonly<Record<string, string>>): string[] =>
+        Object.keys(map)
+          .filter((name) => map[name] === module.id)
+          .sort();
+      expect(module.events).toEqual(owned(contract.eventOwners));
+      expect(module.frames).toEqual(owned(contract.frameOwners));
+    }
+  });
+
+  test('type MeResponse.modules as the ids of the modules the build carries: a manifest id the type lacks fails here', () => {
+    const ids = manifests.map((manifest) => manifest.id).sort();
+    expect([...MODULE_IDS].sort()).toEqual<string[]>(ids);
+    expect(moduleIdProblems(contract)).toEqual([]);
+    expect(contract.schemas['ModuleId']).toEqual({
+      anyOf: ids.map((id) => ({ const: id, type: 'string' })),
+    });
+    expect(contract.schemas['MeResponse']).toMatchObject({
+      properties: { modules: { type: 'array', items: { $ref: 'ModuleId' } } },
+    });
+  });
+
+  const notes: BundledModule = {
+    manifest: {
+      id: 'notes',
+      requires: [],
+      optional: ['chat'],
+      provides: [],
+      budget: { none: 'a test module' },
+      routes: ['/api/workspaces/:workspaceId/notes'],
+      frames: [],
+      events: [],
+    },
+  };
+
+  test('change when a module is added to the registry, and the build refuses the bundle until the type knows its id', () => {
+    const more = buildContract([...bundledModules, notes]);
+    expect(more.modules.map((module) => module.id)).toContain('notes');
+    expect(JSON.stringify(more)).not.toBe(JSON.stringify(contract));
+    expect(moduleIdProblems(more).join('\n')).toContain('the module notes');
+    expect(() => assembleBundle(process.cwd(), more)).toThrow(/notes/);
+  });
+
+  test('a module added to the registry is listed with what it needs and the routes it owns', () => {
+    const owned = buildContract([...bundledModules, notes]);
+    const found = owned.modules.find((module) => module.id === 'notes');
+    expect(found).toMatchObject({
+      optional: ['chat'],
+      routes: ['/api/workspaces/:workspaceId/notes'],
+    });
+  });
+
+  test('refuses a module that takes the core’s name: an owner of "core" would be two things', () => {
+    const core: BundledModule = { manifest: { ...notes.manifest, id: 'core' } };
+    expect(() => buildContract([...bundledModules, core])).toThrow(/core/);
+  });
+
+  const chat = bundledModules.find((module) => module.manifest.id === 'chat');
+  const withoutChat = (leave: 'routes' | 'events' | 'frames'): BundledModule[] =>
+    bundledModules.map((module) =>
+      module === chat ? { ...module, manifest: { ...module.manifest, [leave]: [] } } : module,
+    );
+
+  test.each([
+    ['an endpoint no manifest claims the path of', 'routes', /endpoint .* has no owner/],
+    ['a server event no manifest lists', 'events', /event [A-Z_]+ has no owner/],
+    ['a client operation no manifest lists', 'frames', /operation [A-Z_]+ has no owner/],
+  ] as const)('refuses %s, rather than leaving it without an owner', (_what, leave, message) => {
+    expect(() => buildContract(withoutChat(leave))).toThrow(message);
+  });
+
+  test('leaves what was in the contract as it was: only owners and the module list are new', () => {
+    const added = ['eventOwners', 'frameOwners', 'modules'];
+    expect(
+      Object.keys(contract)
+        .filter((key) => !added.includes(key))
+        .sort(),
+    ).toEqual([
+      'closeCodes',
+      'constants',
+      'contractVersion',
+      'endpoints',
+      'errorStatus',
+      'format',
+      'formats',
+      'schemas',
+    ]);
+    expect(contract.contractVersion).toBe(CONTRACT_VERSION);
+    expect(contract.format).toBe(CONTRACT_BUNDLE_FORMAT);
   });
 });

@@ -52,6 +52,7 @@ import {
 import { PresenceChange } from './events';
 import { EMAIL_MAX } from './mailbox';
 import { REPLAY_OVERLAP_MS } from './message-id';
+import { ModuleId } from './modules';
 
 /**
  * Keyset pagination, always. `nextCursor` is the id to pass back **as whichever
@@ -132,9 +133,10 @@ export const MeResponse = Type.Object({
   /**
    * The modules this server runs, by the words an operator writes in `MODULES` (D-250): the screens, routes and
    * shortcuts of a module that is not here are not drawn. Asked here, not of the public `GET /api/client`, because
-   * the page already waits for this answer and a signed-out screen needs none of it.
+   * the page already waits for this answer and a signed-out screen needs none of it. An id the client does not know
+   * is ignored, not an error: a newer server may run a module an installed client was built before (D-273).
    */
-  modules: Type.Array(Type.String()),
+  modules: Type.Array(ModuleId),
   /**
    * Whether the caller chose to appear away (`users.away_chosen`, D-257): they stay away, whatever they
    * do, until they choose to appear active again.

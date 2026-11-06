@@ -6,20 +6,12 @@
 import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
 import { erasedPerson, type Channel, type User } from '@purlay/types';
-import { Outlet } from '../../app/outlet';
-import type { Api } from '../../data/api';
-import { expectNoAxeViolations } from '../../testing/axe';
-import { installDom } from '../../testing/dom';
-import {
-  ALICE,
-  BOB,
-  IDS,
-  aChannel,
-  aSignedInApi,
-  aUser,
-  someChannels,
-} from '../../testing/fixtures';
-import { renderApp } from '../../testing/render';
+import { Outlet } from '../app/outlet';
+import type { Api } from '../data/api';
+import { expectNoAxeViolations } from '../testing/axe';
+import { installDom } from '../testing/dom';
+import { ALICE, BOB, IDS, aChannel, aSignedInApi, aUser, someChannels } from '../testing/fixtures';
+import { renderApp } from '../testing/render';
 
 installDom();
 

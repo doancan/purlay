@@ -3,7 +3,7 @@
  * profile beside the conversation, the time it is where they are, and their status line — so a
  * message is not sent at three in their morning without knowing it.
  */
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import type { User } from '@purlay/types';
 import { useId } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';

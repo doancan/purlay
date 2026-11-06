@@ -20,7 +20,7 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 
 const sectionTitle = 'text-label font-semibold text-ink';
 

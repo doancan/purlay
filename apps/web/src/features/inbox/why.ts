@@ -5,7 +5,7 @@
 import type { Channel, Notification } from '@purlay/types';
 import type { Translate } from '../../i18n/types';
 import { href, threadHref } from '../../router/routes';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 
 /**
  * Why the person was told, in words: who did it, except for a resolution of their own question.
