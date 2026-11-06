@@ -183,6 +183,14 @@ each module's. The bundled contract (`contract:bundle`) lists every known module
 removes is its routes and tables, not its types. Whether namespaced frame names break an installed client is
 verified first (D-250, open question b); the old names stay as aliases for one release either way.
 
+**The contract bundle's module structure (built, D-273).** `contract.json` carries `modules` (id, `requires`, `optional`, and
+the routes, frames, events and notification types each owns), the owner of every endpoint (`module`) and of every server event
+and client operation (`eventOwners`, `frameOwners`), `core` or a module id, all read from the manifests and `CORE_CLAIMS` by
+`contract/module-structure.ts`; what neither claims fails the bundle's build. `MeResponse.modules` is `ModuleId[]`
+(`@purlay/types`, `modules.ts`), and a manifest id the type lacks fails `contract/bundle.test.ts` and `assembleBundle`. So adding
+a module is also adding its id to `ModuleId` (§9). The wire names are not namespaced: the owner maps give the grouping, `API.md`
+§2 tells a client what to do with it, and nothing needs an alias.
+
 ## 5. Data
 
 A module's tables exist only while it is enabled, and **disabling drops nothing** — the tables stay, inert.
@@ -444,6 +452,8 @@ commit beside this list.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
   for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
   module sends and does not list would reach a process that does not run it.
+- Its id in `ModuleId` (`packages/types/src/modules.ts`): the contract bundle lists the module from its manifest, and
+  `contract/bundle.test.ts` and `bun run contract:bundle` fail until the type names it (D-273).
 - `budget` (D-260, D-266, D-269): required. `{ poolShare: (poolMax) => limits }` (`features/issues/budget.ts`,
   `features/chat/budget.ts`) or `{ none: '<reason>' }`, which is also a line in `module-budgets.test.ts`: an exemption is a
   decision a reviewer sees (there is none today). A manifest without it does not compile; the registry refuses it at run
