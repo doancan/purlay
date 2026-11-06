@@ -108,6 +108,6 @@ export const chatModule = {
   jobWork: chatJobWork,
   // What the router asks of chat for the operations of `frames` above that it has moved here (`MODULES.md` §9).
   frameHandlers: chatFrameHandlers,
-  // Chat's routes that have left `ingress/http/` (D-280); `route-ownership.test.ts` lists the module until the last has.
+  // All of chat's routes (D-280): `features/chat/http/routes.ts`.
   routes: chatRoutes,
 };

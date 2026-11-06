@@ -4,7 +4,7 @@
  * the node's few reads at once, a read too slow — is `webhooks.integration.test.ts`.
  */
 import { describe, expect, test } from 'bun:test';
-import { aRecordingLogger, testDependencies } from '../../testing/doubles';
+import { aRecordingLogger, testDependencies } from '../../../testing/doubles';
 import { receiveWebhook } from './webhooks';
 
 const attempt = async (
