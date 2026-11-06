@@ -1302,3 +1302,33 @@ describe('the endpoints', () => {
     expect(signal).toBe(controller.signal);
   });
 });
+
+test('public instance identity and own admission use distinct strict endpoints, including anonymous and restricted states', async () => {
+  const identity = {
+    displayName: 'Research',
+    supportUrl: 'mailto:help@example.test',
+    allowedEmailDomains: ['example.test'],
+    requireAccountApproval: true,
+  };
+  const instance = harness(identity);
+  expect(await instance.api.instanceInfo(new AbortController().signal)).toEqual(identity);
+  expect(instance.calls[0]).toMatchObject({ method: 'GET', url: '/api/instance' });
+  for (const state of [null, 'pending', 'approved', 'denied', 'verify-email'] as const) {
+    const own = harness({ state });
+    expect(await own.api.ownAdmission()).toEqual({ state });
+    expect(own.calls[0]).toMatchObject({ method: 'GET', url: '/api/admission' });
+  }
+  const bad = harness({ state: 'administrator', secret: 'do not accept' });
+  expect(
+    await bad.api.ownAdmission().then(
+      () => null,
+      (failure: unknown) => failure,
+    ),
+  ).toBeInstanceOf(ApiError);
+  expect(
+    await bad.api.instanceInfo().then(
+      () => null,
+      (failure: unknown) => failure,
+    ),
+  ).toBeInstanceOf(ApiError);
+});

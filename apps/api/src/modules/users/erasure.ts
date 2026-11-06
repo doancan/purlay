@@ -18,6 +18,7 @@
  * everywhere does (D-11), and runs what the hooks asked to be done once the rows are gone: a call to a provider
  * that must not hold the transaction open, and whose failure must not undo the erasure (`AfterErasure`).
  */
+import { serializeServerAdministrators } from '../administration/changes';
 import { sql, type Transaction } from '@purlay/db';
 import { ERASED_USERNAME_PREFIX, ERASURE_SIGN_IN_MINUTES } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -76,7 +77,31 @@ export const eraseAccount = async (
   confirm: string,
   userErased: UserErased,
 ): Promise<Erased> => {
+  // The same authority lock as a grant/demotion, before a session/workspace/user lock (D-278).
+  await serializeServerAdministrators(executor);
   const now = clock.now();
+  const administrator = await executor
+    .selectFrom('users')
+    .select('is_server_admin')
+    .where('id', '=', caller.userId)
+    .where('deleted_at', 'is', null)
+    .executeTakeFirst();
+  if (administrator?.is_server_admin === true) {
+    const successor = await executor
+      .selectFrom('users')
+      .select('id')
+      .where('id', '!=', caller.userId)
+      .where('deleted_at', 'is', null)
+      .where('suspended_at', 'is', null)
+      .where('is_server_admin', '=', true)
+      .limit(1)
+      .executeTakeFirst();
+    if (successor === undefined)
+      throw new AppError({
+        code: 'FORBIDDEN',
+        message: 'Hand server administration to another active account before erasing yours.',
+      });
+  }
   // Read first, locking nothing: the checks refuse before anything is held.
   const person = await executor
     .selectFrom('users')
@@ -213,6 +238,7 @@ export const eraseAccount = async (
   await executor
     .updateTable('users')
     .set({
+      deleted_at: now,
       email: `erased-${person.id}@erased.invalid`,
       username: placeholder,
       display_name: placeholder,
@@ -228,10 +254,11 @@ export const eraseAccount = async (
       // server authority, which must not outlive the person (D-139 §5, D-179).
       email_verified: false,
       is_server_admin: false,
+      admission_state: 'approved',
+      admission_requires_verified_email: false,
       two_factor_enabled: false,
       // Nothing is mailed to an erased account, and its address is gone (D-240).
       missed_mail_since: null,
-      deleted_at: now,
       updated_at: now,
     })
     .where('id', '=', person.id)

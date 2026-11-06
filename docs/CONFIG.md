@@ -317,6 +317,7 @@ with the recipient's chosen channel level and Deep Work taken into account; insp
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
+| `BACKUP_STATUS_DIRECTORY` | — | — | Optional directory of operator-generated `backup.json` and `restore.json` receipts, mounted read-only into the API. Server administration shows evidence age, archive scope and restore-check scope; absent means unconfigured, never assumed healthy (D-278). Receipts contain no credentials or archive paths. See `DEPLOY.md` for publication and mounting |
 | `CLIENT_DIST` | — | — | Absolute path of the built client (`apps/web/dist`), which the API then serves from the one origin (`API.md` §8, D-61). **Set but without an `index.html` refuses to start.** Unset serves no client, as in development, where Vite does. The image sets it |
 | `DEFAULT_LOCALE` | — | `en` | `en` \| `tr`. The fallback when the browser asks for neither (D-41). Read once the interface is translated (#109) |
 

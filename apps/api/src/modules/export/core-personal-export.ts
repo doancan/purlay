@@ -20,6 +20,8 @@ const head = [
       display_name: 'export',
       avatar_url: 'export',
       email: 'export',
+      admission_state: 'export',
+      admission_requires_verified_email: 'export',
       email_verified: 'export',
       github_id: 'export',
       github_login: 'export',
@@ -110,6 +112,7 @@ export type CorePersonalExcluded =
   | 'object_deletions'
   | 'workspace_exports'
   | 'personal_exports'
+  | 'server_operational_status'
   | 'server_settings'
   | 'setup_state';
 
@@ -131,6 +134,7 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   workspace_exports: 'an owner’s export of a workspace: the workspace’s record',
   personal_exports:
     'the record of this very export and the ones before it: its archive is the export',
+  server_operational_status: 'the operator’s bounded checks, not personal or workspace data',
   server_settings: 'the operator’s settings for the whole server',
   setup_state: 'where the server’s setup stands: the server’s',
 };

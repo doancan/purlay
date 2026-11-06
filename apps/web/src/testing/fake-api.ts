@@ -12,6 +12,15 @@ const unexpected = (name: string) => (): never => {
 
 export const anApi = (overrides: Partial<Api> = {}): Api => ({
   me: unexpected('me'),
+  // Public identity and own admission are read by sign-in/session gates; old servers have neither restriction.
+  ownAdmission: () => Promise.resolve({ state: null }),
+  instanceInfo: () =>
+    Promise.resolve({
+      displayName: 'Purlay',
+      supportUrl: null,
+      allowedEmailDomains: [],
+      requireAccountApproval: false,
+    }),
   attachmentText: unexpected('attachmentText'),
   markUnread: unexpected('markUnread'),
   markAllRead: unexpected('markAllRead'),

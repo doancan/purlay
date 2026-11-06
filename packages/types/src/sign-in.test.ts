@@ -41,6 +41,7 @@ describe('the address a failed sign-in comes back to', () => {
       'email-required',
       'email-taken',
       'signup-closed',
+      'email-domain-not-allowed',
       'github-unavailable',
       'oidc-unavailable',
       'google-unavailable',

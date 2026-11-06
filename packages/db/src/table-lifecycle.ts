@@ -71,6 +71,10 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   server_audit_log: decided('anonymised', {
     kept: 'append-only trail of the server’s own settings',
   }),
+  server_operational_status: decided(
+    { nobody: 'bounded server checks; no recipient, credential or actor' },
+    { kept: 'one row for the life of the instance' },
+  ),
   server_settings: decided(
     { nobody: 'the server’s own settings, one row' },
     { kept: 'one row for the life of the instance' },

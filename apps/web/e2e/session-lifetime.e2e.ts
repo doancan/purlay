@@ -78,7 +78,7 @@ test('an idle timeout chosen on the page signs out a session left unused, at its
   await send('/setup/finish');
 
   const page = await context.newPage();
-  await page.goto('/w/acme-engineering/settings/server');
+  await page.goto('/server/security');
   const lifetime = page.getByRole('region', { name: 'How long a session lasts' });
   const idle = lifetime.getByRole('combobox', { name: 'Sign out when unused for' });
   await expect(idle).toHaveValue('off');
@@ -91,7 +91,7 @@ test('an idle timeout chosen on the page signs out a session left unused, at its
   onTheServersDatabase(`UPDATE sessions SET last_used_at = now() - interval '2 hours'`);
 
   // The next action: the sign-in screen, and the server answers as to somebody signed out.
-  await page.getByRole('link', { name: 'Sessions & account' }).click();
+  await page.getByRole('link', { name: 'Back to Purlay' }).click();
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
   expect((await page.request.get('/api/me')).status()).toBe(401);
 
@@ -101,7 +101,7 @@ test('an idle timeout chosen on the page signs out a session left unused, at its
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in to Purlay' })).toHaveCount(0);
-  await page.goto('/w/acme-engineering/settings/server');
+  await page.goto('/server/security');
   await expect(
     page
       .getByRole('region', { name: 'How long a session lasts' })

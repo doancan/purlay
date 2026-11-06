@@ -17,6 +17,7 @@
  * place kept for the one request (`signInRounds`): the library hands its hooks no profile, so the
  * provider's call writes it there and the session hook reads it back (`recordGitHubSignIn`).
  */
+import { readServerPreferences, emailDomainAllowed } from '../administration/admission';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hkdfSync } from 'node:crypto';
 import {
@@ -254,6 +255,7 @@ export const deriveAuthSecret = (encryptionKey: string): string =>
  * provider's call vouched for, and whether the library made an account for it.
  */
 interface SignInRound {
+  admissionRefused?: boolean;
   profile: GitHubProfile | undefined;
   /** The single sign-on account a verified token vouched for, as the library keeps it (D-200). */
   oidcAccountId?: string | undefined;
@@ -1552,6 +1554,18 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         // Read so neither a sign-in nor the seam lets a suspended account in (D-233); written by the
         // server's administrator alone (`modules/users/suspension.ts`), never by the library or a client.
         suspendedAt: { type: 'date', required: false, input: false, fieldName: 'suspended_at' },
+        admissionState: {
+          type: 'string',
+          required: false,
+          input: false,
+          fieldName: 'admission_state',
+        },
+        admissionRequiresVerifiedEmail: {
+          type: 'boolean',
+          required: false,
+          input: false,
+          fieldName: 'admission_requires_verified_email',
+        },
       },
     },
     session: {
@@ -1794,6 +1808,15 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         },
         create: {
           before: async (user, context) => {
+            const admission = await readServerPreferences(deps.database);
+            if (!emailDomainAllowed(user.email, admission.allowedEmailDomains)) {
+              const round = signInRounds.getStore();
+              if (round !== undefined) round.admissionRefused = true;
+              throw new APIError('FORBIDDEN', {
+                code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+                message: 'This email domain cannot create an account on this server.',
+              });
+            }
             if (settings.signUp === 'invite-only') {
               await admittedByPassport(deps, user.email, context);
             }
@@ -1823,6 +1846,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 githubLogin: github === undefined ? null : github.login,
                 // The same, from Google's sign-in alone (D-251).
                 googleMade: google,
+                admissionState: admission.requireAccountApproval ? 'pending' : 'approved',
+                admissionRequiresVerifiedEmail: admission.allowedEmailDomains.length > 0,
               },
             };
           },
@@ -1972,7 +1997,15 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   const answer = async (request: Request): Promise<AuthAnswer> => {
     const round: SignInRound = { profile: undefined, made: false };
     return await signInRounds.run(round, async () => {
-      const response = await instance.handler(request);
+      let response = await instance.handler(request);
+      const redirect = response.headers.get('location');
+      if (round.admissionRefused === true && redirect !== null) {
+        const url = new URL(redirect, deps.baseUrl);
+        url.searchParams.set('error', 'email_domain_not_allowed');
+        const headers = new Headers(response.headers);
+        headers.set('location', url.toString());
+        response = new Response(response.body, { status: response.status, headers });
+      }
       return { response, lostSignUpRace: await lostSignUpRace(round, response) };
     });
   };

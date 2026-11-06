@@ -20,6 +20,7 @@
  * It is the first thing anyone sees of the product, so it is a card on the navigation tone with the
  * product's mark, not a heading on a blank page (D-100).
  */
+import { InstanceIdentity } from '../session/admission';
 import { useEffect, useState } from 'react';
 import { signInFailureIn, type SignInFailure } from '@purlay/types';
 import { useAuthMethods, useMe } from '../../data/queries';
@@ -44,6 +45,7 @@ type SentenceKey =
   | 'signIn.emailTaken'
   | 'signIn.emailTakenNoMail'
   | 'signIn.signupClosed'
+  | 'signIn.domainNotAllowed'
   | 'signIn.githubUnavailable'
   | 'signIn.oidcUnavailable'
   | 'signIn.googleUnavailable'
@@ -67,6 +69,8 @@ const sentenceFor = (failure: SignInFailure, mail: boolean): SentenceKey => {
       return 'signIn.emailRequired';
     case 'email-taken':
       return mail ? 'signIn.emailTaken' : 'signIn.emailTakenNoMail';
+    case 'email-domain-not-allowed':
+      return 'signIn.domainNotAllowed';
     case 'signup-closed':
       return 'signIn.signupClosed';
     case 'github-unavailable':
@@ -117,6 +121,7 @@ export const SignInScreen = (): React.JSX.Element => {
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
         <LogoMark />
+        <InstanceIdentity />
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-display">{t('signIn.title')}</h1>
           <p className="text-balance text-body text-ink-muted">{t('signIn.lede')}</p>

@@ -5,6 +5,17 @@
  * kept), the question before a way in is disconnected (the strong one when it is the last), and the line
  * on a card whose secret the key could not open.
  */
+import { SessionGate, useSession } from '../../session/session';
+import { Shell } from '../../shell/shell';
+import { NotFound } from '../../shell/not-found';
+import { SettingsPage } from '../page';
+import { ServerSettingsState } from './server';
+import { GitHubCard, EmailCard } from './server-channels';
+import { GoogleCard } from './server-google';
+import { OidcCard } from './server-oidc';
+import { GitHubAppCard } from './server-github-app';
+import { CreatorsCard, PolicyCard, SignInPolicyCard, SessionLifetimeCard } from './server-policies';
+import { AccountsCard } from './server-accounts';
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { BoundFunctions, queries } from '@testing-library/react';
@@ -14,7 +25,6 @@ import {
   type ServerAccount,
   type ServerSettingsAnswer,
 } from '@purlay/types';
-import { Outlet } from '../../../app/outlet';
 import { en } from '../../../i18n/catalogue/en';
 import { tr } from '../../../i18n/catalogue/tr';
 import { expectNoAxeViolations } from '../../../testing/axe';
@@ -111,6 +121,31 @@ const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
   ...over,
 });
 
+/** Test-only card composition: production categorizes these across the independent console. */
+const ProviderCards = (): React.JSX.Element =>
+  useSession().isServerAdmin ? (
+    <SettingsPage title="Server" description={en['settings.server.description']}>
+      <ServerSettingsState>
+        {(view) => (
+          <>
+            <GitHubCard view={view} />
+            <GoogleCard view={view} />
+            <OidcCard view={view} />
+            <EmailCard view={view} />
+            <GitHubAppCard view={view} />
+            <PolicyCard view={view} />
+            <SignInPolicyCard view={view} />
+            <SessionLifetimeCard view={view} />
+            <CreatorsCard view={view} />
+            <AccountsCard />
+          </>
+        )}
+      </ServerSettingsState>
+    </SettingsPage>
+  ) : (
+    <NotFound />
+  );
+
 const render = async (
   client: ServerClient,
   { admin = true, owner = true }: { admin?: boolean; owner?: boolean } = {},
@@ -118,7 +153,11 @@ const render = async (
   const session = aSession();
   const view = await renderApp(
     <ServerClientProvider value={client}>
-      <Outlet />
+      <SessionGate>
+        <Shell slug="acme">
+          <ProviderCards />
+        </Shell>
+      </SessionGate>
     </ServerClientProvider>,
     {
       path: '/w/acme/settings/server',
@@ -258,6 +297,7 @@ describe('Settings → Server', () => {
     await person().click(email.getByRole('button', { name: 'Connect a mail server' }));
     expect(email.getByText('We will send a test message to admin@example.test.')).toBeDefined();
     expect(sent).toEqual([]);
+    await person().click(email.getByRole('button', { name: 'Use an SMTP URL' }));
     await person().type(email.getByLabelText('Mail server'), 'smtp://u:p@mail.example.test');
     await person().type(email.getByLabelText('Sender'), 'purlay@example.test');
     await person().click(email.getByRole('button', { name: 'Send a test message and save' }));
@@ -619,6 +659,7 @@ describe('Settings → Server, the forms and what stops them', () => {
     const view = await render(client);
     const email = card(view, 'E-mail');
     await person().click(email.getByRole('button', { name: 'Connect a mail server' }));
+    await person().click(email.getByRole('button', { name: 'Use an SMTP URL' }));
     await person().type(email.getByLabelText('Mail server'), 'smtp://mail.example.test');
     await person().type(email.getByLabelText('Sender'), 'purlay@example.test');
     return { view, email };
@@ -1764,7 +1805,7 @@ describe('Settings → Server confirmed changes and dismissed forms', () => {
     ['Sign in with GitHub', 'Connect GitHub', ['Client secret']],
     ['Sign in with Google', 'Connect Google', ['Client secret']],
     ['Single sign-on', 'Connect single sign-on', ['Client secret']],
-    ['E-mail', 'Connect a mail server', ['Mail server']],
+    ['E-mail', 'Connect a mail server', ['SMTP password']],
     [
       'GitHub App for issues',
       'Connect the GitHub App',
@@ -1853,6 +1894,8 @@ describe('Settings → Server confirmed changes and dismissed forms', () => {
         githubApp: 'Connect the GitHub App',
       }[kind];
       await person().click(section.getByRole('button', { name: connect }));
+      if (kind === 'smtp')
+        await person().click(section.getByRole('button', { name: 'Use an SMTP URL' }));
       const fields =
         kind === 'smtp'
           ? {

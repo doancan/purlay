@@ -166,6 +166,7 @@ export const Environment = Type.Object({
   /** The built client this process serves from the one origin (D-61), an absolute path.
    *  Unset means none is served: Vite serves it in development. Opened, and refused
    *  without an `index.html`, by the composition root (`ingress/http/client.ts`). */
+  BACKUP_STATUS_DIRECTORY: Type.Optional(Type.String({ minLength: 1 })),
   CLIENT_DIST: Type.Optional(Type.String({ minLength: 1 })),
 
   /** The attachment bucket, S3-compatible — Garage in the deployment (D-16, D-109). All of

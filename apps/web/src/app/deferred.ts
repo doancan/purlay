@@ -25,3 +25,5 @@ export { NewConversationDialog } from '../features/chat/conversations/new-conver
 export { GroupDetailsDialog } from '../features/chat/conversations/group-details';
 export { AddPeopleDialog } from '../features/chat/channel/add-people';
 export { RowMenu } from '../features/chat/sidebar/row-menu-body';
+
+export { AdministrationScreen } from '../features/administration/screen';

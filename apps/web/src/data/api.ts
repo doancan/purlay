@@ -1,3 +1,4 @@
+import { OwnAdmission, InstanceInfo } from '@purlay/types';
 import {
   Issue,
   IssuePage,
@@ -142,6 +143,8 @@ const SetupStatusAnswer = Type.Object({ open: Type.Boolean(), appUrl: Type.Strin
 export type SetupStatusAnswer = Static<typeof SetupStatusAnswer>;
 
 export interface Api {
+  readonly ownAdmission: (signal?: AbortSignal) => Promise<OwnAdmission>;
+  readonly instanceInfo: (signal?: AbortSignal) => Promise<InstanceInfo>;
   readonly me: (signal?: AbortSignal) => Promise<MeResponse>;
   readonly workspaces: (signal?: AbortSignal) => Promise<Membership[]>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
@@ -534,6 +537,10 @@ export const createApi = (http: Http): Api => {
   const at = (id: string): string => encodeURIComponent(id);
 
   return {
+    ownAdmission: (signal) =>
+      http.request('GET', '/api/admission', OwnAdmission, options({}, signal)),
+    instanceInfo: (signal) =>
+      http.request('GET', '/api/instance', InstanceInfo, options({}, signal)),
     me: (signal) => http.request('GET', '/api/me', MeResponse, options({}, signal)),
     workspaces: (signal) =>
       http.request('GET', '/api/workspaces', Memberships, options({}, signal)),

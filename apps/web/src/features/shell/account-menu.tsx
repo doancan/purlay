@@ -128,7 +128,7 @@ const AwayItem = ({ chosen }: { readonly chosen: boolean }): React.JSX.Element =
 
 export const AccountMenu = (): React.JSX.Element => {
   const { t } = useI18n();
-  const { user, awayChosen } = useSession();
+  const { user, awayChosen, isServerAdmin } = useSession();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   const leave = useSignOut();
@@ -182,6 +182,16 @@ export const AccountMenu = (): React.JSX.Element => {
       >
         {t('settings.label')}
       </MenuItem>
+      {isServerAdmin && (
+        <MenuItem
+          glyph="settings"
+          onSelect={() => {
+            navigate(href('serverHome'));
+          }}
+        >
+          {t('admin.title')}
+        </MenuItem>
+      )}
       {openShortcuts === null ? null : (
         <MenuItem glyph="shortcuts" shortcut={`${mod}/`} onSelect={openShortcuts}>
           {t('shortcuts.title')}
