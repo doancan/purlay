@@ -159,6 +159,22 @@ export const API_CLI: readonly Mutation[] = [
     tests: ['apps/api/src/cli/jobs-wiring.test.ts'],
   },
   {
+    id: 'latency-busy-failure-swallowed',
+    why: 'a load loop fails before the timed path finishes and cleanup reports success instead of rejecting the invalid scenario',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: "if (outcome.status === 'rejected') {",
+    replace: 'if (false) {',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
+    id: 'latency-chat-unexpected-answer-counted',
+    why: 'an internal or validation error counts as an expected capacity refusal, so the reverse latency measurement passes with an invalid workload',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: "event === 'ERROR' && code === 'DATABASE_UNAVAILABLE'",
+    replace: "event === 'ERROR'",
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
+  {
     id: 'latency-first-regression-alone-fails',
     why: 'a latency regression is judged on one measurement, and a runner’s bad minute fails a change that touched no message path (D-227)',
     file: 'apps/api/src/cli/budget-latency.ts',

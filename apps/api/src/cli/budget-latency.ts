@@ -289,6 +289,15 @@ export const countAnswer = (tally: { answered: number; refused: number }, status
   else throw new Error(`issues answered ${String(status)}`);
 };
 
+/** A busy sender succeeds or is refused database capacity; any other answer invalidates the scenario. */
+export const countSendAnswer = (tally: Tally, event: string, data: unknown): void => {
+  const code: unknown =
+    typeof data === 'object' && data !== null ? Reflect.get(data, 'code') : undefined;
+  if (event === 'ACK') tally.answered += 1;
+  else if (event === 'ERROR' && code === 'DATABASE_UNAVAILABLE') tally.refused += 1;
+  else throw new Error(`chat answered ${event}${typeof code === 'string' ? `: ${code}` : ''}`);
+};
+
 /** A trial in which a message was not answered or not delivered measured nothing; it is an error, not a smaller sample. */
 export const requireAnswers = (acks: number, deliveries: number, count: number): void => {
   if (acks < count || deliveries < count) {
@@ -410,17 +419,23 @@ interface Busy {
 }
 
 /** Runs `loops` until stopped, which waits for them and says if one of them failed. */
-const busyWith = (
+export const busyWith = (
   tally: Tally,
   loops: (stopped: () => boolean) => readonly Promise<unknown>[],
 ): Busy => {
   let stopping = false;
-  const running = Promise.all(loops(() => stopping));
+  // Observe failures immediately, but drain every loop before surfacing one during cleanup.
+  const running = Promise.allSettled(loops(() => stopping));
   return {
     tally,
     stop: async (): Promise<void> => {
       stopping = true;
-      await running;
+      for (const outcome of await running) {
+        if (outcome.status === 'rejected') {
+          const error: unknown = outcome.reason;
+          throw error;
+        }
+      }
     },
   };
 };
@@ -462,8 +477,8 @@ const readIssues = async (
 };
 
 /**
- * Sends messages until `stopped`, one at a time with a pause after each answer: an `ACK` is an answer and anything
- * else with the message's id is the share's refusal, as `countAnswer` has it for issues.
+ * Sends messages until `stopped`, one at a time with a pause after each answer. Only ACK and the database-capacity
+ * refusal are valid answers; another error fails the scenario, as `countAnswer` does for issues.
  */
 const sendMessages = async (
   scene: Scene,
@@ -471,19 +486,26 @@ const sendMessages = async (
   stopped: () => boolean,
   tally: Tally,
 ): Promise<void> => {
-  const outcomes = new Map<string, (event: string) => void>();
+  const outcomes = new Map<string, (event: string, data: unknown) => void>();
   socket.frames((frame) => {
-    if (frame.refId !== undefined) outcomes.get(frame.refId)?.(frame.event);
+    if (frame.refId !== undefined) outcomes.get(frame.refId)?.(frame.event, frame.data);
   });
   while (!stopped()) {
     const id = messageId(systemClock.now());
-    const event = await new Promise<string>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const giveUp = setTimeout(() => {
         reject(new Error('chat did not answer a message while it was meant to be busy'));
       }, ANSWERED_WITHIN_MS);
-      outcomes.set(id, (answer) => {
+      outcomes.set(id, (event, data) => {
         clearTimeout(giveUp);
-        resolve(answer);
+        try {
+          countSendAnswer(tally, event, data);
+          resolve();
+        } catch (error) {
+          reject(
+            error instanceof Error ? error : new Error('chat workload failed', { cause: error }),
+          );
+        }
       });
       socket.send({
         id,
@@ -492,8 +514,6 @@ const sendMessages = async (
       });
     });
     outcomes.delete(id);
-    if (event === 'ACK') tally.answered += 1;
-    else tally.refused += 1;
     await Bun.sleep(BUSY_THINK_MS);
   }
 };

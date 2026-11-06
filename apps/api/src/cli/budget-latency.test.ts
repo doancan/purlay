@@ -14,6 +14,8 @@ import {
   requireAnswers,
   gate,
   countAnswer,
+  countSendAnswer,
+  busyWith,
   lowestOf,
   REGRESSION_FACTOR,
   FLOOR_SPREAD_MS,
@@ -422,6 +424,65 @@ describe('chat’s latency with issues busy', () => {
   test('the command hands back what the quiet trials came to, to be judged against', async () => {
     const result = await main([], () => Promise.resolve(run(30, 31)));
     expect(result.quiet).toEqual(summarizeTrials([run(30, 31), run(30, 31), run(30, 31)]));
+  });
+});
+
+describe('the busy chat workload', () => {
+  test('an early workload failure is retained until cleanup can await it', async () => {
+    const workload = busyWith({ answered: 0, refused: 0 }, () => [
+      Promise.reject(new Error('broken sender')),
+    ]);
+    await Bun.sleep(10);
+    const failure = await workload.stop().then(
+      () => 'finished',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(failure).toBe('broken sender');
+  });
+
+  test('cleanup waits for the other load loops before surfacing one failed loop', async () => {
+    const inFlight = Promise.withResolvers<undefined>();
+    const workload = busyWith({ answered: 0, refused: 0 }, () => [
+      Promise.reject(new Error('broken sender')),
+      inFlight.promise,
+    ]);
+    const stopping = workload.stop();
+    let settled = false;
+    void stopping.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Bun.sleep(10);
+    expect(settled).toBe(false);
+    inFlight.resolve(undefined);
+    const failure = await stopping.then(
+      () => 'finished',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(failure).toBe('broken sender');
+  });
+
+  test('counts only acknowledgements and database-capacity refusals; unexpected answers fail the scenario', () => {
+    const tally = { answered: 0, refused: 0 };
+    countSendAnswer(tally, 'ACK', {});
+    countSendAnswer(tally, 'ERROR', { code: 'DATABASE_UNAVAILABLE' });
+    expect(tally).toEqual({ answered: 1, refused: 1 });
+    for (const [event, data] of [
+      ['ERROR', { code: 'INTERNAL' }],
+      ['ERROR', { code: 'VALIDATION_FAILED' }],
+      ['ERROR', null],
+      ['ERROR', { code: 503 }],
+      ['MESSAGE_CREATED', {}],
+    ] as const) {
+      expect(() => {
+        countSendAnswer(tally, event, data);
+      }).toThrow('chat answered');
+      expect(tally).toEqual({ answered: 1, refused: 1 });
+    }
   });
 });
 
