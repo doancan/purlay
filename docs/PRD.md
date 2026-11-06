@@ -165,7 +165,7 @@ integration credentials, workspace and channel settings. Never message content.
 A workspace-independent server console gives server administrators paginated account, workspace and
 server audit inventories; administrator and admission decisions; session revocation; storage quotas;
 provider, email and joining policies; server identity; and truthful readiness, job and backup evidence
-(D-277). This authority grants metadata and configuration access, never private conversation access.
+(D-278). This authority grants metadata and configuration access, never private conversation access.
 Existing accounts keep admission when a new-account domain/approval policy is enabled. Infrastructure
 secrets and destructive restore remain operator tasks.
 

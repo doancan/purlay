@@ -1,4 +1,4 @@
-/** The legacy workspace address hands over to the independent server console (D-277). */
+/** The legacy workspace address hands over to the independent server console (D-278). */
 import { useQuery } from '@tanstack/react-query';
 import type { ServerSettingsAnswer } from '@purlay/types';
 import { useI18n } from '../../../i18n/i18n-provider';

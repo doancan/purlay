@@ -2303,14 +2303,14 @@ CREATE TABLE server_settings (
 );
 ```
 
-The additive admission and identity columns (D-277) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
+The additive admission and identity columns (D-278) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
 
 ### 9.5a. `server_operational_status`
 
-One core row holding the latest saved-relay test (D-277): test time, relay acceptance, safe reason and public host. No credential, recipient, actor or raw SMTP error. Not exported. The test records its audit actor separately. A late completion cannot replace a newer timestamp.
+One core row holding the latest saved-relay test (D-278): test time, relay acceptance, safe reason and public host. No credential, recipient, actor or raw SMTP error. Not exported. The test records its audit actor separately. A late completion cannot replace a newer timestamp.
 
 ```sql
--- D-277: bounded operational evidence, with no credentials, recipient or raw failure text.
+-- D-278: bounded operational evidence, with no credentials, recipient or raw failure text.
 CREATE TABLE server_operational_status (
     id boolean PRIMARY KEY DEFAULT true CHECK (id = true),
     smtp_tested_at timestamptz,
@@ -2739,10 +2739,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0079_attachment_claims.sql   attachments.claimed_at: a module has taken the upload; (id, workspace_id) unique  (D-250)
 0080_away_chosen.sql          users.away_chosen: a person's choice to appear away  (D-257)
 0081_message_search_branches.sql idx_messages_search_noted + idx_messages_search_answered: search asks the note and the answer apart from the words  (D-105, #1019)
-0082_server_operations.sql  server_operational_status: bounded operational evidence for the administrator (D-277)
-0083_server_audit_filters.sql  server audit action/target/workspace/date indexes (D-277)
-0084_server_admission_identity.sql  server identity and new-account admission policy (D-277)
-0085_administration_counts.sql  covering account-status and export-status indexes for the admin overview (D-277)
+0082_server_operations.sql  server_operational_status: bounded operational evidence for the administrator (D-278)
+0083_server_audit_filters.sql  server audit action/target/workspace/date indexes (D-278)
+0084_server_admission_identity.sql  server identity and new-account admission policy (D-278)
+0085_administration_counts.sql  covering account-status and export-status indexes for the admin overview (D-278)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

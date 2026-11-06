@@ -54,7 +54,7 @@ x-environment: &environment
   LOG_LEVEL: ${LOG_LEVEL:-info}
   # Which modules this stack runs; blank is every one. The API, the jobs and the commands read the same (D-250).
   MODULES: ${MODULES:-}
-  # Optional operator receipts: mount their metadata-only directory read-only through an override (D-277).
+  # Optional operator receipts: mount their metadata-only directory read-only through an override (D-278).
   BACKUP_STATUS_DIRECTORY: ${BACKUP_STATUS_DIRECTORY:-}
   DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}

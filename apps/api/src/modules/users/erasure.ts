@@ -77,7 +77,7 @@ export const eraseAccount = async (
   confirm: string,
   userErased: UserErased,
 ): Promise<Erased> => {
-  // The same authority lock as a grant/demotion, before a session/workspace/user lock (D-277).
+  // The same authority lock as a grant/demotion, before a session/workspace/user lock (D-278).
   await serializeServerAdministrators(executor);
   const now = clock.now();
   const administrator = await executor

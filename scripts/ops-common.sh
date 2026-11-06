@@ -66,7 +66,7 @@ fi
 die() { echo "$*" >&2; exit 1; }
 
 # Operational evidence only: no archive path, recipient, credentials or content. The API mounts this
-# directory read-only. Empty means the operator has not connected reporting (D-277).
+# directory read-only. Empty means the operator has not connected reporting (D-278).
 write_backup_evidence() ( # <dump> <scope: database|database-and-attachments>
   [ -n "${BACKUP_STATUS_DIRECTORY:-}" ] || exit 0
   local ttl digest bytes receipt_tmp

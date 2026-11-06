@@ -28,6 +28,13 @@ export const InstanceIdentity = (): React.JSX.Element | null => {
   });
   if (query.data === undefined) return null;
   const info = query.data;
+  if (
+    info.displayName === 'Purlay' &&
+    info.allowedEmailDomains.length === 0 &&
+    !info.requireAccountApproval &&
+    info.supportUrl === null
+  )
+    return null;
   return (
     <div className="flex flex-col items-center gap-2 text-center">
       {info.displayName !== 'Purlay' && (

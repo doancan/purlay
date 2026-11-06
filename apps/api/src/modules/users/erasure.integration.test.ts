@@ -488,7 +488,7 @@ describe('integration: erasing an account', () => {
         .set({ is_server_admin: true, email_verified: true })
         .where('id', '=', ada.userId)
         .execute();
-      // Another administrator remains; erasing the last is refused (D-277).
+      // Another administrator remains; erasing the last is refused (D-278).
       await db
         .updateTable('users')
         .set({ is_server_admin: true })

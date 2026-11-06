@@ -303,7 +303,7 @@ export class SettingsChangeFailed extends Error {
 
 /** What a change of the settings needs besides the holder. */
 export interface SettingsChange {
-  /** Server administration revalidates authority under its lock, before the settings row (D-277). */
+  /** Server administration revalidates authority under its lock, before the settings row (D-278). */
   readonly beforeSave?: (transaction: Transaction) => Promise<void>;
   readonly holder: RuntimeHolder;
   readonly cipher: CredentialCipher;

@@ -20,7 +20,7 @@ Not requested: SAML/video/plugin marketplace, arbitrary shell jobs, live editing
 
 ## Acceptance evidence — 2026-11-06
 
-Implemented the complete checklist above. Tracking issue: https://github.com/doancan/purlay/issues/1146. Source decisions and deployment instructions are D-277, API.md, CONFIG.md and DEPLOY.md.
+Implemented the complete checklist above. Tracking issue: https://github.com/doancan/purlay/issues/1146. Source decisions and deployment instructions are D-278, API.md, CONFIG.md and DEPLOY.md.
 
 - HTTP integration scenarios cover guard-before-validation, bounded/literal inventories, pagination, metadata-only answers, deleted accounts, quota reservations, audit filtering and last-admin concurrency. Role loss while a settings change waits and erasing the last administrator both have regression tests. Approval is exercised through GitHub, Google, OIDC, invitation passports and real email links.
 - `apps/web/e2e/server-administration.e2e.ts` and `server-settings.e2e.ts`: **2 passed** against isolated real servers. Saved SMTP uses a real loopback relay and persists its receipt across reload; the new email account remains restricted until the administrator approves it; the same session then enters the app. Quota changes, identity/support, audit filtering, narrow controls and keyboard navigation are included.

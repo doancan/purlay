@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
 import { ApiError } from '../../data/errors';
-import { AdmissionScreen } from './admission';
+import { AdmissionScreen, InstanceIdentity } from './admission';
 import { SessionGate } from './session';
 import { installDom } from '../../testing/dom';
 import { aSession, aSignedInApi } from '../../testing/fixtures';
@@ -111,3 +111,27 @@ test.each(['denied', 'verify-email'] as const)(
     view.unmount();
   },
 );
+
+test('the default public identity has no empty layout slot; joining requirements still render without custom branding', async () => {
+  const empty = await renderApp(<InstanceIdentity />, { api: aSignedInApi() });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(empty.container.textContent).toBe('');
+  expect(empty.container.querySelector('.text-center')).toBeNull();
+  empty.unmount();
+  const requirements = await renderApp(<InstanceIdentity />, {
+    api: aSignedInApi({
+      instanceInfo: () =>
+        Promise.resolve({
+          displayName: 'Purlay',
+          supportUrl: null,
+          allowedEmailDomains: ['example.test'],
+          requireAccountApproval: true,
+        }),
+    }),
+  });
+  expect(await requirements.findByText(/example.test/)).toBeDefined();
+  expect(requirements.getByText('New accounts need administrator approval.')).toBeDefined();
+  requirements.unmount();
+});

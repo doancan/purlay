@@ -225,7 +225,7 @@ A page open during the roll that meets the `404 ROUTE_NOT_FOUND` of a node witho
 That line needs `REDIS_URL`; without Redis there is one node. **Finish the roll**: a set that stays mixed is a service that
 answers differently by node. A migration that a new module brings applies when the first node of the new set starts.
 
-**Backup evidence in server administration (D-277).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
+**Backup evidence in server administration (D-278).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
 
 The production Compose stack passes this optional variable but does not mount a host directory by default. Add the metadata-only read-only API volume through a Compose override and set the container path in `production.env`; setting a path alone does not provide evidence.
 
