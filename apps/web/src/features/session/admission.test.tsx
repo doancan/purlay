@@ -118,7 +118,7 @@ test('the default public identity has no empty layout slot; joining requirements
     await Promise.resolve();
   });
   expect(empty.container.textContent).toBe('');
-  expect(empty.container.querySelector('.text-center')).toBeNull();
+  expect(empty.container.childElementCount).toBe(0);
   empty.unmount();
   const requirements = await renderApp(<InstanceIdentity />, {
     api: aSignedInApi({

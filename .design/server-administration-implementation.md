@@ -32,6 +32,12 @@ Implemented the complete checklist above. Tracking issue: https://github.com/doa
 
 - After rebasing onto current main: **203 tests passed, 0 failed** across 16 files (HTTP administration, module seams/frame handlers, UI states/navigation, admission, SMTP, account menu, contracts and both Compose deployments). Both TypeScript compilers, document consistency, branch naming, mapped production build and JavaScript budget passed again.
 
+## CI follow-up
+
+The first full browser CI run exposed session-lifetime and MFA scenarios still using the former combined server page, and a default instance identity rendering an empty layout slot on sign-in. The scenarios now use the canonical security/integration sections, preserving the dedicated legacy-redirect test. Default identity now renders nothing when there is no branding, support link or joining requirement.
+
+Targeted light browser scenarios passed **15/15**, including real idle expiration and MFA/password changes; narrow OIDC/GitHub App scenarios passed. Sign-in reference comparisons passed in both themes and widths. The one stale Darwin light/narrow image was reviewed and refreshed for the existing input-edge tokens; Linux reference images were unchanged. The five admission/identity component scenarios passed. Current main’s web import fence was merged and the administration decision moved to D-278 without rewriting SQL migration checksums.
+
 ## Local review
 
 The real local server remains at http://localhost:4180/server, with a signed-in headed browser. Its isolated preview database has the administrator, one pending applicant and one approved sample account. Saved SMTP testing uses only the loopback test relay. This does not claim production mail delivery or a production backup/restore check.
