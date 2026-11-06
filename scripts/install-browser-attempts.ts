@@ -18,14 +18,28 @@ export const installWithRetries = async (
   say: (line: string) => void,
   tries: number = TRIES,
   limitMs: number = TRY_LIMIT_MS,
+  afterStall: () => Promise<void> = () => Promise.resolve(),
 ): Promise<number> => {
   for (let attempt = 1; attempt <= tries; attempt += 1) {
     const outcome = await run(limitMs);
     if (outcome === 'done') return 0;
     say(`installing ${browser}, try ${String(attempt)} of ${String(tries)}: ${outcome}`);
+    // Stopping the playwright that started apt does not stop apt: the `apt-get` it left holds the dpkg
+    // lock, and the next try waits for it until it gives up (#1141, seen on main).
+    if (outcome === 'stalled') await afterStall();
   }
   return 1;
 };
+
+/**
+ * What a runner does after a stalled try, so that the next one starts clean: stop the `apt-get` the
+ * stopped try left (it was in its download, or hung), then finish any package the stop interrupted.
+ */
+export const AFTER_STALL_COMMANDS: readonly (readonly string[])[] = [
+  ['sudo', 'pkill', '-KILL', '-x', 'apt-get'],
+  ['sudo', 'pkill', '-KILL', '-x', 'apt'],
+  ['sudo', 'dpkg', '--configure', '-a'],
+];
 
 /** The command a try runs: the playwright the lockfile pins, from the web workspace (#1099). */
 export const installCommand = (browser: string): string[] => [
