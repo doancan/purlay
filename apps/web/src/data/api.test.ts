@@ -1013,6 +1013,12 @@ describe('the endpoints', () => {
     const spent = harness(null);
     await spent.api.consumeEmailSignIn(token);
     expect(spent.calls[0]).toEqual({ method: 'POST', url: '/auth/email/consume', body: { token } });
+    await spent.api.consumeEmailSignIn(token, 'b'.repeat(64));
+    expect(spent.calls[1]).toEqual({
+      method: 'POST',
+      url: '/auth/email/consume',
+      body: { token, invitation: 'b'.repeat(64) },
+    });
   });
 
   test('passwords and the invitation passport (R30, R51)', async () => {

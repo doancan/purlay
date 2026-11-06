@@ -465,7 +465,7 @@ export interface Api {
   /** The address a link was sent to, without spending it (D-138 §4). */
   readonly previewEmailSignIn: (token: string, signal?: AbortSignal) => Promise<EmailSignInPreview>;
   /** Spends the link; the answer sets the session cookie. */
-  readonly consumeEmailSignIn: (token: string) => Promise<void>;
+  readonly consumeEmailSignIn: (token: string, invitation?: string) => Promise<void>;
   /** How long the workspace keeps its history; an owner's (D-139 §4). */
   readonly retention: (workspaceId: string, signal?: AbortSignal) => Promise<RetentionSetting>;
   /** An owner's: the workspace's storage used and its quota (D-173). */
@@ -1119,8 +1119,12 @@ export const createApi = (http: Http): Api => {
         EmailSignInPreview,
         options({ body: { token } }, signal),
       ),
-    consumeEmailSignIn: (token) =>
-      http.send('POST', '/auth/email/consume', options({ body: { token } })),
+    consumeEmailSignIn: (token, invitation) =>
+      http.send(
+        'POST',
+        '/auth/email/consume',
+        options({ body: { token, ...(invitation === undefined ? {} : { invitation }) } }),
+      ),
     retention: (workspaceId, signal) =>
       http.request(
         'GET',

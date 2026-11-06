@@ -1928,6 +1928,12 @@ export type EmailSignInRequest = Static<typeof EmailSignInRequest>;
  */
 export const EmailSignInToken = FromClient({ token: Type.String({ pattern: '^[0-9a-f]{64}$' }) });
 export type EmailSignInToken = Static<typeof EmailSignInToken>;
+/** The invitation actually carried by this sign-in page; never inferred from another person's address-scoped passport. */
+export const EmailSignInConsume = FromClient({
+  ...EmailSignInToken.properties,
+  invitation: Type.Optional(InvitationToken),
+});
+export type EmailSignInConsume = Static<typeof EmailSignInConsume>;
 
 /** What the page shows before the person signs in: the address the link was sent to (D-138 §4). */
 export const EmailSignInPreview = Type.Object({ email: Type.String() });
