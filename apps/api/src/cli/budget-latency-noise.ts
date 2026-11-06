@@ -89,3 +89,26 @@ export const RECORDED_RUNS: readonly RecordedRun[] = [
   { ack: [16.5, 16.0, 16.8], fanOut: [16.3, 16.0, 16.8] },
   { ack: [16.3, 14.9, 15.2], fanOut: [16.2, 14.8, 15.1] },
 ];
+
+/**
+ * What `budget:latency` recorded for issues' list with chat busy, on a laptop under heavy load (ten cores, load average
+ * about 20, six more busy loops): eleven gate runs of three trials, as the lowest and the highest p95 of each run's
+ * trials in milliseconds (the log keeps the range, not the middle trial). Local, not CI's: CI's `api-latency` artifacts
+ * keep the trials of this metric from now on, and these are replaced by them once there are enough.
+ */
+export const RECORDED_LOADED_RUNS: readonly {
+  readonly lowest: number;
+  readonly highest: number;
+}[] = [
+  { lowest: 12.4, highest: 15.6 },
+  { lowest: 13.8, highest: 22.0 },
+  { lowest: 21.4, highest: 28.6 },
+  { lowest: 14.1, highest: 46.6 },
+  { lowest: 12.4, highest: 14.5 },
+  { lowest: 9.8, highest: 19.3 },
+  { lowest: 8.9, highest: 14.4 },
+  { lowest: 14.9, highest: 16.9 },
+  { lowest: 11.5, highest: 20.2 },
+  { lowest: 22.2, highest: 25.8 },
+  { lowest: 20.0, highest: 23.0 },
+];
