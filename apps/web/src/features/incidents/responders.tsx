@@ -5,7 +5,7 @@
  *
  * Somebody who left the channel stays on it: a record of who responded, never a change made silently.
  */
-import { nameOf } from '../messages/author';
+import { nameOf } from '../../lib/author';
 import type { Incident } from '@purlay/types';
 import { useId, useRef } from 'react';
 import { useChannelMembers } from '../../data/queries';

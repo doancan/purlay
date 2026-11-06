@@ -34,6 +34,7 @@ have it.
 
 ### Added
 
+- **Operations** — The contract a native client is generated from now lists the server's modules and says which module owns each endpoint, socket event and operation, and `GET /api/me` types its module list, so an app can follow the module structure and ignore a module it does not know (D-273)
 - **Operations** — A release's image is also tagged `release` and its version, so a Dockhand server can follow releases on its own; the Dockhand stack backs the database up every hour (D-262)
 - **Editor** — Markdown blocks and Markdown files have a Source and a Preview view, and a checklist button joins the formatting row (D-259)
 - **Editor** — A text of 500 lines or more, or a table of more than 200 rows, is offered as a file instead of being left too long to send (D-259)

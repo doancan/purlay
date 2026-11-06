@@ -27,7 +27,7 @@ import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuItem, MenuSeparator } from '../../ui/menu';
 import { holdUnread, releaseUnread } from '../channel/use-mark-read';
 import { composerKey, focusComposer, quoteMarkdown, sendToComposer } from '../composer/quote';
-import { authorOf } from './author';
+import { authorOf } from '../../lib/author';
 import { messageUrl } from './message-link';
 import { ForwardDialog } from './forward-dialog';
 import { useToast } from '../../ui/toast';

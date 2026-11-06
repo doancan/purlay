@@ -32,7 +32,7 @@ import { useToast } from '../../ui/toast';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { renderContent } from '../content/render-content';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { useSession } from '../session/session';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';

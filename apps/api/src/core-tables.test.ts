@@ -1,7 +1,7 @@
 /**
  * The core names no table a module owns (D-250, `MODULES.md` §4, §10 step 10): `modules/` and `platform/` — the code
- * that must run with every module absent — reach a module's rows through a port or a contribution the module
- * supplies, never by writing the table's name in a query. The tables are read from `TABLE_OWNERS`, the one list of
+ * that must run with every module absent — and the doors, `cli/`, `ingress/` and `realtime/`, reach a module's rows
+ * through a port or a contribution the module supplies, never by writing the table's name in a query. The tables are read from `TABLE_OWNERS`, the one list of
  * who owns what, so a table a module gains is covered without this file being told.
  *
  * What is looked for is a table in a place a query puts one (a builder method's first argument, SQL's `from`,
@@ -16,13 +16,24 @@ import { describe, expect, test } from 'bun:test';
 import { TABLE_OWNERS } from '@purlay/db';
 
 const SOURCE_ROOT = import.meta.dir;
-const CORE_DIRECTORIES = ['modules', 'platform'] as const;
+const CORE_DIRECTORIES = ['modules', 'platform', 'cli', 'ingress', 'realtime'] as const;
 
 /**
  * A file of the core that may still name a module's table, with why and who answers for the follow-up. **It may only
- * shrink**: an entry whose file no longer names one fails the test. Empty.
+ * shrink**: an entry whose file no longer names one fails the test, and `MAX_ALLOWED` holds its size.
  */
-const ALLOWED: Readonly<Record<string, string>> = {};
+const ALLOWED: Readonly<Record<string, string>> = {
+  'cli/budget-latency.ts':
+    'the latency gate locks `issues` and measures chat’s send path, through the demo world it seeds',
+  'cli/demo-seed.ts': 'the demo world is made of chat’s channels and issues’ rows',
+};
+
+/**
+ * The size `ALLOWED` may have. The list is a seam that is not a port yet and only shrinks, but a test of "an entry still
+ * needs it" cannot see an entry being added: this can. A file joins the list only with this raised in the same change,
+ * which is a line a reviewer reads and has to accept.
+ */
+const MAX_ALLOWED = 2;
 
 const moduleTables = Object.entries(TABLE_OWNERS)
   .filter(([, owner]) => owner !== 'core')
@@ -72,6 +83,9 @@ describe('the core names no table a module owns', () => {
     expect(moduleTables).not.toContain('users');
     expect(coreSources()).toContain(join('modules', 'push', 'sender.ts'));
     expect(coreSources()).toContain(join('platform', 'clock.ts'));
+    for (const door of ['cli', 'ingress', 'realtime']) {
+      expect(coreSources().some((file) => file.startsWith(`${door}/`))).toBe(true);
+    }
   });
 
   test('it sees a table in each place a query puts one, and nothing in a path or a field', () => {
@@ -107,6 +121,10 @@ describe('the core names no table a module owns', () => {
       expect(tableNamed(readFileSync(join(SOURCE_ROOT, file), 'utf8'))).toBeUndefined();
     });
   }
+
+  test('the list is no longer than its cap', () => {
+    expect(Object.keys(ALLOWED).length).toBeLessThanOrEqual(MAX_ALLOWED);
+  });
 
   test('an allowed file still needs it, so the list only shrinks', () => {
     for (const file of Object.keys(ALLOWED)) {

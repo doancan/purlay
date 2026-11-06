@@ -32,7 +32,7 @@ import { messageHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { useWorkspace } from '../shell/workspace';
 import { usePin, useShownPins } from './use-pin';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { useMessageText } from '../content/github-event';
 
 export const PINS_PANEL_ID = 'channel-pins';

@@ -15,7 +15,7 @@ import type { FailureCode } from '../../data/failure';
 import type { Message, User } from '@purlay/types';
 import type { PendingMessage } from '../../realtime/engine';
 import { GROUP_WINDOW_MS } from '../channel/feed-model';
-import { sameAuthor } from '../messages/author';
+import { sameAuthor } from '../../lib/author';
 
 export interface ReplyItem {
   readonly key: string;

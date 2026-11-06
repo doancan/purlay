@@ -1,9 +1,10 @@
 /**
  * The production source a module's code is, and the core's: what the emission tests read to hold what a module writes to
  * what its manifest declares (`module-emissions.test.ts`, `audit-emissions.test.ts`). A module's files are its folder
- * under `features/` and, when there is one, its route file `ingress/http/<id>.ts`; the core's are every other file.
+ * under `features/` and the files of the doors, `ingress/` and `realtime/`, that import it (its route handlers, and the frame
+ * router while that runs a module's operations itself); the core's are every other file.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SOURCE = /\.tsx?$/;
@@ -19,14 +20,35 @@ const filesUnder = (directory: string): string[] =>
 const production = (files: readonly string[]): string[] =>
   files.filter((file) => SOURCE.test(file) && !NOT_PRODUCTION.test(file));
 
-/** The files that are the module's. */
-export const sourcesOf = (id: string): string[] => {
-  const route = join(API_SOURCE, 'ingress/http', `${id}.ts`);
-  return production([
-    ...filesUnder(join(API_SOURCE, 'features', id)),
-    ...(existsSync(route) ? [route] : []),
-  ]);
+const withoutComments = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+/** The ids of the features a source imports a path through: `from '…/features/chat/…'`, `import('…')`, `export … from`. */
+export const featuresImportedBy = (source: string): string[] => {
+  const ids = [
+    ...withoutComments(source).matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(?\s*)['"][^'"]*\bfeatures\/([a-z0-9-]+)(?:\/[^'"]*)?['"]/g,
+    ),
+  ].map((found) => found[1] ?? '');
+  return [...new Set(ids)].sort();
 };
+
+/** The folders whose files are the doors: where a request or a frame arrives and is routed. */
+const DOORS = ['ingress', 'realtime'] as const;
+
+/** The one file that registers every module's routes: it names them all and is no module's. */
+const COMPOSITION_ROOT = join(API_SOURCE, 'ingress/http/app.ts');
+
+/** The files of a door that import the module: its route handlers, found by what they import and not by a list. */
+const doorFilesOf = (id: string): string[] =>
+  production(DOORS.flatMap((door) => filesUnder(join(API_SOURCE, door)))).filter(
+    (file) =>
+      file !== COMPOSITION_ROOT && featuresImportedBy(readFileSync(file, 'utf8')).includes(id),
+  );
+
+/** The files that are the module's. */
+export const sourcesOf = (id: string): string[] =>
+  production([...filesUnder(join(API_SOURCE, 'features', id)), ...doorFilesOf(id)]);
 
 /** Every production file that is no module's: the core's, which names no module's words. */
 export const coreSources = (moduleIds: readonly string[]): string[] => {
