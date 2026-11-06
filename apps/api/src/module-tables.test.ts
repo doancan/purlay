@@ -7,7 +7,7 @@
  * A module that **writes** a core table says so in `CORE_WRITES`, each with why: a write into the core's rows is a seam that
  * is not a port yet, and the list may only shrink. Reads are not told from writes by the type, which is why this does.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { TABLE_OWNERS } from '@purlay/db';
@@ -47,6 +47,11 @@ const ownTablesOf = (id: string): string[] =>
     .map(([table]) => table);
 
 const readCoreReads = async (id: string): Promise<readonly string[]> => {
+  if (!existsSync(join(FEATURES, id, 'schema.ts'))) {
+    throw new Error(
+      `features/${id} has no schema.ts (D-271, MODULES.md §9): a module says which core tables it reads and makes its handle there`,
+    );
+  }
   const schema = (await import(join(FEATURES, id, 'schema.ts'))) as {
     CORE_READS?: readonly string[];
   };

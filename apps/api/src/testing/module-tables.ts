@@ -156,16 +156,3 @@ export const unsaidCoreWrites = (
   coreTables: readonly string[],
   said: (table: string) => boolean,
 ): readonly TableUse[] => coreWrites(source, coreTables).filter((use) => !said(use.table));
-
-/** What `source` imports from `@purlay/db` that is the whole database's: its executor, transaction and schema type. */
-export const wholeDatabaseImports = (source: string): readonly string[] =>
-  [...withoutComments(source).matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+'@purlay\/db'/g)]
-    .flatMap((found) => (found[1] ?? '').split(','))
-    .map(
-      (name) =>
-        name
-          .trim()
-          .replace(/^type\s+/, '')
-          .split(/\s+as\s+/)[0] ?? '',
-    )
-    .filter((name) => ['Executor', 'Transaction', 'Database', 'DB'].includes(name));

@@ -96,8 +96,7 @@ const VIOLATIONS: readonly Violation[] = [
     path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
     source: "import { sql } from 'kysely';\n\nexport const use = (): unknown => sql;\n",
   },
-  // A module behind its typed handle takes the handle, not the whole database's executor (D-271). Chat is not yet; the
-  // fence names it, and leaves it when no file of it does. `enforce-a` stands for a module that is.
+  // A module takes its typed handle, not the whole database's executor (D-271): every feature, chat last.
   {
     rule: "a feature behind its handle does not take the whole database's executor (D-271)",
     ruleId: 'no-restricted-imports',
@@ -136,9 +135,16 @@ const VIOLATIONS: readonly Violation[] = [
     allowed: true,
   },
   {
-    rule: "chat may still take the whole database's executor, until its functions are behind its handle (control)",
+    rule: "chat does not take the whole database's executor: its functions take its handle (D-271)",
     ruleId: 'no-restricted-imports',
     path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import type { Executor } from '@purlay/db';\n\nexport const use = (database: Executor): unknown => database;\n",
+  },
+  {
+    rule: "chat's tests may take the whole database's executor, as every feature's may (control)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.test.ts',
     source:
       "import type { Executor } from '@purlay/db';\n\nexport const use = (database: Executor): unknown => database;\n",
     allowed: true,
