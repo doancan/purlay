@@ -4,13 +4,13 @@
  * server that does not run chat is never sent it, and `budget:web` fails the build if it is.
  */
 import { createElement } from 'react';
-import { ChannelScreen } from '../channel/channel-screen';
-import { DraftsScreen } from '../drafts/drafts-screen';
-import { InboxScreen } from '../inbox/inbox-screen';
-import { QuestionsScreen } from '../questions/questions-screen';
-import { SavedScreen } from '../saved/saved-screen';
-import { SearchScreen } from '../search/search-screen';
-import { UnreadsScreen } from '../unreads/unreads-screen';
+import { ChannelScreen } from './channel/channel-screen';
+import { DraftsScreen } from './drafts/drafts-screen';
+import { InboxScreen } from './inbox/inbox-screen';
+import { QuestionsScreen } from './questions/questions-screen';
+import { SavedScreen } from './saved/saved-screen';
+import { SearchScreen } from './search/search-screen';
+import { UnreadsScreen } from './unreads/unreads-screen';
 import type { ChatScreens } from './manifest';
 
 /** What the manifest's `load` reads: the screen of each of chat's routes, given what its address names. */
