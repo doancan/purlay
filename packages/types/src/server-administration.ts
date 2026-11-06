@@ -241,6 +241,28 @@ export const ServerAdmissionRequest = FromClient({
   decision: Type.Union([Type.Literal('approved'), Type.Literal('denied')]),
 });
 export type ServerAdmissionRequest = Static<typeof ServerAdmissionRequest>;
+export const SERVER_APPROVAL_BATCH_MAX = 50;
+export const ServerBatchApprovalRequest = FromClient({
+  userIds: Type.Array(Uuid, {
+    minItems: 1,
+    maxItems: SERVER_APPROVAL_BATCH_MAX,
+    uniqueItems: true,
+  }),
+});
+export type ServerBatchApprovalRequest = Static<typeof ServerBatchApprovalRequest>;
+export const ServerApprovalOutcome = Type.Union([
+  Type.Literal('approved'),
+  Type.Literal('refused'),
+  Type.Literal('unconfirmed'),
+  Type.Literal('not_processed'),
+]);
+export const ServerBatchApprovalResponse = Type.Object({
+  results: Type.Array(Type.Object({ userId: Uuid, outcome: ServerApprovalOutcome }), {
+    minItems: 1,
+    maxItems: SERVER_APPROVAL_BATCH_MAX,
+  }),
+});
+export type ServerBatchApprovalResponse = Static<typeof ServerBatchApprovalResponse>;
 export const OwnAdmission = Type.Object({
   state: Type.Union([AdmissionState, Type.Literal('verify-email'), Type.Null()]),
 });

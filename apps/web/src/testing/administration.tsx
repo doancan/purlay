@@ -96,6 +96,7 @@ export interface AdministrationCall {
   readonly method: string;
   readonly path: string;
   readonly body: unknown;
+  readonly signal?: AbortSignal;
 }
 export const adminJson = (value: unknown, status = 200): Response =>
   Response.json(value, { status });
@@ -116,6 +117,7 @@ export const renderAdministration = async (
       path,
       method: init.method ?? 'GET',
       body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
+      ...(init.signal == null ? {} : { signal: init.signal }),
     };
     calls.push(call);
     const custom = answer(call);
