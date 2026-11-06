@@ -519,6 +519,9 @@ personal access token on selected repositories, and the server now says what it 
    nothing and leaves the token that was there. The `X-OAuth-Scopes` header is kept
    (`github_integrations.token_scopes`), and a classic token with `repo` or a write scope is shown to admins
    as broader than cards need. A fine-grained token sends no header and is what is asked for.
+   The write then locks the workspace and checks the caller’s current membership and role again, so
+   revocation during the provider check takes effect. Both setting and removing return the existing
+   public `GitHubIntegration` status from that transaction; no credential is returned or cached (#1179).
 2. **A token GitHub refuses is shown, and not used.** A `401` on a card writes `token_invalid_at` on the
    row it was read from (not on a replacement that landed while the call was out); Settings → Integrations
    tells admins, `configured` stays true, no call is made with it and no card is served from the cache
@@ -6735,6 +6738,16 @@ clear, professional".
 6. **Not drawn: what Purlay does not have.** The screens also draw SSO, SCIM, two-factor, an IP
    allowlist, seats, guests, billing and an email digest. Each is outside Phase 1 or refused
    (`PRD.md` §4, §7); a navigation entry for it would promise what is not there.
+
+**Amended 2026-11-06 (#1179).** A confirmed member or integration change is applied to the
+settings cache before refreshing it; an older pending read is cancelled first. Failed refreshes
+retain the last confirmed rows/status, name that limitation and offer Retry. An uncertain write
+(network, server failure or malformed receipt) is not described as unchanged. Confirmed self-role
+changes also update the session’s workspace role before a refresh, so stale owner controls disappear.
+An export link activation hides the once-only link while a fresh server read confirms whether it
+was consumed. A context-menu right click changes nothing; a failed receipt read leaves the result
+unknown until Retry, which only reads status and never replays a download. General offers archived
+channels only when chat is enabled; long valid names wrap without hiding their distinguishing end.
 
 **Rejected.**
 

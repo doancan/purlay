@@ -440,6 +440,11 @@ export const tr = {
   'members.removeAsk': '{name} çıkarılsın mı? Çalışma alanının tüm kanallarını kaybeder.',
   'members.lastOwner': 'Bir çalışma alanında en az bir sahip kalır.',
   'members.roleFailed': 'Rol değiştirilmedi.',
+  'members.roleChanged': '{name} artık {role}.',
+  'members.removed': '{name} çıkarıldı.',
+  'members.unconfirmed':
+    '{name}: işlem sonucu doğrulanamadı. Yeniden denemeden önce üye listesini yenileyin.',
+  'members.refreshFailed': 'Üyeler yenilenemedi. Son alınan liste gösteriliyor.',
   'members.removeFailed': '{name} çıkarılmadı.',
   'audit.entry': 'Denetim kaydı…',
   'audit.title': '{workspace} denetim kaydı',
@@ -631,6 +636,9 @@ export const tr = {
   'export.empty': 'Bu çalışma alanını henüz dışa aktarmadın.',
   'export.asked': '{when} istendi',
   'export.status.pending': 'Hazırlanıyor…',
+  'export.status.checking': 'İndirme durumu kontrol ediliyor…',
+  'export.status.unconfirmed':
+    'İndirme durumu doğrulanamadı. Durumu kontrol etmek için yeniden deneyin.',
   'export.status.downloaded': 'İndirildi. Dosya gelmediyse yeniden dışa aktar.',
   'export.downloadPlain': 'İndir — bir kez',
   'export.status.expired': 'İndirilmeden süresi doldu',
@@ -666,6 +674,10 @@ export const tr = {
   'github.invalid': 'Token boşluksuz tek bir kelimedir: harf, rakam ve simgeler.',
   'github.save': 'Tokenı kaydet',
   'github.saved': 'Token kaydedildi.',
+  'github.disconnected': 'GitHub bağlantısı kaldırıldı.',
+  'github.unconfirmed':
+    'Bağlantı değişikliği doğrulanamadı. Yeniden denemeden önce durumunu yenileyin.',
+  'github.refreshFailed': 'Bağlantı durumu yenilenemedi. Son doğrulanan durum gösteriliyor.',
   'github.saveFailed': 'Token kaydedilmedi.',
   'github.disconnect': 'Bağlantıyı kes',
   'github.disconnectFailed': 'GitHub bağlantısı kesilmedi.',

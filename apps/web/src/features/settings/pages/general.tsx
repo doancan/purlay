@@ -32,7 +32,7 @@ export const GeneralPage = (): React.JSX.Element => {
   const { show } = useToast();
   const { copy } = useContentPorts();
   const { workspace, role } = useWorkspace();
-  const { mayCreateWorkspace } = useSession();
+  const { mayCreateWorkspace, modules } = useSession();
   const { renameWorkspace } = useActions();
   // What was typed; until something is, the field shows the name as it is now, so a rename in
   // another tab appears here.
@@ -136,7 +136,7 @@ export const GeneralPage = (): React.JSX.Element => {
           </SettingsRow>
         </SettingsCard>
       </form>
-      <ArchivedChannelsCard />
+      {modules.includes('chat') && <ArchivedChannelsCard />}
       {/* Offered only to whom the server lets make one (D-155): never a form that would be refused. */}
       {mayCreateWorkspace && (
         <SettingsCard title={t('settings.general.another')}>

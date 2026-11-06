@@ -1,22 +1,24 @@
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import {
   SetMessageReminderRequest,
   type MessageReminder,
   type MessageReminderList,
 } from '@purlay/types';
-import { requireLiveSession } from '../../modules/auth/sessions';
-import { cancelReminder, reminderList, setReminder } from '../../features/chat/reminders/reminders';
-import { requireMessageById } from '../../features/chat/channels/guard';
+import { requireLiveSession } from '../../../modules/auth/sessions';
+import { cancelReminder, reminderList, setReminder } from '../reminders/reminders';
+import { requireMessageById } from '../channels/guard';
 import {
   NO_LOG,
   publication,
   publishAfterCommit,
   publishRemindersUpdated,
-} from '../../platform/events';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { atomicallyOn } from '../../platform/transactions';
+} from '../../../platform/events';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
-import { validated } from './validate';
+import { requireSession } from '../../../ingress/http/session';
+import { validated } from '../../../ingress/http/validate';
 
 const told = async (
   { bus, clock, log = NO_LOG }: ChannelWriteDependencies,
@@ -31,7 +33,7 @@ const told = async (
     ],
   ]);
 };
-export const putReminder = async (
+const putReminder = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   messageId: string,
@@ -48,7 +50,7 @@ export const putReminder = async (
   await told(dependencies, userId, result.workspace);
   return result.reminder;
 };
-export const deleteReminder = async (
+const deleteReminder = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   messageId: string,
@@ -60,7 +62,7 @@ export const deleteReminder = async (
   });
   await told(dependencies, userId, workspace);
 };
-export const listReminders = async (
+const listReminders = async (
   dependencies: ChannelDependencies,
   request: Request,
   workspaceId: string,
@@ -71,3 +73,21 @@ export const listReminders = async (
     await requireWorkspaceMembership(dependencies.database, userId, workspaceId),
   );
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const reminderRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .put(
+      '/api/messages/:messageId/reminder',
+      async ({ request, params, body }) =>
+        await putReminder(context, request, params.messageId, body),
+    )
+    .delete('/api/messages/:messageId/reminder', async ({ request, params, set }) => {
+      await deleteReminder(context, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
+    .get(
+      '/api/workspaces/:workspaceId/reminders',
+      async ({ request, params }) => await listReminders(context, request, params.workspaceId),
+    );

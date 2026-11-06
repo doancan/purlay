@@ -17,7 +17,6 @@ import {
   writeAdministrationSessions,
 } from './server-administration';
 import { CORE_JOBS } from '../../platform/module-kit/core-claims';
-import { putKnowledge, readSavedSearches, putSavedSearch, deleteSavedSearch } from './knowledge';
 /**
  * The HTTP surface.
  *
@@ -200,46 +199,6 @@ import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import {
-  createWorkspaceChannel,
-  joinPublicChannel,
-  listArchived,
-  listChannels,
-  openConversationWith,
-  openDirectMessageWith,
-  readAllChannels,
-  readChannel,
-  readUpTo,
-  unreadFrom,
-  setLevel,
-  addChannelMember,
-  archive,
-  changeChannel,
-  readChannelRetentionSetting,
-  updateChannelRetentionSetting,
-  leave,
-  removeFromChannel,
-  restore,
-  listChannelMembers,
-} from './channels';
-import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
-import {
-  postMessage,
-  readFiles,
-  readHistory,
-  readChanges,
-  readAround,
-  readOne,
-  readThread,
-  readThreadFollow,
-  putThreadFollow,
-  readSearch,
-  readUnresolved,
-  setThreadResolution,
-  editMessage,
-  removeMessage,
-} from './messages';
-import { changeReaction } from './reactions';
-import {
   CORE_COLLATED_COLUMNS,
   readiness,
   recentReadiness,
@@ -283,19 +242,12 @@ import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
-import { hideMyMessage } from './hidden';
 import { moduleConnections } from '../../platform/module-budget';
 import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-deadline';
-import { deleteReminder, listReminders, putReminder } from './reminders';
-import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
-import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
-import { starChannel } from './star';
-import { deleteVersion, listVersions } from './versions';
-import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds, regenerateFeedSecret } from './feeds';
 import {
@@ -304,17 +256,7 @@ import {
   postIncomingWebhook,
   revokeIncomingWebhook,
 } from './incoming-webhooks';
-import { deletePin, listPins, putPin } from './pins';
-import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
 import { runningModuleIds, type Composition } from '../../composition';
-import {
-  listIncidentUpdates,
-  patchIncident,
-  postIncident,
-  putPostmortem,
-  putResponder,
-  readIncident,
-} from './incidents';
 
 export interface Dependencies {
   readonly config: Config;
@@ -596,7 +538,15 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const moduleRoutes = modules.bundled.flatMap((module) =>
     module.routes === undefined
       ? []
-      : [module.routes({ ...dependencies, permissions: modules.permissions })],
+      : [
+          module.routes({
+            ...dependencies,
+            permissions: modules.permissions,
+            bus: sockets.bus,
+            atomically: sockets.atomically,
+            online: sockets.online,
+          }),
+        ],
   );
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
@@ -1380,40 +1330,29 @@ export const createApp = (given: Dependencies): HttpApplication => {
       return outcome;
     })
     .get(
-      '/api/workspaces/:workspaceId/presence',
-      async ({ request, params }) =>
-        await readPresence(dependencies, request, params.workspaceId, sockets.online),
-    )
-    .get(
       '/api/workspaces/:workspaceId/integrations/github',
       async ({ request, params }) =>
         await readGitHubIntegration(dependencies, request, params.workspaceId),
     )
     .put(
       '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params, body, set }) => {
+      async ({ request, params, body }) =>
         await changeGitHubToken(
           { ...dependencies, cipher, githubApi: github },
           request,
           params.workspaceId,
           body,
-        );
-        set.status = 204;
-        return null;
-      },
+        ),
     )
     .delete(
       '/api/workspaces/:workspaceId/integrations/github',
-      async ({ request, params, set }) => {
+      async ({ request, params }) =>
         await changeGitHubToken(
           { ...dependencies, cipher, githubApi: github },
           request,
           params.workspaceId,
           undefined,
-        );
-        set.status = 204;
-        return null;
-      },
+        ),
     )
     .get(
       '/api/workspaces/:workspaceId/invitation-recipients',
@@ -1552,46 +1491,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
-    .put(
-      '/api/messages/:messageId/hidden',
-      async ({ request, params }) => await hideMyMessage(sending, request, params.messageId),
-    )
-    .put(
-      '/api/messages/:messageId/reminder',
-      async ({ request, params, body }) =>
-        await putReminder(sending, request, params.messageId, body),
-    )
-    .delete('/api/messages/:messageId/reminder', async ({ request, params, set }) => {
-      await deleteReminder(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/workspaces/:workspaceId/reminders',
-      async ({ request, params }) => await listReminders(dependencies, request, params.workspaceId),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/scheduled',
-      async ({ request, params }) => await listScheduled(dependencies, request, params.workspaceId),
-    )
-    .put(
-      '/api/channels/:channelId/scheduled/:scheduledId',
-      async ({ request, params, body }) =>
-        await putScheduled(dependencies, request, params.channelId, params.scheduledId, body),
-    )
-    .delete('/api/channels/:channelId/scheduled/:scheduledId', async ({ request, params, set }) => {
-      await deleteScheduled(dependencies, request, params.channelId, params.scheduledId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/workspaces/:workspaceId/saved',
-      async ({ request, params }) => await listSaved(dependencies, request, params.workspaceId),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/saved/ids',
-      async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
-    )
     .use(moduleRoutes)
     .get(
       '/api/channels/:channelId/github-feeds',
@@ -1666,312 +1565,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
         return answer;
       },
     )
-    .get(
-      '/api/channels/:channelId/incident',
-      async ({ request, params }) => await readIncident(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/incident', async ({ request, params, body, set }) => {
-      const { incident, changed } = await postIncident(sending, request, params.channelId, body);
-      // Made now is 201; the same declaration again is the incident it made, 200 (D-33).
-      set.status = changed ? 201 : 200;
-      return incident;
-    })
-    .patch(
-      '/api/channels/:channelId/incident/:incidentId',
-      async ({ request, params, body }) =>
-        await patchIncident(sending, request, params.channelId, params.incidentId, body),
-    )
-    .put(
-      '/api/channels/:channelId/incident/:incidentId/postmortem',
-      async ({ request, params, body }) =>
-        await putPostmortem(sending, request, params.channelId, params.incidentId, body),
-    )
-    .put(
-      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
-      async ({ request, params }) =>
-        await putResponder(
-          sending,
-          request,
-          params.channelId,
-          params.incidentId,
-          params.userId,
-          true,
-        ),
-    )
-    .delete(
-      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
-      async ({ request, params }) =>
-        await putResponder(
-          sending,
-          request,
-          params.channelId,
-          params.incidentId,
-          params.userId,
-          false,
-        ),
-    )
-    .get(
-      '/api/channels/:channelId/incident/:incidentId/updates',
-      async ({ request, params }) =>
-        await listIncidentUpdates(dependencies, request, params.channelId, params.incidentId),
-    )
-    .get(
-      '/api/channels/:channelId/pins',
-      async ({ request, params }) => await listPins(dependencies, request, params.channelId),
-    )
-    .get(
-      '/api/channels/:channelId/bookmarks',
-      async ({ request, params }) => await listBookmarks(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/bookmarks', async ({ request, params, body, set }) => {
-      const bookmark = await postBookmark(sending, request, params.channelId, body);
-      set.status = 201;
-      return bookmark;
-    })
-    .delete('/api/channels/:channelId/bookmarks/:bookmarkId', async ({ request, params, set }) => {
-      await deleteBookmark(sending, request, params.channelId, params.bookmarkId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/messages/:messageId/versions',
-      async ({ request, params }) => await listVersions(dependencies, request, params.messageId),
-    )
-    .delete('/api/messages/:messageId/versions/:versionId', async ({ request, params, set }) => {
-      await deleteVersion(sending, request, params.messageId, params.versionId);
-      set.status = 204;
-      return null;
-    })
-    .put('/api/messages/:messageId/pin', async ({ request, params, set }) => {
-      await putPin(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .delete('/api/messages/:messageId/pin', async ({ request, params, set }) => {
-      await deletePin(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .put('/api/messages/:messageId/saved', async ({ request, params, body, set }) => {
-      await putSaved(sending, request, params.messageId, body);
-      set.status = 204;
-      return '';
-    })
-    .delete('/api/messages/:messageId/saved', async ({ request, params, set }) => {
-      await deleteSaved(sending, request, params.messageId);
-      set.status = 204;
-      return '';
-    })
 
-    .get(
-      '/api/workspaces/:workspaceId/channels',
-      async ({ request, params }) => await listChannels(dependencies, request, params.workspaceId),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/archived-channels',
-      async ({ request, params }) => await listArchived(dependencies, request, params.workspaceId),
-    )
-    .put(
-      '/api/workspaces/:workspaceId/read',
-      async ({ request, params }) =>
-        await readAllChannels({ ...dependencies, bus: sockets.bus }, request, params.workspaceId),
-    )
-    .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
-      set.status = 201;
-      return await createWorkspaceChannel(
-        { ...dependencies, bus: sockets.bus },
-        request,
-        params.workspaceId,
-        body,
-      );
-    })
-    .post('/api/workspaces/:workspaceId/conversations', async ({ request, params, body, set }) => {
-      const { channel, created } = await openConversationWith(
-        { ...dependencies, bus: sockets.bus },
-        request,
-        params.workspaceId,
-        body,
-      );
-      // As `/dms`: 201 when this call made it, 200 when these people already had it (I-5).
-      set.status = created ? 201 : 200;
-      return channel;
-    })
-    .post('/api/workspaces/:workspaceId/dms', async ({ request, params, body, set }) => {
-      const { channel, created } = await openDirectMessageWith(
-        { ...dependencies, bus: sockets.bus },
-        request,
-        params.workspaceId,
-        body,
-      );
-      // 201 when this call made it, 200 when it was already there: the same pair
-      // is the same channel, and a retry is not a second one (I-5).
-      set.status = created ? 201 : 200;
-      return channel;
-    })
-    .get(
-      '/api/channels/:channelId',
-      async ({ request, params }) => await readChannel(dependencies, request, params.channelId),
-    )
-    .patch(
-      '/api/channels/:channelId',
-      async ({ request, params, body }) =>
-        await changeChannel(sending, request, params.channelId, body),
-    )
-    .get(
-      '/api/channels/:channelId/retention',
-      async ({ request, params }) =>
-        await readChannelRetentionSetting(dependencies, request, params.channelId),
-    )
-    .put(
-      '/api/channels/:channelId/retention',
-      async ({ request, params, body }) =>
-        await updateChannelRetentionSetting(dependencies, request, params.channelId, body),
-    )
-    .delete('/api/channels/:channelId', async ({ request, params, set }) => {
-      await archive(sending, request, params.channelId);
-      set.status = 204;
-      return null;
-    })
-    .post('/api/channels/:channelId/restore', async ({ request, params, set }) => {
-      await restore(sending, request, params.channelId);
-      set.status = 204;
-      return null;
-    })
-    .post('/api/channels/:channelId/leave', async ({ request, params, set }) => {
-      await leave(sending, request, params.channelId);
-      set.status = 204;
-      return null;
-    })
-    .delete('/api/channels/:channelId/members/:userId', async ({ request, params, set }) => {
-      await removeFromChannel(sending, request, params.channelId, params.userId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/channels/:channelId/members',
-      async ({ request, params }) =>
-        await listChannelMembers(dependencies, request, params.channelId),
-    )
-    .put(
-      '/api/channels/:channelId/read',
-      async ({ request, params, body }) =>
-        await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
-    )
-    .put(
-      '/api/channels/:channelId/unread',
-      async ({ request, params, body }) =>
-        await unreadFrom({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
-    )
-    .put('/api/channels/:channelId/star', async ({ request, params, set }) => {
-      await starChannel(sending, request, params.channelId, true);
-      set.status = 204;
-      return null;
-    })
-    .delete('/api/channels/:channelId/star', async ({ request, params, set }) => {
-      await starChannel(sending, request, params.channelId, false);
-      set.status = 204;
-      return null;
-    })
-    .put('/api/channels/:channelId/notification-level', async ({ request, params, body, set }) => {
-      await setLevel(dependencies, request, params.channelId, body);
-      set.status = 204;
-      return null;
-    })
-    .post('/api/channels/:channelId/members', async ({ request, params, body, set }) => {
-      await addChannelMember(
-        { ...dependencies, bus: sockets.bus },
-        request,
-        params.channelId,
-        body,
-      );
-      set.status = 204;
-      return null;
-    })
-    .post(
-      '/api/channels/:channelId/join',
-      async ({ request, params }) =>
-        await joinPublicChannel({ ...dependencies, bus: sockets.bus }, request, params.channelId),
-    )
-
-    .get(
-      '/api/channels/:channelId/messages',
-      async ({ request, params }) => await readHistory(dependencies, request, params.channelId),
-    )
-    .get(
-      '/api/channels/:channelId/changes',
-      async ({ request, params }) => await readChanges(dependencies, request, params.channelId),
-    )
-    .get(
-      '/api/channels/:channelId/files',
-      async ({ request, params }) => await readFiles(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
-      set.status = 201;
-      return await postMessage(sending, request, params.channelId, body);
-    })
-    .delete('/api/messages/:messageId', async ({ request, params, set }) => {
-      await removeMessage(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .patch(
-      '/api/messages/:messageId',
-      async ({ request, params, body }) =>
-        await editMessage(sending, request, params.messageId, body),
-    )
-    .get(
-      '/api/messages/:messageId',
-      async ({ request, params }) => await readOne(dependencies, request, params.messageId),
-    )
-    .get(
-      '/api/messages/:messageId/around',
-      async ({ request, params }) => await readAround(dependencies, request, params.messageId),
-    )
-    .put(
-      '/api/messages/:messageId/knowledge',
-      async ({ request, params, body }) =>
-        await putKnowledge(sending, request, params.messageId, body),
-    )
-    .get(
-      '/api/messages/:messageId/thread',
-      async ({ request, params }) => await readThread(dependencies, request, params.messageId),
-    )
-    .get(
-      '/api/messages/:messageId/follow',
-      async ({ request, params }) =>
-        await readThreadFollow(dependencies, request, params.messageId),
-    )
-    .put(
-      '/api/messages/:messageId/follow',
-      async ({ request, params, body }) =>
-        await putThreadFollow(dependencies, request, params.messageId, body),
-    )
-    .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
-      await markThreadRead({ ...dependencies, bus: sockets.bus }, request, params.messageId, body);
-      set.status = 204;
-      return null;
-    })
-    .post(
-      '/api/messages/:messageId/resolve',
-      async ({ request, params }) =>
-        await setThreadResolution(sending, request, params.messageId, true),
-    )
-    .delete(
-      '/api/messages/:messageId/resolve',
-      async ({ request, params }) =>
-        await setThreadResolution(sending, request, params.messageId, false),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/unresolved',
-      async ({ request, params }) =>
-        await readUnresolved(dependencies, request, params.workspaceId),
-    )
-    .get('/api/notifications', async ({ request }) => await readInbox(dependencies, request))
-    .put('/api/notifications/read', async ({ request, body, set }) => {
-      await markNotificationsRead({ ...dependencies, bus: sockets.bus }, request, body);
-      set.status = 204;
-      return null;
-    })
     .post(
       '/api/workspaces/:workspaceId/uploads',
       async ({ request, params, set }) => {
@@ -2085,39 +1679,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
-    .get(
-      '/api/workspaces/:workspaceId/saved-searches',
-      async ({ request, params }) =>
-        await readSavedSearches(dependencies, request, params.workspaceId),
-    )
-    .put(
-      '/api/workspaces/:workspaceId/saved-searches/:searchId',
-      async ({ request, params, body }) =>
-        await putSavedSearch(sending, request, params.workspaceId, params.searchId, body),
-    )
-    .delete(
-      '/api/workspaces/:workspaceId/saved-searches/:searchId',
-      async ({ request, params, set }) => {
-        await deleteSavedSearch(sending, request, params.workspaceId, params.searchId);
-        set.status = 204;
-        return null;
-      },
-    )
-    .get(
-      '/api/workspaces/:workspaceId/search',
-      async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),
-    )
-
-    .put(
-      '/api/messages/:messageId/reactions/:emoji',
-      async ({ request, params }) =>
-        await changeReaction(sending, request, params.messageId, params.emoji, true),
-    )
-    .delete(
-      '/api/messages/:messageId/reactions/:emoji',
-      async ({ request, params }) =>
-        await changeReaction(sending, request, params.messageId, params.emoji, false),
-    )
 
     /**
      * The built client, after every route of the API's own: a path the API owns is never

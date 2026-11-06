@@ -481,20 +481,33 @@ export const changeGitHubToken = async (
   request: Request,
   workspaceId: string,
   body: unknown,
-): Promise<void> => {
+): Promise<GitHubIntegration> => {
   const { database, clock, cipher } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  if (request.method === 'DELETE') {
-    await atomicallyOn(database)(async (transaction) => {
-      await removeGitHubToken(transaction, clock, context);
-    });
-    return;
-  }
-  const { token } = validated(SetGitHubTokenRequest, body);
   mayConfigure(context);
-  const { scopes } = await verifiedToken(dependencies.githubApi, dependencies.log, token);
-  await atomicallyOn(database)(async (transaction) => {
-    await setGitHubToken(transaction, clock, cipher, context, token, scopes);
+  const replacement = request.method === 'DELETE' ? null : validated(SetGitHubTokenRequest, body);
+  // No workspace lock is held while the remote provider checks the token.
+  const checked =
+    replacement === null
+      ? null
+      : {
+          token: replacement.token,
+          ...(await verifiedToken(dependencies.githubApi, dependencies.log, replacement.token)),
+        };
+  return await atomicallyOn(database)(async (transaction) => {
+    // Member changes and workspace deletion take this same lock. Re-read the caller only
+    // after acquiring it: the initial role may have been revoked during the remote check.
+    await transaction
+      .selectFrom('workspaces')
+      .select('id')
+      .where('id', '=', context.workspaceId)
+      .forUpdate()
+      .executeTakeFirst();
+    const current = await requireWorkspaceMembership(transaction, userId, context.workspaceId);
+    mayConfigure(current);
+    if (checked === null) await removeGitHubToken(transaction, clock, current);
+    else await setGitHubToken(transaction, clock, cipher, current, checked.token, checked.scopes);
+    return await githubIntegrationOf(transaction, current);
   });
 };

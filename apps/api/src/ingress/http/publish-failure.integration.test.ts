@@ -25,7 +25,7 @@ import { sendMessage, send } from '../../features/chat/messages/messages';
 import { setResolved } from '../../features/chat/messages/threads';
 import { setReaction } from '../../features/chat/reactions/reactions';
 import { aTestAuth, aSignedInUser } from '../../testing/signed-in';
-import { openDirectMessageWith, readUpTo } from './channels';
+import { openDirectMessageWith, readUpTo } from '../../features/chat/http/channels';
 import { aUniqueSlug } from '../../testing/users';
 import { createApp } from './app';
 import { testDependencies } from '../../testing/doubles';

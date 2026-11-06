@@ -6,8 +6,9 @@
  * only path (`ARCHITECTURE.md` §5.1). One service, two entry points, so the two
  * cannot validate differently.
  */
-import type { Auth } from '../../modules/auth/better-auth';
-import type { Executor } from '@purlay/db';
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { Auth } from '../../../modules/auth/better-auth';
 import {
   EditMessageRequest,
   FileQuery,
@@ -25,49 +26,44 @@ import {
   type MessagePage,
   type MessageWindow,
 } from '@purlay/types';
-import type { Clock } from '../../platform/clock';
+import type { Clock } from '../../../platform/clock';
 import {
   channelNotFound,
   messageNotFound,
   requireChannelById,
   requireMessageById,
-} from '../../features/chat/channels/guard';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { visibleChannelIds } from '../../features/chat/channels/guard';
-import {
-  messageHistory,
-  messageWindow,
-  send,
-  type SendDependencies,
-} from '../../features/chat/messages/messages';
-import { changesIn } from '../../features/chat/messages/changes';
-import { buildMessages, readMessage } from '../../features/chat/messages/reader';
-import { edit } from '../../features/chat/messages/edit';
-import { deleteMessage } from '../../features/chat/messages/delete';
+} from '../channels/guard';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { visibleChannelIds } from '../channels/guard';
+import { messageHistory, messageWindow, send, type SendDependencies } from '../messages/messages';
+import { changesIn } from '../messages/changes';
+import { buildMessages, readMessage } from '../messages/reader';
+import { edit } from '../messages/edit';
+import { deleteMessage } from '../messages/delete';
 import {
   setResolved,
   threadReplies,
   unresolvedIn,
   type ResolveDependencies,
-} from '../../features/chat/messages/threads';
-import { followState, setFollowing } from '../../features/chat/messages/follow';
-import { searchIn } from '../../features/chat/search/search';
-import { channelFiles } from '../../features/chat/channels/files';
-import { requireSession } from './session';
-import { queryOf, validated } from './validate';
+} from '../messages/threads';
+import { followState, setFollowing } from '../messages/follow';
+import { searchIn } from '../search/search';
+import { channelFiles } from '../channels/files';
+import { requireSession } from '../../../ingress/http/session';
+import { queryOf, validated } from '../../../ingress/http/validate';
 
 /** Reading needs the database and the clock, and nothing that publishes. */
 export interface HistoryDependencies {
   /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
   readonly auth: Auth;
-  readonly database: Executor;
+  readonly database: ModuleRouteDependencies['database'];
   readonly clock: Clock;
 }
 
 /** Sending needs the one send path's boundary and bus as well. */
-export interface MessageDependencies extends HistoryDependencies, SendDependencies {}
+interface MessageDependencies extends HistoryDependencies, SendDependencies {}
 
-export const readHistory = async (
+const readHistory = async (
   dependencies: HistoryDependencies,
   request: Request,
   channelId: string,
@@ -83,7 +79,7 @@ export const readHistory = async (
  * `GET /api/channels/:channelId/changes` — what happened to the channel's messages since the client last heard
  * (D-194). Seen as the history is: whoever can read the channel, and nobody else.
  */
-export const readChanges = async (
+const readChanges = async (
   dependencies: HistoryDependencies,
   request: Request,
   channelId: string,
@@ -96,7 +92,7 @@ export const readChanges = async (
 };
 
 /** `GET /api/channels/:channelId/files` — the channel's files, newest message first (D-129). */
-export const readFiles = async (
+const readFiles = async (
   dependencies: HistoryDependencies,
   request: Request,
   channelId: string,
@@ -108,7 +104,7 @@ export const readFiles = async (
   return await channelFiles(database, context, query);
 };
 
-export const postMessage = async (
+const postMessage = async (
   dependencies: MessageDependencies,
   request: Request,
   channelId: string,
@@ -128,7 +124,7 @@ export const postMessage = async (
  * query, so a message that does not exist and one in a conversation the caller is not
  * in are the same `404` (D-34).
  */
-export const readThread = async (
+const readThread = async (
   dependencies: HistoryDependencies,
   request: Request,
   messageId: string,
@@ -147,7 +143,7 @@ export const readThread = async (
  * message deleted, never sent, or in a channel the caller cannot see is the one `404` (D-34): a link
  * someone else could follow shows nothing of what this reader may not see.
  */
-export const readOne = async (
+const readOne = async (
   dependencies: HistoryDependencies,
   request: Request,
   messageId: string,
@@ -166,7 +162,7 @@ export const readOne = async (
  * `GET /api/messages/:messageId/around` — the feed around a message, for a link to it (D-149). A
  * message deleted, never sent, or in a channel the caller cannot see is the one `404` (D-34).
  */
-export const readAround = async (
+const readAround = async (
   dependencies: HistoryDependencies,
   request: Request,
   messageId: string,
@@ -180,7 +176,7 @@ export const readAround = async (
  * `GET /api/messages/:messageId/follow` — whether the caller is told of this thread's replies (D-161).
  * Anybody who can see the root may ask; a deleted root with replies keeps its thread (D-103 §7).
  */
-export const readThreadFollow = async (
+const readThreadFollow = async (
   dependencies: HistoryDependencies,
   request: Request,
   messageId: string,
@@ -196,7 +192,7 @@ export const readThreadFollow = async (
  * as a save is: open to anybody who can see the root, a member of the channel or not (D-156 §3). Told
  * to nobody else, and not to the caller's other devices — they read it when they open the thread.
  */
-export const putThreadFollow = async (
+const putThreadFollow = async (
   dependencies: HistoryDependencies,
   request: Request,
   messageId: string,
@@ -210,7 +206,7 @@ export const putThreadFollow = async (
 };
 
 /** `POST` and `DELETE /api/messages/:messageId/resolve` — close the thread, or reopen it. */
-export const setThreadResolution = async (
+const setThreadResolution = async (
   dependencies: HistoryDependencies & ResolveDependencies,
   request: Request,
   messageId: string,
@@ -221,7 +217,7 @@ export const setThreadResolution = async (
 };
 
 /** `PATCH /api/messages/:messageId` — the author's new content (D-103). */
-export const editMessage = async (
+const editMessage = async (
   dependencies: HistoryDependencies & SendDependencies,
   request: Request,
   messageId: string,
@@ -233,7 +229,7 @@ export const editMessage = async (
 };
 
 /** `DELETE /api/messages/:messageId` — the author, or a workspace admin (D-103 §7). */
-export const removeMessage = async (
+const removeMessage = async (
   dependencies: HistoryDependencies & SendDependencies,
   request: Request,
   messageId: string,
@@ -248,7 +244,7 @@ export const removeMessage = async (
  * One of the two reads D-34 was written about: it spans channels, so it asks the
  * guard which ones the caller can see and reads inside that set and nowhere else.
  */
-export const readUnresolved = async (
+const readUnresolved = async (
   dependencies: HistoryDependencies,
   request: Request,
   workspaceId: string,
@@ -271,7 +267,7 @@ export const readUnresolved = async (
  * `GET /api/workspaces/:workspaceId/search` — the words, in the channels the caller can see
  * (D-105, D-34). `q` is trimmed before it is measured: three spaces and a letter are not a search.
  */
-export const readSearch = async (
+const readSearch = async (
   dependencies: HistoryDependencies,
   request: Request,
   workspaceId: string,
@@ -285,3 +281,72 @@ export const readSearch = async (
   const search = validated(SearchQuery, query);
   return await searchIn(database, context, await visibleChannelIds(database, context), search);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const messageRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/channels/:channelId/messages',
+      async ({ request, params }) => await readHistory(context, request, params.channelId),
+    )
+    .get(
+      '/api/channels/:channelId/changes',
+      async ({ request, params }) => await readChanges(context, request, params.channelId),
+    )
+    .get(
+      '/api/channels/:channelId/files',
+      async ({ request, params }) => await readFiles(context, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
+      set.status = 201;
+      return await postMessage(context, request, params.channelId, body);
+    })
+    .delete('/api/messages/:messageId', async ({ request, params, set }) => {
+      await removeMessage(context, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
+    .patch(
+      '/api/messages/:messageId',
+      async ({ request, params, body }) =>
+        await editMessage(context, request, params.messageId, body),
+    )
+    .get(
+      '/api/messages/:messageId',
+      async ({ request, params }) => await readOne(context, request, params.messageId),
+    )
+    .get(
+      '/api/messages/:messageId/around',
+      async ({ request, params }) => await readAround(context, request, params.messageId),
+    )
+    .get(
+      '/api/messages/:messageId/thread',
+      async ({ request, params }) => await readThread(context, request, params.messageId),
+    )
+    .get(
+      '/api/messages/:messageId/follow',
+      async ({ request, params }) => await readThreadFollow(context, request, params.messageId),
+    )
+    .put(
+      '/api/messages/:messageId/follow',
+      async ({ request, params, body }) =>
+        await putThreadFollow(context, request, params.messageId, body),
+    )
+    .post(
+      '/api/messages/:messageId/resolve',
+      async ({ request, params }) =>
+        await setThreadResolution(context, request, params.messageId, true),
+    )
+    .delete(
+      '/api/messages/:messageId/resolve',
+      async ({ request, params }) =>
+        await setThreadResolution(context, request, params.messageId, false),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/unresolved',
+      async ({ request, params }) => await readUnresolved(context, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/search',
+      async ({ request, params }) => await readSearch(context, request, params.workspaceId),
+    );

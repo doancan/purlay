@@ -15,13 +15,13 @@ import {
   ErrorResponse,
   type ServerFrame,
 } from '@purlay/types';
-import { createApp } from './app';
+import { createApp } from '../../../ingress/http/app';
 import { markNotificationsRead } from './notifications';
-import { NOW, testDependencies } from '../../testing/doubles';
-import { fixedClock } from '../../platform/clock';
-import { userTopic, type EventBus } from '../../platform/events';
-import { aTestAuth, aSignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
+import { NOW, testDependencies } from '../../../testing/doubles';
+import { fixedClock } from '../../../platform/clock';
+import { userTopic, type EventBus } from '../../../platform/events';
+import { aTestAuth, aSignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

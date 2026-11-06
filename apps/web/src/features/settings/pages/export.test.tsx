@@ -10,6 +10,7 @@ import type { UserRole, WorkspaceExport } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
+import { keys } from '../../../data/keys';
 import { en } from '../../../i18n/catalogue/en';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
@@ -100,6 +101,169 @@ const leaveAndReturn = async (view: View): Promise<void> => {
 };
 
 describe('an owner’s export of the workspace', () => {
+  test('a pre-activation read cannot attest a download, and a second activation gets its own fresh read', async () => {
+    const second = { ...READY, id: '0199155c-6200-7b7f-8c11-0000000000e2' };
+    const held = [READY, second];
+    const delayed: ((value: WorkspaceExport[]) => void)[] = [];
+    const complete = (index: number, value: WorkspaceExport[]): void => {
+      const resolve = delayed[index];
+      if (resolve === undefined) throw new Error('Expected a pending status read');
+      resolve(value);
+    };
+    let reads = 0;
+    const view = await open({
+      exports: () =>
+        ++reads === 1 ? Promise.resolve(held) : new Promise((resolve) => delayed.push(resolve)),
+    });
+    const card = within(cardOf(view));
+    void view.world.client.invalidateQueries({ queryKey: keys.exports(WORKSPACE.id) });
+    await settle();
+    const links = card.getAllByRole('link');
+    const [first, last] = links;
+    if (first === undefined || last === undefined) throw new Error('Expected two ready exports');
+    const activate = async (link: HTMLElement, button: number): Promise<void> => {
+      await act(async () => {
+        const event = new MouseEvent(button === 1 ? 'auxclick' : 'click', {
+          bubbles: true,
+          cancelable: true,
+          button,
+        });
+        link.addEventListener(
+          event.type,
+          (click) => {
+            click.preventDefault();
+          },
+          { once: true },
+        );
+        link.dispatchEvent(event);
+        await Promise.resolve();
+      });
+    };
+    await activate(first, 0);
+    await act(async () => {
+      view.world.timers.advance(3_000);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(reads).toBe(3);
+    await act(async () => {
+      complete(0, held);
+      await Promise.resolve();
+    });
+    expect(card.queryByText(/^Downloaded\./)).toBeNull();
+    expect(card.getAllByText('Checking download status…')).toHaveLength(1);
+    await activate(last, 1);
+    // The receipt for the first activation remains pending when the next timer fires.
+    await act(async () => {
+      view.world.timers.advance(3_000);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(reads).toBe(4);
+    await act(async () => {
+      complete(1, held);
+      await Promise.resolve();
+    });
+    expect(card.getAllByText('Checking download status…')).toHaveLength(2);
+    await act(async () => {
+      complete(
+        2,
+        held.map((made) => ({ ...made, status: 'downloaded' })),
+      );
+      await Promise.resolve();
+    });
+    await settle();
+    expect(card.getAllByText(/^Downloaded\./)).toHaveLength(2);
+    view.unmount();
+  });
+  test('leaving while a receipt is pending never restarts a read or replays a download', async () => {
+    let finish: (value: WorkspaceExport[]) => void = () => undefined;
+    let reads = 0;
+    const view = await open({
+      exports: () =>
+        ++reads === 1
+          ? Promise.resolve([READY])
+          : new Promise((resolve) => {
+              finish = resolve;
+            }),
+    });
+    const link = within(cardOf(view)).getByRole('link');
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+    });
+    await person().click(link);
+    await act(async () => {
+      view.world.timers.advance(3_000);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(reads).toBe(2);
+    view.unmount();
+    await act(async () => {
+      finish([{ ...READY, status: 'downloaded' }]);
+      await Promise.resolve();
+      view.world.timers.advance(10_000);
+    });
+    expect(reads).toBe(2);
+  });
+  test('a right click leaves the download link available and schedules no receipt read', async () => {
+    let reads = 0;
+    const view = await open({
+      exports: () => {
+        reads++;
+        return Promise.resolve([READY]);
+      },
+    });
+    const card = within(cardOf(view));
+    const link = card.getByRole('link');
+    await act(async () => {
+      link.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+      await Promise.resolve();
+    });
+    expect(card.getByRole('link')).toBe(link);
+    expect(card.queryByText(/^Downloaded\./)).toBeNull();
+    await act(async () => {
+      view.world.timers.advance(3_000);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(reads).toBe(1);
+    view.unmount();
+  });
+  test('a download is unconfirmed until a fresh receipt succeeds, and a failed read can be retried', async () => {
+    let reads = 0;
+    let fail = true;
+    const view = await open({
+      exports: () =>
+        ++reads === 1
+          ? Promise.resolve([READY])
+          : fail
+            ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+            : Promise.resolve([{ ...READY, status: 'downloaded' }]),
+    });
+    const card = within(cardOf(view));
+    const link = card.getByRole('link');
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+    });
+    await person().click(link);
+    expect(card.getByText('Checking download status…')).toBeDefined();
+    expect(card.queryByText(/^Downloaded\./)).toBeNull();
+    await act(async () => {
+      view.world.timers.advance(3_000);
+      await Promise.resolve();
+    });
+    await settle();
+    expect(
+      await card.findByText('Could not confirm the download. Retry to check its status.'),
+    ).toBeDefined();
+    expect(card.queryByRole('link')).toBeNull();
+    fail = false;
+    await person().click(card.getByRole('button', { name: 'Retry' }));
+    expect(await card.findByText(/^Downloaded\./)).toBeDefined();
+    expect(card.queryByText('Checking download status…')).toBeNull();
+    view.unmount();
+  });
   test('is an owner’s alone: an admin and a member are not offered it, and its address is not found', async () => {
     for (const role of ['admin', 'member'] as const) {
       const view = await render('/w/acme/settings/data', {}, role, 'en');
@@ -179,7 +343,7 @@ describe('an owner’s export of the workspace', () => {
     await person().click(link);
     await settle();
     expect(within(dialog).queryByRole('link')).toBeNull();
-    expect(within(dialog).getByText(/^Downloaded\./)).toBeDefined();
+    expect(within(dialog).getByText('Checking download status…')).toBeDefined();
     // Then read from the server, which spent it too.
     held = [{ ...READY, status: 'downloaded' }];
     const followed = reads;

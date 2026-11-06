@@ -6,33 +6,35 @@
  * before anything else is read: a stranger, a workspace that never existed and an id that is not
  * one are the same `404` (D-34), whatever else the request says.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import {
   NotificationQuery,
   ReadNotificationsRequest,
   ReadThreadRequest,
   type NotificationPage,
 } from '@purlay/types';
-import { visibleChannelIds } from '../../features/chat/channels/guard';
+import { visibleChannelIds } from '../channels/guard';
 import {
   NO_LOG,
   publication,
   publishAfterCommit,
   publishChannelState,
-} from '../../platform/events';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { atomicallyOn } from '../../platform/transactions';
+} from '../../../platform/events';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
 import {
   inboxOf,
   readNotifications,
   readThreadNotifications,
   type Told,
-} from '../../features/chat/notifications/notifications';
+} from '../notifications/notifications';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
-import { queryOf, validated } from './validate';
+import { requireSession } from '../../../ingress/http/session';
+import { queryOf, validated } from '../../../ingress/http/validate';
 
 /** `GET /api/notifications?workspaceId=` — the caller's inbox in one workspace, newest first. */
-export const readInbox = async (
+const readInbox = async (
   dependencies: ChannelDependencies,
   request: Request,
 ): Promise<NotificationPage> => {
@@ -74,7 +76,7 @@ export const markNotificationsRead = async (
  * including a reply: the caller's notifications for its replies are read (D-147), and the channel's
  * new numbers go to the caller's devices after the commit, as the inbox's do.
  */
-export const markThreadRead = async (
+const markThreadRead = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   rootId: string,
@@ -104,3 +106,18 @@ const tell = async (
     ),
   ]);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const notificationRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
+      await markThreadRead(context, request, params.messageId, body);
+      set.status = 204;
+      return null;
+    })
+    .get('/api/notifications', async ({ request }) => await readInbox(context, request))
+    .put('/api/notifications/read', async ({ request, body, set }) => {
+      await markNotificationsRead(context, request, body);
+      set.status = 204;
+      return null;
+    });

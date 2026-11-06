@@ -22,27 +22,12 @@ const COMPOSITION_ROOTS: readonly string[] = [join('ingress', 'http', 'app.ts')]
 
 /** The route handlers of chat, and the doors that still read it, by feature: `ingress/http/<file>.ts` and no other file. */
 const CHAT_HANDLERS = [
-  'bookmarks',
-  'channels',
   'feeds',
   'github-app',
   'github-issues',
-  'hidden',
-  'incidents',
   'incoming-webhooks',
   'integrations',
-  'knowledge',
-  'messages',
   'missed-mail',
-  'notifications',
-  'pins',
-  'presence',
-  'reactions',
-  'reminders',
-  'saved',
-  'scheduled',
-  'star',
-  'versions',
   'webhooks',
 ].map((name) => join('ingress', 'http', `${name}.ts`));
 
@@ -86,7 +71,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 26;
+const MAX_ALLOWED = 11;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
@@ -175,7 +160,7 @@ describe('the doors name no module’s files outside its routes and the composit
  * every connection of the one database `createApp` hands the handlers, so what would get round it is another handle:
  * the raw one the application was given, used a second time, or a pool a module opened for itself. Neither exists today,
  * and this holds both to that. The rest, that a request of a module is noted as its own and held, is
- * `issues-budget.integration.test.ts` and `chat-budget.integration.test.ts`, and the mutation
+ * `features/issues/http/budget.integration.test.ts` and `ingress/http/chat-budget.integration.test.ts`, and the mutation
  * `application-database-not-leased`.
  */
 const APP_FILE = join('ingress', 'http', 'app.ts');

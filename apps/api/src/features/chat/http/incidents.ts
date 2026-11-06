@@ -3,6 +3,8 @@
  * moved and resolved by anyone in it. A change tells everyone watching the channel
  * (`INCIDENT_UPDATED`), after the commit, and only when it was one.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import {
   ChangeIncidentRequest,
   DeclareIncidentRequest,
@@ -12,14 +14,14 @@ import {
   type IncidentResponse,
   type IncidentUpdatePage,
 } from '@purlay/types';
-import { requireChannelById } from '../../features/chat/channels/guard';
+import { requireChannelById } from '../channels/guard';
 import {
   NO_LOG,
   publication,
   publishAfterCommit,
   publishIncidentUpdated,
-} from '../../platform/events';
-import { atomicallyOn } from '../../platform/transactions';
+} from '../../../platform/events';
+import { atomicallyOn } from '../../../platform/transactions';
 import {
   changeIncident,
   channelIncident,
@@ -27,11 +29,11 @@ import {
   incidentUpdates,
   savePostmortem,
   type IncidentWrite,
-} from '../../features/chat/incidents/incidents';
-import { addResponder, removeResponder } from '../../features/chat/incidents/responders';
+} from '../incidents/incidents';
+import { addResponder, removeResponder } from '../incidents/responders';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
-import { queryOf, validated } from './validate';
+import { requireSession } from '../../../ingress/http/session';
+import { queryOf, validated } from '../../../ingress/http/validate';
 
 const told = async (
   { bus, clock, log = NO_LOG }: ChannelWriteDependencies,
@@ -50,7 +52,7 @@ const told = async (
 };
 
 /** `GET /api/channels/:channelId/incident` — the open one, or the latest; null when never. */
-export const readIncident = async (
+const readIncident = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -97,7 +99,7 @@ export const patchIncident = async (
 };
 
 /** `GET /api/channels/:channelId/incident/:incidentId/updates` — its timeline, newest first. */
-export const listIncidentUpdates = async (
+const listIncidentUpdates = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -145,3 +147,56 @@ export const putPostmortem = async (
   );
   return await told(dependencies, write);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const incidentRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/channels/:channelId/incident',
+      async ({ request, params }) => await readIncident(context, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/incident', async ({ request, params, body, set }) => {
+      const { incident, changed } = await postIncident(context, request, params.channelId, body);
+      // Made now is 201; the same declaration again is the incident it made, 200 (D-33).
+      set.status = changed ? 201 : 200;
+      return incident;
+    })
+    .patch(
+      '/api/channels/:channelId/incident/:incidentId',
+      async ({ request, params, body }) =>
+        await patchIncident(context, request, params.channelId, params.incidentId, body),
+    )
+    .put(
+      '/api/channels/:channelId/incident/:incidentId/postmortem',
+      async ({ request, params, body }) =>
+        await putPostmortem(context, request, params.channelId, params.incidentId, body),
+    )
+    .put(
+      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
+      async ({ request, params }) =>
+        await putResponder(
+          context,
+          request,
+          params.channelId,
+          params.incidentId,
+          params.userId,
+          true,
+        ),
+    )
+    .delete(
+      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
+      async ({ request, params }) =>
+        await putResponder(
+          context,
+          request,
+          params.channelId,
+          params.incidentId,
+          params.userId,
+          false,
+        ),
+    )
+    .get(
+      '/api/channels/:channelId/incident/:incidentId/updates',
+      async ({ request, params }) =>
+        await listIncidentUpdates(context, request, params.channelId, params.incidentId),
+    );

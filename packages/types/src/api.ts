@@ -776,7 +776,9 @@ export const SetGitHubTokenRequest = FromClient({
 export type SetGitHubTokenRequest = Static<typeof SetGitHubTokenRequest>;
 
 /**
- * `GET …/integrations/github` — whether a token is set, and since when. Never the token.
+ * `GET …/integrations/github` — whether a token is set, and since when. PUT and DELETE return the
+ * same public status from their committed transaction, so a client can reconcile an accepted change
+ * even if a later GET fails (#1179). Never the token.
  *
  * `invalidSince` is when GitHub first refused the token (`401`: revoked or expired): no call is made
  * with it until it is replaced, and replacing or removing it clears this (D-23, amended; #884).

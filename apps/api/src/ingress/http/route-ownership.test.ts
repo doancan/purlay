@@ -6,8 +6,9 @@
  * paths `app.ts` registers, and those of each module's own folder (`features/<id>/http/`, D-280), and holds each to exactly
  * one owner: the core's list below or a manifest's templates. A new route fails here until it is put in one.
  *
- * A module's HTTP is part of the module: where its slot supplies `routes`, every path it registers is its manifest's and
- * none of its paths is registered in `app.ts`; where it does not, it is listed in `HTTP_IN_INGRESS`, which only shrinks.
+ * A module's HTTP is part of the module: its slot supplies `routes`, every path it registers is its manifest's and none of
+ * them is also registered in `app.ts`; a module whose handlers are still partly in `ingress/http/` is listed in
+ * `HTTP_IN_INGRESS`, which only shrinks, and is on it only while `app.ts` still registers one of its paths.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -19,8 +20,8 @@ import { CORE_ROUTES } from '../../platform/module-kit/core-claims';
 import { ownsPath } from '../../platform/module-kit/routes';
 
 /**
- * The modules whose handlers are still in `ingress/http/` and whose routes `app.ts` registers. **Only shrinks**: a module that
- * supplies `routes` and is listed fails, and so does one that has routes, supplies none and is not listed.
+ * The modules whose handlers are still partly in `ingress/http/`, where `app.ts` registers some of their routes. **Only
+ * shrinks**: a module listed that has none left there fails, and so does an unlisted one that has any.
  */
 const HTTP_IN_INGRESS: readonly string[] = ['chat'];
 
@@ -87,22 +88,26 @@ describe('who owns each route', () => {
     }
   });
 
-  test('a module’s routes come from its folder: its slot supplies them, and app.ts registers none of its paths', () => {
+  test('a module’s routes come from its folder: its slot supplies them, and app.ts registers none of its paths but while it is listed', () => {
     const fromApp = registeredByApp();
     for (const module of carried) {
       const id = module.manifest.id;
       const owns = ownsPath(module.manifest.routes ?? []);
-      const listed = HTTP_IN_INGRESS.includes(id);
-      if (listed) {
-        expect({ id, supplies: module.routes !== undefined }).toEqual({ id, supplies: false });
-        expect(registeredByFolder(id)).toEqual([]);
-        continue;
-      }
+      const inApp = fromApp.filter(owns);
       expect({ id, supplies: module.routes !== undefined }).toEqual({ id, supplies: true });
-      expect({ id, inApp: fromApp.filter(owns) }).toEqual({ id, inApp: [] });
-      // What the plugin registers is what its folder spells, and all of it is the module's.
+      // A module whose handlers are still partly in `ingress/` is listed, and is listed only while some are.
+      if (HTTP_IN_INGRESS.includes(id)) {
+        expect({ id, stillInApp: inApp.length > 0 }).toEqual({ id, stillInApp: true });
+      } else {
+        expect({ id, inApp }).toEqual({ id, inApp: [] });
+      }
+      // What the plugin registers is what its folder spells, all of it the module's, and none of it twice.
       const registers = pluginPaths(module);
       expect({ id, outside: registers.filter((path) => !owns(path)) }).toEqual({ id, outside: [] });
+      expect({ id, twice: registers.filter((path) => inApp.includes(path)) }).toEqual({
+        id,
+        twice: [],
+      });
       expect([...new Set(registers)].sort()).toEqual([...new Set(registeredByFolder(id))].sort());
     }
   });

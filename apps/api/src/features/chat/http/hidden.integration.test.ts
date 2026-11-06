@@ -6,15 +6,15 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
-import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { userTopic, type EventBus } from '../../platform/events';
-import { atomicallyOn } from '../../platform/transactions';
-import { aRoom, type Room } from '../../testing/rooms';
-import { aSession, aTestAuth } from '../../testing/signed-in';
-import { sendMessage } from '../../features/chat/messages/messages';
-import { hideMessage } from '../../features/chat/messages/hide';
-import { removeMessage } from '../../features/chat/messages/delete';
+import { fixedClock } from '../../../platform/clock';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { userTopic, type EventBus } from '../../../platform/events';
+import { atomicallyOn } from '../../../platform/transactions';
+import { aRoom, type Room } from '../../../testing/rooms';
+import { aSession, aTestAuth } from '../../../testing/signed-in';
+import { sendMessage } from '../messages/messages';
+import { hideMessage } from '../messages/hide';
+import { removeMessage } from '../messages/delete';
 import { hideMyMessage } from './hidden';
 
 const clock = fixedClock(new Date('2026-10-28T12:00:00Z'));

@@ -126,7 +126,7 @@ describe('a person’s export of their own data', () => {
     await person().click(link);
     await settle();
     expect(within(card).queryByRole('link')).toBeNull();
-    expect(within(card).getByText(/^Downloaded\./)).toBeDefined();
+    expect(within(card).getByText('Checking download status…')).toBeDefined();
   });
 
   test('an account gone before it was made is said in its own words; other endings as an owner’s', async () => {
