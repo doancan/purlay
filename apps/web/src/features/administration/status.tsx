@@ -5,6 +5,7 @@ import { Button } from '../../ui/button';
 import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
 import { Facts, QueryState } from './parts';
+import { ServerProblems } from './problems';
 
 export const Overview = (): React.JSX.Element => {
   const client = useAdministrationClient();
@@ -15,56 +16,59 @@ export const Overview = (): React.JSX.Element => {
     retry: false,
   });
   return (
-    <QueryState query={query}>
-      {(data) => (
-        <>
-          <SettingsCard
-            title={t('admin.overview')}
-            actions={
-              <Button
-                busy={query.isFetching}
-                onClick={() => {
-                  void query.refetch();
-                }}
-              >
-                {t('admin.refresh')}
-              </Button>
-            }
-          >
-            <p role="status" className="px-6 py-4 text-body text-ink">
-              {t(data.ready ? 'admin.ready' : 'admin.notReady')}
-            </p>
-            <p className="px-6 pb-4 text-caption text-ink-muted">
-              {t('admin.checked', { when: format.absolute(data.checkedAt) })}
-            </p>
-            <dl className="grid grid-cols-3 gap-4 px-6 py-4 max-narrow:grid-cols-2 max-narrow:px-4">
-              {[
-                [t('admin.accounts'), data.users],
-                [t('admin.admins'), data.admins],
-                [t('admin.suspended'), data.suspendedUsers],
-                [t('admin.workspaces'), data.workspaces],
-                [t('admin.deletionsPending'), data.deletedWorkspaces],
-                [t('admin.used'), format.bytes(Number(data.usedBytes))],
-              ].map(([label, value]) => (
-                <div key={label} className="flex min-w-0 flex-col gap-1">
-                  <dt className="text-caption text-ink-muted">{label}</dt>
-                  <dd className="text-title text-ink">{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <Facts
-              items={[
-                [t('admin.version'), data.version],
-                [t('admin.url'), data.appUrl],
-                [t('admin.modules'), data.modules.join(', ') || t('admin.none')],
-                [t('admin.exportFailures'), data.exportFailures],
-              ]}
-            />
-          </SettingsCard>
-          <Deployment data={data} />
-        </>
-      )}
-    </QueryState>
+    <>
+      <ServerProblems overview={query} />
+      <QueryState query={query}>
+        {(data) => (
+          <>
+            <SettingsCard
+              title={t('admin.overview')}
+              actions={
+                <Button
+                  busy={query.isFetching}
+                  onClick={() => {
+                    void query.refetch();
+                  }}
+                >
+                  {t('admin.refresh')}
+                </Button>
+              }
+            >
+              <p role="status" className="px-6 py-4 text-body text-ink">
+                {t(data.ready ? 'admin.ready' : 'admin.notReady')}
+              </p>
+              <p className="px-6 pb-4 text-caption text-ink-muted">
+                {t('admin.checked', { when: format.absolute(data.checkedAt) })}
+              </p>
+              <dl className="grid grid-cols-3 gap-4 px-6 py-4 max-narrow:grid-cols-2 max-narrow:px-4">
+                {[
+                  [t('admin.accounts'), data.users],
+                  [t('admin.admins'), data.admins],
+                  [t('admin.suspended'), data.suspendedUsers],
+                  [t('admin.workspaces'), data.workspaces],
+                  [t('admin.deletionsPending'), data.deletedWorkspaces],
+                  [t('admin.used'), format.bytes(Number(data.usedBytes))],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex min-w-0 flex-col gap-1">
+                    <dt className="text-caption text-ink-muted">{label}</dt>
+                    <dd className="text-title text-ink">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <Facts
+                items={[
+                  [t('admin.version'), data.version],
+                  [t('admin.url'), data.appUrl],
+                  [t('admin.modules'), data.modules.join(', ') || t('admin.none')],
+                  [t('admin.exportFailures'), data.exportFailures],
+                ]}
+              />
+            </SettingsCard>
+            <Deployment data={data} />
+          </>
+        )}
+      </QueryState>
+    </>
   );
 };
 
