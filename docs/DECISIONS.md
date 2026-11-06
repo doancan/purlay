@@ -13353,7 +13353,7 @@ eleven of chat's files by hand to say which must stay out of the shell.
    (`no-restricted-imports` blocks made by `webFences`, found per folder with a manifest, as the API's are), and
    `web-fences.test.ts` holds it per import with the compiler's parser, so a path in a comment is not an import and a type is
    counted. The list **only shrinks**: the test fails for a core import that is not listed, for an entry that is no longer an
-   import, for a duplicate or an entry with no reason, and for a list longer than its cap (28 today; a change that removes an
+   import, for a duplicate or an entry with no reason, and for a list longer than its cap (24 after the first burn-down; a change that removes an
    entry lowers the number).
 4. **What the list holds, and why it is not empty.** Eight overlays the shell opens (re-exported from `app/deferred.ts`, one
    lazy chunk, never in the shell); the sidebar's chat lists, the rail's inbox and open-questions entries and the two
@@ -13361,6 +13361,12 @@ eleven of chat's files by hand to say which must stay out of the shell.
    which are in the first frame inside `WhenRun module="chat"` — a lazy chunk for them was measured on 2026-11-03 and saved
    2% of the shell for a layout fallback; and a few functions the palette, the alerts and the welcome screen ask of chat's
    files. Each is the next step of a burn-down: a manifest slot for overlays and sidebar sections would end most of them.
+   **Burn-down, first step (28 to 24):** a notification's reading (`whyOf`, `targetOf`: the inbox's rows and the background alert
+   say one thing), the channel lists and their order (pure functions of the wire's `Channel`, which the sidebar, the palette
+   and the welcome screen share) and the remembered last channel (a `localStorage` helper, like the language and the theme) are
+   not chat's screens: they moved to `lib/` and `data/`, by a script that proved the files equal but for import paths. What is
+   left is chat's by what it draws (the sidebar's lists, the rail's entries, the providers, the overlays), the palette's reading
+   of search operators and `fold`; the next step is a manifest slot, not another move.
 5. **The budget is derived.** `budget:web` no longer lists chat's files: every file under `features/<id>/` but the manifest,
    less what the core may import and what those files import statically (`screenSources`), must be absent from the initial
    chunks' source maps, for every module; the hand-listed heavy files of chat go. The bounds stay: chat's 50 KB, issues'

@@ -16,7 +16,7 @@ const SRC = join(import.meta.dirname, '..', 'apps', 'web', 'src');
 const FEATURES = join(SRC, 'features');
 
 /** The core's imports of a module's files that remain, and the number the list may not grow past: lower it with the entry. */
-const CORE_IMPORTS_CAP = 28;
+const CORE_IMPORTS_CAP = 24;
 
 const aTree = (files: Record<string, string>): string => {
   const root = mkdtempSync(join(tmpdir(), 'web-src-'));
