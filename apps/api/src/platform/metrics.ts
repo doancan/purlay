@@ -218,6 +218,13 @@ export interface ServerMetrics {
   readonly rateLimited: Counter<'door' | 'module'>;
   readonly pushFailures: Counter<'reason' | 'module'>;
   readonly mailFailures: Counter<'module'>;
+  readonly workerFailures: Counter<'module' | 'worker'>;
+}
+
+/** A background loop a module declares: the pair that labels its failures (`MODULES.md` §7). */
+export interface WorkerSeries {
+  readonly module: string;
+  readonly name: string;
 }
 
 /**
@@ -227,6 +234,7 @@ export interface ServerMetrics {
 export const serverMetrics = (
   readings: ProcessReadings = thisProcess,
   modules: readonly string[] = [],
+  workers: readonly WorkerSeries[] = [],
 ): ServerMetrics => {
   const registry = createMetricsRegistry();
   registry.gauge(
@@ -260,6 +268,11 @@ export const serverMetrics = (
     'Letters the mail relay did not accept, by the module that sent them (`core`, or a module id).',
     ['module'],
   );
+  const workerFailures = registry.counter(
+    'purlay_worker_failures_total',
+    'Iterations of a module’s background loops that threw or ran past their deadline, by the module and the worker (both named by a manifest and a slot, never by a caller).',
+    ['module', 'worker'],
+  );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
   const owners = [CORE_OWNER, ...modules];
@@ -270,7 +283,8 @@ export const serverMetrics = (
     for (const module of owners) pushFailures.inc({ reason, module }, 0);
   }
   for (const module of owners) mailFailures.inc({ module }, 0);
-  return { registry, httpDuration, rateLimited, pushFailures, mailFailures };
+  for (const { module, name } of workers) workerFailures.inc({ module, worker: name }, 0);
+  return { registry, httpDuration, rateLimited, pushFailures, mailFailures, workerFailures };
 };
 
 /** The page, from what the registry holds and what was read for this scrape alone. */

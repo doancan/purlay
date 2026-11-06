@@ -37,6 +37,7 @@ import { API_MODULES_SETUP_RUNTIME } from './api-modules-setup-runtime';
 import { API_MODULES_SETUP_SETTINGS } from './api-modules-setup-settings';
 import { API_MODULES_SETUP_SETUP } from './api-modules-setup-setup';
 import { API_MODULES_USERS } from './api-modules-users';
+import { API_MODULES_WORKERS } from './api-modules-workers';
 import { API_MODULES_WORKSPACES } from './api-modules-workspaces';
 import { API_PLATFORM } from './api-platform';
 import { API_REALTIME } from './api-realtime';
@@ -87,6 +88,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-modules-setup-settings': API_MODULES_SETUP_SETTINGS,
   'api-modules-setup-setup': API_MODULES_SETUP_SETUP,
   'api-modules-users': API_MODULES_USERS,
+  'api-modules-workers': API_MODULES_WORKERS,
   'api-modules-workspaces': API_MODULES_WORKSPACES,
   'api-platform': API_PLATFORM,
   'api-realtime': API_REALTIME,

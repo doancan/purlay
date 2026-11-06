@@ -1,0 +1,108 @@
+// Area api-modules-workers: ids ascending; areas.ts says what belongs here.
+import type { Mutation } from '../mutate';
+
+export const API_MODULES_WORKERS: readonly Mutation[] = [
+  {
+    id: 'worker-deadline-default-dropped',
+    why: 'a module that says nothing of its workers’ deadline has none, so a loop that hangs is never tried again',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '        ? DEFAULT_WORKER_DEADLINE_MS',
+    replace: '        ? undefined',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
+    id: 'worker-deadline-ignored',
+    why: 'an iteration runs as long as it likes whatever its manifest says, as every loop did before',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '        if (deadlineMs === undefined) {',
+    replace: '        if (deadlineMs === undefined || deadlineMs > 0) {',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
+    id: 'worker-deadline-signal-not-passed',
+    why: 'an iteration is answered as failed at its deadline and the statement it was running goes on in the database, holding its connection and its locks',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '            ...(signal === undefined ? {} : { signal }),\n',
+    replace: '',
+    tests: [
+      'apps/api/src/modules/workers/module-workers.test.ts',
+      'apps/api/src/modules/workers/module-workers.integration.test.ts',
+    ],
+  },
+  {
+    id: 'worker-failure-not-counted',
+    why: 'a worker that fails every time shows nothing on /metrics',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '        failures.inc({ module, worker: name });\n',
+    replace: '',
+    tests: [
+      'apps/api/src/modules/workers/module-workers.test.ts',
+      'apps/api/src/modules/workers/module-workers.integration.test.ts',
+    ],
+  },
+  {
+    id: 'worker-failure-not-logged',
+    why: 'a worker fails and the log says nothing of it',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: "        log.error('worker failed; trying again at its next interval', { err: error });\n",
+    replace: '',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
+    id: 'worker-failure-stops-the-loop',
+    why: 'one failed iteration ends the worker, and scheduled messages stop being delivered until a restart',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '        failures.inc({ module, worker: name });\n',
+    replace: '        failures.inc({ module, worker: name });\n        stopped = true;\n',
+    tests: [
+      'apps/api/src/modules/workers/module-workers.test.ts',
+      'apps/api/src/modules/workers/module-workers.integration.test.ts',
+    ],
+  },
+  {
+    id: 'worker-interval-unbounded-accepted',
+    why: 'a worker that runs every millisecond is a busy loop on the database',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '      intervalMs < WORKER_INTERVAL_MS_MIN ||\n',
+    replace: '',
+    tests: [
+      'apps/api/src/composition.test.ts',
+      'apps/api/src/modules/workers/module-workers.test.ts',
+    ],
+  },
+  {
+    id: 'worker-name-not-checked',
+    why: 'two workers of one module share a name, and so a series and a line',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '    if (seen.has(name)) return `"${module}" has two workers called "${name}"`;\n',
+    replace: '',
+    tests: [
+      'apps/api/src/composition.test.ts',
+      'apps/api/src/modules/workers/module-workers.test.ts',
+    ],
+  },
+  {
+    id: 'worker-not-noted-as-its-module',
+    why: 'an iteration holds no share of the pool, as a handler that took the pool as it is would',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '            module,\n            ...(signal',
+    replace: '            ...(signal',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
+    id: 'worker-started-after-stop',
+    why: 'a call that was already due when the process stopped starts one more iteration under a closing pool',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '      if (stopped) return;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
+    id: 'worker-stop-does-not-wait',
+    why: 'the pool is closed under an iteration that was delivering a message',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '        await flight;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+];

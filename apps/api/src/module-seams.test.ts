@@ -1,5 +1,5 @@
 /**
- * The doors name a module only where its routes are (D-250, `MODULES.md` §8): `cli/`, `ingress/` and `realtime/` reach a module's work
+ * The doors name a module only where its routes are (D-250, `MODULES.md` §8): `cli/`, `ingress/`, `realtime/` and the process entry `index.ts` reach a module's work
  * through the composition (`composition.ts`, whose `jobWork` is what `bun run job` runs) and name none of its files, but the
  * one file that composes the modules' routes, `ingress/http/app.ts`, and the route handlers a module has not yet moved
  * into its own folder (`features/<id>/http/`, D-280, `MODULES.md` §9 item 4). `eslint.config.mjs` keeps the core (`modules/`, `platform/`) from importing a feature at all; this
@@ -65,15 +65,24 @@ const MAX_ALLOWED_IN_CLI = 1;
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
 const DOORS = ['cli', 'ingress', 'realtime'] as const;
 
+/**
+ * The process entry (`index.ts`) is a door too: it starts what the composition says the modules run, the workers among
+ * them (`MODULES.md` §9), and names no module's work itself. It is read as the doors are, with nothing listed for it.
+ */
+const PROCESS_ENTRY = 'index.ts';
+
 const withoutComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
 const doorSources = (): string[] =>
-  DOORS.flatMap((directory) =>
-    readdirSync(join(SOURCE_ROOT, directory), { recursive: true, encoding: 'utf8' })
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
-      .map((file) => join(directory, file)),
-  ).sort();
+  [
+    ...DOORS.flatMap((directory) =>
+      readdirSync(join(SOURCE_ROOT, directory), { recursive: true, encoding: 'utf8' })
+        .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+        .map((file) => join(directory, file)),
+    ),
+    PROCESS_ENTRY,
+  ].sort();
 
 const featuresOf = (file: string): string[] =>
   featuresImportedBy(readFileSync(join(SOURCE_ROOT, file), 'utf8'));
@@ -85,6 +94,7 @@ describe('the doors name no module’s files outside its routes and the composit
     expect(readdirSync(FEATURES)).toContain('chat');
     expect(doorSources()).toContain(join('cli', 'jobs.ts'));
     expect(doorSources()).toContain(join('ingress', 'http', 'app.ts'));
+    expect(doorSources()).toContain(PROCESS_ENTRY);
     for (const root of COMPOSITION_ROOTS) expect(doorSources()).toContain(root);
   });
 
@@ -141,6 +151,11 @@ describe('the doors name no module’s files outside its routes and the composit
   test('the command that runs the scheduled jobs names no module’s file', () => {
     expect(featuresOf(join('cli', 'jobs.ts'))).toEqual([]);
   });
+
+  test('the process entry names no module’s file: what a module does on a timer is its workers, through the composition', () => {
+    expect(featuresOf(PROCESS_ENTRY)).toEqual([]);
+    expect(Object.keys(ALLOWED)).not.toContain(PROCESS_ENTRY);
+  });
 });
 
 /**
@@ -180,5 +195,29 @@ describe('a module’s handlers reach the database only through the one the appl
       withoutComments(source).match(/\bgiven\.database\b/g)?.length ?? 0;
     expect(count('const again = given.database;')).toBe(1);
     expect(count('// given.database\n/* given.database */')).toBe(0);
+  });
+});
+
+/**
+ * What a module does on a timer is held to its share and its deadline (`MODULES.md` §7, §9): the process entry starts the
+ * workers the composition names, over the one set of shares its application takes, and stops them with the process. What
+ * the entry hands the workers is the leased database; the raw handle would be a loop that took the pool as it pleased.
+ */
+describe('the process entry starts the modules’ workers over the shares of the pool', () => {
+  const entry = withoutComments(readFileSync(join(SOURCE_ROOT, PROCESS_ENTRY), 'utf8'));
+
+  test('it starts the workers the composition says run, on the leased database and no other', () => {
+    expect(entry).toMatch(/startWorkers\(\s*modules\.workers,/);
+    expect(entry).toMatch(
+      /startWorkers\([^)]*database:\s*leasingExecutor\(database, moduleShares\)/s,
+    );
+  });
+
+  test('the application takes those shares too, so a request and a worker of a module hold the same slots', () => {
+    expect(entry).toMatch(/createApp\(\{[^}]*\bmoduleShares,/s);
+  });
+
+  test('it stops them when the process is crashing and when it is shut down', () => {
+    expect(entry.match(/\bworkers\.stop\(\)/g)).toHaveLength(2);
   });
 });

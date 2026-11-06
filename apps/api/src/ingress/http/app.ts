@@ -58,7 +58,7 @@ import { readLatestRelease } from './releases';
 import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
-import { leasingExecutor, type Executor } from '@purlay/db';
+import { leasingExecutor, type Executor, type LeaseConnection } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
 import type { ServicesPin, SettingsChange } from '../../modules/setup/runtime';
@@ -239,6 +239,12 @@ export interface Dependencies {
   readonly settingsChange?: SettingsChange;
   /** A `Kysely` or a `Transaction` — indistinguishable here, which is the point (D-46). */
   readonly database: Executor;
+  /**
+   * The shares of the pool the modules hold (`moduleConnections`), where the process has something besides requests that
+   * takes them — a module's workers (`modules/workers`) are held to the same slots a request of the module is. Absent, the
+   * application makes its own, which is all a process with nothing else needs.
+   */
+  readonly moduleShares?: LeaseConnection;
   readonly clock: Clock;
   /** Where attachment bytes live (D-109); the unconfigured store refuses every use, loudly. */
   readonly storage: ObjectStore;
@@ -408,10 +414,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     // pool holds each of its statements, with nothing for a handler to ask for (`platform/module-budget.ts`, D-266).
     database: leasingExecutor(
       given.database,
-      moduleConnections(
-        modules.bundled.map((module) => module.manifest),
-        given.config.DATABASE_POOL_MAX,
-      ),
+      given.moduleShares ??
+        moduleConnections(
+          modules.bundled.map((module) => module.manifest),
+          given.config.DATABASE_POOL_MAX,
+        ),
     ),
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,

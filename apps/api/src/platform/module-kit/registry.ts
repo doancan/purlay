@@ -190,40 +190,56 @@ const vocabularyProblems = (manifest: ModuleManifest): string[] => {
 /** The longest a deadline may be: past it a proxy in front of the process has given up, and a client with it. */
 const DEADLINE_MS_MAX = 120_000;
 
-/** What a manifest's `deadline` must be, when it says one: whole milliseconds a client could wait for, or `none` with a reason. */
-const deadlineProblems = ({ id, deadline }: ModuleManifest): string[] => {
-  if (deadline === undefined) return [];
-  if ('none' in deadline) {
-    return deadline.none.trim() === ''
-      ? [`"${id}" declares \`deadline: none\` without a reason`]
-      : [];
-  }
-  return Number.isInteger(deadline.ms) && deadline.ms >= 1_000 && deadline.ms <= DEADLINE_MS_MAX
-    ? []
-    : [
-        `"${id}" has a deadline of ${String(deadline.ms)} ms: it needs a whole number from 1000 to ${String(DEADLINE_MS_MAX)}`,
-      ];
-};
-
 /** The longest a job's deadline may be: a day's jobs are an hour apart at the closest, and the scheduler runs them one after another. */
 const JOB_DEADLINE_MS_MAX = 3_600_000;
 
-/** What a manifest's `jobDeadline` must be, when it says one: whole milliseconds from a second to an hour, or `none` with a reason. */
-const jobDeadlineProblems = ({ id, jobDeadline }: ModuleManifest): string[] => {
-  if (jobDeadline === undefined) return [];
-  if ('none' in jobDeadline) {
-    return jobDeadline.none.trim() === ''
-      ? [`"${id}" declares \`jobDeadline: none\` without a reason`]
+/** The longest a worker's deadline may be: the longest interval a worker may have (`WORKER_INTERVAL_MS_MAX`). */
+const WORKER_DEADLINE_MS_MAX = 3_600_000;
+
+/** What a deadline a manifest says must be: whole milliseconds from a second to `max`, or `none` with a reason. */
+const deadlineDeclarationProblems = (
+  id: string,
+  field: string,
+  noun: string,
+  declaration: ModuleManifest['deadline'],
+  max: number,
+): string[] => {
+  if (declaration === undefined) return [];
+  if ('none' in declaration) {
+    return declaration.none.trim() === ''
+      ? [`"${id}" declares \`${field}: none\` without a reason`]
       : [];
   }
-  return Number.isInteger(jobDeadline.ms) &&
-    jobDeadline.ms >= 1_000 &&
-    jobDeadline.ms <= JOB_DEADLINE_MS_MAX
+  return Number.isInteger(declaration.ms) && declaration.ms >= 1_000 && declaration.ms <= max
     ? []
     : [
-        `"${id}" has a job deadline of ${String(jobDeadline.ms)} ms: it needs a whole number from 1000 to ${String(JOB_DEADLINE_MS_MAX)}`,
+        `"${id}" has a ${noun} of ${String(declaration.ms)} ms: it needs a whole number from 1000 to ${String(max)}`,
       ];
 };
+
+/** What a manifest's `deadline`, `jobDeadline` and `workerDeadline` must be, when it says them. */
+const deadlineProblems = ({
+  id,
+  deadline,
+  jobDeadline,
+  workerDeadline,
+}: ModuleManifest): string[] => [
+  ...deadlineDeclarationProblems(id, 'deadline', 'deadline', deadline, DEADLINE_MS_MAX),
+  ...deadlineDeclarationProblems(
+    id,
+    'jobDeadline',
+    'job deadline',
+    jobDeadline,
+    JOB_DEADLINE_MS_MAX,
+  ),
+  ...deadlineDeclarationProblems(
+    id,
+    'workerDeadline',
+    'worker deadline',
+    workerDeadline,
+    WORKER_DEADLINE_MS_MAX,
+  ),
+];
 
 const bundleProblems = (
   manifests: readonly ModuleManifest[],
@@ -249,7 +265,6 @@ const bundleProblems = (
       ...budgetProblems(manifest),
       ...vocabularyProblems(manifest),
       ...deadlineProblems(manifest),
-      ...jobDeadlineProblems(manifest),
     );
 
     for (const capability of manifest.provides) {

@@ -1090,7 +1090,8 @@ what was still open. `apps/api/src/lifecycle.ts`. (D-72)
 The cloud runs several API nodes behind a sticky-session load balancer, with `REDIS_URL` set so that
 the bus, presence and the limiters are shared (D-201). Nothing above changes: the three seams in §6 were
 placed for exactly this. The jobs of the `jobs` module run outside the API process (D-30); the scheduled-message
-and reminder delivery loops run inside it, and are safe on several nodes because each claims its due rows with
+and reminder delivery loops run inside it, as the workers of the chat module that runs (D-281: each iteration in chat's share
+of the pool and against its `workerDeadline`, a failure counted in `purlay_worker_failures_total`), and are safe on several nodes because each claims its due rows with
 `FOR UPDATE SKIP LOCKED`, so no job needs a distributed lock. The balancer's configuration is #115's, not this section's: a socket lives on
 the node that accepted it, which is why the per-connection frame limiter stays in that node's process
 (D-201), and why a node that loses its Redis sends its sockets back to replay rather than leaving them

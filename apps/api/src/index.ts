@@ -8,14 +8,11 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
-import { deliverReminders } from './features/chat/reminders/delivery';
-import { deliverScheduled } from './features/chat/scheduled/delivery';
-import { timedDeliveryLoop } from './features/chat/scheduled/loop';
 import { exportQueue } from './modules/export/queue';
-import { compositionFor, moduleReport, startWhereRunning, type Composition } from './composition';
+import { compositionFor, moduleReport, type Composition } from './composition';
 import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
-import { createDatabase } from '@purlay/db';
+import { createDatabase, leasingExecutor } from '@purlay/db';
 import { databaseConnection } from './platform/database';
 import { loadConfig } from './platform/config';
 import { systemClock } from './platform/clock';
@@ -56,6 +53,8 @@ import { inMemoryAttention } from './platform/attention';
 import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
+import { moduleConnections } from './platform/module-budget';
+import { startWorkers } from './modules/workers/module-workers';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -101,12 +100,21 @@ log.info(
 const connection = databaseConnection(config, log);
 
 const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
+// The modules' shares of that pool, one set for what serves requests and what runs on a timer: a module's workers and its
+// requests take from the same slots (`MODULES.md` §7).
+const moduleShares = moduleConnections(
+  modules.bundled.map((module) => module.manifest),
+  config.DATABASE_POOL_MAX,
+);
 
 // What this process counts for `/metrics` (D-221): one registry, handed to everything that records.
 // Kept whether or not METRICS_TOKEN is set — counting is cheap; without it the page is never served.
 const metrics = serverMetrics(
   undefined,
   modules.bundled.map((module) => module.manifest.id),
+  modules.bundled.flatMap((module) =>
+    (module.workers ?? []).map((worker) => ({ module: module.manifest.id, name: worker.name })),
+  ),
 );
 log.info(
   config.METRICS_TOKEN === undefined
@@ -215,34 +223,9 @@ const servicesFor = (
   needsReentry: readonly SealedSetting[],
 ): RuntimeServices => runtimeServicesFrom(settings, runtimeBase, needsReentry, services.sends);
 
-const timedDelivery = timedDeliveryLoop(
-  async () => {
-    const dependencies = {
-      database,
-      clock: systemClock,
-      bus: runtimeBase.bus,
-      log,
-      ...(push === undefined ? {} : { push }),
-    };
-    const results = await Promise.allSettled([
-      deliverScheduled(dependencies),
-      deliverReminders(dependencies),
-    ]);
-    for (const result of results) {
-      if (result.status === 'rejected') throw result.reason;
-    }
-  },
-  (callback, milliseconds) => {
-    const timer = setTimeout(callback, milliseconds);
-    return (): void => {
-      clearTimeout(timer);
-    };
-  },
-  log,
-);
-
 const app = createApp({
   composition: modules,
+  moduleShares,
   auth: services.auth,
   services,
   // The setup's steps and, later, Administration → Server change the settings through this (D-179 §4.9).
@@ -271,7 +254,7 @@ const app = createApp({
 log.info('listening', { port: app.listen(config.PORT) });
 // A crash stops new work at once: readiness says no and the sockets are told to come back (#634).
 crash.onCrash(() => {
-  void timedDelivery.stop();
+  void workers.stop();
   drainRefusingChanges(services, app.drain)().catch((failure: unknown) => {
     plainLog.warn('draining after a crash failed', { err: failure });
   });
@@ -284,7 +267,7 @@ installShutdown({
   // Pushes for writes already committed, then the mail of every relay this process served with, then
   // the reports of the shutdown itself — the error tracker still has its time — then the pool.
   closeDatabase: async () => {
-    await timedDelivery.stop();
+    await workers.stop();
     await closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet })();
   },
   log,
@@ -379,8 +362,15 @@ if (config.MIGRATE_ON_START === true) {
   }
 }
 services.settle(runtime);
-// Scheduled messages and reminders are chat's (D-250): delivered by a process that runs chat, and by no other.
-startWhereRunning(modules, 'chat', timedDelivery.start);
+// What the modules that run do on a timer, each iteration held to its module's share and deadline (`modules/workers`).
+const workers = startWorkers(modules.workers, {
+  database: leasingExecutor(database, moduleShares),
+  clock: systemClock,
+  log,
+  bus: runtimeBase.bus,
+  failures: metrics.workerFailures,
+  ...(push === undefined ? {} : { push }),
+});
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
 log.info(
   runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',
