@@ -25,7 +25,7 @@ import type {
  * value; no secret is in any answer or any line written; and a client is limited.
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
@@ -95,15 +95,17 @@ const BAD_SECRET = 'not-the-secret-4417';
 
 const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
-// Every test's database, dropped after its connections have closed: up to 31 of them, which fitted the
-// five seconds a hook is given only on an idle machine (#797, D-228).
-afterAll(async () => {
-  for (const stop of stops) await stop();
+// Release each test's servers and clone before the next case: retaining every pool until the
+// file ends exhausts PostgreSQL's connection cap when this suite grows (#1169, D-228).
+afterEach(async () => {
+  for (const stop of stops.splice(0)) await stop();
   await Promise.all(
-    clones.map(async (drop) => {
+    clones.splice(0).map(async (drop) => {
       await drop();
     }),
   );
+}, DROP_HOOK_MS);
+afterAll(async () => {
   await closeIntegrationDatabase();
 }, DROP_HOOK_MS);
 
