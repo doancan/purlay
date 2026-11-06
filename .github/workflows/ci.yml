@@ -136,6 +136,7 @@ jobs:
     outputs:
       browser: ${{ steps.paths.outputs.browser }}
       modules: ${{ steps.paths.outputs.modules }}
+      mutations: ${{ steps.paths.outputs.mutations }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -220,6 +221,42 @@ jobs:
 
       - name: the suites that belong to no module, in this cell
         run: bun run modules:suites -- ${{ matrix.cell }}
+
+  # The mutations this pull request adds or changes, each applied to a copy of the tree and required to be caught
+  # (`CONTRIBUTING.md` §5). `mutations.test.ts` only sees that an entry still applies; an equivalent or broken
+  # mutant — one no test fails on — passed it, and was found months later (#1180). The ids come from diffing
+  # `scripts/mutations/` against the merge-base, so the history is fetched. The whole list is the weekly
+  # `mutations.yml`'s, not this job's. A change that touches no mutation file skips it, and the gate allows only that skip.
+  mutations-changed:
+    needs: changes
+    if: needs.changes.outputs.mutations == 'true'
+    runs-on: ubuntu-latest
+    # A pull request that adds a handful of entries takes a few minutes (each runs the tests it names once); the
+    # ceiling is for one that adds dozens, and catches a hang.
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge-base with the base branch is the point the entries are compared with.
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - name: start the database and redis
+        run: bun run db:up:tests
+
+      - name: every mutation this change adds or changes is caught
+        env:
+          # A pull request is measured against its base branch; a push to main against the commit it moved on from.
+          BASE: ${{ github.base_ref && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: bun run mutate --changed="$BASE"
 
   # The browser tests: the production build and a seeded real API, in real Chromium,
   # in both themes and at two widths (#139). A job of its own because it needs a
@@ -448,7 +485,7 @@ jobs:
   # whatever happened before it — a job whose dependency failed is skipped by default, and branch protection
   # counts a skipped required check as passed — and passes only when each job it needs succeeded.
   verify:
-    needs: [static, schema, changes, browser, modules, module-suites]
+    needs: [static, schema, changes, browser, modules, module-suites, mutations-changed]
     if: always()
     runs-on: ubuntu-latest
     # Checkout and Bun's download, then a few milliseconds of judging; the margin is for a slow download.

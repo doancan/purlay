@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { main, needsBrowser, needsModules, run } from './ci-changes';
+import { main, needsBrowser, needsModules, needsMutations, run } from './ci-changes';
 
 describe('the browser jobs', () => {
   test('always run on main', () => {
@@ -61,6 +61,34 @@ describe('the modules job', () => {
   });
 });
 
+describe('the mutations job', () => {
+  test('always runs on main', () => {
+    expect(needsMutations('push', [])).toBe(true);
+  });
+
+  test.each([
+    'scripts/mutations/api-issues.ts',
+    'scripts/mutations/index.ts',
+    'scripts/mutate.ts',
+    'scripts/run-mutations.ts',
+    'scripts/mutation-selection.ts',
+    '.github/workflows/ci.yml',
+  ])('runs for a pull request that changes %s', (file) => {
+    expect(needsMutations('pull_request', ['docs/UX.md', file])).toBe(true);
+  });
+
+  test('does not run for code a mutation names, documents or another workflow', () => {
+    expect(
+      needsMutations('pull_request', [
+        'apps/api/src/features/issues/service.ts',
+        'scripts/mutations.test.ts',
+        'docs/MODULES.md',
+        '.github/workflows/mutations.yml',
+      ]),
+    ).toBe(false);
+  });
+});
+
 describe('the command', () => {
   const listing =
     (files: string[], exitCode = 0) =>
@@ -77,8 +105,10 @@ describe('the command', () => {
       NUMBER: '7',
       GITHUB_OUTPUT: output,
     };
-    expect(main(environment, listing(['docs/UX.md']))).toBe('browser=false\nmodules=false');
-    expect(readFileSync(output, 'utf8')).toBe('browser=false\nmodules=false\n');
+    expect(main(environment, listing(['docs/UX.md']))).toBe(
+      'browser=false\nmodules=false\nmutations=false',
+    );
+    expect(readFileSync(output, 'utf8')).toBe('browser=false\nmodules=false\nmutations=false\n');
   });
 
   test('asks nothing of GitHub on main', () => {
@@ -86,7 +116,7 @@ describe('the command', () => {
       main({ EVENT: 'push' }, () => {
         throw new Error('not asked');
       }),
-    ).toBe('browser=true\nmodules=true');
+    ).toBe('browser=true\nmodules=true\nmutations=true');
   });
 
   test('says each job on its own: a client change is a browser run and no modules run', () => {
@@ -95,7 +125,7 @@ describe('the command', () => {
         { EVENT: 'pull_request', REPOSITORY: 'o/r', NUMBER: '7' },
         listing(['apps/web/src/main.tsx']),
       ),
-    ).toBe('browser=true\nmodules=false');
+    ).toBe('browser=true\nmodules=false\nmutations=false');
   });
 
   test('refuses rather than guessing when the files cannot be read', () => {
