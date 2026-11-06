@@ -10,6 +10,13 @@ import { hiddenRoutes } from './hidden';
 import { pinRoutes } from './pins';
 import { reactionRoutes } from './reactions';
 import { savedRoutes } from './saved';
+import { incidentRoutes } from './incidents';
+import { knowledgeRoutes } from './knowledge';
+import { notificationRoutes } from './notifications';
+import { presenceRoutes } from './presence';
+import { reminderRoutes } from './reminders';
+import { scheduledRoutes } from './scheduled';
+import { starRoutes } from './star';
 import { versionRoutes } from './versions';
 
 export const chatRoutes = (context: ModuleRouteDependencies): AnyElysia =>
@@ -19,4 +26,11 @@ export const chatRoutes = (context: ModuleRouteDependencies): AnyElysia =>
     .use(pinRoutes(context))
     .use(reactionRoutes(context))
     .use(savedRoutes(context))
+    .use(incidentRoutes(context))
+    .use(knowledgeRoutes(context))
+    .use(notificationRoutes(context))
+    .use(presenceRoutes(context))
+    .use(reminderRoutes(context))
+    .use(scheduledRoutes(context))
+    .use(starRoutes(context))
     .use(versionRoutes(context));

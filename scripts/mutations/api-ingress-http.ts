@@ -375,7 +375,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     file: 'apps/api/src/ingress/http/validate.ts',
     find: '  if (repeated !== undefined) {\n',
     replace: '  if (repeated === "never") {\n',
-    tests: ['apps/api/src/ingress/http/notifications.integration.test.ts'],
+    tests: ['apps/api/src/features/chat/http/notifications.integration.test.ts'],
   },
   {
     id: 'incoming-webhook-knock-skipped',
@@ -524,14 +524,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '        () => dependencies.shared?.problem(),\n        modules.migrationSets,\n',
     replace: '        () => dependencies.shared?.problem(),\n',
     tests: ['apps/api/src/ingress/http/readiness.integration.test.ts'],
-  },
-  {
-    id: 'reading-notifications-tells-nobody',
-    why: 'the badge moves on the device that read and stays on every other one',
-    file: 'apps/api/src/ingress/http/notifications.ts',
-    find: '    told.map((channel) =>\n',
-    replace: '    told.slice(0, 0).map((channel) =>\n',
-    tests: ['apps/api/src/ingress/http/notifications.integration.test.ts'],
   },
   {
     id: 'redis-limiters-not-shared',

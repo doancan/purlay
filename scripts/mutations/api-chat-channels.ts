@@ -521,7 +521,7 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/channels/channels.ts',
     find: '  starred: row.member_user_id !== null && row.starred_at !== null,\n',
     replace: '  starred: row.starred_at !== null || row.member_user_id === null,\n',
-    tests: ['apps/api/src/ingress/http/star.integration.test.ts'],
+    tests: ['apps/api/src/features/chat/http/star.integration.test.ts'],
   },
   {
     id: 'star-on-a-conversation',
@@ -529,7 +529,7 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/channels/star.ts',
     find: "  if (context.channelType === 'direct_message') throw channelNotFound();\n",
     replace: '',
-    tests: ['apps/api/src/ingress/http/star.integration.test.ts'],
+    tests: ['apps/api/src/features/chat/http/star.integration.test.ts'],
   },
   {
     id: 'star-told-of-nothing',
@@ -537,7 +537,7 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/channels/star.ts',
     find: "    .where('starred_at', starred ? 'is' : 'is not', null)\n",
     replace: '',
-    tests: ['apps/api/src/ingress/http/star.integration.test.ts'],
+    tests: ['apps/api/src/features/chat/http/star.integration.test.ts'],
   },
   {
     id: 'unread-from-a-reply-reads-the-feed-wrong',

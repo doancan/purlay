@@ -126,7 +126,7 @@ The application's hooks (the deadline's `wrap`, the edge, the closed-path check,
 plugin's routes as to the chain's. The aggregate type of the table is read by nobody: `createApp` returns `HttpApplication`, and
 the web's types are the contract's (D-280 §4). **Where a module has moved only some of its handlers** (chat, resource by resource), it supplies the plugin of the ones that
 have and is named in `HTTP_IN_INGRESS` in the ownership test while `ingress/http/app.ts` still registers a path of it; the list
-only shrinks, and its entry fails once the last path has left. The effect is that a request for a closed path gets the plain
+only shrinks, and its entry fails once the last path has left. **A core route served by a module's code stays in `ingress/http/`:** `GET` and `PUT /api/me/missed-mail` are the core's (`CORE_ROUTES`) and call chat's missed-mail service, so `ingress/http/missed-mail.ts` is a door that imports chat (in `ALLOWED`) and not a part of chat's folder; only `POST /api/missed-mail/stop`, which is chat's, moves. Handing those two routes to chat would close them in a process without chat, a change of the wire that has its own decision. The effect is that a request for a closed path gets the plain
 `404` of any unknown route, with the generic body and no code that says *disabled*, so what a closed route says is the
 same as what an unknown path says (its status, for a caller with no session, is not: see below). A closed job exits `0` (`closedJob`), a closed frame is answered as an
 operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).

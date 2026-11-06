@@ -13,6 +13,7 @@ import type { Auth } from '../../modules/auth/better-auth';
 import type { Clock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
+import type { OnlinePresence } from '../../realtime/online';
 import type { Atomically } from '../../platform/transactions';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 
@@ -26,6 +27,8 @@ export interface ModuleRouteDependencies {
   readonly permissions: PermissionTable;
   /** What a write tells the sockets through. */
   readonly bus: EventBus;
+  /** Who is online on this node and across them (`realtime/online.ts`), for a module that shows presence. */
+  readonly online: OnlinePresence;
   /** The transaction boundary a write that tells the sockets runs in, so that it tells them only once committed. */
   readonly atomically: Atomically;
   /** Where a failed publish is written; the write it follows is already committed. */

@@ -17,7 +17,6 @@ import {
   writeAdministrationSessions,
 } from './server-administration';
 import { CORE_JOBS } from '../../platform/module-kit/core-claims';
-import { putKnowledge, readSavedSearches, putSavedSearch, deleteSavedSearch } from './knowledge';
 /**
  * The HTTP surface.
  *
@@ -221,7 +220,6 @@ import {
   restore,
   listChannelMembers,
 } from './channels';
-import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
 import {
   postMessage,
   readFiles,
@@ -284,14 +282,10 @@ import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { moduleConnections } from '../../platform/module-budget';
 import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-deadline';
-import { deleteReminder, listReminders, putReminder } from './reminders';
-import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
-import { starChannel } from './star';
-import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds, regenerateFeedSecret } from './feeds';
 import {
@@ -301,14 +295,6 @@ import {
   revokeIncomingWebhook,
 } from './incoming-webhooks';
 import { runningModuleIds, type Composition } from '../../composition';
-import {
-  listIncidentUpdates,
-  patchIncident,
-  postIncident,
-  putPostmortem,
-  putResponder,
-  readIncident,
-} from './incidents';
 
 export interface Dependencies {
   readonly config: Config;
@@ -596,6 +582,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
             permissions: modules.permissions,
             bus: sockets.bus,
             atomically: sockets.atomically,
+            online: sockets.online,
           }),
         ],
   );
@@ -1381,11 +1368,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       return outcome;
     })
     .get(
-      '/api/workspaces/:workspaceId/presence',
-      async ({ request, params }) =>
-        await readPresence(dependencies, request, params.workspaceId, sockets.online),
-    )
-    .get(
       '/api/workspaces/:workspaceId/integrations/github',
       async ({ request, params }) =>
         await readGitHubIntegration(dependencies, request, params.workspaceId),
@@ -1553,34 +1535,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
-    .put(
-      '/api/messages/:messageId/reminder',
-      async ({ request, params, body }) =>
-        await putReminder(sending, request, params.messageId, body),
-    )
-    .delete('/api/messages/:messageId/reminder', async ({ request, params, set }) => {
-      await deleteReminder(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/workspaces/:workspaceId/reminders',
-      async ({ request, params }) => await listReminders(dependencies, request, params.workspaceId),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/scheduled',
-      async ({ request, params }) => await listScheduled(dependencies, request, params.workspaceId),
-    )
-    .put(
-      '/api/channels/:channelId/scheduled/:scheduledId',
-      async ({ request, params, body }) =>
-        await putScheduled(dependencies, request, params.channelId, params.scheduledId, body),
-    )
-    .delete('/api/channels/:channelId/scheduled/:scheduledId', async ({ request, params, set }) => {
-      await deleteScheduled(dependencies, request, params.channelId, params.scheduledId);
-      set.status = 204;
-      return null;
-    })
     .use(moduleRoutes)
     .get(
       '/api/channels/:channelId/github-feeds',
@@ -1654,55 +1608,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
         set.status = 201;
         return answer;
       },
-    )
-    .get(
-      '/api/channels/:channelId/incident',
-      async ({ request, params }) => await readIncident(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/incident', async ({ request, params, body, set }) => {
-      const { incident, changed } = await postIncident(sending, request, params.channelId, body);
-      // Made now is 201; the same declaration again is the incident it made, 200 (D-33).
-      set.status = changed ? 201 : 200;
-      return incident;
-    })
-    .patch(
-      '/api/channels/:channelId/incident/:incidentId',
-      async ({ request, params, body }) =>
-        await patchIncident(sending, request, params.channelId, params.incidentId, body),
-    )
-    .put(
-      '/api/channels/:channelId/incident/:incidentId/postmortem',
-      async ({ request, params, body }) =>
-        await putPostmortem(sending, request, params.channelId, params.incidentId, body),
-    )
-    .put(
-      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
-      async ({ request, params }) =>
-        await putResponder(
-          sending,
-          request,
-          params.channelId,
-          params.incidentId,
-          params.userId,
-          true,
-        ),
-    )
-    .delete(
-      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
-      async ({ request, params }) =>
-        await putResponder(
-          sending,
-          request,
-          params.channelId,
-          params.incidentId,
-          params.userId,
-          false,
-        ),
-    )
-    .get(
-      '/api/channels/:channelId/incident/:incidentId/updates',
-      async ({ request, params }) =>
-        await listIncidentUpdates(dependencies, request, params.channelId, params.incidentId),
     )
 
     .get(
@@ -1804,16 +1709,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await unreadFrom({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
-    .put('/api/channels/:channelId/star', async ({ request, params, set }) => {
-      await starChannel(sending, request, params.channelId, true);
-      set.status = 204;
-      return null;
-    })
-    .delete('/api/channels/:channelId/star', async ({ request, params, set }) => {
-      await starChannel(sending, request, params.channelId, false);
-      set.status = 204;
-      return null;
-    })
     .put('/api/channels/:channelId/notification-level', async ({ request, params, body, set }) => {
       await setLevel(dependencies, request, params.channelId, body);
       set.status = 204;
@@ -1869,11 +1764,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/messages/:messageId/around',
       async ({ request, params }) => await readAround(dependencies, request, params.messageId),
     )
-    .put(
-      '/api/messages/:messageId/knowledge',
-      async ({ request, params, body }) =>
-        await putKnowledge(sending, request, params.messageId, body),
-    )
     .get(
       '/api/messages/:messageId/thread',
       async ({ request, params }) => await readThread(dependencies, request, params.messageId),
@@ -1888,11 +1778,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await putThreadFollow(dependencies, request, params.messageId, body),
     )
-    .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
-      await markThreadRead({ ...dependencies, bus: sockets.bus }, request, params.messageId, body);
-      set.status = 204;
-      return null;
-    })
     .post(
       '/api/messages/:messageId/resolve',
       async ({ request, params }) =>
@@ -1908,12 +1793,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await readUnresolved(dependencies, request, params.workspaceId),
     )
-    .get('/api/notifications', async ({ request }) => await readInbox(dependencies, request))
-    .put('/api/notifications/read', async ({ request, body, set }) => {
-      await markNotificationsRead({ ...dependencies, bus: sockets.bus }, request, body);
-      set.status = 204;
-      return null;
-    })
     .post(
       '/api/workspaces/:workspaceId/uploads',
       async ({ request, params, set }) => {
@@ -2027,24 +1906,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
-    .get(
-      '/api/workspaces/:workspaceId/saved-searches',
-      async ({ request, params }) =>
-        await readSavedSearches(dependencies, request, params.workspaceId),
-    )
-    .put(
-      '/api/workspaces/:workspaceId/saved-searches/:searchId',
-      async ({ request, params, body }) =>
-        await putSavedSearch(sending, request, params.workspaceId, params.searchId, body),
-    )
-    .delete(
-      '/api/workspaces/:workspaceId/saved-searches/:searchId',
-      async ({ request, params, set }) => {
-        await deleteSavedSearch(sending, request, params.workspaceId, params.searchId);
-        set.status = 204;
-        return null;
-      },
-    )
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),

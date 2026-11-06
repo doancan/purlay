@@ -88,6 +88,14 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/http/pins.integration.test.ts'],
   },
   {
+    id: 'chat-routes-leave-out-presence',
+    why: 'presence, whose route needs the node’s own online record, is not used by chat’s plugin, so a workspace’s presence is the 404 of an unknown path (D-280)',
+    file: 'apps/api/src/features/chat/http/routes.ts',
+    find: '    .use(presenceRoutes(context))\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/away.integration.test.ts'],
+  },
+  {
     id: 'chat-routes-slot-dropped',
     why: 'chat’s slot supplies no routes, so the paths that left `app.ts` are the 404 of an unknown one with chat running (D-280)',
     file: 'apps/api/src/features/chat/module.ts',
@@ -384,7 +392,7 @@ export const API_CHAT: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/presence/presence.ts',
     find: '  const state: PresenceChange = { ...change, away: change.online && (change.away || chosen) };\n',
     replace: '  const state: PresenceChange = change;\n',
-    tests: ['apps/api/src/features/chat/presence/presence.integration.test.ts'],
+    tests: ['apps/api/src/ingress/http/away.integration.test.ts'],
   },
   {
     id: 'presence-snapshot-unscoped',
@@ -392,7 +400,7 @@ export const API_CHAT: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/presence/presence.ts',
     find: "    .where('workspace_id', '=', context.workspaceId)\n",
     replace: '',
-    tests: ['apps/api/src/features/chat/presence/presence.integration.test.ts'],
+    tests: ['apps/api/src/ingress/http/away.integration.test.ts'],
   },
   {
     id: 'presence-told-to-themselves',
@@ -400,7 +408,7 @@ export const API_CHAT: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/presence/presence.ts',
     find: '    for (const memberId of workspace.memberIds) if (memberId !== userId) everyone.add(memberId);\n',
     replace: '    for (const memberId of workspace.memberIds) everyone.add(memberId);\n',
-    tests: ['apps/api/src/features/chat/presence/presence.integration.test.ts'],
+    tests: ['apps/api/src/ingress/http/away.integration.test.ts'],
   },
   {
     id: 'reaction-kinds-not-serialised',
@@ -417,6 +425,14 @@ export const API_CHAT: readonly Mutation[] = [
     find: '      if (await wouldExceedPerson(transaction, messageId, caller.userId, emoji)) {\n',
     replace: '      if (false) {\n',
     tests: ['apps/api/src/features/chat/reactions/reactions.integration.test.ts'],
+  },
+  {
+    id: 'reading-notifications-tells-nobody',
+    why: 'the badge moves on the device that read and stays on every other one',
+    file: 'apps/api/src/features/chat/http/notifications.ts',
+    find: '    told.map((channel) =>\n',
+    replace: '    told.slice(0, 0).map((channel) =>\n',
+    tests: ['apps/api/src/features/chat/http/notifications.integration.test.ts'],
   },
   {
     id: 'refusal-is-not-followed-by-the-notice-it-missed',
