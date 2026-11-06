@@ -5,8 +5,11 @@
 import { describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { bundledModules } from '../composition';
 import {
   BUDGETS,
+  HOT_PATHS,
+  type LoadedMeasure,
   STARVATION_FACTOR,
   requireAnswers,
   gate,
@@ -434,6 +437,14 @@ describe('a trial that was not answered', () => {
   });
 });
 
+/** Chat's senders, answered while issues' list was timed. */
+const BUSY = { answered: 100, refused: 3 };
+
+/** The p95 a module's hot path is answered while the others are busy, one value for the one metric each has here. */
+const loadedAt = (...answers: number[]): LoadedMeasure => {
+  return () => Promise.resolve({ p95: { list: answers.shift() ?? 999 }, busy: { chat: BUSY } });
+};
+
 describe('the whole gate', () => {
   const quietOrBusy =
     (quiet: Latency, busy: Latency) =>
@@ -441,20 +452,158 @@ describe('the whole gate', () => {
       Promise.resolve(issuesBusy ? { ...busy, issues: { answered: 100, refused: 0 } } : quiet);
 
   test('passes when the quiet trials and the trials with issues busy both hold', async () => {
-    const result = await gate([], quietOrBusy(run(25, 25), run(27, 27)));
+    const result = await gate([], quietOrBusy(run(25, 25), run(27, 27)), loadedAt(10, 10, 10));
     expect(result.code).toBe(0);
     expect(result.lines).toContain('with issues busy, against the quiet trials of this run:');
   });
 
   test('fails when chat regresses with issues busy, though the quiet trials held', async () => {
-    const result = await gate([], quietOrBusy(run(25, 25), run(250, 250)));
+    const result = await gate([], quietOrBusy(run(25, 25), run(250, 250)), loadedAt(10, 10, 10));
     expect(result.code).toBe(1);
   });
 
   test('fails when the quiet trials regress against the baseline, whatever issues does', async () => {
     const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
     await Bun.write(file, JSON.stringify(run(30, 30)));
-    const result = await gate(['--baseline', file], quietOrBusy(run(100, 30), run(100, 30)));
+    const result = await gate(
+      ['--baseline', file],
+      quietOrBusy(run(100, 30), run(100, 30)),
+      loadedAt(10, 10, 10),
+    );
     expect(result.code).toBe(1);
+  });
+});
+
+describe('every module’s hot path, with the others busy (D-250 rule 6)', () => {
+  /** A module's hot path answered at these p95s in turn, and what it was asked. */
+  const loading = (
+    ...answers: readonly number[]
+  ): { readonly measure: LoadedMeasure; readonly asked: { subject: string; count: number }[] } => {
+    const asked: { subject: string; count: number }[] = [];
+    return {
+      asked,
+      measure: (subject, count): ReturnType<LoadedMeasure> => {
+        asked.push({ subject, count });
+        return Promise.resolve({
+          p95: { list: answers[asked.length - 1] ?? 999 },
+          busy: { chat: BUSY },
+        });
+      },
+    };
+  };
+  const baselineWith = async (listP95Ms: number | null): Promise<string> => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const loaded =
+      listP95Ms === null ? {} : { loaded: { 'issues/list': { p95Ms: listP95Ms, trials: [] } } };
+    await Bun.write(file, JSON.stringify({ ...run(30, 30), ...loaded }));
+    return file;
+  };
+
+  test('is measured in three trials of sixty reads, and the lowest is kept with every trial', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const { measure, asked } = loading(18, 11, 14);
+    const result = await main(['--keep', file], () => Promise.resolve(run(30, 30)), measure);
+    expect(asked).toEqual(Array.from({ length: 3 }, () => ({ subject: 'issues', count: 60 })));
+    expect(result.code).toBe(0);
+    expect(await Bun.file(file).json()).toMatchObject({
+      loaded: { 'issues/list': { p95Ms: 11, trials: [18, 11, 14] } },
+    });
+    expect(result.lines.join('\n')).toContain('issues/list with the others busy p95: 11.0 ms');
+    expect(result.lines).toContain('issues trial 2/3: chat answered 100, refused 3');
+  });
+
+  test('passes against its own recorded number with the noise of D-267: a stalled trial is not a regression', async () => {
+    const file = await baselineWith(10);
+    const { measure, asked } = loading(90, 12, 13);
+    expect((await main(['--keep', file], () => Promise.resolve(run(30, 30)), measure)).code).toBe(
+      0,
+    );
+    expect(asked).toHaveLength(3);
+  });
+
+  test('fails when every trial is past the limit, measured again once, and keeps nothing', async () => {
+    const file = await baselineWith(10);
+    const original = await Bun.file(file).text();
+    const { measure, asked } = loading(...Array.from({ length: 6 }, () => 40));
+    const result = await main(['--keep', file], () => Promise.resolve(run(30, 30)), measure);
+    expect(result.code).toBe(1);
+    expect(asked).toHaveLength(6);
+    expect(result.lines.join('\n')).toContain(
+      'issues/list with the others busy p95: 40.0 ms (60 reads, was 10.0 ms, limit 20.0 ms) — REGRESSED',
+    );
+    expect(await Bun.file(file).text()).toBe(original);
+  });
+
+  test('the limit is the rule of D-267: the factor, the spread of the floor and the noise floor', async () => {
+    for (const [before, now, regressed] of [
+      [10, 20, false],
+      [10, 20.1, true],
+      [40, 60, false],
+      [40, 60.1, true],
+    ] as const) {
+      const file = await baselineWith(before);
+      const { measure } = loading(...Array.from({ length: 6 }, () => now));
+      const result = await main(['--keep', file], () => Promise.resolve(run(30, 30)), measure);
+      expect(result.code).toBe(regressed ? 1 : 0);
+    }
+  });
+
+  test('a baseline from before it was measured is not compared, and the run is recorded', async () => {
+    const file = await baselineWith(null);
+    const { measure } = loading(500, 500, 500);
+    const result = await main(['--keep', file], () => Promise.resolve(run(30, 30)), measure);
+    expect(result.code).toBe(0);
+    expect(await Bun.file(file).json()).toMatchObject({
+      loaded: { 'issues/list': { p95Ms: 500 } },
+    });
+  });
+
+  test('a measurement that is not a finite positive number is an error', async () => {
+    for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const refusal = await main([], () => Promise.resolve(run(30, 30)), loadedAt(value)).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      expect(refusal).toContain('finite');
+    }
+  });
+
+  test('the gate asks for the hot path of every module that declares one and is judged on the baseline', async () => {
+    const asked: string[] = [];
+    await gate(
+      [],
+      (_count, issuesBusy) =>
+        Promise.resolve(
+          issuesBusy ? { ...run(25, 25), issues: { answered: 1, refused: 0 } } : run(25, 25),
+        ),
+      (subject) => {
+        asked.push(subject);
+        return Promise.resolve({ p95: { list: 10 }, busy: { chat: BUSY } });
+      },
+    );
+    const declared = Object.entries(HOT_PATHS).flatMap(([id, path]) =>
+      'judged' in path && path.judged === 'baseline' ? [id] : [],
+    );
+    expect(declared).toEqual(['issues']);
+    expect([...new Set(asked)]).toEqual(declared);
+  });
+});
+
+/**
+ * The modules that declare no hot path, with why. A third module is either measured while the others are busy or is
+ * a line here that a reviewer reads (D-250 rule 6): it cannot skip the gate by saying nothing.
+ */
+const WITHOUT_A_HOT_PATH: Readonly<Record<string, string>> = {};
+
+describe('the table of hot paths', () => {
+  test('has exactly the bundled modules, and a module without a hot path is listed here with its reason', () => {
+    expect(Object.keys(HOT_PATHS).sort()).toEqual(
+      bundledModules.map(({ manifest }) => manifest.id).sort(),
+    );
+    const declared = Object.fromEntries(
+      Object.entries(HOT_PATHS).flatMap(([id, path]) => ('none' in path ? [[id, path.none]] : [])),
+    );
+    expect(declared).toEqual(WITHOUT_A_HOT_PATH);
+    for (const reason of Object.values(WITHOUT_A_HOT_PATH)) expect(reason.trim()).not.toBe('');
   });
 });

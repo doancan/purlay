@@ -24,6 +24,11 @@
  * past the noise floor is a regression — with the same second look. The comparison is with this run's quiet
  * numbers, the baseline mechanism above, because what is asked is what issues adds, not what this machine does today.
  *
+ * **Every module's hot path, with the others busy** (D-250 rule 6): `HOT_PATHS` says, for each bundled module, how its hot
+ * path is timed and how it is made busy, or why it has none. Chat's is the send above. Issues' is the list of a
+ * workspace's issues through its route, timed while chat's senders hold chat's share of the pool, and is judged as the
+ * quiet trials are: the lowest of three trials against the number recorded for it in the baseline file, by `limitOf`.
+ *
  * **A regression must happen twice** (D-227): a run that regressed is measured again, three more trials,
  * once, and fails only if that regresses too. `--record` keeps the run judged last; both are printed.
  *
@@ -36,7 +41,7 @@
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { MODULE_IDS, messageId, type ModuleId } from '@purlay/types';
 import { systemClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { issueSession } from '../modules/auth/sessions';
@@ -78,23 +83,30 @@ export const jumped = (
 ): boolean => before !== undefined && value > limitOf(before, factor);
 
 /**
- * What is measured with issues busy is connections held, not requests served: the readers are closed-loop clients
- * that send one request, wait for its answer and think for `ISSUE_THINK_MS`, so the work they ask of the CPU is a
- * few tens of small requests a trial, and there are more of them than the pool has connections, so that were issues
- * not held to its share the pool would be theirs. The CPU and event loop a busy module takes are the process's
+ * What is measured with a module busy is connections held, not requests served: the people are closed-loop clients
+ * that send one request, wait for its answer and think for `BUSY_THINK_MS`, so the work they ask of the CPU is a
+ * few tens of small requests a trial, and there are more of them than the pool has connections, so that were the
+ * module not held to its share the pool would be theirs. The CPU and event loop a busy module takes are the process's
  * to share (`MODULES.md` §7) and are not what the share of the pool promises.
  */
-const ISSUE_READERS = 12;
-const ISSUE_THINK_MS = 100;
+const BUSY_PEOPLE = 12;
+const BUSY_THINK_MS = 100;
+/** A busy module's message or request is answered within this, or the scenario is broken: chat's queue is thirty seconds at most. */
+const ANSWERED_WITHIN_MS = 60_000;
 /**
- * Issues' statements are made slow the way a long migration or a slow query would, without a clock in the
- * database: a lock on the table they read, taken for this long, let go for this long, again and again. The
- * readers that got a slot hold a connection each for the whole of the lock.
+ * A module's statements are made slow the way a long migration or a slow query would, without a clock in the
+ * database: a lock on the table they read or write, taken for this long, let go for this long, again and again. The
+ * people that got a slot hold a connection each for the whole of the lock.
  */
-const ISSUES_LOCKED_MS = 800;
-const ISSUES_UNLOCKED_MS = 50;
+const LOCKED_MS = 800;
+const UNLOCKED_MS = 50;
 /** Trials with issues busy: the lower of two, since a slowdown the share causes is in both. */
 const BUSY_TRIALS = 2;
+
+/** The list of issues' hot path: a workspace of this many, read this many times a trial, this far apart. */
+const ISSUES_LISTED = 50;
+const READS_PER_TRIAL = 60;
+const READ_PACE_MS = 50;
 
 /** Under the per-connection and per-user budgets of ten a second (`rate-limiter.ts`). */
 const PACE_MS = 125;
@@ -105,8 +117,23 @@ export interface Latency {
   readonly fanOutP95Ms: number;
   readonly messages: number;
   /** What the people reading issues were answered while the messages were timed; only when they were there. */
-  readonly issues?: { readonly answered: number; readonly refused: number };
+  readonly issues?: Tally;
+  /** In a run's summary only: each other module's hot path with the others busy, by `<module>/<metric>` (`HOT_PATHS`). */
+  readonly loaded?: Loaded;
 }
+
+/** What a request of a busy module was told: an answer, or its share's own refusal. */
+export interface Tally {
+  answered: number;
+  refused: number;
+}
+
+/** One hot path's p95 while the others were busy: the lowest trial is what is judged, every trial is kept. */
+interface LoadedPath {
+  readonly p95Ms: number;
+  readonly trials: readonly number[];
+}
+type Loaded = Readonly<Record<string, LoadedPath>>;
 
 const LATENCY_TRIALS = 3;
 const MESSAGES_PER_TRIAL = 60;
@@ -133,12 +160,12 @@ export const summarizeTrials = (trials: readonly Latency[]): RepeatedLatency => 
   return { ...lowestOf(trials), trials };
 };
 
+const range = (values: readonly number[]): string =>
+  `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ms`;
+
 /** How far apart the trials were, which is how noisy the machine was while they ran. */
-export const spreadOf = (trials: readonly Latency[]): string => {
-  const range = (values: readonly number[]): string =>
-    `${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} ms`;
-  return `noise across ${String(trials.length)} trials: ACK p95 ${range(trials.map((trial) => trial.ackP95Ms))}, fan-out p95 ${range(trials.map((trial) => trial.fanOutP95Ms))}`;
-};
+export const spreadOf = (trials: readonly Latency[]): string =>
+  `noise across ${String(trials.length)} trials: ACK p95 ${range(trials.map((trial) => trial.ackP95Ms))}, fan-out p95 ${range(trials.map((trial) => trial.fanOutP95Ms))}`;
 
 /** The value at the 95th percentile, nearest rank. */
 export const p95 = (samples: readonly number[]): number => {
@@ -158,7 +185,7 @@ export const judge = (
     ['fan-out', now.fanOutP95Ms, baseline?.fanOutP95Ms, BUDGETS.fanOutMs],
   ] as const;
   let regressed = false;
-  const lines = rows.map(([name, value, before, budget]) => {
+  const chat = rows.map(([name, value, before, budget]) => {
     const worse = jumped(value, before, factor);
     if (worse) regressed = true;
     const against =
@@ -168,7 +195,17 @@ export const judge = (
     const verdict = worse ? ' — REGRESSED' : value < budget ? '' : ' — over the budget';
     return `${name} p95: ${value.toFixed(1)} ms of ${String(budget)} ms (${String(now.messages)} messages${against})${verdict}`;
   });
-  return { regressed, lines };
+  const loaded = Object.entries(now.loaded ?? {}).map(([name, path]) => {
+    const before = baseline?.loaded?.[name]?.p95Ms;
+    const worse = jumped(path.p95Ms, before, factor);
+    if (worse) regressed = true;
+    const against =
+      before === undefined
+        ? ', no number recorded yet'
+        : `, was ${before.toFixed(1)} ms, limit ${limitOf(before, factor).toFixed(1)} ms`;
+    return `${name} with the others busy p95: ${path.p95Ms.toFixed(1)} ms (${String(READS_PER_TRIAL)} reads${against})${worse ? ' — REGRESSED' : ''}`;
+  });
+  return { regressed, lines: [...chat, ...loaded] };
 };
 
 const freePort = async (): Promise<number> => {
@@ -261,40 +298,25 @@ export const requireAnswers = (acks: number, deliveries: number, count: number):
   }
 };
 
-/** Reads issues' list until `stopped`, one request at a time, thinking between them. */
-const readIssues = async (
-  origin: string,
-  who: Person,
-  workspaceId: string,
-  stopped: () => boolean,
-  tally: { answered: number; refused: number },
-): Promise<void> => {
-  while (!stopped()) {
-    const response = await fetch(`${origin}/api/workspaces/${workspaceId}/issues`, {
-      headers: { cookie: who.cookie, origin },
-    });
-    await response.arrayBuffer();
-    countAnswer(tally, response.status);
-    await Bun.sleep(ISSUE_THINK_MS);
-  }
-};
-
-/** Takes the issues table in turns, until `stopped`, so that the statements of the module wait for it. */
-const lockIssuesInTurns = async (clone: ClonedDatabase, stopped: () => boolean): Promise<void> => {
-  while (!stopped()) {
-    await clone.db.transaction().execute(async (transaction) => {
-      await sql`lock table issues in access exclusive mode`.execute(transaction);
-      await Bun.sleep(ISSUES_LOCKED_MS);
-    });
-    await Bun.sleep(ISSUES_UNLOCKED_MS);
-  }
-};
+/** Everything a scenario needs of a running API: its address, its database, and the people and places in it. */
+interface Scene {
+  readonly origin: string;
+  readonly clone: ClonedDatabase;
+  readonly workspaceId: string;
+  readonly channelId: string;
+  readonly sender: Person;
+  readonly listener: Person;
+  /** A person of the workspace, signed in. */
+  readonly member: (name: string) => Promise<Person>;
+  /** A socket of the person's, closed with the scene. */
+  readonly connect: (who: Person) => Promise<Socket>;
+}
 
 /**
- * Starts the API against a fresh clone, times `count` messages, and takes everything down. With `issuesBusy`,
- * people read issues' list throughout, from the same process and the same pool, while its table is locked in turns.
+ * Starts the API against a fresh clone, as the image starts it, with a workspace of two people and a channel they
+ * are both in, and takes everything down afterwards.
  */
-export const measureLatency = async (count: number, issuesBusy = false): Promise<Latency> => {
+const inAScene = async <Result>(body: (scene: Scene) => Promise<Result>): Promise<Result> => {
   const clone = await cloneIntegrationDatabase();
   const port = await freePort();
   const origin = `http://localhost:${String(port)}`;
@@ -316,9 +338,6 @@ export const measureLatency = async (count: number, issuesBusy = false): Promise
     stderr: 'inherit',
   });
   const sockets: Socket[] = [];
-  const tally = { answered: 0, refused: 0 };
-  let hammering = true;
-  let hammers: Promise<unknown> = Promise.resolve();
   try {
     const deadline = performance.now() + READY_WITHIN_MS;
     for (;;) {
@@ -330,8 +349,9 @@ export const measureLatency = async (count: number, issuesBusy = false): Promise
       if (performance.now() > deadline) throw new Error('the API did not become ready');
       await Bun.sleep(100);
     }
-    const sender = await aPerson(clone, deriveAuthSecret(key), 'budget-sender');
-    const listener = await aPerson(clone, deriveAuthSecret(key), 'budget-listener');
+    const secret = deriveAuthSecret(key);
+    const sender = await aPerson(clone, secret, 'budget-sender');
+    const listener = await aPerson(clone, secret, 'budget-listener');
     const call = async (who: Person, path: string, body: unknown): Promise<{ id: string }> => {
       const response = await fetch(`${origin}${path}`, {
         method: 'POST',
@@ -343,48 +363,167 @@ export const measureLatency = async (count: number, issuesBusy = false): Promise
     };
     const slug = `budget-${randomBytes(4).toString('hex')}`;
     const workspace = await call(sender, '/api/workspaces', { name: 'budget', slug });
-    await clone.db
-      .insertInto('workspace_members')
-      .values({ workspace_id: workspace.id, user_id: listener.id, role: 'member' })
-      .execute();
+    const joinWorkspace = async (who: Person): Promise<void> => {
+      await clone.db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspace.id, user_id: who.id, role: 'member' })
+        .execute();
+    };
+    await joinWorkspace(listener);
     const channel = await call(sender, `/api/workspaces/${workspace.id}/channels`, {
       name: 'latency',
     });
     await call(listener, `/api/channels/${channel.id}/join`, {});
+    return await body({
+      origin,
+      clone,
+      workspaceId: workspace.id,
+      channelId: channel.id,
+      sender,
+      listener,
+      member: async (name) => {
+        const who = await aPerson(clone, secret, name);
+        await joinWorkspace(who);
+        return who;
+      },
+      connect: async (who) => {
+        const socket = await connect(origin, who.cookie);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+  } finally {
+    for (const socket of sockets) socket.close();
+    api.kill('SIGTERM');
+    await api.exited;
+    await clone.drop();
+  }
+};
 
-    const out = await connect(origin, sender.cookie);
-    const into = await connect(origin, listener.cookie);
-    sockets.push(out, into);
-    for (const socket of [out, into]) {
-      const id = messageId(systemClock.now());
-      const done = answered(socket, id);
+/** What a module's hot path was timed to, by metric. */
+type Samples = Readonly<Record<string, readonly number[]>>;
+
+/** A module made busy: what its requests were told, and the way to let it go. */
+interface Busy {
+  readonly tally: Tally;
+  readonly stop: () => Promise<void>;
+}
+
+/** Runs `loops` until stopped, which waits for them and says if one of them failed. */
+const busyWith = (
+  tally: Tally,
+  loops: (stopped: () => boolean) => readonly Promise<unknown>[],
+): Busy => {
+  let stopping = false;
+  const running = Promise.all(loops(() => stopping));
+  return {
+    tally,
+    stop: async (): Promise<void> => {
+      stopping = true;
+      await running;
+    },
+  };
+};
+
+/** Takes the table in turns, until `stopped`, so that the statements of the module that reads or writes it wait for it. */
+const lockInTurns = async (
+  clone: ClonedDatabase,
+  table: 'issues' | 'messages',
+  stopped: () => boolean,
+): Promise<void> => {
+  while (!stopped()) {
+    await clone.db.transaction().execute(async (transaction) => {
+      await sql`lock table ${sql.table(table)} in access exclusive mode`.execute(transaction);
+      await Bun.sleep(LOCKED_MS);
+    });
+    await Bun.sleep(UNLOCKED_MS);
+  }
+};
+
+/** Reads issues' list until `stopped`, one request at a time, thinking between them. */
+const readIssues = async (
+  scene: Scene,
+  who: Person,
+  stopped: () => boolean,
+  tally: Tally,
+): Promise<void> => {
+  while (!stopped()) {
+    const response = await fetch(`${scene.origin}/api/workspaces/${scene.workspaceId}/issues`, {
+      headers: { cookie: who.cookie, origin: scene.origin },
+    });
+    await response.arrayBuffer();
+    countAnswer(tally, response.status);
+    await Bun.sleep(BUSY_THINK_MS);
+  }
+};
+
+/**
+ * Sends messages until `stopped`, one at a time with a pause after each answer: an `ACK` is an answer and anything
+ * else with the message's id is the share's refusal, as `countAnswer` has it for issues.
+ */
+const sendMessages = async (
+  scene: Scene,
+  socket: Socket,
+  stopped: () => boolean,
+  tally: Tally,
+): Promise<void> => {
+  const outcomes = new Map<string, (event: string) => void>();
+  socket.frames((frame) => {
+    if (frame.refId !== undefined) outcomes.get(frame.refId)?.(frame.event);
+  });
+  while (!stopped()) {
+    const id = messageId(systemClock.now());
+    const event = await new Promise<string>((resolve, reject) => {
+      const giveUp = setTimeout(() => {
+        reject(new Error('chat did not answer a message while it was meant to be busy'));
+      }, ANSWERED_WITHIN_MS);
+      outcomes.set(id, (answer) => {
+        clearTimeout(giveUp);
+        resolve(answer);
+      });
       socket.send({
         id,
-        op: 'SUBSCRIBE',
-        payload: { channels: [{ channelId: channel.id, afterMessageId: null }] },
+        op: 'MESSAGE_SEND',
+        payload: { channelId: scene.channelId, content: 'busy' },
       });
-      await done;
-    }
+    });
+    outcomes.delete(id);
+    if (event === 'ACK') tally.answered += 1;
+    else tally.refused += 1;
+    await Bun.sleep(BUSY_THINK_MS);
+  }
+};
 
-    if (issuesBusy) {
-      const readers = await Promise.all(
-        Array.from({ length: ISSUE_READERS }, async (_, n) => {
-          const reader = await aPerson(clone, deriveAuthSecret(key), `budget-reader-${String(n)}`);
-          await clone.db
-            .insertInto('workspace_members')
-            .values({ workspace_id: workspace.id, user_id: reader.id, role: 'member' })
-            .execute();
-          return reader;
-        }),
-      );
-      hammers = Promise.all([
-        lockIssuesInTurns(clone, () => !hammering),
-        ...readers.map((reader) =>
-          readIssues(origin, reader, workspace.id, () => !hammering, tally),
-        ),
-      ]);
-    }
+/**
+ * What a module declares for D-250 rule 6: how its hot path is timed (`prepare` readies the scene, `time` answers
+ * every metric's samples, which are p95'd) and how it is made busy (`makeBusy`, lifting the other modules' hot paths
+ * to their share), and which rule judges it: `quiet-and-starvation` is the send path's own (the quiet trials against the
+ * baseline, then with issues busy against the quiet trials), `baseline` is the one a module added after chat has (its
+ * hot path with the others busy, against the number recorded for it). A module with no hot path says why.
+ */
+type HotPath =
+  | { readonly none: string }
+  | {
+      readonly judged: 'quiet-and-starvation' | 'baseline';
+      readonly prepare: (scene: Scene) => Promise<(count: number) => Promise<Samples>>;
+      readonly makeBusy: (scene: Scene) => Promise<Busy>;
+    };
 
+/** The send path: every message timed from the frame leaving to its `ACK` on the sender's socket and to its `MESSAGE_CREATED` on the other's. */
+const timeSends = async (scene: Scene): Promise<(count: number) => Promise<Samples>> => {
+  const out = await scene.connect(scene.sender);
+  const into = await scene.connect(scene.listener);
+  for (const socket of [out, into]) {
+    const id = messageId(systemClock.now());
+    const done = answered(socket, id);
+    socket.send({
+      id,
+      op: 'SUBSCRIBE',
+      payload: { channels: [{ channelId: scene.channelId, afterMessageId: null }] },
+    });
+    await done;
+  }
+  return async (count) => {
     const sentAt = new Map<string, number>();
     const acks: number[] = [];
     const fanOuts: number[] = [];
@@ -405,7 +544,7 @@ export const measureLatency = async (count: number, issuesBusy = false): Promise
       out.send({
         id,
         op: 'MESSAGE_SEND',
-        payload: { channelId: channel.id, content: `latency ${String(n)}` },
+        payload: { channelId: scene.channelId, content: `latency ${String(n)}` },
       });
       await Bun.sleep(PACE_MS);
     }
@@ -414,22 +553,148 @@ export const measureLatency = async (count: number, issuesBusy = false): Promise
       await Bun.sleep(20);
     }
     requireAnswers(acks.length, fanOuts.length, count);
-    hammering = false;
-    await hammers;
-    return {
-      ackP95Ms: p95(acks),
-      fanOutP95Ms: p95(fanOuts),
-      messages: count,
-      ...(issuesBusy ? { issues: tally } : {}),
-    };
-  } finally {
-    hammering = false;
-    await hammers.catch(() => undefined);
-    for (const socket of sockets) socket.close();
-    api.kill('SIGTERM');
-    await api.exited;
-    await clone.drop();
+    return { ack: acks, fanOut: fanOuts };
+  };
+};
+
+/**
+ * The list of a workspace's issues, through its route, one request at a time; a request the share refuses is timed
+ * at what it waited, since a module starved of its connections is what this measures, and counted by `countAnswer`.
+ */
+const timeIssuesList = async (scene: Scene): Promise<(count: number) => Promise<Samples>> => {
+  for (let n = 0; n < ISSUES_LISTED; n += 1) {
+    const response = await fetch(`${scene.origin}/api/workspaces/${scene.workspaceId}/issues`, {
+      method: 'POST',
+      headers: {
+        cookie: scene.sender.cookie,
+        origin: scene.origin,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ title: `latency ${String(n)}` }),
+    });
+    if (response.status !== 201)
+      throw new Error(`creating an issue answered ${String(response.status)}`);
   }
+  return async (count) => {
+    const timed: number[] = [];
+    const tally = { answered: 0, refused: 0 };
+    for (let n = 0; n < count; n += 1) {
+      const started = performance.now();
+      const response = await fetch(`${scene.origin}/api/workspaces/${scene.workspaceId}/issues`, {
+        headers: { cookie: scene.listener.cookie, origin: scene.origin },
+      });
+      await response.arrayBuffer();
+      timed.push(performance.now() - started);
+      countAnswer(tally, response.status);
+      await Bun.sleep(READ_PACE_MS);
+    }
+    return { list: timed };
+  };
+};
+
+/**
+ * Issues busy: people reading its list throughout, from the same process and the same pool, while its table is
+ * locked in turns, so that the readers that got a slot hold a connection each for the whole of the lock.
+ */
+const issuesBusy = async (scene: Scene): Promise<Busy> => {
+  const readers = await Promise.all(
+    Array.from({ length: BUSY_PEOPLE }, (_, n) => scene.member(`budget-reader-${String(n)}`)),
+  );
+  const tally = { answered: 0, refused: 0 };
+  return busyWith(tally, (stopped) => [
+    lockInTurns(scene.clone, 'issues', stopped),
+    ...readers.map((reader) => readIssues(scene, reader, stopped, tally)),
+  ]);
+};
+
+/** Chat busy: people sending messages throughout, more of them than chat's share of the pool, while its messages are locked in turns. */
+const chatBusy = async (scene: Scene): Promise<Busy> => {
+  const senders = await Promise.all(
+    Array.from({ length: BUSY_PEOPLE }, async (_, n) => {
+      const who = await scene.member(`budget-chatter-${String(n)}`);
+      const response = await fetch(`${scene.origin}/api/channels/${scene.channelId}/join`, {
+        method: 'POST',
+        headers: { cookie: who.cookie, origin: scene.origin, 'content-type': 'application/json' },
+        body: '{}',
+      });
+      if (!response.ok) throw new Error(`joining the channel answered ${String(response.status)}`);
+      return await scene.connect(who);
+    }),
+  );
+  const tally = { answered: 0, refused: 0 };
+  return busyWith(tally, (stopped) => [
+    lockInTurns(scene.clone, 'messages', stopped),
+    ...senders.map((socket) => sendMessages(scene, socket, stopped, tally)),
+  ]);
+};
+
+/** Every bundled module's hot path, or why it has none; `budget-latency.test.ts` holds the keys to the bundle. */
+export const HOT_PATHS: Readonly<Record<ModuleId, HotPath>> = {
+  chat: { judged: 'quiet-and-starvation', prepare: timeSends, makeBusy: chatBusy },
+  issues: { judged: 'baseline', prepare: timeIssuesList, makeBusy: issuesBusy },
+};
+
+/**
+ * Times `subject`'s hot path with each of the `busy` modules made busy before it starts, and takes everything down;
+ * says what the busy ones were told. A busy module that nobody answered measured nothing, and is an error.
+ */
+export const measureUnder = async (
+  subject: ModuleId,
+  count: number,
+  busy: readonly ModuleId[],
+): Promise<{ readonly samples: Samples; readonly busy: Partial<Record<ModuleId, Tally>> }> =>
+  await inAScene(async (scene) => {
+    const timed = HOT_PATHS[subject];
+    if ('none' in timed) throw new Error(`${subject} has no hot path: ${timed.none}`);
+    const time = await timed.prepare(scene);
+    const loads: [ModuleId, Busy][] = [];
+    try {
+      for (const id of busy) {
+        const load = HOT_PATHS[id];
+        if (!('none' in load)) loads.push([id, await load.makeBusy(scene)]);
+      }
+      const samples = await time(count);
+      for (const [, load] of loads) await load.stop();
+      for (const [id, load] of loads) {
+        if (load.tally.answered === 0) {
+          throw new Error(
+            `nobody was answered while ${id} was meant to be busy: nothing was measured`,
+          );
+        }
+      }
+      return { samples, busy: Object.fromEntries(loads.map(([id, load]) => [id, load.tally])) };
+    } finally {
+      await Promise.all(loads.map(([, load]) => load.stop().catch(() => undefined)));
+    }
+  });
+
+/** Chat's latency, `count` messages; with `issuesBusy`, while people read issues' list throughout. */
+export const measureLatency = async (count: number, issuesBusy = false): Promise<Latency> => {
+  const { samples, busy } = await measureUnder('chat', count, issuesBusy ? ['issues'] : []);
+  return {
+    ackP95Ms: p95(samples['ack'] ?? []),
+    fanOutP95Ms: p95(samples['fanOut'] ?? []),
+    messages: count,
+    ...(busy.issues === undefined ? {} : { issues: busy.issues }),
+  };
+};
+
+/** The p95 of each metric of `subject`'s hot path, `count` requests, while every other module is busy, and what the busy ones were told. */
+export type LoadedMeasure = (
+  subject: ModuleId,
+  count: number,
+) => Promise<{
+  readonly p95: Readonly<Record<string, number>>;
+  readonly busy: Partial<Record<ModuleId, Tally>>;
+}>;
+
+const measureLoaded: LoadedMeasure = async (subject, count) => {
+  const others = MODULE_IDS.filter((id) => id !== subject);
+  const { samples, busy } = await measureUnder(subject, count, others);
+  return {
+    p95: Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, p95(values)])),
+    busy,
+  };
 };
 
 export const optionOf = (args: readonly string[], name: string): string | undefined => {
@@ -454,13 +719,60 @@ const readLatency = async (file: string): Promise<Latency> => {
   if (ackP95Ms === null || fanOutP95Ms === null || messages === null) {
     throw new Error(`${file} is not a latency measurement`);
   }
-  return { ackP95Ms, fanOutP95Ms, messages };
+  const loaded: unknown =
+    typeof read === 'object' && read !== null ? Reflect.get(read, 'loaded') : null;
+  return { ackP95Ms, fanOutP95Ms, messages, ...(isLoaded(loaded) ? { loaded } : {}) };
+};
+
+/** A recorded `loaded`; one that is not in this shape (a baseline from before it existed) is not compared. */
+const isLoaded = (value: unknown): value is Loaded =>
+  typeof value === 'object' &&
+  value !== null &&
+  Object.values(value).every(
+    (path: unknown) =>
+      typeof path === 'object' &&
+      path !== null &&
+      typeof Reflect.get(path, 'p95Ms') === 'number' &&
+      Number.isFinite(Reflect.get(path, 'p95Ms')),
+  );
+
+/**
+ * Every module's hot path judged on the baseline, with the others busy: three trials each, the lowest kept beside every
+ * trial (D-267). What is not a finite positive number is an error, as for the quiet trials.
+ */
+const measureLoadedPaths = async (
+  measure: LoadedMeasure,
+): Promise<{ readonly loaded: Loaded; readonly told: readonly string[] }> => {
+  const loaded: Record<string, LoadedPath> = {};
+  const told: string[] = [];
+  for (const [id, path] of Object.entries(HOT_PATHS)) {
+    if ('none' in path || path.judged !== 'baseline') continue;
+    const trials: Readonly<Record<string, number>>[] = [];
+    for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
+      const { p95: measured, busy } = await measure(id as ModuleId, READS_PER_TRIAL);
+      trials.push(measured);
+      for (const [other, tally] of Object.entries(busy)) {
+        told.push(
+          `${id} trial ${String(trial + 1)}/${String(LATENCY_TRIALS)}: ${other} answered ${String(tally.answered)}, refused ${String(tally.refused)}`,
+        );
+      }
+    }
+    for (const metric of Object.keys(trials[0] ?? {})) {
+      const values = trials.map((trial) => trial[metric] ?? Number.NaN);
+      if (values.some((value) => !Number.isFinite(value) || value <= 0)) {
+        throw new Error(`${id}/${metric}: three finite positive p95s are required`);
+      }
+      loaded[`${id}/${metric}`] = { p95Ms: Math.min(...values), trials: values };
+    }
+  }
+  return { loaded, told };
 };
 
 /** The command: measure, compare with `--baseline`, keep with `--record`; answers what to print and the exit code. */
 export const main = async (
   args: readonly string[],
   measure: (count: number) => Promise<Latency> = measureLatency,
+  measureLoadedPath?: LoadedMeasure,
 ): Promise<{
   readonly lines: readonly string[];
   readonly code: number;
@@ -481,7 +793,14 @@ export const main = async (
     for (let trial = 0; trial < LATENCY_TRIALS; trial += 1) {
       trials.push(await measure(MESSAGES_PER_TRIAL));
     }
-    const now = summarizeTrials(trials);
+    const { loaded, told } =
+      measureLoadedPath === undefined
+        ? { loaded: {}, told: [] }
+        : await measureLoadedPaths(measureLoadedPath);
+    const now: RepeatedLatency = {
+      ...summarizeTrials(trials),
+      ...(Object.keys(loaded).length === 0 ? {} : { loaded }),
+    };
     const verdict = judge(now, baseline);
     const detail = trials.map(
       (trial, index) =>
@@ -494,7 +813,12 @@ export const main = async (
         ...verdict.lines,
         'verdict: lowest of three independent p95 measurements',
         spreadOf(trials),
+        ...Object.entries(loaded).map(
+          ([name, path]) =>
+            `noise across ${String(path.trials.length)} trials: ${name} p95 ${range(path.trials)}`,
+        ),
         ...detail,
+        ...told,
       ],
     };
   };
@@ -572,12 +896,16 @@ export const withIssuesBusy = async (
   };
 };
 
-/** The whole gate: the quiet trials against the baseline, then chat with issues busy against the quiet ones. */
+/**
+ * The whole gate: the quiet trials and each other module's hot path with the others busy, against the baseline; then
+ * chat with issues busy against the quiet trials.
+ */
 export const gate = async (
   args: readonly string[],
   measure: (count: number, issuesBusy: boolean) => Promise<Latency> = measureLatency,
+  measureLoadedPath: LoadedMeasure = measureLoaded,
 ): Promise<{ readonly lines: readonly string[]; readonly code: number }> => {
-  const quiet = await main(args, (count) => measure(count, false));
+  const quiet = await main(args, (count) => measure(count, false), measureLoadedPath);
   const busy = await withIssuesBusy(quiet.quiet, measure);
   return {
     lines: [...quiet.lines, ...busy.lines],
