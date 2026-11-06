@@ -886,7 +886,7 @@ export const WEB_FEATURES: readonly Mutation[] = [
     id: 'web-module-gate-always-open',
     why: 'the page draws a chat screen on a server that runs no chat, a screen whose every request answers 404 (D-250)',
     file: 'apps/web/src/features/shell/module-gate.tsx',
-    find: 'owner === null || modules.includes(owner)',
+    find: 'owner === null || modules.some((id) => id === owner)',
     replace: 'true',
     tests: ['apps/web/src/app/app.test.tsx'],
   },

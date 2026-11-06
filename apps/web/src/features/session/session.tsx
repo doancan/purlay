@@ -35,7 +35,8 @@ export const useSession = (): MeResponse => {
 };
 
 /** Whether the server runs this module (D-250): a screen, a request or a shortcut of one that is not run is not drawn. */
-export const useRuns = (module: string): boolean => useSession().modules.includes(module);
+export const useRuns = (module: string): boolean =>
+  useSession().modules.some((id) => id === module);
 
 export const SessionGate = ({
   children,
