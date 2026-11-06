@@ -312,6 +312,24 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   neither the process nor the pool is left as it was not (`deadline.integration.test.ts`). Not built: a counter of
   overruns (the warn line `request ran past its deadline` names the module, and a request that never answers is not in the
   request histogram, which counts the responses the handler gave), and a deadline on the core's own routes;
+- **a share, a deadline and an error boundary for each scheduled job** (`modules/jobs/module-shares.ts`, D-274). The job
+  command was the one door that took the raw database: nothing held a module's job to its share, nothing but the pool's
+  thirty-second statement limit bounded its time, and the scheduler runs jobs one after another, so a job that hung held
+  every job behind it. **A module's job now runs as a module's request does.** The command notes the run as its module's
+  (`scheduledJobRunner`), so each connection its work takes is asked of the module's share and held to its statement limit,
+  and the work is given the leased database as its only handle; `jobDeadline` in the manifest (`{ ms }` from 1000 to
+  3 600 000, or `{ none: reason }`, which `module-deadlines.test.ts` lists, empty today; ten minutes when left out,
+  `DEFAULT_JOB_DEADLINE_MS`) is how long one run may take, past which its signal aborts, the lease cancels the statement
+  running (`pg_cancel_backend`, as for a request) and refuses the next, and the run is recorded as a failure, `job_runs`
+  and `purlay_job_consecutive_failures` included, with the module's label on the log line. **A throw is the run's alone**:
+  recorded, logged at `error` with the module, answered with the exit code the scheduler reads, and the connection and the
+  slot are given back, so `jobs:first` goes on to the next job. The record of a run is written on the pool as it is, by the
+  runner, so a job cut off at its deadline is still told as failed. **The core's own jobs stay on the core's connection**
+  and have no deadline, as the core's routes have none: their bound is the statement limit, and a core job that hangs on
+  the store still holds the scheduler. Each job is a process of its own with a pool of two (`cli/jobs.ts`), so the
+  share holds what a job asks of its module's slots and limits and the deadline stops what it waits on; the pool's two
+  connections were already all one job could take of the server's. Measured on `purge:retention` over 3 000 workspaces, eight alternating runs each of the command before and after: medians 3 940
+  and 3 824 ms, fastest 3 084 and 3 165 ms, which is within the noise of a shared machine;
 - a deadline and an abort signal per `SearchSource`; one that overruns is cancelled, skipped, and the response
   says which (`skipped: [module]`, a wire shape fixed in step 4);
 - the CI latency gate refuses **starvation**, and only that (`budget:latency`): after the quiet trials it runs
@@ -485,7 +503,7 @@ commit beside this list.
   the manifests.
   `table-ownership.integration.test.ts` holds the list to the database, and a key across owners fails it. A core
   migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
-- **The table's schema** (D-271): `features/<id>/schema.ts` makes `<Id>Db` and `<Id>Tx` of `ModuleSchema<'<id>', CoreReads>`, naming the core tables the module reads; the module's functions take them in place of `Executor` and `Transaction`, and a core table added to the list is a line a reviewer reads. `module-db.test.ts` holds what the type refuses, and `module-tables.test.ts` fails for a folder under `features/` with no `schema.ts`, saying so, and reads its `CORE_READS`; the lint refuses `Executor`, `Transaction`, `Database` and `DB` in the module's files. A module therefore needs, beside its manifest: `schema.ts`; a `budget` (`poolShare` or `none` with a reason, the registry refuses a manifest without it and `module-budgets.test.ts` lists a `none`); a `deadline` only to differ from the default (`{ ms }`, or `{ none: reason }`, listed in `module-deadlines.test.ts`); and `retention` for the jobs that keep its rows (`composition.test.ts` stops a build whose named jobs and supplied work differ).
+- **The table's schema** (D-271): `features/<id>/schema.ts` makes `<Id>Db` and `<Id>Tx` of `ModuleSchema<'<id>', CoreReads>`, naming the core tables the module reads; the module's functions take them in place of `Executor` and `Transaction`, and a core table added to the list is a line a reviewer reads. `module-db.test.ts` holds what the type refuses, and `module-tables.test.ts` fails for a folder under `features/` with no `schema.ts`, saying so, and reads its `CORE_READS`; the lint refuses `Executor`, `Transaction`, `Database` and `DB` in the module's files. A module therefore needs, beside its manifest: `schema.ts`; a `budget` (`poolShare` or `none` with a reason, the registry refuses a manifest without it and `module-budgets.test.ts` lists a `none`); a `deadline` only to differ from the default (`{ ms }`, or `{ none: reason }`, listed in `module-deadlines.test.ts`), and a `jobDeadline` likewise for its scheduled jobs (D-274); and `retention` for the jobs that keep its rows (`composition.test.ts` stops a build whose named jobs and supplied work differ).
 - **The table's lifecycle**: every owned table needs its erasure and retention decision in `TABLE_LIFECYCLE`
   (`packages/db/src/table-lifecycle.ts`); a table with none does not compile, and `table-lifecycle.test.ts` holds the
   list to `TABLE_OWNERS`. The compiler does not check that a `deleted` or `window` decision is true (see the silent gaps).
