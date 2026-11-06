@@ -26,7 +26,7 @@ import {
   scrollToBottom,
   type Anchor,
 } from './scroll';
-import { isMine } from '../messages/author';
+import { isMine } from '../../lib/author';
 
 export interface FeedScroll {
   /** Is the reader at the bottom right now? */
