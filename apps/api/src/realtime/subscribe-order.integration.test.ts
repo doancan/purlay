@@ -25,6 +25,7 @@ import { createSocketHub, type SocketHub } from './hub';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame, type RouterDependencies } from './router';
+import { chatFrameHandlers } from '../features/chat/frames';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
@@ -96,6 +97,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           bus,
           limiter,
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+          frameHandlers: chatFrameHandlers,
           presence: inMemoryPresenceRegistry(clock),
           attention: nobodyActive,
           online: { active: () => undefined },
