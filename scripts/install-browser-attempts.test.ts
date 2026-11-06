@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  AFTER_STALL_COMMANDS,
   APT_TIMEOUTS,
   APT_TIMEOUTS_FILE,
   browserOf,
@@ -85,5 +86,30 @@ describe('installing a browser, with a stall cut and tried again', () => {
     expect(APT_TIMEOUTS).toContain('DPkg::Lock::Timeout "120";');
     expect(APT_TIMEOUTS.endsWith('\n')).toBe(true);
     expect(APT_TIMEOUTS_FILE).toMatch(/^\/etc\/apt\/apt\.conf\.d\/[0-9]+[a-z-]+$/);
+  });
+
+  test('after a stalled try, and only then, the runner is cleaned before the next one', async () => {
+    const cleaned: number[] = [];
+    const { run } = runs(['stalled', 'failed', 'stalled']);
+    await installWithRetries(
+      'webkit',
+      run,
+      () => undefined,
+      3,
+      5,
+      () => {
+        cleaned.push(cleaned.length);
+        return Promise.resolve();
+      },
+    );
+    expect(cleaned).toHaveLength(2);
+  });
+
+  test('the cleanup stops the apt a stopped try left and then finishes what it interrupted', () => {
+    expect(AFTER_STALL_COMMANDS.map((command) => command.join(' '))).toEqual([
+      'sudo pkill -KILL -x apt-get',
+      'sudo pkill -KILL -x apt',
+      'sudo dpkg --configure -a',
+    ]);
   });
 });
