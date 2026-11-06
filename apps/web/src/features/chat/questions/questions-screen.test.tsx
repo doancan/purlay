@@ -25,7 +25,7 @@ import {
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import { groupByChannel } from './questions-screen';
-import { forgetChannel, lastChannel, rememberChannel } from './last-channel';
+import { forgetChannel, lastChannel, rememberChannel } from '../../../data/last-channel';
 
 installDom();
 

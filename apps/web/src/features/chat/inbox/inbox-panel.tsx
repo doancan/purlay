@@ -33,7 +33,7 @@ import { INBOX_CATEGORIES, inboxSearch, typesOf, type InboxCategory } from './ca
 import { groupInbox, type InboxRow } from './group';
 import { InboxRowItem } from './inbox-row';
 import { useInboxReads } from './read';
-import { targetOf } from './why';
+import { targetOf } from '../../../lib/notification-why';
 
 interface InboxPanelProps {
   /** The rail's Inbox: the button the panel opens from, and is anchored to. */

@@ -22,7 +22,7 @@ import { FINDABLE_FROM, TextField } from '../../../ui/text-field';
 import { useToast } from '../../../ui/toast';
 import { fold } from '../composer/mention-suggest';
 import { useWorkspace } from '../../shell/workspace';
-import { joinableChannels } from './ordering';
+import { joinableChannels } from '../../../lib/channel-lists';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
 export const BrowseChannelsDialog = ({

@@ -286,7 +286,6 @@ import { discardAttachment, downloadAttachment } from './attachments';
 import { hideMyMessage } from './hidden';
 import { moduleConnections } from '../../platform/module-budget';
 import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-deadline';
-import { listIssues, patchIssue, postIssue, removeIssue } from './issues';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
@@ -592,7 +591,13 @@ export const createApp = (given: Dependencies): HttpApplication => {
     'WebSocket connections open on this process.',
     () => sockets.held().connections,
   );
-  const issueDependencies = { ...dependencies, permissions: modules.permissions };
+  // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
+  // manifest, as the rest of the surface is (D-255 §2).
+  const moduleRoutes = modules.bundled.flatMap((module) =>
+    module.routes === undefined
+      ? []
+      : [module.routes({ ...dependencies, permissions: modules.permissions })],
+  );
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
     read: async () => await readJobRuns(dependencies.database),
@@ -1587,26 +1592,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/saved/ids',
       async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
     )
-    .get(
-      '/api/workspaces/:workspaceId/issues',
-      async ({ request, params }) =>
-        await listIssues(issueDependencies, request, params.workspaceId),
-    )
-    .post('/api/workspaces/:workspaceId/issues', async ({ request, params, body, set }) => {
-      const issue = await postIssue(issueDependencies, request, params.workspaceId, body);
-      set.status = 201;
-      return issue;
-    })
-    .patch(
-      '/api/workspaces/:workspaceId/issues/:issueId',
-      async ({ request, params, body }) =>
-        await patchIssue(issueDependencies, request, params.workspaceId, params.issueId, body),
-    )
-    .delete('/api/workspaces/:workspaceId/issues/:issueId', async ({ request, params, set }) => {
-      await removeIssue(issueDependencies, request, params.workspaceId, params.issueId);
-      set.status = 204;
-      return null;
-    })
+    .use(moduleRoutes)
     .get(
       '/api/channels/:channelId/github-feeds',
       async ({ request, params }) => await listFeeds(dependencies, request, params.channelId),

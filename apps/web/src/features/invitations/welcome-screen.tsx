@@ -28,7 +28,7 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
-import { joinableChannels } from '../chat/sidebar/ordering';
+import { joinableChannels } from '../../lib/channel-lists';
 import { Checkbox } from '../../ui/checkbox';
 
 /** How many of the busiest channels are marked and picked to begin with. */

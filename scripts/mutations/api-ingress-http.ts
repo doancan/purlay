@@ -28,7 +28,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     file: 'apps/api/src/ingress/http/app.ts',
     find: '    database: leasingExecutor(\n      given.database,',
     replace: '    database: ((_lease: unknown) => given.database)(\n      given.database,',
-    tests: ['apps/api/src/ingress/http/issues-budget.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/budget.integration.test.ts'],
   },
   {
     id: 'application-hands-handlers-a-raw-database',
@@ -37,6 +37,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '    readAttachment: modules.readAttachment,\n',
     replace: '    readAttachment: modules.readAttachment,\n    rawDatabase: given.database,\n',
     tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
+    id: 'application-leaves-out-the-modules-routes',
+    why: 'the application uses no module’s own routes, so every path a module serves from its folder is the 404 of an unknown one (D-280)',
+    file: APP,
+    find: '    .use(moduleRoutes)\n',
+    replace: '',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'attachment-cached-for-a-year',
@@ -411,30 +419,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {
-    id: 'issues-delete-ignores-a-ended-session',
-    why: 'a session that ended after it was read still deletes an issue (D-85, D-254)',
-    file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    await deleteIssue(',
-    replace: '    await deleteIssue(',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
-  },
-  {
-    id: 'issues-patch-ignores-a-ended-session',
-    why: 'a session that ended after it was read still changes an issue (D-85, D-254)',
-    file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await updateIssue(',
-    replace: '    return await updateIssue(',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
-  },
-  {
-    id: 'issues-post-ignores-a-ended-session',
-    why: 'a session that ended after it was read still makes an issue (D-85, D-254)',
-    file: 'apps/api/src/ingress/http/issues.ts',
-    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await createIssue(',
-    replace: '    return await createIssue(',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
-  },
-  {
     id: 'library-status-logged-unset',
     why: 'the log line takes its status from `set` only, so every answer the library returns whole is written 200 and auth failures hide from a 4xx alert',
     file: 'apps/api/src/ingress/http/app.ts',
@@ -505,7 +489,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: 'if (owner !== CORE_OWNER && owner !== NO_OWNER)\n        noteModule(owner, deadlineSignals.get(request));',
     replace: 'void noteModule;',
     tests: [
-      'apps/api/src/ingress/http/issues-budget.integration.test.ts',
+      'apps/api/src/features/issues/http/budget.integration.test.ts',
       'scripts/budget-latency.integration.test.ts',
     ],
   },

@@ -31,7 +31,7 @@ import { useToast } from '../../../ui/toast';
 import { useRuns, useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { ActionRow, ChannelRow, StaticRow } from './channel-row';
-import { people } from './ordering';
+import { people } from '../../../lib/channel-lists';
 import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
 import { SectionHeading } from './section-heading';

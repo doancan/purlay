@@ -18,6 +18,15 @@ const NO_TRANSPORT_TYPES = {
     'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
 };
 
+// What a module's HTTP folder (`features/<id>/http/`, D-280) may not import: it is the module's part of the HTTP door, so it
+// speaks Elysia and the door's helpers (`ingress/http/session`, `validate`), but not the socket door, the file that composes
+// every module's routes, or the composition, which imports it.
+const NO_COMPOSITION_FROM_HTTP = {
+  group: ['**/realtime/**', '**/ingress/http/app', '**/composition'],
+  message:
+    'A module’s HTTP folder is below the application that composes it: it does not import the socket door, `ingress/http/app` or the composition. (D-280, MODULES.md §4)',
+};
+
 // What every file of the web client may not import, named once: ESLint replaces a rule rather than merging it, so the
 // module fences below restate it. (D-277)
 const WEB_RESTRICTED_IMPORTS = [
@@ -684,6 +693,7 @@ export default defineConfig([
         ? [NO_CREATE_DATABASE, NO_WHOLE_DATABASE]
         : [NO_CREATE_DATABASE, ...NO_RAW_SQL, NO_WHOLE_DATABASE],
     (id) => (id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL]),
+    NO_COMPOSITION_FROM_HTTP,
   ),
   // Repeats the clock and brand selectors, since a `no-restricted-syntax` replaces the one before it; tests are left to
   // the block below that gives them their own.

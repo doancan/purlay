@@ -9,28 +9,21 @@ import {
   type Issue,
   type IssuePage,
 } from '@purlay/types';
-import { createIssue, deleteIssue, issuePage, updateIssue } from '../../features/issues/issues';
-import { requireLiveSession } from '../../modules/auth/sessions';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import type { PermissionTable } from '../../platform/module-kit/permissions';
-import { atomicallyOn } from '../../platform/transactions';
-import type { ChannelDependencies } from './channels';
-import { requireSession } from './session';
-import { queryOf, validated } from './validate';
+import { requireLiveSession } from '../../../modules/auth/sessions';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import { requireSession } from '../../../ingress/http/session';
+import { queryOf, validated } from '../../../ingress/http/validate';
+import { createIssue, deleteIssue, issuePage, updateIssue } from '../issues';
 
-/**
- * Every statement these routes run is held to the issues module's share of the database by the database they are
- * handed (`features/issues/budget.ts`, `platform/module-budget.ts`). Who may ask is settled first, by the core's read of
- * the membership, outside the share: a person who is not in the workspace must not be able to hold its slots.
- */
-export interface IssueDependencies extends ChannelDependencies {
-  /** What a role may do in a process that runs these modules. */
-  readonly permissions: PermissionTable;
-}
+// Every statement these routes run is held to the issues module's share of the database by the database they are
+// handed (`../budget.ts`, `platform/module-budget.ts`). Who may ask is settled first, by the core's read of
+// the membership, outside the share: a person who is not in the workspace must not be able to hold its slots.
 
 /** `GET /api/workspaces/:workspaceId/issues?status=&before=&limit=` — newest first. */
 export const listIssues = async (
-  { auth, database }: ChannelDependencies,
+  { auth, database }: ModuleRouteDependencies,
   request: Request,
   workspaceId: string,
 ): Promise<IssuePage> => {
@@ -44,7 +37,7 @@ export const listIssues = async (
 
 /** `POST /api/workspaces/:workspaceId/issues` — `201` with the issue, open. */
 export const postIssue = async (
-  { auth, database, clock }: ChannelDependencies,
+  { auth, database, clock }: ModuleRouteDependencies,
   request: Request,
   workspaceId: string,
   body: unknown,
@@ -60,7 +53,7 @@ export const postIssue = async (
 
 /** `PATCH /api/workspaces/:workspaceId/issues/:issueId` — the issue as it is now. */
 export const patchIssue = async (
-  { auth, database, clock }: ChannelDependencies,
+  { auth, database, clock }: ModuleRouteDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -77,7 +70,7 @@ export const patchIssue = async (
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */
 export const removeIssue = async (
-  { auth, database, clock, permissions }: IssueDependencies,
+  { auth, database, clock, permissions }: ModuleRouteDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,

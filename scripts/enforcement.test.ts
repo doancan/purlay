@@ -8,11 +8,26 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { ESLint } from 'eslint';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
 const base = JSON.parse(readFileSync('packages/config/tsconfig.base.json', 'utf8')) as {
   compilerOptions: Record<string, unknown>;
+};
+
+/** The application's routes as text: `app.ts` and each module's own HTTP folder (D-280, `testing/route-sources.ts`). */
+const applicationRoutes = (): string => {
+  const features = 'apps/api/src/features';
+  const folders = readdirSync(features, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `${features}/${entry.name}/http`)
+    .filter((folder) => existsSync(folder));
+  const own = folders.flatMap((folder) =>
+    readdirSync(folder, { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => readFileSync(`${folder}/${file}`, 'utf8')),
+  );
+  return [readFileSync('apps/api/src/ingress/http/app.ts', 'utf8'), ...own].join('\n');
 };
 
 describe('compiler strictness (CONTRIBUTING.md §1.3, D-47)', () => {
@@ -473,7 +488,7 @@ describe('development starts with one command', () => {
  * and requires the proxy to cover each of their first segments.
  */
 describe('development serves the one origin it promises', () => {
-  const app = readFileSync('apps/api/src/ingress/http/app.ts', 'utf8');
+  const app = applicationRoutes();
   const vite = readFileSync('apps/web/vite.config.ts', 'utf8');
 
   const served = [...app.matchAll(/\.(?:get|post|put|patch|delete)\('(\/[^']*)'/g)].map(
@@ -601,7 +616,7 @@ describe('what API.md publishes for this phase is what the application serves', 
     [...source.matchAll(/^\s*\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm)].map(
       (match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`,
     );
-  const served = routesIn(readFileSync('apps/api/src/ingress/http/app.ts', 'utf8'));
+  const served = routesIn(applicationRoutes());
 
   test('the route reader sees a link of the chain and not a lookup inside a handler', () => {
     const source = [

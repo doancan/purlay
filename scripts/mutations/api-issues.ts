@@ -32,7 +32,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: 'permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy',
     replace: "context.role === 'owner' || createdBy",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-assigned-to-a-stranger',
@@ -40,7 +40,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .where('workspace_members.user_id', '=', assigneeId)\n",
     replace: "    .where('workspace_members.user_id', '<>', assigneeId)\n",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-assigned-to-an-erased-account',
@@ -48,7 +48,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .where('users.deleted_at', 'is', null)\n",
     replace: '',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-assignee-cleared-unchecked',
@@ -56,7 +56,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '  if (input.assigneeId !== undefined && input.assigneeId !== null) {',
     replace: '  if (input.assigneeId !== undefined) {',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-assignment-not-audited',
@@ -64,7 +64,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '  if (row.assignee_id !== before.assignee_id) {',
     replace: '  if (row.assignee_id !== row.assignee_id) {',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-cap-counts-every-workspace',
@@ -72,7 +72,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .where('workspace_id', '=', context.workspaceId)\n    .executeTakeFirstOrThrow();\n  if (Number(held.count)",
     replace: '    .executeTakeFirstOrThrow();\n  if (Number(held.count)',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-cap-not-enforced',
@@ -80,7 +80,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '  if (Number(held.count) >= ISSUES_PER_WORKSPACE_MAX) {',
     replace: '  if (Number(held.count) < 0) {',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-cap-off-by-one',
@@ -88,7 +88,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '  if (Number(held.count) >= ISSUES_PER_WORKSPACE_MAX) {',
     replace: '  if (Number(held.count) > ISSUES_PER_WORKSPACE_MAX) {',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-cap-without-the-lock',
@@ -96,7 +96,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '    .forNoKeyUpdate()\n',
     replace: '',
-    tests: ['apps/api/src/ingress/http/issues-cap.concurrency.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/cap.concurrency.integration.test.ts'],
   },
   {
     id: 'issues-create-not-audited',
@@ -104,7 +104,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "  await recordAudit(transaction, clock, audit(context, 'issue.created', row.id));\n",
     replace: '',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-created-by-nobody',
@@ -112,7 +112,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '      created_by: context.userId,\n',
     replace: '      created_by: null,\n',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-creator-cannot-delete-their-own',
@@ -120,7 +120,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: 'permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId',
     replace: 'permissions.holds(context.role, ISSUES_DELETE_ANY)',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-declares-no-budget-unlisted',
@@ -136,7 +136,15 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .select('created_by')\n    .where('id', '=', issueId)\n    .where('workspace_id', '=', context.workspaceId)",
     replace: "    .select('created_by')\n    .where('id', '=', issueId)",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
+    id: 'issues-delete-ignores-a-ended-session',
+    why: 'a session that ended after it was read still deletes an issue (D-85, D-254)',
+    file: 'apps/api/src/features/issues/http/handlers.ts',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    await deleteIssue(',
+    replace: '    await deleteIssue(',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-delete-ignores-its-permission',
@@ -144,7 +152,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '): boolean => permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId;',
     replace: '): boolean => createdBy === context.userId;',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-delete-not-audited',
@@ -152,7 +160,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "  await recordAudit(transaction, clock, audit(context, 'issue.deleted', issueId));\n",
     replace: '',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-deleted-by-any-member',
@@ -160,7 +168,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: 'permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId;',
     replace: 'createdBy !== undefined;',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-erasure-needs-its-table',
@@ -176,7 +184,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/module.ts',
     find: "    .where('assignee_id', '=', userId)\n",
     replace: '',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-export-reads-a-missing-table',
@@ -192,7 +200,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .where('workspace_id', '=', context.workspaceId)\n    .orderBy('id', 'desc')",
     replace: "    .orderBy('id', 'desc')",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-owner-cannot-delete-others',
@@ -200,7 +208,15 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: 'permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy',
     replace: "context.role === 'admin' || createdBy",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
+    id: 'issues-patch-ignores-a-ended-session',
+    why: 'a session that ended after it was read still changes an issue (D-85, D-254)',
+    file: 'apps/api/src/features/issues/http/handlers.ts',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await updateIssue(',
+    replace: '    return await updateIssue(',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-permission-asked-is-not-the-one-declared',
@@ -220,6 +236,14 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
   },
   {
+    id: 'issues-post-ignores-a-ended-session',
+    why: 'a session that ended after it was read still makes an issue (D-85, D-254)',
+    file: 'apps/api/src/features/issues/http/handlers.ts',
+    find: '    await requireLiveSession(transaction, clock, sessionId);\n    return await createIssue(',
+    replace: '    return await createIssue(',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
     id: 'issues-purge-forgets-its-table',
     why: 'a deleted workspace’s issues stay in the database, a title and a body of a workspace that was erased (D-242, D-254)',
     file: 'apps/api/src/features/issues/module.ts',
@@ -229,6 +253,14 @@ export const API_ISSUES: readonly Mutation[] = [
       'apps/api/src/ingress/http/workspace-purge.integration.test.ts',
       'apps/api/src/module-lifecycle.integration.test.ts',
     ],
+  },
+  {
+    id: 'issues-route-outside-its-manifest',
+    why: 'a route registered in issues’ folder is at a path its manifest does not list, so it stays mounted with the module off (D-255 §2, D-280)',
+    file: 'apps/api/src/features/issues/http/routes.ts',
+    find: "    .post('/api/workspaces/:workspaceId/issues', async",
+    replace: "    .post('/api/workspaces/:workspaceId/issues-stray', async",
+    tests: ['apps/api/src/ingress/http/route-ownership.test.ts'],
   },
   {
     id: 'issues-routes-not-in-its-manifest',
@@ -243,13 +275,21 @@ export const API_ISSUES: readonly Mutation[] = [
     ],
   },
   {
+    id: 'issues-routes-slot-dropped',
+    why: 'issues has routes in its manifest and its slot supplies none, so its handlers are back in the core’s hand-wired chain or nowhere (D-280)',
+    file: 'apps/api/src/features/issues/module.ts',
+    find: '  routes: issuesRoutes,\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/route-ownership.test.ts'],
+  },
+  {
     id: 'issues-share-is-the-whole-pool',
     why: 'the share issues may take is the whole pool, so the budget leaves chat nothing (O3, MODULES.md §7)',
     file: 'apps/api/src/features/issues/budget.ts',
     find: 'Math.min(Math.floor(poolMax / POOL_SHARE_DIVISOR), poolMax - 1)',
     replace: 'poolMax',
     tests: [
-      'apps/api/src/ingress/http/issues-budget.integration.test.ts',
+      'apps/api/src/features/issues/http/budget.integration.test.ts',
       'scripts/budget-latency.integration.test.ts',
     ],
   },
@@ -259,7 +299,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: '  if (row.status !== before.status) {',
     replace: '  if (row.status !== row.status) {',
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-update-crosses-workspaces',
@@ -267,7 +307,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .select(['status', 'assignee_id'])\n    .where('id', '=', issueId)\n    .where('workspace_id', '=', context.workspaceId)",
     replace: "    .select(['status', 'assignee_id'])\n    .where('id', '=', issueId)",
-    tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'purge-forgets-a-modules-table',

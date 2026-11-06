@@ -42,7 +42,7 @@ describe('what a module’s code names on the socket', () => {
     const chat = sourcesOf('chat').map(shown);
     expect(chat).toContain('features/chat/module.ts');
     expect(chat).toContain('ingress/http/messages.ts');
-    expect(sourcesOf('issues').map(shown)).toContain('ingress/http/issues.ts');
+    expect(sourcesOf('issues').map(shown)).toContain('features/issues/http/routes.ts');
     for (const module of carried) {
       expect(sourcesOf(module.manifest.id).map(shown)).not.toContain('ingress/http/app.ts');
     }
