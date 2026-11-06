@@ -119,6 +119,18 @@ route nobody owns, or one claimed by two, fails it. The effect is that a request
 same as what an unknown path says (its status, for a caller with no session, is not: see below). A closed job exits `0` (`closedJob`), a closed frame is answered as an
 operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).
 
+**A frame of a module that runs is served by the module** (D-276). The manifest's `frames` say which client operations
+are the module's, and its slot of `BundledModule` supplies `frameHandlers`, one handler for each: `(context, frame)`,
+where the frame is the contract's, already parsed, and the context is the connection's (`platform/frame-handlers.ts`:
+who is speaking, the application's database whose connections are the module's share, the transaction boundary, the bus,
+the clock, the user's write budget, and `reply` and `fail`, which stamp a frame as the router does). The router does what is
+the same for every operation, in this order: counts the frame against the connection's budget, parses it, answers an
+operation of a module this process does not run as one nobody has, and runs the handler inside its module's deadline and
+share (D-270, D-266), answering what it throws with the frame's `refId`. A handler returns the frames for this connection
+and publishes the rest to the bus; it never touches the socket. `PING` and `ACTIVE` are the router's own. A handler for an
+operation the manifest does not name stops the build (`compose`). A module reaches what its handler needs beyond the
+context by declaring a context of its own that extends it (chat's: `ChatFrameContext`), so it takes no more than it names.
+
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
 and the same route of a module that does not answers `404 ROUTE_NOT_FOUND`, while an unknown path is always `404`
@@ -508,7 +520,15 @@ commit beside this list.
 - `routes`: every path template the module owns, as the paths the contract gives (`:name` is a segment, a trailing `**`
   the rest). `route-ownership.test.ts` fails for a registered route no manifest claims or two claim.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act
-  for its users. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
+  for its users. **An operation in `frames` is served by a handler in `frameHandlers` of the module's slot**, typed by the
+  contract's frame for that operation, and the router dispatches by ownership: a module's frame is added by its handler and
+  not by an edit of `realtime/router.ts`. (Chat's four operations are still the router's own, moving behind the field in
+  steps, D-276: an operation with no handler is served as it was.) An operation is a name of `ClientFrame` in
+  `@purlay/types`, which does not yet open to a module's own (§4, wire unions); until it does, a new operation is added to
+  the contract and claimed here by one module. The context a handler is given is a
+  `FrameContext` (`platform/frame-handlers.ts`): declare the parts you use in an interface that extends it. A test in
+  `realtime/` with the module's handler and a fake `bundledModules` slot, as `frame-handlers.test.ts`, shows dispatch, the
+  closed answer, the budget and the deadline. Chat's `events` are a `satisfies readonly ServerEvent[]` list, so a typo does not compile. An event the
   module sends and does not list would reach a process that does not run it.
 - Its id in `ModuleId` (`packages/types/src/modules.ts`): the contract bundle lists the module from its manifest, and
   `contract/bundle.test.ts` and `bun run contract:bundle` fail until the type names it (D-273).
