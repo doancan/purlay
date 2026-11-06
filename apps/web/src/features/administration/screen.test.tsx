@@ -154,21 +154,31 @@ describe('server administration outside a workspace', () => {
 
   test('failed reads offer retry; a failed refresh retains the last result with a visible warning', async () => {
     let reads = 0;
-    const view = await open('overview', () => {
+    const view = await renderAdministration('overview', (call) => {
+      if (call.path !== '/api/server/overview') return undefined;
       reads++;
       return reads === 2
         ? json(overview)
         : json({ error: { code: 'INTERNAL', message: 'unavailable' } }, 500);
     });
+    const failure = (): HTMLElement => {
+      const section = view.getByText('Could not read administration data').closest('section');
+      if (section === null) throw new Error('missing administration read error');
+      return section;
+    };
     expect(await view.findByText('Could not read administration data')).toBeDefined();
-    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await person().click(within(failure()).getByRole('button', { name: 'Retry' }));
     expect(await view.findByText('0.3.0')).toBeDefined();
-    await person().click(view.getByRole('button', { name: 'Refresh' }));
+    await person().click(
+      within(view.getByRole('region', { name: 'Overview' })).getByRole('button', {
+        name: 'Refresh',
+      }),
+    );
     expect(
       await view.findByText('The refresh failed. The last received data is shown below.'),
     ).toBeDefined();
     expect(view.getByText('0.3.0')).toBeDefined();
-    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await person().click(within(failure()).getByRole('button', { name: 'Retry' }));
     expect(
       await view.findByText('The refresh failed. The last received data is shown below.'),
     ).toBeDefined();
