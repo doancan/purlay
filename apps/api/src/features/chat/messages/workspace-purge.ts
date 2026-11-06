@@ -5,7 +5,7 @@
  * tables of chat that still name the workspace once those are gone. The core owns the order, the batches'
  * transactions and the drain of the keys (`workspaces/deletion-purge.ts`).
  */
-import type { Transaction } from '@purlay/db';
+import type { ChatTx } from '../schema';
 import {
   WORKSPACE_PURGE_BATCH,
   type Batch,
@@ -19,7 +19,7 @@ const CHANNEL_BATCH = 100;
 /** A batch of the workspace's messages: replies while any is left, then roots. */
 const messageBatch =
   (replies: boolean) =>
-  async (transaction: Transaction, workspaceId: string): Promise<Batch> => {
+  async (transaction: ChatTx, workspaceId: string): Promise<Batch> => {
     const ids = (
       await transaction
         .selectFrom('messages')
@@ -36,7 +36,7 @@ const messageBatch =
     return { rows: ids.length, files: files.count, keys: files.keys };
   };
 
-const channelBatch = async (transaction: Transaction, workspaceId: string): Promise<Batch> => {
+const channelBatch = async (transaction: ChatTx, workspaceId: string): Promise<Batch> => {
   const gone = await transaction
     .deleteFrom('channels')
     .where(

@@ -11,7 +11,8 @@
  * messages `SKIP LOCKED` — with what each message added taken back first by the delete's own rule. A
  * process with no bus tells no socket: an open screen keeps the words until it reloads (D-139 §7).
  */
-import { sql, tableExists, type Executor, type Transaction } from '@purlay/db';
+import { sql, tableExists } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import type { ObjectStore } from '../../../platform/storage';
 import { atomicallyOn } from '../../../platform/transactions';
 import { drainObjectDeletions } from '../../../modules/attachments/deletions';
@@ -38,7 +39,7 @@ interface Batch {
 
 /** One batch of the person's messages in one workspace that still hold words or files. */
 const eraseBatch = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   now: Date,
   workspaceId: string,
   userId: string,
@@ -198,7 +199,7 @@ const USAGE =
  * name. `--all` is every workspace where they wrote anything: the self-hoster's, who controls them all.
  */
 export const planContentErasure = async (
-  executor: Executor,
+  executor: ChatDb,
   argv: readonly string[],
 ): Promise<ErasurePlan> => {
   const [who, flag, slug, ...rest] = argv;

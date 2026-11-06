@@ -8,7 +8,8 @@
  * a replay and the answer to a send build their messages through the same two
  * calls, and a page that arrives by a different route cannot differ in what it says.
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { Attachment, Reaction } from '@purlay/types';
 import { asAttachment } from '../../../modules/attachments/uploads';
 
@@ -18,7 +19,7 @@ import { asAttachment } from '../../../modules/attachments/uploads';
  * hop sideways when somebody else adds theirs.
  */
 export const reactionSets = async (
-  executor: Executor,
+  executor: ChatDb,
   messageIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly Reaction[]>> => {
   const sets = new Map<string, Reaction[]>();
@@ -45,7 +46,7 @@ export const reactionSets = async (
 
 /** The people each message names, in a stable order. */
 export const mentionSets = async (
-  executor: Executor,
+  executor: ChatDb,
   messageIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly string[]>> => {
   const sets = new Map<string, string[]>();
@@ -67,7 +68,7 @@ export const mentionSets = async (
 
 /** What each message carries, in the order it was uploaded (the ids are UUIDv7). */
 export const attachmentSets = async (
-  executor: Executor,
+  executor: ChatDb,
   messageIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly Attachment[]>> => {
   const sets = new Map<string, Attachment[]>();

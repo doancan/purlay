@@ -17,7 +17,8 @@
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
 import { notHiddenBy } from './hidden';
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import {
   isMessageIdShape,
   isPlausibleMessageId,
@@ -108,7 +109,7 @@ export interface Sent {
 
 /** The root a reply goes under, if it is a root of this channel that can be replied to. */
 const requireRoot = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   parentId: string,
 ): Promise<{ readonly authorId: string | null }> => {
@@ -145,7 +146,7 @@ const requireRoot = async (
  * `FOR UPDATE` waits on and waits for (D-111 §2). A demotion that committed first is the answer; one
  * still in flight waits for this send, which was made while the sender was an admin.
  */
-const mayPostRoot = async (executor: Executor, context: ChannelContext): Promise<boolean> => {
+const mayPostRoot = async (executor: ChatDb, context: ChannelContext): Promise<boolean> => {
   const channel = await executor
     .selectFrom('channels')
     .select('only_admins_post')
@@ -164,7 +165,7 @@ const mayPostRoot = async (executor: Executor, context: ChannelContext): Promise
 
 /** The summary of a root's thread as it is now, and the version it was read at. */
 const currentSummary = async (
-  executor: Executor,
+  executor: ChatDb,
   rootId: string,
 ): Promise<{ readonly summary: ThreadSummary; readonly version: number } | undefined> => {
   const root = await executor
@@ -193,7 +194,7 @@ const currentSummary = async (
  * with is chat's own `message_attachments` (`MODULES.md` §10, step 8).
  */
 const linkAttachments = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   messageId: string,
   ids: readonly string[],
@@ -242,7 +243,7 @@ const linkAttachments = async (
  * content of what it collided with.
  */
 export const sendMessage = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   context: ChannelContext,
   input: OutgoingMessage,
@@ -465,7 +466,7 @@ export interface HistoryQuery {
  * one's.
  */
 export const messageHistory = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   query: HistoryQuery = {},
 ): Promise<MessagePage> => {
@@ -523,7 +524,7 @@ export const messageHistory = async (
  * (D-103 §7). A fixed number of queries, however many messages the window holds.
  */
 export const messageWindow = async (
-  executor: Executor,
+  executor: ChatDb,
   visible: VisibleMessage,
 ): Promise<MessageWindow> => {
   const rootId = visible.parentId ?? visible.messageId;
@@ -565,7 +566,7 @@ export interface Replay {
  * first, one row past the limit so "is there more" is answered by reading.
  */
 export const missedIn = async (
-  executor: Executor,
+  executor: ChatDb,
   wanted: readonly { readonly context: ChannelContext; readonly after: string }[],
   perChannel: number,
 ): Promise<ReadonlyMap<string, Replay>> => {

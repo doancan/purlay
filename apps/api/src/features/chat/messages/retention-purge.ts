@@ -32,13 +32,11 @@
 import {
   sql,
   tableExists,
-  type DB,
-  type Executor,
   type Expression,
   type ExpressionBuilder,
   type SqlBool,
-  type Transaction,
 } from '@purlay/db';
+import type { ChatDb, ChatSchema, ChatTx } from '../schema';
 import { DAY_MS } from '../../../platform/clock';
 import type { ObjectStore } from '../../../platform/storage';
 import { atomicallyOn } from '../../../platform/transactions';
@@ -80,7 +78,7 @@ const NOTHING: Batch = {
 };
 
 /** The tables a candidate read names: a message as `message`, beside its channel. */
-type PurgeTables = DB & { readonly message: DB['messages'] };
+type PurgeTables = ChatSchema & { readonly message: ChatSchema['messages'] };
 
 /**
  * The message's channel keeps it no longer (D-225): not a channel that keeps everything, and older than
@@ -105,7 +103,7 @@ const pastChannelWindow =
 
 /** One batch of replies older than the window: deleted, and their threads summed again. */
 const purgeReplies = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   now: Date,
   workspaceId: string,
   cutoff: Date,
@@ -198,7 +196,7 @@ const purgeReplies = async (
  * thread, with no file left, is what the night leaves — so it is not taken again, and the loop ends.
  */
 const purgeRoots = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   now: Date,
   workspaceId: string,
   cutoff: Date,
@@ -407,7 +405,7 @@ export const purgeRetention = async (
 };
 
 const retainingWorkspaces = async (
-  database: Executor,
+  database: ChatDb,
 ): Promise<readonly { readonly id: string; readonly retentionDays: number }[]> =>
   (
     await database

@@ -6,7 +6,7 @@
  * `removeMessage` is the rule, inside the caller's transaction; `deleteMessage` is the one way in,
  * which commits and then tells the people whose numbers moved (D-35).
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { AppError } from '../../../platform/errors';
 import { requireMessageById } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
@@ -47,7 +47,7 @@ export interface Removed {
  * response is not an error. The row is locked first, so a delete and an edit take turns.
  */
 export const removeMessage = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   userId: string,
   messageId: string,

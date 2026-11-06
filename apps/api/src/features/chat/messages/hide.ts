@@ -1,4 +1,5 @@
-import { sql, type Transaction } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatTx } from '../schema';
 import type { Message } from '@purlay/types';
 import { requireMessageById, messageNotFound } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
@@ -15,7 +16,7 @@ export interface Hidden {
 
 /** Only the caller's projection, saves, notifications and pending reminders change. */
 export const hideMessage = async (
-  tx: Transaction,
+  tx: ChatTx,
   clock: Clock,
   userId: string,
   messageId: string,

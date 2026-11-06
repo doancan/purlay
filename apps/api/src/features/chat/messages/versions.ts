@@ -9,7 +9,7 @@
  * would keep them, since the row stays (D-135 §4, D-139).
  */
 import { Value } from '@sinclair/typebox/value';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import {
   MESSAGE_VERSIONS_KEPT,
   messageId,
@@ -30,7 +30,7 @@ const versionNotFound = (): AppError =>
  * own instant; then lets the oldest go past the bound. One statement each, whatever the count.
  */
 export const keepVersion = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   messageIdOf: string,
   replaced: string,
@@ -74,7 +74,7 @@ export const keepVersion = async (
 
 /** `GET /api/messages/:messageId/versions` — for anybody who can read the message. */
 export const messageVersions = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   messageIdOf: string,
   query: OlderPageQuery,
@@ -107,7 +107,7 @@ export const messageVersions = async (
  * removal can be told to every open history once it has committed (D-135 §5).
  */
 export const removeVersion = async (
-  executor: Executor,
+  executor: ChatDb,
   userId: string,
   messageIdOf: string,
   versionId: string,

@@ -12,7 +12,7 @@
  * silence. A channel at `none` stays silent for a thread followed (D-107 §1). Deep Work, the
  * counters and `NEEDS_YOU` are as they were: this decides who has a reason, nothing after.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { ThreadFollow } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
@@ -27,7 +27,7 @@ const requireRoot = (root: VisibleMessage): void => {
 
 /** Whether the caller is told of new replies in this root's thread. */
 export const followState = async (
-  executor: Executor,
+  executor: ChatDb,
   root: VisibleMessage,
 ): Promise<ThreadFollow> => {
   requireRoot(root);
@@ -57,7 +57,7 @@ export const followState = async (
 
 /** Records the caller's choice for this root's thread, and answers it. Twice is once. */
 export const setFollowing = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   root: VisibleMessage,
   following: boolean,
@@ -91,7 +91,7 @@ export interface ThreadChoices {
  * Every choice about this root's thread, over `idx_thread_follows_message`: one indexed lookup per
  * reply, beside D-29's. Bounded by who can see the channel, since a row is somebody's own choice.
  */
-export const threadChoices = async (executor: Executor, rootId: string): Promise<ThreadChoices> => {
+export const threadChoices = async (executor: ChatDb, rootId: string): Promise<ThreadChoices> => {
   const rows = await executor
     .selectFrom('thread_follows')
     .select(['user_id', 'following'])

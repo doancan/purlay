@@ -12,7 +12,8 @@
  * for a change that did not happen would make every other client re-render for no
  * reason, and let one person's double click be heard by the whole channel.
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { REACTIONS_PER_PERSON_MAX, type ReactionsResponse } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { requireChannelMember, requireMessageById } from '../channels/guard';
@@ -58,13 +59,13 @@ export interface ReactionDependencies {
  * (0015) does write the row, but as the transaction's last write, so a reply waits
  * for the instant between that statement and the commit, not for the whole of it.)
  */
-const serialiseReactionsTo = async (executor: Executor, messageId: string): Promise<void> => {
+const serialiseReactionsTo = async (executor: ChatDb, messageId: string): Promise<void> => {
   await sql`select pg_advisory_xact_lock(hashtextextended(${messageId}, 0))`.execute(executor);
 };
 
 /** Whether this would be a kind over the cap: new to the message, and no room for it. */
 const wouldExceedKinds = async (
-  executor: Executor,
+  executor: ChatDb,
   messageId: string,
   emoji: string,
 ): Promise<boolean> => {
@@ -83,7 +84,7 @@ const wouldExceedKinds = async (
  * lock as the kinds, so one person's two clicks at once cannot both pass the count.
  */
 const wouldExceedPerson = async (
-  executor: Executor,
+  executor: ChatDb,
   messageId: string,
   userId: string,
   emoji: string,

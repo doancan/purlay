@@ -9,7 +9,7 @@
  * - **Only the web**: an address is `http:` or `https:` as the contract's pattern says, and parsed here
  *   as a URL too, so nothing a browser would run (`javascript:`) is ever kept.
  */
-import type { Executor, Transaction } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import {
   BOOKMARKS_MAX,
   messageId as newId,
@@ -33,7 +33,7 @@ const notFound = (): AppError =>
   new AppError({ code: 'BOOKMARK_NOT_FOUND', message: 'Bookmark not found.' });
 
 /** The channel's row, held for the rest of the transaction: two members' adds take turns. */
-const lockForMember = async (transaction: Transaction, context: ChannelContext): Promise<void> => {
+const lockForMember = async (transaction: ChatTx, context: ChannelContext): Promise<void> => {
   await requireChannelMember(transaction, context, 'Join the channel to change its bookmarks.');
   await transaction
     .selectFrom('channels')
@@ -104,7 +104,7 @@ const webAddress = (url: string): string => {
 };
 
 export const channelBookmarks = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<BookmarkList> => {
   const rows = await executor
@@ -120,7 +120,7 @@ export const channelBookmarks = async (
 };
 
 export const addBookmark = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   context: ChannelContext,
   input: { readonly url: string; readonly title: string },
@@ -182,7 +182,7 @@ export const addBookmark = async (
  * none — is the one 404: the channel is what the caller was found able to see (D-34).
  */
 export const removeBookmark = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   context: ChannelContext,
   bookmarkId: string,
 ): Promise<BookmarkChange> => {

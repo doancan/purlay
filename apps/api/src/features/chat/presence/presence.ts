@@ -17,7 +17,7 @@
  * heard after an arrival is already away for somebody who chose it — nobody sees active-then-away. Offline
  * wins: an offline change is never away, and nobody offline is in a snapshot.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { PresenceChange, PresenceSnapshot } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import {
@@ -38,7 +38,7 @@ export interface OnlineReader {
 }
 
 /** Everybody who shares a workspace with the person, once each, never the person. */
-const coMembers = async (executor: Executor, userId: string): Promise<readonly string[]> => {
+const coMembers = async (executor: ChatDb, userId: string): Promise<readonly string[]> => {
   const everyone = new Set<string>();
   for (const workspace of await workspacesOf(executor, userId)) {
     for (const memberId of workspace.memberIds) if (memberId !== userId) everyone.add(memberId);
@@ -47,7 +47,7 @@ const coMembers = async (executor: Executor, userId: string): Promise<readonly s
 };
 
 /** Whether the person chose to appear away; false for nobody (an account erased meanwhile). */
-const awayChosen = async (executor: Executor, userId: string): Promise<boolean> =>
+const awayChosen = async (executor: ChatDb, userId: string): Promise<boolean> =>
   (
     await executor
       .selectFrom('users')
@@ -63,7 +63,7 @@ export const announcePresence = async (
     clock,
     log,
   }: {
-    readonly database: Executor;
+    readonly database: ChatDb;
     readonly bus: EventBus;
     readonly clock: Clock;
     readonly log: Logger;
@@ -91,7 +91,7 @@ export const announcePresence = async (
 
 /** `GET /api/workspaces/:workspaceId/presence` — for a member, the context says so already. */
 export const workspacePresence = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
   online: OnlineReader,
 ): Promise<PresenceSnapshot> => {

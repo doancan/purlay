@@ -1,9 +1,9 @@
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { ACCEPTED_ANSWER_PREVIEW_MAX, type ThreadKnowledge } from '@purlay/types';
 
 /** One bounded join for a whole page. Never copy a deleted answer or a former member's assignment. */
 export const knowledgeFor = async (
-  executor: Executor,
+  executor: ChatDb,
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, ThreadKnowledge>> => {
   const result = new Map<string, ThreadKnowledge>();

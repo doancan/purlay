@@ -5,7 +5,8 @@
  * `reviseMessage` is the rule, inside the caller's transaction; `edit` is the one way in from
  * either door, which commits and then tells the people whose numbers moved (D-35).
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { Message } from '@purlay/types';
 import type { Engine, Reading } from '@purlay/markdown';
 import { AppError } from '../../../platform/errors';
@@ -65,7 +66,7 @@ const added = (previous: readonly string[], next: readonly string[]): string[] =
  * taken one after the other and an edit that loses a race with a delete finds it deleted.
  */
 export const reviseMessage = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   userId: string,
   messageId: string,
@@ -228,7 +229,7 @@ export const reviseMessage = async (
  * message for them as well, as the recount finds it.
  */
 const countMentions = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   message: { readonly id: string; readonly reply: boolean },
   told: readonly string[],

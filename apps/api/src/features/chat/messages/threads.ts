@@ -14,7 +14,8 @@
  * with the message and publishes nothing, because nothing changed.
  */
 import { notHiddenBy } from './hidden';
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
@@ -55,7 +56,7 @@ const refuseBothDirections = (query: PageQuery): void => {
 
 /** A page of rows built into messages, and the cursor to continue in the direction travelled. */
 export const asPage = async (
-  executor: Executor,
+  executor: ChatDb,
   rows: readonly MessageRow[],
   limit: number,
   userId?: string,
@@ -74,7 +75,7 @@ export const asPage = async (
  * as its tombstone: it keeps its place in the thread, and the thread its count (D-103 §7).
  */
 export const threadReplies = async (
-  executor: Executor,
+  executor: ChatDb,
   root: VisibleMessage,
   query: PageQuery = {},
 ): Promise<MessagePage> => {
@@ -109,7 +110,7 @@ export const threadReplies = async (
  * also what confines the scan to a handful of channels.
  */
 export const unresolvedIn = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
   channelIds: readonly string[],
   query: UnresolvedQuery = {},
@@ -299,7 +300,7 @@ export const setResolved = async (
  * notification was written, for their inbox to be told after the commit.
  */
 const notifyResolved = async (
-  executor: Executor,
+  executor: ChatDb,
   target: VisibleMessage,
   authorId: string,
   now: Date,

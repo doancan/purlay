@@ -20,7 +20,8 @@
  * those who were notified. It returns the rows it changed, which is what lets the
  * caller tell each of them their new numbers without a query per person.
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { ChannelState, NEEDS_YOU } from '@purlay/types';
 import type { ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
@@ -72,7 +73,7 @@ export const THREAD_PARTICIPANTS_MAX = 50;
  * yesterday and was removed today is told nothing: a notification row names a conversation.
  */
 export const stillSeeing = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   userIds: readonly string[],
 ): Promise<ReadonlySet<string>> => {
@@ -98,7 +99,7 @@ export const stillSeeing = async (
 };
 
 export const resolveMentions = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   names: readonly string[],
 ): Promise<readonly string[]> => {
@@ -153,7 +154,7 @@ type Reasons = ReadonlyMap<string, Reason>;
  * read by the feed (D-147): its notification waits for its thread wherever the position is.
  */
 export const notify = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   message: { readonly id: string; readonly reply: boolean },
   reasons: Reasons,
@@ -231,7 +232,7 @@ export interface Recorded {
 /**
  * Writes the mentions and notifications for a new message and moves the counters.
  */
-export const recordDelivery = async (executor: Executor, delivery: Delivery): Promise<Recorded> => {
+export const recordDelivery = async (executor: ChatDb, delivery: Delivery): Promise<Recorded> => {
   const { context, messageId, mentioned, thread, now } = delivery;
   const sender = context.userId;
 
@@ -342,7 +343,7 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
  * recount counts it as unread until then.
  */
 export const countArrival = async (
-  executor: Executor,
+  executor: ChatDb,
   channelId: string,
   message: { readonly id: string; readonly reply: boolean },
   writer: string | null,
@@ -404,7 +405,7 @@ export const countArrival = async (
  * again. Counts nothing, writes nothing.
  */
 export const currentStates = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<readonly ChannelStateUpdate[]> =>
   (
