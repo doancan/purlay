@@ -30,8 +30,11 @@ import {
   shapeProblems,
   webModules,
 } from './budget-web';
+import { webImports } from './web-imports';
 
 const FEATURES_DIRECTORY = join(import.meta.dirname, '..', 'apps', 'web', 'src', 'features');
+/** The client's import graph, read once for the file: reading it is what costs, and every test but one is about the judging. */
+const GRAPH = webImports(join(FEATURES_DIRECTORY, '..'));
 
 const made: string[] = [];
 afterEach(() => {
@@ -198,7 +201,7 @@ describe('the shape the budget protects', () => {
     expect(shapeProblems(clean, measure(clean))).toEqual([]);
     // The word lives in the screen's file, not in a manifest the shell carries. Chat is found by its sources instead.
     for (const module of webModules().filter(({ id }) => id !== 'chat')) {
-      const [screen] = screenSources(module);
+      const [screen] = screenSources(module, GRAPH);
       expect(readFileSync(join(FEATURES_DIRECTORY, '..', screen ?? ''), 'utf8')).toContain(
         `'screen-of-the-${module.id}-module'`,
       );
@@ -283,7 +286,7 @@ describe('the files the first page is cut into', () => {
 describe("where each module's code is", () => {
   const problemsOf = (files: Record<string, string | Buffer>, features?: string): string[] => {
     const dist = aBuild(files);
-    return moduleProblems(dist, measure(dist), features);
+    return moduleProblems(dist, measure(dist), features, GRAPH);
   };
 
   test("a shell with the other features and a chunk of each module's own passes", () => {
@@ -299,7 +302,7 @@ describe("where each module's code is", () => {
 
   test("a module's lazy-only files are derived from its folder: its screens and the composer, not what the shell imports", () => {
     const sources = Object.fromEntries(
-      webModules().map((module) => [module.id, screenSources(module)]),
+      webModules().map((module) => [module.id, screenSources(module, GRAPH)]),
     );
     expect(sources['chat']).toContain('features/chat/chat.ts');
     expect(sources['chat']).toContain('features/chat/channel/channel-screen.tsx');
@@ -404,7 +407,7 @@ describe("where each module's code is", () => {
 describe('the command', () => {
   test('passes quietly inside the budget, with the report on stdout', () => {
     const dist = aBuild(aShell([]));
-    const result = main(dist);
+    const result = main(dist, GRAPH);
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
     expect(result.out).toContain('initial JavaScript, gzipped');
@@ -418,14 +421,15 @@ describe('the command', () => {
         Buffer.from('"scopeName"'),
       ]),
     });
-    const result = main(dist);
+    const result = main(dist, GRAPH);
     expect(result.code).toBe(1);
     expect(result.err).toContain('over the 400.00 KB budget');
     expect(result.err).toContain('syntax-highlighting');
     expect(result.out).toContain('assets/index-aaa.js');
   });
 
-  test('fails when a chat screen is back in the shell, and says where it loads from', () => {
+  // The one test that reads the repository's own import graph, as `bun run budget:web` does.
+  test('fails when a chat screen is back in the shell, and says where it loads from, against the real tree', () => {
     const dist = aBuild(aShell(['../../src/features/chat/unreads/unreads-screen.tsx']));
     const result = main(dist);
     expect(result.code).toBe(1);

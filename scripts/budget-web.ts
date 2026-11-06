@@ -35,7 +35,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { CORE_IMPORTS_OF_MODULES } from './web-fences.mjs';
-import { staticClosure, webImports } from './web-imports';
+import { staticClosure, webImports, type WebImport } from './web-imports';
 
 export const BUDGET_BYTES = 400 * 1024;
 /** The shell's own bound: the initial JavaScript with chat's screens in their own chunk. */
@@ -175,8 +175,10 @@ export const moduleIds = (features = FEATURES): string[] =>
  * statically, which is in the shell for the reason listed there. Derived from the folder, so a file added to a module is
  * held without a line here, and a file the core stops importing is held from then on.
  */
-export const screenSources = (module: WebModule, src = SRC): string[] => {
-  const imports = webImports(src);
+export const screenSources = (
+  module: WebModule,
+  imports: readonly WebImport[] = webImports(SRC),
+): string[] => {
   const resident = staticClosure(
     imports,
     CORE_IMPORTS_OF_MODULES.map(({ to }) => to),
@@ -245,11 +247,19 @@ export const shapeProblems = (dist: string, report: Report): string[] => {
  * What is wrong with where each module's code is, and with the shell's size, one sentence each: a module's chunk and its
  * bound, and its sources in the shell.
  */
-export const moduleProblems = (dist: string, report: Report, features = FEATURES): string[] => {
+export const moduleProblems = (
+  dist: string,
+  report: Report,
+  features = FEATURES,
+  imports?: readonly WebImport[],
+): string[] => {
   const problems: string[] = [];
   const assets = join(dist, 'assets');
   const files = existsSync(assets) ? readdirSync(assets) : [];
   const modules = webModules(features);
+  // The import graph is read once, when a chunk with a source map first needs it, and not for each chunk and module.
+  let graph = imports;
+  const lazyOnly: Record<string, string[]> = {};
   for (const module of modules) {
     const bound = MODULE_BYTES[module.id];
     if (bound === undefined) {
@@ -294,7 +304,7 @@ export const moduleProblems = (dist: string, report: Report, features = FEATURES
       continue;
     }
     for (const module of modules) {
-      const own = screenSources(module);
+      const own = (lazyOnly[module.id] ??= screenSources(module, (graph ??= webImports(SRC))));
       const found = own.filter((only) =>
         sources.some(({ source }) => source.includes(`/src/${only}`)),
       );
@@ -344,9 +354,13 @@ export const overBudget = (report: Report, budget = BUDGET_BYTES): string | null
 /** The command: what it prints, what it complains about, and whether it fails. */
 export const main = (
   dist: string,
+  imports?: readonly WebImport[],
 ): { readonly out: string; readonly err: string; readonly code: number } => {
   const report = measure(dist);
-  const problems = [...shapeProblems(dist, report), ...moduleProblems(dist, report)];
+  const problems = [
+    ...shapeProblems(dist, report),
+    ...moduleProblems(dist, report, FEATURES, imports),
+  ];
   const over = overBudget(report);
   if (over !== null) problems.unshift(over);
   return {
