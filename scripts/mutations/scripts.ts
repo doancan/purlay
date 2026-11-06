@@ -35,6 +35,22 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/budget-api.test.ts'],
   },
   {
+    id: 'budget-web-forgets-a-module-with-no-bound',
+    why: 'a module is added to the client and its chunk has no byte bound, so it may grow without a reviewer choosing a limit (D-250)',
+    file: 'scripts/budget-web.ts',
+    find: '    if (bound === undefined) {',
+    replace: '    if (bound === null) {',
+    tests: ['scripts/budget-web.test.ts'],
+  },
+  {
+    id: 'budget-web-ignores-a-modules-bound',
+    why: 'a module’s lazy chunk grows past its bound and the build still passes, so the lazy chunk costs whatever it likes (D-250)',
+    file: 'scripts/budget-web.ts',
+    find: '    if (bound !== undefined && gzip > bound) {',
+    replace: '    if (bound !== undefined && gzip > bound * 1000) {',
+    tests: ['scripts/budget-web.test.ts'],
+  },
+  {
     id: 'budget-web-lets-a-module-screen-into-the-shell',
     why: 'a module’s screen is bundled into the entry and every server downloads it, whether it runs the module or not (D-250, D-254)',
     file: 'scripts/budget-web.ts',
