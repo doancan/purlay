@@ -12,13 +12,13 @@ import {
   type ClonedDatabase,
 } from '@purlay/db';
 import { ISSUES_PER_WORKSPACE_MAX } from '@purlay/types';
-import { fixedClock } from '../../platform/clock';
-import { AppError } from '../../platform/errors';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { atomicallyOn } from '../../platform/transactions';
-import { NOW } from '../../testing/doubles';
-import { aUniqueSlug, aUserRow } from '../../testing/users';
-import { createIssue } from '../../features/issues/issues';
+import { fixedClock } from '../../../platform/clock';
+import { AppError } from '../../../platform/errors';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
+import { NOW } from '../../../testing/doubles';
+import { aUniqueSlug, aUserRow } from '../../../testing/users';
+import { createIssue } from '../issues';
 
 let cloned: ClonedDatabase;
 

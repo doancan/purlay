@@ -40,6 +40,8 @@ import {
 } from './platform/module-kit/permissions';
 import { CORE_OWNER, ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
+import type { AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from './ingress/http/module-routes';
 import type { ModuleManifest, NotificationKindDeclaration } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
 
@@ -85,6 +87,13 @@ export interface BundledModule {
    * the build (`compose`), as the work of a job does (D-276).
    */
   readonly frameHandlers?: FrameHandlers<RouterFrameContext>;
+  /**
+   * The module's HTTP routes, as an Elysia plugin made from what they are handed, at the paths its manifest lists under
+   * `routes` and no others (D-280). The application uses the plugin of every bundled module, whether or not it runs, and a
+   * module that is not run is closed by its manifest as before (D-255 §2). A module that has routes and supplies none is
+   * one whose handlers are still in `ingress/http/`, which `route-ownership.test.ts` lists and only lets shrink.
+   */
+  readonly routes?: (context: ModuleRouteDependencies) => AnyElysia;
 }
 
 /**

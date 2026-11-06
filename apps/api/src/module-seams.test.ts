@@ -1,8 +1,8 @@
 /**
  * The doors name a module only where its routes are (D-250, `MODULES.md` §8): `cli/`, `ingress/` and `realtime/` reach a module's work
  * through the composition (`composition.ts`, whose `jobWork` is what `bun run job` runs) and name none of its files, but the
- * one file that registers the modules' routes, `ingress/http/app.ts`, and the route handlers a module keeps in `ingress/`
- * (`MODULES.md` §9 item 4). `eslint.config.mjs` keeps the core (`modules/`, `platform/`) from importing a feature at all; this
+ * one file that composes the modules' routes, `ingress/http/app.ts`, and the route handlers a module has not yet moved
+ * into its own folder (`features/<id>/http/`, D-280, `MODULES.md` §9 item 4). `eslint.config.mjs` keeps the core (`modules/`, `platform/`) from importing a feature at all; this
  * is the same line for the doors, which the lint cannot draw because chat's own handlers are among them: a file may import a
  * feature only if it is listed here for that feature, and the lists only shrink.
  *
@@ -63,10 +63,6 @@ const ALLOWED: Readonly<
       },
     ]),
   ),
-  [join('ingress', 'http', 'issues.ts')]: {
-    features: ['issues'],
-    why: 'a route handler of issues, kept in ingress (MODULES.md §9 item 4)',
-  },
   [join('ingress', 'http', 'workspaces.ts')]: {
     features: ['chat'],
     why: 'the workspace routes still read chat’s GitHub client and unfurl check',
@@ -90,7 +86,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 27;
+const MAX_ALLOWED = 26;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */

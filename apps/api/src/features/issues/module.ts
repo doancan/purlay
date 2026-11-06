@@ -16,6 +16,7 @@ import { issuesBudget } from './budget';
 import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
 import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
+import { issuesRoutes } from './http/routes';
 import { issuesPersonalExport } from './personal-export';
 import type { IssuesTx } from './schema';
 
@@ -56,4 +57,5 @@ export const issuesModule = {
   workspacePurge: issuesWorkspacePurge,
   export: issuesExport,
   personalExport: issuesPersonalExport,
+  routes: issuesRoutes,
 };

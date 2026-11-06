@@ -19,13 +19,13 @@ import {
   type ClonedDatabase,
 } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import { composition } from '../../composition';
-import { issuesBudget } from '../../features/issues/budget';
-import { fixedClock } from '../../platform/clock';
-import { NOW, testConfig, testDependencies } from '../../testing/doubles';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
-import { createApp, type HttpApplication } from './app';
+import { composition } from '../../../composition';
+import { issuesBudget } from '../budget';
+import { fixedClock } from '../../../platform/clock';
+import { NOW, testConfig, testDependencies } from '../../../testing/doubles';
+import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
+import { createApp, type HttpApplication } from '../../../ingress/http/app';
 
 const POOL = 6;
 const ORIGIN = 'https://purlay.test';

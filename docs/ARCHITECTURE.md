@@ -135,8 +135,8 @@ purlay/
 │   │       │   │              incidents, the GitHub integration and the inbox: what the product was before
 │   │       │   │              it was a set of modules. It still writes raw SQL; the others may not
 │   │       │   └── issues/      a workspace's issues (D-254): its manifest and data hooks, with a migration
-│   │       │                  set of its own (`packages/db/migrations/issues/`). The route table is in
-│   │       │                  `ingress/http/issues.ts`; every module is listed in `composition.ts`
+│   │       │                  set of its own (`packages/db/migrations/issues/`). Its routes are a plugin
+│   │       │                  in `http/routes.ts` (D-280); every module is listed in `composition.ts`
 │   │       │                  (`bundledModules`) and in `MODULES.md` §11, which also says how to add one
 │   │       ├── modules/         the core's business rules; no HTTP or WS types cross this line, and none of
 │   │       │                  it imports a feature
