@@ -263,8 +263,8 @@ export const API_CHAT_INTEGRATIONS: readonly Mutation[] = [
     id: 'github-issue-without-membership',
     why: 'a person taken out of a channel makes an issue from its thread with the form they opened before (D-246 §2)',
     file: GITHUB_ISSUES,
-    find: "    'Join the channel to create an issue from it.',\n  );\n",
-    replace: "    'Join the channel to create an issue from it.',\n  ).then(() => undefined);\n",
+    find: "  await requireChannelMember(\n    database,\n    target.context,\n    'Join the channel to create an issue from it.',\n  );\n",
+    replace: '',
     tests: [GITHUB_ISSUES_TESTS],
   },
   {
