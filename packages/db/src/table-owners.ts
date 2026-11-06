@@ -28,6 +28,7 @@ export const TABLE_OWNERS = {
   rate_limits: 'core',
   server_audit_log: 'core',
   server_settings: 'core',
+  server_operational_status: 'core',
   sessions: 'core',
   setup_state: 'core',
   two_factors: 'core',
@@ -35,6 +36,8 @@ export const TABLE_OWNERS = {
   verifications: 'core',
   workspace_exports: 'core',
   workspace_invitations: 'core',
+  workspace_invitation_recipients: 'core',
+  workspace_invitation_mail_attempts: 'core',
   workspace_members: 'core',
   workspaces: 'core',
 

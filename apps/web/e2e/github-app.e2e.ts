@@ -78,7 +78,7 @@ test('the administrator connects the App, an owner installs it, a person allows 
   await expect(page.getByRole('region', { name: 'Create issues as you' })).toHaveCount(0);
 
   // The administrator connects the App: a key from another App is refused in words, nothing kept.
-  await page.goto('/w/acme-engineering/settings/server');
+  await page.goto('/server/integrations');
   const card = page.getByRole('region', { name: 'GitHub App for issues' });
   await expect(card.getByText('Not connected')).toBeVisible();
   await expect(card.getByText(`${origin}/api/github-app/callback`)).toBeVisible();

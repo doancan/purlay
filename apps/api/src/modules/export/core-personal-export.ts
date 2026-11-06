@@ -20,6 +20,8 @@ const head = [
       display_name: 'export',
       avatar_url: 'export',
       email: 'export',
+      admission_state: 'export',
+      admission_requires_verified_email: 'export',
       email_verified: 'export',
       github_id: 'export',
       github_login: 'export',
@@ -77,6 +79,41 @@ const head = [
     },
     (userId) => ({ where: sql`user_id = ${userId}`, order: 'id' }),
   ),
+  personalTableExport(
+    'workspace_invitation_recipients',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      email: 'export',
+      locale: 'export',
+      created_by: 'omit',
+      created_at: 'export',
+      applicant_user_id: 'export',
+      requested_at: 'export',
+      joined_at: 'export',
+    },
+    (userId) => ({
+      where: sql`applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true)`,
+      order: 'id',
+    }),
+  ),
+  personalTableExport(
+    'workspace_invitation_mail_attempts',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      recipient_id: 'export',
+      invitation_id: 'omit',
+      created_at: 'export',
+      result: 'export',
+      finished_at: 'export',
+      failure: 'export',
+    },
+    (userId) => ({
+      where: sql`recipient_id in (select id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true))`,
+      order: 'id',
+    }),
+  ),
 ] as const;
 
 /** The tables the core writes into a person's export. */
@@ -89,6 +126,7 @@ export const corePersonalExport: CorePersonalContribution = {
   tables: [],
   workspaces: (userId) => [
     sql`select workspace_id from workspace_members where user_id = ${userId}`,
+    sql`select workspace_id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true)`,
   ],
 };
 
@@ -110,6 +148,7 @@ export type CorePersonalExcluded =
   | 'object_deletions'
   | 'workspace_exports'
   | 'personal_exports'
+  | 'server_operational_status'
   | 'server_settings'
   | 'setup_state';
 
@@ -131,6 +170,7 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   workspace_exports: 'an owner’s export of a workspace: the workspace’s record',
   personal_exports:
     'the record of this very export and the ones before it: its archive is the export',
+  server_operational_status: 'the operator’s bounded checks, not personal or workspace data',
   server_settings: 'the operator’s settings for the whole server',
   setup_state: 'where the server’s setup stands: the server’s',
 };

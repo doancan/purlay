@@ -13,6 +13,7 @@ import type * as Deferred from '../../app/deferred';
 const load = (): Promise<typeof Deferred> => import('../../app/deferred');
 
 const Screen = lazy(async () => ({ default: (await load()).SettingsScreen }));
+const Administration = lazy(async () => ({ default: (await load()).AdministrationScreen }));
 const Nav = lazy(async () => ({ default: (await load()).SettingsNav }));
 const Enrolment = lazy(async () => ({ default: (await load()).TwoFactorEnrolment }));
 
@@ -51,5 +52,15 @@ export const LazyTwoFactorEnrolment = ({
 }): React.JSX.Element => (
   <Suspense fallback={<Waiting className="flex w-full flex-col gap-3 p-10" />}>
     <Enrolment email={email} />
+  </Suspense>
+);
+
+export const LazyAdministration = ({
+  section,
+}: {
+  readonly section: string;
+}): React.JSX.Element => (
+  <Suspense fallback={<Waiting className="flex w-full flex-col gap-3 p-10" />}>
+    <Administration section={section} />
   </Suspense>
 );

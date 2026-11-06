@@ -68,6 +68,7 @@ export const SignInFailure = Type.Union([
   Type.Literal('email-taken'),
   /** A new account on a server whose sign-up is invite-only, with no invitation (D-179 §5). */
   Type.Literal('signup-closed'),
+  Type.Literal('email-domain-not-allowed'),
   /** GitHub could not be reached, refused, or answered something unusable. */
   Type.Literal('github-unavailable'),
   /**

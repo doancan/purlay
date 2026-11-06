@@ -71,6 +71,10 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   server_audit_log: decided('anonymised', {
     kept: 'append-only trail of the server’s own settings',
   }),
+  server_operational_status: decided(
+    { nobody: 'bounded server checks; no recipient, credential or actor' },
+    { kept: 'one row for the life of the instance' },
+  ),
   server_settings: decided(
     { nobody: 'the server’s own settings, one row' },
     { kept: 'one row for the life of the instance' },
@@ -89,6 +93,11 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   workspace_exports: decided('anonymised', {
     kept: 'the row is the record that an export was made; its archive is swept',
   }),
+  // Received evidence is deleted on erasure; creator references name the anonymised account.
+  workspace_invitation_recipients: decided('anonymised', {
+    kept: 'for the life of the workspace, unless the recipient erases their account',
+  }),
+  workspace_invitation_mail_attempts: decided('deleted', 'with-parent'),
   workspace_invitations: decided('anonymised', {
     kept: 'the record of what was offered, for the life of the workspace',
   }),

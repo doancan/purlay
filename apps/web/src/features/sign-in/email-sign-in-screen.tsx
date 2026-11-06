@@ -175,7 +175,7 @@ export const EmailSignInScreen = (): React.JSX.Element => {
     setSigningIn(true);
     setFailed(null);
     try {
-      await signInByLink(link.token);
+      await signInByLink(link.token, link.invitation ?? undefined);
       if (link.invitation !== null) keepInvitation(link.invitation, ports);
       // The link was asked for by the native application, and may have opened in another browser than the one
       // the application's session is waiting in: what it carried is this tab's now, and home goes on to the consent.

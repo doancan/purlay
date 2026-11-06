@@ -1,3 +1,4 @@
+import { aScriptedRelay } from '../../testing/smtp-relay';
 /**
  * Inviting by e-mail over HTTP (D-179 §5): the answer a request gets, that the letters follow it and
  * wait for nothing, that a relay that is down or slow changes nothing about it and says nothing of the
@@ -13,9 +14,14 @@ import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
 } from '@purlay/db';
-import { INVITATION_EMAILS_PER_REQUEST, type CreatedInvitation } from '@purlay/types';
+import {
+  INVITATION_EMAILS_PER_REQUEST,
+  type CreatedInvitation,
+  type InvitationRecipientPage,
+  type InvitationDeliveryPage,
+} from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
-import { outbox, type MailMessage, type Outbox } from '../../platform/mail';
+import { smtpMailer, outbox, type MailMessage, type Outbox } from '../../platform/mail';
 import { NOW, aRecordingLogger, aRecordingOutbox, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -94,6 +100,88 @@ const counters = async (): Promise<number> => {
 };
 
 describe('integration: inviting by e-mail over HTTP', () => {
+  test.each([false, true])(
+    'real SMTP acceptance/refusal persists through resend (refused=%s)',
+    async (refused) => {
+      const relay = await aScriptedRelay(
+        refused ? { rcptTo: (): string => '550 5.1.1 recipient rejected' } : {},
+      );
+      const transport = smtpMailer({
+        SMTP_URL: `smtp://127.0.0.1:${String(relay.port)}`,
+        MAIL_FROM: 'no-reply@example.test',
+        SMTP_ALLOW_PLAINTEXT: true,
+      });
+      const box = outbox(transport.send, aRecordingLogger().log);
+      try {
+        const app = anApp(box);
+        const { owner, id } = await aWorkspace(app, refused ? 'im-real-refused' : 'im-real-sent');
+        expect((await invite(app, owner, id, { emails: ['actual@example.test'] })).status).toBe(
+          201,
+        );
+        await app.settled();
+        await box.flush();
+        const root = `/api/workspaces/${id}/invitation-recipients`;
+        const response = await call(anApp(box), 'GET', root, owner);
+        const recipient = ((await response.json()) as InvitationRecipientPage).data[0];
+        if (recipient === undefined) throw new Error('recipient missing');
+        expect(recipient.latest.result).toBe(refused ? 'failed' : 'accepted');
+        expect(recipient.latest.failure).toBe(refused ? 'recipient' : null);
+        expect((await call(app, 'POST', `${root}/${recipient.id}/resend`, owner)).status).toBe(204);
+        await app.settled();
+        await box.flush();
+        const history = (
+          (await (
+            await call(app, 'GET', `${root}/${recipient.id}/attempts`, owner)
+          ).json()) as InvitationDeliveryPage
+        ).data;
+        expect(history).toHaveLength(2);
+        expect(history[0]?.result).toBe(refused ? 'failed' : 'accepted');
+        expect(history[1]?.revokedAt).not.toBeNull();
+        expect(relay.received).toHaveLength(refused ? 0 : 2);
+      } finally {
+        transport.close();
+        await relay.stop();
+      }
+    },
+  );
+
+  test('recipient reads, receipt callbacks, resend and revoke are guarded and survive a new app instance', async () => {
+    const recorded = aRecordingLogger();
+    const box = outbox(() => Promise.resolve(), recorded.log);
+    const app = anApp(box);
+    const { owner, id } = await aWorkspace(app, 'im-receipts');
+    const made = await invite(app, owner, id, { emails: ['receipt@example.test'] });
+    expect(made.status).toBe(201);
+    await app.settled();
+    await box.flush();
+    const root = `/api/workspaces/${id}/invitation-recipients`;
+    const page = await call(anApp(box), 'GET', root, owner);
+    expect(page.status).toBe(200);
+    const recipient = ((await page.json()) as InvitationRecipientPage).data[0];
+    if (recipient === undefined) throw new Error('recipient missing');
+    expect(recipient.latest.result).toBe('accepted');
+    const attempt = await call(app, 'GET', `${root}/${recipient.id}/attempts?limit=1`, owner);
+    expect(attempt.status).toBe(200);
+    expect(((await attempt.json()) as InvitationDeliveryPage).data).toHaveLength(1);
+    expect((await call(app, 'POST', `${root}/${recipient.id}/resend`, owner)).status).toBe(204);
+    await app.settled();
+    await box.flush();
+    const history = await call(app, 'GET', `${root}/${recipient.id}/attempts`, owner);
+    expect(((await history.json()) as InvitationDeliveryPage).data).toHaveLength(2);
+    expect((await call(app, 'DELETE', `${root}/${recipient.id}`, owner)).status).toBe(204);
+    expect((await call(app, 'DELETE', `${root}/${recipient.id}`, owner)).status).toBe(204);
+    const outsider = await aSignedInUser(cloned.db, clock, 'im-receipt-outsider');
+    for (const [method, suffix] of [
+      ['GET', ''],
+      ['GET', `/${recipient.id}/attempts`],
+      ['POST', `/${recipient.id}/resend`],
+      ['DELETE', `/${recipient.id}`],
+    ] as const) {
+      expect((await call(app, method, root + suffix, outsider)).status).toBe(404);
+    }
+    expect((await call(app, 'GET', `${root}/invalid/attempts`, owner)).status).toBe(400);
+  });
+
   test('201 with the link and, for each address, queued — and the letters follow, one link in each', async () => {
     const mail = aRecordingOutbox();
     const app = anApp(mail);
@@ -114,16 +202,16 @@ describe('integration: inviting by e-mail over HTTP', () => {
       'bob@example.test',
     ]);
     for (const letter of mail.posted) {
-      expect(letter.text).toContain(`${ORIGIN}/invite#${made.token}`);
+      expect(letter.text).not.toContain(`${ORIGIN}/invite#${made.token}`);
       expect(letter.subject).toBe('Purlay’a davet edildin');
     }
-    // One link for the request, not one for each address.
+    // A separate copy link and a link for each recipient.
     const links = await cloned.db
       .selectFrom('workspace_invitations')
       .select('id')
       .where('workspace_id', '=', id)
       .execute();
-    expect(links).toHaveLength(1);
+    expect(links).toHaveLength(3);
   });
 
   test('with no body, or an empty one, it is the link alone and no letter', async () => {

@@ -82,7 +82,7 @@ const spent = async (db: Executor, like: string): Promise<number> => {
 };
 
 describe('integration: mailing an invitation', () => {
-  test('one link is made for the request, and a letter is queued for each address with that link', async () => {
+  test('the copy link and each recipient have separate links', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['im-owner']);
       const made = await send(db, aMovableClock(), await as(db, room, 'im-owner'), {
@@ -95,7 +95,7 @@ describe('integration: mailing an invitation', () => {
         'bob@example.test',
       ]);
       for (const letter of made.letters) {
-        expect(letter.text).toContain(`${APP}/invite#${made.created.token}`);
+        expect(letter.text).not.toContain(`${APP}/invite#${made.created.token}`);
         expect(letter.text).toContain('im-owner invited you to join');
       }
       const links = await db
@@ -103,13 +103,13 @@ describe('integration: mailing an invitation', () => {
         .select('id')
         .where('workspace_id', '=', room.workspaceId)
         .execute();
-      expect(links).toHaveLength(1);
+      expect(links).toHaveLength(3);
       const audit = await db
         .selectFrom('audit_log')
         .select('action')
         .where('workspace_id', '=', room.workspaceId)
         .execute();
-      expect(audit.map((row) => row.action)).toEqual(['invitation.created']);
+      expect(audit.map((row) => row.action)).toEqual(Array<string>(3).fill('invitation.created'));
     });
   });
 

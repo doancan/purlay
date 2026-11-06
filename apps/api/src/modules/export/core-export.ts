@@ -43,6 +43,8 @@ const head = [
       deleted_at: 'export',
       // The controller's data about their own people — not about those who left (D-140).
       email: 'operator',
+      admission_state: 'omit',
+      admission_requires_verified_email: 'omit',
       title: 'members',
       time_zone: 'members',
       status_text: 'members',
@@ -139,6 +141,8 @@ export const coreExport: CoreExportContribution = {
 
 /** The tables of the core that are not in an export, and why. Every other table says it in its own module's. */
 export type CoreExcluded =
+  | 'workspace_invitation_recipients'
+  | 'workspace_invitation_mail_attempts'
   | 'accounts'
   | 'verifications'
   | 'two_factors'
@@ -149,6 +153,7 @@ export type CoreExcluded =
   | 'workspace_exports'
   | 'personal_exports'
   | 'object_deletions'
+  | 'server_operational_status'
   | 'server_settings'
   | 'server_audit_log'
   | 'admin_email_verification'
@@ -157,6 +162,9 @@ export type CoreExcluded =
   | 'setup_state';
 
 export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
+  workspace_invitation_recipients:
+    'private recipient addresses, available only to workspace managers',
+  workspace_invitation_mail_attempts: 'private invitation delivery history',
   accounts: 'a provider’s account and a credential’s password hash: the person’s own (D-179)',
   verifications: 'short-lived sign-in tokens, credentials of the person’s own (D-179)',
   two_factors:
@@ -171,6 +179,7 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
     'a person’s export of their own data: theirs, never a workspace’s (D-241), and its archive is the export',
   object_deletions:
     'storage keys waiting to be deleted: the store’s housekeeping, and keys never leave',
+  server_operational_status: 'the operator’s bounded checks, not personal or workspace data',
   server_settings:
     'the operator’s settings for the whole server, not a workspace’s; the GitHub secret and the relay’s address are credentials, which never leave (D-179)',
   server_audit_log:

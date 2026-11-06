@@ -1,3 +1,22 @@
+import { instanceInfo } from '../../modules/administration/admission';
+import {
+  readAdministrationPreferences,
+  writeAdministrationPreferences,
+  writeAdministrationAdmission,
+  readOwnAdmission,
+  readAdministrationBackups,
+  readAdministrationMail,
+  readAdministrationUsers,
+  readAdministrationUser,
+  readAdministrationWorkspaces,
+  readAdministrationAudit,
+  readAdministrationOverview,
+  readAdministrationOperations,
+  writeAdministrationRole,
+  writeAdministrationQuota,
+  writeAdministrationSessions,
+} from './server-administration';
+import { CORE_JOBS } from '../../platform/module-kit/core-claims';
 import { putKnowledge, readSavedSearches, putSavedSearch, deleteSavedSearch } from './knowledge';
 /**
  * The HTTP surface.
@@ -150,6 +169,7 @@ import {
   disconnectChannel,
   disconnectIssuesApp,
   readServerSettings,
+  trySavedServerRelay,
 } from './server';
 import {
   linkGitHubWork,
@@ -248,6 +268,10 @@ import type { PushSender } from '../../modules/push/sender';
 import { serveExternalImage } from './images';
 import {
   dropInvitation,
+  readInvitationRecipients,
+  readInvitationDeliveries,
+  resendRecipient,
+  dropRecipient,
   joinByInvitation,
   lookAtInvitation,
   makeInvitation,
@@ -673,6 +697,17 @@ export const createApp = (given: Dependencies): HttpApplication => {
     ...dependencies,
     settingsChange: dependencies.settingsChange,
   };
+  const administration = {
+    ...dependencies,
+    bus: sockets.bus,
+    modules: moduleIds,
+    jobs: [
+      ...CORE_JOBS,
+      ...Object.keys(modules.jobWork).filter((name) => !modules.closedJob(name)),
+    ],
+    readiness: async (): Promise<Readiness> =>
+      draining ? { ready: false as const, reason: 'draining for shutdown' } : await askReadiness(),
+  };
   /** The library's answer to a request under its base path, with the client's address decided here. */
   const library = async (request: Request, server: PeerSource | null): Promise<Response> =>
     await answerAuth(
@@ -1019,7 +1054,75 @@ export const createApp = (given: Dependencies): HttpApplication => {
     )
     .post('/setup/verify', async ({ body }) => await followAddressLink(setup, body))
 
+    .get('/api/instance', async () => await instanceInfo(dependencies.database))
+    .get('/api/admission', async ({ request }) => await readOwnAdmission(administration, request))
+    .get(
+      '/api/server/preferences',
+      async ({ request }) => await readAdministrationPreferences(administration, request),
+    )
+    .post('/api/server/preferences', async ({ request, body, set }) => {
+      await writeAdministrationPreferences(administration, request, body);
+      set.status = 204;
+      return '';
+    })
+    .post('/api/server/users/:userId/admission', async ({ request, params, body, set }) => {
+      await writeAdministrationAdmission(administration, request, params.userId, body);
+      set.status = 204;
+      return '';
+    })
+    .get(
+      '/api/server/backups',
+      async ({ request }) => await readAdministrationBackups(administration, request),
+    )
     // Administration → Server (D-179 §4.8): the server's administrator alone; everybody else is absent.
+    .get(
+      '/api/server/mail-test',
+      async ({ request }) => await readAdministrationMail(administration, request),
+    )
+    .post(
+      '/api/server/mail-test',
+      async ({ request, body }) => await trySavedServerRelay(setup, request, body),
+    )
+    .get(
+      '/api/server/overview',
+      async ({ request }) => await readAdministrationOverview(administration, request),
+    )
+    .get(
+      '/api/server/operations',
+      async ({ request }) => await readAdministrationOperations(administration, request),
+    )
+    .get(
+      '/api/server/users',
+      async ({ request }) => await readAdministrationUsers(administration, request),
+    )
+    .get(
+      '/api/server/users/:userId',
+      async ({ request, params }) =>
+        await readAdministrationUser(administration, request, params.userId),
+    )
+    .get(
+      '/api/server/workspaces',
+      async ({ request }) => await readAdministrationWorkspaces(administration, request),
+    )
+    .get(
+      '/api/server/audit',
+      async ({ request }) => await readAdministrationAudit(administration, request),
+    )
+    .post('/api/server/users/:userId/admin', async ({ request, params, body, set }) => {
+      await writeAdministrationRole(administration, request, params.userId, body);
+      set.status = 204;
+      return '';
+    })
+    .post('/api/server/users/:userId/revoke-sessions', async ({ request, params, body, set }) => {
+      await writeAdministrationSessions(administration, request, params.userId, body);
+      set.status = 204;
+      return '';
+    })
+    .post('/api/server/workspaces/:workspaceId/quota', async ({ request, params, body, set }) => {
+      await writeAdministrationQuota(administration, request, params.workspaceId, body);
+      set.status = 204;
+      return '';
+    })
     .get('/api/server/settings', async ({ request }) => await readServerSettings(setup, request))
     .post(
       '/api/server/github',
@@ -1305,6 +1408,35 @@ export const createApp = (given: Dependencies): HttpApplication => {
         );
         set.status = 204;
         return null;
+      },
+    )
+    .get(
+      '/api/workspaces/:workspaceId/invitation-recipients',
+      async ({ request, params }) =>
+        await readInvitationRecipients(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/invitation-recipients/:recipientId/attempts',
+      async ({ request, params }) =>
+        await readInvitationDeliveries(
+          dependencies,
+          request,
+          params.workspaceId,
+          params.recipientId,
+        ),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/invitation-recipients/:recipientId/resend',
+      async ({ request, params, set }) => {
+        await resendRecipient(invitationMail(), request, params.workspaceId, params.recipientId);
+        set.status = 204;
+      },
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/invitation-recipients/:recipientId',
+      async ({ request, params, set }) => {
+        await dropRecipient(dependencies, request, params.workspaceId, params.recipientId);
+        set.status = 204;
       },
     )
     .post('/api/workspaces/:workspaceId/invitations', async ({ request, params, body, set }) => {

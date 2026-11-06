@@ -61,8 +61,8 @@ const signedOut = (overrides: Partial<Api>): Api => {
     ...(overrides.consumeEmailSignIn === undefined
       ? {}
       : {
-          consumeEmailSignIn: async (token: string): Promise<void> => {
-            await overrides.consumeEmailSignIn?.(token);
+          consumeEmailSignIn: async (token: string, invitation?: string): Promise<void> => {
+            await overrides.consumeEmailSignIn?.(token, invitation);
             signedIn = true;
           },
         }),
@@ -291,10 +291,12 @@ describe('a sign-in link, opened', () => {
 
   test('shows whose link it is, takes the token out of the address, and spends nothing until Sign in', async () => {
     const consumed: string[] = [];
+    const invitations: (string | undefined)[] = [];
     const view = await open(`#${TOKEN}.${INVITATION}`, {
       previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
-      consumeEmailSignIn: async (token) => {
+      consumeEmailSignIn: async (token, invitation) => {
         consumed.push(token);
+        invitations.push(invitation);
         await Promise.resolve();
       },
     });
@@ -309,6 +311,7 @@ describe('a sign-in link, opened', () => {
     });
     await settle();
     expect(consumed).toEqual([TOKEN]);
+    expect(invitations).toEqual([INVITATION]);
     // The invitation the link carried is this tab's now, and home takes the person to it.
     expect(window.sessionStorage.getItem(KEY)).toBe(INVITATION);
     expect(here(view)).toBe('/invite');

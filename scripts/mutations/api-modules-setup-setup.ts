@@ -20,8 +20,9 @@ export const API_MODULES_SETUP_SETUP: readonly Mutation[] = [
     id: 'server-guard-lets-an-erased-account-in',
     why: 'an erased administrator account still opens the server settings',
     file: 'apps/api/src/modules/setup/setup.ts',
-    find: "          .where('is_server_admin', '=', true)\n          .where('deleted_at', 'is', null)\n",
-    replace: "          .where('is_server_admin', '=', true)\n",
+    find: "          .where('is_server_admin', '=', true)\n          .where('suspended_at', 'is', null)\n          .where('deleted_at', 'is', null)\n",
+    replace:
+      "          .where('is_server_admin', '=', true)\n          .where('suspended_at', 'is', null)\n",
     tests: [SERVER_TESTS],
     equivalent:
       'the session resolver already refuses a soft-deleted account (sessions.ts, D-139 §5); the guard’s own check is a second wall that no request can reach alone',

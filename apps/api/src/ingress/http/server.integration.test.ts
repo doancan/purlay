@@ -1,3 +1,15 @@
+import { signInWithOidc } from '../../testing/oidc-sign-in';
+import { signInWithGoogle } from '../../testing/google-sign-in';
+import { startGitHubSignIn, returnFromGitHub } from '../../testing/github-sign-in';
+import type {
+  ServerAuditPage,
+  ServerMailTest,
+  ServerOperations,
+  ServerOverview,
+  ServerUserDetail,
+  ServerUserPage,
+  ServerWorkspacePage,
+} from '@purlay/types';
 /**
  * Administration → Server over HTTP (D-179 §4.8, `API.md` §2 `/api/server/*`): the real mounted
  * application on a database of each test's own, its sign-in services held by the holder the composition
@@ -11,7 +23,7 @@
  * value; no secret is in any answer or any line written; and a client is limited.
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
@@ -19,6 +31,7 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import {
+  messageId,
   GITHUB_APP_CALLBACK,
   GITHUB_APP_WEBHOOK,
   GOOGLE_CALLBACK,
@@ -28,7 +41,7 @@ import {
   type ServerSettingsAnswer,
 } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
-import { systemClock } from '../../platform/clock';
+import { systemClock, fixedClock, type Clock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import {
   DEVELOPMENT_ENCRYPTION_KEY,
@@ -45,7 +58,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { inProcessEventBus } from '../../realtime/bus';
 import type { RateBudget } from '../../realtime/rate-limiter';
 import { testConfig, testDependencies } from '../../testing/doubles';
-import { aGitHubPerson, signInWithGitHub } from '../../testing/github-sign-in';
+import { aGitHubPerson, cookiesFrom, signInWithGitHub } from '../../testing/github-sign-in';
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS, type GitHubStub } from '../../testing/github-stub';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
@@ -124,11 +137,13 @@ interface Server {
 const aServer = async (
   options: {
     readonly limits?: 'real';
+    readonly clock?: Clock;
     readonly noWorkspace?: boolean;
     /** A GitHub app sealed under another key before the start: read as unset, needing entry again. */
     readonly unreadableGitHub?: boolean;
   } = {},
 ): Promise<Server> => {
+  const clock = options.clock ?? systemClock;
   const cloned = await cloneIntegrationDatabase();
   clones.push(cloned.drop);
   const person = aGitHubPerson();
@@ -158,27 +173,28 @@ const aServer = async (
           url.startsWith(GITHUB_URL_DEFAULT) || url.startsWith(GITHUB_API_URL_DEFAULT)
             ? await github.fetch(url, init)
             : await fetch(url, init),
+        googleIssuer: google.issuer(),
         sessionTtlDays: 30,
         bus: inProcessEventBus(() => undefined, NO_LOG),
-        clock: systemClock,
+        clock: clock,
       },
       needsReentry,
       holder.sends,
     );
-  const admin = await aSignedInUser(cloned.db, systemClock, 'srv-admin');
+  const admin = await aSignedInUser(cloned.db, clock, 'srv-admin');
   await cloned.db
     .updateTable('users')
     .set({ is_server_admin: true })
     .where('id', '=', admin.userId)
     .execute();
-  const member = await aSignedInUser(cloned.db, systemClock, 'srv-member');
-  const owner = await aSignedInUser(cloned.db, systemClock, 'srv-owner');
+  const member = await aSignedInUser(cloned.db, clock, 'srv-member');
+  const owner = await aSignedInUser(cloned.db, clock, 'srv-owner');
   if (options.noWorkspace !== true) {
     await atomicallyOn(cloned.db)(
       async (transaction) =>
         await createWorkspace(
           transaction,
-          systemClock,
+          clock,
           owner.userId,
           { name: 'Owned', slug: aUniqueSlug('owned') },
           chatWorkspaceHooks(),
@@ -189,7 +205,7 @@ const aServer = async (
     await saveSettings(
       cloned.db,
       credentialCipher('a-different-key-of-the-right-shape-0123456789abcdef'),
-      systemClock,
+      clock,
       { github: GITHUB_STUB_CREDENTIALS },
     );
   }
@@ -204,13 +220,13 @@ const aServer = async (
         GITHUB_URL: served.url,
         GITHUB_API_URL: served.url,
       }),
-      clock: systemClock,
+      clock: clock,
       log,
       googleIssuer: google.issuer(),
       auth: holder.auth,
       services: holder,
       workspaceCreators: readWorkspaceCreators,
-      settingsChange: { holder, cipher, clock: systemClock, log, build },
+      settingsChange: { holder, cipher, clock: clock, log, build },
       rateBudgets:
         options.limits === 'real'
           ? {
@@ -1676,3 +1692,829 @@ describe('integration: Administration → Server — Google (D-251)', () => {
     expect((await readSettings(server.db, cipher)).google).toBeDefined();
   });
 });
+
+describe('integration — server administration inventory', () => {
+  test('metadata routes are absent before input is parsed for strangers, members and workspace owners', async () => {
+    const server = await aServer();
+    for (const cookie of [undefined, server.member.cookie, server.owner.cookie]) {
+      for (const path of [
+        '/api/server/overview',
+        '/api/server/users?limit=invalid',
+        '/api/server/workspaces?offset=1',
+        '/api/server/audit?from=bad',
+        '/api/server/operations',
+        `/api/server/users/${server.admin.userId}?after=bad`,
+      ]) {
+        const answer = await call(server, 'GET', path, { cookie });
+        expect(answer.status).toBe(404);
+        expect(answer.headers.get('cache-control')).toContain('no-store');
+      }
+      const answer = await call(server, 'POST', `/api/server/users/${server.member.userId}/admin`, {
+        cookie,
+        body: { isServerAdmin: true },
+      });
+      expect(answer.status).toBe(404);
+    }
+  });
+
+  test('user inventory is paginated, filters are enforced, details include membership without content', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    const first = await call(server, 'GET', '/api/server/users?limit=1', { cookie });
+    expect(first.status).toBe(200);
+    const page = (await first.json()) as ServerUserPage;
+    expect(page.data).toHaveLength(1);
+    expect(page.nextCursor).toBe(page.data[0]?.id ?? 'missing');
+    const next = await call(
+      server,
+      'GET',
+      `/api/server/users?limit=1&after=${page.nextCursor ?? ''}`,
+      { cookie },
+    );
+    const second = (await next.json()) as ServerUserPage;
+    expect(second.data[0]?.id).not.toBe(page.data[0]?.id);
+    const admins = await call(server, 'GET', '/api/server/users?status=admins', { cookie });
+    const list = (await admins.json()) as ServerUserPage;
+    expect(list.data.map((user) => user.id)).toEqual([server.admin.userId]);
+    const details = await call(server, 'GET', `/api/server/users/${server.owner.userId}`, {
+      cookie,
+    });
+    expect(details.status).toBe(200);
+    const detail = (await details.json()) as ServerUserDetail;
+    expect(detail.memberships[0]?.role).toBe('owner');
+    expect(detail.activeSessions).toBe(1);
+    expect(JSON.stringify(detail)).not.toContain('token_hash');
+    for (const query of ['limit=0', 'limit=101', 'q=a&q=b', 'offset=1', 'status=deleted']) {
+      expect((await call(server, 'GET', `/api/server/users?${query}`, { cookie })).status).toBe(
+        400,
+      );
+    }
+  });
+
+  test('quota changes reuse upload accounting, are audited and reject unsafe integers', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    const listed = await call(server, 'GET', '/api/server/workspaces', { cookie });
+    expect(listed.status).toBe(200);
+    const page = (await listed.json()) as ServerWorkspacePage;
+    const workspace = page.data[0];
+    expect(workspace).toBeDefined();
+    if (workspace === undefined) throw new Error('workspace fixture missing');
+    expect(workspace.ownerCount).toBe(1);
+    expect(workspace.owners[0]?.id).toBe(server.owner.userId);
+    await server.db
+      .insertInto('attachments')
+      .values({
+        id: messageId(systemClock.now()),
+        file_name: 'private-name.txt',
+        mime_type: 'text/plain',
+        size_bytes: '2048',
+        storage_key: 'pending-file',
+        uploader_id: server.owner.userId,
+        workspace_id: workspace.id,
+      })
+      .execute();
+    const path = `/api/server/workspaces/${workspace.id}/quota`;
+    expect((await call(server, 'POST', path, { cookie, body: { quotaBytes: 1024 } })).status).toBe(
+      204,
+    );
+    expect((await call(server, 'POST', path, { cookie, body: { quotaBytes: 1024 } })).status).toBe(
+      204,
+    );
+    expect(
+      (
+        await call(server, 'POST', path, {
+          cookie,
+          body: { quotaBytes: Number.MAX_SAFE_INTEGER + 1 },
+        })
+      ).status,
+    ).toBe(400);
+    const full = await call(server, 'GET', '/api/server/workspaces?status=full', { cookie });
+    const usage = (await full.json()) as ServerWorkspacePage;
+    expect(usage.data[0]?.usedBytes).toBe('2048');
+    expect(JSON.stringify(usage)).not.toContain('private-name');
+    const changed = await server.db
+      .selectFrom('workspaces')
+      .select('storage_quota_bytes')
+      .where('id', '=', workspace.id)
+      .executeTakeFirstOrThrow();
+    expect(changed.storage_quota_bytes).toBe('1024');
+    const audit = await call(
+      server,
+      'GET',
+      '/api/server/audit?action=server.quota_changed&limit=1',
+      { cookie },
+    );
+    const entries = (await audit.json()) as ServerAuditPage;
+    expect(entries.data).toHaveLength(1);
+    expect(entries.nextCursor).toBeNull();
+    expect(entries.data[0]?.actorUserId).toBe(server.admin.userId);
+    expect(entries.data[0]?.targetWorkspaceId).toBe(workspace.id);
+  });
+
+  test('concurrent administrators cannot remove every administrator; a demotion loses authority immediately', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ email_verified: true })
+      .where('id', '=', server.member.userId)
+      .execute();
+    const grant = await call(server, 'POST', `/api/server/users/${server.member.userId}/admin`, {
+      cookie: server.admin.cookie,
+      body: { isServerAdmin: true },
+    });
+    expect(grant.status).toBe(204);
+    const answers = await Promise.all([
+      call(server, 'POST', `/api/server/users/${server.admin.userId}/admin`, {
+        cookie: server.admin.cookie,
+        body: { isServerAdmin: false },
+      }),
+      call(server, 'POST', `/api/server/users/${server.member.userId}/admin`, {
+        cookie: server.member.cookie,
+        body: { isServerAdmin: false },
+      }),
+    ]);
+    expect(answers.map((answer) => answer.status).sort()).toEqual([204, 403]);
+    const remaining = await server.db
+      .selectFrom('users')
+      .select('id')
+      .where('is_server_admin', '=', true)
+      .where('deleted_at', 'is', null)
+      .execute();
+    expect(remaining).toHaveLength(1);
+    const demotedCookie =
+      remaining[0]?.id === server.admin.userId ? server.member.cookie : server.admin.cookie;
+    expect(
+      (await call(server, 'GET', '/api/server/overview', { cookie: demotedCookie })).status,
+    ).toBe(404);
+  });
+
+  test('session revocation removes the target sessions and records the actor', async () => {
+    const server = await aServer();
+    const answer = await call(
+      server,
+      'POST',
+      `/api/server/users/${server.member.userId}/revoke-sessions`,
+      { cookie: server.admin.cookie, body: {} },
+    );
+    expect(answer.status).toBe(204);
+    const sessions = await server.db
+      .selectFrom('sessions')
+      .select('id')
+      .where('user_id', '=', server.member.userId)
+      .where('revoked_at', 'is', null)
+      .execute();
+    expect(sessions).toHaveLength(0);
+    expect((await trail(server)).map((entry) => entry.action)).toContain('server.sessions_revoked');
+  });
+
+  test('overview and jobs use live metadata and do not expose stored raw errors or credentials', async () => {
+    const server = await aServer({ noWorkspace: true });
+    const cookie = server.admin.cookie;
+    await server.db
+      .insertInto('job_runs')
+      .values({
+        job_name: 'sweep:sessions',
+        consecutive_failures: 2,
+        last_error: 'postgres://root:secret@example/db',
+        last_success_at: new Date(0),
+      })
+      .execute();
+    const response = await call(server, 'GET', '/api/server/overview', { cookie });
+    expect(response.status).toBe(200);
+    const overview = (await response.json()) as ServerOverview;
+    expect(overview.users).toBe(3);
+    expect(overview.admins).toBe(1);
+    expect(overview.workspaces).toBe(0);
+    const operations = await call(server, 'GET', '/api/server/operations', { cookie });
+    expect(operations.status).toBe(200);
+    const result = (await operations.json()) as ServerOperations;
+    expect(result.jobs.find((job) => job.name === 'sweep:sessions')?.status).toBe('overdue');
+    expect(result.jobs.find((job) => job.name === 'sweep:orphans')?.status).toBe('never');
+    expect(JSON.stringify(result)).not.toContain('secret');
+  });
+});
+
+describe('integration — saved mail relay testing', () => {
+  test('sends only to the verified requesting administrator, reuses saved credentials and persists a safe receipt', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    expect((await call(server, 'POST', '/api/server/mail-test', { cookie, body: {} })).status).toBe(
+      403,
+    );
+    const relay = await aRelay();
+    expect(
+      (await call(server, 'POST', '/api/server/smtp', { cookie, body: smtpBody(relay) })).status,
+    ).toBe(200);
+    expect((await call(server, 'POST', '/api/server/mail-test', { cookie, body: {} })).status).toBe(
+      403,
+    );
+    await server.db
+      .updateTable('users')
+      .set({ email_verified: true })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const before = relay.received.length;
+    expect(
+      (
+        await call(server, 'POST', '/api/server/mail-test', {
+          cookie,
+          body: { to: 'somebody@example.test' },
+        })
+      ).status,
+    ).toBe(400);
+    expect(relay.received).toHaveLength(before);
+    const answer = await call(server, 'POST', '/api/server/mail-test', { cookie, body: {} });
+    expect(answer.status).toBe(200);
+    const receipt = (await answer.json()) as ServerMailTest;
+    expect(receipt.accepted).toBe(true);
+    expect(receipt.reason).toBeNull();
+    expect(JSON.stringify(receipt)).not.toContain(RELAY_PASS);
+    expect(relay.received).toHaveLength(before + 1);
+    expect(relay.received.at(-1)?.to).toEqual([server.admin.email]);
+    const status = await call(server, 'GET', '/api/server/mail-test', { cookie });
+    expect(await status.json()).toEqual({ lastTest: receipt });
+    expect((await trail(server)).map((entry) => entry.action)).toContain('server.smtp_tested');
+    expect(
+      (
+        await call(server, 'POST', '/api/server/mail-test', {
+          cookie: server.member.cookie,
+          body: {},
+        })
+      ).status,
+    ).toBe(404);
+  });
+});
+
+describe('integration — admission and server identity', () => {
+  const preferences = {
+    displayName: 'Research server',
+    supportUrl: 'https://support.example.test/help',
+    allowedEmailDomains: ['example.test'],
+    requireAccountApproval: true,
+  };
+  test('new OAuth accounts persist pending, reach only their own status, and become usable after audited approval', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    expect(
+      (await call(server, 'POST', '/api/server/policy', { cookie, body: { signUp: 'open' } }))
+        .status,
+    ).toBe(204);
+    expect(
+      (await call(server, 'POST', '/api/server/github', { cookie, body: GITHUB_OK })).status,
+    ).toBe(200);
+    expect(
+      (await call(server, 'POST', '/api/server/preferences', { cookie, body: preferences })).status,
+    ).toBe(204);
+    const signedIn = await signInWithGitHub(server.app, ORIGIN, server.github);
+    const pending = await server.db
+      .selectFrom('users')
+      .select(['id', 'admission_state'])
+      .where('email', '=', server.person.email.toLowerCase())
+      .executeTakeFirstOrThrow();
+    expect(pending.admission_state).toBe('pending');
+    expect((await call(server, 'GET', '/api/me', { cookie: cookiesFrom(signedIn) })).status).toBe(
+      401,
+    );
+    const status = await call(server, 'GET', '/api/admission', { cookie: cookiesFrom(signedIn) });
+    expect(await status.json()).toEqual({ state: 'pending' });
+    expect(
+      (await call(server, 'GET', '/api/server/users', { cookie: cookiesFrom(signedIn) })).status,
+    ).toBe(404);
+    // The new policy does not eject previously admitted accounts.
+    expect((await call(server, 'GET', '/api/me', { cookie: server.member.cookie })).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await call(server, 'POST', `/api/server/users/${pending.id}/admission`, {
+          cookie,
+          body: { decision: 'approved' },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await call(server, 'GET', '/api/me', { cookie: cookiesFrom(signedIn) })).status).toBe(
+      200,
+    );
+    expect((await trail(server)).map((row) => row.action)).toContain('server.account_approved');
+    const publicInfo = await call(server, 'GET', '/api/instance');
+    expect(await publicInfo.json()).toEqual(preferences);
+  });
+
+  test('a domain restriction is enforced at account creation, cannot be bypassed by a client, and matches exact domains', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    await call(server, 'POST', '/api/server/policy', { cookie, body: { signUp: 'open' } });
+    await call(server, 'POST', '/api/server/github', { cookie, body: GITHUB_OK });
+    expect(
+      (
+        await call(server, 'POST', '/api/server/preferences', {
+          cookie,
+          body: { ...preferences, allowedEmailDomains: ['other.test'] },
+        })
+      ).status,
+    ).toBe(204);
+    await signInWithGitHub(server.app, ORIGIN, server.github);
+    const refused = await server.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', server.person.email.toLowerCase())
+      .executeTakeFirst();
+    expect(refused).toBeUndefined();
+    const bad = await call(server, 'POST', '/auth/sign-up/email', {
+      body: {
+        name: 'Applicant',
+        email: 'applicant@example.test',
+        password: 'Safe-test-password-2026!',
+        admissionState: 'approved',
+        admissionRequiresVerifiedEmail: false,
+      },
+    });
+    expect(bad.status).toBeGreaterThanOrEqual(400);
+    expect(
+      await server.db
+        .selectFrom('users')
+        .select('id')
+        .where('email', '=', 'applicant@example.test')
+        .execute(),
+    ).toHaveLength(0);
+    for (const supportUrl of [
+      'javascript:alert(1)',
+      'https://user:password@example.test',
+      'mailto:me@example.test?body=secret',
+    ]) {
+      expect(
+        (
+          await call(server, 'POST', '/api/server/preferences', {
+            cookie,
+            body: { ...preferences, supportUrl },
+          })
+        ).status,
+      ).toBe(400);
+    }
+  });
+
+  test('unverified restricted accounts are held back and denied applicants lose all sessions', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ admission_requires_verified_email: true })
+      .where('id', '=', server.member.userId)
+      .execute();
+    expect((await call(server, 'GET', '/api/me', { cookie: server.member.cookie })).status).toBe(
+      401,
+    );
+    expect(
+      await (await call(server, 'GET', '/api/admission', { cookie: server.member.cookie })).json(),
+    ).toEqual({ state: 'verify-email' });
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'pending' })
+      .where('id', '=', server.member.userId)
+      .execute();
+    const denied = await call(
+      server,
+      'POST',
+      `/api/server/users/${server.member.userId}/admission`,
+      { cookie: server.admin.cookie, body: { decision: 'denied' } },
+    );
+    expect(denied.status).toBe(204);
+    expect(
+      await server.db
+        .selectFrom('sessions')
+        .select('id')
+        .where('user_id', '=', server.member.userId)
+        .execute(),
+    ).toHaveLength(0);
+    expect(await (await call(server, 'GET', '/api/admission')).json()).toEqual({ state: null });
+  });
+});
+
+describe('integration — administrator authority during a settings change', () => {
+  test('an administrator demoted while waiting to save cannot commit settings with stale authority', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ email_verified: true })
+      .where('id', '=', server.member.userId)
+      .execute();
+    expect(
+      (
+        await call(server, 'POST', `/api/server/users/${server.member.userId}/admin`, {
+          cookie: server.admin.cookie,
+          body: { isServerAdmin: true },
+        })
+      ).status,
+    ).toBe(204);
+    const release = Promise.withResolvers<undefined>();
+    const held = Promise.withResolvers<undefined>();
+    const entered = Promise.withResolvers<undefined>();
+    const occupying = server.holder.exclusively(async () => {
+      held.resolve(undefined);
+      await release.promise;
+    });
+    await held.promise;
+    const original = server.holder.exclusively.bind(server.holder);
+    const spy = spyOn(server.holder, 'exclusively').mockImplementation(
+      async <T>(work: () => Promise<T>): Promise<T> => {
+        entered.resolve(undefined);
+        return await original(work);
+      },
+    );
+    try {
+      const pending = call(server, 'POST', '/api/server/policy', {
+        cookie: server.admin.cookie,
+        body: { signUp: 'open' },
+      });
+      await entered.promise;
+      expect(
+        (
+          await call(server, 'POST', `/api/server/users/${server.admin.userId}/admin`, {
+            cookie: server.member.cookie,
+            body: { isServerAdmin: false },
+          })
+        ).status,
+      ).toBe(204);
+      release.resolve(undefined);
+      expect((await pending).status).toBe(404);
+      expect((await readSettings(server.db, cipher)).signUp).toBe('invite-only');
+    } finally {
+      spy.mockRestore();
+      release.resolve(undefined);
+      await occupying;
+    }
+  });
+});
+
+describe('integration — administration read budgets', () => {
+  test('inventory navigation does not spend the provider/write budget, and metadata reads remain bounded', async () => {
+    const server = await aServer({ limits: 'real', clock: fixedClock(systemClock.now()) });
+    const cookie = server.admin.cookie;
+    for (let at = 0; at < 60; at++) {
+      expect((await call(server, 'GET', '/api/server/users?limit=1', { cookie })).status).toBe(200);
+    }
+    expect((await call(server, 'GET', '/api/server/users?limit=1', { cookie })).status).toBe(429);
+    // Provider/settings reads retain their old budget, independent of the inventory's.
+    expect((await call(server, 'GET', '/api/server/settings', { cookie })).status).toBe(200);
+  });
+});
+
+describe('integration — admission across sign-in paths', () => {
+  test.each(['oidc', 'google'] as const)(
+    '%s cannot bypass approval even with a verified allowed-domain identity',
+    async (provider) => {
+      const server = await aServer();
+      const cookie = server.admin.cookie;
+      await call(server, 'POST', '/api/server/policy', { cookie, body: { signUp: 'open' } });
+      expect(
+        (
+          await call(server, 'POST', '/api/server/preferences', {
+            cookie,
+            body: { allowedEmailDomains: ['gmail.com'], requireAccountApproval: true },
+          })
+        ).status,
+      ).toBe(204);
+      expect(
+        (
+          await call(server, 'POST', `/api/server/${provider}`, {
+            cookie,
+            body: {
+              ...OIDC_STUB_CREDENTIALS,
+              ...(provider === 'oidc' ? { issuer: server.google.issuer(), name: 'Identity' } : {}),
+            },
+          })
+        ).status,
+      ).toBe(200);
+      const response =
+        provider === 'oidc'
+          ? await signInWithOidc(server.app, ORIGIN, server.google)
+          : await signInWithGoogle(server.app, ORIGIN, server.google);
+      const signed = cookiesFrom(response);
+      const status = await call(server, 'GET', '/api/admission', { cookie: signed });
+      expect(await status.json()).toEqual({ state: 'pending' });
+      expect((await call(server, 'GET', '/api/me', { cookie: signed })).status).toBe(401);
+      const person = await server.db
+        .selectFrom('users')
+        .select(['admission_state', 'email_verified'])
+        .where('email', '=', 'grace@gmail.com')
+        .executeTakeFirstOrThrow();
+      expect(person).toEqual({ admission_state: 'pending', email_verified: true });
+    },
+  );
+
+  test('an invitation passport permits registration but neither approval nor workspace access', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    await call(server, 'POST', '/api/server/github', { cookie, body: GITHUB_OK });
+    await call(server, 'POST', '/api/server/preferences', {
+      cookie,
+      body: { allowedEmailDomains: ['example.test'], requireAccountApproval: true },
+    });
+    const workspace = await server.db
+      .selectFrom('workspaces')
+      .select('id')
+      .where('created_by', '=', server.owner.userId)
+      .executeTakeFirstOrThrow();
+    const made = await call(server, 'POST', `/api/workspaces/${workspace.id}/invitations`, {
+      cookie: server.owner.cookie,
+      body: {},
+    });
+    expect(made.status).toBe(201);
+    const { token } = (await made.json()) as { token: string };
+    const passport = await call(server, 'POST', '/api/invitations/passport', { body: { token } });
+    expect(passport.status).toBe(204);
+    const signed = await returnFromGitHub(
+      server.app,
+      ORIGIN,
+      await startGitHubSignIn(server.app, ORIGIN, server.github, cookiesFrom(passport)),
+    );
+    const entrant = cookiesFrom(signed);
+    expect(await (await call(server, 'GET', '/api/admission', { cookie: entrant })).json()).toEqual(
+      { state: 'pending' },
+    );
+    expect(
+      (await call(server, 'POST', '/api/invitations/accept', { cookie: entrant, body: { token } }))
+        .status,
+    ).toBe(401);
+  });
+
+  test('a verified email link makes an identity-only pending account until an administrator approves it', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    const relay = await aRelay();
+    await call(server, 'POST', '/api/server/smtp', { cookie, body: smtpBody(relay) });
+    await call(server, 'POST', '/api/server/policy', { cookie, body: { signUp: 'open' } });
+    await call(server, 'POST', '/api/server/preferences', {
+      cookie,
+      body: { allowedEmailDomains: ['example.test'], requireAccountApproval: true },
+    });
+    const email = 'applicant@example.test';
+    expect(
+      (await call(server, 'POST', '/auth/email', { body: { email, locale: 'en' } })).status,
+    ).toBe(202);
+    await server.app.settled();
+    await server.holder.sends.flush();
+    const data =
+      relay.received
+        .find((letter) => letter.to.includes(email))
+        ?.data.replace(/=\r?\n/g, '')
+        .replace(/=3D/g, '=') ?? '';
+    const token = /#([0-9a-f]{64})/.exec(data)?.[1];
+    expect(token).toBeDefined();
+    const consumed = await call(server, 'POST', '/auth/email/consume', { body: { token } });
+    expect(consumed.status).toBe(204);
+    const applicant = cookiesFrom(consumed);
+    expect(
+      await (await call(server, 'GET', '/api/admission', { cookie: applicant })).json(),
+    ).toEqual({ state: 'pending' });
+    expect((await call(server, 'GET', '/api/me', { cookie: applicant })).status).toBe(401);
+    const row = await server.db
+      .selectFrom('users')
+      .select(['id', 'email_verified'])
+      .where('email', '=', email)
+      .executeTakeFirstOrThrow();
+    expect(row.email_verified).toBe(true);
+    expect(
+      (
+        await call(server, 'POST', `/api/server/users/${row.id}/admission`, {
+          cookie,
+          body: { decision: 'approved' },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await call(server, 'GET', '/api/me', { cookie: applicant })).status).toBe(200);
+  });
+});
+
+describe('integration — administration filters and refusal states', () => {
+  test('metadata search is literal, statuses belong to accounts, and details have bounded membership pages', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    await server.db
+      .updateTable('users')
+      .set({ display_name: '100% research', suspended_at: clockNow(), last_seen_at: clockNow() })
+      .where('id', '=', server.member.userId)
+      .execute();
+    const search = await call(server, 'GET', '/api/server/users?q=%25&status=suspended', {
+      cookie,
+    });
+    const people = (await search.json()) as ServerUserPage;
+    expect(people.data.map((person) => person.id)).toEqual([server.member.userId]);
+    expect(people.data[0]?.lastSeenAt).not.toBeNull();
+    const active = await call(server, 'GET', '/api/server/users?status=active', { cookie });
+    expect(
+      ((await active.json()) as ServerUserPage).data.every((person) => person.suspendedAt === null),
+    ).toBe(true);
+    const workspaces = Array.from({ length: 50 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      name: `Inventory ${String(index)}`,
+      slug: `inventory-${String(index)}`,
+      created_by: server.owner.userId,
+    }));
+    await server.db.insertInto('workspaces').values(workspaces).execute();
+    await server.db
+      .insertInto('workspace_members')
+      .values(
+        workspaces.map((workspace) => ({
+          workspace_id: workspace.id,
+          user_id: server.owner.userId,
+          role: 'owner' as const,
+        })),
+      )
+      .execute();
+    const first = (await (
+      await call(server, 'GET', `/api/server/users/${server.owner.userId}`, { cookie })
+    ).json()) as ServerUserDetail;
+    expect(first.memberships).toHaveLength(50);
+    expect(first.nextCursor).not.toBeNull();
+    const second = (await (
+      await call(
+        server,
+        'GET',
+        `/api/server/users/${server.owner.userId}?after=${first.nextCursor ?? ''}`,
+        { cookie },
+      )
+    ).json()) as ServerUserDetail;
+    expect(second.memberships).toHaveLength(1);
+    expect(second.nextCursor).toBeNull();
+    const deleted = workspaces[0];
+    if (deleted === undefined) throw new Error('fixture missing');
+    const removedAt = clockNow();
+    await server.db
+      .updateTable('workspaces')
+      .set({ deleted_at: removedAt, purge_started_at: removedAt, purged_at: removedAt })
+      .where('id', '=', deleted.id)
+      .execute();
+    const page = (await (
+      await call(server, 'GET', `/api/server/workspaces?q=Inventory&status=deleted&limit=1`, {
+        cookie,
+      })
+    ).json()) as ServerWorkspacePage;
+    expect(page.data[0]?.id).toBe(deleted.id);
+    expect(page.data[0]?.purgedAt).not.toBeNull();
+    const live = (await (
+      await call(server, 'GET', '/api/server/workspaces?status=active&limit=1', { cookie })
+    ).json()) as ServerWorkspacePage;
+    expect(live.nextCursor).not.toBeNull();
+    const next = (await (
+      await call(
+        server,
+        'GET',
+        `/api/server/workspaces?status=active&limit=1&after=${live.nextCursor ?? ''}`,
+        { cookie },
+      )
+    ).json()) as ServerWorkspacePage;
+    expect(next.data[0]?.id).not.toBe(live.data[0]?.id);
+    expect(
+      (await call(server, 'GET', `/api/server/users/${crypto.randomUUID()}`, { cookie })).status,
+    ).toBe(404);
+  });
+
+  test('audit pages filter action, actor, target and dates, and refuse a reversed date range', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    await call(server, 'POST', '/api/server/policy', { cookie, body: { signUp: 'open' } });
+    await call(server, 'POST', '/api/server/preferences', {
+      cookie,
+      body: { displayName: 'Renamed' },
+    });
+    await server.db
+      .updateTable('users')
+      .set({ email_verified: true })
+      .where('id', '=', server.member.userId)
+      .execute();
+    await call(server, 'POST', `/api/server/users/${server.member.userId}/admin`, {
+      cookie,
+      body: { isServerAdmin: true },
+    });
+    const first = (await (
+      await call(
+        server,
+        'GET',
+        '/api/server/audit?limit=1&from=2020-01-01T00:00:00Z&to=2090-01-01T00:00:00Z',
+        { cookie },
+      )
+    ).json()) as ServerAuditPage;
+    expect(first.nextCursor).not.toBeNull();
+    const older = (await (
+      await call(server, 'GET', `/api/server/audit?limit=1&after=${first.nextCursor ?? ''}`, {
+        cookie,
+      })
+    ).json()) as ServerAuditPage;
+    expect(older.data[0]?.id).not.toBe(first.data[0]?.id);
+    const filtered = (await (
+      await call(
+        server,
+        'GET',
+        `/api/server/audit?action=server.admin_granted&actorUserId=${server.admin.userId}&targetUserId=${server.member.userId}`,
+        { cookie },
+      )
+    ).json()) as ServerAuditPage;
+    expect(filtered.data).toHaveLength(1);
+    const none = (await (
+      await call(server, 'GET', `/api/server/audit?targetWorkspaceId=${crypto.randomUUID()}`, {
+        cookie,
+      })
+    ).json()) as ServerAuditPage;
+    expect(none.data).toHaveLength(0);
+    expect(
+      (
+        await call(
+          server,
+          'GET',
+          '/api/server/audit?from=2090-01-01T00:00:00Z&to=2020-01-01T00:00:00Z',
+          { cookie },
+        )
+      ).status,
+    ).toBe(400);
+  });
+
+  test('sensitive changes refuse unavailable targets and unsafe grants; repeated grants do not add audit entries', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    const missing = crypto.randomUUID();
+    for (const path of [
+      `/api/server/users/${missing}/admin`,
+      `/api/server/users/${missing}/revoke-sessions`,
+      `/api/server/workspaces/${missing}/quota`,
+      `/api/server/users/${missing}/admission`,
+    ]) {
+      const body = path.endsWith('/admin')
+        ? { isServerAdmin: true }
+        : path.endsWith('/quota')
+          ? { quotaBytes: 0 }
+          : path.endsWith('/admission')
+            ? { decision: 'approved' }
+            : {};
+      expect((await call(server, 'POST', path, { cookie, body })).status).toBe(404);
+    }
+    const rolePath = `/api/server/users/${server.member.userId}/admin`;
+    expect(
+      (await call(server, 'POST', rolePath, { cookie, body: { isServerAdmin: true } })).status,
+    ).toBe(403);
+    await server.db
+      .updateTable('users')
+      .set({ email_verified: true, suspended_at: clockNow() })
+      .where('id', '=', server.member.userId)
+      .execute();
+    expect(
+      (await call(server, 'POST', rolePath, { cookie, body: { isServerAdmin: true } })).status,
+    ).toBe(403);
+    await server.db
+      .updateTable('users')
+      .set({ suspended_at: null })
+      .where('id', '=', server.member.userId)
+      .execute();
+    for (let at = 0; at < 2; at++)
+      expect(
+        (await call(server, 'POST', rolePath, { cookie, body: { isServerAdmin: true } })).status,
+      ).toBe(204);
+    expect(
+      (await trail(server)).filter((row) => row.action === 'server.admin_granted'),
+    ).toHaveLength(1);
+    expect(
+      (
+        await call(server, 'POST', '/api/server/preferences', {
+          cookie,
+          body: { supportUrl: 'not a URL' },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(server, 'POST', '/api/server/preferences', {
+          cookie,
+          body: { displayName: '  ' },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(server, 'POST', '/api/server/preferences', {
+          cookie,
+          body: { displayName: 'bad\u0001name' },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(server, 'POST', '/api/server/preferences', {
+          cookie,
+          body: { supportUrl: 'mailto:support@example.test' },
+        })
+      ).status,
+    ).toBe(204);
+    const before = (await trail(server)).length;
+    expect(
+      (
+        await call(server, 'POST', '/api/server/preferences', {
+          cookie,
+          body: { supportUrl: 'mailto:support@example.test' },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await trail(server)).length).toBe(before);
+    expect((await call(server, 'GET', '/api/server/backups', { cookie })).status).toBe(200);
+  });
+});
+const clockNow = (): Date => systemClock.now();

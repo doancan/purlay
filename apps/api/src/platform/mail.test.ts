@@ -70,6 +70,32 @@ describe('the outbox', () => {
     html: '<p>https://purlay.test/sign-in/email#secret-token</p>',
   };
 
+  test('flush waits for a receipt, and receipt persistence failure never relabels an accepted message', async () => {
+    const { log, lines } = aRecordingLogger();
+    const box = outbox(() => Promise.resolve(), log);
+    let accepted = false;
+    box.post(letter_, 'invitation', (receipt) => {
+      accepted = receipt.accepted;
+      return Promise.reject(new Error('private database error'));
+    });
+    await box.flush();
+    expect(accepted).toBe(true);
+    expect(lines.map((line) => line['msg'])).toEqual([
+      'mail sent',
+      'mail receipt could not be recorded',
+    ]);
+    expect(JSON.stringify(lines)).not.toContain('private database error');
+    const refused = outbox(
+      () => Promise.reject(Object.assign(new Error('private SMTP error'), { code: 'EAUTH' })),
+      log,
+    );
+    refused.post(letter_, 'invitation', (receipt) => {
+      expect(receipt).toEqual({ accepted: false, code: 'EAUTH' });
+      return Promise.resolve();
+    });
+    await refused.flush();
+  });
+
   test('starts a send and returns; flush waits for it', async () => {
     const { log } = aRecordingLogger();
     let release: () => void = () => undefined;

@@ -255,6 +255,7 @@ jobs:
         run: bun run db:up:postgres
 
       - name: install the browser
+        timeout-minutes: 10
         run: bun run test:e2e:install
 
       # Everything but the files that write a measurement: those run in the other part, alone (D-227).
@@ -343,6 +344,7 @@ jobs:
         run: bun run db:up:postgres
 
       - name: install WebKit
+        timeout-minutes: 10
         run: bun run test:e2e:install:webkit
 
       - name: the browser tests on WebKit

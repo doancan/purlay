@@ -1,3 +1,4 @@
+import { makeAndMailInvitation } from '../workspaces/invitation-mail';
 /**
  * Erasing an account against the real database (D-27 §2, D-139 §5–§6, I-11): every column that said who
  * they were, cleared — beside the control, what the team holds, still there under the anonymised row; a
@@ -109,6 +110,52 @@ const erase = async (
   await eraseAccount(db, clock, caller, confirm, chatUserErased());
 
 describe('integration: erasing an account', () => {
+  test.each([
+    [false, false, 1],
+    [true, false, 0],
+    [false, true, 0],
+  ] as const)(
+    'received invitation erasure requires a verified address or prior attestation (%s, %s)',
+    async (verified, attested, remaining) => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['receipt-owner', 'receipt-person']);
+        const person = member(room, 'receipt-person');
+        const caller = await signedIn(db, room, 'receipt-person');
+        const email = await emailOf(db, person.userId);
+        await db
+          .updateTable('users')
+          .set({ email_verified: verified })
+          .where('id', '=', person.userId)
+          .execute();
+        await makeAndMailInvitation(
+          db,
+          clock,
+          await requireWorkspaceMembership(
+            db,
+            member(room, 'receipt-owner').userId,
+            room.workspaceId,
+          ),
+          { emails: [email] },
+          { on: true, appUrl: 'https://purlay.test' },
+        );
+        if (attested)
+          await db
+            .updateTable('workspace_invitation_recipients')
+            .set({ applicant_user_id: person.userId, requested_at: NOW })
+            .where('email', '=', email)
+            .execute();
+        await eraseAccount(db, clock, caller, person.username, chatUserErased());
+        expect(
+          await db
+            .selectFrom('workspace_invitation_recipients')
+            .select('id')
+            .where('email', '=', email)
+            .execute(),
+        ).toHaveLength(remaining);
+      });
+    },
+  );
+
   test('what said who they were is cleared; what the team holds stays under the anonymised row', async () => {
     await withRollback(async (db) => {
       // bob owns it (the first is the owner): ada is free to go.
@@ -488,6 +535,12 @@ describe('integration: erasing an account', () => {
         .set({ is_server_admin: true, email_verified: true })
         .where('id', '=', ada.userId)
         .execute();
+      // Another administrator remains; erasing the last is refused (D-278).
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', member(room, 'bob').userId)
+        .execute();
       await erase(db, await signedIn(db, room, 'ada'), ada.username);
       const tombstone = await db
         .selectFrom('users')
@@ -819,6 +872,45 @@ describe('integration: erasing an account', () => {
           async () => await erase(db, await signedIn(db, room, 'ada'), ada.username),
         ),
       ).toBe('LAST_OWNER');
+    });
+  });
+});
+
+describe('integration: keeping a server administrator during erasure', () => {
+  test('the last active server administrator hands over administration before erasing their account', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', ada.userId)
+        .execute();
+      const caller = await signedIn(db, room, 'ada');
+      const refusal: unknown = await erase(db, caller, ada.username).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(refusal).toMatchObject({ body: { code: 'FORBIDDEN' } });
+      const kept = await db
+        .selectFrom('users')
+        .select(['deleted_at', 'is_server_admin'])
+        .where('id', '=', ada.userId)
+        .executeTakeFirstOrThrow();
+      expect(kept.deleted_at).toBeNull();
+      expect(kept.is_server_admin).toBe(true);
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true })
+        .where('id', '=', member(room, 'bob').userId)
+        .execute();
+      await erase(db, caller, ada.username);
+      const erased = await db
+        .selectFrom('users')
+        .select('deleted_at')
+        .where('id', '=', ada.userId)
+        .executeTakeFirstOrThrow();
+      expect(erased.deleted_at).not.toBeNull();
     });
   });
 });

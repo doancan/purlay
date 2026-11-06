@@ -1,7 +1,7 @@
 /**
- * Sending an invitation link by e-mail (D-179 §5, on D-115): the one link a request makes, mailed to
- * the addresses typed with it — nothing new about what the link is. It is still the bearer link of
- * D-115: whoever holds it joins as a member, no role is chosen and no address is bound to it.
+ * Invitation email (D-279, extending D-179 §5): a separate bearer link per recipient and a
+ * separate copy link in the create response. Each recipient can be followed up or revoked independently.
+ * All links still admit their signed-in holder as a member; no address or role is bound to them.
  *
  * - **The server is not a mail relay.** At most twenty addresses a request (the contract's `400`),
  *   repeats of an address in any case dropped before they are counted, fifty letters a day for an
@@ -10,8 +10,8 @@
  *   before an address is looked at.
  * - **Said honestly.** What the answer can say of an address is *queued*: the letter is handed to the
  *   mail server after the answer (`afterAnswer` and the outbox), so nothing has been delivered, nor even
- *   accepted, when the inviter reads it. A letter that then fails is logged by its code, never told —
- *   which is why the link is always answered too.
+ *   accepted, when the inviter reads it. Its later receipt is kept as a safe category in private
+ *   recipient history. Relay acceptance is never called inbox delivery.
  * - **No look at who is in.** Whether an address already belongs to a member is not answered: members'
  *   addresses are never shown to each other (`models.ts`), and an answer for an address typed would
  *   say it. Mailing a member is harmless — joining again changes nothing (D-115 §3).
@@ -24,6 +24,7 @@ import {
   INVITATION_EMAILS_PER_INVITER_PER_DAY,
   INVITATION_EMAILS_PER_WORKSPACE_PER_DAY,
   normalisedMailbox,
+  messageId,
   type CreateInvitationRequest,
   type CreatedInvitation,
   type InvitationMailResult,
@@ -33,7 +34,10 @@ import { composeLetter } from '../../platform/letter';
 import type { MailMessage } from '../../platform/mail';
 import { takeDaily, type Allowance } from '../../platform/quota';
 import type { WorkspaceContext } from '../../platform/tenancy';
-import { createInvitation } from './invitations';
+import { createInvitation, revokeInvitation, notFound } from './invitations';
+import { addInvitationAttempt, INVITATION_RECEIPT_WAIT_MS } from './invitation-delivery';
+import { requireInvitationManagerNow } from './invitation-manager';
+import { AppError } from '../../platform/errors';
 
 type Locale = NonNullable<CreateInvitationRequest['locale']>;
 
@@ -129,10 +133,14 @@ export const invitationLetter = (to: string, head: Letterhead): MailMessage => {
 /** The counter of an inviter's letters, which an erasure deletes with the rest of the person. */
 export const inviterMailKey = (userId: string): string => `purlay:invite-mail:inviter:${userId}`;
 
+export interface InvitationLetter extends MailMessage {
+  readonly attemptId: string;
+}
+
 export interface MailedInvitation {
   readonly created: CreatedInvitation;
   /** The letters to hand to the mail server once the answer is on its way — and the transaction committed. */
-  readonly letters: readonly MailMessage[];
+  readonly letters: readonly InvitationLetter[];
 }
 
 /**
@@ -181,15 +189,7 @@ export const makeAndMailInvitation = async (
   if (!mail.on) {
     for (const address of valid) outcomeOf.set(address, 'unavailable');
   } else if (valid.length > 0) {
-    const inviter: Allowance = {
-      key: inviterMailKey(context.userId),
-      limit: INVITATION_EMAILS_PER_INVITER_PER_DAY,
-    };
-    const workspace: Allowance = {
-      key: `purlay:invite-mail:workspace:${context.workspaceId}`,
-      limit: INVITATION_EMAILS_PER_WORKSPACE_PER_DAY,
-    };
-    const taken = await takeDaily(transaction, clock.now(), [inviter, workspace], valid.length);
+    const { taken, inviter } = await reserveMail(transaction, clock, context, valid.length);
     queued = valid.slice(0, taken.granted);
     const refusal = taken.refusedBy === inviter ? 'inviter_limit' : 'workspace_limit';
     valid.forEach((address, index) => {
@@ -214,12 +214,202 @@ export const makeAndMailInvitation = async (
     .where('workspace_members.workspace_id', '=', context.workspaceId)
     .where('workspace_members.user_id', '=', context.userId)
     .executeTakeFirst();
-  const head: Letterhead = {
+  const head = {
     inviter: names?.display_name ?? '',
     workspace: names?.name ?? '',
     expiresAt: created.invitation.expiresAt,
     url: `${mail.appUrl}/invite#${created.token}`,
-    locale: request.locale ?? 'en',
+    locale: request.locale ?? ('en' as const),
   };
-  return { created: mailed, letters: queued.map((address) => invitationLetter(address, head)) };
+  const letters: InvitationLetter[] = [];
+  for (const address of queued) {
+    const recipientId = messageId(clock.now());
+    await transaction
+      .insertInto('workspace_invitation_recipients')
+      .values({
+        id: recipientId,
+        workspace_id: context.workspaceId,
+        email: address,
+        locale: head.locale,
+        created_by: context.userId,
+        created_at: clock.now(),
+      })
+      .execute();
+    const personal = await createInvitation(transaction, clock, context);
+    const attemptId = await addInvitationAttempt(
+      transaction,
+      clock,
+      context.workspaceId,
+      recipientId,
+      personal.invitation.id,
+    );
+    letters.push({
+      ...invitationLetter(address, {
+        ...head,
+        expiresAt: personal.invitation.expiresAt,
+        url: `${mail.appUrl}/invite#${personal.token}`,
+      }),
+      attemptId,
+    });
+  }
+  return { created: mailed, letters };
+};
+
+/** Both first send and resend spend the same durable quotas. */
+const reserveMail = async (
+  transaction: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+  count: number,
+): Promise<{
+  readonly taken: Awaited<ReturnType<typeof takeDaily>>;
+  readonly inviter: Allowance;
+}> => {
+  const inviter: Allowance = {
+    key: inviterMailKey(context.userId),
+    limit: INVITATION_EMAILS_PER_INVITER_PER_DAY,
+  };
+  const workspace: Allowance = {
+    key: `purlay:invite-mail:workspace:${context.workspaceId}`,
+    limit: INVITATION_EMAILS_PER_WORKSPACE_PER_DAY,
+  };
+  return { taken: await takeDaily(transaction, clock.now(), [inviter, workspace], count), inviter };
+};
+
+/** Serialised per recipient. Old links are revoked only after a replacement can be queued. */
+export const resendInvitationRecipient = async (
+  transaction: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+  recipientId: string,
+  mail: { readonly on: boolean; readonly appUrl: string },
+): Promise<InvitationLetter> => {
+  await requireInvitationManagerNow(transaction, context);
+  const recipient = await transaction
+    .selectFrom('workspace_invitation_recipients')
+    .selectAll()
+    .where('workspace_id', '=', context.workspaceId)
+    .where('id', '=', recipientId)
+    .executeTakeFirst();
+  if (recipient === undefined) throw notFound();
+  if (!mail.on)
+    throw new AppError({
+      code: 'EMAIL_SIGN_IN_UNAVAILABLE',
+      message: 'Configure the mail relay before sending invitations.',
+    });
+  const previous = await transaction
+    .selectFrom('workspace_invitation_mail_attempts')
+    .selectAll()
+    .where('workspace_id', '=', context.workspaceId)
+    .where('recipient_id', '=', recipientId)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  await transaction
+    .selectFrom('workspace_invitations')
+    .select('id')
+    .where('id', '=', previous.invitation_id)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  const latest = await transaction
+    .selectFrom('workspace_invitation_mail_attempts')
+    .select('id')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('recipient_id', '=', recipientId)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  if (latest.id !== previous.id)
+    throw new AppError(
+      { code: 'RATE_LIMITED', message: 'This invitation changed. Refresh before trying again.' },
+      { retryAfterSeconds: 1 },
+    );
+  if (
+    previous.result === 'queued' &&
+    clock.now().getTime() - new Date(previous.created_at).getTime() < INVITATION_RECEIPT_WAIT_MS
+  )
+    throw new AppError(
+      {
+        code: 'RATE_LIMITED',
+        message: 'This invitation is still being sent. Wait before trying again.',
+      },
+      { retryAfterSeconds: 120 },
+    );
+  const { taken } = await reserveMail(transaction, clock, context, 1);
+  if (taken.granted === 0)
+    throw new AppError(
+      { code: 'RATE_LIMITED', message: 'The daily invitation mail limit has been reached.' },
+      { retryAfterSeconds: 86_400 },
+    );
+  await revokeInvitation(transaction, clock, context, previous.invitation_id);
+  const made = await createInvitation(transaction, clock, context);
+  const attemptId = await addInvitationAttempt(
+    transaction,
+    clock,
+    context.workspaceId,
+    recipientId,
+    made.invitation.id,
+    previous.id,
+  );
+  const names = await transaction
+    .selectFrom('users')
+    .innerJoin('workspaces', (join) => join.on('workspaces.id', '=', context.workspaceId))
+    .select(['users.display_name', 'workspaces.name'])
+    .where('users.id', '=', context.userId)
+    .executeTakeFirstOrThrow();
+  return {
+    ...invitationLetter(recipient.email, {
+      inviter: names.display_name,
+      workspace: names.name,
+      expiresAt: made.invitation.expiresAt,
+      url: `${mail.appUrl}/invite#${made.token}`,
+      locale: recipient.locale as Locale,
+    }),
+    attemptId,
+  };
+};
+
+/** Every older attempt was already revoked by resend; the newest is the only remaining open link. */
+export const revokeInvitationRecipient = async (
+  transaction: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+  recipientId: string,
+): Promise<void> => {
+  await requireInvitationManagerNow(transaction, context);
+  const recipient = await transaction
+    .selectFrom('workspace_invitation_recipients')
+    .select('id')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('id', '=', recipientId)
+    .executeTakeFirst();
+  if (recipient === undefined) throw notFound();
+  const last = await transaction
+    .selectFrom('workspace_invitation_mail_attempts')
+    .select('invitation_id')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('recipient_id', '=', recipientId)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  await transaction
+    .selectFrom('workspace_invitations')
+    .select('id')
+    .where('id', '=', last.invitation_id)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  const current = await transaction
+    .selectFrom('workspace_invitation_mail_attempts')
+    .select('invitation_id')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('recipient_id', '=', recipientId)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  if (current.invitation_id !== last.invitation_id)
+    throw new AppError(
+      { code: 'RATE_LIMITED', message: 'This invitation changed. Refresh before trying again.' },
+      { retryAfterSeconds: 1 },
+    );
+  await revokeInvitation(transaction, clock, context, last.invitation_id);
 };

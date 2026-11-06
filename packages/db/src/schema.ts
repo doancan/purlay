@@ -545,8 +545,18 @@ export interface ServerAuditLog {
   target_workspace_id: string | null;
 }
 
+export interface ServerOperationalStatus {
+  id: Generated<boolean>;
+  smtp_accepted: boolean | null;
+  smtp_host: string | null;
+  smtp_reason: string | null;
+  smtp_tested_at: Timestamp | null;
+}
+
 export interface ServerSettings {
+  allowed_email_domains: Generated<string[]>;
   created_at: Generated<Timestamp>;
+  display_name: string | null;
   github_app_client_id: string | null;
   github_app_client_secret_encrypted: string | null;
   github_app_id: Int8 | null;
@@ -565,6 +575,7 @@ export interface ServerSettings {
   oidc_issuer: string | null;
   oidc_name: string | null;
   password_sign_in: Generated<boolean>;
+  require_account_approval: Generated<boolean>;
   require_two_factor: Generated<boolean>;
   session_idle_timeout_hours: number | null;
   session_max_age_days: number | null;
@@ -572,6 +583,7 @@ export interface ServerSettings {
   sign_up: Generated<string>;
   smtp_allow_plaintext: Generated<boolean>;
   smtp_url_encrypted: string | null;
+  support_url: string | null;
   updated_at: Generated<Timestamp>;
   workspace_creator_logins: Generated<string[]>;
   workspace_creators: Generated<string>;
@@ -627,6 +639,8 @@ export interface TwoFactors {
 }
 
 export interface Users {
+  admission_requires_verified_email: Generated<boolean>;
+  admission_state: Generated<string>;
   avatar_url: string | null;
   away_chosen: Generated<boolean>;
   created_at: Generated<Timestamp>;
@@ -676,6 +690,29 @@ export interface WorkspaceExports {
   size_bytes: Int8 | null;
   status: string;
   storage_key: string | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceInvitationMailAttempts {
+  created_at: Timestamp;
+  failure: string | null;
+  finished_at: Timestamp | null;
+  id: string;
+  invitation_id: string;
+  recipient_id: string;
+  result: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceInvitationRecipients {
+  applicant_user_id: string | null;
+  created_at: Timestamp;
+  created_by: string | null;
+  email: string;
+  id: string;
+  joined_at: Timestamp | null;
+  locale: string;
+  requested_at: Timestamp | null;
   workspace_id: string;
 }
 
@@ -761,6 +798,7 @@ export interface DB {
   scheduled_message_attachments: ScheduledMessageAttachments;
   scheduled_messages: ScheduledMessages;
   server_audit_log: ServerAuditLog;
+  server_operational_status: ServerOperationalStatus;
   server_settings: ServerSettings;
   sessions: Sessions;
   setup_state: SetupState;
@@ -769,6 +807,8 @@ export interface DB {
   users: Users;
   verifications: Verifications;
   workspace_exports: WorkspaceExports;
+  workspace_invitation_mail_attempts: WorkspaceInvitationMailAttempts;
+  workspace_invitation_recipients: WorkspaceInvitationRecipients;
   workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;
   workspaces: Workspaces;
