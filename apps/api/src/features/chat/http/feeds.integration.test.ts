@@ -8,12 +8,12 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { CreatedGitHubFeed, GitHubFeedList } from '@purlay/types';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { fixedClock } from '../../platform/clock';
-import { aSession } from '../../testing/signed-in';
-import { aRoom } from '../../testing/rooms';
-import { testDependencies } from '../../testing/doubles';
-import { createApp } from './app';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { fixedClock } from '../../../platform/clock';
+import { aSession } from '../../../testing/signed-in';
+import { aRoom } from '../../../testing/rooms';
+import { testDependencies } from '../../../testing/doubles';
+import { createApp } from '../../../ingress/http/app';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

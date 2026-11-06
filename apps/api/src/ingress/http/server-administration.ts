@@ -4,6 +4,8 @@ import type { ServerBackupStatus } from '@purlay/types';
 import {
   ServerPreferencesRequest,
   ServerAdmissionRequest,
+  ServerBatchApprovalRequest,
+  type ServerBatchApprovalResponse,
   type ServerPreferences,
   type OwnAdmission,
 } from '@purlay/types';
@@ -17,6 +19,7 @@ import { sessionFromHeaders } from '../../modules/auth/sessions';
 import {
   ServerAdminRequest,
   ServerAuditQuery,
+  ServerAuditExportQuery,
   ServerQuotaRequest,
   ServerUsersQuery,
   ServerWorkspacesQuery,
@@ -54,6 +57,8 @@ import type { Readiness } from '../../platform/readiness';
 import type { AccountDependencies } from './accounts';
 import type { Config } from '../../platform/config';
 import { queryOf, validated } from './validate';
+import { exportServerAudit } from '../../modules/administration/audit-export';
+import { approvePendingAccounts } from '../../modules/administration/batch-approval';
 
 export interface AdministrationDependencies extends AccountDependencies {
   readonly config: Config;
@@ -110,6 +115,30 @@ export const readAdministrationAudit = async (
   const query = validated(ServerAuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await listServerAudit(deps.database, admin, query);
 };
+export const downloadAdministrationAudit = async (
+  deps: AccountDependencies,
+  request: Request,
+): Promise<Response> => {
+  await guard(deps, request);
+  const query = validated(ServerAuditExportQuery, queryOf(new URL(request.url)));
+  const download = await exportServerAudit(
+    deps.database,
+    deps.clock,
+    deps.log,
+    query,
+    async () => await guard(deps, request),
+    request.signal,
+  );
+  return new Response(download.body, {
+    headers: {
+      'content-type': download.contentType,
+      'content-disposition': `attachment; filename="${download.filename}"`,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+};
+
 export const readAdministrationOperations = async (
   deps: AdministrationDependencies,
   request: Request,
@@ -201,6 +230,23 @@ export const writeAdministrationPreferences = async (
     await changeServerPreferences(tx, deps.clock, admin, input);
   });
 };
+export const writeAdministrationBatchApproval = async (
+  deps: AccountDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ServerBatchApprovalResponse> => {
+  await guard(deps, request);
+  const input = validated(ServerBatchApprovalRequest, body);
+  return await approvePendingAccounts(
+    deps.database,
+    deps.clock,
+    deps.log,
+    input.userIds,
+    async () => await guard(deps, request),
+    request.signal,
+  );
+};
+
 export const writeAdministrationAdmission = async (
   deps: AccountDependencies,
   request: Request,

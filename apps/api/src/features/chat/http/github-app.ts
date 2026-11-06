@@ -3,12 +3,17 @@
  * GitHub's callback and the App's deliveries. Each route validates, calls one function of
  * `features/chat/integrations/github-app*.ts`, and answers; the App is the settings' as this request pinned them.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { GitHubWiring } from './wiring';
+import { limitKeyFor } from '../../../platform/client-key';
+import { clientAddress, peerOf } from '../../../ingress/http/client-address';
 import {
   GitHubAuthorizationRequest,
   type GitHubAppRedirect,
   type GitHubAppStatus,
 } from '@purlay/types';
-import type { Auth } from '../../modules/auth/better-auth';
+import type { Auth } from '../../../modules/auth/better-auth';
 import {
   completeCallback,
   disconnectInstallation,
@@ -17,17 +22,17 @@ import {
   startAuthorization,
   startInstallation,
   type GitHubAppDependencies,
-} from '../../features/chat/integrations/github-app';
+} from '../integrations/github-app';
 import {
   receiveAppDelivery,
   requireAppAddress,
   type AppOutcome,
-} from '../../features/chat/integrations/github-app-webhook';
-import { AppError } from '../../platform/errors';
-import type { EventBus } from '../../platform/events';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { requireSession } from './session';
-import { validated } from './validate';
+} from '../integrations/github-app-webhook';
+import { AppError } from '../../../platform/errors';
+import type { EventBus } from '../../../platform/events';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { requireSession } from '../../../ingress/http/session';
+import { validated } from '../../../ingress/http/validate';
 import { DELIVERIES_AT_ONCE, DELIVERY_READ_MS, readWithin } from './webhooks';
 
 export interface GitHubAppRouteDependencies extends GitHubAppDependencies {
@@ -35,7 +40,7 @@ export interface GitHubAppRouteDependencies extends GitHubAppDependencies {
 }
 
 /** `GET /api/workspaces/:workspaceId/github-app` — any member. */
-export const readGitHubAppStatus = async (
+const readGitHubAppStatus = async (
   dependencies: GitHubAppRouteDependencies,
   request: Request,
   workspaceId: string,
@@ -46,7 +51,7 @@ export const readGitHubAppStatus = async (
 };
 
 /** `POST /api/workspaces/:workspaceId/github-app/installation` — an owner, to GitHub's installation screen. */
-export const beginInstallation = async (
+const beginInstallation = async (
   dependencies: GitHubAppRouteDependencies,
   request: Request,
   workspaceId: string,
@@ -57,7 +62,7 @@ export const beginInstallation = async (
 };
 
 /** `DELETE /api/workspaces/:workspaceId/github-app/installation` — an owner lets it go; `204`. */
-export const endInstallation = async (
+const endInstallation = async (
   dependencies: GitHubAppRouteDependencies,
   request: Request,
   workspaceId: string,
@@ -68,7 +73,7 @@ export const endInstallation = async (
 };
 
 /** `POST /api/github-app/authorization` — the person, to GitHub's authorization screen. */
-export const beginAuthorization = async (
+const beginAuthorization = async (
   dependencies: GitHubAppRouteDependencies,
   request: Request,
   body: unknown,
@@ -79,7 +84,7 @@ export const beginAuthorization = async (
 };
 
 /** `DELETE /api/github-app/authorization` — the person's own tokens forgotten; `204`. */
-export const endAuthorization = async (
+const endAuthorization = async (
   dependencies: GitHubAppRouteDependencies,
   request: Request,
 ): Promise<void> => {
@@ -91,7 +96,7 @@ export const endAuthorization = async (
  * `GET /api/github-app/callback` — a browser GitHub sent back: answered with where to go on, never JSON. A
  * browser signed out, or owing two-step verification, is somebody the trip cannot be finished for.
  */
-export const githubAppCallback = async (
+const githubAppCallback = async (
   dependencies: GitHubAppRouteDependencies,
   request: Request,
 ): Promise<string> => {
@@ -156,3 +161,65 @@ export const receiveAppWebhook = async (
     inFlight.count -= 1;
   }
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const githubAppRoutes = (
+  context: ModuleRouteDependencies,
+  wiring: GitHubWiring,
+): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/workspaces/:workspaceId/github-app',
+      async ({ request, params }) =>
+        await readGitHubAppStatus(wiring.githubApp(), request, params.workspaceId),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/github-app/installation',
+      async ({ request, params }) =>
+        await beginInstallation(wiring.githubApp(), request, params.workspaceId),
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/github-app/installation',
+      async ({ request, params, set }) => {
+        await endInstallation(wiring.githubApp(), request, params.workspaceId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/github-app/authorization',
+      async ({ request, body }) => await beginAuthorization(wiring.githubApp(), request, body),
+    )
+    .delete('/api/github-app/authorization', async ({ request, set }) => {
+      await endAuthorization(wiring.githubApp(), request);
+      set.status = 204;
+      return null;
+    })
+    .get('/api/github-app/callback', async ({ request, set }) => {
+      set.status = 302;
+      set.headers.location = await githubAppCallback(wiring.githubApp(), request);
+      set.headers['cache-control'] = 'no-store';
+      return '';
+    })
+    .post(
+      '/api/webhooks/github-app',
+      async ({ request, server }) => {
+        const outcome = await receiveAppWebhook(
+          {
+            ...wiring.githubIssues(),
+            mayKnock: async (address) => await wiring.knocks.consume(address),
+            inFlight: wiring.delivering,
+            deadline: async (ms) => {
+              await Bun.sleep(ms);
+            },
+          },
+          request,
+          limitKeyFor(
+            clientAddress(peerOf(server, request), request.headers, context.config.TRUST_PROXY),
+          ),
+        );
+        return { outcome };
+      },
+      // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
+      { parse: 'none' },
+    );

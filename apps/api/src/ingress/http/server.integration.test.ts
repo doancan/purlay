@@ -1,4 +1,7 @@
 import { signInWithOidc } from '../../testing/oidc-sign-in';
+import * as administrationInventory from '../../modules/administration/inventory';
+import * as admissionChanges from '../../modules/administration/admission';
+import * as setupAuthority from '../../modules/setup/setup';
 import { signInWithGoogle } from '../../testing/google-sign-in';
 import { startGitHubSignIn, returnFromGitHub } from '../../testing/github-sign-in';
 import type {
@@ -23,7 +26,7 @@ import type {
  * value; no secret is in any answer or any line written; and a client is limited.
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
@@ -32,6 +35,7 @@ import {
 } from '@purlay/db';
 import {
   messageId,
+  SERVER_AUDIT_EXPORT_COLUMNS,
   GITHUB_APP_CALLBACK,
   GITHUB_APP_WEBHOOK,
   GOOGLE_CALLBACK,
@@ -93,15 +97,17 @@ const BAD_SECRET = 'not-the-secret-4417';
 
 const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
-// Every test's database, dropped after its connections have closed: up to 31 of them, which fitted the
-// five seconds a hook is given only on an idle machine (#797, D-228).
-afterAll(async () => {
-  for (const stop of stops) await stop();
+// Release each test's servers and clone before the next case: retaining every pool until the
+// file ends exhausts PostgreSQL's connection cap when this suite grows (#1169, D-228).
+afterEach(async () => {
+  for (const stop of stops.splice(0)) await stop();
   await Promise.all(
-    clones.map(async (drop) => {
+    clones.splice(0).map(async (drop) => {
       await drop();
     }),
   );
+}, DROP_HOOK_MS);
+afterAll(async () => {
   await closeIntegrationDatabase();
 }, DROP_HOOK_MS);
 
@@ -1694,6 +1700,487 @@ describe('integration: Administration → Server — Google (D-251)', () => {
 });
 
 describe('integration — server administration inventory', () => {
+  test('a database failure truncates the audit download instead of calling a partial file complete', async () => {
+    const server = await aServer();
+    await server.db
+      .insertInto('server_audit_log')
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          id: messageId(new Date(Date.UTC(2026, 10, 1, 0, 0, 0, index))),
+          action: 'server.smtp_tested',
+          actor_user_id: server.admin.userId,
+        })),
+      )
+      .execute();
+    const response = await call(
+      server,
+      'GET',
+      '/api/server/audit/export?format=ndjson&action=server.smtp_tested',
+      { cookie: server.admin.cookie },
+    );
+    if (response.body === null) throw new Error('download missing');
+    const reader = response.body.getReader();
+    expect((await reader.read()).done).toBe(false);
+    await server.db.schema.dropTable('server_audit_log').execute();
+    const failure = await reader.read().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).not.toBeNull();
+  });
+  test('server audit downloads walk every page without read-ahead and cancellation stops reads', async () => {
+    const server = await aServer();
+    await server.db
+      .insertInto('server_audit_log')
+      .values(
+        Array.from({ length: 205 }, (_, index) => ({
+          id: messageId(new Date(Date.UTC(2026, 10, 1, 0, 0, 0, index))),
+          action: 'server.smtp_tested',
+          actor_user_id: server.admin.userId,
+        })),
+      )
+      .execute();
+    const reads = spyOn(administrationInventory, 'listServerAudit');
+    const count = (): number => reads.mock.calls.length;
+    try {
+      const path = '/api/server/audit/export?format=ndjson&action=server.smtp_tested';
+      const answer = await call(server, 'GET', path, { cookie: server.admin.cookie });
+      expect(count()).toBe(1);
+      if (answer.body === null) throw new Error('download missing');
+      const reader = answer.body.getReader();
+      const decode = (value: unknown): string => {
+        if (!(value instanceof Uint8Array)) throw new Error('Expected download bytes');
+        return new TextDecoder().decode(value);
+      };
+      const first = await reader.read();
+      expect(decode(first.value).trim().split('\n')).toHaveLength(100);
+      expect(count()).toBe(1);
+      let text = decode(first.value);
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        text += decode(chunk.value);
+      }
+      const lines = text.trim().split('\n');
+      expect(lines).toHaveLength(205);
+      expect(new Set(lines).size).toBe(205);
+      expect(count()).toBe(3);
+      const cancelled = await call(server, 'GET', path, { cookie: server.admin.cookie });
+      expect(count()).toBe(4);
+      await cancelled.body?.cancel();
+      expect(count()).toBe(4);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  test('an aborted download closes, and losing administrator authority stops the next chunk', async () => {
+    const server = await aServer();
+    await server.db
+      .insertInto('server_audit_log')
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          id: messageId(new Date(Date.UTC(2026, 10, 1, 0, 0, 0, index))),
+          action: 'server.smtp_tested',
+          actor_user_id: server.admin.userId,
+        })),
+      )
+      .execute();
+    const path = '/api/server/audit/export?format=ndjson&action=server.smtp_tested';
+    const abort = new AbortController();
+    const aborted = await server.app.handle(
+      new Request(`${ORIGIN}${path}`, {
+        signal: abort.signal,
+        headers: { cookie: server.admin.cookie },
+      }),
+    );
+    if (aborted.body === null) throw new Error('download missing');
+    const abortReader = aborted.body.getReader();
+    expect((await abortReader.read()).done).toBe(false);
+    abort.abort();
+    expect((await abortReader.read()).done).toBe(true);
+    const answer = await call(server, 'GET', path, { cookie: server.admin.cookie });
+    if (answer.body === null) throw new Error('download missing');
+    const reader = answer.body.getReader();
+    expect((await reader.read()).done).toBe(false);
+    await server.db
+      .updateTable('users')
+      .set({ is_server_admin: false })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const failure = await reader.read().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toMatchObject({ body: { code: 'ROUTE_NOT_FOUND' } });
+  });
+
+  test('the server audit download applies filters, defuses CSV and records only an export request', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    await server.db
+      .updateTable('users')
+      .set({ display_name: '=SUM(1,2)' })
+      .where('id', '=', server.admin.userId)
+      .execute();
+    const changed = await call(server, 'POST', '/api/server/policy', {
+      cookie,
+      body: { signUp: 'open' },
+    });
+    expect(changed.status).toBe(204);
+    const filter = `action=server.sign_up_changed&actorUserId=${server.admin.userId}`;
+    const answer = await call(server, 'GET', `/api/server/audit/export?format=ndjson&${filter}`, {
+      cookie,
+    });
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toContain('application/x-ndjson');
+    expect(answer.headers.get('cache-control')).toContain('no-store');
+    expect(answer.headers.get('content-disposition')).toMatch(
+      /^attachment; filename="server-audit-.*\.ndjson"$/,
+    );
+    const lines = (await answer.text())
+      .trim()
+      .split('\n')
+      .map(
+        (line) => JSON.parse(line) as { action: string; actorUserId: string; actorName: string },
+      );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      action: 'server.sign_up_changed',
+      actorUserId: server.admin.userId,
+      actorName: '=SUM(1,2)',
+    });
+    expect(Object.keys(lines[0] ?? {}).sort()).toEqual([...SERVER_AUDIT_EXPORT_COLUMNS].sort());
+    const csv = await call(server, 'GET', `/api/server/audit/export?format=csv&${filter}`, {
+      cookie,
+    });
+    expect(await csv.text()).toContain('"\'=SUM(1,2)"');
+    const logged = await server.db
+      .selectFrom('server_audit_log')
+      .selectAll()
+      .where('action', '=', 'server.audit_export_requested')
+      .execute();
+    expect(logged).toHaveLength(2);
+    expect(logged.every((row) => row.actor_user_id === server.admin.userId)).toBe(true);
+    const emptyCsv = await call(
+      server,
+      'GET',
+      '/api/server/audit/export?format=csv&action=server.account_denied',
+      { cookie },
+    );
+    expect((await emptyCsv.text()).trim()).toBe(SERVER_AUDIT_EXPORT_COLUMNS.join(','));
+    const emptyJson = await call(
+      server,
+      'GET',
+      '/api/server/audit/export?format=ndjson&action=server.account_denied',
+      { cookie },
+    );
+    expect(await emptyJson.text()).toBe('');
+    for (const query of [
+      'format=json',
+      'format=csv&limit=1',
+      'format=csv&from=2090-01-01T00:00:00Z&to=2020-01-01T00:00:00Z',
+    ]) {
+      expect(
+        (await call(server, 'GET', `/api/server/audit/export?${query}`, { cookie })).status,
+      ).toBe(400);
+    }
+  });
+
+  test('an account denied while a batch waits cannot be admitted from its earlier selection', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'pending' })
+      .where('id', '=', server.member.userId)
+      .execute();
+    let enter: () => void = () => undefined;
+    let resume: () => void = () => undefined;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const original = admissionChanges.decideAdmission;
+    const blocked = spyOn(admissionChanges, 'decideAdmission').mockImplementationOnce(
+      async (...args) => {
+        enter();
+        await released;
+        return await original(...args);
+      },
+    );
+    const pending = call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds: [server.member.userId] },
+    });
+    try {
+      await entered;
+      await server.db
+        .updateTable('users')
+        .set({ admission_state: 'denied' })
+        .where('id', '=', server.member.userId)
+        .execute();
+      resume();
+      const response = await pending;
+      expect(await response.json()).toEqual({
+        results: [{ userId: server.member.userId, outcome: 'refused' }],
+      });
+      expect(
+        (
+          await server.db
+            .selectFrom('users')
+            .select('admission_state')
+            .where('id', '=', server.member.userId)
+            .executeTakeFirstOrThrow()
+        ).admission_state,
+      ).toBe('denied');
+    } finally {
+      resume();
+      await pending;
+      blocked.mockRestore();
+    }
+  });
+
+  test('one bounded batch approves fifty accounts without granting administrator access', async () => {
+    const server = await aServer();
+    const accounts = await server.db
+      .insertInto('users')
+      .values(
+        Array.from({ length: 50 }, (_, index) => {
+          const username = `batch-${String(index)}-${crypto.randomUUID().slice(0, 8)}`;
+          return {
+            username,
+            email: `${username}@example.test`,
+            display_name: username,
+            admission_state: 'pending',
+            email_verified: true,
+          };
+        }),
+      )
+      .returning('id')
+      .execute();
+    const userIds = accounts.map((row) => row.id);
+    const answer = await call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds },
+    });
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({
+      results: userIds.map((userId) => ({ userId, outcome: 'approved' })),
+    });
+    const users = await server.db
+      .selectFrom('users')
+      .select(['admission_state', 'is_server_admin', 'email_verified'])
+      .where('id', 'in', userIds)
+      .execute();
+    expect(users).toHaveLength(50);
+    expect(
+      users.every(
+        (user) =>
+          user.admission_state === 'approved' && !user.is_server_admin && user.email_verified,
+      ),
+    ).toBe(true);
+  });
+  test.each([true, false])(
+    'batch approval stops when authority is lost and reports an unconfirmed database failure honestly (%s)',
+    async (loseAuthority) => {
+      const server = await aServer();
+      await server.db
+        .updateTable('users')
+        .set({ admission_state: 'pending' })
+        .where('id', 'in', [server.member.userId, server.owner.userId])
+        .execute();
+      const original = admissionChanges.decideAdmission;
+      const changed = spyOn(admissionChanges, 'decideAdmission').mockImplementationOnce(
+        async (tx, clock, admin, id, decision, pendingOnly) => {
+          if (!loseAuthority) throw new Error('private database failure');
+          const ended = await original(tx, clock, admin, id, decision, pendingOnly);
+          await tx
+            .updateTable('users')
+            .set({ is_server_admin: false })
+            .where('id', '=', server.admin.userId)
+            .execute();
+          return ended;
+        },
+      );
+      try {
+        const ids = [server.member.userId, server.owner.userId, crypto.randomUUID()];
+        const answer = await call(server, 'POST', '/api/server/users/approve', {
+          cookie: server.admin.cookie,
+          body: { userIds: ids },
+        });
+        expect(answer.status).toBe(200);
+        const body: unknown = await answer.json();
+        expect(body).toEqual({
+          results: ids.map((userId, index) => ({
+            userId,
+            outcome:
+              index === 0
+                ? loseAuthority
+                  ? 'approved'
+                  : 'unconfirmed'
+                : index === 1 && loseAuthority
+                  ? 'refused'
+                  : 'not_processed',
+          })),
+        });
+        expect(JSON.stringify(body)).not.toContain('private database failure');
+        expect(
+          (
+            await server.db
+              .selectFrom('users')
+              .select('admission_state')
+              .where('id', '=', server.owner.userId)
+              .executeTakeFirstOrThrow()
+          ).admission_state,
+        ).toBe('pending');
+      } finally {
+        changed.mockRestore();
+      }
+    },
+  );
+
+  test.each([true, false])(
+    'batch cancellation stops between accounts and after authorization, without undoing committed approvals (%s)',
+    async (duringAuthorization) => {
+      const server = await aServer();
+      await server.db
+        .updateTable('users')
+        .set({ admission_state: 'pending' })
+        .where('id', 'in', [server.member.userId, server.owner.userId])
+        .execute();
+      const abort = new AbortController();
+      const originalGuard = setupAuthority.requireServerAdmin;
+      const originalChange = admissionChanges.decideAdmission;
+      let guards = 0;
+      const guard = spyOn(setupAuthority, 'requireServerAdmin').mockImplementation(
+        async (...args) => {
+          const authority = await originalGuard(...args);
+          guards++;
+          if (duringAuthorization && guards === 2) abort.abort();
+          return authority;
+        },
+      );
+      const changed = spyOn(admissionChanges, 'decideAdmission').mockImplementationOnce(
+        async (...args) => {
+          const ended = await originalChange(...args);
+          abort.abort();
+          return ended;
+        },
+      );
+      try {
+        const userIds = [server.member.userId, server.owner.userId];
+        const answer = await server.app.handle(
+          new Request(`${ORIGIN}/api/server/users/approve`, {
+            method: 'POST',
+            signal: abort.signal,
+            headers: {
+              cookie: server.admin.cookie,
+              origin: ORIGIN,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ userIds }),
+          }),
+        );
+        expect(answer.status).toBe(200);
+        expect(await answer.json()).toEqual({
+          results: userIds.map((userId, index) => ({
+            userId,
+            outcome: index === 0 && !duringAuthorization ? 'approved' : 'not_processed',
+          })),
+        });
+        expect(
+          (
+            await server.db
+              .selectFrom('users')
+              .select('admission_state')
+              .where('id', '=', server.member.userId)
+              .executeTakeFirstOrThrow()
+          ).admission_state,
+        ).toBe(duringAuthorization ? 'pending' : 'approved');
+      } finally {
+        guard.mockRestore();
+        changed.mockRestore();
+      }
+    },
+  );
+  test('batch approval is pending-only, idempotent and independently reports refused targets', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'pending' })
+      .where('id', '=', server.member.userId)
+      .execute();
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'denied' })
+      .where('id', '=', server.owner.userId)
+      .execute();
+    const missing = crypto.randomUUID();
+    const userIds = [server.member.userId, server.owner.userId, server.admin.userId, missing];
+    const response = await call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      results: userIds.map((userId, index) => ({
+        userId,
+        outcome: index === 0 || index === 2 ? 'approved' : 'refused',
+      })),
+    });
+    const user = await server.db
+      .selectFrom('users')
+      .select(['admission_state', 'is_server_admin'])
+      .where('id', '=', server.member.userId)
+      .executeTakeFirstOrThrow();
+    expect(user).toEqual({ admission_state: 'approved', is_server_admin: false });
+    expect(
+      (
+        await server.db
+          .selectFrom('users')
+          .select('admission_state')
+          .where('id', '=', server.owner.userId)
+          .executeTakeFirstOrThrow()
+      ).admission_state,
+    ).toBe('denied');
+    const again = await call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds: [server.member.userId] },
+    });
+    expect(again.status).toBe(200);
+    const trail = await server.db
+      .selectFrom('server_audit_log')
+      .select('id')
+      .where('action', '=', 'server.account_approved')
+      .where('target_user_id', '=', server.member.userId)
+      .execute();
+    expect(trail).toHaveLength(1);
+    for (const body of [
+      { userIds: [] },
+      { userIds: [missing, missing] },
+      { userIds: Array.from({ length: 51 }, () => crypto.randomUUID()) },
+      { userIds: [missing], force: true },
+    ]) {
+      expect(
+        (
+          await call(server, 'POST', '/api/server/users/approve', {
+            cookie: server.admin.cookie,
+            body,
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await call(server, 'POST', '/api/server/users/approve', {
+            cookie: server.owner.cookie,
+            body,
+          })
+        ).status,
+      ).toBe(404);
+    }
+  });
   test('metadata routes are absent before input is parsed for strangers, members and workspace owners', async () => {
     const server = await aServer();
     for (const cookie of [undefined, server.member.cookie, server.owner.cookie]) {
@@ -1702,6 +2189,7 @@ describe('integration — server administration inventory', () => {
         '/api/server/users?limit=invalid',
         '/api/server/workspaces?offset=1',
         '/api/server/audit?from=bad',
+        '/api/server/audit/export?format=invalid',
         '/api/server/operations',
         `/api/server/users/${server.admin.userId}?after=bad`,
       ]) {

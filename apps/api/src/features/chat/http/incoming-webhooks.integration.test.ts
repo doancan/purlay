@@ -16,14 +16,14 @@ import {
   MESSAGE_CONTENT_MAX,
   MessagePage,
 } from '@purlay/types';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { fixedClock } from '../../platform/clock';
-import { aSession } from '../../testing/signed-in';
-import { aRoom } from '../../testing/rooms';
-import { aRecordingLogger, testDependencies } from '../../testing/doubles';
-import { createApp } from './app';
-import { JSON_BODY_MAX_BYTES } from './edge';
-import { INCOMING_WEBHOOK_BUDGET } from './rate-limit';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { fixedClock } from '../../../platform/clock';
+import { aSession } from '../../../testing/signed-in';
+import { aRoom } from '../../../testing/rooms';
+import { aRecordingLogger, testDependencies } from '../../../testing/doubles';
+import { createApp } from '../../../ingress/http/app';
+import { JSON_BODY_MAX_BYTES } from '../../../ingress/http/edge';
+import { INCOMING_WEBHOOK_BUDGET } from '../../../ingress/http/rate-limit';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
