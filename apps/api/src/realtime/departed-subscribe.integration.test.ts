@@ -22,6 +22,7 @@ import { inProcessEventBus } from './bus';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { routeFrame } from './router';
+import { chatFrameHandlers } from '../features/chat/frames';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -87,6 +88,7 @@ const aWorld = async (db: Executor): Promise<World> => {
         bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
         limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+        frameHandlers: chatFrameHandlers,
         presence: inMemoryPresenceRegistry(clock),
         attention: nobodyActive,
         online: { active: () => undefined },

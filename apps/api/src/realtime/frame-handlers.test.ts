@@ -222,9 +222,19 @@ describe('the handlers a composition takes', () => {
   });
 
   test('stop the build for an operation the module’s manifest does not name', () => {
-    const notes = notesWith({ MESSAGE_SEND: () => Promise.resolve([]) });
+    const notes = notesWith({
+      [OPERATION]: () => Promise.resolve([]),
+      MESSAGE_SEND: () => Promise.resolve([]),
+    });
     expect(() => compose([notes], [notes])).toThrow(
       '"notes" supplies handlers for MESSAGE_SEND, which its manifest does not name under frames',
+    );
+  });
+
+  test('stop the build for an operation the module names and has no handler for', () => {
+    const notes = notesWith({});
+    expect(() => compose([notes], [notes])).toThrow(
+      `"notes" names the frames ${OPERATION} in its manifest and supplies no handler for them`,
     );
   });
 });

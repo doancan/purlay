@@ -75,10 +75,6 @@ const ALLOWED: Readonly<
     features: ['chat'],
     why: 'the release route takes the type of chat’s release check',
   },
-  [join('realtime', 'router.ts')]: {
-    features: ['chat'],
-    why: 'the frame router still runs chat’s three operations itself (subscribe and replay, message.send, typing) and the manifest has no field for a module’s frame handler yet; `closedFrame` already answers them as an unknown operation where chat is off',
-  },
   [join('ingress', 'ws', 'socket.ts')]: {
     features: ['chat'],
     why: 'the socket announces presence through chat’s presence service',
@@ -94,7 +90,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 28;
+const MAX_ALLOWED = 27;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */

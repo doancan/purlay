@@ -25,7 +25,7 @@ import { createSocketHub, type SocketHub } from './hub';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame, type RouterDependencies } from './router';
-import { chatFrameHandlers } from '../features/chat/frames';
+import { chatFrameHandlers, chatFrames } from '../features/chat/frames';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
@@ -161,7 +161,9 @@ describe('integration: subscribe before replay', () => {
       };
 
       const replies = [
-        ...(await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: hooked })),
+        ...(await rig.route(subscribeFrame(channelId, BEFORE), {
+          frameHandlers: chatFrames(hooked),
+        })),
       ];
       rig.hub.reply('s1', replies);
       rig.hub.closed('s1');
@@ -198,7 +200,7 @@ describe('integration: subscribe before replay', () => {
         rig.hub.closed('s1');
         return replays;
       };
-      await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: closing });
+      await rig.route(subscribeFrame(channelId, BEFORE), { frameHandlers: chatFrames(closing) });
       expect(rig.bus.size()).toEqual({ topics: 0, sockets: 0 });
     });
   });
@@ -223,7 +225,9 @@ describe('integration: subscribe before replay', () => {
       const rig = await aRig(db, alice);
       const failing: typeof missedIn = async () => await Promise.reject(new Error('read failed'));
 
-      const refused = await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: failing });
+      const refused = await rig.route(subscribeFrame(channelId, BEFORE), {
+        frameHandlers: chatFrames(failing),
+      });
       rig.hub.reply('s1', refused);
       expect(refused[0]).toMatchObject({ event: 'ERROR', data: { code: 'INTERNAL' } });
       expect(rig.bus.size()).toEqual({ topics: 0, sockets: 0 });
@@ -232,7 +236,7 @@ describe('integration: subscribe before replay', () => {
       rig.hub.reply('s1', await rig.route(subscribeFrame(channelId, BEFORE)));
       rig.hub.reply(
         's1',
-        await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: failing }),
+        await rig.route(subscribeFrame(channelId, BEFORE), { frameHandlers: chatFrames(failing) }),
       );
       expect(rig.bus.size()).toEqual({ topics: 1, sockets: 1 });
       rig.hub.closed('s1');
@@ -262,7 +266,9 @@ describe('integration: subscribe before replay', () => {
         return await missedIn(...args);
       };
 
-      const replies = await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: hooked });
+      const replies = await rig.route(subscribeFrame(channelId, BEFORE), {
+        frameHandlers: chatFrames(hooked),
+      });
       // The control: the replay as read does hold both messages.
       expect(idsOf(replies)).toEqual([before, afterRevocation]);
       rig.written.length = 0;
