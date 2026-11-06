@@ -16,7 +16,7 @@ import { href, searchHref } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { useChooseLevel } from '../channel/notification-level-menu';
 import { useStar } from '../channel/star-toggle';
-import { forgetChannel } from '../questions/last-channel';
+import { forgetChannel } from '../../../data/last-channel';
 import { searchProblem } from '../search/operators';
 import { problemText, useSearchOperators } from '../search/use-operators';
 import { useDeepWorkControls } from '../../shell/deep-work';

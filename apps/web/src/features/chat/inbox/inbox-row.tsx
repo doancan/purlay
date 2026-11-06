@@ -17,7 +17,7 @@ import { useChannelTitle } from '../channel/channel-header';
 import { useMessageText } from '../../content/github-event';
 import { authorOf } from '../../../lib/author';
 import { repliersOf, type InboxRow } from './group';
-import { whyOf } from './why';
+import { whyOf } from '../../../lib/notification-why';
 
 const glyphOf = (type: Notification['type']): GlyphName => {
   switch (type) {

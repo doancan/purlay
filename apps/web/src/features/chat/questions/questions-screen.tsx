@@ -43,7 +43,7 @@ import { NavToggle } from '../../shell/nav';
 import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../../ui/list-column';
 import { SlideTrack } from '../../../ui/slide-track';
 import { useWorkspace } from '../../shell/workspace';
-import { lastChannel } from './last-channel';
+import { lastChannel } from '../../../data/last-channel';
 import { useOpenCount } from './use-open-count';
 import { authorOf } from '../../../lib/author';
 import { useMessageText } from '../../content/github-event';
