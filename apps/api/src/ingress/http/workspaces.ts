@@ -24,6 +24,7 @@ import {
   UpdateWorkspaceRequest,
   type DeepWorkResponse,
   type MeResponse,
+  type ModuleId,
   type Membership,
   type Workspace,
   type WorkspaceDeletion,
@@ -100,7 +101,7 @@ export interface CreatorDependencies extends WorkspaceDependencies {
   /** What the modules start a new workspace with, in its transaction (D-250). */
   readonly workspaceCreated: WorkspaceCreated;
   /** The ids of the modules this process runs, which `GET /api/me` tells the client. */
-  readonly modules: readonly string[];
+  readonly modules: readonly ModuleId[];
 }
 
 /**

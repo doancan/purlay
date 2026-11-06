@@ -14,7 +14,7 @@ interface ModuleGateProps {
 export const ModuleGate = ({ route, children }: ModuleGateProps): React.JSX.Element => {
   const { modules } = useSession();
   const owner = moduleOf(route);
-  return owner === null || modules.includes(owner) ? <>{children}</> : <NotFound />;
+  return owner === null || modules.some((id) => id === owner) ? <>{children}</> : <NotFound />;
 };
 
 /**

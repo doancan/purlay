@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import type { Issue, IssuePage, MeResponse } from '@purlay/types';
+import type { Issue, IssuePage, MeResponse, ModuleId } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
@@ -45,7 +45,7 @@ const page = (data: readonly Issue[], nextCursor: string | null = null): IssuePa
 });
 
 /** A session on a server that runs these modules, in this role. */
-const session = (modules: readonly string[], role: 'owner' | 'member' = 'owner'): MeResponse => {
+const session = (modules: readonly ModuleId[], role: 'owner' | 'member' = 'owner'): MeResponse => {
   const base = aSession();
   return {
     ...base,
@@ -58,7 +58,7 @@ const visit = async (
   api: Partial<Api>,
   options: {
     path?: string;
-    modules?: readonly string[];
+    modules?: readonly ModuleId[];
     role?: 'owner' | 'member';
     locale?: 'tr';
   } = {},

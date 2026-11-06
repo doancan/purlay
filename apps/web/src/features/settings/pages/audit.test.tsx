@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent, waitFor, within } from '@testing-library/react';
-import type { AuditEntry, AuditPage, UserRole } from '@purlay/types';
+import type { AuditEntry, AuditPage, ModuleId, UserRole } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
@@ -741,7 +741,7 @@ describe('the audit log, narrowed and downloaded', () => {
   });
 
   test('offers the actions of the modules the server runs, and the core’s always (D-265)', async () => {
-    const optionsOf = async (modules: string[]): Promise<string[]> => {
+    const optionsOf = async (modules: ModuleId[]): Promise<string[]> => {
       const view = await renderApp(<Outlet />, {
         path: '/w/acme/settings/audit',
         api: aSignedInApi({

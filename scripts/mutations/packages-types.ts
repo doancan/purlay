@@ -114,6 +114,22 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/issues.integration.test.ts'],
   },
   {
+    id: 'me-modules-is-a-free-string',
+    why: '`MeResponse.modules` is a list of any strings again: a client generated from the bundle has no ids to know',
+    file: 'packages/types/src/api.ts',
+    find: '  modules: Type.Array(ModuleId),',
+    replace: '  modules: Type.Array(Type.String()),',
+    tests: ['apps/api/src/contract/bundle.test.ts'],
+  },
+  {
+    id: 'module-id-lacks-a-module',
+    why: 'the type of a module id does not name issues, which the build carries: a client built from the bundle cannot decode it',
+    file: 'packages/types/src/modules.ts',
+    find: "Type.Union([Type.Literal('chat'), Type.Literal('issues')])",
+    replace: "Type.Union([Type.Literal('chat'), Type.Literal('chat')])",
+    tests: ['apps/api/src/contract/bundle.test.ts'],
+  },
+  {
     id: 'native-device-name-any-characters',
     why: "a device name may hold a newline or a control character: it is written into the session's label and from there into whatever reads it",
     file: 'packages/types/src/api.ts',
